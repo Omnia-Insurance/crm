@@ -1,0 +1,127 @@
+# RDS PostgreSQL Addon
+# Creates a PostgreSQL 16 database with encryption and automatic backups
+
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: Your workload's name.
+
+Resources:
+  # Security group for RDS
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Twenty CRM RDS PostgreSQL
+      VpcId:
+        Fn::ImportValue: !Sub ${App}-${Env}-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub ${App}-${Env}-EnvironmentSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${App}-${Env}-rds-sg
+
+  # Subnet group for RDS
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for Twenty CRM RDS
+      SubnetIds:
+        - Fn::Select:
+            - 0
+            - Fn::Split:
+                - ','
+                - Fn::ImportValue: !Sub ${App}-${Env}-PrivateSubnets
+        - Fn::Select:
+            - 1
+            - Fn::Split:
+                - ','
+                - Fn::ImportValue: !Sub ${App}-${Env}-PrivateSubnets
+      Tags:
+        - Key: Name
+          Value: !Sub ${App}-${Env}-db-subnet-group
+
+  # Secret for database credentials
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${App}-${Env}-db-credentials
+      Description: RDS PostgreSQL credentials for Twenty CRM
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "twentyadmin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  # RDS PostgreSQL instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DBInstanceIdentifier: !Sub ${App}-${Env}-postgres
+      DBInstanceClass: db.t4g.small
+      Engine: postgres
+      EngineVersion: '16'
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+      DBName: twenty
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroup: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: true
+      EnablePerformanceInsights: false
+      PubliclyAccessible: false
+      MultiAZ: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${App}-${Env}-postgres
+
+  # SSM Parameter for database URL
+  DBURLParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /copilot/${App}/${Env}/secrets/PG_DATABASE_URL
+      Type: SecureString
+      Value: !Sub
+        - 'postgresql://${Username}:${Password}@${Endpoint}:${Port}/twenty'
+        - Username: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+          Password: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
+          Endpoint: !GetAtt DBInstance.Endpoint.Address
+          Port: !GetAtt DBInstance.Endpoint.Port
+      Description: PostgreSQL connection URL for Twenty CRM
+
+Outputs:
+  DBEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${App}-${Env}-DBEndpoint
+
+  DBPort:
+    Description: RDS PostgreSQL port
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${App}-${Env}-DBPort
+
+  DBSecurityGroupId:
+    Description: Security group ID for RDS
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: !Sub ${App}-${Env}-DBSecurityGroup

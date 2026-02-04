@@ -1,0 +1,33 @@
+# Worker Service Manifest
+# Processes background jobs via BullMQ
+
+name: worker
+type: Backend Service
+
+image:
+  location: twentycrm/twenty:latest
+  port: 3000
+
+command: ["yarn", "worker:prod"]
+
+cpu: 256       # 0.25 vCPU
+memory: 512    # 512 MB
+count: 1
+exec: true
+
+variables:
+  NODE_ENV: production
+  STORAGE_TYPE: s3
+  STORAGE_S3_REGION: ${AWS_REGION}
+  IS_MULTIWORKSPACE_ENABLED: 'false'
+  DISABLE_DB_MIGRATIONS: 'true'
+  DISABLE_CRON_JOBS_REGISTRATION: 'true'
+
+secrets:
+  PG_DATABASE_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/PG_DATABASE_URL
+  REDIS_URL: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/REDIS_URL
+  APP_SECRET: /copilot/${COPILOT_APPLICATION_NAME}/${COPILOT_ENVIRONMENT_NAME}/secrets/APP_SECRET
+
+environments:
+  production:
+    count: 1

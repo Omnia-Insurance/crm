@@ -1,0 +1,49 @@
+# S3 Access Addon for Worker
+# Grants the worker service access to the shared S3 bucket
+
+Parameters:
+  App:
+    Type: String
+    Description: Your application's name.
+  Env:
+    Type: String
+    Description: The environment name your service, job, or workflow is being deployed to.
+  Name:
+    Type: String
+    Description: Your workload's name.
+
+Resources:
+  # IAM policy for S3 access (references the bucket created by server addon)
+  WorkerStorageAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy for worker to access Twenty CRM S3 bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: S3BucketAccess
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+            Resource:
+              - !Sub arn:aws:s3:::${App}-${Env}-storage-${AWS::AccountId}
+              - !Sub arn:aws:s3:::${App}-${Env}-storage-${AWS::AccountId}/*
+
+Outputs:
+  # Environment variable for bucket name
+  StorageS3BucketName:
+    Description: S3 bucket name (injected as STORAGE_S3_BUCKET_NAME)
+    Value: !Sub ${App}-${Env}-storage-${AWS::AccountId}
+
+  StorageS3Region:
+    Description: S3 bucket region (injected as STORAGE_S3_REGION)
+    Value: !Ref AWS::Region
+
+  # Policy ARN that Copilot attaches to the task role
+  WorkerStorageAccessPolicyArn:
+    Description: IAM policy ARN for S3 access
+    Value: !Ref WorkerStorageAccessPolicy
