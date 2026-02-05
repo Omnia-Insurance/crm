@@ -1452,9 +1452,6 @@ msgstr "Παρουσιάστηκε σφάλμα κατά τη μεταφόρτω
 #: src/modules/views/hooks/internal/usePerformViewAPIPersist.ts
 #: src/modules/views/hooks/internal/usePerformViewAPIPersist.ts
 #: src/modules/ui/feedback/snack-bar-manager/hooks/useSnackBar.ts
-#: src/modules/settings/logic-functions/hooks/usePersistLogicFunction.ts
-#: src/modules/settings/logic-functions/hooks/usePersistLogicFunction.ts
-#: src/modules/settings/logic-functions/hooks/usePersistLogicFunction.ts
 #: src/modules/page-layout/hooks/useUpdatePageLayoutWithTabsAndWidgets.ts
 #: src/modules/object-metadata/hooks/useUpdateOneObjectMetadataItem.ts
 #: src/modules/object-metadata/hooks/useUpdateOneFieldMetadataItem.ts
@@ -1462,6 +1459,9 @@ msgstr "Παρουσιάστηκε σφάλμα κατά τη μεταφόρτω
 #: src/modules/object-metadata/hooks/useDeleteOneFieldMetadataItem.ts
 #: src/modules/object-metadata/hooks/useCreateOneObjectMetadataItem.ts
 #: src/modules/object-metadata/hooks/useCreateOneFieldMetadataItem.ts
+#: src/modules/logic-functions/hooks/usePersistLogicFunction.ts
+#: src/modules/logic-functions/hooks/usePersistLogicFunction.ts
+#: src/modules/logic-functions/hooks/usePersistLogicFunction.ts
 msgid "An error occurred."
 msgstr "Παρουσιάστηκε σφάλμα."
 
@@ -5812,6 +5812,11 @@ msgstr "Το αρχείο \"{fileName}\" υπερβαίνει το {maxUploadSiz
 msgid "File \"{fileName}\" uploaded successfully"
 msgstr "Το αρχείο \"{fileName}\" μεταφορτώθηκε με επιτυχία"
 
+#. js-lingui-id: EYl2hs
+#: src/modules/activities/files/hooks/useUploadAttachmentFile.tsx
+msgid "File field not found for attachment object"
+msgstr ""
+
 #. js-lingui-id: N793lP
 #: src/modules/object-record/record-field/ui/meta-types/input/components/FilesFieldInput.tsx
 msgid "File label"
@@ -5820,6 +5825,12 @@ msgstr ""
 #. js-lingui-id: ncBVqE
 #: src/modules/object-record/record-field/ui/meta-types/hooks/useUploadFilesFieldFile.ts
 msgid "File upload failed"
+msgstr ""
+
+#. js-lingui-id: H/+55l
+#: src/modules/activities/files/components/AttachmentRow.tsx
+#: src/modules/activities/files/components/AttachmentList.tsx
+msgid "File URL is not defined"
 msgstr ""
 
 #. js-lingui-id: o7J4JM
@@ -11754,6 +11765,11 @@ msgstr "Συγχρονισμός Ετικετών Αντικειμένων κα�
 msgid "System"
 msgstr "Σύστημα"
 
+#. js-lingui-id: bbR21S
+#: src/pages/settings/data-model/SettingsObjectFieldTable.tsx
+msgid "System fields"
+msgstr ""
+
 #. js-lingui-id: 0apULK
 #: src/pages/settings/data-model/SettingsObjectTable.tsx
 msgid "System objects"
@@ -11764,6 +11780,11 @@ msgstr ""
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
 msgid "System Prompt"
 msgstr "Σύστημα Προτροπής"
+
+#. js-lingui-id: k+7QWO
+#: src/modules/settings/data-model/object-details/components/SettingsObjectRelationsTable.tsx
+msgid "System relations"
+msgstr ""
 
 #. js-lingui-id: D4SseJ
 #: src/pages/settings/profile/appearance/components/SettingsExperience.tsx
