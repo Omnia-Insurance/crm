@@ -108,6 +108,7 @@ export const DEFAULT_RECORD_ACTIONS_CONFIG: Record<
     shortLabel: msg`New record`,
     position: 2,
     isPinned: true,
+    isPrimaryCTA: true,
     Icon: IconPlus,
     shouldBeRegistered: ({ objectPermissions, hasAnySoftDeleteFilterOnView }) =>
       (objectPermissions.canUpdateObjectRecords &&

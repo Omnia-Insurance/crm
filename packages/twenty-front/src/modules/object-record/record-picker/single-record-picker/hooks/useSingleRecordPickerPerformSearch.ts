@@ -8,7 +8,10 @@ import { type RecordPickerPickableMorphItem } from '@/object-record/record-picke
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useRecoilCallback } from 'recoil';
 import { CustomError, isDefined } from 'twenty-shared/utils';
-import { type SearchQuery } from '~/generated/graphql';
+import {
+  type ObjectRecordFilterInput,
+  type SearchQuery,
+} from '~/generated/graphql';
 
 export const useSingleRecordPickerPerformSearch = ({
   selectedIds,
@@ -16,12 +19,14 @@ export const useSingleRecordPickerPerformSearch = ({
   excludedRecordIds = [],
   objectNameSingulars,
   searchFilter,
+  additionalFilter,
 }: {
   selectedIds: string[];
   limit?: number;
   excludedRecordIds?: string[];
   objectNameSingulars: string[];
   searchFilter?: string;
+  additionalFilter?: ObjectRecordFilterInput;
 }): {
   pickableMorphItems: RecordPickerPickableMorphItem[];
   loading: boolean;
@@ -67,12 +72,29 @@ export const useSingleRecordPickerPerformSearch = ({
       onCompleted: onSearchRecordsCompleted,
     });
 
+  const combineFilters = (
+    filters: (ObjectRecordFilterInput | undefined)[],
+  ): ObjectRecordFilterInput | undefined => {
+    const defined = filters.filter((f): f is ObjectRecordFilterInput =>
+      isDefined(f),
+    );
+
+    if (defined.length === 0) return undefined;
+    if (defined.length === 1) return defined[0];
+
+    return { and: defined };
+  };
+
+  const filteredSelectedIdsFilter = combineFilters([
+    selectedIdsFilter,
+    additionalFilter,
+  ]);
   const {
     loading: filteredSelectedRecordsLoading,
     searchRecords: filteredSelectedRecords,
   } = useObjectRecordSearchRecords({
     objectNameSingulars,
-    filter: selectedIdsFilter,
+    filter: filteredSelectedIdsFilter,
     skip: !selectedIds.length,
     searchInput: searchFilter,
     onCompleted: onSearchRecordsCompleted,
@@ -82,10 +104,11 @@ export const useSingleRecordPickerPerformSearch = ({
   const notFilter = notFilterIds.length
     ? { not: { id: { in: notFilterIds } } }
     : undefined;
+  const combinedFilter = combineFilters([notFilter, additionalFilter]);
   const { loading: recordsToSelectLoading, searchRecords: recordsToSelect } =
     useObjectRecordSearchRecords({
       objectNameSingulars,
-      filter: notFilter,
+      filter: combinedFilter,
       limit: limit ?? DEFAULT_SEARCH_REQUEST_LIMIT,
       searchInput: searchFilter,
       fetchPolicy: 'cache-and-network',

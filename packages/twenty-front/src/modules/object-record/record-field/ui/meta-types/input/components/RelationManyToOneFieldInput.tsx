@@ -4,6 +4,7 @@ import { useRelationField } from '@/object-record/record-field/ui/meta-types/hoo
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
+import { FieldDependencyContext } from '@/object-record/record-field-dependency/contexts/FieldDependencyContext';
 import { useAddNewRecordAndOpenRightDrawer } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer';
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 import { recordFieldInputLayoutDirectionComponentState } from '@/object-record/record-field/ui/states/recordFieldInputLayoutDirectionComponentState';
@@ -36,6 +37,11 @@ export const RelationManyToOneFieldInput = () => {
     );
   }
   const { onSubmit, onCancel } = useContext(FieldInputEventContext);
+
+  const fieldDependencyContext = useContext(FieldDependencyContext);
+  const additionalFilter = fieldDependencyContext?.getFilterForField(
+    fieldDefinition.metadata.fieldName,
+  );
 
   const instanceId = useAvailableComponentInstanceIdOrThrow(
     RecordFieldComponentInstanceContext,
@@ -125,6 +131,7 @@ export const RelationManyToOneFieldInput = () => {
           ? 'search-bar-on-top'
           : 'search-bar-on-bottom'
       }
+      additionalFilter={additionalFilter}
     />
   );
 };

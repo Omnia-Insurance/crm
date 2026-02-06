@@ -25,6 +25,7 @@ export const ActionButton = ({
     : undefined;
 
   const buttonAccent = action.isPrimaryCTA ? 'blue' : 'default';
+  const buttonVariant = action.isPrimaryCTA ? 'primary' : 'secondary';
 
   return (
     <>
@@ -32,7 +33,7 @@ export const ActionButton = ({
         <Button
           Icon={action.Icon}
           size="small"
-          variant="secondary"
+          variant={buttonVariant}
           accent={buttonAccent}
           to={to}
           onClick={onClick}
