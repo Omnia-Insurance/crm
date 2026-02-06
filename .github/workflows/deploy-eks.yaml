@@ -116,7 +116,7 @@ jobs:
           helm upgrade --install ${{ env.HELM_RELEASE }} \
             ./packages/twenty-docker/helm/twenty \
             --namespace ${{ env.NAMESPACE }} \
-            --values twenty-values.yaml \
+            --values packages/twenty-docker/helm/twenty/omnia-values.yaml \
             --set server.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --set server.image.tag=${{ steps.image-tag.outputs.tag }} \
             --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
