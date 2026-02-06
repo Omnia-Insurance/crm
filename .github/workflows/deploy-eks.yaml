@@ -72,6 +72,8 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             REACT_APP_SERVER_BASE_URL=/api
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_RELEASE=${{ github.sha }}
 
   deploy:
     name: Deploy to EKS

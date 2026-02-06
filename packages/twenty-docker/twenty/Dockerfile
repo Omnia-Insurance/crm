@@ -23,6 +23,9 @@ RUN yarn && yarn cache clean && npx nx reset
 # Build the back
 FROM common-deps AS twenty-server-build
 
+ARG SENTRY_AUTH_TOKEN
+ARG SENTRY_RELEASE
+
 # Copy sourcecode after installing dependences to accelerate subsequents builds
 COPY ./packages/twenty-emails /app/packages/twenty-emails
 COPY ./packages/twenty-shared /app/packages/twenty-shared
@@ -30,12 +33,28 @@ COPY ./packages/twenty-server /app/packages/twenty-server
 
 RUN npx nx run twenty-server:build
 
+RUN if [ -n "$SENTRY_AUTH_TOKEN" ]; then \
+  npx sentry-cli sourcemaps upload \
+    --auth-token "$SENTRY_AUTH_TOKEN" \
+    --org omnia-insurance \
+    --project crm-server \
+    --release "$SENTRY_RELEASE" \
+    ./packages/twenty-server/dist && \
+  find ./packages/twenty-server/dist -name '*.js.map' -delete; \
+fi
+
 RUN yarn workspaces focus --production twenty-emails twenty-shared twenty-server
 
 # Build the front
 FROM common-deps AS twenty-front-build
 
 ARG REACT_APP_SERVER_BASE_URL
+ARG SENTRY_AUTH_TOKEN
+ARG SENTRY_RELEASE
+
+ENV VITE_BUILD_SOURCEMAP=true
+ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+ENV SENTRY_RELEASE=${SENTRY_RELEASE}
 
 COPY ./packages/twenty-front /app/packages/twenty-front
 COPY ./packages/twenty-ui /app/packages/twenty-ui

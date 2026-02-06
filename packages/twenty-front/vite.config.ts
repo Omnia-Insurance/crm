@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { lingui } from '@lingui/vite-plugin';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { isNonEmptyString } from '@sniptt/guards';
 import react from '@vitejs/plugin-react-swc';
 import wyw from '@wyw-in-js/vite';
@@ -29,6 +30,8 @@ export default defineConfig(({ command, mode }) => {
     SSL_KEY_PATH,
     REACT_APP_PORT,
     IS_DEBUG_MODE,
+    SENTRY_AUTH_TOKEN,
+    SENTRY_RELEASE,
   } = env;
 
   const port = isNonEmptyString(REACT_APP_PORT)
@@ -156,6 +159,21 @@ export default defineConfig(({ command, mode }) => {
         brotliSize: true,
         filename: 'dist/stats.html',
       }) as PluginOption, // https://github.com/btd/rollup-plugin-visualizer/issues/162#issuecomment-1538265997,
+      ...(isNonEmptyString(SENTRY_AUTH_TOKEN)
+        ? [
+            sentryVitePlugin({
+              org: 'omnia-insurance',
+              project: 'crm-front',
+              authToken: SENTRY_AUTH_TOKEN,
+              release: isNonEmptyString(SENTRY_RELEASE)
+                ? { name: SENTRY_RELEASE }
+                : undefined,
+              sourcemaps: {
+                filesToDeleteAfterUpload: ['./build/**/*.map'],
+              },
+            }),
+          ]
+        : []),
     ],
 
     optimizeDeps: {
