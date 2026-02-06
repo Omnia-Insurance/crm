@@ -107,7 +107,8 @@ jobs:
           if [ "${{ github.event.inputs.deploy_only }}" == "true" ]; then
             echo "tag=latest" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+            # Use short SHA (7 chars) to match docker/metadata-action output
+            echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           fi
 
       - name: Deploy with Helm
