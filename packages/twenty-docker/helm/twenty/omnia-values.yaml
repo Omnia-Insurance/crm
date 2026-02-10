@@ -1,5 +1,9 @@
 server:
   replicaCount: 1
+  persistence:
+    enabled: false
+  dockerDataPersistence:
+    enabled: false
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
