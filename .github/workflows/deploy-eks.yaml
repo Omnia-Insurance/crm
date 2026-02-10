@@ -124,13 +124,20 @@ jobs:
             --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --set worker.image.tag=${{ steps.image-tag.outputs.tag }} \
             --wait \
-            --atomic \
+            --burst-limit 200 \
             --timeout 10m
 
       - name: Verify deployment
         run: |
           kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-server -n ${{ env.NAMESPACE }} --timeout=5m
           kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-worker -n ${{ env.NAMESPACE }} --timeout=5m
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deploy failed, rolling back to previous release..."
+          helm rollback ${{ env.HELM_RELEASE }} 0 --namespace ${{ env.NAMESPACE }} --wait --timeout 5m
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-server -n ${{ env.NAMESPACE }} --timeout=3m
 
       - name: Get service URL
         run: |
