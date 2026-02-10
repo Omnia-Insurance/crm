@@ -4,9 +4,11 @@ import { ActionViewType } from '@/action-menu/actions/types/ActionViewType';
 import { type ShouldBeRegisteredFunctionParams } from '@/action-menu/actions/types/ShouldBeRegisteredFunctionParams';
 import { getActionConfig } from '@/action-menu/actions/utils/getActionConfig';
 import { getActionViewType } from '@/action-menu/actions/utils/getActionViewType';
+import { resolveGoToActionLabels } from '@/action-menu/actions/utils/resolveGoToActionLabels';
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
 import { contextStoreIsPageInEditModeComponentState } from '@/context-store/states/contextStoreIsPageInEditModeComponentState';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { isDefined } from 'twenty-shared/utils';
@@ -19,6 +21,8 @@ export const useRegisteredActions = (
     shouldBeRegisteredParams;
 
   const { getIcon } = useIcons();
+
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const contextStoreTargetedRecordsRule = useRecoilComponentValue(
     contextStoreTargetedRecordsRuleComponentState,
@@ -96,5 +100,5 @@ export const useRegisteredActions = (
     })
     .sort((a, b) => a.position - b.position);
 
-  return actions;
+  return resolveGoToActionLabels(actions, objectMetadataItems);
 };
