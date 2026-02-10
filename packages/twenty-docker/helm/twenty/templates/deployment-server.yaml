@@ -167,7 +167,7 @@ spec:
               protocol: TCP
           startupProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: {{ include "twenty.server.containerPort" . }}
             initialDelaySeconds: 10
             periodSeconds: 5
@@ -175,14 +175,14 @@ spec:
             failureThreshold: 30
           livenessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: {{ include "twenty.server.containerPort" . }}
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /
+              path: /healthz
               port: {{ include "twenty.server.containerPort" . }}
             periodSeconds: 5
             timeoutSeconds: 5
