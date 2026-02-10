@@ -30,6 +30,7 @@ export const useCascadeClearDependentFields = ({
         }
 
         for (const dep of dependents) {
+          if (dep.direction === 'reverse') continue;
           if (!fieldsToClear.has(dep.dependentFieldName)) {
             fieldsToClear.add(dep.dependentFieldName);
             queue.push(dep.dependentFieldName);

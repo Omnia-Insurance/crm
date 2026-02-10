@@ -4,6 +4,7 @@ export type FieldDependency = {
   parentFieldName: string;
   parentFieldMetadataId: string;
   bridgeFieldForeignKeyName: string;
+  direction: 'forward' | 'reverse';
 };
 
 export type FieldDependencyGraph = {

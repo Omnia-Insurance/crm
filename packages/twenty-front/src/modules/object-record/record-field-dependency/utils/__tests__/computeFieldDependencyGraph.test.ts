@@ -293,54 +293,81 @@ describe('computeFieldDependencyGraph', () => {
 
     const graph = computeFieldDependencyGraph(policyObject, allObjects);
 
-    // productType depends on carrier (because productType obj has a carrier MANY_TO_ONE)
+    // productType depends on carrier (forward: because productType obj has a carrier MANY_TO_ONE)
     expect(graph.dependenciesByField['productType']).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           parentFieldName: 'carrier',
           bridgeFieldForeignKeyName: 'carrierId',
+          direction: 'forward',
         }),
       ]),
     );
 
-    // carrierProduct depends on carrier
+    // carrierProduct depends on carrier (forward)
     expect(graph.dependenciesByField['carrierProduct']).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           parentFieldName: 'carrier',
           bridgeFieldForeignKeyName: 'carrierId',
+          direction: 'forward',
         }),
       ]),
     );
 
-    // carrierProduct depends on productType
+    // carrierProduct depends on productType (forward)
     expect(graph.dependenciesByField['carrierProduct']).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           parentFieldName: 'productType',
           bridgeFieldForeignKeyName: 'productTypeId',
+          direction: 'forward',
         }),
       ]),
     );
 
-    // policyOption depends on carrierProduct
+    // policyOption depends on carrierProduct (forward)
     expect(graph.dependenciesByField['policyOption']).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           parentFieldName: 'carrierProduct',
           bridgeFieldForeignKeyName: 'carrierProductId',
+          direction: 'forward',
         }),
       ]),
     );
 
-    // carrier has dependents: productType, carrierProduct
-    expect(graph.dependentsByField['carrier']).toHaveLength(2);
+    // carrier has reverse dependencies from productType and carrierProduct
+    expect(graph.dependenciesByField['carrier']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parentFieldName: 'productType',
+          direction: 'reverse',
+        }),
+        expect.objectContaining({
+          parentFieldName: 'carrierProduct',
+          direction: 'reverse',
+        }),
+      ]),
+    );
 
-    // productType has dependent: carrierProduct
-    expect(graph.dependentsByField['productType']).toHaveLength(1);
+    // carrier has forward dependents: productType, carrierProduct
+    const carrierForwardDependents = graph.dependentsByField['carrier']?.filter(
+      (d) => d.direction === 'forward',
+    );
+    expect(carrierForwardDependents).toHaveLength(2);
 
-    // carrierProduct has dependent: policyOption
-    expect(graph.dependentsByField['carrierProduct']).toHaveLength(1);
+    // productType has forward dependent: carrierProduct
+    const productTypeForwardDependents = graph.dependentsByField[
+      'productType'
+    ]?.filter((d) => d.direction === 'forward');
+    expect(productTypeForwardDependents).toHaveLength(1);
+
+    // carrierProduct has forward dependent: policyOption
+    const cpForwardDependents = graph.dependentsByField[
+      'carrierProduct'
+    ]?.filter((d) => d.direction === 'forward');
+    expect(cpForwardDependents).toHaveLength(1);
   });
 
   it('should return empty graph for object with no relation dependencies', () => {
@@ -606,9 +633,12 @@ describe('computeFieldDependencyGraph', () => {
       currentObject,
     ]);
 
-    // carrierProduct should have two parents: carrier and productType
-    expect(graph.dependenciesByField['carrierProduct']).toHaveLength(2);
-    expect(graph.dependenciesByField['carrierProduct']).toEqual(
+    // carrierProduct should have two forward parents: carrier and productType
+    const forwardDeps = graph.dependenciesByField['carrierProduct']?.filter(
+      (d) => d.direction === 'forward',
+    );
+    expect(forwardDeps).toHaveLength(2);
+    expect(forwardDeps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ parentFieldName: 'carrier' }),
         expect.objectContaining({ parentFieldName: 'productType' }),
@@ -616,7 +646,7 @@ describe('computeFieldDependencyGraph', () => {
     );
   });
 
-  it('should handle a single field pair', () => {
+  it('should handle a single field pair with bidirectional dependencies', () => {
     const carrierObject = createMockObject({
       id: 'carrier-obj',
       nameSingular: 'carrier',
@@ -721,22 +751,199 @@ describe('computeFieldDependencyGraph', () => {
       policyObject,
     ]);
 
-    expect(graph.dependenciesByField['product']).toHaveLength(1);
-    expect(graph.dependenciesByField['product']![0]).toEqual({
-      dependentFieldName: 'product',
-      dependentFieldMetadataId: 'policy-product-field',
-      parentFieldName: 'carrier',
-      parentFieldMetadataId: 'policy-carrier-field',
-      bridgeFieldForeignKeyName: 'carrierId',
+    // Forward: product depends on carrier
+    expect(graph.dependenciesByField['product']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'product',
+          dependentFieldMetadataId: 'policy-product-field',
+          parentFieldName: 'carrier',
+          parentFieldMetadataId: 'policy-carrier-field',
+          bridgeFieldForeignKeyName: 'carrierId',
+          direction: 'forward',
+        }),
+      ]),
+    );
+
+    // Reverse: carrier depends on product
+    expect(graph.dependenciesByField['carrier']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'carrier',
+          dependentFieldMetadataId: 'policy-carrier-field',
+          parentFieldName: 'product',
+          parentFieldMetadataId: 'policy-product-field',
+          bridgeFieldForeignKeyName: 'carrierId',
+          direction: 'reverse',
+        }),
+      ]),
+    );
+
+    // Forward dependents of carrier include product
+    expect(graph.dependentsByField['carrier']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'product',
+          direction: 'forward',
+        }),
+      ]),
+    );
+
+    // Reverse dependents of product include carrier
+    expect(graph.dependentsByField['product']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'carrier',
+          direction: 'reverse',
+        }),
+      ]),
+    );
+  });
+
+  it('should create reverse dependencies at each level of a chain', () => {
+    const carrierObject = createMockObject({
+      id: 'carrier-obj',
+      nameSingular: 'carrier',
+      fields: [],
     });
 
-    expect(graph.dependentsByField['carrier']).toHaveLength(1);
-    expect(graph.dependentsByField['carrier']![0]).toEqual({
-      dependentFieldName: 'product',
-      dependentFieldMetadataId: 'policy-product-field',
-      parentFieldName: 'carrier',
-      parentFieldMetadataId: 'policy-carrier-field',
-      bridgeFieldForeignKeyName: 'carrierId',
+    const productTypeObject = createMockObject({
+      id: 'productType-obj',
+      nameSingular: 'productType',
+      fields: [
+        createMockField({
+          id: 'pt-carrier-field',
+          name: 'carrier',
+          relation: {
+            type: RelationType.MANY_TO_ONE,
+            sourceFieldMetadata: { id: 'pt-carrier-field', name: 'carrier' },
+            targetFieldMetadata: {
+              id: 'carrier-pts-field',
+              name: 'productTypes',
+              isCustom: false,
+            },
+            sourceObjectMetadata: {
+              id: 'productType-obj',
+              nameSingular: 'productType',
+              namePlural: 'productTypes',
+            },
+            targetObjectMetadata: {
+              id: 'carrier-obj',
+              nameSingular: 'carrier',
+              namePlural: 'carriers',
+            },
+          },
+        }),
+      ],
     });
+
+    const currentObject = createMockObject({
+      id: 'current-obj',
+      nameSingular: 'current',
+      fields: [
+        createMockField({
+          id: 'current-carrier-field',
+          name: 'carrier',
+          relation: {
+            type: RelationType.MANY_TO_ONE,
+            sourceFieldMetadata: {
+              id: 'current-carrier-field',
+              name: 'carrier',
+            },
+            targetFieldMetadata: {
+              id: 'carrier-currents-field',
+              name: 'currents',
+              isCustom: false,
+            },
+            sourceObjectMetadata: {
+              id: 'current-obj',
+              nameSingular: 'current',
+              namePlural: 'currents',
+            },
+            targetObjectMetadata: {
+              id: 'carrier-obj',
+              nameSingular: 'carrier',
+              namePlural: 'carriers',
+            },
+          },
+        }),
+        createMockField({
+          id: 'current-productType-field',
+          name: 'productType',
+          relation: {
+            type: RelationType.MANY_TO_ONE,
+            sourceFieldMetadata: {
+              id: 'current-productType-field',
+              name: 'productType',
+            },
+            targetFieldMetadata: {
+              id: 'pt-currents-field',
+              name: 'currents',
+              isCustom: false,
+            },
+            sourceObjectMetadata: {
+              id: 'current-obj',
+              nameSingular: 'current',
+              namePlural: 'currents',
+            },
+            targetObjectMetadata: {
+              id: 'productType-obj',
+              nameSingular: 'productType',
+              namePlural: 'productTypes',
+            },
+          },
+        }),
+      ],
+    });
+
+    const graph = computeFieldDependencyGraph(currentObject, [
+      carrierObject,
+      productTypeObject,
+      currentObject,
+    ]);
+
+    // Forward: productType depends on carrier
+    const productTypeForwardDeps = graph.dependenciesByField[
+      'productType'
+    ]?.filter((d) => d.direction === 'forward');
+    expect(productTypeForwardDeps).toHaveLength(1);
+    expect(productTypeForwardDeps![0]).toEqual(
+      expect.objectContaining({
+        parentFieldName: 'carrier',
+        bridgeFieldForeignKeyName: 'carrierId',
+        direction: 'forward',
+      }),
+    );
+
+    // Reverse: carrier depends on productType
+    const carrierReverseDeps = graph.dependenciesByField['carrier']?.filter(
+      (d) => d.direction === 'reverse',
+    );
+    expect(carrierReverseDeps).toHaveLength(1);
+    expect(carrierReverseDeps![0]).toEqual(
+      expect.objectContaining({
+        parentFieldName: 'productType',
+        bridgeFieldForeignKeyName: 'carrierId',
+        direction: 'reverse',
+      }),
+    );
+
+    // dependentsByField includes both forward and reverse entries
+    expect(graph.dependentsByField['carrier']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'productType',
+          direction: 'forward',
+        }),
+      ]),
+    );
+    expect(graph.dependentsByField['productType']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependentFieldName: 'carrier',
+          direction: 'reverse',
+        }),
+      ]),
+    );
   });
 });

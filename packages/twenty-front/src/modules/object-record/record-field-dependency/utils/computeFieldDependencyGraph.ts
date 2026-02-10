@@ -1,12 +1,13 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
-import { type FieldDependencyGraph } from '@/object-record/record-field-dependency/types/FieldDependency';
+import {
+  type FieldDependency,
+  type FieldDependencyGraph,
+} from '@/object-record/record-field-dependency/types/FieldDependency';
 import { getForeignKeyNameFromRelationFieldName } from '@/object-record/utils/getForeignKeyNameFromRelationFieldName';
 import { RelationType } from '~/generated-metadata/graphql';
 
-const isManyToOneRelationField = (
-  field: FieldMetadataItem,
-): boolean => {
+const isManyToOneRelationField = (field: FieldMetadataItem): boolean => {
   return field.relation?.type === RelationType.MANY_TO_ONE;
 };
 
@@ -14,16 +15,15 @@ export const computeFieldDependencyGraph = (
   currentObjectMetadata: ObjectMetadataItem,
   allObjectMetadataItems: ObjectMetadataItem[],
 ): FieldDependencyGraph => {
-  const dependenciesByField: Record<string, import('@/object-record/record-field-dependency/types/FieldDependency').FieldDependency[]> = {};
-  const dependentsByField: Record<string, import('@/object-record/record-field-dependency/types/FieldDependency').FieldDependency[]> = {};
+  const dependenciesByField: Record<string, FieldDependency[]> = {};
+  const dependentsByField: Record<string, FieldDependency[]> = {};
 
   const manyToOneFields = currentObjectMetadata.fields.filter(
     isManyToOneRelationField,
   );
 
   for (const parentField of manyToOneFields) {
-    const parentTargetObjectId =
-      parentField.relation?.targetObjectMetadata.id;
+    const parentTargetObjectId = parentField.relation?.targetObjectMetadata.id;
 
     if (!parentTargetObjectId) {
       continue;
@@ -67,25 +67,47 @@ export const computeFieldDependencyGraph = (
         continue;
       }
 
-      const dependency = {
+      const bridgeForeignKeyName = getForeignKeyNameFromRelationFieldName(
+        bridgeField.name,
+      );
+
+      const forwardDependency = {
         dependentFieldName: dependentField.name,
         dependentFieldMetadataId: dependentField.id,
         parentFieldName: parentField.name,
         parentFieldMetadataId: parentField.id,
-        bridgeFieldForeignKeyName: getForeignKeyNameFromRelationFieldName(
-          bridgeField.name,
-        ),
+        bridgeFieldForeignKeyName: bridgeForeignKeyName,
+        direction: 'forward' as const,
       };
 
       if (!dependenciesByField[dependentField.name]) {
         dependenciesByField[dependentField.name] = [];
       }
-      dependenciesByField[dependentField.name].push(dependency);
+      dependenciesByField[dependentField.name].push(forwardDependency);
 
       if (!dependentsByField[parentField.name]) {
         dependentsByField[parentField.name] = [];
       }
-      dependentsByField[parentField.name].push(dependency);
+      dependentsByField[parentField.name].push(forwardDependency);
+
+      const reverseDependency = {
+        dependentFieldName: parentField.name,
+        dependentFieldMetadataId: parentField.id,
+        parentFieldName: dependentField.name,
+        parentFieldMetadataId: dependentField.id,
+        bridgeFieldForeignKeyName: bridgeForeignKeyName,
+        direction: 'reverse' as const,
+      };
+
+      if (!dependenciesByField[parentField.name]) {
+        dependenciesByField[parentField.name] = [];
+      }
+      dependenciesByField[parentField.name].push(reverseDependency);
+
+      if (!dependentsByField[dependentField.name]) {
+        dependentsByField[dependentField.name] = [];
+      }
+      dependentsByField[dependentField.name].push(reverseDependency);
     }
   }
 
