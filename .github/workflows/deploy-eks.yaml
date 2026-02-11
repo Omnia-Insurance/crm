@@ -136,6 +136,7 @@ jobs:
             --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --set worker.image.tag=${{ steps.image-tag.outputs.tag }} \
             --wait \
+            --cleanup-on-fail \
             --timeout 10m
 
       - name: Verify deployment
@@ -143,18 +144,35 @@ jobs:
           kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-server -n ${{ env.NAMESPACE }} --timeout=5m
           kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-worker -n ${{ env.NAMESPACE }} --timeout=5m
 
-      - name: Rollback on failure
+      - name: Debug on failure
         if: failure()
         run: |
-          echo "Deploy failed, attempting rollback to previous release..."
-          PREV=$(helm history ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} --max 2 -o json | jq '.[0].revision')
-          if [ "$PREV" != "null" ] && [ -n "$PREV" ]; then
-            helm rollback ${{ env.HELM_RELEASE }} "$PREV" \
-              --namespace ${{ env.NAMESPACE }} --wait --timeout 5m || \
-              echo "::warning::Helm rollback failed — manual intervention may be needed"
-          else
-            echo "::warning::No previous release found, skipping rollback"
-          fi
+          echo "::group::Pod status"
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          echo "::endgroup::"
+
+          echo "::group::Pod events"
+          kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp' | tail -30
+          echo "::endgroup::"
+
+          echo "::group::Non-ready pod details"
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} --field-selector=status.phase!=Running -o name 2>/dev/null); do
+            echo "--- $pod ---"
+            kubectl describe "$pod" -n ${{ env.NAMESPACE }} | tail -20
+          done
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -o name 2>/dev/null); do
+            READY=$(kubectl get "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+            if [ "$READY" != "True" ]; then
+              echo "--- $pod (not ready) ---"
+              kubectl describe "$pod" -n ${{ env.NAMESPACE }} | tail -25
+              kubectl logs "$pod" -n ${{ env.NAMESPACE }} --tail=30 --all-containers 2>/dev/null || true
+            fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::Node resources"
+          kubectl top nodes 2>/dev/null || kubectl describe nodes | grep -A 10 "Allocated resources"
+          echo "::endgroup::"
 
       - name: Get service URL
         run: |
