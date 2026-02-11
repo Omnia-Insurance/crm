@@ -90,6 +90,7 @@ export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
     const firstOperand = getRecordFilterOperands({
       filterType,
       subFieldName,
+      relationType: fieldMetadataItem.relation?.type,
     })?.[0];
 
     if (!isDefined(firstOperand)) {

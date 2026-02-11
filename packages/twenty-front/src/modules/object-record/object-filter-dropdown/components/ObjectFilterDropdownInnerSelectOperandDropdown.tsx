@@ -37,6 +37,7 @@ export const ObjectFilterDropdownInnerSelectOperandDropdown = () => {
           fieldMetadataItemUsedInDropdown.type,
         ),
         subFieldName: subFieldNameUsedInDropdown,
+        relationType: fieldMetadataItemUsedInDropdown.relation?.type,
       })
     : [];
 

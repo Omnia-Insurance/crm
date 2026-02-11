@@ -214,7 +214,7 @@ export class WorkspaceUpdateQueryBuilder<
           updatedValues.length === 1 ? updatedValues[0] : updatedValues;
       }
 
-      this.applyRowLevelPermissionPredicates();
+      await this.applyRowLevelPermissionPredicates();
 
       const valuesSet = this.expressionMap.valuesSet ?? {};
       const updatedRecords: T[] = before.map(
@@ -227,7 +227,7 @@ export class WorkspaceUpdateQueryBuilder<
           }) as T,
       );
 
-      this.validateRLSPredicatesForUpdate({
+      await this.validateRLSPredicatesForUpdate({
         updatedRecords,
       });
 
@@ -423,7 +423,7 @@ export class WorkspaceUpdateQueryBuilder<
         this.expressionMap.valuesSet = input.partialEntity;
         this.where({ id: input.criteria });
 
-        this.applyRowLevelPermissionPredicates();
+        await this.applyRowLevelPermissionPredicates();
 
         const beforeRecord = beforeRecordById.get(input.criteria);
         const updatedRecords = beforeRecord
@@ -435,7 +435,7 @@ export class WorkspaceUpdateQueryBuilder<
             ]
           : [];
 
-        this.validateRLSPredicatesForUpdate({
+        await this.validateRLSPredicatesForUpdate({
           updatedRecords,
         });
 
@@ -615,7 +615,7 @@ export class WorkspaceUpdateQueryBuilder<
     return this;
   }
 
-  private applyRowLevelPermissionPredicates(): void {
+  private async applyRowLevelPermissionPredicates(): Promise<void> {
     if (
       this.featureFlagMap[
         FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
@@ -635,7 +635,7 @@ export class WorkspaceUpdateQueryBuilder<
       this.internalContext,
     );
 
-    applyRowLevelPermissionPredicates({
+    await applyRowLevelPermissionPredicates({
       queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>,
       objectMetadata,
       internalContext: this.internalContext,
@@ -644,11 +644,11 @@ export class WorkspaceUpdateQueryBuilder<
     });
   }
 
-  private validateRLSPredicatesForUpdate({
+  private async validateRLSPredicatesForUpdate({
     updatedRecords,
   }: {
     updatedRecords: T[];
-  }): void {
+  }): Promise<void> {
     if (
       this.featureFlagMap[
         FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
@@ -670,7 +670,7 @@ export class WorkspaceUpdateQueryBuilder<
       this.internalContext.flatFieldMetadataMaps,
     );
 
-    validateRLSPredicatesForRecords({
+    await validateRLSPredicatesForRecords({
       records: updatedRecordsFormatted,
       objectMetadata,
       internalContext: this.internalContext,

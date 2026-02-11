@@ -11,6 +11,7 @@ import { type JsonValue } from 'type-fest';
 
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
 import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
 import { AdvancedFilterContext } from '@/object-record/advanced-filter/states/context/AdvancedFilterContext';
@@ -119,6 +120,8 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionValueInput =
         objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
       });
 
+    const { objectMetadataItems } = useObjectMetadataItems();
+
     const { upsertObjectFilterDropdownCurrentFilter } =
       useUpsertObjectFilterDropdownCurrentFilter();
 
@@ -163,11 +166,27 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionValueInput =
         return baseLabel;
       }
 
+      // If not found in WM fields, check all objects (indirect relation case)
+      if (!isDefined(workspaceMemberField)) {
+        for (const objectMetadata of objectMetadataItems) {
+          const foundField = objectMetadata.fields.find(
+            (field) => field.id === dynamicValue.workspaceMemberFieldMetadataId,
+          );
+          if (isDefined(foundField)) {
+            return null; // For indirect relations, just show "Me" without sub-field
+          }
+        }
+      }
+
       return (
         dynamicValue.workspaceMemberSubFieldName ??
         dynamicValue.workspaceMemberFieldMetadataId
       );
-    }, [dynamicValue, workspaceMemberMetadataItem?.fields]);
+    }, [
+      dynamicValue,
+      workspaceMemberMetadataItem?.fields,
+      objectMetadataItems,
+    ]);
 
     const handleSelectDynamicValue = (
       workspaceMemberFieldMetadataId: string,

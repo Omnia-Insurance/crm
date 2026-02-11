@@ -16,6 +16,7 @@ import { FeatureFlagKey } from 'src/engine/core-modules/feature-flag/enums/featu
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/workspace-select-query-builder';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   queryBuilder: WorkspaceSelectQueryBuilder<T>;
@@ -25,13 +26,15 @@ type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   featureFlagMap: FeatureFlagMap;
 };
 
-export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
+export const applyRowLevelPermissionPredicates = async <
+  T extends ObjectLiteral,
+>({
   queryBuilder,
   objectMetadata,
   internalContext,
   authContext,
   featureFlagMap,
-}: ApplyRowLevelPermissionPredicatesArgs<T>): void => {
+}: ApplyRowLevelPermissionPredicatesArgs<T>): Promise<void> => {
   if (
     featureFlagMap[
       FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
@@ -44,7 +47,7 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     ? internalContext.userWorkspaceRoleMap[authContext.userWorkspaceId]
     : undefined;
 
-  const recordFilter = buildRowLevelPermissionRecordFilter({
+  const recordFilter = await buildRowLevelPermissionRecordFilter({
     flatRowLevelPermissionPredicateMaps:
       internalContext.flatRowLevelPermissionPredicateMaps,
     flatRowLevelPermissionPredicateGroupMaps:
@@ -53,6 +56,10 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     objectMetadata,
     roleId,
     authContext,
+    flatObjectMetadataMaps: internalContext.flatObjectMetadataMaps,
+    objectIdByNameSingular: internalContext.objectIdByNameSingular,
+    workspaceDataSource: internalContext.coreDataSource,
+    workspaceSchemaName: getWorkspaceSchemaName(internalContext.workspaceId),
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {
@@ -71,6 +78,7 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     fieldParser: new GraphqlQueryFilterFieldParser(
       objectMetadata,
       internalContext.flatFieldMetadataMaps,
+      internalContext.flatObjectMetadataMaps,
     ),
     useDirectTableReference: isUpdateOrDeleteQuery,
   });

@@ -59,6 +59,7 @@ type FieldShared = {
   name: string;
   type: FieldMetadataType;
   label: string;
+  relation?: { type: string } | null;
 };
 
 type TurnRecordFilterIntoRecordGqlOperationFilterParams = {
@@ -96,7 +97,10 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
   if (shouldComputeEmptinessFilter) {
     const emptinessFilter = getEmptyRecordGqlOperationFilter({
       operand: recordFilter.operand,
-      correspondingField: correspondingFieldMetadataItem,
+      correspondingField: {
+        ...correspondingFieldMetadataItem,
+        relationType: correspondingFieldMetadataItem.relation?.type,
+      },
       recordFilter: recordFilter,
     });
 

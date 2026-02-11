@@ -11,6 +11,7 @@ import { assertUnreachable, isExpectedSubFieldName } from 'twenty-shared/utils';
 export type GetRecordFilterOperandsParams = {
   filterType: FilterableAndTSVectorFieldType;
   subFieldName?: string | null | undefined;
+  relationType?: string | null | undefined;
 };
 
 const emptyOperands = [
@@ -161,6 +162,7 @@ export const COMPOSITE_FIELD_FILTER_OPERANDS_MAP = {
 export const getRecordFilterOperands = ({
   filterType,
   subFieldName,
+  relationType,
 }: GetRecordFilterOperandsParams): readonly RecordFilterOperand[] => {
   switch (filterType) {
     case 'TEXT':
@@ -195,6 +197,9 @@ export const getRecordFilterOperands = ({
     case 'RATING':
       return FILTER_OPERANDS_MAP.RATING;
     case 'RELATION':
+      if (relationType === 'ONE_TO_MANY') {
+        return emptyOperands;
+      }
       return FILTER_OPERANDS_MAP.RELATION;
     case 'MULTI_SELECT':
       return FILTER_OPERANDS_MAP.MULTI_SELECT;

@@ -159,7 +159,7 @@ export class WorkspaceEventEmitterService {
 
     const objectNameSingular = workspaceEventBatch.objectMetadata.nameSingular;
 
-    const subscriberRLSFilter = this.buildSubscriberRLSFilter(
+    const subscriberRLSFilter = await this.buildSubscriberRLSFilter(
       streamData.authContext,
       roleId,
       workspaceEventBatch.objectMetadata,
@@ -222,7 +222,7 @@ export class WorkspaceEventEmitterService {
     }
   }
 
-  private buildSubscriberRLSFilter(
+  private async buildSubscriberRLSFilter(
     subscriberAuthContext: SerializableAuthContext,
     roleId: string,
     objectMetadata: FlatObjectMetadata,
@@ -232,7 +232,7 @@ export class WorkspaceEventEmitterService {
       flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
     },
     flatWorkspaceMemberMaps: FlatWorkspaceMemberMaps,
-  ): RecordGqlOperationFilter | null {
+  ): Promise<RecordGqlOperationFilter | null> {
     const workspaceMember = isDefined(subscriberAuthContext.workspaceMemberId)
       ? flatWorkspaceMemberMaps.byId[subscriberAuthContext.workspaceMemberId]
       : undefined;

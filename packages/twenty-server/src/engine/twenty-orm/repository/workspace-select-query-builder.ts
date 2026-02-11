@@ -75,7 +75,7 @@ export class WorkspaceSelectQueryBuilder<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async execute(): Promise<any> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -105,7 +105,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getMany(): Promise<T[]> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -132,7 +132,7 @@ export class WorkspaceSelectQueryBuilder<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async getRawOne<U = any>(): Promise<U | undefined> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       return super.getRawOne();
     } catch (error) {
@@ -143,7 +143,7 @@ export class WorkspaceSelectQueryBuilder<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async getRawMany<U = any>(): Promise<U[]> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       return super.getRawMany();
     } catch (error) {
@@ -153,7 +153,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getOne(): Promise<T | null> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -181,7 +181,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getOneOrFail(): Promise<T> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -207,7 +207,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getCount(): Promise<number> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       return super.getCount();
     } catch (error) {
@@ -224,7 +224,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getManyAndCount(): Promise<[T[], number]> {
     try {
-      this.validatePermissions();
+      await this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -330,8 +330,8 @@ export class WorkspaceSelectQueryBuilder<
     );
   }
 
-  private validatePermissions(): void {
-    this.applyRowLevelPermissionPredicates();
+  private async validatePermissions(): Promise<void> {
+    await this.applyRowLevelPermissionPredicates();
     validateQueryIsPermittedOrThrow({
       expressionMap: this.expressionMap,
       objectsPermissions: this.objectRecordsPermissions,
@@ -357,7 +357,7 @@ export class WorkspaceSelectQueryBuilder<
     return mainAliasTarget;
   }
 
-  private applyRowLevelPermissionPredicates(): void {
+  private async applyRowLevelPermissionPredicates(): Promise<void> {
     if (
       this.featureFlagMap[
         FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
@@ -383,7 +383,7 @@ export class WorkspaceSelectQueryBuilder<
       this.internalContext,
     );
 
-    applyRowLevelPermissionPredicates({
+    await applyRowLevelPermissionPredicates({
       queryBuilder: this,
       objectMetadata,
       internalContext: this.internalContext,

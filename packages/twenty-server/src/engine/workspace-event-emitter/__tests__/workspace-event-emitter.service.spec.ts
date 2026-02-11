@@ -225,7 +225,7 @@ describe('WorkspaceEventEmitterService', () => {
       getOrRecompute: jest.fn().mockImplementation(createCacheMock()),
     };
 
-    (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue({});
+    (buildRowLevelPermissionRecordFilter as jest.Mock).mockResolvedValue({});
     (
       isRecordMatchingRLSRowLevelPermissionPredicate as jest.Mock
     ).mockReturnValue(true);
@@ -689,7 +689,7 @@ describe('WorkspaceEventEmitterService', () => {
     it('should combine query filter with RLS filter', async () => {
       const rlsFilter: RecordGqlOperationFilter = { status: { eq: 'active' } };
 
-      (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue(
+      (buildRowLevelPermissionRecordFilter as jest.Mock).mockResolvedValue(
         rlsFilter,
       );
 
@@ -951,7 +951,7 @@ describe('WorkspaceEventEmitterService', () => {
           assigneeId: { eq: workspaceMemberId },
         };
 
-        (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue(
+        (buildRowLevelPermissionRecordFilter as jest.Mock).mockResolvedValue(
           rlsFilter,
         );
 
@@ -1036,7 +1036,7 @@ describe('WorkspaceEventEmitterService', () => {
           locale: { eq: 'en' },
         };
 
-        (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue(
+        (buildRowLevelPermissionRecordFilter as jest.Mock).mockResolvedValue(
           rlsFilter,
         );
 
@@ -1105,7 +1105,9 @@ describe('WorkspaceEventEmitterService', () => {
           idByUserId: {},
         };
 
-        (buildRowLevelPermissionRecordFilter as jest.Mock).mockReturnValue({});
+        (buildRowLevelPermissionRecordFilter as jest.Mock).mockResolvedValue(
+          {},
+        );
 
         const streamDataWithWorkspaceMember: EventStreamData = {
           authContext: {

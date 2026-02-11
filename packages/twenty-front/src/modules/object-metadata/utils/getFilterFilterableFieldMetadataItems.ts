@@ -17,7 +17,8 @@ export const getFilterFilterableFieldMetadataItems = ({
 
     const isRelationFieldHandled = !(
       field.type === FieldMetadataType.RELATION &&
-      field.relation?.type !== RelationType.MANY_TO_ONE
+      field.relation?.type !== RelationType.MANY_TO_ONE &&
+      field.relation?.type !== RelationType.ONE_TO_MANY
     );
 
     const isFieldTypeFilterable = [

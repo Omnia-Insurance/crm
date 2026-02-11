@@ -79,6 +79,7 @@ export const AdvancedFilterAddFilterRuleSelect = ({
       type: filterType,
       operand: getRecordFilterOperands({
         filterType,
+        relationType: defaultFieldMetadataItemForFilter.relation?.type,
       })[0],
       value: '',
       displayValue: '',
@@ -128,6 +129,7 @@ export const AdvancedFilterAddFilterRuleSelect = ({
       type: filterType,
       operand: getRecordFilterOperands({
         filterType,
+        relationType: defaultFieldMetadataItemForFilter.relation?.type,
       })[0],
       value: '',
       displayValue: '',

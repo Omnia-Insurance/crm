@@ -13,6 +13,7 @@ import {
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
 import { isRecordMatchingRLSRowLevelPermissionPredicate } from 'src/engine/twenty-orm/utils/is-record-matching-rls-row-level-permission-predicate.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 type ValidateRLSPredicatesForRecordsArgs<T extends ObjectLiteral> = {
   records: T[];
@@ -23,14 +24,14 @@ type ValidateRLSPredicatesForRecordsArgs<T extends ObjectLiteral> = {
   errorMessage?: string;
 };
 
-export const validateRLSPredicatesForRecords = <T extends ObjectLiteral>({
+export const validateRLSPredicatesForRecords = async <T extends ObjectLiteral>({
   records,
   objectMetadata,
   internalContext,
   authContext,
   shouldBypassPermissionChecks,
   errorMessage = 'Record does not satisfy row-level security constraints of your current role',
-}: ValidateRLSPredicatesForRecordsArgs<T>): void => {
+}: ValidateRLSPredicatesForRecordsArgs<T>): Promise<void> => {
   if (shouldBypassPermissionChecks) {
     return;
   }
@@ -43,7 +44,7 @@ export const validateRLSPredicatesForRecords = <T extends ObjectLiteral>({
     return;
   }
 
-  const recordFilter = buildRowLevelPermissionRecordFilter({
+  const recordFilter = await buildRowLevelPermissionRecordFilter({
     flatRowLevelPermissionPredicateMaps:
       internalContext.flatRowLevelPermissionPredicateMaps,
     flatRowLevelPermissionPredicateGroupMaps:
@@ -52,6 +53,10 @@ export const validateRLSPredicatesForRecords = <T extends ObjectLiteral>({
     objectMetadata,
     roleId,
     authContext,
+    flatObjectMetadataMaps: internalContext.flatObjectMetadataMaps,
+    objectIdByNameSingular: internalContext.objectIdByNameSingular,
+    workspaceDataSource: internalContext.coreDataSource,
+    workspaceSchemaName: getWorkspaceSchemaName(internalContext.workspaceId),
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {

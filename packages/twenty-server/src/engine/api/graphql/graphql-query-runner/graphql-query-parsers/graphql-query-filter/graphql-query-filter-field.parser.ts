@@ -1,8 +1,13 @@
 import { msg } from '@lingui/core/macro';
-import { compositeTypeDefinitions } from 'twenty-shared/types';
+import {
+  compositeTypeDefinitions,
+  FieldMetadataType,
+  RelationType,
+} from 'twenty-shared/types';
 import { capitalize, isDefined } from 'twenty-shared/utils';
 import { type WhereExpressionBuilder } from 'typeorm';
 
+import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
 import {
   GraphqlQueryRunnerException,
   GraphqlQueryRunnerExceptionCode,
@@ -15,19 +20,28 @@ import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { computeTableName } from 'src/engine/utils/compute-table-name.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 const ARRAY_OPERATORS = ['in', 'contains', 'notContains'];
 
 export class GraphqlQueryFilterFieldParser {
   private flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  private flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
+  private workspaceSchemaName: string;
   private fieldIdByName: Record<string, string>;
   private fieldIdByJoinColumnName: Record<string, string>;
 
   constructor(
     flatObjectMetadata: FlatObjectMetadata,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+    flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
   ) {
     this.flatFieldMetadataMaps = flatFieldMetadataMaps;
+    this.flatObjectMetadataMaps = flatObjectMetadataMaps;
+    this.workspaceSchemaName = getWorkspaceSchemaName(
+      flatObjectMetadata.workspaceId,
+    );
 
     const fieldMaps = buildFieldMapsFromFlatObjectMetadata(
       flatFieldMetadataMaps,
@@ -57,6 +71,20 @@ export class GraphqlQueryFilterFieldParser {
 
     if (!isDefined(fieldMetadata)) {
       throw new Error(`Field metadata not found for field: ${key}`);
+    }
+
+    if (
+      fieldMetadata.type === FieldMetadataType.RELATION &&
+      (fieldMetadata.settings as { relationType?: string } | undefined)
+        ?.relationType === RelationType.ONE_TO_MANY
+    ) {
+      return this.parseOneToManyRelationFilter(
+        queryBuilder,
+        fieldMetadata,
+        objectNameSingular,
+        filterValue,
+        isFirst,
+      );
     }
 
     if (isCompositeFieldMetadataType(fieldMetadata.type)) {
@@ -161,5 +189,95 @@ export class GraphqlQueryFilterFieldParser {
 
       queryBuilder.andWhere(sql, params);
     });
+  }
+
+  private parseOneToManyRelationFilter(
+    queryBuilder: WhereExpressionBuilder,
+    fieldMetadata: FlatFieldMetadata,
+    objectNameSingular: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    filterValue: any,
+    isFirst = false,
+  ): void {
+    const [[operator, value]] = Object.entries(filterValue);
+
+    if (operator !== 'is') {
+      throw new GraphqlQueryRunnerException(
+        `Only "is" operator is supported for ONE_TO_MANY relation filters`,
+        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
+
+    if (value !== 'NULL' && value !== 'NOT_NULL') {
+      throw new GraphqlQueryRunnerException(
+        `Invalid value for ONE_TO_MANY relation filter. Expected "NULL" or "NOT_NULL"`,
+        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
+
+    const targetObjectMetadataId = fieldMetadata.relationTargetObjectMetadataId;
+    const inverseFieldMetadataId = fieldMetadata.relationTargetFieldMetadataId;
+
+    if (
+      !isDefined(targetObjectMetadataId) ||
+      !isDefined(inverseFieldMetadataId)
+    ) {
+      throw new Error(
+        `Missing relation metadata for ONE_TO_MANY field: ${fieldMetadata.name}`,
+      );
+    }
+
+    const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: targetObjectMetadataId,
+      flatEntityMaps: this.flatObjectMetadataMaps,
+    });
+
+    if (!isDefined(targetObjectMetadata)) {
+      throw new Error(
+        `Target object metadata not found for ONE_TO_MANY field: ${fieldMetadata.name}`,
+      );
+    }
+
+    const inverseFieldMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: inverseFieldMetadataId,
+      flatEntityMaps: this.flatFieldMetadataMaps,
+    });
+
+    if (!isDefined(inverseFieldMetadata)) {
+      throw new Error(
+        `Inverse field metadata not found for ONE_TO_MANY field: ${fieldMetadata.name}`,
+      );
+    }
+
+    const foreignKeyColumnName = (
+      inverseFieldMetadata.settings as { joinColumnName?: string } | undefined
+    )?.joinColumnName;
+
+    if (!isDefined(foreignKeyColumnName)) {
+      throw new Error(
+        `Join column name not found on inverse field for ONE_TO_MANY field: ${fieldMetadata.name}`,
+      );
+    }
+
+    const targetTableName = computeTableName(
+      targetObjectMetadata.nameSingular,
+      targetObjectMetadata.isCustom,
+    );
+
+    const existsPrefix = value === 'NULL' ? 'NOT EXISTS' : 'EXISTS';
+    const subqueryAlias = `${targetTableName}_exists`;
+
+    const sql =
+      `${existsPrefix} (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
+      `WHERE "${subqueryAlias}"."${foreignKeyColumnName}" = "${objectNameSingular}"."id" ` +
+      `AND "${subqueryAlias}"."deletedAt" IS NULL)`;
+
+    if (isFirst) {
+      queryBuilder.where(sql);
+    } else {
+      queryBuilder.andWhere(sql);
+    }
   }
 }

@@ -220,7 +220,7 @@ export class WorkspaceInsertQueryBuilder<
         this.expressionMap.valuesSet = updatedValues;
       }
 
-      this.validateRLSPredicatesForInsert();
+      await this.validateRLSPredicatesForInsert();
 
       const result = await super.execute();
 
@@ -317,7 +317,7 @@ export class WorkspaceInsertQueryBuilder<
     }
   }
 
-  private validateRLSPredicatesForInsert(): void {
+  private async validateRLSPredicatesForInsert(): Promise<void> {
     if (
       this.featureFlagMap[
         FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
@@ -343,7 +343,7 @@ export class WorkspaceInsertQueryBuilder<
       this.internalContext.flatFieldMetadataMaps,
     );
 
-    validateRLSPredicatesForRecords({
+    await validateRLSPredicatesForRecords({
       records: valuesToInsertFormatted,
       objectMetadata,
       internalContext: this.internalContext,

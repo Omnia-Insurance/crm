@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import {
   GraphQLInputFieldConfigMap,
+  GraphQLInputObjectType,
   isInputObjectType,
   isObjectType,
 } from 'graphql';
@@ -9,6 +10,7 @@ import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { GqlInputTypeDefinitionKind } from 'src/engine/api/graphql/workspace-schema-builder/enums/gql-input-type-definition-kind.enum';
+import { FilterIs } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/input/filter-is.input-type';
 import {
   TypeMapperService,
   TypeOptions,
@@ -83,8 +85,22 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
     >;
     typeOptions: TypeOptions;
   }) {
-    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
-      return {};
+    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
+      const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
+      const oneToManyFilterType = new GraphQLInputObjectType({
+        name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
+        fields: {
+          is: { type: FilterIs },
+        },
+      });
+
+      return {
+        [fieldMetadata.name]: {
+          type: oneToManyFilterType,
+          description: fieldMetadata.description,
+        },
+      };
+    }
 
     const { joinColumnName } = extractGraphQLRelationFieldNames(fieldMetadata);
 

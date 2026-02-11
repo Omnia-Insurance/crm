@@ -83,6 +83,7 @@ export const useInitializeFilterOnFieldMetadataItemFromViewBarFilterDropdown =
 
             const defaultOperand = getRecordFilterOperands({
               filterType,
+              relationType: fieldMetadataItem.relation?.type,
             })[0];
 
             const duplicateFilterInCurrentRecordFilters =

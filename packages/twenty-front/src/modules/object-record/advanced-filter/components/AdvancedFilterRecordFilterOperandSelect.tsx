@@ -1,4 +1,5 @@
 import { AdvancedFilterRecordFilterOperandSelectContent } from '@/object-record/advanced-filter/components/AdvancedFilterRecordFilterOperandSelectContent';
+import { objectMetadataItemsState } from '@/object-metadata/states/objectMetadataItemsState';
 import { getOperandLabel } from '@/object-record/object-filter-dropdown/utils/getOperandLabel';
 import { useTimeZoneAbbreviationForNowInUserTimeZone } from '@/object-record/record-filter/hooks/useTimeZoneAbbreviationForNowInUserTimeZone';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
@@ -8,6 +9,7 @@ import { SelectControl } from '@/ui/input/components/SelectControl';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import styled from '@emotion/styled';
 import { t } from '@lingui/core/macro';
+import { useRecoilValue } from 'recoil';
 import { isDefined } from 'twenty-shared/utils';
 
 const StyledContainer = styled.div`
@@ -25,6 +27,8 @@ export const AdvancedFilterRecordFilterOperandSelect = ({
     currentRecordFiltersComponentState,
   );
 
+  const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
+
   const filter = currentRecordFilters.find(
     (recordFilter) => recordFilter.id === recordFilterId,
   );
@@ -33,10 +37,17 @@ export const AdvancedFilterRecordFilterOperandSelect = ({
 
   const filterType = filter?.type;
 
+  const fieldMetadataItem = isDefined(filter?.fieldMetadataId)
+    ? objectMetadataItems
+        .flatMap((item) => item.fields)
+        .find((field) => field.id === filter.fieldMetadataId)
+    : undefined;
+
   const operandsForFilterType = isDefined(filterType)
     ? getRecordFilterOperands({
         filterType,
         subFieldName: filter?.subFieldName,
+        relationType: fieldMetadataItem?.relation?.type,
       })
     : [];
 

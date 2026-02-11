@@ -1,5 +1,6 @@
 /* @license Enterprise */
 
+import { type DataSource } from 'typeorm';
 import {
   FieldMetadataType,
   RecordFilterGroupLogicalOperator,
@@ -31,6 +32,7 @@ import {
 import { type FlatRowLevelPermissionPredicateGroupMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group-maps.type';
 import { type FlatRowLevelPermissionPredicateMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-maps.type';
 import { validateEnumValueCompatibility } from 'src/engine/twenty-orm/utils/validate-enum-value-compatibility.util';
+import { computeTableName } from 'src/engine/utils/compute-table-name.util';
 
 type BuildRowLevelPermissionRecordFilterArgs = {
   flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
@@ -39,16 +41,24 @@ type BuildRowLevelPermissionRecordFilterArgs = {
   objectMetadata: FlatObjectMetadata;
   roleId: string | undefined;
   authContext: AuthContext;
+  flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>;
+  objectIdByNameSingular?: Record<string, string>;
+  workspaceDataSource?: DataSource;
+  workspaceSchemaName?: string;
 };
 
-export const buildRowLevelPermissionRecordFilter = ({
+export const buildRowLevelPermissionRecordFilter = async ({
   flatRowLevelPermissionPredicateMaps,
   flatRowLevelPermissionPredicateGroupMaps,
   flatFieldMetadataMaps,
   objectMetadata,
   roleId,
   authContext,
-}: BuildRowLevelPermissionRecordFilterArgs): RecordGqlOperationFilter | null => {
+  flatObjectMetadataMaps,
+  objectIdByNameSingular,
+  workspaceDataSource,
+  workspaceSchemaName,
+}: BuildRowLevelPermissionRecordFilterArgs): Promise<RecordGqlOperationFilter | null> => {
   if (!isDefined(roleId)) {
     return null;
   }
@@ -70,105 +80,168 @@ export const buildRowLevelPermissionRecordFilter = ({
 
   const workspaceMember = authContext.workspaceMember;
 
-  const recordFilters = predicates
-    .map((predicate) => {
-      const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: predicate.fieldMetadataId,
-        flatEntityMaps: flatFieldMetadataMaps,
-      });
+  const recordFilters = (
+    await Promise.all(
+      predicates.map(async (predicate) => {
+        const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
+          flatEntityId: predicate.fieldMetadataId,
+          flatEntityMaps: flatFieldMetadataMaps,
+        });
 
-      if (!isDefined(fieldMetadata)) {
-        throw new PermissionsException(
-          `Field metadata not found for row level predicate ${predicate.id}`,
-          PermissionsExceptionCode.FIELD_METADATA_NOT_FOUND,
-        );
-      }
-
-      const workspaceMemberFieldMetadataId =
-        predicate.workspaceMemberFieldMetadataId;
-      let predicateValue: RowLevelPermissionPredicateValue = predicate.value;
-
-      if (isDefined(workspaceMemberFieldMetadataId)) {
-        const workspaceMemberFieldMetadata = findFlatEntityByIdInFlatEntityMaps(
-          {
-            flatEntityId: workspaceMemberFieldMetadataId,
-            flatEntityMaps: flatFieldMetadataMaps,
-          },
-        );
-
-        if (!isDefined(workspaceMemberFieldMetadata)) {
+        if (!isDefined(fieldMetadata)) {
           throw new PermissionsException(
-            `Workspace member field metadata not found for row level predicate ${predicate.id}`,
+            `Field metadata not found for row level predicate ${predicate.id}`,
             PermissionsExceptionCode.FIELD_METADATA_NOT_FOUND,
           );
         }
 
-        if (!isDefined(workspaceMember)) {
-          return null;
+        const workspaceMemberFieldMetadataId =
+          predicate.workspaceMemberFieldMetadataId;
+        let predicateValue: RowLevelPermissionPredicateValue = predicate.value;
+
+        if (isDefined(workspaceMemberFieldMetadataId)) {
+          const workspaceMemberFieldMetadata =
+            findFlatEntityByIdInFlatEntityMaps({
+              flatEntityId: workspaceMemberFieldMetadataId,
+              flatEntityMaps: flatFieldMetadataMaps,
+            });
+
+          if (!isDefined(workspaceMemberFieldMetadata)) {
+            throw new PermissionsException(
+              `Workspace member field metadata not found for row level predicate ${predicate.id}`,
+              PermissionsExceptionCode.FIELD_METADATA_NOT_FOUND,
+            );
+          }
+
+          // Determine if this is a direct or indirect relation
+          const workspaceMemberObjectId =
+            objectIdByNameSingular?.['workspaceMember'];
+          const isDirectRelation =
+            !workspaceMemberObjectId ||
+            workspaceMemberFieldMetadata.objectMetadataId ===
+              workspaceMemberObjectId;
+
+          if (isDirectRelation) {
+            if (!isDefined(workspaceMember)) {
+              return null;
+            }
+
+            const rawWorkspaceMemberValue = Object.entries(
+              workspaceMember,
+            ).find(([key]) => key === workspaceMemberFieldMetadata.name)?.[1];
+
+            const workspaceMemberSubFieldName =
+              predicate.workspaceMemberSubFieldName;
+
+            if (
+              isDefined(workspaceMemberSubFieldName) &&
+              isDefined(rawWorkspaceMemberValue) &&
+              isCompositeFieldMetadataType(workspaceMemberFieldMetadata.type) &&
+              typeof rawWorkspaceMemberValue === 'object'
+            ) {
+              predicateValue =
+                rawWorkspaceMemberValue[workspaceMemberSubFieldName];
+            } else {
+              predicateValue = rawWorkspaceMemberValue;
+            }
+
+            if (!isDefined(predicateValue)) {
+              return null;
+            }
+
+            // Validate that workspace member enum value is compatible with target field enum options
+            const isEnumValueCompatible = validateEnumValueCompatibility({
+              workspaceMemberFieldMetadata,
+              targetFieldMetadata: fieldMetadata,
+              predicateValue,
+            });
+
+            if (!isEnumValueCompatible) {
+              return null;
+            }
+
+            // When workspace member field is SELECT or MULTI_SELECT and value is a string,
+            // wrap it in an array to match the frontend format (which uses multi-select UI)
+            if (
+              (workspaceMemberFieldMetadata.type === FieldMetadataType.SELECT ||
+                workspaceMemberFieldMetadata.type ===
+                  FieldMetadataType.MULTI_SELECT) &&
+              typeof predicateValue === 'string'
+            ) {
+              predicateValue = [predicateValue];
+            }
+          } else {
+            // Indirect relation: field is on an intermediate object (e.g., Agent)
+            // that has a RELATION to WorkspaceMember
+            if (
+              !isDefined(workspaceMember) ||
+              !isDefined(workspaceDataSource) ||
+              !isDefined(workspaceSchemaName) ||
+              !isDefined(flatObjectMetadataMaps)
+            ) {
+              return null;
+            }
+
+            // Find the intermediate object metadata
+            const intermediateObjectMetadata = Object.values(
+              flatObjectMetadataMaps.byUniversalIdentifier,
+            )
+              .filter(isDefined)
+              .find(
+                (obj) =>
+                  obj.id === workspaceMemberFieldMetadata.objectMetadataId,
+              );
+
+            if (!isDefined(intermediateObjectMetadata)) {
+              return null;
+            }
+
+            const tableName = computeTableName(
+              intermediateObjectMetadata.nameSingular,
+              intermediateObjectMetadata.isCustom,
+            );
+
+            // The FK column is the field name + "Id"
+            const fkColumn = `${workspaceMemberFieldMetadata.name}Id`;
+
+            try {
+              const rows = await workspaceDataSource.query(
+                `SELECT "id" FROM "${workspaceSchemaName}"."${tableName}" WHERE "${fkColumn}" = $1 AND "deletedAt" IS NULL`,
+                [workspaceMember.id],
+              );
+
+              if (rows.length === 0) {
+                return null;
+              }
+
+              predicateValue =
+                rows.length === 1
+                  ? rows[0].id
+                  : rows.map((r: { id: string }) => r.id);
+            } catch {
+              return null;
+            }
+          }
         }
 
-        const rawWorkspaceMemberValue = Object.entries(workspaceMember).find(
-          ([key]) => key === workspaceMemberFieldMetadata.name,
-        )?.[1];
+        const effectiveSubFieldName = predicate.subFieldName as
+          | CompositeFieldSubFieldName
+          | undefined;
 
-        const workspaceMemberSubFieldName =
-          predicate.workspaceMemberSubFieldName;
+        const filterValue = convertViewFilterValueToString(predicateValue);
 
-        if (
-          isDefined(workspaceMemberSubFieldName) &&
-          isDefined(rawWorkspaceMemberValue) &&
-          isCompositeFieldMetadataType(workspaceMemberFieldMetadata.type) &&
-          typeof rawWorkspaceMemberValue === 'object'
-        ) {
-          predicateValue = rawWorkspaceMemberValue[workspaceMemberSubFieldName];
-        } else {
-          predicateValue = rawWorkspaceMemberValue;
-        }
-
-        if (!isDefined(predicateValue)) {
-          return null;
-        }
-
-        // Validate that workspace member enum value is compatible with target field enum options
-        const isEnumValueCompatible = validateEnumValueCompatibility({
-          workspaceMemberFieldMetadata,
-          targetFieldMetadata: fieldMetadata,
-          predicateValue,
-        });
-
-        if (!isEnumValueCompatible) {
-          return null;
-        }
-
-        // When workspace member field is SELECT or MULTI_SELECT and value is a string,
-        // wrap it in an array to match the frontend format (which uses multi-select UI)
-        if (
-          (workspaceMemberFieldMetadata.type === FieldMetadataType.SELECT ||
-            workspaceMemberFieldMetadata.type ===
-              FieldMetadataType.MULTI_SELECT) &&
-          typeof predicateValue === 'string'
-        ) {
-          predicateValue = [predicateValue];
-        }
-      }
-
-      const effectiveSubFieldName = predicate.subFieldName as
-        | CompositeFieldSubFieldName
-        | undefined;
-
-      let filterValue = convertViewFilterValueToString(predicateValue);
-
-      return {
-        id: predicate.id,
-        fieldMetadataId: predicate.fieldMetadataId,
-        value: filterValue,
-        type: getFilterTypeFromFieldType(fieldMetadata.type),
-        operand: predicate.operand as unknown as RecordFilter['operand'],
-        recordFilterGroupId: predicate.rowLevelPermissionPredicateGroupId,
-        subFieldName: effectiveSubFieldName,
-      } satisfies RecordFilter;
-    })
-    .filter(isDefined);
+        return {
+          id: predicate.id,
+          fieldMetadataId: predicate.fieldMetadataId,
+          value: filterValue,
+          type: getFilterTypeFromFieldType(fieldMetadata.type),
+          operand: predicate.operand as unknown as RecordFilter['operand'],
+          recordFilterGroupId: predicate.rowLevelPermissionPredicateGroupId,
+          subFieldName: effectiveSubFieldName,
+        } satisfies RecordFilter;
+      }),
+    )
+  ).filter(isDefined);
 
   const relevantGroupIds = new Set<string>();
 

@@ -73,7 +73,7 @@ export class WorkspaceDeleteQueryBuilder<
 
   override async execute(): Promise<DeleteResult & { generatedMaps: T[] }> {
     try {
-      this.applyRowLevelPermissionPredicates();
+      await this.applyRowLevelPermissionPredicates();
       validateQueryIsPermittedOrThrow({
         expressionMap: this.expressionMap,
         objectsPermissions: this.objectRecordsPermissions,
@@ -168,7 +168,7 @@ export class WorkspaceDeleteQueryBuilder<
     return mainAliasTarget;
   }
 
-  private applyRowLevelPermissionPredicates(): void {
+  private async applyRowLevelPermissionPredicates(): Promise<void> {
     if (this.shouldBypassPermissionChecks) {
       return;
     }
@@ -180,7 +180,7 @@ export class WorkspaceDeleteQueryBuilder<
       this.internalContext,
     );
 
-    applyRowLevelPermissionPredicates({
+    await applyRowLevelPermissionPredicates({
       queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>,
       objectMetadata,
       internalContext: this.internalContext,
