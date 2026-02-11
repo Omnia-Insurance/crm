@@ -22,6 +22,7 @@ import { computeEnumFieldGqlTypeKey } from 'src/engine/api/graphql/workspace-sch
 import { computeObjectMetadataInputTypeKey } from 'src/engine/api/graphql/workspace-schema-builder/utils/compute-stored-gql-type-key-utils/compute-object-metadata-input-type.util';
 import { createGqlEnumFilterType } from 'src/engine/api/graphql/workspace-schema-builder/utils/create-gql-enum-filter-type.util';
 import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
+import { type SchemaGenerationContext } from 'src/engine/api/graphql/workspace-schema-builder/types/schema-generation-context.type';
 import { isEnumFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-enum-field-metadata-type.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
@@ -41,12 +42,18 @@ export class ObjectMetadataFilterGqlInputTypeGenerator {
   public buildAndStore(
     flatObjectMetadata: FlatObjectMetadata,
     fields: FlatFieldMetadata[],
+    context?: SchemaGenerationContext,
   ) {
     const inputType = new GraphQLInputObjectType({
       name: `${pascalCase(flatObjectMetadata.nameSingular)}${GqlInputTypeDefinitionKind.Filter.toString()}Input`,
       description: flatObjectMetadata.description,
       fields: () =>
-        this.generateFields(flatObjectMetadata.nameSingular, fields, inputType),
+        this.generateFields(
+          flatObjectMetadata.nameSingular,
+          fields,
+          inputType,
+          context,
+        ),
     }) as GraphQLInputObjectType;
 
     const key = computeObjectMetadataInputTypeKey(
@@ -61,6 +68,7 @@ export class ObjectMetadataFilterGqlInputTypeGenerator {
     objectNameSingular: string,
     fields: FlatFieldMetadata[],
     inputType: GraphQLInputObjectType,
+    context?: SchemaGenerationContext,
   ): GraphQLInputFieldConfigMap {
     const andOrType = this.typeMapperService.applyTypeOptions(inputType, {
       isArray: true,
@@ -88,6 +96,7 @@ export class ObjectMetadataFilterGqlInputTypeGenerator {
             {
               fieldMetadata,
               typeOptions,
+              context,
             },
           );
       } else if (isEnumFieldMetadataType(fieldMetadata.type)) {

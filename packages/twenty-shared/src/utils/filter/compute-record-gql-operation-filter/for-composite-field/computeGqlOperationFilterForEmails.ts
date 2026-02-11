@@ -1,5 +1,4 @@
 import {
-  type CompositeFieldSubFieldName,
   type EmailsFilter,
   type PartialFieldMetadataItem,
   ViewFilterOperand as RecordFilterOperand,
@@ -20,7 +19,7 @@ export const computeGqlOperationFilterForEmails = ({
     PartialFieldMetadataItem,
     'name' | 'type'
   >;
-  subFieldName: CompositeFieldSubFieldName | null | undefined;
+  subFieldName: string | null | undefined;
 }): RecordGqlOperationFilter => {
   const isSubFieldFilter = isNonEmptyString(subFieldName);
 

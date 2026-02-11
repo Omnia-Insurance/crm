@@ -16,6 +16,7 @@ import { AdvancedFilterContext } from '@/object-record/advanced-filter/states/co
 import { ObjectFilterDropdownFilterSelectMenuItem } from '@/object-record/object-filter-dropdown/components/ObjectFilterDropdownFilterSelectMenuItem';
 import { fieldMetadataItemIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemIdUsedInDropdownComponentState';
 import { objectFilterDropdownIsSelectingCompositeFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingCompositeFieldComponentState';
+import { objectFilterDropdownIsSelectingRelationSubFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingRelationSubFieldComponentState';
 import { objectFilterDropdownSubMenuFieldTypeComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownSubMenuFieldTypeComponentState';
 import { isCompositeFilterableFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFilterableFieldType';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
@@ -27,7 +28,9 @@ import { useRecoilComponentState } from '@/ui/utilities/state/component-state/ho
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { getFilterTypeFromFieldType } from 'twenty-shared/utils';
+import { RelationType } from '~/generated-metadata/graphql';
 
 type AdvancedFilterFieldSelectMenuProps = {
   recordFilterId: string;
@@ -99,6 +102,11 @@ export const AdvancedFilterFieldSelectMenu = ({
       objectFilterDropdownIsSelectingCompositeFieldComponentState,
     );
 
+  const [, setObjectFilterDropdownIsSelectingRelationSubField] =
+    useRecoilComponentState(
+      objectFilterDropdownIsSelectingRelationSubFieldComponentState,
+    );
+
   const setFieldMetadataItemIdUsedInDropdown = useSetRecoilComponentState(
     fieldMetadataItemIdUsedInDropdownComponentState,
   );
@@ -116,6 +124,16 @@ export const AdvancedFilterFieldSelectMenu = ({
       fieldMetadataItemId: selectedFieldMetadataItem.id,
       recordFilterId,
     });
+
+    if (
+      selectedFieldMetadataItem.type === FieldMetadataType.RELATION &&
+      selectedFieldMetadataItem.relation?.type === RelationType.ONE_TO_MANY
+    ) {
+      setFieldMetadataItemIdUsedInDropdown(selectedFieldMetadataItem.id);
+      setObjectFilterDropdownIsSelectingRelationSubField(true);
+
+      return;
+    }
 
     if (isCompositeFilterableFieldType(filterType)) {
       setObjectFilterDropdownSubMenuFieldType(filterType);

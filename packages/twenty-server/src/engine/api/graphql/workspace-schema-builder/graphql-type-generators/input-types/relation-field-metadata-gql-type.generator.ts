@@ -79,18 +79,62 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
   public generateSimpleRelationFieldFilterInputType({
     fieldMetadata,
     typeOptions,
+    context,
   }: {
     fieldMetadata: FlatFieldMetadata<
       FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
     >;
     typeOptions: TypeOptions;
+    context?: SchemaGenerationContext;
   }) {
     if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
       const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
       const oneToManyFilterType = new GraphQLInputObjectType({
         name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
-        fields: {
-          is: { type: FilterIs },
+        fields: () => {
+          const baseFields: GraphQLInputFieldConfigMap = {
+            is: { type: FilterIs },
+          };
+
+          // Add target object's filterable fields for sub-field filtering
+          if (
+            isDefined(fieldMetadata.relationTargetObjectMetadataId) &&
+            isDefined(context)
+          ) {
+            const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+              flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+              flatEntityMaps: context.flatObjectMetadataMaps,
+            });
+
+            if (isDefined(targetObjectMetadata)) {
+              const targetFilterKey = computeObjectMetadataInputTypeKey(
+                targetObjectMetadata.nameSingular,
+                GqlInputTypeDefinitionKind.Filter,
+              );
+
+              const targetFilterType =
+                this.gqlTypesStorage.getGqlTypeByKey(targetFilterKey);
+
+              if (
+                isDefined(targetFilterType) &&
+                isInputObjectType(targetFilterType)
+              ) {
+                const targetFields = targetFilterType.getFields();
+
+                for (const [key, field] of Object.entries(targetFields)) {
+                  if (['and', 'or', 'not'].includes(key)) {
+                    continue;
+                  }
+                  baseFields[key] = {
+                    type: field.type,
+                    description: field.description,
+                  };
+                }
+              }
+            }
+          }
+
+          return baseFields;
         },
       });
 

@@ -1,4 +1,3 @@
-import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { type ViewFilterOperand } from 'twenty-shared/types';
 
 export type ViewFilter = {
@@ -14,5 +13,5 @@ export type ViewFilter = {
   viewId?: string;
   viewFilterGroupId?: string;
   positionInViewFilterGroup?: number | null;
-  subFieldName?: CompositeFieldSubFieldName | null;
+  subFieldName?: string | null;
 };

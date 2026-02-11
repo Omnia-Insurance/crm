@@ -107,6 +107,40 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
     return emptinessFilter;
   }
 
+  // ONE_TO_MANY relation sub-field filter
+  // Generate nested filter like { policies: { status: { in: ['submitted'] } } }
+  const isOneToManySubFieldFilter =
+    correspondingFieldMetadataItem.type === FieldMetadataType.RELATION &&
+    correspondingFieldMetadataItem.relation?.type === 'ONE_TO_MANY' &&
+    isNonEmptyString(recordFilter.subFieldName) &&
+    recordFilter.operand !== RecordFilterOperand.IS_EMPTY &&
+    recordFilter.operand !== RecordFilterOperand.IS_NOT_EMPTY;
+
+  if (isOneToManySubFieldFilter) {
+    const virtualField: FieldShared = {
+      id: 'virtual-relation-sub-field',
+      name: recordFilter.subFieldName as string,
+      type: recordFilter.type as FieldMetadataType,
+      label: '',
+    };
+
+    const innerFilter = turnRecordFilterIntoRecordGqlOperationFilter({
+      filterValueDependencies,
+      recordFilter: {
+        ...recordFilter,
+        fieldMetadataId: virtualField.id,
+        subFieldName: undefined,
+      },
+      fieldMetadataItems: [virtualField],
+    });
+
+    if (!isDefined(innerFilter)) {
+      return undefined;
+    }
+
+    return { [correspondingFieldMetadataItem.name]: innerFilter };
+  }
+
   const subFieldName = recordFilter.subFieldName;
 
   const isSubFieldFilter = isNonEmptyString(subFieldName);

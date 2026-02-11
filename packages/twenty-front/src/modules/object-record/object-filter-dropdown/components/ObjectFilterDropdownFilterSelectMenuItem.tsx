@@ -4,8 +4,10 @@ import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/uti
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
 import { isSelectedItemIdComponentFamilySelector } from '@/ui/layout/selectable-list/states/selectors/isSelectedItemIdComponentFamilySelector';
 import { useRecoilComponentFamilyValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentFamilyValue';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { useIcons } from 'twenty-ui/display';
 import { MenuItem } from 'twenty-ui/navigation';
+import { RelationType } from '~/generated-metadata/graphql';
 
 export type ObjectFilterDropdownFilterSelectMenuItemProps = {
   fieldMetadataItemToSelect: FieldMetadataItem;
@@ -27,9 +29,10 @@ export const ObjectFilterDropdownFilterSelectMenuItem = ({
 
   const Icon = getIcon(fieldMetadataItemToSelect.icon);
 
-  const shouldShowSubMenu = isCompositeFieldType(
-    fieldMetadataItemToSelect.type,
-  );
+  const shouldShowSubMenu =
+    isCompositeFieldType(fieldMetadataItemToSelect.type) ||
+    (fieldMetadataItemToSelect.type === FieldMetadataType.RELATION &&
+      fieldMetadataItemToSelect.relation?.type === RelationType.ONE_TO_MANY);
 
   const handleClick = () => {
     resetSelectedItem();

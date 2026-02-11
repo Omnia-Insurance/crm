@@ -12,17 +12,22 @@ import { type RecordFilter } from '@/object-record/record-filter/types/RecordFil
 import { getDefaultSubFieldNameForCompositeFilterableFieldType } from '@/object-record/record-filter/utils/getDefaultSubFieldNameForCompositeFilterableFieldType';
 import { getRecordFilterOperands } from '@/object-record/record-filter/utils/getRecordFilterOperands';
 import { isCompositeTypeNonFilterableByAnySubField } from '@/object-record/record-filter/utils/isCompositeTypeNonFilterableByAnySubField';
-import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
+import {
+  type FilterableAndTSVectorFieldType,
+  FieldMetadataType,
+} from 'twenty-shared/types';
 import { getFilterTypeFromFieldType, isDefined } from 'twenty-shared/utils';
+import { RelationType } from '~/generated-metadata/graphql';
 
 type SelectFilterParams = {
   fieldMetadataItemId: string;
   recordFilterId: string;
-  subFieldName?: CompositeFieldSubFieldName | null | undefined;
+  subFieldName?: string | null | undefined;
+  relationSubFieldType?: FilterableAndTSVectorFieldType | null | undefined;
 };
 
 export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
@@ -62,6 +67,7 @@ export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
     fieldMetadataItemId,
     recordFilterId,
     subFieldName,
+    relationSubFieldType,
   }: SelectFilterParams) => {
     setFieldMetadataItemIdUsedInDropdown(fieldMetadataItemId);
 
@@ -71,6 +77,12 @@ export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
     if (!isDefined(fieldMetadataItem)) {
       return;
     }
+
+    const isOneToManyRelationSubField =
+      fieldMetadataItem.type === FieldMetadataType.RELATION &&
+      fieldMetadataItem.relation?.type === RelationType.ONE_TO_MANY &&
+      isDefined(relationSubFieldType) &&
+      isDefined(subFieldName);
 
     if (
       fieldMetadataItem.type === 'RELATION' ||
@@ -85,12 +97,16 @@ export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
       });
     }
 
-    const filterType = getFilterTypeFromFieldType(fieldMetadataItem.type);
+    const filterType = isOneToManyRelationSubField
+      ? relationSubFieldType
+      : getFilterTypeFromFieldType(fieldMetadataItem.type);
 
     const firstOperand = getRecordFilterOperands({
       filterType,
       subFieldName,
-      relationType: fieldMetadataItem.relation?.type,
+      relationType: isOneToManyRelationSubField
+        ? undefined
+        : fieldMetadataItem.relation?.type,
     })?.[0];
 
     if (!isDefined(firstOperand)) {
@@ -115,10 +131,8 @@ export const useSelectFieldUsedInAdvancedFilterDropdown = () => {
     const compositeFilterNonFilterableByAnySubField =
       isCompositeTypeNonFilterableByAnySubField(filterType);
 
-    let subFieldNameForNonFilterableWithAny:
-      | CompositeFieldSubFieldName
-      | undefined
-      | null = subFieldName;
+    let subFieldNameForNonFilterableWithAny: string | undefined | null =
+      subFieldName;
 
     if (
       isCompositeFilterOnAnySubField &&

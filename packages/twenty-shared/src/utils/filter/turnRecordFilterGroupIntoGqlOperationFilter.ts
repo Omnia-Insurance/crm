@@ -1,5 +1,4 @@
 import {
-  type CompositeFieldSubFieldName,
   type FilterableAndTSVectorFieldType,
   type PartialFieldMetadataItem,
   RecordFilterGroupLogicalOperator,
@@ -18,7 +17,7 @@ export type RecordFilter = {
   type: FilterableAndTSVectorFieldType;
   recordFilterGroupId?: string | null;
   operand: ViewFilterOperand;
-  subFieldName?: CompositeFieldSubFieldName | null | undefined;
+  subFieldName?: string | null | undefined;
 };
 
 export type RecordFilterGroup = {

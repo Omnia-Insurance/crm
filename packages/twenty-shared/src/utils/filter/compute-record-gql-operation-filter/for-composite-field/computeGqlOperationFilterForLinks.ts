@@ -1,6 +1,5 @@
 import {
   ViewFilterOperand as RecordFilterOperand,
-  type CompositeFieldSubFieldName,
   type LinksFilter,
   type PartialFieldMetadataItem,
 } from '@/types';
@@ -18,7 +17,7 @@ export const computeGqlOperationFilterForLinks = ({
     PartialFieldMetadataItem,
     'name' | 'type'
   >;
-  subFieldName: CompositeFieldSubFieldName | null | undefined;
+  subFieldName: string | null | undefined;
 }) => {
   const isSubFieldFilter = isNonEmptyString(subFieldName);
 

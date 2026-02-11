@@ -199,23 +199,7 @@ export class GraphqlQueryFilterFieldParser {
     filterValue: any,
     isFirst = false,
   ): void {
-    const [[operator, value]] = Object.entries(filterValue);
-
-    if (operator !== 'is') {
-      throw new GraphqlQueryRunnerException(
-        `Only "is" operator is supported for ONE_TO_MANY relation filters`,
-        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
-      );
-    }
-
-    if (value !== 'NULL' && value !== 'NOT_NULL') {
-      throw new GraphqlQueryRunnerException(
-        `Invalid value for ONE_TO_MANY relation filter. Expected "NULL" or "NOT_NULL"`,
-        GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
-        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
-      );
-    }
+    const entries = Object.entries(filterValue);
 
     const targetObjectMetadataId = fieldMetadata.relationTargetObjectMetadataId;
     const inverseFieldMetadataId = fieldMetadata.relationTargetFieldMetadataId;
@@ -266,18 +250,95 @@ export class GraphqlQueryFilterFieldParser {
       targetObjectMetadata.isCustom,
     );
 
-    const existsPrefix = value === 'NULL' ? 'NOT EXISTS' : 'EXISTS';
-    const subqueryAlias = `${targetTableName}_exists`;
+    // Existence check: { is: 'NULL' | 'NOT_NULL' }
+    if (entries.length === 1 && entries[0][0] === 'is') {
+      const value = entries[0][1];
+
+      if (value !== 'NULL' && value !== 'NOT_NULL') {
+        throw new GraphqlQueryRunnerException(
+          `Invalid value for ONE_TO_MANY relation filter. Expected "NULL" or "NOT_NULL"`,
+          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+          { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+        );
+      }
+
+      const existsPrefix = value === 'NULL' ? 'NOT EXISTS' : 'EXISTS';
+      const subqueryAlias = `${targetTableName}_exists`;
+
+      const sql =
+        `${existsPrefix} (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
+        `WHERE "${subqueryAlias}"."${foreignKeyColumnName}" = "${objectNameSingular}"."id" ` +
+        `AND "${subqueryAlias}"."deletedAt" IS NULL)`;
+
+      if (isFirst) {
+        queryBuilder.where(sql);
+      } else {
+        queryBuilder.andWhere(sql);
+      }
+
+      return;
+    }
+
+    // Sub-field filter: { status: { in: ['submitted'] } }
+    const subqueryAlias = `${targetTableName}_subfield`;
+    const subFieldConditions: string[] = [];
+    const allParams: Record<string, unknown> = {};
+
+    const targetFieldMaps = buildFieldMapsFromFlatObjectMetadata(
+      this.flatFieldMetadataMaps,
+      targetObjectMetadata,
+    );
+
+    for (const [fieldName, fieldFilter] of entries) {
+      const targetFieldId = targetFieldMaps.fieldIdByName[fieldName];
+
+      if (!isDefined(targetFieldId)) {
+        throw new GraphqlQueryRunnerException(
+          `Unknown field "${fieldName}" on target object for ONE_TO_MANY filter`,
+          GraphqlQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+          { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+        );
+      }
+
+      const targetField = findFlatEntityByIdInFlatEntityMaps({
+        flatEntityId: targetFieldId,
+        flatEntityMaps: this.flatFieldMetadataMaps,
+      });
+
+      if (!isDefined(targetField)) {
+        throw new Error(
+          `Target field metadata not found for field: ${fieldName}`,
+        );
+      }
+
+      const filterEntries = Object.entries(
+        fieldFilter as Record<string, unknown>,
+      );
+
+      for (const [operator, value] of filterEntries) {
+        const { sql, params } = computeWhereConditionParts({
+          operator,
+          objectNameSingular: subqueryAlias,
+          key: fieldName,
+          value,
+          fieldMetadataType: targetField.type,
+        });
+
+        subFieldConditions.push(sql);
+        Object.assign(allParams, params);
+      }
+    }
 
     const sql =
-      `${existsPrefix} (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
+      `EXISTS (SELECT 1 FROM "${this.workspaceSchemaName}"."${targetTableName}" "${subqueryAlias}" ` +
       `WHERE "${subqueryAlias}"."${foreignKeyColumnName}" = "${objectNameSingular}"."id" ` +
+      `AND ${subFieldConditions.join(' AND ')} ` +
       `AND "${subqueryAlias}"."deletedAt" IS NULL)`;
 
     if (isFirst) {
-      queryBuilder.where(sql);
+      queryBuilder.where(sql, allParams);
     } else {
-      queryBuilder.andWhere(sql);
+      queryBuilder.andWhere(sql, allParams);
     }
   }
 }
