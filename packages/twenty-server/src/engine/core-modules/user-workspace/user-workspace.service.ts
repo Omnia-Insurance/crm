@@ -2,9 +2,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { TypeOrmQueryService } from '@ptc-org/nestjs-query-typeorm';
 import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
+import { FieldMetadataType, FileFolder } from 'twenty-shared/types';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
 import { type QueryRunner, IsNull, Not, type Repository } from 'typeorm';
-import { FileFolder } from 'twenty-shared/types';
 
 import { FileStorageExceptionCode } from 'src/engine/core-modules/file-storage/interfaces/file-storage-exception';
 
@@ -26,6 +26,8 @@ import { WorkspaceInvitationService } from 'src/engine/core-modules/workspace-in
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { workspaceValidator } from 'src/engine/core-modules/workspace/workspace.validate';
+import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import {
   PermissionsException,
   PermissionsExceptionCode,
@@ -47,6 +49,10 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(RoleTargetEntity)
     private readonly roleTargetRepository: Repository<RoleTargetEntity>,
+    @InjectRepository(ObjectMetadataEntity)
+    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
+    @InjectRepository(FieldMetadataEntity)
+    private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
     private readonly workspaceInvitationService: WorkspaceInvitationService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly loginTokenService: LoginTokenService,
@@ -133,6 +139,8 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
         `Error while creating workspace member ${user.email} on workspace ${workspaceId}`,
       );
     }, authContext);
+
+    await this.linkWorkspaceMemberToMatchingAgent(workspaceId, user);
   }
 
   async addUserToWorkspaceIfUserNotInWorkspace(
@@ -178,6 +186,9 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
         workspaceId: workspace.id,
         value: true,
       });
+    } else {
+      // On subsequent logins, try to link if not already linked
+      await this.linkWorkspaceMemberToMatchingAgent(workspace.id, user);
     }
   }
 
@@ -375,6 +386,81 @@ export class UserWorkspaceService extends TypeOrmQueryService<UserWorkspaceEntit
       },
       authContext,
     );
+  }
+
+  private async linkWorkspaceMemberToMatchingAgent(
+    workspaceId: string,
+    user: UserEntity,
+  ): Promise<void> {
+    const agentObjectMetadata = await this.objectMetadataRepository.findOne({
+      where: { nameSingular: 'agent', workspaceId, isActive: true },
+    });
+
+    if (!agentObjectMetadata) return;
+
+    const workspaceMemberObjectMetadata =
+      await this.objectMetadataRepository.findOne({
+        where: {
+          nameSingular: 'workspaceMember',
+          workspaceId,
+          isActive: true,
+        },
+      });
+
+    if (!workspaceMemberObjectMetadata) return;
+
+    const userRelationField = await this.fieldMetadataRepository.findOne({
+      where: {
+        objectMetadataId: agentObjectMetadata.id,
+        type: FieldMetadataType.RELATION,
+        relationTargetObjectMetadataId: workspaceMemberObjectMetadata.id,
+        workspaceId,
+        isActive: true,
+      },
+    });
+
+    if (!userRelationField) return;
+
+    const userForeignKeyColumn = `${userRelationField.name}Id`;
+
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const agentRepository =
+        await this.globalWorkspaceOrmManager.getRepository(
+          workspaceId,
+          'agent',
+          { shouldBypassPermissionChecks: true },
+        );
+
+      const workspaceMemberRepository =
+        await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
+          workspaceId,
+          'workspaceMember',
+          { shouldBypassPermissionChecks: true },
+        );
+
+      const workspaceMember = await workspaceMemberRepository.findOne({
+        where: { userId: user.id },
+      });
+
+      if (!workspaceMember) return;
+
+      const agent = await agentRepository
+        .createQueryBuilder('agent')
+        .where('LOWER(agent."emailsPrimaryEmail") = LOWER(:email)', {
+          email: user.email,
+        })
+        .andWhere(`agent."${userForeignKeyColumn}" IS NULL`)
+        .getOne();
+
+      if (!agent) return;
+
+      await agentRepository.update(
+        { id: (agent as Record<string, unknown>).id as string },
+        { [userForeignKeyColumn]: workspaceMember.id },
+      );
+    }, authContext);
   }
 
   private async computeDefaultAvatarUrl(

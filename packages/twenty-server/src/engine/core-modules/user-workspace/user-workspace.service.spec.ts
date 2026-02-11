@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { type DataSource, type Repository } from 'typeorm';
-import { FileFolder } from 'twenty-shared/types';
+import { FieldMetadataType, FileFolder } from 'twenty-shared/types';
 
 import { type ApprovedAccessDomainEntity } from 'src/engine/core-modules/approved-access-domain/approved-access-domain.entity';
 import { ApprovedAccessDomainService } from 'src/engine/core-modules/approved-access-domain/services/approved-access-domain.service';
@@ -22,6 +22,7 @@ import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceInvitationService } from 'src/engine/core-modules/workspace-invitation/services/workspace-invitation.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
+import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { PermissionsException } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
@@ -33,6 +34,8 @@ describe('UserWorkspaceService', () => {
   let service: UserWorkspaceService;
   let userWorkspaceRepository: Repository<UserWorkspaceEntity>;
   let userRepository: Repository<UserEntity>;
+  let objectMetadataRepository: Repository<ObjectMetadataEntity>;
+  let fieldMetadataRepository: Repository<FieldMetadataEntity>;
   let workspaceInvitationService: WorkspaceInvitationService;
   let approvedAccessDomainService: ApprovedAccessDomainService;
   let globalWorkspaceOrmManager: GlobalWorkspaceOrmManager;
@@ -66,7 +69,14 @@ describe('UserWorkspaceService', () => {
         {
           provide: getRepositoryToken(ObjectMetadataEntity),
           useValue: {
+            findOne: jest.fn(),
             findOneOrFail: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(FieldMetadataEntity),
+          useValue: {
+            findOne: jest.fn(),
           },
         },
         {
@@ -155,6 +165,12 @@ describe('UserWorkspaceService', () => {
       getRepositoryToken(UserWorkspaceEntity),
     );
     userRepository = module.get(getRepositoryToken(UserEntity));
+    objectMetadataRepository = module.get(
+      getRepositoryToken(ObjectMetadataEntity),
+    );
+    fieldMetadataRepository = module.get(
+      getRepositoryToken(FieldMetadataEntity),
+    );
     workspaceInvitationService = module.get<WorkspaceInvitationService>(
       WorkspaceInvitationService,
     );
@@ -404,6 +420,216 @@ describe('UserWorkspaceService', () => {
         locale: 'en',
         avatarUrl: 'userWorkspace-avatar-url',
       });
+    });
+  });
+
+  describe('linkWorkspaceMemberToMatchingAgent', () => {
+    const workspaceId = 'workspace-id';
+    const user = {
+      id: 'user-id',
+      email: 'agent@example.com',
+      firstName: 'Jane',
+      lastName: 'Doe',
+    } as UserEntity;
+
+    const agentObjectMetadata = {
+      id: 'agent-object-id',
+      nameSingular: 'agent',
+      workspaceId,
+      isActive: true,
+    };
+    const workspaceMemberObjectMetadata = {
+      id: 'wm-object-id',
+      nameSingular: 'workspaceMember',
+      workspaceId,
+      isActive: true,
+    };
+    const userRelationField = {
+      id: 'relation-field-id',
+      name: 'user',
+      type: FieldMetadataType.RELATION,
+      objectMetadataId: 'agent-object-id',
+      relationTargetObjectMetadataId: 'wm-object-id',
+    };
+
+    it('should link agent to workspace member when emails match on createWorkspaceMember', async () => {
+      const workspaceMemberRecord = { id: 'wm-id', userId: user.id };
+      const agentRecord = {
+        id: 'agent-id',
+        emailsPrimaryEmail: 'agent@example.com',
+        userId: null,
+      };
+
+      const agentQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(agentRecord),
+      };
+
+      const agentRepo = {
+        createQueryBuilder: jest.fn().mockReturnValue(agentQueryBuilder),
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const wmRepo = {
+        insert: jest.fn(),
+        find: jest.fn().mockResolvedValue([workspaceMemberRecord]),
+        findOne: jest.fn().mockResolvedValue(workspaceMemberRecord),
+      };
+
+      jest
+        .spyOn(globalWorkspaceOrmManager, 'getRepository')
+        .mockImplementation(async (_wsId, objectName) => {
+          if (objectName === 'agent') return agentRepo as any;
+
+          return wmRepo as any;
+        });
+
+      jest.spyOn(userWorkspaceRepository, 'findOneOrFail').mockResolvedValue({
+        defaultAvatarUrl: '',
+      } as UserWorkspaceEntity);
+
+      jest
+        .spyOn(objectMetadataRepository, 'findOne')
+        .mockResolvedValueOnce(agentObjectMetadata as any)
+        .mockResolvedValueOnce(workspaceMemberObjectMetadata as any);
+      jest
+        .spyOn(fieldMetadataRepository, 'findOne')
+        .mockResolvedValue(userRelationField as any);
+
+      await service.createWorkspaceMember(workspaceId, user);
+
+      expect(agentRepo.update).toHaveBeenCalledWith(
+        { id: 'agent-id' },
+        { userId: 'wm-id' },
+      );
+    });
+
+    it('should not link when no agent object exists in workspace', async () => {
+      const wmRepo = {
+        insert: jest.fn(),
+        find: jest.fn().mockResolvedValue([{ id: 'wm-id', userId: user.id }]),
+        findOne: jest.fn(),
+      };
+
+      jest
+        .spyOn(globalWorkspaceOrmManager, 'getRepository')
+        .mockResolvedValue(wmRepo as any);
+      jest.spyOn(userWorkspaceRepository, 'findOneOrFail').mockResolvedValue({
+        defaultAvatarUrl: '',
+      } as UserWorkspaceEntity);
+      jest.spyOn(objectMetadataRepository, 'findOne').mockResolvedValue(null);
+
+      await service.createWorkspaceMember(workspaceId, user);
+
+      expect(objectMetadataRepository.findOne).toHaveBeenCalledWith({
+        where: { nameSingular: 'agent', workspaceId, isActive: true },
+      });
+      // Should not attempt to query the agent table
+      expect(wmRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should not overwrite an agent that already has a user linked', async () => {
+      const workspaceMemberRecord = { id: 'wm-id', userId: user.id };
+
+      const agentQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(null),
+      };
+
+      const agentRepo = {
+        createQueryBuilder: jest.fn().mockReturnValue(agentQueryBuilder),
+        update: jest.fn(),
+      };
+      const wmRepo = {
+        insert: jest.fn(),
+        find: jest.fn().mockResolvedValue([workspaceMemberRecord]),
+        findOne: jest.fn().mockResolvedValue(workspaceMemberRecord),
+      };
+
+      jest
+        .spyOn(globalWorkspaceOrmManager, 'getRepository')
+        .mockImplementation(async (_wsId, objectName) => {
+          if (objectName === 'agent') return agentRepo as any;
+
+          return wmRepo as any;
+        });
+
+      jest.spyOn(userWorkspaceRepository, 'findOneOrFail').mockResolvedValue({
+        defaultAvatarUrl: '',
+      } as UserWorkspaceEntity);
+      jest
+        .spyOn(objectMetadataRepository, 'findOne')
+        .mockResolvedValueOnce(agentObjectMetadata as any)
+        .mockResolvedValueOnce(workspaceMemberObjectMetadata as any);
+      jest
+        .spyOn(fieldMetadataRepository, 'findOne')
+        .mockResolvedValue(userRelationField as any);
+
+      await service.createWorkspaceMember(workspaceId, user);
+
+      // getOne returned null (agent already linked), so update should not be called
+      expect(agentRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('should link agent on subsequent login via addUserToWorkspaceIfUserNotInWorkspace', async () => {
+      const workspace = {
+        id: workspaceId,
+        defaultRoleId: 'default-role-id',
+      } as WorkspaceEntity;
+      const existingUserWorkspace = {
+        id: 'user-workspace-id',
+        userId: user.id,
+        workspaceId,
+      } as UserWorkspaceEntity;
+
+      jest
+        .spyOn(service, 'checkUserWorkspaceExists')
+        .mockResolvedValue(existingUserWorkspace);
+
+      const workspaceMemberRecord = { id: 'wm-id', userId: user.id };
+      const agentRecord = {
+        id: 'agent-id',
+        emailsPrimaryEmail: 'agent@example.com',
+        userId: null,
+      };
+
+      const agentQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(agentRecord),
+      };
+
+      const agentRepo = {
+        createQueryBuilder: jest.fn().mockReturnValue(agentQueryBuilder),
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      const wmRepo = {
+        findOne: jest.fn().mockResolvedValue(workspaceMemberRecord),
+      };
+
+      jest
+        .spyOn(globalWorkspaceOrmManager, 'getRepository')
+        .mockImplementation(async (_wsId, objectName) => {
+          if (objectName === 'agent') return agentRepo as any;
+
+          return wmRepo as any;
+        });
+
+      jest
+        .spyOn(objectMetadataRepository, 'findOne')
+        .mockResolvedValueOnce(agentObjectMetadata as any)
+        .mockResolvedValueOnce(workspaceMemberObjectMetadata as any);
+      jest
+        .spyOn(fieldMetadataRepository, 'findOne')
+        .mockResolvedValue(userRelationField as any);
+
+      await service.addUserToWorkspaceIfUserNotInWorkspace(user, workspace);
+
+      expect(agentRepo.update).toHaveBeenCalledWith(
+        { id: 'agent-id' },
+        { userId: 'wm-id' },
+      );
     });
   });
 
