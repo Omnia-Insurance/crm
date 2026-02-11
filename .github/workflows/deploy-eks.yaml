@@ -101,7 +101,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
         with:
-          version: 'v3.14.0'
+          version: 'v3.16.4'
 
       - name: Determine image tag
         id: image-tag
@@ -124,7 +124,6 @@ jobs:
             --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --set worker.image.tag=${{ steps.image-tag.outputs.tag }} \
             --wait \
-            --burst-limit 200 \
             --timeout 10m
 
       - name: Verify deployment
@@ -135,9 +134,15 @@ jobs:
       - name: Rollback on failure
         if: failure()
         run: |
-          echo "Deploy failed, rolling back to previous release..."
-          helm rollback ${{ env.HELM_RELEASE }} 0 --namespace ${{ env.NAMESPACE }} --wait --timeout 5m
-          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-server -n ${{ env.NAMESPACE }} --timeout=3m
+          echo "Deploy failed, attempting rollback to previous release..."
+          PREV=$(helm history ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} --max 2 -o json | jq '.[0].revision')
+          if [ "$PREV" != "null" ] && [ -n "$PREV" ]; then
+            helm rollback ${{ env.HELM_RELEASE }} "$PREV" \
+              --namespace ${{ env.NAMESPACE }} --wait --timeout 5m || \
+              echo "::warning::Helm rollback failed — manual intervention may be needed"
+          else
+            echo "::warning::No previous release found, skipping rollback"
+          fi
 
       - name: Get service URL
         run: |
