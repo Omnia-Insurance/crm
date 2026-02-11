@@ -12,6 +12,10 @@ on:
         default: false
         type: boolean
 
+concurrency:
+  group: deploy-eks
+  cancel-in-progress: true
+
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: twenty-crm
@@ -111,6 +115,14 @@ jobs:
           else
             # Use short SHA (7 chars) to match docker/metadata-action output
             echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Clear stale Helm state
+        run: |
+          STATUS=$(helm status ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status' || echo "not-found")
+          if [ "$STATUS" = "pending-upgrade" ] || [ "$STATUS" = "pending-install" ] || [ "$STATUS" = "pending-rollback" ]; then
+            echo "Found stale Helm state ($STATUS), rolling back..."
+            helm rollback ${{ env.HELM_RELEASE }} 0 --namespace ${{ env.NAMESPACE }} --wait --timeout 3m || true
           fi
 
       - name: Deploy with Helm
