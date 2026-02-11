@@ -3,12 +3,14 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { usePerformCombinedFindManyRecords } from '@/object-record/multiple-objects/hooks/usePerformCombinedFindManyRecords';
+import { multipleRecordPickerAdditionalFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerAdditionalFilterComponentState';
 import { multipleRecordPickerIsLoadingComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerIsLoadingComponentState';
 import { multipleRecordPickerPaginationState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPaginationState';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
 import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
 import { multipleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
+import { combineFilters } from '@/object-record/record-picker/multiple-record-picker/utils/combineFilters';
 import { sortMorphItems } from '@/object-record/record-picker/multiple-record-picker/utils/sortMorphItems';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
@@ -17,7 +19,10 @@ import { isNonEmptyArray } from '@sniptt/guards';
 import { useRecoilCallback } from 'recoil';
 import { capitalize, isDefined } from 'twenty-shared/utils';
 import { type SearchRecord } from '~/generated-metadata/graphql';
-import { type SearchResultEdge } from '~/generated/graphql';
+import {
+  type ObjectRecordFilterInput,
+  type SearchResultEdge,
+} from '~/generated/graphql';
 
 const MULTIPLE_RECORD_PICKER_PAGE_SIZE = 30;
 
@@ -112,6 +117,12 @@ export const useMultipleRecordPickerPerformSearch = () => {
               }).canReadObjectRecords === true,
           );
 
+        const additionalFilter = getLoadable(
+          multipleRecordPickerAdditionalFilterComponentState.atomFamily({
+            instanceId: multipleRecordPickerInstanceId,
+          }),
+        ).getValue();
+
         const [
           searchRecordsFilteredOnPickedRecords,
           searchRecordsExcludingPickedRecords,
@@ -124,6 +135,7 @@ export const useMultipleRecordPickerPerformSearch = () => {
             ({ recordId }) => recordId,
           ),
           after: loadMore ? paginationState.endCursor : null,
+          additionalFilter,
         });
 
         const existingMorphItems = getLoadable(
@@ -387,6 +399,7 @@ const performSearchQueries = async ({
   pickedRecordIds,
   limit = MULTIPLE_RECORD_PICKER_PAGE_SIZE,
   after = null,
+  additionalFilter,
 }: {
   client: ApolloClient<object>;
   searchFilter: string;
@@ -394,6 +407,7 @@ const performSearchQueries = async ({
   pickedRecordIds: string[];
   limit?: number;
   after?: string | null;
+  additionalFilter?: ObjectRecordFilterInput;
 }): Promise<
   [
     SearchRecord[],
@@ -405,7 +419,7 @@ const performSearchQueries = async ({
     return [[], [], { hasNextPage: false, endCursor: null }];
   }
 
-  const searchRecords = async (filter: any) => {
+  const searchRecords = async (filter: ObjectRecordFilterInput | undefined) => {
     const { data } = await client.query({
       query: SEARCH_QUERY,
       variables: {
@@ -424,26 +438,21 @@ const performSearchQueries = async ({
     };
   };
 
-  const searchRecordsExcludingPickedRecordsResult = await searchRecords(
+  const excludeFilter =
     pickedRecordIds.length > 0
-      ? {
-          not: {
-            id: {
-              in: pickedRecordIds,
-            },
-          },
-        }
-      : undefined,
+      ? { not: { id: { in: pickedRecordIds } } }
+      : undefined;
+
+  const searchRecordsExcludingPickedRecordsResult = await searchRecords(
+    combineFilters([excludeFilter, additionalFilter]),
   );
 
-  const searchRecordsIncludingPickedRecordsResult =
-    pickedRecordIds.length > 0
-      ? await searchRecords({
-          id: {
-            in: pickedRecordIds,
-          },
-        })
-      : { records: [], pageInfo: { hasNextPage: false, endCursor: null } };
+  const includeFilter =
+    pickedRecordIds.length > 0 ? { id: { in: pickedRecordIds } } : undefined;
+
+  const searchRecordsIncludingPickedRecordsResult = isDefined(includeFilter)
+    ? await searchRecords(combineFilters([includeFilter, additionalFilter]))
+    : { records: [], pageInfo: { hasNextPage: false, endCursor: null } };
 
   return [
     searchRecordsIncludingPickedRecordsResult.records,

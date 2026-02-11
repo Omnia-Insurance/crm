@@ -1,5 +1,5 @@
 import { useContext } from 'react';
-import { useRecoilCallback } from 'recoil';
+import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { v4 } from 'uuid';
 
 import { useActivityTargetObjectRecords } from '@/activities/hooks/useActivityTargetObjectRecords';
@@ -14,6 +14,7 @@ import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { isActivityTargetField } from '@/object-record/record-field-list/utils/categorizeRelationFields';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
+import { useJunctionBridgeFilter } from '@/object-record/record-field/ui/hooks/useJunctionBridgeFilter';
 import { useUpdateJunctionRelationFromCell } from '@/object-record/record-field/ui/hooks/useUpdateJunctionRelationFromCell';
 import { useRelationField } from '@/object-record/record-field/ui/meta-types/hooks/useRelationField';
 import { useAddNewRecordAndOpenRightDrawer } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer';
@@ -57,6 +58,16 @@ export const RelationOneToManyFieldInput = () => {
       'FIELD_METADATA_ITEM_OR_OBJECT_METADATA_ITEM_NOT_FOUND',
     );
   }
+  const recordData = useRecoilValue(recordStoreFamilyState(recordId));
+
+  const junctionBridgeFilter = useJunctionBridgeFilter({
+    objectMetadataItem,
+    fieldMetadataItem,
+    recordId,
+    objectMetadataItems,
+    recordData,
+  });
+
   const objectMetadataNameSingular =
     fieldDefinition.metadata.objectMetadataNameSingular;
 
@@ -320,6 +331,7 @@ export const RelationOneToManyFieldInput = () => {
       onCreate={canCreateNew ? handleCreateNew : undefined}
       objectMetadataItemIdForCreate={objectMetadataItemIdForCreate}
       onClickOutside={handleSubmit}
+      additionalFilter={junctionBridgeFilter}
       layoutDirection={
         layoutDirection === 'downward'
           ? 'search-bar-on-top'

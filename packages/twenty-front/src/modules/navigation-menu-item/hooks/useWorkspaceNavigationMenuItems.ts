@@ -19,42 +19,60 @@ export const useWorkspaceNavigationMenuItems = (): {
 
   const views = coreViews.map(convertCoreViewToView);
 
-  const workspaceNavigationMenuItemViewIds = new Set(
-    workspaceNavigationMenuItemsSorted
-      .map((item) => item.viewId)
-      .filter((viewId) => isDefined(viewId)),
-  );
-
-  const navigationMenuItemViewObjectMetadataIds = new Set(
-    views.reduce<string[]>((acc, view) => {
-      if (workspaceNavigationMenuItemViewIds.has(view.id)) {
-        acc.push(view.objectMetadataId);
-      }
-      return acc;
-    }, []),
-  );
-
-  const navigationMenuItemRecordObjectMetadataIds = new Set(
-    rawWorkspaceNavigationMenuItems
-      .map((item) => item.targetObjectMetadataId)
-      .filter((objectMetadataId) => isDefined(objectMetadataId)),
-  );
-
-  const allNavigationMenuItemObjectMetadataIds = new Set([
-    ...navigationMenuItemViewObjectMetadataIds,
-    ...navigationMenuItemRecordObjectMetadataIds,
-  ]);
-
   const { activeNonSystemObjectMetadataItems } =
     useFilteredObjectMetadataItems();
 
-  const activeNonSystemObjectMetadataItemsInWorkspaceNavigationMenuItems: ObjectMetadataItem[] =
-    activeNonSystemObjectMetadataItems.filter((item: ObjectMetadataItem) =>
-      allNavigationMenuItemObjectMetadataIds.has(item.id),
-    );
+  // Build a map from objectMetadataId to objectMetadataItem for fast lookup
+  const objectMetadataById = new Map(
+    activeNonSystemObjectMetadataItems.map((item) => [item.id, item]),
+  );
+
+  // Build a map from viewId to objectMetadataId
+  const viewIdToObjectMetadataId = new Map(
+    views.map((view) => [view.id, view.objectMetadataId]),
+  );
+
+  // Iterate over sorted navigation menu items to preserve position order
+  const seen = new Set<string>();
+  const orderedItems: ObjectMetadataItem[] = [];
+
+  for (const navItem of workspaceNavigationMenuItemsSorted) {
+    let objectMetadataId: string | undefined;
+
+    if (isDefined(navItem.viewId)) {
+      objectMetadataId = viewIdToObjectMetadataId.get(navItem.viewId);
+    }
+
+    if (
+      !isDefined(objectMetadataId) &&
+      isDefined(navItem.targetObjectMetadataId)
+    ) {
+      objectMetadataId = navItem.targetObjectMetadataId;
+    }
+
+    if (isDefined(objectMetadataId) && !seen.has(objectMetadataId)) {
+      const metadataItem = objectMetadataById.get(objectMetadataId);
+      if (isDefined(metadataItem)) {
+        seen.add(objectMetadataId);
+        orderedItems.push(metadataItem);
+      }
+    }
+  }
+
+  // Also include items from raw workspace navigation menu items
+  // that have targetObjectMetadataId but no sorted entry
+  for (const rawItem of rawWorkspaceNavigationMenuItems) {
+    const targetId = rawItem.targetObjectMetadataId;
+    if (isDefined(targetId) && !seen.has(targetId)) {
+      const metadataItem = objectMetadataById.get(targetId);
+      if (isDefined(metadataItem)) {
+        seen.add(targetId);
+        orderedItems.push(metadataItem);
+      }
+    }
+  }
 
   return {
-    workspaceNavigationMenuItemsObjectMetadataItems:
-      activeNonSystemObjectMetadataItemsInWorkspaceNavigationMenuItems,
+    workspaceNavigationMenuItemsObjectMetadataItems: orderedItems,
   };
 };
