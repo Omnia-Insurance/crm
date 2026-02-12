@@ -4,7 +4,7 @@ import { Args, Mutation, Subscription } from '@nestjs/graphql';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
-import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { CoreResolver } from 'src/engine/api/graphql/graphql-config/decorators/core-resolver.decorator';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
@@ -37,7 +37,7 @@ import { WorkspaceEventEmitterExceptionFilter } from 'src/engine/workspace-event
 
 import { eventStreamIdToChannelId } from './utils/get-channel-id-from-event-stream-id';
 
-@MetadataResolver()
+@CoreResolver()
 @UseGuards(WorkspaceAuthGuard, UserAuthGuard, NoPermissionGuard)
 @UsePipes(ResolverValidationPipe)
 @UseFilters(

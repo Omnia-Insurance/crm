@@ -12,17 +12,22 @@ server:
     SENTRY_ENVIRONMENT: production
     SENTRY_DSN: https://3364f6ba21801fb70491652bd784a367@o4510840638930944.ingest.us.sentry.io/4510840660819968
     SENTRY_FRONT_DSN: https://660cb58838f1dbf2ee91c1290136056e@o4510840638930944.ingest.us.sentry.io/4510840650989568
+    NODE_OPTIONS: "--max-old-space-size=1536"
   resources:
     requests:
       cpu: 100m
-      memory: 512Mi
+      memory: 1Gi
     limits:
-      cpu: 1000m
-      memory: 1536Mi
+      cpu: 1500m
+      memory: 2560Mi
   ingress:
     enabled: true
     className: nginx
     acme: false
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
     hosts:
       - host: crm.omniaagent.com
         paths:
