@@ -47,8 +47,12 @@ export const useJunctionBridgeFilter = ({
       : undefined
     : undefined;
 
+  // When bridge is null, skip is true so the query won't execute.
+  // We still need a valid objectNameSingular because useFindManyRecords
+  // unconditionally calls useObjectMetadataItem (React hooks can't be conditional),
+  // which throws on empty string. Use 'person' as a safe placeholder.
   const { records: junctionRecords } = useFindManyRecords({
-    objectNameSingular: bridge?.junctionObjectNameSingular ?? '',
+    objectNameSingular: bridge?.junctionObjectNameSingular ?? 'person',
     filter: junctionFilter,
     skip: !isDefined(bridge) || !isDefined(parentId),
   });
