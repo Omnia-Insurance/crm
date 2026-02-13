@@ -1,0 +1,10 @@
+name = "twenty-webhook"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+routes = [
+  { pattern = "ingest.omniaagent.com/*", zone_name = "omniaagent.com" }
+]
+
+[vars]
+CRM_BASE_URL = "https://crm.omniaagent.com"
