@@ -64,6 +64,17 @@ export const useJunctionBridgeFilter = ({
     return undefined;
   }, [bridge, recordData]);
 
+  // eslint-disable-next-line no-console
+  console.warn('[JunctionBridge] hook state:', {
+    bridge,
+    parentId,
+    recordDataKeys: recordData ? Object.keys(recordData) : null,
+    parentFieldValue: bridge ? recordData?.[bridge.parentFieldName] : 'N/A',
+    parentFieldFkValue: bridge
+      ? recordData?.[`${bridge.parentFieldName}Id`]
+      : 'N/A',
+  });
+
   const junctionFilter: RecordGqlOperationFilter | undefined = isDefined(bridge)
     ? isDefined(parentId)
       ? { [bridge.sourceJoinColumnName]: { eq: parentId } }

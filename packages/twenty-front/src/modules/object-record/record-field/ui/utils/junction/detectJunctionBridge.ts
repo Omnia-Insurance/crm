@@ -64,6 +64,13 @@ export const detectJunctionBridge = ({
     fieldMetadataItem.relation?.targetObjectMetadata.id;
 
   if (!isDefined(fieldTargetObjectId)) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[JunctionBridge] field has no relation target:',
+      fieldMetadataItem.name,
+      'relation:',
+      fieldMetadataItem.relation,
+    );
     return undefined;
   }
 
@@ -74,6 +81,22 @@ export const detectJunctionBridge = ({
       field.id !== fieldMetadataItem.id &&
       field.type === FieldMetadataType.RELATION &&
       isRelationType(field, RelationType.MANY_TO_ONE),
+  );
+
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[JunctionBridge] object:',
+    objectMetadataItem.nameSingular,
+    'field:',
+    fieldMetadataItem.name,
+    'siblings:',
+    siblingManyToOneFields.map((f) => ({
+      name: f.name,
+      relationType: f.relation?.type,
+      settingsRelationType: (f.settings as Record<string, unknown> | null)
+        ?.relationType,
+      targetObjectId: f.relation?.targetObjectMetadata?.id,
+    })),
   );
 
   for (const siblingField of siblingManyToOneFields) {
@@ -93,6 +116,30 @@ export const detectJunctionBridge = ({
     if (!isDefined(siblingTargetObject)) {
       continue;
     }
+
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[JunctionBridge] sibling',
+      siblingField.name,
+      '-> target object:',
+      siblingTargetObject.nameSingular,
+      'ONE_TO_MANY fields with junction:',
+      siblingTargetObject.fields
+        .filter(
+          (f) =>
+            f.type === FieldMetadataType.RELATION &&
+            isRelationType(f, RelationType.ONE_TO_MANY),
+        )
+        .map((f) => ({
+          name: f.name,
+          relationType: f.relation?.type,
+          settingsRelationType: (
+            f.settings as Record<string, unknown> | null
+          )?.relationType,
+          hasJunction: hasJunctionConfig(f.settings),
+          settings: f.settings,
+        })),
+    );
 
     for (const targetField of siblingTargetObject.fields) {
       if (
