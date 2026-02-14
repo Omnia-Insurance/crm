@@ -18,9 +18,9 @@ import { type ApolloClient } from '@apollo/client';
 import { isNonEmptyArray } from '@sniptt/guards';
 import { useRecoilCallback } from 'recoil';
 import { capitalize, isDefined } from 'twenty-shared/utils';
-import { type SearchRecord } from '~/generated-metadata/graphql';
 import {
   type ObjectRecordFilterInput,
+  type SearchRecord,
   type SearchResultEdge,
 } from '~/generated/graphql';
 

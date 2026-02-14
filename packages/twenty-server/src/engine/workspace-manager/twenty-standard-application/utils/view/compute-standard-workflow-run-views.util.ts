@@ -15,11 +15,11 @@ export const computeStandardWorkflowRunViews = (
       objectName: 'workflowRun',
       context: {
         viewName: 'allWorkflowRuns',
-        name: 'All {objectLabelPlural}',
+        name: 'Runs',
         type: ViewType.TABLE,
         key: ViewKey.INDEX,
         position: 0,
-        icon: 'IconList',
+        icon: 'IconPlayerPlay',
       },
     }),
   };

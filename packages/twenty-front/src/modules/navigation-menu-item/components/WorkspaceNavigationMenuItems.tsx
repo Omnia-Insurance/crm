@@ -1,93 +1,188 @@
+import styled from '@emotion/styled';
 import { useLingui } from '@lingui/react/macro';
+import {
+  useRecoilCallback,
+  useRecoilState,
+  useRecoilValue,
+  useSetRecoilState,
+} from 'recoil';
+import {
+  IconFolder,
+  IconLink,
+  IconPlus,
+  IconTool,
+  useIcons,
+} from 'twenty-ui/display';
+import { LightIconButton } from 'twenty-ui/input';
+import { FeatureFlagKey } from '~/generated-metadata/graphql';
 
-import { useWorkspaceNavigationMenuItems } from '@/navigation-menu-item/hooks/useWorkspaceNavigationMenuItems';
-import { NavigationDrawerItemForObjectMetadataItem } from '@/object-metadata/components/NavigationDrawerItemForObjectMetadataItem';
+import { useNavigateCommandMenu } from '@/command-menu/hooks/useNavigateCommandMenu';
+import { CommandMenuPages } from '@/command-menu/types/CommandMenuPages';
+import { useOpenNavigationMenuItemInCommandMenu } from '@/navigation-menu-item/hooks/useOpenNavigationMenuItemInCommandMenu';
+import {
+  type NavigationMenuItemClickParams,
+  useWorkspaceSectionItems,
+} from '@/navigation-menu-item/hooks/useWorkspaceSectionItems';
+import { isNavigationMenuInEditModeState } from '@/navigation-menu-item/states/isNavigationMenuInEditModeState';
+import { NavigationMenuItemType } from '@/navigation-menu-item/constants/NavigationMenuItemType';
+import { navigationMenuItemsDraftState } from '@/navigation-menu-item/states/navigationMenuItemsDraftState';
+import { filterWorkspaceNavigationMenuItems } from '@/navigation-menu-item/utils/filterWorkspaceNavigationMenuItems';
+import { openNavigationMenuItemFolderIdsState } from '@/navigation-menu-item/states/openNavigationMenuItemFolderIdsState';
+import { selectedNavigationMenuItemInEditModeState } from '@/navigation-menu-item/states/selectedNavigationMenuItemInEditModeState';
 import { NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader';
-import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
-import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
+import { NavigationDrawerSectionForWorkspaceItems } from '@/object-metadata/components/NavigationDrawerSectionForWorkspaceItems';
+import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useIsPrefetchLoading } from '@/prefetch/hooks/useIsPrefetchLoading';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
-import { NavigationDrawerAnimatedCollapseWrapper } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerAnimatedCollapseWrapper';
-import { NavigationDrawerSection } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSection';
-import { NavigationDrawerSectionTitle } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSectionTitle';
-import { useNavigationSection } from '@/ui/navigation/navigation-drawer/hooks/useNavigationSection';
-import { useRecoilValue } from 'recoil';
-import { PermissionFlagType } from '~/generated/graphql';
+import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavigationMenuItemsState';
+import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import { isDefined } from 'twenty-shared/utils';
 
-/* eslint-disable lingui/no-unlocalized-strings */
-const ADMIN_SIDEBAR_ITEMS = [
-  'dashboards',
-  'leads',
-  'agents',
-  'calls',
-  'policies',
-  'products',
-  'carriers',
-  'product types',
-  'lead sources',
-  'workflows',
-];
-
-const MEMBER_SIDEBAR_ITEMS = ['leads', 'calls', 'policies', 'notes', 'tasks'];
-/* eslint-enable lingui/no-unlocalized-strings */
+const StyledRightIconsContainer = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${({ theme }) => theme.spacing(1)};
+`;
 
 export const WorkspaceNavigationMenuItems = () => {
-  const { workspaceNavigationMenuItemsObjectMetadataItems } =
-    useWorkspaceNavigationMenuItems();
+  const items = useWorkspaceSectionItems();
+  const enterEditMode = useRecoilCallback(
+    ({ set, snapshot }) =>
+      () => {
+        const prefetchNavigationMenuItems = snapshot
+          .getLoadable(prefetchNavigationMenuItemsState)
+          .getValue();
+        const workspaceNavigationMenuItems = filterWorkspaceNavigationMenuItems(
+          prefetchNavigationMenuItems,
+        );
+        set(navigationMenuItemsDraftState, workspaceNavigationMenuItems);
+        set(isNavigationMenuInEditModeState, true);
+      },
+    [],
+  );
+  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  );
+  const isNavigationMenuInEditMode = useRecoilValue(
+    isNavigationMenuInEditModeState,
+  );
+  const [
+    selectedNavigationMenuItemInEditMode,
+    setSelectedNavigationMenuItemInEditMode,
+  ] = useRecoilState(selectedNavigationMenuItemInEditModeState);
+  const setOpenNavigationMenuItemFolderIds = useSetRecoilState(
+    openNavigationMenuItemFolderIdsState,
+  );
+  const { navigateCommandMenu } = useNavigateCommandMenu();
+  const { openNavigationMenuItemInCommandMenu } =
+    useOpenNavigationMenuItemInCommandMenu();
+  const { getIcon } = useIcons();
 
   const loading = useIsPrefetchLoading();
   const { t } = useLingui();
 
-  const { toggleNavigationSection, isNavigationSectionOpenState } =
-    useNavigationSection('ObjectsWorkspace');
-  const isNavigationSectionOpen = useRecoilValue(isNavigationSectionOpenState);
+  const handleEditClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    enterEditMode();
+  };
 
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const permissionFlagMap = usePermissionFlagMap();
+  const handleNavigationMenuItemClick = (
+    params: NavigationMenuItemClickParams,
+  ) => {
+    const { item, objectMetadataItem } = params;
+    const id = item.id;
+    setSelectedNavigationMenuItemInEditMode(id);
+    if (item.itemType === NavigationMenuItemType.FOLDER) {
+      setOpenNavigationMenuItemFolderIds((currentOpenFolders) =>
+        currentOpenFolders.includes(id)
+          ? currentOpenFolders
+          : [...currentOpenFolders, id],
+      );
+      openNavigationMenuItemInCommandMenu({
+        pageTitle: t`Edit folder`,
+        pageIcon: IconFolder,
+      });
+    } else if (item.itemType === NavigationMenuItemType.LINK) {
+      openNavigationMenuItemInCommandMenu({
+        pageTitle: t`Edit link`,
+        pageIcon: IconLink,
+      });
+    } else if (isDefined(objectMetadataItem)) {
+      openNavigationMenuItemInCommandMenu({
+        pageTitle: objectMetadataItem.labelPlural,
+        pageIcon: getIcon(objectMetadataItem.icon),
+      });
+    }
+  };
+
+  const handleActiveObjectMetadataItemClick = (
+    objectMetadataItem: ObjectMetadataItem,
+    navigationMenuItemId: string,
+  ) => {
+    enterEditMode();
+    setSelectedNavigationMenuItemInEditMode(navigationMenuItemId);
+    openNavigationMenuItemInCommandMenu({
+      pageTitle: objectMetadataItem.labelPlural,
+      pageIcon: getIcon(objectMetadataItem.icon),
+    });
+  };
+
+  const handleAddMenuItem = (event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    navigateCommandMenu({
+      page: CommandMenuPages.NavigationMenuAddItem,
+      pageTitle: t`New sidebar item`,
+      pageIcon: IconPlus,
+      resetNavigationStack: true,
+    });
+  };
+
+  const isEditMode =
+    isNavigationMenuItemEditingEnabled && isNavigationMenuInEditMode;
 
   if (loading) {
     return <NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader />;
   }
 
-  const itemsWithReadPermission =
-    workspaceNavigationMenuItemsObjectMetadataItems.filter(
-      (objectMetadataItem) =>
-        getObjectPermissionsForObject(
-          objectPermissionsByObjectMetadataId,
-          objectMetadataItem.id,
-        ).canReadObjectRecords,
-    );
-
-  const isAdmin = permissionFlagMap[PermissionFlagType.ROLES];
-  const allowedItems = isAdmin ? ADMIN_SIDEBAR_ITEMS : MEMBER_SIDEBAR_ITEMS;
-
-  const filteredItems = itemsWithReadPermission
-    .filter((item) => allowedItems.includes(item.labelPlural.toLowerCase()))
-    .sort(
-      (itemA, itemB) =>
-        allowedItems.indexOf(itemA.labelPlural.toLowerCase()) -
-        allowedItems.indexOf(itemB.labelPlural.toLowerCase()),
-    );
-
-  if (filteredItems.length === 0) {
-    return null;
-  }
-
   return (
-    <NavigationDrawerSection>
-      <NavigationDrawerAnimatedCollapseWrapper>
-        <NavigationDrawerSectionTitle
-          label={t`Workspace`}
-          onClick={() => toggleNavigationSection()}
-        />
-      </NavigationDrawerAnimatedCollapseWrapper>
-      {isNavigationSectionOpen &&
-        filteredItems.map((objectMetadataItem) => (
-          <NavigationDrawerItemForObjectMetadataItem
-            key={`navigation-drawer-item-${objectMetadataItem.id}`}
-            objectMetadataItem={objectMetadataItem}
-          />
-        ))}
-    </NavigationDrawerSection>
+    <NavigationDrawerSectionForWorkspaceItems
+      sectionTitle={t`Workspace`}
+      items={items}
+      rightIcon={
+        isNavigationMenuItemEditingEnabled ? (
+          <StyledRightIconsContainer>
+            {isEditMode ? (
+              <LightIconButton
+                Icon={IconPlus}
+                accent="tertiary"
+                size="small"
+                onClick={handleAddMenuItem}
+              />
+            ) : (
+              <LightIconButton
+                Icon={IconTool}
+                accent="tertiary"
+                size="small"
+                onClick={handleEditClick}
+              />
+            )}
+          </StyledRightIconsContainer>
+        ) : undefined
+      }
+      onAddMenuItem={
+        isNavigationMenuItemEditingEnabled && isEditMode
+          ? handleAddMenuItem
+          : undefined
+      }
+      isEditMode={isEditMode}
+      selectedNavigationMenuItemId={selectedNavigationMenuItemInEditMode}
+      onNavigationMenuItemClick={
+        isEditMode ? handleNavigationMenuItemClick : undefined
+      }
+      onActiveObjectMetadataItemClick={
+        isNavigationMenuItemEditingEnabled
+          ? handleActiveObjectMetadataItemClick
+          : undefined
+      }
+    />
   );
 };

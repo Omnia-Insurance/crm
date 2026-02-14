@@ -57,7 +57,6 @@ export const RecordFieldList = ({
 
   const { useUpdateOneObjectRecordMutation } = useRecordShowContainerActions({
     objectNameSingular,
-    objectRecordId,
   });
 
   const isRecordReadOnly = useIsRecordReadOnly({

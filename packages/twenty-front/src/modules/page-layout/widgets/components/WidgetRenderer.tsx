@@ -33,7 +33,7 @@ import {
   PageLayoutTabLayoutMode,
   PageLayoutType,
   WidgetType,
-} from '~/generated/graphql';
+} from '~/generated-metadata/graphql';
 
 const StyledNoAccessContainer = styled.div`
   align-items: center;
@@ -84,6 +84,9 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
   const isLastWidget = useIsCurrentWidgetLastOfTab(widget.id);
 
   const isReorderEnabled =
+    currentPageLayout.type !== PageLayoutType.RECORD_PAGE;
+
+  const isDeletingWidgetEnabled =
     currentPageLayout.type !== PageLayoutType.RECORD_PAGE;
 
   // TODO: when we have more widgets without headers, we should use a more generic approach to hide the header
@@ -153,6 +156,7 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
             isInEditMode={isPageLayoutInEditMode}
             isResizing={isResizing}
             isReorderEnabled={isReorderEnabled}
+            isDeletingWidgetEnabled={isDeletingWidgetEnabled}
             title={widget.title}
             onRemove={handleRemove}
             actions={actions}

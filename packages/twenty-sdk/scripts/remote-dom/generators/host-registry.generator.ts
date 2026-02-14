@@ -98,7 +98,7 @@ const wrapEventHandler = (handler: (detail: SerializedEventData) => void) => {
   };
 };
 
-const filterProps = (props: Record<string, unknown>) => {
+const filterProps = <T extends object>(props: T): T => {
   const filtered: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(props)) {
     if (INTERNAL_PROPS.has(key) || value === undefined) continue;
@@ -114,7 +114,7 @@ const filterProps = (props: Record<string, unknown>) => {
       }
     }
   }
-  return filtered;
+  return filtered as T;
 };`;
 };
 
@@ -136,7 +136,7 @@ const VOID_ELEMENTS = new Set([
   'wbr',
 ]);
 
-const generateHtmlWrapperComponent = (component: ComponentSchema): string => {
+const generateWrapperComponent = (component: ComponentSchema): string => {
   const isVoidElement = VOID_ELEMENTS.has(component.htmlTag ?? '');
 
   if (isVoidElement) {
@@ -145,22 +145,15 @@ const generateHtmlWrapperComponent = (component: ComponentSchema): string => {
 };`;
   }
 
-  return `const ${component.name}Wrapper = ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => {
+  if (component.isHtmlElement) {
+    return `const ${component.name}Wrapper = ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => {
   return React.createElement('${component.htmlTag}', filterProps(props), children);
 };`;
-};
+  }
 
-const generateUiWrapperComponent = (component: ComponentSchema): string => {
   return `const ${component.name}Wrapper = ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => {
   return React.createElement(${component.componentImport}, filterProps(props), children);
 };`;
-};
-
-const generateWrapperComponent = (component: ComponentSchema): string => {
-  if (component.isHtmlElement) {
-    return generateHtmlWrapperComponent(component);
-  }
-  return generateUiWrapperComponent(component);
 };
 
 const generateRegistryMap = (components: ComponentSchema[]): string => {
@@ -179,28 +172,6 @@ export const componentRegistry: Map<string, ComponentRegistryValue> = new Map([
 ${entries}
   ['${CUSTOM_ELEMENT_NAMES.FRAGMENT}', RemoteFragmentRenderer],
 ]);`;
-};
-
-const groupImportsByPath = (
-  components: ComponentSchema[],
-): Map<string, string[]> => {
-  const importsByPath = new Map<string, string[]>();
-
-  for (const component of components) {
-    if (
-      !component.isHtmlElement &&
-      isDefined(component.componentPath) &&
-      isDefined(component.componentImport)
-    ) {
-      const existing = importsByPath.get(component.componentPath) ?? [];
-      if (!existing.includes(component.componentImport)) {
-        existing.push(component.componentImport);
-      }
-      importsByPath.set(component.componentPath, existing);
-    }
-  }
-
-  return importsByPath;
 };
 
 export const generateHostRegistry = (
@@ -225,17 +196,21 @@ export const generateHostRegistry = (
   });
 
   sourceFile.addImportDeclaration({
-    moduleSpecifier: '../../../sdk/front-component-common/SerializedEventData',
+    moduleSpecifier: '../../../sdk/front-component-api/constants/SerializedEventData',
     namedImports: [{ name: 'SerializedEventData', isTypeOnly: true }],
   });
 
-  const uiImports = groupImportsByPath(components);
-
-  for (const [modulePath, namedImports] of uiImports) {
-    sourceFile.addImportDeclaration({
-      moduleSpecifier: modulePath,
-      namedImports,
-    });
+  for (const component of components) {
+    if (
+      !component.isHtmlElement &&
+      isDefined(component.componentPath) &&
+      isDefined(component.componentImport)
+    ) {
+      sourceFile.addImportDeclaration({
+        moduleSpecifier: component.componentPath,
+        namedImports: [component.componentImport],
+      });
+    }
   }
 
   addStatement(sourceFile, generateRuntimeUtilities(eventToReactMapping));
