@@ -37,7 +37,7 @@ describe('generateCsv', () => {
       {
         label: 'Relation',
         size: 120,
-        type: FieldMetadataType.TEXT,
+        type: FieldMetadataType.RELATION,
         metadata: {
           fieldName: 'relation',
           relationType: RelationType.MANY_TO_ONE,
@@ -58,13 +58,13 @@ describe('generateCsv', () => {
             { label: 'secondary link 2', url: 'https://www.test.com' },
           ],
         },
-        relation: 'a relation',
+        relation: 'Jovone Brown',
       },
     ];
     const csv = generateCsv({ columns, rows });
     expect(csv)
       .toEqual(`Id,Foo,Empty,Nested link field / Link URL,Nested link field / Secondary Links,Relation
-1,some field,,https://www.test.com,"[{""label"":""secondary link 1"",""url"":""https://www.test.com""},{""label"":""secondary link 2"",""url"":""https://www.test.com""}]",a relation`);
+1,some field,,https://www.test.com,"[{""label"":""secondary link 1"",""url"":""https://www.test.com""},{""label"":""secondary link 2"",""url"":""https://www.test.com""}]",Jovone Brown`);
   });
 
   it('generates csv with multi-select and array fields as JSON arrays', () => {

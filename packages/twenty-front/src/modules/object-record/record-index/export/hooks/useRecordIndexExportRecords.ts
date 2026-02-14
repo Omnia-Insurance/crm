@@ -61,9 +61,9 @@ export const generateCsv: GenerateExport = ({
   const columnsToExportWithIdColumn = [objectIdColumn, ...columnsToExport];
 
   const keys = columnsToExportWithIdColumn.flatMap((col) => {
-    const headerLabel = `${col.label}${col.type === 'RELATION' ? ' Id' : ''}`;
+    const headerLabel = col.label;
     const column = {
-      field: `${col.metadata.fieldName}${col.type === 'RELATION' ? 'Id' : ''}`,
+      field: col.metadata.fieldName,
       title: formatValueForCSV(sanitizeValueForCSVExport(headerLabel)),
     };
 
