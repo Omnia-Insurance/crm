@@ -37,6 +37,14 @@ export const PUBLIC_FEATURE_FLAGS: PublicFeatureFlag[] = [
       imagePath: 'https://twenty.com/images/lab/is-real-time-enabled.png',
     },
   },
+  {
+    key: FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+    metadata: {
+      label: 'Navigation Menu Editing',
+      description:
+        'Customize the sidebar navigation with folders, views, and custom links',
+    },
+  },
   ...(process.env.CLOUDFLARE_API_KEY
     ? [
         // {
