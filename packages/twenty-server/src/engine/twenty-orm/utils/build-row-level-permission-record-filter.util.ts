@@ -243,6 +243,15 @@ export const buildRowLevelPermissionRecordFilter = async ({
     )
   ).filter(isDefined);
 
+  // If predicates were defined for this role+object but none could be resolved
+  // (e.g., no Agent linked to this workspace member), deny access by returning
+  // an impossible filter rather than falling through to "show everything".
+  if (recordFilters.length === 0) {
+    return {
+      id: { eq: '00000000-0000-0000-0000-000000000000' },
+    } as RecordGqlOperationFilter;
+  }
+
   const relevantGroupIds = new Set<string>();
 
   for (const predicate of predicates) {
