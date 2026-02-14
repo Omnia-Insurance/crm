@@ -28,6 +28,30 @@ type GetJunctionConfigArgs = {
   objectMetadataItems: JunctionObjectMetadataItem[];
 };
 
+// Resolves the target object ID for a junction field when relation is null.
+// Searches all objects for an inverse relation field that references this field.
+const resolveTargetObjectIdFromItems = (
+  field: FieldMetadataItem,
+  objectMetadataItems: JunctionObjectMetadataItem[],
+): string | undefined => {
+  if (isDefined(field.relation?.targetObjectMetadata.id)) {
+    return field.relation.targetObjectMetadata.id;
+  }
+
+  for (const obj of objectMetadataItems) {
+    for (const otherField of obj.fields) {
+      if (
+        otherField.type === FieldMetadataType.RELATION &&
+        otherField.relation?.targetFieldMetadata.id === field.id
+      ) {
+        return obj.id;
+      }
+    }
+  }
+
+  return undefined;
+};
+
 export const getJunctionConfig = ({
   settings,
   relationObjectMetadataId,
@@ -49,6 +73,7 @@ export const getJunctionConfig = ({
       return undefined;
     }
 
+    // Primary: match by relation.targetObjectMetadata.id
     const relationField = junctionObjectMetadata.fields.find(
       (field) =>
         field.type === FieldMetadataType.RELATION &&
@@ -58,6 +83,20 @@ export const getJunctionConfig = ({
 
     if (isDefined(relationField)) {
       return relationField;
+    }
+
+    // Fallback: when relation is null, resolve the target object ID
+    // by searching for an inverse relation across all objects.
+    const fallbackField = junctionObjectMetadata.fields.find(
+      (field) =>
+        field.type === FieldMetadataType.RELATION &&
+        field.id !== excludeFieldId &&
+        resolveTargetObjectIdFromItems(field, objectMetadataItems) ===
+          sourceObjectMetadataId,
+    );
+
+    if (isDefined(fallbackField)) {
+      return fallbackField;
     }
 
     return junctionObjectMetadata.fields.find(
@@ -85,7 +124,14 @@ export const getJunctionConfig = ({
 
   const isMorphRelation = targetField.type === FieldMetadataType.MORPH_RELATION;
 
-  if (!isMorphRelation && !isDefined(targetField.relation)) {
+  // Accept the target field as long as it's a RELATION type (even if
+  // the relation resolver returned null). The field was already located
+  // by junctionTargetFieldId so we know it's valid.
+  if (
+    !isMorphRelation &&
+    targetField.type !== FieldMetadataType.RELATION &&
+    !isDefined(targetField.relation)
+  ) {
     return null;
   }
 

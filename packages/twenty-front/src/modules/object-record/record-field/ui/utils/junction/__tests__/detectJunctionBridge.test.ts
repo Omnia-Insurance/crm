@@ -509,6 +509,92 @@ describe('detectJunctionBridge', () => {
     });
   });
 
+  it('should detect bridge when junction inner fields (carrier/product on CarrierProduct) have relation=null', () => {
+    // Both cpCarrierField and cpProductField have relation=null
+    // but the algorithm should still work via inverse relation search.
+    const cpCarrierFieldNoRelation = makeField({
+      id: cpCarrierFieldId,
+      name: 'carrier',
+      type: FieldMetadataType.RELATION,
+      relation: null,
+      settings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: 'carrierId',
+      },
+    });
+
+    const cpProductFieldNoRelation = makeField({
+      id: cpProductFieldId,
+      name: 'product',
+      type: FieldMetadataType.RELATION,
+      relation: null,
+      settings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: 'productId',
+      },
+    });
+
+    const carrierProductObjectNoRelation = makeObject({
+      id: carrierProductObjectId,
+      nameSingular: 'carrierProduct',
+      fields: [cpCarrierFieldNoRelation, cpProductFieldNoRelation],
+    });
+
+    // We need inverse fields on Carrier and Product pointing back to
+    // the junction so resolveTargetObjectId can work.
+    const productCarriersField = makeField({
+      id: 'product-carrier-products-field',
+      name: 'carrierProducts',
+      type: FieldMetadataType.RELATION,
+      relation: makeRelation({
+        type: RelationType.ONE_TO_MANY,
+        targetObjectMetadataId: carrierProductObjectId,
+        targetFieldMetadata: {
+          id: cpProductFieldId,
+          name: 'product',
+          isCustom: false,
+        },
+        sourceFieldMetadata: {
+          id: 'product-carrier-products-field',
+          name: 'carrierProducts',
+        },
+        targetObjectMetadata: {
+          id: carrierProductObjectId,
+          nameSingular: 'carrierProduct',
+          namePlural: 'carrierProducts',
+        },
+      }),
+      settings: null,
+    });
+
+    const productObjectWithInverse = makeObject({
+      id: productObjectId,
+      nameSingular: 'product',
+      fields: [productCarriersField],
+    });
+
+    const objectsWithNullJunctionRelations = [
+      policyObject,
+      carrierObject,
+      productObjectWithInverse,
+      carrierProductObjectNoRelation,
+    ];
+
+    const result = detectJunctionBridge({
+      objectMetadataItem: policyObject,
+      fieldMetadataItem: policyProductField,
+      objectMetadataItems: objectsWithNullJunctionRelations,
+    });
+
+    expect(result).toBeDefined();
+    expect(result).toEqual({
+      junctionObjectNameSingular: 'carrierProduct',
+      sourceJoinColumnName: 'carrierId',
+      targetJoinColumnName: 'productId',
+      parentFieldName: 'carrier',
+    });
+  });
+
   it('should detect bridge when carrier ONE_TO_MANY field has relation=null but settings has relationType and junctionTargetFieldId', () => {
     // Carrier.carrierProducts has relation=null but settings is correct
     const carrierProductsFieldNoRelation = makeField({
