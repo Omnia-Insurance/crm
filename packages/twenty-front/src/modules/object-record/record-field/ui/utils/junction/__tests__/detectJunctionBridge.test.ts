@@ -433,4 +433,125 @@ describe('detectJunctionBridge', () => {
 
     expect(result).toBeUndefined();
   });
+
+  it('should detect bridge when sibling field has relation=null but settings.relationType is set', () => {
+    // Simulate a field where the relation resolver returned null
+    // but settings.relationType is still available.
+    const policyCarrierFieldNoRelation = makeField({
+      id: policyCarrierFieldId,
+      name: 'carrier',
+      type: FieldMetadataType.RELATION,
+      relation: null,
+      settings: {
+        relationType: RelationType.MANY_TO_ONE,
+        joinColumnName: 'carrierId',
+      },
+    });
+
+    const policyObjectWithNullRelation = makeObject({
+      id: policyObjectId,
+      nameSingular: 'policy',
+      fields: [policyCarrierFieldNoRelation, policyProductField],
+    });
+
+    // Add inverse fields so resolveTargetObjectId can find targets
+    // by searching for fields that reference the carrier field.
+    const carrierPoliciesField = makeField({
+      id: 'carrier-policies-field',
+      name: 'policies',
+      type: FieldMetadataType.RELATION,
+      relation: makeRelation({
+        type: RelationType.ONE_TO_MANY,
+        targetObjectMetadataId: policyObjectId,
+        targetFieldMetadata: {
+          id: policyCarrierFieldId,
+          name: 'carrier',
+          isCustom: false,
+        },
+        sourceFieldMetadata: {
+          id: 'carrier-policies-field',
+          name: 'policies',
+        },
+        targetObjectMetadata: {
+          id: policyObjectId,
+          nameSingular: 'policy',
+          namePlural: 'policies',
+        },
+      }),
+      settings: null,
+    });
+
+    const carrierObjectWithInverse = makeObject({
+      id: carrierObjectId,
+      nameSingular: 'carrier',
+      fields: [carrierCarrierProductsField, carrierPoliciesField],
+    });
+
+    const objectsWithInverse = [
+      policyObjectWithNullRelation,
+      carrierObjectWithInverse,
+      productObject,
+      carrierProductObject,
+    ];
+
+    const result = detectJunctionBridge({
+      objectMetadataItem: policyObjectWithNullRelation,
+      fieldMetadataItem: policyProductField,
+      objectMetadataItems: objectsWithInverse,
+    });
+
+    expect(result).toBeDefined();
+    expect(result).toEqual({
+      junctionObjectNameSingular: 'carrierProduct',
+      sourceJoinColumnName: 'carrierId',
+      targetJoinColumnName: 'productId',
+      parentFieldName: 'carrier',
+    });
+  });
+
+  it('should detect bridge when carrier ONE_TO_MANY field has relation=null but settings has relationType and junctionTargetFieldId', () => {
+    // Carrier.carrierProducts has relation=null but settings is correct
+    const carrierProductsFieldNoRelation = makeField({
+      id: carrierProductsFieldId,
+      name: 'carrierProducts',
+      type: FieldMetadataType.RELATION,
+      relation: null,
+      settings: {
+        relationType: RelationType.ONE_TO_MANY,
+        junctionTargetFieldId: cpProductFieldId,
+      },
+    });
+
+    const carrierObjectNoRelation = makeObject({
+      id: carrierObjectId,
+      nameSingular: 'carrier',
+      fields: [carrierProductsFieldNoRelation],
+    });
+
+    // cpCarrierField has relation pointing to carrierObjectId, and
+    // its relation.targetFieldMetadata.id = carrierProductsFieldId.
+    // The resolveTargetObjectId fallback for carrierProductsFieldNoRelation
+    // should find cpCarrierField whose relation.targetFieldMetadata.id === carrierProductsFieldId
+    // and return the cpCarrierField's parent object ID (carrierProductObjectId).
+    const objectsWithNoRelationOnCarrier = [
+      policyObject,
+      carrierObjectNoRelation,
+      productObject,
+      carrierProductObject,
+    ];
+
+    const result = detectJunctionBridge({
+      objectMetadataItem: policyObject,
+      fieldMetadataItem: policyProductField,
+      objectMetadataItems: objectsWithNoRelationOnCarrier,
+    });
+
+    expect(result).toBeDefined();
+    expect(result).toEqual({
+      junctionObjectNameSingular: 'carrierProduct',
+      sourceJoinColumnName: 'carrierId',
+      targetJoinColumnName: 'productId',
+      parentFieldName: 'carrier',
+    });
+  });
 });

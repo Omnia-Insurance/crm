@@ -15,6 +15,42 @@ export type JunctionBridgeDetection = {
   parentFieldName: string;
 };
 
+// Checks relation type from either field.relation.type or field.settings.relationType
+// as a fallback when the relation resolver returns null.
+const isRelationType = (
+  field: FieldMetadataItem,
+  type: RelationType,
+): boolean =>
+  field.relation?.type === type ||
+  (field.settings as Record<string, unknown> | null)?.relationType === type;
+
+// Resolves the target object metadata ID for a relation field.
+// Uses field.relation.targetObjectMetadata.id when available,
+// falling back to searching objectMetadataItems for an inverse relation.
+const resolveTargetObjectId = (
+  field: FieldMetadataItem,
+  objectMetadataItems: ObjectMetadataItem[],
+): string | undefined => {
+  if (isDefined(field.relation?.targetObjectMetadata.id)) {
+    return field.relation.targetObjectMetadata.id;
+  }
+
+  // Fallback: search for an inverse relation field across all objects
+  // that references this field as its target.
+  for (const obj of objectMetadataItems) {
+    for (const otherField of obj.fields) {
+      if (
+        otherField.type === FieldMetadataType.RELATION &&
+        otherField.relation?.targetFieldMetadata.id === field.id
+      ) {
+        return obj.id;
+      }
+    }
+  }
+
+  return undefined;
+};
+
 export const detectJunctionBridge = ({
   objectMetadataItem,
   fieldMetadataItem,
@@ -31,15 +67,20 @@ export const detectJunctionBridge = ({
     return undefined;
   }
 
+  // Find sibling MANY_TO_ONE fields on the same object.
+  // Uses both relation.type and settings.relationType for robustness.
   const siblingManyToOneFields = objectMetadataItem.fields.filter(
     (field) =>
       field.id !== fieldMetadataItem.id &&
-      field.relation?.type === RelationType.MANY_TO_ONE,
+      field.type === FieldMetadataType.RELATION &&
+      isRelationType(field, RelationType.MANY_TO_ONE),
   );
 
   for (const siblingField of siblingManyToOneFields) {
-    const siblingTargetObjectId =
-      siblingField.relation?.targetObjectMetadata.id;
+    const siblingTargetObjectId = resolveTargetObjectId(
+      siblingField,
+      objectMetadataItems,
+    );
 
     if (!isDefined(siblingTargetObjectId)) {
       continue;
@@ -56,7 +97,7 @@ export const detectJunctionBridge = ({
     for (const targetField of siblingTargetObject.fields) {
       if (
         targetField.type !== FieldMetadataType.RELATION ||
-        targetField.relation?.type !== RelationType.ONE_TO_MANY
+        !isRelationType(targetField, RelationType.ONE_TO_MANY)
       ) {
         continue;
       }
@@ -65,10 +106,20 @@ export const detectJunctionBridge = ({
         continue;
       }
 
+      // Resolve the junction object ID from either the relation resolver
+      // or by finding the object that contains the junction target field.
+      const relationObjectMetadataId = resolveTargetObjectId(
+        targetField,
+        objectMetadataItems,
+      );
+
+      if (!isDefined(relationObjectMetadataId)) {
+        continue;
+      }
+
       const junctionConfig = getJunctionConfig({
         settings: targetField.settings,
-        relationObjectMetadataId:
-          targetField.relation.targetObjectMetadata.id,
+        relationObjectMetadataId,
         sourceObjectMetadataId: siblingTargetObjectId,
         objectMetadataItems,
       });
@@ -83,8 +134,10 @@ export const detectJunctionBridge = ({
         continue;
       }
 
-      const junctionTargetObjectId =
-        firstTargetField.relation?.targetObjectMetadata.id;
+      const junctionTargetObjectId = resolveTargetObjectId(
+        firstTargetField,
+        objectMetadataItems,
+      );
 
       if (junctionTargetObjectId !== fieldTargetObjectId) {
         continue;
@@ -104,9 +157,7 @@ export const detectJunctionBridge = ({
         sourceObjectMetadata: siblingTargetObject,
       });
 
-      const targetJoinColumnName = getJoinColumnName(
-        firstTargetField.settings,
-      );
+      const targetJoinColumnName = getJoinColumnName(firstTargetField.settings);
 
       if (
         !isDefined(sourceJoinColumnName) ||

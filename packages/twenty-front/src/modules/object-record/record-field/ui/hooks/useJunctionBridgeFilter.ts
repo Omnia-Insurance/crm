@@ -32,16 +32,39 @@ export const useJunctionBridgeFilter = ({
     [objectMetadataItem, fieldMetadataItem, objectMetadataItems],
   );
 
-  const parentValue = recordData?.[bridge?.parentFieldName ?? ''] as
-    | { id: string }
-    | null
-    | undefined;
+  // Extract the parent (sibling) record ID from record data.
+  // Try the relation object first (e.g., recordData.carrier.id),
+  // then fall back to the FK column (e.g., recordData.carrierId).
+  const parentId = useMemo(() => {
+    if (!isDefined(bridge)) {
+      return undefined;
+    }
 
-  const parentId = parentValue?.id;
+    const parentFieldName = bridge.parentFieldName;
 
-  const junctionFilter: RecordGqlOperationFilter | undefined = isDefined(
-    bridge,
-  )
+    const parentRelationValue = recordData?.[parentFieldName] as
+      | { id: string }
+      | null
+      | undefined;
+
+    if (isDefined(parentRelationValue?.id)) {
+      return parentRelationValue.id;
+    }
+
+    // Fallback: check for the FK column value (e.g., "carrierId")
+    const fkColumnValue = recordData?.[`${parentFieldName}Id`] as
+      | string
+      | null
+      | undefined;
+
+    if (isDefined(fkColumnValue) && typeof fkColumnValue === 'string') {
+      return fkColumnValue;
+    }
+
+    return undefined;
+  }, [bridge, recordData]);
+
+  const junctionFilter: RecordGqlOperationFilter | undefined = isDefined(bridge)
     ? isDefined(parentId)
       ? { [bridge.sourceJoinColumnName]: { eq: parentId } }
       : undefined
