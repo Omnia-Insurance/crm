@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
+import { SeedInsuranceNavigationCommand } from 'src/database/commands/custom/seed-insurance-navigation.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
 import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list-and-delete-orphaned-workspace-entities.command';
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
@@ -13,13 +14,17 @@ import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanu
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
+import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
 import { DataSourceModule } from 'src/engine/metadata-modules/data-source/data-source.module';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
+import { NavigationMenuItemEntity } from 'src/engine/metadata-modules/navigation-menu-item/entities/navigation-menu-item.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
+import { ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { DevSeederModule } from 'src/engine/workspace-manager/dev-seeder/dev-seeder.module';
@@ -38,6 +43,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
       WorkspaceEntity,
       ObjectMetadataEntity,
       FieldMetadataEntity,
+      NavigationMenuItemEntity,
+      ViewEntity,
     ]),
     // Cron command dependencies
     MessagingImportManagerModule,
@@ -61,6 +68,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     TrashCleanupModule,
     PublicDomainModule,
     EventLogCleanupModule,
+    ApplicationModule,
+    WorkspaceCacheModule,
   ],
   providers: [
     DataSeedWorkspaceCommand,
@@ -68,6 +77,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     CronRegisterAllCommand,
     ListOrphanedWorkspaceEntitiesCommand,
     SyncAgentWorkspaceMembersCommand,
+    SeedInsuranceNavigationCommand,
   ],
 })
 export class DatabaseCommandModule {}

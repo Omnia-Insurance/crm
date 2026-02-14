@@ -1,11 +1,21 @@
+import { useMemo } from 'react';
+import { useRecoilValue } from 'recoil';
+
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { isNavigationMenuInEditModeState } from '@/navigation-menu-item/states/isNavigationMenuInEditModeState';
 import { navigationMenuItemsDraftState } from '@/navigation-menu-item/states/navigationMenuItemsDraftState';
+import { filterNavigationMenuItemsByRole } from '@/navigation-menu-item/utils/filterNavigationMenuItemsByRole';
 import { filterWorkspaceNavigationMenuItems } from '@/navigation-menu-item/utils/filterWorkspaceNavigationMenuItems';
+import { objectMetadataItemsState } from '@/object-metadata/states/objectMetadataItemsState';
 import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavigationMenuItemsState';
-import { useRecoilValue } from 'recoil';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { coreViewsState } from '@/views/states/coreViewState';
+import { convertCoreViewToView } from '@/views/utils/convertCoreViewToView';
 import { isDefined } from 'twenty-shared/utils';
-import { type NavigationMenuItem } from '~/generated-metadata/graphql';
+import {
+  PermissionFlagType,
+  type NavigationMenuItem,
+} from '~/generated-metadata/graphql';
 
 type PrefetchedNavigationMenuItemsData = {
   navigationMenuItems: NavigationMenuItem[];
@@ -27,6 +37,15 @@ export const usePrefetchedNavigationMenuItemsData =
       navigationMenuItemsDraftState,
     );
 
+    const permissionFlagMap = usePermissionFlagMap();
+    const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
+    const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
+    const coreViews = useRecoilValue(coreViewsState);
+    const views = useMemo(
+      () => coreViews.map(convertCoreViewToView),
+      [coreViews],
+    );
+
     const navigationMenuItems = prefetchNavigationMenuItems.filter((item) =>
       isDefined(item.userWorkspaceId),
     );
@@ -34,10 +53,27 @@ export const usePrefetchedNavigationMenuItemsData =
     const workspaceNavigationMenuItemsFromPrefetch =
       filterWorkspaceNavigationMenuItems(prefetchNavigationMenuItems);
 
+    // Apply role-based filtering for non-admin users (skip in edit mode)
+    const roleFilteredItems = useMemo(
+      () =>
+        filterNavigationMenuItemsByRole(
+          workspaceNavigationMenuItemsFromPrefetch,
+          isAdmin,
+          objectMetadataItems,
+          views,
+        ),
+      [
+        workspaceNavigationMenuItemsFromPrefetch,
+        isAdmin,
+        objectMetadataItems,
+        views,
+      ],
+    );
+
     const workspaceNavigationMenuItems =
       isNavigationMenuInEditMode && isDefined(navigationMenuItemsDraft)
         ? navigationMenuItemsDraft
-        : workspaceNavigationMenuItemsFromPrefetch;
+        : roleFilteredItems;
 
     return {
       navigationMenuItems,
