@@ -5,6 +5,7 @@ import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
 import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list-and-delete-orphaned-workspace-entities.command';
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
+import { SyncAgentWorkspaceMembersCommand } from 'src/database/commands/sync-agent-workspace-members.command';
 import { UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/upgrade-version-command.module';
 import { TypeORMModule } from 'src/database/typeorm/typeorm.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
@@ -15,7 +16,9 @@ import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
 import { DataSourceModule } from 'src/engine/metadata-modules/data-source/data-source.module';
+import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
@@ -31,7 +34,11 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([WorkspaceEntity]),
+    TypeOrmModule.forFeature([
+      WorkspaceEntity,
+      ObjectMetadataEntity,
+      FieldMetadataEntity,
+    ]),
     // Cron command dependencies
     MessagingImportManagerModule,
     CalendarEventImportManagerModule,
@@ -60,6 +67,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     ConfirmationQuestion,
     CronRegisterAllCommand,
     ListOrphanedWorkspaceEntitiesCommand,
+    SyncAgentWorkspaceMembersCommand,
   ],
 })
 export class DatabaseCommandModule {}
