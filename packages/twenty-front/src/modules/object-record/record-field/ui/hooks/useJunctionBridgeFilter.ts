@@ -92,7 +92,11 @@ export const useJunctionBridgeFilter = ({
       .filter((id): id is string => isDefined(id));
 
     if (targetIds.length === 0) {
-      return { id: { in: [] } } as ObjectRecordFilterInput;
+      // Use a non-existent UUID to match zero records. The backend rejects
+      // empty arrays in `in` filters, so we pass a sentinel value instead.
+      return {
+        id: { eq: '00000000-0000-0000-0000-000000000000' },
+      } as ObjectRecordFilterInput;
     }
 
     return { id: { in: targetIds } } as ObjectRecordFilterInput;

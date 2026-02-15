@@ -677,6 +677,161 @@ describe('detectJunctionBridge', () => {
     });
   });
 
+  it('should detect bridge with exact production data (relationTargetObjectMetadataId=null, relation populated)', () => {
+    // This test simulates the exact production API response:
+    // - relationTargetObjectMetadataId is null for ALL fields (backend DTO not deployed)
+    // - relation IS populated for ALL fields
+
+    const prodCpCarrier = makeField({
+      id: cpCarrierFieldId,
+      name: 'carrier',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataId: undefined,
+      relation: makeRelation({
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadataId: carrierObjectId,
+        targetObjectMetadata: {
+          id: carrierObjectId,
+          nameSingular: 'carrier',
+          namePlural: 'carriers',
+        },
+      }),
+      settings: {
+        onDelete: 'SET_NULL',
+        relationType: 'MANY_TO_ONE',
+        joinColumnName: 'carrierId',
+      },
+    });
+
+    const prodCpProduct = makeField({
+      id: cpProductFieldId,
+      name: 'product',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataId: undefined,
+      relation: makeRelation({
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadataId: productObjectId,
+        targetObjectMetadata: {
+          id: productObjectId,
+          nameSingular: 'product',
+          namePlural: 'products',
+        },
+      }),
+      settings: {
+        onDelete: 'SET_NULL',
+        relationType: 'MANY_TO_ONE',
+        joinColumnName: 'productId',
+      },
+    });
+
+    const prodCarrierProductObj = makeObject({
+      id: carrierProductObjectId,
+      nameSingular: 'carrierProduct',
+      fields: [prodCpCarrier, prodCpProduct],
+    });
+
+    const prodCarrierProductsField = makeField({
+      id: carrierProductsFieldId,
+      name: 'carrierProducts',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataId: undefined,
+      relation: makeRelation({
+        type: RelationType.ONE_TO_MANY,
+        targetObjectMetadataId: carrierProductObjectId,
+        targetObjectMetadata: {
+          id: carrierProductObjectId,
+          nameSingular: 'carrierProduct',
+          namePlural: 'carrierProducts',
+        },
+      }),
+      settings: {
+        relationType: 'ONE_TO_MANY',
+        junctionTargetFieldId: cpProductFieldId,
+      },
+    });
+
+    const prodCarrierObj = makeObject({
+      id: carrierObjectId,
+      nameSingular: 'carrier',
+      fields: [prodCarrierProductsField],
+    });
+
+    const prodPolicyCarrier = makeField({
+      id: policyCarrierFieldId,
+      name: 'carrier',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataId: undefined,
+      relation: makeRelation({
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadataId: carrierObjectId,
+        targetObjectMetadata: {
+          id: carrierObjectId,
+          nameSingular: 'carrier',
+          namePlural: 'carriers',
+        },
+      }),
+      settings: {
+        onDelete: 'SET_NULL',
+        relationType: 'MANY_TO_ONE',
+        joinColumnName: 'carrierId',
+      },
+    });
+
+    const prodPolicyProduct = makeField({
+      id: policyProductFieldId,
+      name: 'product',
+      type: FieldMetadataType.RELATION,
+      relationTargetObjectMetadataId: undefined,
+      relation: makeRelation({
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadataId: productObjectId,
+        targetObjectMetadata: {
+          id: productObjectId,
+          nameSingular: 'product',
+          namePlural: 'products',
+        },
+      }),
+      settings: {
+        onDelete: 'SET_NULL',
+        relationType: 'MANY_TO_ONE',
+        joinColumnName: 'productId',
+      },
+    });
+
+    const prodPolicyObj = makeObject({
+      id: policyObjectId,
+      nameSingular: 'policy',
+      fields: [prodPolicyCarrier, prodPolicyProduct],
+    });
+
+    const prodProductObj = makeObject({
+      id: productObjectId,
+      nameSingular: 'product',
+      fields: [],
+    });
+
+    const prodObjects = [
+      prodPolicyObj,
+      prodCarrierObj,
+      prodProductObj,
+      prodCarrierProductObj,
+    ];
+
+    const result = detectJunctionBridge({
+      objectMetadataItem: prodPolicyObj,
+      fieldMetadataItem: prodPolicyProduct,
+      objectMetadataItems: prodObjects,
+    });
+
+    expect(result).toBeDefined();
+    expect(result).toEqual({
+      junctionObjectNameSingular: 'carrierProduct',
+      sourceJoinColumnName: 'carrierId',
+      targetJoinColumnName: 'productId',
+      parentFieldName: 'carrier',
+    });
+  });
+
   it('should detect bridge when carrier ONE_TO_MANY field has relation=null but settings has relationType and junctionTargetFieldId', () => {
     // Carrier.carrierProducts has relation=null but settings is correct
     const carrierProductsFieldNoRelation = makeField({

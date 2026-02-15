@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useContext } from 'react';
+import { type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -6,6 +6,7 @@ import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSi
 import { useRecordFieldsScopeContextOrThrow } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
+import { useJunctionBridgeFilter } from '@/object-record/record-field/ui/hooks/useJunctionBridgeFilter';
 import { useAddNewRecordAndOpenRightDrawer } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer';
 import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
 import { useSingleRecordPickerOpen } from '@/object-record/record-picker/single-record-picker/hooks/useSingleRecordPickerOpen';
@@ -14,6 +15,7 @@ import { singleRecordPickerSelectedIdComponentState } from '@/object-record/reco
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { getRecordFieldCardRelationPickerDropdownId } from '@/object-record/record-show/utils/getRecordFieldCardRelationPickerDropdownId';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
+import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
@@ -23,12 +25,14 @@ import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state
 
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
+import { FieldDependencyContext } from '@/object-record/record-field-dependency/contexts/FieldDependencyContext';
 import { assertFieldMetadata } from '@/object-record/record-field/ui/types/guards/assertFieldMetadata';
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { FieldMetadataType } from 'twenty-shared/types';
-import { CustomError } from 'twenty-shared/utils';
+import { CustomError, isDefined } from 'twenty-shared/utils';
 import { IconForbid, IconPencil } from 'twenty-ui/display';
 import { LightIconButton } from 'twenty-ui/input';
+import { type ObjectRecordFilterInput } from '~/generated/graphql';
 
 type RecordDetailRelationSectionDropdownToOneProps = {
   dropdownTriggerClickableComponent?: ReactNode;
@@ -159,6 +163,26 @@ export const RecordDetailRelationSectionDropdownToOne = ({
     relationObjectMetadataNameSingular !==
     CoreObjectNameSingular.WorkspaceMember;
 
+  const recordData = useRecoilValue(recordStoreFamilyState(recordId));
+
+  const fieldDependencyContext = useContext(FieldDependencyContext);
+  const dependencyFilter = fieldDependencyContext?.getFilterForField(fieldName);
+
+  const junctionBridgeFilter = useJunctionBridgeFilter({
+    objectMetadataItem,
+    fieldMetadataItem,
+    recordId,
+    objectMetadataItems,
+    recordData,
+  });
+
+  const additionalFilter = useMemo((): ObjectRecordFilterInput | undefined => {
+    if (isDefined(dependencyFilter) && isDefined(junctionBridgeFilter)) {
+      return { and: [dependencyFilter, junctionBridgeFilter] };
+    }
+    return dependencyFilter ?? junctionBridgeFilter;
+  }, [dependencyFilter, junctionBridgeFilter]);
+
   return (
     <Dropdown
       dropdownId={dropdownId}
@@ -189,6 +213,7 @@ export const RecordDetailRelationSectionDropdownToOne = ({
               ? 'search-bar-on-bottom'
               : 'search-bar-on-top'
           }
+          additionalFilter={additionalFilter}
         />
       }
     />
