@@ -154,6 +154,11 @@ export class FieldMetadataDTO<T extends FieldMetadataType = FieldMetadataType> {
   @Field(() => UUIDScalarType, { nullable: true })
   morphId?: string;
 
+  @IsOptional()
+  @IsUUID()
+  @Field(() => UUIDScalarType, { nullable: true })
+  relationTargetObjectMetadataId?: string;
+
   @IsDateString(undefined, {
     message: ({ value }) =>
       `Field metadata created at is invalid got ${JSON.stringify(value)} isDate: ${value instanceof Date}`,

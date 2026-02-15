@@ -800,6 +800,76 @@ describe('computeFieldDependencyGraph', () => {
     );
   });
 
+  it('should detect dependencies when fields use relationTargetObjectMetadataId with null relation', () => {
+    const carrierObject = createMockObject({
+      id: 'carrier-obj',
+      nameSingular: 'carrier',
+      fields: [],
+    });
+
+    const productObject = createMockObject({
+      id: 'product-obj',
+      nameSingular: 'product',
+      fields: [
+        createMockField({
+          id: 'product-carrier-field',
+          name: 'carrier',
+          relationTargetObjectMetadataId: 'carrier-obj',
+          relation: null,
+          settings: { relationType: RelationType.MANY_TO_ONE },
+        }),
+      ],
+    });
+
+    const policyObject = createMockObject({
+      id: 'policy-obj',
+      nameSingular: 'policy',
+      fields: [
+        createMockField({
+          id: 'policy-carrier-field',
+          name: 'carrier',
+          relationTargetObjectMetadataId: 'carrier-obj',
+          relation: null,
+          settings: { relationType: RelationType.MANY_TO_ONE },
+        }),
+        createMockField({
+          id: 'policy-product-field',
+          name: 'product',
+          relationTargetObjectMetadataId: 'product-obj',
+          relation: null,
+          settings: { relationType: RelationType.MANY_TO_ONE },
+        }),
+      ],
+    });
+
+    const graph = computeFieldDependencyGraph(policyObject, [
+      carrierObject,
+      productObject,
+      policyObject,
+    ]);
+
+    // Forward: product depends on carrier (because product obj has carrier MANY_TO_ONE)
+    expect(graph.dependenciesByField['product']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parentFieldName: 'carrier',
+          bridgeFieldForeignKeyName: 'carrierId',
+          direction: 'forward',
+        }),
+      ]),
+    );
+
+    // Reverse: carrier depends on product
+    expect(graph.dependenciesByField['carrier']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parentFieldName: 'product',
+          direction: 'reverse',
+        }),
+      ]),
+    );
+  });
+
   it('should create reverse dependencies at each level of a chain', () => {
     const carrierObject = createMockObject({
       id: 'carrier-obj',

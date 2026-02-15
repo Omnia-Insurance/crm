@@ -25,17 +25,21 @@ const isRelationType = (
   (field.settings as Record<string, unknown> | null)?.relationType === type;
 
 // Resolves the target object metadata ID for a relation field.
-// Uses field.relation.targetObjectMetadata.id when available,
-// falling back to searching objectMetadataItems for an inverse relation.
-const resolveTargetObjectId = (
+// Uses relationTargetObjectMetadataId (a scalar column on the field entity),
+// falling back to the relation resolver, then to inverse relation search.
+const getTargetObjectId = (
   field: FieldMetadataItem,
   objectMetadataItems: ObjectMetadataItem[],
 ): string | undefined => {
+  if (isDefined(field.relationTargetObjectMetadataId)) {
+    return field.relationTargetObjectMetadataId;
+  }
+
   if (isDefined(field.relation?.targetObjectMetadata.id)) {
     return field.relation.targetObjectMetadata.id;
   }
 
-  // Fallback: search for an inverse relation field across all objects
+  // Last resort: search for an inverse relation field across all objects
   // that references this field as its target.
   for (const obj of objectMetadataItems) {
     for (const otherField of obj.fields) {
@@ -60,9 +64,7 @@ export const detectJunctionBridge = ({
   fieldMetadataItem: FieldMetadataItem;
   objectMetadataItems: ObjectMetadataItem[];
 }): JunctionBridgeDetection | undefined => {
-  // Use resolveTargetObjectId to handle cases where relation is null
-  // but the target can still be found via inverse relation search.
-  const fieldTargetObjectId = resolveTargetObjectId(
+  const fieldTargetObjectId = getTargetObjectId(
     fieldMetadataItem,
     objectMetadataItems,
   );
@@ -81,7 +83,7 @@ export const detectJunctionBridge = ({
   );
 
   for (const siblingField of siblingManyToOneFields) {
-    const siblingTargetObjectId = resolveTargetObjectId(
+    const siblingTargetObjectId = getTargetObjectId(
       siblingField,
       objectMetadataItems,
     );
@@ -110,9 +112,7 @@ export const detectJunctionBridge = ({
         continue;
       }
 
-      // Resolve the junction object ID from either the relation resolver
-      // or by finding the object that contains the junction target field.
-      const relationObjectMetadataId = resolveTargetObjectId(
+      const relationObjectMetadataId = getTargetObjectId(
         targetField,
         objectMetadataItems,
       );
@@ -138,7 +138,7 @@ export const detectJunctionBridge = ({
         continue;
       }
 
-      const junctionTargetObjectId = resolveTargetObjectId(
+      const junctionTargetObjectId = getTargetObjectId(
         firstTargetField,
         objectMetadataItems,
       );

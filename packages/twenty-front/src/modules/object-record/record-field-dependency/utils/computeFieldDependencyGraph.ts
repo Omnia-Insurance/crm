@@ -7,8 +7,16 @@ import {
 import { getForeignKeyNameFromRelationFieldName } from '@/object-record/utils/getForeignKeyNameFromRelationFieldName';
 import { RelationType } from '~/generated-metadata/graphql';
 
+const getTargetObjectId = (field: FieldMetadataItem): string | undefined =>
+  field.relationTargetObjectMetadataId ??
+  field.relation?.targetObjectMetadata.id;
+
 const isManyToOneRelationField = (field: FieldMetadataItem): boolean => {
-  return field.relation?.type === RelationType.MANY_TO_ONE;
+  return (
+    field.relation?.type === RelationType.MANY_TO_ONE ||
+    (field.settings as Record<string, unknown> | null)?.relationType ===
+      RelationType.MANY_TO_ONE
+  );
 };
 
 export const computeFieldDependencyGraph = (
@@ -23,7 +31,7 @@ export const computeFieldDependencyGraph = (
   );
 
   for (const parentField of manyToOneFields) {
-    const parentTargetObjectId = parentField.relation?.targetObjectMetadata.id;
+    const parentTargetObjectId = getTargetObjectId(parentField);
 
     if (!parentTargetObjectId) {
       continue;
@@ -42,8 +50,7 @@ export const computeFieldDependencyGraph = (
         continue;
       }
 
-      const dependentTargetObjectId =
-        dependentField.relation?.targetObjectMetadata.id;
+      const dependentTargetObjectId = getTargetObjectId(dependentField);
 
       if (!dependentTargetObjectId) {
         continue;
@@ -59,8 +66,8 @@ export const computeFieldDependencyGraph = (
 
       const bridgeField = dependentTargetObject.fields.find(
         (field) =>
-          field.relation?.type === RelationType.MANY_TO_ONE &&
-          field.relation.targetObjectMetadata.id === parentTargetObjectId,
+          isManyToOneRelationField(field) &&
+          getTargetObjectId(field) === parentTargetObjectId,
       );
 
       if (!bridgeField) {
