@@ -155,7 +155,7 @@ type LeadReportResponse = {
   response: {
     data: LeadReportPolicy[];
     current_page: number;
-    last_page: number;
+    total_page: number;
     per_page: number;
     total: number;
   };
@@ -181,9 +181,9 @@ const POLICY_STATUS_NAME_MAP: Record<string, string> = {
   "payment error - active/placed": "PAYMENT_ERROR_ACTIVE_PLACED",
 };
 
-const POLICY_PAGE_SIZE = 100;
-const POLICY_INCREMENTAL_PAGES = 3;
-const POLICY_BACKFILL_PAGES = 2;
+const POLICY_PAGE_SIZE = 10; // API ignores per_page, always returns 10
+const POLICY_INCREMENTAL_PAGES = 5;
+const POLICY_BACKFILL_PAGES = 5;
 const POLICY_BATCH_LIMIT = 50;
 const SYNCED_POLICIES_KEY = "sync:policy-ids";
 
@@ -1064,10 +1064,6 @@ const buildPolicyInputFromReport = async (
     input.expirationDate = new Date(policy.expires_date).toISOString();
   }
 
-  if (policy.policy_number) {
-    input.policyNumber = policy.policy_number;
-  }
-
   // Carrier (in-memory cached)
   if (policy.carrier_name) {
     let carrierId: string | null;
@@ -1107,14 +1103,6 @@ const buildPolicyInputFromReport = async (
     }
     if (agentId) {
       input.agentId = agentId;
-    }
-  }
-
-  // Lead source from vendor_name
-  if (policy.vendor_name) {
-    const leadSourceId = await findOrCreateLeadSource(env, policy.vendor_name);
-    if (leadSourceId) {
-      input.leadSourceId = leadSourceId;
     }
   }
 
@@ -1925,7 +1913,7 @@ const syncRecentPolicies = async (env: Env): Promise<void> => {
 
     cursorPage++;
     // Wrap around if past last page
-    if (result.response && cursorPage > result.response.last_page) {
+    if (result.response && cursorPage > result.response.total_page) {
       cursorPage = 1;
     }
   }
