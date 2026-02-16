@@ -199,3 +199,8 @@ When running in CI, the dev environment is **not** pre-configured. Dependencies 
 - `tsconfig.base.json` - Base TypeScript configuration
 - `package.json` - Root package with workspace definitions
 - `.cursor/rules/` - Detailed development guidelines and best practices
+
+
+## Planning phases
+
+Please put all planning documents in /plans as we can iterate on these and keep track of them as we go along.

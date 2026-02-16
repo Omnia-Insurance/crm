@@ -1,4 +1,4 @@
-**/**/.env
+/**/**/.env
 .DS_Store
 /.idea
 **/**/node_modules/
@@ -50,3 +50,5 @@ dump.rdb
 mcp.json
 /.junie/
 TRANSLATION_QA_REPORT.md
+.playwright-mcp
+plans
