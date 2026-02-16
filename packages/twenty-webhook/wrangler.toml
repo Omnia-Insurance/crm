@@ -6,5 +6,14 @@ routes = [
   { pattern = "ingest.omniaagent.com/*", zone_name = "omniaagent.com" }
 ]
 
+[[kv_namespaces]]
+binding = "CACHE"
+id = "4908fb5fc9a24787835e9dc71a874c24"
+
+[triggers]
+# Separate crons so each sync gets its own invocation + subrequest budget
+crons = ["* * * * *", "*/2 * * * *", "*/5 * * * *"]
+
 [vars]
 CRM_BASE_URL = "https://crm.omniaagent.com"
+OLD_CRM_BASE_URL = "https://omnia.geogrowth.com/api/orgadmin"
