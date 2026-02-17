@@ -15,6 +15,7 @@ import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user
 import { UpdateWorkspaceMemberEmailJob } from 'src/engine/core-modules/user/jobs/update-workspace-member-email.job';
 import { UserVarsModule } from 'src/engine/core-modules/user/user-vars/user-vars.module';
 import { UserModule } from 'src/engine/core-modules/user/user.module';
+import { IngestionJobModule } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-job.module';
 import { WebhookJobModule } from 'src/engine/metadata-modules/webhook/jobs/webhook-job.module';
 import { HandleWorkspaceMemberDeletedJob } from 'src/engine/core-modules/workspace/handle-workspace-member-deleted.job';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
@@ -59,6 +60,7 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     AutoCompaniesAndContactsCreationJobModule,
     TimelineJobModule,
     WebhookJobModule,
+    IngestionJobModule,
     WorkflowModule,
     FavoriteModule,
     NavigationMenuItemModule,
