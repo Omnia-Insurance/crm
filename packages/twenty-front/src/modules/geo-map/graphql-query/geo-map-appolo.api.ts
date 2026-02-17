@@ -22,6 +22,8 @@ export const GET_AUTOCOMPLETE_QUERY = gql`
 export const GET_PLACE_DETAILS_QUERY = gql`
   query GetAddressDetails($placeId: String!, $token: String!) {
     getAddressDetails(placeId: $placeId, token: $token) {
+      street1
+      street2
       state
       postcode
       city

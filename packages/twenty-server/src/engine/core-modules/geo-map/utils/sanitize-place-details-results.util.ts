@@ -4,6 +4,8 @@ export type AddressComponent = {
   types: string[];
 };
 export type AddressFields = {
+  street1?: string;
+  street2?: string;
   state?: string;
   postcode?: string;
   city?: string;
@@ -25,6 +27,17 @@ export const sanitizePlaceDetailsResults = (
   for (const AddressComponent of AddressComponents) {
     for (const type of AddressComponent.types) {
       switch (type) {
+        case 'street_number':
+        case 'route':
+          address.street1 = [address.street1, AddressComponent.long_name]
+            .filter(Boolean)
+            .join(' ');
+          break;
+
+        case 'subpremise':
+          address.street2 = AddressComponent.long_name;
+          break;
+
         case 'postal_code': {
           address.postcode =
             AddressComponent.long_name + (address.postcode ?? '');

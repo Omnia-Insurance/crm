@@ -80,8 +80,12 @@ export const useAddressAutocomplete = (
       const countryName = findCountryNameByCountryCode(placeData?.country);
 
       const updatedAddress = {
-        addressStreet1: addressStreet1 || (internalValue?.addressStreet1 ?? ''),
-        addressStreet2: internalValue?.addressStreet2 ?? null,
+        addressStreet1:
+          placeData?.street1 ||
+          addressStreet1 ||
+          (internalValue?.addressStreet1 ?? ''),
+        addressStreet2:
+          placeData?.street2 || (internalValue?.addressStreet2 ?? null),
         addressCity: placeData?.city || (internalValue?.addressCity ?? null),
         addressState: placeData?.state || (internalValue?.addressState ?? null),
         addressCountry: countryName || (internalValue?.addressCountry ?? null),
