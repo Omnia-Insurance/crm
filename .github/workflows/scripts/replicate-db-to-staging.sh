@@ -49,9 +49,10 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
 kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
   psql -U postgres -c "CREATE DATABASE $DB_NAME;"
 
-echo "==> Restoring dump into staging..."
-kubectl exec -i -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -d "$DB_NAME" < "$DUMP_FILE"
+echo "==> Restoring dump into staging (triggers disabled to avoid FK ordering issues)..."
+{ echo "SET session_replication_role = 'replica';"; cat "$DUMP_FILE"; echo "SET session_replication_role = 'origin';"; } | \
+  kubectl exec -i -n "$STAGING_NS" "$STAGING_POD" -- \
+  psql -U postgres -d "$DB_NAME"
 
 echo "==> Anonymizing staging data..."
 kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
@@ -63,10 +64,10 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
     UPDATE core.\"user\"
     SET email = 'staging-user-' || id || '@example.com';
 
-    -- Delete refresh tokens
-    DELETE FROM core.\"refreshToken\";
+    -- Delete refresh tokens (stored in appToken table with type)
+    DELETE FROM core.\"appToken\" WHERE type = 'REFRESH_TOKEN';
 
-    -- Regenerate app tokens
+    -- Regenerate remaining app tokens
     UPDATE core.\"appToken\"
     SET value = encode(gen_random_bytes(32), 'hex'),
         \"expiresAt\" = NOW() + INTERVAL '30 days';
