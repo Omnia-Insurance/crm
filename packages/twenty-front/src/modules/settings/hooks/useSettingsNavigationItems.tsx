@@ -162,6 +162,12 @@ const useSettingsNavigationItems = (): SettingsNavigationSection[] => {
           Icon: IconApi,
           isHidden: !permissionMap[PermissionFlagType.API_KEYS_AND_WEBHOOKS],
         },
+        {
+          label: t`Ingestion Pipelines`,
+          path: SettingsPath.IngestionPipelines,
+          Icon: IconServer,
+          isHidden: !permissionMap[PermissionFlagType.API_KEYS_AND_WEBHOOKS],
+        },
         // TODO: Re-enable when integrations page is ready
         // {
         //   label: t`Integrations`,
