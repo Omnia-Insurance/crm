@@ -19,7 +19,7 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-staging
+  group: deploy-staging-${{ github.ref }}
   cancel-in-progress: true
 
 env:
