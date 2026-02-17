@@ -50,5 +50,5 @@ dump.rdb
 mcp.json
 /.junie/
 TRANSLATION_QA_REPORT.md
-.playwright-mcp
+.playwright-mcp/
 plans
