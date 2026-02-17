@@ -1,0 +1,224 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  workflow_dispatch:
+    inputs:
+      deploy_only:
+        description: 'Skip build and deploy existing image'
+        required: false
+        default: false
+        type: boolean
+      replicate_db:
+        description: 'Replicate production DB to staging (anonymized)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: twenty-crm
+  EKS_CLUSTER: twenty-crm
+  HELM_RELEASE: my-twenty-staging
+  NAMESPACE: twentycrm-staging
+  PROD_NAMESPACE: twentycrm
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.deploy_only != 'true' }}
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,prefix=staging-
+            type=raw,value=staging-latest
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/twenty-docker/twenty/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            REACT_APP_SERVER_BASE_URL=/api
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+            SENTRY_RELEASE=${{ github.sha }}
+
+  replicate-db:
+    name: Replicate Production DB to Staging
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.replicate_db == 'true' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Run DB replication script
+        run: |
+          chmod +x .github/workflows/scripts/replicate-db-to-staging.sh
+          .github/workflows/scripts/replicate-db-to-staging.sh
+        env:
+          PROD_NAMESPACE: ${{ env.PROD_NAMESPACE }}
+          STAGING_NAMESPACE: ${{ env.NAMESPACE }}
+
+  deploy:
+    name: Deploy to EKS (Staging)
+    runs-on: ubuntu-latest
+    needs: [build-and-push, replicate-db]
+    if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped') && (needs.replicate-db.result == 'success' || needs.replicate-db.result == 'skipped')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.16.4'
+
+      - name: Ensure staging namespace exists
+        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Copy S3 secret from prod namespace
+        run: |
+          kubectl get secret twenty-s3-credentials -n ${{ env.NAMESPACE }} 2>/dev/null || \
+            kubectl get secret twenty-s3-credentials -n ${{ env.PROD_NAMESPACE }} -o yaml | \
+            sed 's/namespace: ${{ env.PROD_NAMESPACE }}$/namespace: ${{ env.NAMESPACE }}/' | \
+            kubectl apply -f -
+
+      - name: Determine image tag
+        id: image-tag
+        run: |
+          if [ "${{ github.event.inputs.deploy_only }}" == "true" ]; then
+            echo "tag=staging-latest" >> $GITHUB_OUTPUT
+          else
+            echo "tag=staging-${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Clear stale Helm state
+        run: |
+          STATUS=$(helm status ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status' || echo "not-found")
+          if [ "$STATUS" = "pending-upgrade" ] || [ "$STATUS" = "pending-install" ] || [ "$STATUS" = "pending-rollback" ]; then
+            echo "Found stale Helm state ($STATUS), rolling back..."
+            helm rollback ${{ env.HELM_RELEASE }} 0 --namespace ${{ env.NAMESPACE }} --wait --timeout 3m || true
+          fi
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} \
+            ./packages/twenty-docker/helm/twenty \
+            --namespace ${{ env.NAMESPACE }} \
+            --values packages/twenty-docker/helm/twenty/omnia-staging-values.yaml \
+            --set server.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
+            --set server.image.tag=${{ steps.image-tag.outputs.tag }} \
+            --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
+            --set worker.image.tag=${{ steps.image-tag.outputs.tag }} \
+            --wait \
+            --cleanup-on-fail \
+            --timeout 10m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-server -n ${{ env.NAMESPACE }} --timeout=5m
+          kubectl rollout status deployment/${{ env.HELM_RELEASE }}-twenty-worker -n ${{ env.NAMESPACE }} --timeout=5m
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "::group::Pod status"
+          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          echo "::endgroup::"
+
+          echo "::group::Pod events"
+          kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp' | tail -30
+          echo "::endgroup::"
+
+          echo "::group::Non-ready pod details"
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} --field-selector=status.phase!=Running -o name 2>/dev/null); do
+            echo "--- $pod ---"
+            kubectl describe "$pod" -n ${{ env.NAMESPACE }} | tail -20
+          done
+          for pod in $(kubectl get pods -n ${{ env.NAMESPACE }} -o name 2>/dev/null); do
+            READY=$(kubectl get "$pod" -n ${{ env.NAMESPACE }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+            if [ "$READY" != "True" ]; then
+              echo "--- $pod (not ready) ---"
+              kubectl describe "$pod" -n ${{ env.NAMESPACE }} | tail -25
+              kubectl logs "$pod" -n ${{ env.NAMESPACE }} --tail=30 --all-containers 2>/dev/null || true
+            fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::Node resources"
+          kubectl top nodes 2>/dev/null || kubectl describe nodes | grep -A 10 "Allocated resources"
+          echo "::endgroup::"
+
+      - name: Get service URL
+        run: |
+          echo "## Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.image-tag.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://staging-crm.omniaagent.com" >> $GITHUB_STEP_SUMMARY
