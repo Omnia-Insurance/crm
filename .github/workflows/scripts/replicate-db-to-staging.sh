@@ -57,6 +57,8 @@ echo "==> Restoring dump into staging (triggers disabled to avoid FK ordering is
 echo "==> Anonymizing staging data..."
 kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
   psql -U postgres -d "$DB_NAME" -c "
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
     -- Null out password hashes
     UPDATE core.\"user\" SET \"passwordHash\" = NULL;
 
