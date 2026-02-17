@@ -169,6 +169,10 @@ spec:
             {{- if $storageEnv }}
             {{ $storageEnv | nindent 12 }}
             {{- end }}
+            {{- range $key, $value := .Values.server.extraEnv }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           lifecycle:
             preStop:
               exec:

@@ -16,20 +16,21 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 @Injectable()
 export class GeoMapService {
-  private apiMapKey: string | undefined;
   constructor(
     private readonly twentyConfigService: TwentyConfigService,
     private readonly secureHttpClientService: SecureHttpClientService,
-  ) {
+  ) {}
+
+  private getApiKey(): string | undefined {
     if (
       !this.twentyConfigService.get(
         'IS_MAPS_AND_ADDRESS_AUTOCOMPLETE_ENABLED',
-      ) ||
-      !this.twentyConfigService.get('GOOGLE_MAP_API_KEY')
+      )
     ) {
-      return;
+      return undefined;
     }
-    this.apiMapKey = this.twentyConfigService.get('GOOGLE_MAP_API_KEY');
+
+    return this.twentyConfigService.get('GOOGLE_MAP_API_KEY');
   }
 
   public async getAutoCompleteAddress(
@@ -38,11 +39,13 @@ export class GeoMapService {
     country?: string,
     isFieldCity?: boolean,
   ): Promise<AutocompleteSanitizedResult[] | undefined> {
-    if (!isNonEmptyString(address?.trim())) {
+    const apiKey = this.getApiKey();
+
+    if (!apiKey || !isNonEmptyString(address?.trim())) {
       return [];
     }
 
-    let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(address)}&sessiontoken=${token}&key=${this.apiMapKey}`;
+    let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(address)}&sessiontoken=${token}&key=${apiKey}`;
 
     if (isNonEmptyString(country)) {
       url += `&components=country:${country}`;
@@ -65,10 +68,16 @@ export class GeoMapService {
     placeId: string,
     token: string,
   ): Promise<AddressFields | undefined> {
+    const apiKey = this.getApiKey();
+
+    if (!apiKey) {
+      return {};
+    }
+
     const httpClient = this.secureHttpClientService.getHttpClient();
 
     const result = await httpClient.get(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&sessiontoken=${token}&fields=address_components%2Cgeometry&key=${this.apiMapKey}`,
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&sessiontoken=${token}&fields=address_components%2Cgeometry&key=${apiKey}`,
     );
 
     if (result.data.status === 'OK') {
