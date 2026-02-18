@@ -30,6 +30,8 @@ export const applyFieldTransform = (
       return applyNumberScale(value, transform.multiplier);
     case 'sanitizeNull':
       return sanitizeNull(value);
+    case 'static':
+      return transform.value;
     default:
       return value;
   }
