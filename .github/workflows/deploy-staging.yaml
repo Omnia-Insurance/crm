@@ -142,10 +142,15 @@ jobs:
       - name: Ensure staging namespace exists
         run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Copy S3 secret from prod namespace
+      - name: Copy secrets from prod namespace
         run: |
+          # S3 credentials - only copy if missing
           kubectl get secret twenty-s3-credentials -n ${{ env.NAMESPACE }} 2>/dev/null || \
             kubectl get secret twenty-s3-credentials -n ${{ env.PROD_NAMESPACE }} -o yaml | \
+            sed 's/namespace: ${{ env.PROD_NAMESPACE }}$/namespace: ${{ env.NAMESPACE }}/' | \
+            kubectl apply -f -
+          # Tokens (APP_SECRET) - always sync from prod so encrypted DB config can be decrypted
+          kubectl get secret tokens -n ${{ env.PROD_NAMESPACE }} -o yaml | \
             sed 's/namespace: ${{ env.PROD_NAMESPACE }}$/namespace: ${{ env.NAMESPACE }}/' | \
             kubectl apply -f -
 

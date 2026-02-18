@@ -78,6 +78,11 @@ storage:
     accessKeyIdKey: accessKeyId
     secretAccessKeyKey: secretAccessKey
 
+secrets:
+  tokens:
+    create: false
+    name: tokens
+
 redisInternal:
   resources:
     requests:
