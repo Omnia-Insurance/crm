@@ -59,12 +59,11 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
   psql -U postgres -d "$DB_NAME" -c "
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-    -- Null out password hashes
+    -- Null out password hashes (force Google SSO on staging)
     UPDATE core.\"user\" SET \"passwordHash\" = NULL;
 
-    -- Scramble email addresses
-    UPDATE core.\"user\"
-    SET email = 'staging-user-' || id || '@example.com';
+    -- Keep real emails so Google OAuth works on staging
+    -- (same team, private environment)
 
     -- Delete refresh tokens (stored in appToken table with type)
     DELETE FROM core.\"appToken\" WHERE type = 'REFRESH_TOKEN';
