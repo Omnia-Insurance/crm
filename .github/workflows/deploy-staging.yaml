@@ -150,9 +150,10 @@ jobs:
             sed 's/namespace: ${{ env.PROD_NAMESPACE }}$/namespace: ${{ env.NAMESPACE }}/' | \
             kubectl apply -f -
           # Tokens (APP_SECRET) - always sync from prod so encrypted DB config can be decrypted
+          kubectl delete secret tokens -n ${{ env.NAMESPACE }} --ignore-not-found
           kubectl get secret tokens -n ${{ env.PROD_NAMESPACE }} -o json | \
-            jq 'del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.annotations, .metadata.labels) | .metadata.namespace = "${{ env.NAMESPACE }}"' | \
-            kubectl replace --force -f -
+            jq 'del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.annotations, .metadata.labels, .metadata.managedFields) | .metadata.namespace = "${{ env.NAMESPACE }}"' | \
+            kubectl create -f -
 
       - name: Determine image tag
         id: image-tag
