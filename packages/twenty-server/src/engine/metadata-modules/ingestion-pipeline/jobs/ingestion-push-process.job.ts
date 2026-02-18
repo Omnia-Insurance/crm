@@ -11,6 +11,8 @@ import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipel
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
 import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
 @Processor(MessageQueue.ingestionQueue)
 export class IngestionPushProcessJob {
@@ -22,6 +24,7 @@ export class IngestionPushProcessJob {
     private readonly logService: IngestionLogService,
     private readonly recordProcessorService: IngestionRecordProcessorService,
     private readonly preprocessorRegistry: IngestionPreprocessorRegistry,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   @Process(IngestionPushProcessJob.name)
@@ -55,12 +58,17 @@ export class IngestionPushProcessJob {
         return;
       }
 
-      // Run preprocessor if available
+      // Run preprocessor if available (wrapped in workspace context for DB access)
+      const authContext = buildSystemAuthContext(workspaceId);
       const preprocessedRecords =
-        await this.preprocessorRegistry.preProcessRecords(
-          records,
-          pipeline,
-          workspaceId,
+        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          () =>
+            this.preprocessorRegistry.preProcessRecords(
+              records,
+              pipeline,
+              workspaceId,
+            ),
+          authContext,
         );
 
       this.logger.log(
