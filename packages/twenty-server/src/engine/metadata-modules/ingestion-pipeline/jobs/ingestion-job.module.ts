@@ -11,6 +11,8 @@ import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipel
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
 import { IngestionRelationResolverService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-relation-resolver.service';
+import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { IngestionRelationResolverService } from 'src/engine/metadata-modules/in
     IngestionLogService,
     IngestionRecordProcessorService,
     IngestionRelationResolverService,
+    HealthSherpaPolicyPreprocessor,
+    IngestionPreprocessorRegistry,
   ],
 })
 export class IngestionJobModule {}

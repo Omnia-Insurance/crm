@@ -10,6 +10,7 @@ import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingest
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 
 @Processor(MessageQueue.ingestionQueue)
 export class IngestionPushProcessJob {
@@ -20,6 +21,7 @@ export class IngestionPushProcessJob {
     private readonly fieldMappingService: IngestionFieldMappingService,
     private readonly logService: IngestionLogService,
     private readonly recordProcessorService: IngestionRecordProcessorService,
+    private readonly preprocessorRegistry: IngestionPreprocessorRegistry,
   ) {}
 
   @Process(IngestionPushProcessJob.name)
@@ -53,8 +55,20 @@ export class IngestionPushProcessJob {
         return;
       }
 
+      // Run preprocessor if available
+      const preprocessedRecords =
+        await this.preprocessorRegistry.preProcessRecords(
+          records,
+          pipeline,
+          workspaceId,
+        );
+
+      this.logger.log(
+        `Preprocessed ${preprocessedRecords.length} records for pipeline ${pipelineId}`,
+      );
+
       const result = await this.recordProcessorService.processRecords(
-        records,
+        preprocessedRecords,
         pipeline,
         mappings,
         workspaceId,
