@@ -16,7 +16,7 @@ export const buildRecordFromMappings = (
   for (const mapping of mappings) {
     const rawValue = extractValueByPath(sourceData, mapping.sourceFieldPath);
 
-    if (!isDefined(rawValue)) {
+    if (!isDefined(rawValue) || rawValue === '') {
       continue;
     }
 
