@@ -22,7 +22,7 @@ export const buildRecordFromMappings = (
 
     const transformedValue = applyFieldTransform(rawValue, mapping.transform);
 
-    if (!isDefined(transformedValue)) {
+    if (!isDefined(transformedValue) || transformedValue === '') {
       continue;
     }
 
