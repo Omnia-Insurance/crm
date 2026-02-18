@@ -80,7 +80,7 @@ storage:
 
 secrets:
   tokens:
-    create: false
+    create: true
     name: tokens
 
 redisInternal:
