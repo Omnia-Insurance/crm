@@ -33,6 +33,11 @@ export type SanitizeNullTransform = {
   type: 'sanitizeNull';
 };
 
+export type StaticTransform = {
+  type: 'static';
+  value: string;
+};
+
 export type FieldTransform =
   | PhoneNormalizeTransform
   | MapTransform
@@ -41,4 +46,5 @@ export type FieldTransform =
   | TrimTransform
   | DateFormatTransform
   | NumberScaleTransform
-  | SanitizeNullTransform;
+  | SanitizeNullTransform
+  | StaticTransform;
