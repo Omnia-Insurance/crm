@@ -75,9 +75,11 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
         \"expiresAt\" = NOW() + INTERVAL '30 days';
 
     -- Rewrite config URLs from prod domain to staging domain
-    UPDATE core.\"configVariable\"
-    SET value = REPLACE(value, 'crm.omniaagent.com', 'staging-crm.omniaagent.com')
-    WHERE value LIKE '%crm.omniaagent.com%';
+    -- Config is stored in keyValuePair table as jsonb
+    UPDATE core.\"keyValuePair\"
+    SET value = REPLACE(value::text, 'crm.omniaagent.com', 'staging-crm.omniaagent.com')::jsonb
+    WHERE type = 'CONFIG_VARIABLE'
+      AND value::text LIKE '%crm.omniaagent.com%';
   "
 
 echo "==> Granting permissions to twenty_app_user..."
