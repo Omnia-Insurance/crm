@@ -149,11 +149,10 @@ jobs:
             kubectl get secret twenty-s3-credentials -n ${{ env.PROD_NAMESPACE }} -o yaml | \
             sed 's/namespace: ${{ env.PROD_NAMESPACE }}$/namespace: ${{ env.NAMESPACE }}/' | \
             kubectl apply -f -
-          # Tokens (APP_SECRET) - always sync from prod so encrypted DB config can be decrypted
-          kubectl delete secret tokens -n ${{ env.NAMESPACE }} --ignore-not-found
-          kubectl get secret tokens -n ${{ env.PROD_NAMESPACE }} -o json | \
-            jq 'del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.annotations, .metadata.labels, .metadata.managedFields) | .metadata.namespace = "${{ env.NAMESPACE }}"' | \
-            kubectl create -f -
+          # Tokens (APP_SECRET) - sync from prod so encrypted DB config can be decrypted
+          PROD_TOKEN=$(kubectl get secret tokens -n ${{ env.PROD_NAMESPACE }} -o jsonpath='{.data.accessToken}')
+          kubectl patch secret tokens -n ${{ env.NAMESPACE }} -p "{\"data\":{\"accessToken\":\"$PROD_TOKEN\"}}" 2>/dev/null || \
+            kubectl create secret generic tokens -n ${{ env.NAMESPACE }} --from-literal=accessToken="$(echo $PROD_TOKEN | base64 -d)"
 
       - name: Determine image tag
         id: image-tag
