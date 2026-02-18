@@ -14,9 +14,6 @@ server:
     SENTRY_FRONT_DSN: https://660cb58838f1dbf2ee91c1290136056e@o4510840638930944.ingest.us.sentry.io/4510840650989568
     NODE_OPTIONS: "--max-old-space-size=1536"
     SIGN_IN_PREFILLED: "true"
-  extraEnv:
-    AUTH_GOOGLE_CALLBACK_URL: "https://staging-crm.omniaagent.com/api/auth/google/redirect"
-    AUTH_GOOGLE_APIS_CALLBACK_URL: "https://staging-crm.omniaagent.com/api/auth/google-apis/get-access-token"
   resources:
     requests:
       cpu: 100m

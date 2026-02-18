@@ -73,6 +73,11 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
     UPDATE core.\"appToken\"
     SET value = encode(gen_random_bytes(32), 'hex'),
         \"expiresAt\" = NOW() + INTERVAL '30 days';
+
+    -- Rewrite config URLs from prod domain to staging domain
+    UPDATE core.\"configVariable\"
+    SET value = REPLACE(value, 'crm.omniaagent.com', 'staging-crm.omniaagent.com')
+    WHERE value LIKE '%crm.omniaagent.com%';
   "
 
 echo "==> Granting permissions to twenty_app_user..."
