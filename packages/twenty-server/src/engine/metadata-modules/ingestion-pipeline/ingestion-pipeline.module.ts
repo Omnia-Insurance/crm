@@ -18,6 +18,7 @@ import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-
 import { IngestionPullSchedulerService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
 import { IngestionRelationResolverService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-relation-resolver.service';
+import { ConvosoCallPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor';
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
 import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 
@@ -45,6 +46,7 @@ import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/inges
     IngestionLogResolver,
     IngestionPipelineGraphqlApiExceptionInterceptor,
     HealthSherpaPolicyPreprocessor,
+    ConvosoCallPreprocessor,
     IngestionPreprocessorRegistry,
   ],
   exports: [

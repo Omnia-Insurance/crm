@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { ConvosoCallPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor';
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
 
 export interface IngestionPreprocessor {
@@ -8,7 +9,7 @@ export interface IngestionPreprocessor {
     payload: Record<string, unknown>,
     pipeline: IngestionPipelineEntity,
     workspaceId: string,
-  ): Promise<Record<string, unknown>>;
+  ): Promise<Record<string, unknown> | null>;
 }
 
 @Injectable()
@@ -17,6 +18,7 @@ export class IngestionPreprocessorRegistry {
 
   constructor(
     private readonly healthSherpaPolicyPreprocessor: HealthSherpaPolicyPreprocessor,
+    private readonly convosoCallPreprocessor: ConvosoCallPreprocessor,
   ) {}
 
   async preProcessRecords(
@@ -46,6 +48,11 @@ export class IngestionPreprocessorRegistry {
           workspaceId,
         );
 
+        if (processed === null) {
+          this.logger.log(`Preprocessor returned null, skipping record`);
+          continue;
+        }
+
         processedRecords.push(processed);
       } catch (error) {
         this.logger.error(
@@ -70,6 +77,15 @@ export class IngestionPreprocessorRegistry {
       pipeline.name.toLowerCase().includes('healthsherpa')
     ) {
       return this.healthSherpaPolicyPreprocessor;
+    }
+
+    const pipelineName = pipeline.name.toLowerCase();
+
+    if (
+      pipelineName.includes('convoso') &&
+      pipelineName.includes('call')
+    ) {
+      return this.convosoCallPreprocessor;
     }
 
     // No preprocessor for this pipeline
