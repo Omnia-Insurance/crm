@@ -9,6 +9,7 @@ import { type IngestionError } from 'src/engine/metadata-modules/ingestion-pipel
 import { buildRecordFromMappings } from 'src/engine/metadata-modules/ingestion-pipeline/utils/build-record-from-mappings.util';
 import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeline/utils/extract-value-by-path.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
 type ProcessingResult = {
   recordsCreated: number;
@@ -33,87 +34,99 @@ export class IngestionRecordProcessorService {
     mappings: IngestionFieldMappingEntity[],
     workspaceId: string,
   ): Promise<ProcessingResult> {
-    const result: ProcessingResult = {
-      recordsCreated: 0,
-      recordsUpdated: 0,
-      recordsSkipped: 0,
-      recordsFailed: 0,
-      errors: [],
-    };
+    const authContext = buildSystemAuthContext(workspaceId);
 
-    const relationCache = this.relationResolverService.createCache();
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const result: ProcessingResult = {
+          recordsCreated: 0,
+          recordsUpdated: 0,
+          recordsSkipped: 0,
+          recordsFailed: 0,
+          errors: [],
+        };
 
-    const repository = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      pipeline.targetObjectNameSingular,
-      { shouldBypassPermissionChecks: true },
-    );
+        const relationCache = this.relationResolverService.createCache();
 
-    for (let i = 0; i < records.length; i++) {
-      const sourceRecord = records[i];
-
-      try {
-        // Build the CRM record from field mappings
-        const mappedRecord = buildRecordFromMappings(sourceRecord, mappings);
-
-        // Resolve all relation references
-        const resolvedRecord =
-          await this.relationResolverService.resolveRelations(
-            mappedRecord,
+        const repository =
+          await this.globalWorkspaceOrmManager.getRepository(
             workspaceId,
-            relationCache,
+            pipeline.targetObjectNameSingular,
+            { shouldBypassPermissionChecks: true },
           );
 
-        // Check for dedup match
-        if (isDefined(pipeline.dedupFieldName)) {
-          const dedupValue = getDedupValue(
-            resolvedRecord,
-            pipeline.dedupFieldName,
-          );
+        for (let i = 0; i < records.length; i++) {
+          const sourceRecord = records[i];
 
-          if (isDefined(dedupValue)) {
-            const [field, subField] = pipeline.dedupFieldName.includes('.')
-              ? pipeline.dedupFieldName.split('.')
-              : [pipeline.dedupFieldName, null];
+          try {
+            // Build the CRM record from field mappings
+            const mappedRecord = buildRecordFromMappings(
+              sourceRecord,
+              mappings,
+            );
 
-            const whereClause = isDefined(subField)
-              ? { [field]: { [subField]: dedupValue } }
-              : { [field]: dedupValue };
+            // Resolve all relation references
+            const resolvedRecord =
+              await this.relationResolverService.resolveRelations(
+                mappedRecord,
+                workspaceId,
+                relationCache,
+              );
 
-            const existing = await repository.findOne({
-              where: whereClause,
+            // Check for dedup match
+            if (isDefined(pipeline.dedupFieldName)) {
+              const dedupValue = getDedupValue(
+                resolvedRecord,
+                pipeline.dedupFieldName,
+              );
+
+              if (isDefined(dedupValue)) {
+                const [field, subField] =
+                  pipeline.dedupFieldName.includes('.')
+                    ? pipeline.dedupFieldName.split('.')
+                    : [pipeline.dedupFieldName, null];
+
+                const whereClause = isDefined(subField)
+                  ? { [field]: { [subField]: dedupValue } }
+                  : { [field]: dedupValue };
+
+                const existing = await repository.findOne({
+                  where: whereClause,
+                });
+
+                if (isDefined(existing)) {
+                  const existingId = (existing as Record<string, unknown>)
+                    .id as string;
+
+                  await repository.update(existingId, resolvedRecord);
+                  result.recordsUpdated++;
+                  continue;
+                }
+              }
+            }
+
+            // Create new record
+            await repository.save(resolvedRecord);
+            result.recordsCreated++;
+          } catch (error) {
+            result.recordsFailed++;
+            result.errors.push({
+              recordIndex: i,
+              sourceData: sourceRecord,
+              message:
+                error instanceof Error ? error.message : 'Unknown error',
             });
 
-            if (isDefined(existing)) {
-              const existingId = (existing as Record<string, unknown>)
-                .id as string;
-
-              await repository.update(existingId, resolvedRecord);
-              result.recordsUpdated++;
-              continue;
-            }
+            this.logger.warn(
+              `Failed to process record ${i} for pipeline ${pipeline.id}: ${error}`,
+            );
           }
         }
 
-        // Create new record
-        await repository.save(resolvedRecord);
-        result.recordsCreated++;
-      } catch (error) {
-        result.recordsFailed++;
-        result.errors.push({
-          recordIndex: i,
-          sourceData: sourceRecord,
-          message:
-            error instanceof Error ? error.message : 'Unknown error',
-        });
-
-        this.logger.warn(
-          `Failed to process record ${i} for pipeline ${pipeline.id}: ${error}`,
-        );
-      }
-    }
-
-    return result;
+        return result;
+      },
+      authContext,
+    );
   }
 }
 
