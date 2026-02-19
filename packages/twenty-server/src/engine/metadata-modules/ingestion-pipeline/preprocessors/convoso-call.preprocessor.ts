@@ -109,12 +109,14 @@ export class ConvosoCallPreprocessor {
       workspaceId,
     );
 
-    // Compute billing from lead source's costPerCall + minimumCallDuration
+    // Compute billing by matching queue/source name against Lead Source names
+    // (same logic as old Cloudflare Worker: bill based on which queue handled the call)
     const duration = payload.call_length
       ? parseInt(payload.call_length.toString(), 10) || 0
       : 0;
-    const billing = await this.computeBillingFromLeadSource(
-      leadSourceId,
+    const billingLabel = queueName || sourceName || null;
+    const billing = await this.computeBillingByQueueName(
+      billingLabel,
       direction,
       duration,
       workspaceId,
@@ -248,10 +250,11 @@ export class ConvosoCallPreprocessor {
     }
   }
 
-  // Compute billing directly from the resolved Lead Source's costPerCall + minimumCallDuration.
-  // Only inbound calls are billable.
-  private async computeBillingFromLeadSource(
-    leadSourceId: string | null,
+  // Compute billing by matching queue/source name against Lead Source names.
+  // Mirrors old Cloudflare Worker logic: the queue name determines the cost,
+  // not the person's assigned lead source. Only inbound calls are billable.
+  private async computeBillingByQueueName(
+    billingLabel: string | null,
     direction: string,
     duration: number,
     workspaceId: string,
@@ -266,7 +269,7 @@ export class ConvosoCallPreprocessor {
       costCurrencyCode: 'USD',
     };
 
-    if (direction !== 'INBOUND' || !leadSourceId) {
+    if (direction !== 'INBOUND' || !billingLabel) {
       return noBill;
     }
 
@@ -276,20 +279,40 @@ export class ConvosoCallPreprocessor {
       { shouldBypassPermissionChecks: true },
     );
 
-    const leadSource = await leadSourceRepo.findOne({
-      where: { id: leadSourceId },
-    });
+    // Fetch all lead sources and find one whose name matches the queue/source label
+    const allSources = (await leadSourceRepo.find()) as Array<
+      Record<string, unknown>
+    >;
 
-    if (!leadSource) {
+    const labelLower = billingLabel.toLowerCase();
+    let matchedSource: Record<string, unknown> | null = null;
+
+    for (const source of allSources) {
+      const sourceName = ((source.name as string) || '').toLowerCase();
+
+      if (!sourceName) continue;
+
+      // Exact match first
+      if (sourceName === labelLower) {
+        matchedSource = source;
+        break;
+      }
+
+      // Substring match (queue name contains lead source name or vice versa)
+      if (labelLower.includes(sourceName) || sourceName.includes(labelLower)) {
+        matchedSource = source;
+      }
+    }
+
+    if (!matchedSource) {
       return noBill;
     }
 
-    const source = leadSource as Record<string, unknown>;
-    const costPerCall = source.costPerCall as
+    const costPerCall = matchedSource.costPerCall as
       | { amountMicros?: number }
       | undefined;
     const costMicros = costPerCall?.amountMicros ?? 0;
-    const minDuration = (source.minimumCallDuration as number) ?? 0;
+    const minDuration = (matchedSource.minimumCallDuration as number) ?? 0;
 
     if (costMicros === 0) {
       return noBill;
