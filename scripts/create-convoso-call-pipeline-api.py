@@ -20,6 +20,7 @@ def graphql_request(base_url, token, query, variables=None):
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
+        "User-Agent": "TwentyCRM-Script/1.0",
     }
     body = json.dumps(data).encode()
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
@@ -118,10 +119,10 @@ def main():
     """
 
     mappings = [
-        # 1. uniqueid -> convosoCallId
+        # 1. id -> convosoCallId (pull API uses `id`, push uses `uniqueid`)
         {
             "pipelineId": pipeline_id,
-            "sourceFieldPath": "uniqueid",
+            "sourceFieldPath": "id",
             "targetFieldName": "convosoCallId",
             "position": 0,
         },
@@ -165,10 +166,10 @@ def main():
             "transform": {"type": "sanitizeNull"},
             "position": 5,
         },
-        # 7. queue_name -> queueName (sanitizeNull)
+        # 7. queue -> queueName (pull API uses `queue`, push uses `queue_name`)
         {
             "pipelineId": pipeline_id,
-            "sourceFieldPath": "queue_name",
+            "sourceFieldPath": "queue",
             "targetFieldName": "queueName",
             "transform": {"type": "sanitizeNull"},
             "position": 6,

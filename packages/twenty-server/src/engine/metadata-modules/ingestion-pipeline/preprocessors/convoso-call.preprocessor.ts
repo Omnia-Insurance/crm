@@ -4,7 +4,16 @@ import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-p
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 
 type ConvosoCallPayload = Record<string, unknown> & {
+  // Pull API fields
+  id?: string;
+  queue?: string;
+  campaign?: string;
+  // Push (webhook) fields
   uniqueid?: string;
+  queue_name?: string;
+  source_name?: string;
+  campaign_name?: string;
+  // Common fields
   lead_id?: string;
   phone_number?: string;
   phone_code?: string;
@@ -14,9 +23,6 @@ type ConvosoCallPayload = Record<string, unknown> & {
   status_name?: string;
   call_type?: string;
   user_id?: string;
-  queue_name?: string;
-  source_name?: string;
-  campaign_name?: string;
   list_id?: string;
 };
 
@@ -46,9 +52,12 @@ export class ConvosoCallPreprocessor {
     workspaceId: string,
   ): Promise<Record<string, unknown> | null> {
     // Filter incomplete payloads — Convoso fires early with minimal data
-    if (!payload.call_type && !payload.status && !payload.uniqueid) {
+    // Pull API uses `id`, push webhook uses `uniqueid`
+    const callId = payload.id || payload.uniqueid;
+
+    if (!payload.call_type && !payload.status && !callId) {
       this.logger.log(
-        `Skipping incomplete call payload (no call_type, status, or uniqueid)`,
+        `Skipping incomplete call payload (no call_type, status, or id)`,
       );
 
       return null;
@@ -69,15 +78,17 @@ export class ConvosoCallPreprocessor {
     const directionLabel = direction === 'INBOUND' ? 'Inbound' : 'Outbound';
 
     // Resolve source_name: prefer payload value, fall back to list_id lookup
+    // Pull API has no source_name; always resolve via list_id
     let sourceName = payload.source_name || null;
 
     if (!sourceName && payload.list_id) {
       sourceName = await this.resolveConvosoListName(payload.list_id);
     }
 
-    // Compute call name
-    const label =
-      payload.queue_name || sourceName || payload.campaign_name || 'Unknown';
+    // Compute call name — pull API uses `queue`/`campaign`, push uses `queue_name`/`campaign_name`
+    const queueName = payload.queue_name || payload.queue || null;
+    const campaignName = payload.campaign_name || payload.campaign || null;
+    const label = queueName || sourceName || campaignName || 'Unknown';
     const name = `${directionLabel} - ${label}`;
 
     // Resolve person by phone
@@ -89,12 +100,12 @@ export class ConvosoCallPreprocessor {
       workspaceId,
     );
 
-    // Compute billing
+    // Compute billing — use resolved queueName (pull: `queue`, push: `queue_name`)
     const duration = payload.call_length
       ? parseInt(payload.call_length.toString(), 10) || 0
       : 0;
     const billing = await this.computeBilling(
-      payload.queue_name,
+      queueName ?? undefined,
       sourceName,
       direction,
       duration,
@@ -268,9 +279,7 @@ export class ConvosoCallPreprocessor {
     return rules;
   }
 
-  private async resolveConvosoListName(
-    listId: string,
-  ): Promise<string | null> {
+  private async resolveConvosoListName(listId: string): Promise<string | null> {
     const now = Date.now();
 
     // Refresh cache if stale or not yet loaded
@@ -292,9 +301,7 @@ export class ConvosoCallPreprocessor {
         );
 
         if (!response.ok) {
-          this.logger.error(
-            `Convoso Lists API returned ${response.status}`,
-          );
+          this.logger.error(`Convoso Lists API returned ${response.status}`);
 
           return null;
         }
@@ -315,9 +322,7 @@ export class ConvosoCallPreprocessor {
         }
 
         this.listMapFetchedAt = now;
-        this.logger.log(
-          `Cached ${json.data.length} Convoso lists`,
-        );
+        this.logger.log(`Cached ${json.data.length} Convoso lists`);
       } catch (error) {
         this.logger.error(
           `Failed to fetch Convoso lists: ${error instanceof Error ? error.message : 'Unknown error'}`,
