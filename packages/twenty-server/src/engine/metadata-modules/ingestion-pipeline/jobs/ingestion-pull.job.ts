@@ -169,19 +169,32 @@ export class IngestionPullJob {
 
       // Apply dynamic date range params
       if (isDefined(pipeline.sourceRequestConfig?.dateRangeParams)) {
-        const { startParam, endParam, lookbackMinutes, timezone } =
-          pipeline.sourceRequestConfig!.dateRangeParams!;
+        const {
+          startParam,
+          endParam,
+          lookbackMinutes,
+          timezone,
+          startTimeOverride,
+          endTimeOverride,
+        } = pipeline.sourceRequestConfig!.dateRangeParams!;
 
-        const now = new Date();
-        const since = new Date(now.getTime() - lookbackMinutes * 60 * 1000);
+        if (isDefined(startTimeOverride) && isDefined(endTimeOverride)) {
+          // Explicit date range (used by backfill script)
+          url.searchParams.set(startParam, startTimeOverride);
+          url.searchParams.set(endParam, endTimeOverride);
+        } else {
+          // Normal lookback calculation
+          const now = new Date();
+          const since = new Date(now.getTime() - lookbackMinutes * 60 * 1000);
 
-        const formatDate = (date: Date): string =>
-          date
-            .toLocaleString('sv-SE', { timeZone: timezone })
-            .replace(' ', 'T');
+          const formatDate = (date: Date): string =>
+            date
+              .toLocaleString('sv-SE', { timeZone: timezone })
+              .replace(' ', 'T');
 
-        url.searchParams.set(startParam, formatDate(since));
-        url.searchParams.set(endParam, formatDate(now));
+          url.searchParams.set(startParam, formatDate(since));
+          url.searchParams.set(endParam, formatDate(now));
+        }
       }
 
       // Apply pagination params

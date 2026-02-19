@@ -3,6 +3,8 @@ export type DateRangeParams = {
   endParam: string;
   lookbackMinutes: number;
   timezone: string;
+  startTimeOverride?: string;
+  endTimeOverride?: string;
 };
 
 export type SourceRequestConfig = {
