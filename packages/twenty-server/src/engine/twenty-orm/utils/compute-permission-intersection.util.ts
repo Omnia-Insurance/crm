@@ -29,6 +29,7 @@ export const computePermissionIntersection = (
     let canUpdateObjectRecords = true;
     let canSoftDeleteObjectRecords = true;
     let canDestroyObjectRecords = true;
+    let showInSidebar = true;
     const restrictedFields: Record<string, RestrictedFieldPermissions> = {};
 
     for (const permissions of permissionsArray) {
@@ -39,6 +40,7 @@ export const computePermissionIntersection = (
         canUpdateObjectRecords = false;
         canSoftDeleteObjectRecords = false;
         canDestroyObjectRecords = false;
+        showInSidebar = false;
         continue;
       }
 
@@ -51,6 +53,7 @@ export const computePermissionIntersection = (
         objPerm.canSoftDeleteObjectRecords === true;
       canDestroyObjectRecords =
         canDestroyObjectRecords && objPerm.canDestroyObjectRecords === true;
+      showInSidebar = showInSidebar && objPerm.showInSidebar === true;
 
       if (objPerm.restrictedFields) {
         for (const [fieldName, fieldPerm] of Object.entries(
@@ -84,6 +87,7 @@ export const computePermissionIntersection = (
       canUpdateObjectRecords,
       canSoftDeleteObjectRecords,
       canDestroyObjectRecords,
+      showInSidebar,
       restrictedFields,
       rowLevelPermissionPredicates: [],
       rowLevelPermissionPredicateGroups: [],

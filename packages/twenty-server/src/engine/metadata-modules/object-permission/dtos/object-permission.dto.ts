@@ -24,6 +24,9 @@ export class ObjectPermissionDTO {
   @Field({ nullable: true })
   canDestroyObjectRecords?: boolean;
 
+  @Field({ nullable: true })
+  showInSidebar?: boolean;
+
   @Field(() => GraphQLJSON, {
     nullable: true,
   })

@@ -59,6 +59,9 @@ export class ObjectPermissionEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: true, type: 'boolean' })
   canDestroyObjectRecords?: boolean;
 
+  @Column({ nullable: true, type: 'boolean' })
+  showInSidebar?: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

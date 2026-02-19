@@ -677,6 +677,11 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toStringify: false,
       universalProperty: undefined,
     },
+    showAllObjectsInSidebar: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
     canBeAssignedToUsers: {
       toCompare: true,
       toStringify: false,

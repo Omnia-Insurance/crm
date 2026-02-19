@@ -7,6 +7,7 @@ describe('checkFieldPermissions', () => {
     canUpdateObjectRecords: true,
     canSoftDeleteObjectRecords: true,
     canDestroyObjectRecords: true,
+    showInSidebar: true,
     restrictedFields: {},
     rowLevelPermissionPredicates: [],
     rowLevelPermissionPredicateGroups: [],

@@ -1,46 +1,23 @@
 import { isNavigationMenuItemFolder } from '@/navigation-menu-item/utils/isNavigationMenuItemFolder';
-import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { type View } from '@/views/types/View';
 import { isDefined } from 'twenty-shared/utils';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
-// Object names (nameSingular) visible to the Member role
-const MEMBER_VISIBLE_OBJECTS = new Set([
-  'lead',
-  'call',
-  'policy',
-  'note',
-  'task',
-]);
-
-// Resolve the underlying object for a navigation menu item
-const resolveObjectNameSingular = (
+// Resolve the objectMetadataId for a navigation menu item
+const resolveObjectMetadataId = (
   item: NavigationMenuItem,
-  objectMetadataItems: ObjectMetadataItem[],
   views: View[],
 ): string | null => {
-  // View-based items: look up view → objectMetadataId → nameSingular
+  // View-based items: look up view → objectMetadataId
   if (isDefined(item.viewId)) {
     const view = views.find((v) => v.id === item.viewId);
 
-    if (!isDefined(view)) {
-      return null;
-    }
-
-    const objectMetadata = objectMetadataItems.find(
-      (meta) => meta.id === view.objectMetadataId,
-    );
-
-    return objectMetadata?.nameSingular ?? null;
+    return view?.objectMetadataId ?? null;
   }
 
-  // Record-based items: look up targetObjectMetadataId → nameSingular
+  // Record-based items: use targetObjectMetadataId directly
   if (isDefined(item.targetObjectMetadataId)) {
-    const objectMetadata = objectMetadataItems.find(
-      (meta) => meta.id === item.targetObjectMetadataId,
-    );
-
-    return objectMetadata?.nameSingular ?? null;
+    return item.targetObjectMetadataId;
   }
 
   return null;
@@ -48,14 +25,9 @@ const resolveObjectNameSingular = (
 
 export const filterNavigationMenuItemsByRole = (
   items: NavigationMenuItem[],
-  isAdmin: boolean,
-  objectMetadataItems: ObjectMetadataItem[],
+  sidebarPermissions: Map<string, boolean>,
   views: View[],
 ): NavigationMenuItem[] => {
-  if (isAdmin) {
-    return items;
-  }
-
   // Pre-compute which folder IDs contain at least one visible child
   const visibleFolderIds = new Set<string>();
 
@@ -64,13 +36,12 @@ export const filterNavigationMenuItemsByRole = (
       continue;
     }
 
-    const nameSingular = resolveObjectNameSingular(
-      item,
-      objectMetadataItems,
-      views,
-    );
+    const objectMetadataId = resolveObjectMetadataId(item, views);
 
-    if (isDefined(nameSingular) && MEMBER_VISIBLE_OBJECTS.has(nameSingular)) {
+    if (
+      isDefined(objectMetadataId) &&
+      sidebarPermissions.get(objectMetadataId) !== false
+    ) {
       visibleFolderIds.add(item.folderId);
     }
   }
@@ -81,17 +52,14 @@ export const filterNavigationMenuItemsByRole = (
       return visibleFolderIds.has(item.id);
     }
 
-    const nameSingular = resolveObjectNameSingular(
-      item,
-      objectMetadataItems,
-      views,
-    );
+    const objectMetadataId = resolveObjectMetadataId(item, views);
 
     // Links and unresolvable items are always shown
-    if (!isDefined(nameSingular)) {
+    if (!isDefined(objectMetadataId)) {
       return true;
     }
 
-    return MEMBER_VISIBLE_OBJECTS.has(nameSingular);
+    // Use the permission value; default to visible if not in the map
+    return sidebarPermissions.get(objectMetadataId) !== false;
   });
 };

@@ -147,6 +147,29 @@ export const SettingsRolePermissionsObjectsSection = ({
         });
       },
     },
+    {
+      key: 'showInSidebar',
+      label: t`Show All Objects in Sidebar`,
+      grantedBy:
+        objectPermissions?.filter(
+          (permission) =>
+            permission.showInSidebar === true &&
+            settingsDraftRole.showAllObjectsInSidebar === false,
+        )?.length ?? 0,
+      revokedBy:
+        objectPermissions?.filter(
+          (permission) =>
+            permission.showInSidebar === false &&
+            settingsDraftRole.showAllObjectsInSidebar === true,
+        )?.length ?? 0,
+      value: settingsDraftRole.showAllObjectsInSidebar,
+      setValue: (value: boolean) => {
+        setSettingsDraftRole({
+          ...settingsDraftRole,
+          showAllObjectsInSidebar: value,
+        });
+      },
+    },
   ];
 
   return (

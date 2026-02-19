@@ -44,6 +44,9 @@ export class RoleEntity extends SyncableEntity implements Required<RoleEntity> {
   @Column({ nullable: false, default: false })
   canDestroyAllObjectRecords: boolean;
 
+  @Column({ nullable: false, default: true })
+  showAllObjectsInSidebar: boolean;
+
   @Column({ nullable: true, type: 'text' })
   description: string | null;
 
