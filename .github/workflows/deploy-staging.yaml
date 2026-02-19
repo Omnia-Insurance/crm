@@ -47,6 +47,46 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Cache dependencies and Nx build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+            .yarn/cache
+            .nx/cache
+          key: build-${{ hashFiles('yarn.lock') }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ hashFiles('yarn.lock') }}-
+            build-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build all packages
+        run: npx nx run-many --target=build --projects=twenty-server,twenty-front --parallel=2
+        env:
+          VITE_BUILD_SOURCEMAP: 'true'
+          VITE_DISABLE_TYPESCRIPT_CHECKER: 'true'
+
+      - name: Upload Sentry sourcemaps (server)
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        run: |
+          npx sentry-cli sourcemaps upload \
+            --auth-token "$SENTRY_AUTH_TOKEN" \
+            --org omnia-insurance \
+            --project crm-server \
+            --release "${{ github.sha }}" \
+            ./packages/twenty-server/dist
+          find ./packages/twenty-server/dist -name '*.js.map' -delete
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -74,7 +114,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packages/twenty-docker/twenty/Dockerfile
+          file: packages/twenty-docker/twenty/Dockerfile.ci
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -82,8 +122,6 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             REACT_APP_SERVER_BASE_URL=/api
-            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
-            SENTRY_RELEASE=${{ github.sha }}
 
   replicate-db:
     name: Replicate Production DB to Staging
