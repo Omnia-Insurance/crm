@@ -58,10 +58,17 @@ export class ConvosoCallPreprocessor {
       return null;
     }
 
-    // Filter in-progress calls (pull API only) — no term_reason means call hasn't ended
+    // Filter in-progress calls (pull API only) — no term_reason means call hasn't ended.
+    // But if the call has a status (e.g. XDROP, WAITTO), it's completed even without
+    // a term_reason (e.g. "Call Abandoned In Queue" never connected to an agent).
     const termReason = payload.term_reason?.toString();
+    const hasStatus = !!payload.status;
 
-    if (termReason !== undefined && (!termReason || termReason === 'NONE')) {
+    if (
+      termReason !== undefined &&
+      (!termReason || termReason === 'NONE') &&
+      !hasStatus
+    ) {
       this.logger.log(`Skipping in-progress call (term_reason: ${termReason})`);
 
       return null;
