@@ -17,6 +17,7 @@ type ConvosoCallPayload = Record<string, unknown> & {
   queue_name?: string;
   source_name?: string;
   campaign_name?: string;
+  list_id?: string;
 };
 
 type BillingRule = {
@@ -27,9 +28,13 @@ type BillingRule = {
 
 const SYSTEM_USER_IDS = new Set(['666666', '666667', '666671']);
 
+const LIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
 @Injectable()
 export class ConvosoCallPreprocessor {
   private readonly logger = new Logger(ConvosoCallPreprocessor.name);
+  private listMap: Record<string, string> | null = null;
+  private listMapFetchedAt = 0;
 
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
@@ -63,12 +68,16 @@ export class ConvosoCallPreprocessor {
     const direction = callType.includes('IN') ? 'INBOUND' : 'OUTBOUND';
     const directionLabel = direction === 'INBOUND' ? 'Inbound' : 'Outbound';
 
+    // Resolve source_name: prefer payload value, fall back to list_id lookup
+    let sourceName = payload.source_name || null;
+
+    if (!sourceName && payload.list_id) {
+      sourceName = await this.resolveConvosoListName(payload.list_id);
+    }
+
     // Compute call name
     const label =
-      payload.queue_name ||
-      payload.source_name ||
-      payload.campaign_name ||
-      'Unknown';
+      payload.queue_name || sourceName || payload.campaign_name || 'Unknown';
     const name = `${directionLabel} - ${label}`;
 
     // Resolve person by phone
@@ -76,7 +85,7 @@ export class ConvosoCallPreprocessor {
 
     // Find or create lead source
     const leadSourceId = await this.findOrCreateLeadSource(
-      payload.source_name,
+      sourceName,
       workspaceId,
     );
 
@@ -86,7 +95,7 @@ export class ConvosoCallPreprocessor {
       : 0;
     const billing = await this.computeBilling(
       payload.queue_name,
-      payload.source_name,
+      sourceName,
       direction,
       duration,
       workspaceId,
@@ -140,7 +149,7 @@ export class ConvosoCallPreprocessor {
   }
 
   private async findOrCreateLeadSource(
-    sourceName: string | undefined,
+    sourceName: string | null,
     workspaceId: string,
   ): Promise<string | null> {
     if (!sourceName) {
@@ -178,7 +187,7 @@ export class ConvosoCallPreprocessor {
 
   private async computeBilling(
     queueName: string | undefined,
-    sourceName: string | undefined,
+    sourceName: string | null,
     direction: string,
     duration: number,
     workspaceId: string,
@@ -257,6 +266,68 @@ export class ConvosoCallPreprocessor {
     }
 
     return rules;
+  }
+
+  private async resolveConvosoListName(
+    listId: string,
+  ): Promise<string | null> {
+    const now = Date.now();
+
+    // Refresh cache if stale or not yet loaded
+    if (!this.listMap || now - this.listMapFetchedAt > LIST_CACHE_TTL_MS) {
+      const apiToken = process.env.CONVOSO_API_TOKEN;
+
+      if (!apiToken) {
+        this.logger.warn(
+          'CONVOSO_API_TOKEN not set, cannot resolve list_id to name',
+        );
+
+        return null;
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.convoso.com/v1/lists/search?auth_token=${apiToken}`,
+          { headers: { 'Content-Type': 'application/json' } },
+        );
+
+        if (!response.ok) {
+          this.logger.error(
+            `Convoso Lists API returned ${response.status}`,
+          );
+
+          return null;
+        }
+
+        const json = (await response.json()) as {
+          success: boolean;
+          data?: Array<{ id: number; name: string }>;
+        };
+
+        if (!json.success || !json.data?.length) {
+          return null;
+        }
+
+        this.listMap = {};
+
+        for (const list of json.data) {
+          this.listMap[String(list.id)] = list.name;
+        }
+
+        this.listMapFetchedAt = now;
+        this.logger.log(
+          `Cached ${json.data.length} Convoso lists`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to fetch Convoso lists: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+
+        return null;
+      }
+    }
+
+    return this.listMap?.[listId] ?? null;
   }
 
   private normalizePhone(phone: string | undefined): string | null {
