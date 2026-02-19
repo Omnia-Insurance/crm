@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 
 import { AgentProfileModule } from 'src/modules/agent-profile/agent-profile.module';
-import { CallCreateManyPostQueryHook } from 'src/modules/call/query-hooks/call-create-many.post-query.hook';
-import { CallCreateOnePostQueryHook } from 'src/modules/call/query-hooks/call-create-one.post-query.hook';
+import { CallCreateManyPreQueryHook } from 'src/modules/call/query-hooks/call-create-many.pre-query.hook';
+import { CallCreateOnePreQueryHook } from 'src/modules/call/query-hooks/call-create-one.pre-query.hook';
 
 @Module({
   imports: [AgentProfileModule],
-  providers: [CallCreateOnePostQueryHook, CallCreateManyPostQueryHook],
+  providers: [CallCreateOnePreQueryHook, CallCreateManyPreQueryHook],
 })
 export class CallQueryHookModule {}
