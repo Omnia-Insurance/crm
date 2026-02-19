@@ -8,6 +8,7 @@ type ConvosoCallPayload = Record<string, unknown> & {
   id?: string;
   queue?: string;
   campaign?: string;
+  term_reason?: string;
   // Push (webhook) fields
   uniqueid?: string;
   queue_name?: string;
@@ -59,6 +60,15 @@ export class ConvosoCallPreprocessor {
       this.logger.log(
         `Skipping incomplete call payload (no call_type, status, or id)`,
       );
+
+      return null;
+    }
+
+    // Filter in-progress calls (pull API only) — no term_reason means call hasn't ended
+    const termReason = payload.term_reason?.toString();
+
+    if (termReason !== undefined && (!termReason || termReason === 'NONE')) {
+      this.logger.log(`Skipping in-progress call (term_reason: ${termReason})`);
 
       return null;
     }
