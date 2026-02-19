@@ -5422,6 +5422,11 @@ msgstr ""
 msgid "Error while switching subscription."
 msgstr ""
 
+#. js-lingui-id: UirGxE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Errors"
+msgstr ""
+
 #. js-lingui-id: JLxMta
 #: src/pages/settings/workspace/SettingsApiWebhooks.tsx
 #: src/pages/settings/developers/webhooks/components/SettingsWebhooks.tsx
@@ -7026,6 +7031,11 @@ msgstr ""
 #. js-lingui-id: Gp4Yi6
 #: src/modules/activities/emails/components/EmailsCard.tsx
 msgid "Inbox"
+msgstr ""
+
+#. js-lingui-id: Tf3J00
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Incoming Payload"
 msgstr ""
 
 #. js-lingui-id: O5wNUa
@@ -9145,6 +9155,11 @@ msgstr ""
 #: src/pages/settings/ai/components/SettingsSystemToolTableRow.tsx
 #: src/pages/settings/ai/components/SettingsSystemToolTableRow.tsx
 msgid "No parameters"
+msgstr ""
+
+#. js-lingui-id: VUK1wE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "No payload data available"
 msgstr ""
 
 #. js-lingui-id: 5pSj4j
@@ -12015,6 +12030,11 @@ msgstr ""
 msgid "Should changing the label also change the API name?"
 msgstr ""
 
+#. js-lingui-id: ZKF9YH
+#: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsSection.tsx
+msgid "Show All Objects in Sidebar"
+msgstr ""
+
 #. js-lingui-id: lSEpDc
 #: src/modules/object-record/record-group/components/RecordGroupMenuItemDraggable.tsx
 msgid "Show group {groupValue}"
@@ -12023,6 +12043,16 @@ msgstr ""
 #. js-lingui-id: 1OVrop
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableOptionsDropdownContent.tsx
 msgid "Show hidden groups"
+msgstr ""
+
+#. js-lingui-id: 74/nsw
+#: src/modules/settings/roles/role-permissions/object-level-permissions/utils/objectPermissionKeyToHumanReadableText.ts
+msgid "show in sidebar"
+msgstr ""
+
+#. js-lingui-id: OVFeC4
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+msgid "Show in Sidebar"
 msgstr ""
 
 #. js-lingui-id: qi+g0a

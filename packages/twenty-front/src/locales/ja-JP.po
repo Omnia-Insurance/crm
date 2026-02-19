@@ -5427,6 +5427,11 @@ msgstr "サブスクリプションを{oppositPlan}プランに切り替える�
 msgid "Error while switching subscription."
 msgstr "サブスクリプションの切替中にエラーが発生しました。"
 
+#. js-lingui-id: UirGxE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Errors"
+msgstr ""
+
 #. js-lingui-id: JLxMta
 #: src/pages/settings/workspace/SettingsApiWebhooks.tsx
 #: src/pages/settings/developers/webhooks/components/SettingsWebhooks.tsx
@@ -7032,6 +7037,11 @@ msgstr ""
 #: src/modules/activities/emails/components/EmailsCard.tsx
 msgid "Inbox"
 msgstr "受信トレイ"
+
+#. js-lingui-id: Tf3J00
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Incoming Payload"
+msgstr ""
 
 #. js-lingui-id: O5wNUa
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
@@ -9150,6 +9160,11 @@ msgstr "利用可能な出力がありません"
 #: src/pages/settings/ai/components/SettingsSystemToolTableRow.tsx
 #: src/pages/settings/ai/components/SettingsSystemToolTableRow.tsx
 msgid "No parameters"
+msgstr ""
+
+#. js-lingui-id: VUK1wE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "No payload data available"
 msgstr ""
 
 #. js-lingui-id: 5pSj4j
@@ -12020,6 +12035,11 @@ msgstr "オブジェクトのラベルを変更するとAPIも変更されるべ
 msgid "Should changing the label also change the API name?"
 msgstr ""
 
+#. js-lingui-id: ZKF9YH
+#: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsSection.tsx
+msgid "Show All Objects in Sidebar"
+msgstr ""
+
 #. js-lingui-id: lSEpDc
 #: src/modules/object-record/record-group/components/RecordGroupMenuItemDraggable.tsx
 msgid "Show group {groupValue}"
@@ -12029,6 +12049,16 @@ msgstr "グループ {groupValue} を表示"
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableOptionsDropdownContent.tsx
 msgid "Show hidden groups"
 msgstr "隠されたグループを表示"
+
+#. js-lingui-id: 74/nsw
+#: src/modules/settings/roles/role-permissions/object-level-permissions/utils/objectPermissionKeyToHumanReadableText.ts
+msgid "show in sidebar"
+msgstr ""
+
+#. js-lingui-id: OVFeC4
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+msgid "Show in Sidebar"
+msgstr ""
 
 #. js-lingui-id: qi+g0a
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx

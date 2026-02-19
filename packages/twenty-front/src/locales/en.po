@@ -5422,6 +5422,11 @@ msgstr "Error while switching subscription to {oppositPlan} Plan."
 msgid "Error while switching subscription."
 msgstr "Error while switching subscription."
 
+#. js-lingui-id: UirGxE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Errors"
+msgstr "Errors"
+
 #. js-lingui-id: JLxMta
 #: src/pages/settings/workspace/SettingsApiWebhooks.tsx
 #: src/pages/settings/developers/webhooks/components/SettingsWebhooks.tsx
@@ -7027,6 +7032,11 @@ msgstr "Inactive Skill Options"
 #: src/modules/activities/emails/components/EmailsCard.tsx
 msgid "Inbox"
 msgstr "Inbox"
+
+#. js-lingui-id: Tf3J00
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Incoming Payload"
+msgstr "Incoming Payload"
 
 #. js-lingui-id: O5wNUa
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
@@ -9146,6 +9156,11 @@ msgstr "No output available"
 #: src/pages/settings/ai/components/SettingsSystemToolTableRow.tsx
 msgid "No parameters"
 msgstr "No parameters"
+
+#. js-lingui-id: VUK1wE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "No payload data available"
+msgstr "No payload data available"
 
 #. js-lingui-id: 5pSj4j
 #: src/modules/billing/hooks/useEndSubscriptionTrialPeriod.ts
@@ -12015,6 +12030,11 @@ msgstr "Should changing an object's label also change the API?"
 msgid "Should changing the label also change the API name?"
 msgstr "Should changing the label also change the API name?"
 
+#. js-lingui-id: ZKF9YH
+#: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsSection.tsx
+msgid "Show All Objects in Sidebar"
+msgstr "Show All Objects in Sidebar"
+
 #. js-lingui-id: lSEpDc
 #: src/modules/object-record/record-group/components/RecordGroupMenuItemDraggable.tsx
 msgid "Show group {groupValue}"
@@ -12024,6 +12044,16 @@ msgstr "Show group {groupValue}"
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableOptionsDropdownContent.tsx
 msgid "Show hidden groups"
 msgstr "Show hidden groups"
+
+#. js-lingui-id: 74/nsw
+#: src/modules/settings/roles/role-permissions/object-level-permissions/utils/objectPermissionKeyToHumanReadableText.ts
+msgid "show in sidebar"
+msgstr "show in sidebar"
+
+#. js-lingui-id: OVFeC4
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+msgid "Show in Sidebar"
+msgstr "Show in Sidebar"
 
 #. js-lingui-id: qi+g0a
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx

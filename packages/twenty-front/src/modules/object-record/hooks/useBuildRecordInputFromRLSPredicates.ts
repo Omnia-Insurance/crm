@@ -15,6 +15,8 @@ import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/uti
 import { buildRecordInputFromFilter } from '@/object-record/record-table/utils/buildRecordInputFromFilter';
 import { buildCompositeValueFromSubField } from '@/object-record/record-table/utils/buildValueFromFilter';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { PermissionFlagType } from '@/settings/roles/constants/PermissionFlagType';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { isUndefined } from '@sniptt/guards';
 import { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
@@ -35,6 +37,8 @@ export const useBuildRecordInputFromRLSPredicates = ({
   objectMetadataItem: ObjectMetadataItem;
 }) => {
   const currentWorkspaceMember = useRecoilValue(currentWorkspaceMemberState);
+  const permissionFlagMap = usePermissionFlagMap();
+  const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
 
   const { record: currentWorkspaceMemberRecord } = useFindOneRecord({
     objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
@@ -144,6 +148,12 @@ export const useBuildRecordInputFromRLSPredicates = ({
         return intermediateRecordId;
       }
 
+      // Admins may not have an intermediate record (e.g., no Agent profile).
+      // Skip gracefully — they can set the field manually.
+      if (isAdmin) {
+        return undefined;
+      }
+
       throw new Error(
         `Workspace member field metadata item not found for id: ${workspaceMemberFieldMetadataId}`,
       );
@@ -204,6 +214,15 @@ export const useBuildRecordInputFromRLSPredicates = ({
       }
 
       if (isDefined(filter.rlsDynamicValue)) {
+        // Skip fields the user can't edit — the server-side post-query
+        // hook will set them with bypassed permissions instead.
+        const fieldRestriction =
+          objectPermissions.restrictedFields[fieldMetadataItem.id];
+
+        if (fieldRestriction?.canUpdate === false) {
+          return;
+        }
+
         const recordInputField = getRecordInputFieldName(fieldMetadataItem);
         const currentWorkspaceMemberFieldValue = getWorkspaceMemberFieldValue({
           workspaceMemberFieldMetadataId:
@@ -211,6 +230,11 @@ export const useBuildRecordInputFromRLSPredicates = ({
           workspaceMemberSubFieldName:
             filter.rlsDynamicValue?.workspaceMemberSubFieldName,
         });
+
+        // Skip if the value couldn't be resolved (e.g., no Agent profile)
+        if (isUndefined(currentWorkspaceMemberFieldValue)) {
+          return;
+        }
 
         if (isCompositeFieldType(fieldMetadataItem.type)) {
           if (!filter.subFieldName) {
