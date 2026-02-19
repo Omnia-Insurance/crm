@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { ConvosoCallPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor';
+import { ConvosoLeadPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-lead.preprocessor';
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
 
 export interface IngestionPreprocessor {
@@ -19,6 +20,7 @@ export class IngestionPreprocessorRegistry {
   constructor(
     private readonly healthSherpaPolicyPreprocessor: HealthSherpaPolicyPreprocessor,
     private readonly convosoCallPreprocessor: ConvosoCallPreprocessor,
+    private readonly convosoLeadPreprocessor: ConvosoLeadPreprocessor,
   ) {}
 
   async preProcessRecords(
@@ -81,11 +83,12 @@ export class IngestionPreprocessorRegistry {
 
     const pipelineName = pipeline.name.toLowerCase();
 
-    if (
-      pipelineName.includes('convoso') &&
-      pipelineName.includes('call')
-    ) {
+    if (pipelineName.includes('convoso') && pipelineName.includes('call')) {
       return this.convosoCallPreprocessor;
+    }
+
+    if (pipelineName.includes('convoso') && pipelineName.includes('lead')) {
+      return this.convosoLeadPreprocessor;
     }
 
     // No preprocessor for this pipeline
