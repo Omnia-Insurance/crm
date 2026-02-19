@@ -77,18 +77,12 @@ export class ConvosoLeadPreprocessor {
       return (existing as Record<string, unknown>).id as string;
     }
 
-    // Create new Lead Source
+    // Create new Lead Source with name and convosoListId
     try {
-      const newRecord: Record<string, unknown> = { name: listName };
-
-      // Set convosoListId if the field exists (best-effort)
-      try {
-        newRecord.convosoListId = listId;
-      } catch {
-        // Field may not exist yet
-      }
-
-      const created = await leadSourceRepo.save(newRecord);
+      const created = await leadSourceRepo.save({
+        name: listName,
+        convosoListId: listId,
+      });
 
       this.logger.log(
         `Created Lead Source "${listName}" for Convoso list_id ${listId}`,
