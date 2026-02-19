@@ -12,7 +12,8 @@ export type ApiKeyAuthConfig = {
 export type QueryParamAuthConfig = {
   type: 'query_param';
   paramName: string;
-  value: string;
+  value?: string;
+  envVar?: string;
 };
 
 export type BasicAuthConfig = {

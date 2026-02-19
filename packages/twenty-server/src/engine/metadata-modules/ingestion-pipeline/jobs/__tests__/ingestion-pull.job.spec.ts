@@ -1,15 +1,18 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { type IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
+import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { IngestionPullJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-pull.job';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 
 // Mock global fetch
 const mockFetch = jest.fn();
+
 global.fetch = mockFetch;
 
 const pipelineId = 'pipeline-1';
@@ -80,6 +83,22 @@ describe('IngestionPullJob', () => {
             processRecords: jest.fn(),
           },
         },
+        {
+          provide: IngestionPreprocessorRegistry,
+          useValue: {
+            preProcessRecords: jest
+              .fn()
+              .mockImplementation((records) => records),
+          },
+        },
+        {
+          provide: GlobalWorkspaceOrmManager,
+          useValue: {
+            executeInWorkspaceContext: jest
+              .fn()
+              .mockImplementation((fn) => fn()),
+          },
+        },
       ],
     }).compile();
 
@@ -120,10 +139,7 @@ describe('IngestionPullJob', () => {
 
     await job.handle({ pipelineId, workspaceId });
 
-    expect(logService.createPending).toHaveBeenCalledWith(
-      pipelineId,
-      'pull',
-    );
+    expect(logService.createPending).toHaveBeenCalledWith(pipelineId, 'pull');
     expect(logService.markRunning).toHaveBeenCalledWith('log-1');
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('https://api.example.com/leads'),

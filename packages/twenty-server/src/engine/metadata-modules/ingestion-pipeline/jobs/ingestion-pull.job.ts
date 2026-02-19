@@ -10,10 +10,13 @@ import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipel
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
 import { type IngestionPullJobData } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 import { type SourceAuthConfig } from 'src/engine/metadata-modules/ingestion-pipeline/types/source-auth-config.type';
 import { type SourceRequestConfig } from 'src/engine/metadata-modules/ingestion-pipeline/types/source-request-config.type';
 import { type PaginationConfig } from 'src/engine/metadata-modules/ingestion-pipeline/types/pagination-config.type';
 import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeline/utils/extract-value-by-path.util';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
 @Processor(MessageQueue.ingestionQueue)
 export class IngestionPullJob {
@@ -24,6 +27,8 @@ export class IngestionPullJob {
     private readonly fieldMappingService: IngestionFieldMappingService,
     private readonly logService: IngestionLogService,
     private readonly recordProcessorService: IngestionRecordProcessorService,
+    private readonly preprocessorRegistry: IngestionPreprocessorRegistry,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   @Process(IngestionPullJob.name)
@@ -61,7 +66,10 @@ export class IngestionPullJob {
         await this.fieldMappingService.findEntitiesByPipelineId(pipelineId);
 
       if (mappings.length === 0) {
-        await this.logService.markFailed(log.id, 'No field mappings configured');
+        await this.logService.markFailed(
+          log.id,
+          'No field mappings configured',
+        );
 
         return;
       }
@@ -81,8 +89,25 @@ export class IngestionPullJob {
         return;
       }
 
+      // Run preprocessor if available (wrapped in workspace context for DB access)
+      const authContext = buildSystemAuthContext(workspaceId);
+      const preprocessedRecords =
+        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          () =>
+            this.preprocessorRegistry.preProcessRecords(
+              allRecords,
+              pipeline,
+              workspaceId,
+            ),
+          authContext,
+        );
+
+      this.logger.log(
+        `Preprocessed ${preprocessedRecords.length} records for pipeline ${pipelineId}`,
+      );
+
       const result = await this.recordProcessorService.processRecords(
-        allRecords,
+        preprocessedRecords,
         pipeline,
         mappings,
         workspaceId,
@@ -108,16 +133,14 @@ export class IngestionPullJob {
     }
   }
 
-  private async fetchRecords(
-    pipeline: {
-      sourceUrl: string | null;
-      sourceHttpMethod: string | null;
-      sourceAuthConfig: SourceAuthConfig | null;
-      sourceRequestConfig: SourceRequestConfig | null;
-      responseRecordsPath: string | null;
-      paginationConfig: PaginationConfig | null;
-    },
-  ): Promise<Record<string, unknown>[]> {
+  private async fetchRecords(pipeline: {
+    sourceUrl: string | null;
+    sourceHttpMethod: string | null;
+    sourceAuthConfig: SourceAuthConfig | null;
+    sourceRequestConfig: SourceRequestConfig | null;
+    responseRecordsPath: string | null;
+    paginationConfig: PaginationConfig | null;
+  }): Promise<Record<string, unknown>[]> {
     const allRecords: Record<string, unknown>[] = [];
     let hasMore = true;
     let page = 0;
@@ -144,14 +167,26 @@ export class IngestionPullJob {
         }
       }
 
+      // Apply dynamic date range params
+      if (isDefined(pipeline.sourceRequestConfig?.dateRangeParams)) {
+        const { startParam, endParam, lookbackMinutes, timezone } =
+          pipeline.sourceRequestConfig!.dateRangeParams!;
+
+        const now = new Date();
+        const since = new Date(now.getTime() - lookbackMinutes * 60 * 1000);
+
+        const formatDate = (date: Date): string =>
+          date
+            .toLocaleString('sv-SE', { timeZone: timezone })
+            .replace(' ', 'T');
+
+        url.searchParams.set(startParam, formatDate(since));
+        url.searchParams.set(endParam, formatDate(now));
+      }
+
       // Apply pagination params
       if (isDefined(pipeline.paginationConfig)) {
-        applyPagination(
-          url,
-          pipeline.paginationConfig,
-          page,
-          cursor,
-        );
+        applyPagination(url, pipeline.paginationConfig, page, cursor);
       }
 
       const method = pipeline.sourceHttpMethod ?? 'GET';
@@ -160,13 +195,8 @@ export class IngestionPullJob {
         headers,
       };
 
-      if (
-        method === 'POST' &&
-        isDefined(pipeline.sourceRequestConfig?.body)
-      ) {
-        fetchOptions.body = JSON.stringify(
-          pipeline.sourceRequestConfig!.body,
-        );
+      if (method === 'POST' && isDefined(pipeline.sourceRequestConfig?.body)) {
+        fetchOptions.body = JSON.stringify(pipeline.sourceRequestConfig!.body);
       }
 
       const response = await fetch(url.toString(), fetchOptions);
@@ -240,13 +270,20 @@ const applyAuth = (
     case 'api_key':
       headers[auth.headerName] = auth.key;
       break;
-    case 'query_param':
-      url.searchParams.set(auth.paramName, auth.value);
+    case 'query_param': {
+      const tokenValue = isDefined(auth.envVar)
+        ? process.env[auth.envVar]
+        : auth.value;
+
+      if (isDefined(tokenValue)) {
+        url.searchParams.set(auth.paramName, tokenValue);
+      }
       break;
+    }
     case 'basic': {
-      const encoded = Buffer.from(
-        `${auth.username}:${auth.password}`,
-      ).toString('base64');
+      const encoded = Buffer.from(`${auth.username}:${auth.password}`).toString(
+        'base64',
+      );
 
       headers['Authorization'] = `Basic ${encoded}`;
       break;
@@ -262,10 +299,7 @@ const applyPagination = (
 ): void => {
   switch (config.type) {
     case 'offset':
-      url.searchParams.set(
-        config.paramName,
-        String(page * config.pageSize),
-      );
+      url.searchParams.set(config.paramName, String(page * config.pageSize));
       break;
     case 'page':
       url.searchParams.set(config.paramName, String(page + 1));
