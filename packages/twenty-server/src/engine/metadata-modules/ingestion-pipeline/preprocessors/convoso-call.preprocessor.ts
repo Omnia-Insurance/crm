@@ -285,22 +285,49 @@ export class ConvosoCallPreprocessor {
     >;
 
     const labelLower = billingLabel.toLowerCase();
+    const labelWords = labelLower.split(/\s+/);
     let matchedSource: Record<string, unknown> | null = null;
+    let bestMatchWords = 0;
 
     for (const source of allSources) {
       const sourceName = ((source.name as string) || '').toLowerCase();
 
       if (!sourceName) continue;
 
-      // Exact match first
+      // Exact match — highest priority
       if (sourceName === labelLower) {
         matchedSource = source;
         break;
       }
 
-      // Substring match (queue name contains lead source name or vice versa)
+      // Substring match (full name contained in the other)
       if (labelLower.includes(sourceName) || sourceName.includes(labelLower)) {
         matchedSource = source;
+        bestMatchWords = 999;
+        continue;
+      }
+
+      // Word-prefix match: count how many leading words are identical
+      // e.g. "Slate U65 Live Transfers" matches "Slate U65 Leads" (2 words: "slate", "u65")
+      const sourceWords = sourceName.split(/\s+/);
+      let matchingWords = 0;
+
+      for (
+        let i = 0;
+        i < Math.min(labelWords.length, sourceWords.length);
+        i++
+      ) {
+        if (labelWords[i] === sourceWords[i]) {
+          matchingWords++;
+        } else {
+          break;
+        }
+      }
+
+      // Require at least 2 matching leading words to avoid false positives
+      if (matchingWords >= 2 && matchingWords > bestMatchWords) {
+        matchedSource = source;
+        bestMatchWords = matchingWords;
       }
     }
 
