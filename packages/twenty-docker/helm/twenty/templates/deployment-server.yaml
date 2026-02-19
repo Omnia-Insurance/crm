@@ -100,6 +100,10 @@ spec:
               psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA core GRANT ALL ON SEQUENCES TO ${APP_USER};"
               psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${APP_USER};"
               psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${APP_USER};"
+              echo "Granting permissions on workspace schemas..."
+              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "DO \$\$ DECLARE ws RECORD; BEGIN FOR ws IN SELECT nspname FROM pg_namespace WHERE nspname LIKE 'workspace_%' LOOP EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA %I TO ${APP_USER}', ws.nspname); EXECUTE format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I TO ${APP_USER}', ws.nspname); EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON TABLES TO ${APP_USER}', ws.nspname); EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON SEQUENCES TO ${APP_USER}', ws.nspname); END LOOP; END \$\$;"
+              echo "Transferring workspace table ownership to ${APP_USER}..."
+              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT schemaname, tablename FROM pg_tables WHERE schemaname LIKE 'workspace_%' AND tableowner != '${APP_USER}' LOOP EXECUTE format('ALTER TABLE %I.%I OWNER TO ${APP_USER}', r.schemaname, r.tablename); END LOOP; END \$\$;"
               echo "Database ${DBNAME} is ready."
         {{- end }}
         - name: run-migrations
