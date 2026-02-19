@@ -74,17 +74,18 @@ export class ConvosoCallPreprocessor {
       return null;
     }
 
-    // Filter system users
+    // Filter system users (outbound only — inbound calls abandoned in queue
+    // are assigned to system users like "System DID User" by Convoso)
+    const callType = (payload.call_type || '').toUpperCase();
     const userId = payload.user_id?.toString();
 
-    if (userId && SYSTEM_USER_IDS.has(userId)) {
+    if (userId && SYSTEM_USER_IDS.has(userId) && !callType.includes('IN')) {
       this.logger.log(`Skipping system user call (user_id: ${userId})`);
 
       return null;
     }
 
     // Derive direction from call_type
-    const callType = (payload.call_type || '').toUpperCase();
     const direction = callType.includes('IN') ? 'INBOUND' : 'OUTBOUND';
     const directionLabel = direction === 'INBOUND' ? 'Inbound' : 'Outbound';
 
