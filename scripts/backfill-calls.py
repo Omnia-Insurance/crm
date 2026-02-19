@@ -114,7 +114,7 @@ def poll_completion(base_url, token, pipeline_id, timeout_seconds=300):
         time.sleep(5)
         result = meta_gql(base_url, token, """
         {
-          ingestionLogs(pipelineId: "%s", first: 1) {
+          ingestionLogs(pipelineId: "%s", limit: 1) {
             id status totalRecordsReceived recordsCreated
             recordsUpdated recordsFailed errors completedAt
           }
