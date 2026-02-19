@@ -120,8 +120,12 @@ export class ConvosoCallPreprocessor {
       workspaceId,
     );
 
+    // Convert call_date from LA local time to UTC ISO string
+    const callDateISO = this.convertConvosoDateToISO(payload.call_date);
+
     return {
       ...payload,
+      _callDate: callDateISO,
       _direction: direction,
       _name: name,
       _personId: personId,
@@ -354,6 +358,58 @@ export class ConvosoCallPreprocessor {
     }
 
     return this.listMap?.[listId] ?? null;
+  }
+
+  // Convoso API returns dates in America/Los_Angeles local time (e.g. "2026-02-19 09:45:09").
+  // Convert to UTC ISO string, handling PST (UTC-8) and PDT (UTC-7) correctly.
+  private convertConvosoDateToISO(dateStr: string | undefined): string | null {
+    if (!dateStr) return null;
+
+    const match = dateStr.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/,
+    );
+
+    if (!match) {
+      // Already ISO or unknown format — parse as-is
+      const d = new Date(dateStr);
+
+      return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+
+    const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr] = match;
+    const [year, month, day, hour, minute, second] = [
+      yearStr,
+      monthStr,
+      dayStr,
+      hourStr,
+      minuteStr,
+      secondStr,
+    ].map(Number);
+
+    // Try PST (UTC-8) first — standard time (Nov–Mar)
+    const asPst = new Date(
+      Date.UTC(year, month - 1, day, hour + 8, minute, second),
+    );
+
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      hour: 'numeric',
+      hour12: false,
+    }).formatToParts(asPst);
+
+    const laHour = parseInt(
+      parts.find((p) => p.type === 'hour')?.value || '0',
+      10,
+    );
+
+    if (laHour === hour) {
+      return asPst.toISOString();
+    }
+
+    // Fall back to PDT (UTC-7)
+    return new Date(
+      Date.UTC(year, month - 1, day, hour + 7, minute, second),
+    ).toISOString();
   }
 
   private normalizePhone(phone: string | undefined): string | null {

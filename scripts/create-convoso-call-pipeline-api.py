@@ -134,12 +134,11 @@ def main():
             "transform": {"type": "sanitizeNull"},
             "position": 1,
         },
-        # 3. call_date -> callDate (dateFormat ISO)
+        # 3. _callDate -> callDate (from preprocessor, already UTC ISO)
         {
             "pipelineId": pipeline_id,
-            "sourceFieldPath": "call_date",
+            "sourceFieldPath": "_callDate",
             "targetFieldName": "callDate",
-            "transform": {"type": "dateFormat", "sourceFormat": "ISO"},
             "position": 2,
         },
         # 4. call_length -> duration (numberScale x1)
