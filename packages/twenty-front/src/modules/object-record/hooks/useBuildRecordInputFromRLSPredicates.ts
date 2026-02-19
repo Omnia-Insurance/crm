@@ -15,7 +15,7 @@ import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/uti
 import { buildRecordInputFromFilter } from '@/object-record/record-table/utils/buildRecordInputFromFilter';
 import { buildCompositeValueFromSubField } from '@/object-record/record-table/utils/buildValueFromFilter';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { PermissionFlagType } from '@/settings/roles/constants/PermissionFlagType';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { isUndefined } from '@sniptt/guards';
 import { useMemo } from 'react';
