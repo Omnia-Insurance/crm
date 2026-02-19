@@ -27,12 +27,6 @@ type ConvosoCallPayload = Record<string, unknown> & {
   list_id?: string;
 };
 
-type BillingRule = {
-  name: string;
-  costMicros: number;
-  minDuration: number;
-};
-
 const SYSTEM_USER_IDS = new Set(['666666', '666667', '666671']);
 
 const LIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -101,22 +95,26 @@ export class ConvosoCallPreprocessor {
     const label = queueName || sourceName || campaignName || 'Unknown';
     const name = `${directionLabel} - ${label}`;
 
-    // Resolve person by phone
-    const personId = await this.findPersonByPhone(payload, workspaceId);
-
     // Find or create lead source
     const leadSourceId = await this.findOrCreateLeadSource(
       sourceName,
+      payload.list_id,
       workspaceId,
     );
 
-    // Compute billing — use resolved queueName (pull: `queue`, push: `queue_name`)
+    // Resolve person by phone, create if not found
+    const personId = await this.findOrCreatePersonByPhone(
+      payload,
+      leadSourceId,
+      workspaceId,
+    );
+
+    // Compute billing from lead source's costPerCall + minimumCallDuration
     const duration = payload.call_length
       ? parseInt(payload.call_length.toString(), 10) || 0
       : 0;
-    const billing = await this.computeBilling(
-      queueName ?? undefined,
-      sourceName,
+    const billing = await this.computeBillingFromLeadSource(
+      leadSourceId,
       direction,
       duration,
       workspaceId,
@@ -134,8 +132,9 @@ export class ConvosoCallPreprocessor {
     };
   }
 
-  private async findPersonByPhone(
+  private async findOrCreatePersonByPhone(
     payload: ConvosoCallPayload,
+    leadSourceId: string | null,
     workspaceId: string,
   ): Promise<string | null> {
     const normalizedPhone = this.normalizePhone(payload.phone_number);
@@ -150,7 +149,7 @@ export class ConvosoCallPreprocessor {
       { shouldBypassPermissionChecks: true },
     );
 
-    const person = await personRepo.findOne({
+    const existing = await personRepo.findOne({
       where: {
         phones: {
           primaryPhoneNumber: normalizedPhone,
@@ -158,19 +157,52 @@ export class ConvosoCallPreprocessor {
       },
     });
 
-    if (person) {
+    if (existing) {
       this.logger.log(
-        `Matched Person ${(person as Record<string, unknown>).id} by phone`,
+        `Matched Person ${(existing as Record<string, unknown>).id} by phone`,
       );
 
-      return (person as Record<string, unknown>).id as string;
+      return (existing as Record<string, unknown>).id as string;
     }
 
-    return null;
+    // Create person from call data if not found
+    try {
+      const personData: Record<string, unknown> = {
+        phones: {
+          primaryPhoneNumber: normalizedPhone,
+          primaryPhoneCallingCode: '+1',
+          primaryPhoneCountryCode: 'US',
+        },
+        name: {
+          firstName: '',
+          lastName: '',
+        },
+      };
+
+      if (leadSourceId) {
+        personData.leadSourceId = leadSourceId;
+      }
+
+      const created = await personRepo.save(personData);
+      const createdId = (created as Record<string, unknown>).id as string;
+
+      this.logger.log(
+        `Created Person ${createdId} from call phone ${normalizedPhone}`,
+      );
+
+      return createdId;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create Person for phone ${normalizedPhone}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+
+      return null;
+    }
   }
 
   private async findOrCreateLeadSource(
     sourceName: string | null,
+    listId: string | undefined,
     workspaceId: string,
   ): Promise<string | null> {
     if (!sourceName) {
@@ -192,7 +224,13 @@ export class ConvosoCallPreprocessor {
     }
 
     try {
-      const created = await leadSourceRepo.save({ name: sourceName });
+      const data: Record<string, unknown> = { name: sourceName };
+
+      if (listId) {
+        data.convosoListId = listId;
+      }
+
+      const created = await leadSourceRepo.save(data);
 
       this.logger.log(`Created new Lead Source: "${sourceName}"`);
 
@@ -206,9 +244,10 @@ export class ConvosoCallPreprocessor {
     }
   }
 
-  private async computeBilling(
-    queueName: string | undefined,
-    sourceName: string | null,
+  // Compute billing directly from the resolved Lead Source's costPerCall + minimumCallDuration.
+  // Only inbound calls are billable.
+  private async computeBillingFromLeadSource(
+    leadSourceId: string | null,
     direction: string,
     duration: number,
     workspaceId: string,
@@ -223,70 +262,42 @@ export class ConvosoCallPreprocessor {
       costCurrencyCode: 'USD',
     };
 
-    if (direction !== 'INBOUND') {
+    if (direction !== 'INBOUND' || !leadSourceId) {
       return noBill;
     }
 
-    const label = (queueName || sourceName || '').toLowerCase();
-
-    if (!label) {
-      return noBill;
-    }
-
-    const rules = await this.fetchBillingRules(workspaceId);
-
-    // Match queue/source name against lead source names (case-insensitive substring)
-    // Prefer the longest matching name (most specific)
-    let bestMatch: BillingRule | null = null;
-
-    for (const rule of rules) {
-      const ruleName = rule.name.toLowerCase();
-
-      if (label.includes(ruleName) || ruleName.includes(label)) {
-        if (!bestMatch || rule.name.length > bestMatch.name.length) {
-          bestMatch = rule;
-        }
-      }
-    }
-
-    if (!bestMatch) {
-      return noBill;
-    }
-
-    const meetsDuration =
-      bestMatch.minDuration === 0 || duration >= bestMatch.minDuration;
-
-    return {
-      billable: meetsDuration,
-      costAmountMicros: meetsDuration ? bestMatch.costMicros : 0,
-      costCurrencyCode: 'USD',
-    };
-  }
-
-  private async fetchBillingRules(workspaceId: string): Promise<BillingRule[]> {
     const leadSourceRepo = await this.globalWorkspaceOrmManager.getRepository(
       workspaceId,
       'leadSource',
       { shouldBypassPermissionChecks: true },
     );
 
-    const sources = await leadSourceRepo.find();
-    const rules: BillingRule[] = [];
+    const leadSource = await leadSourceRepo.findOne({
+      where: { id: leadSourceId },
+    });
 
-    for (const source of sources) {
-      const s = source as Record<string, unknown>;
-      const costPerCall = s.costPerCall as
-        | { amountMicros?: number }
-        | undefined;
-
-      rules.push({
-        name: s.name as string,
-        costMicros: costPerCall?.amountMicros ?? 0,
-        minDuration: (s.minimumCallDuration as number) ?? 0,
-      });
+    if (!leadSource) {
+      return noBill;
     }
 
-    return rules;
+    const source = leadSource as Record<string, unknown>;
+    const costPerCall = source.costPerCall as
+      | { amountMicros?: number }
+      | undefined;
+    const costMicros = costPerCall?.amountMicros ?? 0;
+    const minDuration = (source.minimumCallDuration as number) ?? 0;
+
+    if (costMicros === 0) {
+      return noBill;
+    }
+
+    const meetsDuration = minDuration === 0 || duration >= minDuration;
+
+    return {
+      billable: meetsDuration,
+      costAmountMicros: meetsDuration ? costMicros : 0,
+      costCurrencyCode: 'USD',
+    };
   }
 
   private async resolveConvosoListName(listId: string): Promise<string | null> {
