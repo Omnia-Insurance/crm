@@ -12,6 +12,7 @@ export const INGESTION_LOG_FRAGMENT = gql`
     recordsSkipped
     recordsFailed
     errors
+    incomingPayload
     startedAt
     completedAt
     durationMs

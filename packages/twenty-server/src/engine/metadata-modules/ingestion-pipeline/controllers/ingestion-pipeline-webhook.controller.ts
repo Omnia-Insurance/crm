@@ -112,8 +112,8 @@ export class IngestionPipelineWebhookController {
       records = [records];
     }
 
-    // Create pending log entry
-    const log = await this.logService.createPending(pipelineId, 'push');
+    // Create pending log entry with incoming payload
+    const log = await this.logService.createPending(pipelineId, 'push', records);
 
     // Enqueue for async processing
     await this.messageQueueService.add<IngestionPushProcessJobData>(

@@ -58,6 +58,10 @@ export class IngestionLogDTO {
   @Field(() => GraphQLJSON, { nullable: true })
   errors: Record<string, unknown>[] | null;
 
+  @IsOptional()
+  @Field(() => GraphQLJSON, { nullable: true })
+  incomingPayload: Record<string, unknown>[] | null;
+
   @IsDateString()
   @IsOptional()
   @Field(() => Date, { nullable: true })

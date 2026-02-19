@@ -53,6 +53,9 @@ export class IngestionLogEntity {
   @Column({ type: 'jsonb', nullable: true })
   errors: IngestionError[] | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  incomingPayload: Record<string, unknown>[] | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   startedAt: Date | null;
 

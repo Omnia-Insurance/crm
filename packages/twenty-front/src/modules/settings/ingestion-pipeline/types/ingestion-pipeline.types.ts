@@ -43,6 +43,7 @@ export type IngestionLog = {
   recordsSkipped: number;
   recordsFailed: number;
   errors: Record<string, unknown>[] | null;
+  incomingPayload: Record<string, unknown>[] | null;
   startedAt: string | null;
   completedAt: string | null;
   durationMs: number | null;

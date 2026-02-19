@@ -26,6 +26,7 @@ export class IngestionLogService {
       recordsSkipped: entity.recordsSkipped,
       recordsFailed: entity.recordsFailed,
       errors: entity.errors as Record<string, unknown>[] | null,
+      incomingPayload: entity.incomingPayload ?? null,
       startedAt: entity.startedAt,
       completedAt: entity.completedAt,
       durationMs: entity.durationMs,
@@ -48,11 +49,13 @@ export class IngestionLogService {
   async createPending(
     pipelineId: string,
     triggerType: string,
+    incomingPayload?: Record<string, unknown>[],
   ): Promise<IngestionLogEntity> {
     const log = this.logRepository.create({
       pipelineId,
       status: 'pending',
       triggerType,
+      incomingPayload: incomingPayload ?? null,
       startedAt: new Date(),
     });
 

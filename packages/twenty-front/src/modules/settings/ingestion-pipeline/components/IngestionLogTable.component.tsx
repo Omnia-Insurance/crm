@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import styled from '@emotion/styled';
 import { Trans, useLingui } from '@lingui/react/macro';
 
@@ -25,6 +27,40 @@ const StyledTd = styled.td`
   padding: ${({ theme }) => theme.spacing(2)};
   border-bottom: 1px solid ${({ theme }) => theme.border.color.light};
   font-size: ${({ theme }) => theme.font.size.sm};
+`;
+
+const StyledClickableRow = styled.tr`
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.background.transparent.lighter};
+  }
+`;
+
+const StyledPayloadRow = styled.tr`
+  background: ${({ theme }) => theme.background.secondary};
+`;
+
+const StyledPayloadCell = styled.td`
+  padding: ${({ theme }) => theme.spacing(2)} ${({ theme }) => theme.spacing(3)};
+  border-bottom: 1px solid ${({ theme }) => theme.border.color.light};
+`;
+
+const StyledPayloadPre = styled.pre`
+  margin: 0;
+  font-size: ${({ theme }) => theme.font.size.xs};
+  color: ${({ theme }) => theme.font.color.secondary};
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+`;
+
+const StyledPayloadLabel = styled.div`
+  font-size: ${({ theme }) => theme.font.size.xs};
+  color: ${({ theme }) => theme.font.color.tertiary};
+  font-weight: ${({ theme }) => theme.font.weight.medium};
+  margin-bottom: ${({ theme }) => theme.spacing(1)};
 `;
 
 const StyledStatusBadge = styled.span<{ status: string }>`
@@ -75,8 +111,11 @@ const formatDate = (date: string | null): string => {
   return new Date(date).toLocaleString();
 };
 
+const COLUMN_COUNT = 8;
+
 export const IngestionLogTable = ({ logs }: IngestionLogTableProps) => {
   const { t } = useLingui();
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   if (logs.length === 0) {
     return (
@@ -85,6 +124,10 @@ export const IngestionLogTable = ({ logs }: IngestionLogTableProps) => {
       </div>
     );
   }
+
+  const handleRowClick = (logId: string) => {
+    setExpandedLogId(expandedLogId === logId ? null : logId);
+  };
 
   return (
     <StyledTable>
@@ -118,20 +161,57 @@ export const IngestionLogTable = ({ logs }: IngestionLogTableProps) => {
       </thead>
       <tbody>
         {logs.map((log) => (
-          <tr key={log.id}>
-            <StyledTd>
-              <StyledStatusBadge status={log.status}>
-                {log.status}
-              </StyledStatusBadge>
-            </StyledTd>
-            <StyledTd>{log.triggerType}</StyledTd>
-            <StyledTd>{log.totalRecordsReceived}</StyledTd>
-            <StyledTd>{log.recordsCreated}</StyledTd>
-            <StyledTd>{log.recordsUpdated}</StyledTd>
-            <StyledTd>{log.recordsFailed}</StyledTd>
-            <StyledTd>{formatDuration(log.durationMs)}</StyledTd>
-            <StyledTd>{formatDate(log.startedAt)}</StyledTd>
-          </tr>
+          <>
+            <StyledClickableRow
+              key={log.id}
+              onClick={() => handleRowClick(log.id)}
+            >
+              <StyledTd>
+                <StyledStatusBadge status={log.status}>
+                  {log.status}
+                </StyledStatusBadge>
+              </StyledTd>
+              <StyledTd>{log.triggerType}</StyledTd>
+              <StyledTd>{log.totalRecordsReceived}</StyledTd>
+              <StyledTd>{log.recordsCreated}</StyledTd>
+              <StyledTd>{log.recordsUpdated}</StyledTd>
+              <StyledTd>{log.recordsFailed}</StyledTd>
+              <StyledTd>{formatDuration(log.durationMs)}</StyledTd>
+              <StyledTd>{formatDate(log.startedAt)}</StyledTd>
+            </StyledClickableRow>
+            {expandedLogId === log.id && (
+              <StyledPayloadRow key={`${log.id}-payload`}>
+                <StyledPayloadCell colSpan={COLUMN_COUNT}>
+                  {log.incomingPayload ? (
+                    <>
+                      <StyledPayloadLabel>
+                        <Trans>Incoming Payload</Trans>
+                      </StyledPayloadLabel>
+                      <StyledPayloadPre>
+                        {JSON.stringify(log.incomingPayload, null, 2)}
+                      </StyledPayloadPre>
+                    </>
+                  ) : (
+                    <StyledPayloadLabel>
+                      <Trans>No payload data available</Trans>
+                    </StyledPayloadLabel>
+                  )}
+                  {log.errors && log.errors.length > 0 && (
+                    <>
+                      <StyledPayloadLabel
+                        style={{ marginTop: '8px' }}
+                      >
+                        <Trans>Errors</Trans>
+                      </StyledPayloadLabel>
+                      <StyledPayloadPre>
+                        {JSON.stringify(log.errors, null, 2)}
+                      </StyledPayloadPre>
+                    </>
+                  )}
+                </StyledPayloadCell>
+              </StyledPayloadRow>
+            )}
+          </>
         ))}
       </tbody>
     </StyledTable>
