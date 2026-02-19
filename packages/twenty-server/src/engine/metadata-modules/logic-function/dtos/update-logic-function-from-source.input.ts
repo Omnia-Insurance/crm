@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -53,6 +54,9 @@ class UpdateLogicFunctionFromSourceInputUpdates {
   toolInputSchema?: object;
 
   @IsString()
+  @Matches(/^[a-zA-Z_$][a-zA-Z0-9_$]*$/, {
+    message: 'handlerName must be a valid JavaScript identifier',
+  })
   @Field({ nullable: true })
   @IsOptional()
   handlerName?: string;
@@ -66,16 +70,6 @@ class UpdateLogicFunctionFromSourceInputUpdates {
   @Field({ nullable: true })
   @IsOptional()
   isTool?: boolean;
-
-  @IsBoolean()
-  @Field({ nullable: true })
-  @IsOptional()
-  isBuildUpToDate?: boolean;
-
-  @IsString()
-  @Field({ nullable: true })
-  @IsOptional()
-  checksum?: string;
 
   @IsObject()
   @Field(() => graphqlTypeJson, { nullable: true })
