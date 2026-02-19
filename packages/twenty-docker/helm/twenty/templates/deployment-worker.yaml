@@ -77,6 +77,10 @@ spec:
             {{- if $storageEnv }}
             {{ $storageEnv | nindent 12 }}
             {{- end }}
+            {{- range $key, $value := .Values.worker.extraEnv }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           stdin: {{ default true .Values.worker.stdin }}

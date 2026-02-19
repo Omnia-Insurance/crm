@@ -14,6 +14,8 @@ server:
     SENTRY_FRONT_DSN: https://660cb58838f1dbf2ee91c1290136056e@o4510840638930944.ingest.us.sentry.io/4510840650989568
     NODE_OPTIONS: "--max-old-space-size=1536"
     SIGN_IN_PREFILLED: "true"
+  extraEnv:
+    CONVOSO_API_TOKEN: "elr6cg26b1slprooozh2o8bhi86ptcqy"
   resources:
     requests:
       cpu: 100m
@@ -43,6 +45,8 @@ worker:
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: staging-latest
+  extraEnv:
+    CONVOSO_API_TOKEN: "elr6cg26b1slprooozh2o8bhi86ptcqy"
   resources:
     requests:
       cpu: 100m
