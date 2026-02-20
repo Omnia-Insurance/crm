@@ -8,6 +8,7 @@
  */
 
 export { AdvancedSettingsToggle } from './link/components/AdvancedSettingsToggle';
+export { AudioLink } from './link/components/AudioLink';
 export { ClickToActionLink } from './link/components/ClickToActionLink';
 export { ContactLink } from './link/components/ContactLink';
 export { GithubVersionLink } from './link/components/GithubVersionLink';

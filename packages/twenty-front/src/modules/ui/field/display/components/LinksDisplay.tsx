@@ -8,15 +8,25 @@ import {
   getUrlHostnameOrThrow,
   isDefined,
 } from 'twenty-shared/utils';
-import { LinkType, RoundedLink, SocialLink } from 'twenty-ui/navigation';
+import {
+  AudioLink,
+  LinkType,
+  RoundedLink,
+  SocialLink,
+} from 'twenty-ui/navigation';
 import { checkUrlType } from '~/utils/checkUrlType';
 
 type LinksDisplayProps = {
   value?: FieldLinksValue;
   onLinkClick?: (url: string, event: React.MouseEvent<HTMLElement>) => void;
+  displayAs?: 'link' | 'audio';
 };
 
-export const LinksDisplay = ({ value, onLinkClick }: LinksDisplayProps) => {
+export const LinksDisplay = ({
+  value,
+  onLinkClick,
+  displayAs,
+}: LinksDisplayProps) => {
   const links = useMemo(() => {
     if (!isDefined(value)) {
       return [];
@@ -43,9 +53,11 @@ export const LinksDisplay = ({ value, onLinkClick }: LinksDisplayProps) => {
   return (
     <ExpandableList>
       {links.map(({ url, label, type }, index) =>
-        type === LinkType.LinkedIn ||
-        type === LinkType.Twitter ||
-        type === LinkType.Facebook ? (
+        displayAs === 'audio' ? (
+          <AudioLink key={index} src={url} />
+        ) : type === LinkType.LinkedIn ||
+          type === LinkType.Twitter ||
+          type === LinkType.Facebook ? (
           <SocialLink
             key={index}
             href={url}

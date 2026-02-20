@@ -1,4 +1,5 @@
 export * from './AdvancedSettingsToggle';
+export * from './AudioLink';
 export * from './ClickToActionLink';
 export * from './ContactLink';
 export * from './GithubVersionLink';

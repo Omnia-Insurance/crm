@@ -23,5 +23,13 @@ export const LinksFieldDisplay = () => {
     }
   };
 
-  return <LinksDisplay value={fieldValue} onLinkClick={handleLinkClick} />;
+  const displayAs = fieldDefinition.metadata.settings?.displayAs;
+
+  return (
+    <LinksDisplay
+      value={fieldValue}
+      onLinkClick={handleLinkClick}
+      displayAs={displayAs}
+    />
+  );
 };
