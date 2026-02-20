@@ -18,6 +18,7 @@ export const settingsDraftRoleFamilyState = createFamilyState<
     canUpdateAllObjectRecords: false,
     canUpdateAllSettings: false,
     canAccessAllTools: false,
+    showAllObjectsInSidebar: true,
     isEditable: false,
     workspaceMembers: [],
     permissionFlags: [],

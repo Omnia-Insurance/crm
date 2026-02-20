@@ -26,6 +26,7 @@ export type RoleManifest = SyncableEntityOptions & {
   canUpdateAllObjectRecords?: boolean;
   canSoftDeleteAllObjectRecords?: boolean;
   canDestroyAllObjectRecords?: boolean;
+  showAllObjectsInSidebar?: boolean;
   canBeAssignedToUsers?: boolean;
   canBeAssignedToAgents?: boolean;
   canBeAssignedToApiKeys?: boolean;

@@ -110,6 +110,7 @@ describe('RestToCommonSelectedFieldsHandler', () => {
         canUpdateObjectRecords: true,
         canSoftDeleteObjectRecords: true,
         canDestroyObjectRecords: true,
+        showInSidebar: true,
         restrictedFields: options.restrictedFields || {},
         rowLevelPermissionPredicates: [],
         rowLevelPermissionPredicateGroups: [],

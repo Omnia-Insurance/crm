@@ -35,6 +35,7 @@ const ROLE_BASIC_KEYS: Array<keyof Role> = [
   'canBeAssignedToUsers',
   'canBeAssignedToAgents',
   'canBeAssignedToApiKeys',
+  'showAllObjectsInSidebar',
 ];
 
 export const useSaveDraftRoleToDB = ({
@@ -139,6 +140,7 @@ export const useSaveDraftRoleToDB = ({
           canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
           canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
           canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
+          showAllObjectsInSidebar: settingsDraftRole.showAllObjectsInSidebar,
         } satisfies Partial<Role>,
       },
       refetchQueries: [getOperationName(GET_ROLES) ?? ''],
@@ -196,6 +198,8 @@ export const useSaveDraftRoleToDB = ({
               canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
               canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
               canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
+              showAllObjectsInSidebar:
+                settingsDraftRole.showAllObjectsInSidebar,
             },
           },
         },
@@ -217,6 +221,7 @@ export const useSaveDraftRoleToDB = ({
                   objectPermission.canSoftDeleteObjectRecords,
                 canDestroyObjectRecords:
                   objectPermission.canDestroyObjectRecords,
+                showInSidebar: objectPermission.showInSidebar,
               })) ?? [],
           },
         },
@@ -385,6 +390,7 @@ export const useSaveDraftRoleToDB = ({
                   objectPermission.canSoftDeleteObjectRecords,
                 canDestroyObjectRecords:
                   objectPermission.canDestroyObjectRecords,
+                showInSidebar: objectPermission.showInSidebar,
               })) ?? [],
           },
         },

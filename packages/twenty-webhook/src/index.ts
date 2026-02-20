@@ -211,9 +211,9 @@ const sanitize = (value?: string): string => {
   return value.trim();
 };
 
-// Format date as YYYY-MM-DDTHH:MM:SS in America/Los_Angeles (Convoso expects LA time)
+// Format date as YYYY-MM-DDTHH:MM:SS in America/New_York (Convoso account timezone)
 const toConvosoDate = (date: Date): string =>
-  date.toLocaleString("sv-SE", { timeZone: "America/Los_Angeles" }).replace(" ", "T");
+  date.toLocaleString("sv-SE", { timeZone: "America/New_York" }).replace(" ", "T");
 
 const normalizePhone = (phone?: string, phoneCode?: string): PhoneInfo | null => {
   if (!phone) return null;
@@ -917,8 +917,8 @@ const buildCallInputFromLog = async (
   }
 
   if (log.call_date) {
-    // Convoso dates are LA time, convert to ISO
-    input.callDate = new Date(log.call_date + " GMT-0800").toISOString();
+    // Convoso dates are Eastern time (account Default GMT), convert to ISO
+    input.callDate = new Date(log.call_date + " GMT-0500").toISOString();
   }
 
   if (log.call_length) {
@@ -984,7 +984,8 @@ const buildCallInput = async (
   }
 
   if (call.call_date) {
-    input.callDate = new Date(call.call_date).toISOString();
+    // Convoso dates are Eastern time (account Default GMT), convert to ISO
+    input.callDate = new Date(call.call_date + " GMT-0500").toISOString();
   }
 
   // Duration in seconds
@@ -1644,7 +1645,7 @@ const syncRecentCalls = async (env: Env): Promise<void> => {
       end_time: toConvosoDate(now),
       limit: String(PAGE_SIZE),
       offset: String(offset),
-      include_recordings: "0",
+      include_recordings: "1",
     });
 
     const response = await fetch(

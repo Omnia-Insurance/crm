@@ -30,6 +30,8 @@ import { useRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilValu
 import { useSetRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilStateV2';
 import { useStore } from 'jotai';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -59,9 +61,13 @@ export const WorkspaceNavigationMenuItems = () => {
       },
     [store],
   );
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
+  const isNavigationMenuItemEditingFeatureEnabled = useIsFeatureEnabled(
     FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
   );
+  const permissionFlagMap = usePermissionFlagMap();
+  const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
+  const isNavigationMenuItemEditingEnabled =
+    isNavigationMenuItemEditingFeatureEnabled && isAdmin;
   const isNavigationMenuInEditMode = useRecoilValueV2(
     isNavigationMenuInEditModeStateV2,
   );

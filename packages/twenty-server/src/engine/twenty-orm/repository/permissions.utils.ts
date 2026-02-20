@@ -139,6 +139,22 @@ export const validateOperationIsPermittedOrThrow = ({
       });
       break;
     case 'insert':
+      if (!permissionsForEntity?.canUpdateObjectRecords) {
+        throw new PermissionsException(
+          PermissionsExceptionMessage.PERMISSION_DENIED,
+          PermissionsExceptionCode.PERMISSION_DENIED,
+        );
+      }
+
+      validateReadFieldPermissionOrThrow({
+        restrictedFields: permissionsForEntity.restrictedFields,
+        selectedColumns,
+        columnNameToFieldMetadataIdMap,
+      });
+      // Skip field-level edit checks on INSERT — pre-query hooks may set
+      // fields (e.g. agentId) that the user cannot manually edit. RLS at
+      // the database level enforces row-level constraints.
+      break;
     case 'update':
       if (!permissionsForEntity?.canUpdateObjectRecords) {
         throw new PermissionsException(

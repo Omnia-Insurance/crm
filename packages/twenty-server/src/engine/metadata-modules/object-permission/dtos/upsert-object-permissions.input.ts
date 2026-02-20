@@ -51,4 +51,9 @@ export class ObjectPermissionInput {
   @IsOptional()
   @Field({ nullable: true })
   canDestroyObjectRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field({ nullable: true })
+  showInSidebar?: boolean;
 }

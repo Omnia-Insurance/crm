@@ -20,6 +20,7 @@ const BASE_ROLE_MOCK: Role = {
   canBeAssignedToUsers: true,
   canBeAssignedToAgents: true,
   canBeAssignedToApiKeys: true,
+  showAllObjectsInSidebar: true,
   id: '1',
   isEditable: true,
   label: 'Role base',

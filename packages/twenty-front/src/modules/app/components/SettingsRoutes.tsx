@@ -264,6 +264,30 @@ const SettingsDevelopersWebhookDetail = lazy(() =>
   })),
 );
 
+const SettingsIngestionPipelines = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelines'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelines,
+  })),
+);
+
+const SettingsIngestionPipelineNew = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelineNew,
+  })),
+);
+
+const SettingsIngestionPipelineDetail = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelineDetail,
+  })),
+);
+
 const SettingsObjectNewFieldSelect = lazy(() =>
   import(
     '~/pages/settings/data-model/new-field/SettingsObjectNewFieldSelect'
@@ -600,6 +624,27 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.WebhookDetail}
           element={<SettingsDevelopersWebhookDetail />}
+        />
+      </Route>
+
+      <Route
+        element={
+          <SettingsProtectedRouteWrapper
+            settingsPermission={PermissionFlagType.API_KEYS_AND_WEBHOOKS}
+          />
+        }
+      >
+        <Route
+          path={SettingsPath.IngestionPipelines}
+          element={<SettingsIngestionPipelines />}
+        />
+        <Route
+          path={SettingsPath.NewIngestionPipeline}
+          element={<SettingsIngestionPipelineNew />}
+        />
+        <Route
+          path={SettingsPath.IngestionPipelineDetail}
+          element={<SettingsIngestionPipelineDetail />}
         />
       </Route>
 

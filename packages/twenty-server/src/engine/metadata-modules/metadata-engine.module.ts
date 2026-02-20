@@ -19,6 +19,7 @@ import { RouteTriggerModule } from 'src/engine/metadata-modules/route-trigger/ro
 import { SearchFieldMetadataModule } from 'src/engine/metadata-modules/search-field-metadata/search-field-metadata.module';
 import { SkillModule } from 'src/engine/metadata-modules/skill/skill.module';
 import { ViewModule } from 'src/engine/metadata-modules/view/view.module';
+import { IngestionPipelineModule } from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.module';
 import { WebhookModule } from 'src/engine/metadata-modules/webhook/webhook.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
 
@@ -43,6 +44,7 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
     PermissionsModule,
     RouteTriggerModule,
     WebhookModule,
+    IngestionPipelineModule,
   ],
   providers: [
     {
@@ -66,6 +68,7 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
     RoleModule,
     PermissionsModule,
     WebhookModule,
+    IngestionPipelineModule,
   ],
 })
 export class MetadataEngineModule {}

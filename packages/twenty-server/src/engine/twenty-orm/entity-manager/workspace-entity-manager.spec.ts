@@ -287,6 +287,7 @@ describe('WorkspaceEntityManager', () => {
           canUpdateObjectRecords: false,
           canSoftDeleteObjectRecords: false,
           canDestroyObjectRecords: false,
+          showInSidebar: true,
           restrictedFields: {},
           rowLevelPermissionPredicates: [],
           rowLevelPermissionPredicateGroups: [],

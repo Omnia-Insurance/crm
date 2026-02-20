@@ -118,6 +118,7 @@ const buildSyntheticRole = (
   canBeAssignedToUsers: false,
   canBeAssignedToAgents: false,
   canBeAssignedToApiKeys: false,
+  showAllObjectsInSidebar: true,
   workspaceMembers: [],
   agents: [],
   apiKeys: [],

@@ -67,6 +67,22 @@ export const useGetSecondaryRecordTableCellButton = () => {
   }
 
   if (isFieldLinks(fieldDefinition)) {
+    const displayAs = fieldDefinition.metadata.settings?.displayAs;
+
+    if (displayAs === 'audio') {
+      const url = (fieldValue as FieldLinksValue).primaryLinkUrl ?? '';
+      copyOnClick = () => {
+        copyToClipboard(url, t`Link copied to clipboard`);
+      };
+
+      return [
+        {
+          onClick: copyOnClick,
+          Icon: IconCopy,
+        },
+      ];
+    }
+
     const url = (fieldValue as FieldLinksValue).primaryLinkUrl ?? '';
     openLinkOnClick = () => {
       window.open(getAbsoluteUrl(url), '_blank');

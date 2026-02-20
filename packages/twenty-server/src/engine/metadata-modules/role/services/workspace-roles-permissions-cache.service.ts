@@ -70,6 +70,7 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
         let canUpdate = role.canUpdateAllObjectRecords;
         let canSoftDelete = role.canSoftDeleteAllObjectRecords;
         let canDestroy = role.canDestroyAllObjectRecords;
+        let showInSidebar = role.showAllObjectsInSidebar;
         const restrictedFields: RestrictedFieldsPermissions = {};
 
         if (
@@ -83,6 +84,7 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
           canUpdate = hasWorkflowsPermissions;
           canSoftDelete = hasWorkflowsPermissions;
           canDestroy = hasWorkflowsPermissions;
+          showInSidebar = hasWorkflowsPermissions;
         } else {
           const objectRecordPermissionsOverride = role.objectPermissions.find(
             (objectPermission) =>
@@ -110,6 +112,9 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
             objectRecordPermissionsOverride?.canDestroyObjectRecords,
             canDestroy,
           );
+          showInSidebar = isSystem
+            ? true
+            : (objectRecordPermissionsOverride?.showInSidebar ?? showInSidebar);
 
           const fieldPermissions = role.fieldPermissions.filter(
             (fieldPermission) =>
@@ -140,6 +145,7 @@ export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvide
           canUpdateObjectRecords: canUpdate,
           canSoftDeleteObjectRecords: canSoftDelete,
           canDestroyObjectRecords: canDestroy,
+          showInSidebar,
           restrictedFields,
           rowLevelPermissionPredicates:
             role.rowLevelPermissionPredicates.filter(
