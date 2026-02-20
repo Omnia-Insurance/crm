@@ -320,9 +320,18 @@ export class ConvosoCallPreprocessor {
       }
 
       // Substring match (full name contained in the other)
+      // Prefer longest matching name (most specific), matching old CRM behavior
       if (labelLower.includes(sourceName) || sourceName.includes(labelLower)) {
-        matchedSource = source;
-        bestMatchWords = 999;
+        if (
+          !matchedSource ||
+          bestMatchWords < 999 ||
+          sourceName.length >
+            ((matchedSource.name as string) || '').toLowerCase().length
+        ) {
+          matchedSource = source;
+          bestMatchWords = 999;
+        }
+
         continue;
       }
 
