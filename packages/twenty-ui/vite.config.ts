@@ -93,6 +93,7 @@ export default defineConfig(({ command }) => {
           '**/LinkChip.tsx',
           '**/Avatar.tsx',
           '**/AvatarChipLeftComponent.tsx',
+          '**/AudioLink.tsx',
           '**/ContactLink.tsx',
           '**/RoundedLink.tsx',
         ],
