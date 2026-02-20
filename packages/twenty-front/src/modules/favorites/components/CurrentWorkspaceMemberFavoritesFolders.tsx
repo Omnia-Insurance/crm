@@ -11,8 +11,6 @@ import { NavigationDrawerAnimatedCollapseWrapper } from '@/ui/navigation/navigat
 import { NavigationDrawerSection } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSection';
 import { NavigationDrawerSectionTitle } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSectionTitle';
 import { useNavigationSection } from '@/ui/navigation/navigation-drawer/hooks/useNavigationSection';
-import { isNavigationSectionOpenFamilyState } from '@/ui/navigation/navigation-drawer/states/isNavigationSectionOpenFamilyState';
-import { useFamilyRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useFamilyRecoilValueV2';
 import { useLingui } from '@lingui/react/macro';
 import { useRecoilValue } from 'recoil';
 import { isDefined } from 'twenty-shared/utils';
@@ -31,12 +29,12 @@ export const CurrentWorkspaceMemberFavoritesFolders = () => {
 
   const { t } = useLingui();
 
-  const { toggleNavigationSection, openNavigationSection } =
-    useNavigationSection('Favorites');
-  const isNavigationSectionOpen = useFamilyRecoilValueV2(
-    isNavigationSectionOpenFamilyState,
-    'Favorites',
-  );
+  const {
+    toggleNavigationSection,
+    isNavigationSectionOpenState,
+    openNavigationSection,
+  } = useNavigationSection('Favorites');
+  const isNavigationSectionOpen = useRecoilValue(isNavigationSectionOpenState);
 
   const toggleNewFolder = () => {
     openNavigationSection();

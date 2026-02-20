@@ -20,11 +20,11 @@ export const NavigationMenuItemFolderContentDispatcherEffect = ({
   favorites,
   navigationMenuItems,
 }: NavigationMenuItemFolderContentDispatcherEffectProps) => {
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
-  if (isNavigationMenuItemEditingEnabled && isDefined(navigationMenuItems)) {
+  if (isNavigationMenuItemEnabled && isDefined(navigationMenuItems)) {
     return (
       <NavigationMenuItemFolderContent
         folderId={folderId}

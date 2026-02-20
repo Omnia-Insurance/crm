@@ -18,8 +18,8 @@ import {
 import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
 
 export const PrefetchRunNavigationMenuItemQueriesEffect = () => {
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
   const showAuthModal = useShowAuthModal();
@@ -37,7 +37,7 @@ export const PrefetchRunNavigationMenuItemQueriesEffect = () => {
       showAuthModal ||
       isSettingsPage ||
       !isWorkspaceActive ||
-      !isNavigationMenuItemEditingEnabled,
+      !isNavigationMenuItemEnabled,
     fetchPolicy: 'cache-and-network',
   });
 

@@ -2,7 +2,7 @@ import { type QueryRunner } from 'typeorm';
 
 import { type WorkspaceSchemaColumnDefinition } from 'src/engine/twenty-orm/workspace-schema-manager/types/workspace-schema-column-definition.type';
 import { buildSqlColumnDefinition } from 'src/engine/twenty-orm/workspace-schema-manager/utils/build-sql-column-definition.util';
-import { escapeIdentifier } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
+import { removeSqlDDLInjection } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 
 export class WorkspaceSchemaTableManagerService {
   async createTable({
@@ -21,13 +21,16 @@ export class WorkspaceSchemaTableManagerService {
         buildSqlColumnDefinition(columnDefinition),
       ) || [];
 
+    // Add default columns if no columns specified
     if (sqlColumnDefinitions.length === 0) {
       sqlColumnDefinitions.push(
         '"id" uuid PRIMARY KEY DEFAULT gen_random_uuid()',
       );
     }
 
-    const sql = `CREATE TABLE IF NOT EXISTS ${escapeIdentifier(schemaName)}.${escapeIdentifier(tableName)} (${sqlColumnDefinitions.join(', ')})`;
+    const safeSchemaName = removeSqlDDLInjection(schemaName);
+    const safeTableName = removeSqlDDLInjection(tableName);
+    const sql = `CREATE TABLE IF NOT EXISTS "${safeSchemaName}"."${safeTableName}" (${sqlColumnDefinitions.join(', ')})`;
 
     await queryRunner.query(sql);
   }
@@ -43,8 +46,10 @@ export class WorkspaceSchemaTableManagerService {
     tableName: string;
     cascade?: boolean;
   }): Promise<void> {
+    const safeSchemaName = removeSqlDDLInjection(schemaName);
+    const safeTableName = removeSqlDDLInjection(tableName);
     const cascadeClause = cascade ? ' CASCADE' : '';
-    const sql = `DROP TABLE IF EXISTS ${escapeIdentifier(schemaName)}.${escapeIdentifier(tableName)}${cascadeClause}`;
+    const sql = `DROP TABLE IF EXISTS "${safeSchemaName}"."${safeTableName}"${cascadeClause}`;
 
     await queryRunner.query(sql);
   }
@@ -60,7 +65,10 @@ export class WorkspaceSchemaTableManagerService {
     oldTableName: string;
     newTableName: string;
   }): Promise<void> {
-    const sql = `ALTER TABLE ${escapeIdentifier(schemaName)}.${escapeIdentifier(oldTableName)} RENAME TO ${escapeIdentifier(newTableName)}`;
+    const safeSchemaName = removeSqlDDLInjection(schemaName);
+    const safeOldTableName = removeSqlDDLInjection(oldTableName);
+    const safeNewTableName = removeSqlDDLInjection(newTableName);
+    const sql = `ALTER TABLE "${safeSchemaName}"."${safeOldTableName}" RENAME TO "${safeNewTableName}"`;
 
     await queryRunner.query(sql);
   }

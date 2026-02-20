@@ -1,12 +1,14 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 
 import { IsIn, IsNotEmpty } from 'class-validator';
-import { type TimelineConfiguration } from 'twenty-shared/types';
 
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import { PageLayoutWidgetConfigurationBase } from 'src/engine/metadata-modules/page-layout-widget/types/page-layout-widget-configurationt-base.type';
 
 @ObjectType('TimelineConfiguration')
-export class TimelineConfigurationDTO implements TimelineConfiguration {
+export class TimelineConfigurationDTO
+  implements PageLayoutWidgetConfigurationBase
+{
   @Field(() => WidgetConfigurationType)
   @IsIn([WidgetConfigurationType.TIMELINE])
   @IsNotEmpty()

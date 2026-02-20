@@ -1,5 +1,5 @@
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { shouldDisplayFormField } from '@/workflow/workflow-steps/workflow-actions/utils/shouldDisplayFormField';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { FieldMetadataType } from 'twenty-shared/types';
 
 const baseField = {
@@ -80,22 +80,13 @@ describe('shouldDisplayFormField', () => {
     expect(result).toBe(true);
   });
 
-  it('returns false for hidden system field', () => {
-    const field = { ...baseField, isSystem: true, name: 'position' };
-    const result = shouldDisplayFormField({
-      fieldMetadataItem: field,
-      actionType: 'UPDATE_RECORD',
-    });
-    expect(result).toBe(false);
-  });
-
-  it('returns true for non hidden system field', () => {
+  it('returns false for system field', () => {
     const field = { ...baseField, isSystem: true };
     const result = shouldDisplayFormField({
       fieldMetadataItem: field,
       actionType: 'UPDATE_RECORD',
     });
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it('throws error on unsupported action', () => {

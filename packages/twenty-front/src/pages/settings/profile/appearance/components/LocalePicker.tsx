@@ -8,7 +8,7 @@ import { getDateFnsLocale } from '@/ui/field/display/utils/getDateFnsLocale.util
 import { Select } from '@/ui/input/components/Select';
 
 import { useRefreshObjectMetadataItems } from '@/object-metadata/hooks/useRefreshObjectMetadataItems';
-import { useStore } from 'jotai';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { useRefreshAllCoreViews } from '@/views/hooks/useRefreshAllCoreViews';
 import { useLingui } from '@lingui/react/macro';
 import { enUS } from 'date-fns/locale';
@@ -27,7 +27,6 @@ const StyledContainer = styled.div`
 
 export const LocalePicker = () => {
   const { t } = useLingui();
-  const store = useStore();
   const [currentWorkspaceMember, setCurrentWorkspaceMember] = useRecoilState(
     currentWorkspaceMemberState,
   );
@@ -71,7 +70,7 @@ export const LocalePicker = () => {
       localeCatalog: dateFnsLocale || enUS,
     };
     setDateLocale(newDateLocale);
-    store.set(dateLocaleStateV2.atom, newDateLocale);
+    jotaiStore.set(dateLocaleStateV2.atom, newDateLocale);
 
     await dynamicActivate(value);
     try {

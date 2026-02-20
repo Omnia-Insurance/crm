@@ -1,8 +1,10 @@
-import { type ColorScheme } from '@/workspace-member/types/WorkspaceMember';
-import { createStateV2 } from '@/ui/utilities/state/jotai/utils/createStateV2';
+import { atom } from 'recoil';
 
-export const persistedColorSchemeState = createStateV2<ColorScheme>({
+import { type ColorScheme } from '@/workspace-member/types/WorkspaceMember';
+import { localStorageEffect } from '~/utils/recoil/localStorageEffect';
+
+export const persistedColorSchemeState = atom<ColorScheme>({
   key: 'persistedColorSchemeState',
-  defaultValue: 'System',
-  useLocalStorage: true,
+  default: 'System',
+  effects: [localStorageEffect()],
 });

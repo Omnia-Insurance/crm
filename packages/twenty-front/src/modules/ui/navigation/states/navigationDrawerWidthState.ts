@@ -1,10 +1,12 @@
+import { atom } from 'recoil';
+
 import { NAVIGATION_DRAWER_CONSTRAINTS } from '@/ui/layout/resizable-panel/constants/NavigationDrawerConstraints';
-import { createStateV2 } from '@/ui/utilities/state/jotai/utils/createStateV2';
+import { localStorageEffect } from '~/utils/recoil/localStorageEffect';
 
 export const NAVIGATION_DRAWER_WIDTH_VAR = '--navigation-drawer-width';
 
-export const navigationDrawerWidthState = createStateV2<number>({
+export const navigationDrawerWidthState = atom<number>({
   key: 'navigationDrawerWidth',
-  defaultValue: NAVIGATION_DRAWER_CONSTRAINTS.default,
-  useLocalStorage: true,
+  default: NAVIGATION_DRAWER_CONSTRAINTS.default,
+  effects: [localStorageEffect()],
 });

@@ -15,8 +15,8 @@ import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotke
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useComponentInstanceStateContext } from '@/ui/utilities/state/component-state/hooks/useComponentInstanceStateContext';
 import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
-import { useSetRecoilComponentStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilComponentStateV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
+import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
 import { t } from '@lingui/core/macro';
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 import { AppPath } from 'twenty-shared/types';
@@ -49,7 +49,7 @@ export const RecordShowRightDrawerOpenRecordButton = ({
     targetObjectId: recordId,
   });
 
-  const activeTabIdInRightDrawer = useRecoilComponentValueV2(
+  const activeTabIdInRightDrawer = useRecoilComponentValue(
     activeTabIdComponentState,
     tabListComponentId,
   );
@@ -58,7 +58,7 @@ export const RecordShowRightDrawerOpenRecordButton = ({
     targetObjectId: recordId,
   });
 
-  const setActiveTabIdInRecordPage = useSetRecoilComponentStateV2(
+  const setActiveTabIdInRecordPage = useSetRecoilComponentState(
     activeTabIdComponentState,
     tabListComponentIdInRecordPage,
   );

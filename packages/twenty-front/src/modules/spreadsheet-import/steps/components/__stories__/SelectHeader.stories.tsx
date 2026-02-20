@@ -10,8 +10,6 @@ import { SelectHeaderStep } from '@/spreadsheet-import/steps/components/SelectHe
 import { SpreadsheetImportStepType } from '@/spreadsheet-import/steps/types/SpreadsheetImportStepType';
 import { DialogComponentInstanceContext } from '@/ui/feedback/dialog-manager/contexts/DialogComponentInstanceContext';
 import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
-import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
-import { Provider as JotaiProvider } from 'jotai';
 import { RecoilRoot } from 'recoil';
 
 const meta: Meta<typeof SelectHeaderStep> = {
@@ -21,21 +19,20 @@ const meta: Meta<typeof SelectHeaderStep> = {
     layout: 'fullscreen',
   },
   decorators: [
-    (Story) => {
-      jotaiStore.set(
-        isModalOpenedComponentState.atomFamily({
-          instanceId: 'select-header-step',
-        }),
-        true,
-      );
-      return (
-        <JotaiProvider store={jotaiStore}>
-          <RecoilRoot>
-            <Story />
-          </RecoilRoot>
-        </JotaiProvider>
-      );
-    },
+    (Story) => (
+      <RecoilRoot
+        initializeState={({ set }) => {
+          set(
+            isModalOpenedComponentState.atomFamily({
+              instanceId: 'select-header-step',
+            }),
+            true,
+          );
+        }}
+      >
+        <Story />
+      </RecoilRoot>
+    ),
   ],
 };
 

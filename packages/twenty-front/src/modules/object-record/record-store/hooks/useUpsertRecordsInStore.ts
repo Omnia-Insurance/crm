@@ -5,7 +5,7 @@ import { type RecordGqlFields } from '@/object-record/graphql/record-gql-fields/
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { recordStoreFamilyStateV2 } from '@/object-record/record-store/states/recordStoreFamilyStateV2';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { useStore } from 'jotai';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { isDefined } from 'twenty-shared/utils';
 import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
 
@@ -15,8 +15,6 @@ type UpsertRecordsInStoreProps = {
 };
 
 export const useUpsertRecordsInStore = () => {
-  const store = useStore();
-
   const upsertRecordsInStore = useRecoilCallback(
     ({ set, snapshot }) =>
       ({ partialRecords, recordGqlFields }: UpsertRecordsInStoreProps) => {
@@ -39,7 +37,7 @@ export const useUpsertRecordsInStore = () => {
               ...filteredPartialRecord,
             };
             set(recordStoreFamilyState(partialRecord.id), newRecord);
-            store.set(
+            jotaiStore.set(
               recordStoreFamilyStateV2.atomFamily(partialRecord.id),
               newRecord,
             );
@@ -59,14 +57,14 @@ export const useUpsertRecordsInStore = () => {
               ...filteredPartialRecord,
             };
             set(recordStoreFamilyState(partialRecord.id), updatedRecord);
-            store.set(
+            jotaiStore.set(
               recordStoreFamilyStateV2.atomFamily(partialRecord.id),
               updatedRecord,
             );
           }
         }
       },
-    [store],
+    [],
   );
 
   return {

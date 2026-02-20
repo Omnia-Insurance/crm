@@ -13,7 +13,6 @@ import { SelectableListItem } from '@/ui/layout/selectable-list/components/Selec
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { ViewKey } from '@/views/types/ViewKey';
 import { ViewType, viewTypeIconMapping } from '@/views/types/ViewType';
@@ -105,7 +104,7 @@ export const ObjectOptionsDropdownCustomView = ({
     'Delete view',
   ];
 
-  const selectedItemId = useRecoilComponentValueV2(
+  const selectedItemId = useRecoilComponentValue(
     selectedItemIdComponentState,
     OBJECT_OPTIONS_DROPDOWN_ID,
   );

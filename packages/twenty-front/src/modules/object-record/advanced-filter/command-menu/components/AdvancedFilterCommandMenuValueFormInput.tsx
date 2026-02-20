@@ -21,7 +21,6 @@ import { RecordFilterOperand } from '@/object-record/record-filter/types/RecordF
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { stringifyRelativeDateFilter } from '@/views/view-filter-value/utils/stringifyRelativeDateFilter';
 import { WORKFLOW_TIMEZONE } from '@/workflow/constants/WorkflowTimeZone';
-import { useFeatureFlagsMap } from '@/workspace/hooks/useFeatureFlagsMap';
 import { isObject, isString } from '@sniptt/guards';
 import { useContext } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
@@ -63,10 +62,6 @@ export const AdvancedFilterCommandMenuValueFormInput = ({
   const { applyObjectFilterDropdownFilterValue } =
     useApplyObjectFilterDropdownFilterValue();
 
-  const featureFlags = useFeatureFlagsMap();
-  const isWholeDayFilterEnabled =
-    featureFlags.IS_DATE_TIME_WHOLE_DAY_FILTER_ENABLED ?? false;
-
   const handleChange = (newValue: JsonValue) => {
     if (isString(newValue)) {
       applyObjectFilterDropdownFilterValue(newValue);
@@ -75,10 +70,6 @@ export const AdvancedFilterCommandMenuValueFormInput = ({
     } else {
       applyObjectFilterDropdownFilterValue(String(newValue));
     }
-  };
-
-  const handleClear = () => {
-    applyObjectFilterDropdownFilterValue('');
   };
 
   const handleRelativeDateFilterChange = (newValue: RelativeDateFilter) => {
@@ -148,7 +139,6 @@ export const AdvancedFilterCommandMenuValueFormInput = ({
       <AdvancedFilterCommandMenuValueFormCompositeFieldInput
         recordFilter={recordFilter}
         onChange={handleChange}
-        onClear={handleClear}
       />
     );
   }
@@ -188,12 +178,7 @@ export const AdvancedFilterCommandMenuValueFormInput = ({
   }
 
   const field = {
-    type:
-      isWholeDayFilterEnabled === true &&
-      recordFilter.type === FieldMetadataType.DATE_TIME &&
-      recordFilter.operand === RecordFilterOperand.IS
-        ? FieldMetadataType.DATE
-        : (recordFilter.type as FieldMetadataType),
+    type: recordFilter.type as FieldMetadataType,
     label: '',
     metadata: fieldDefinition?.metadata as FieldMetadata,
   };

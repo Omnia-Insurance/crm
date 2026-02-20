@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 
-import { isNonEmptyString } from '@sniptt/guards';
 import { type gmail_v1 } from 'googleapis';
 
 import { MESSAGING_GMAIL_USERS_HISTORY_MAX_RESULT } from 'src/modules/messaging/message-import-manager/drivers/gmail/constants/messaging-gmail-users-history-max-result.constant';
@@ -15,6 +14,8 @@ export class GmailGetHistoryService {
   public async getHistory(
     gmailClient: gmail_v1.Gmail,
     lastSyncHistoryId: string,
+    historyTypes?: ('messageAdded' | 'messageDeleted')[],
+    labelId?: string,
   ): Promise<{
     history: gmail_v1.Schema$History[];
     historyId?: string | null;
@@ -31,12 +32,8 @@ export class GmailGetHistoryService {
           maxResults: MESSAGING_GMAIL_USERS_HISTORY_MAX_RESULT,
           pageToken,
           startHistoryId: lastSyncHistoryId,
-          historyTypes: [
-            'messageAdded',
-            'messageDeleted',
-            'labelAdded',
-            'labelRemoved',
-          ],
+          historyTypes: historyTypes || ['messageAdded', 'messageDeleted'],
+          labelId,
         })
         .catch((error) => {
           this.gmailMessageListFetchErrorHandler.handleError(error);
@@ -80,16 +77,12 @@ export class GmailGetHistoryService {
         const messagesAdded = history.messagesAdded?.map(
           (messageAdded) => messageAdded.message?.id || '',
         );
-        const labelsAdded = history.labelsAdded?.map(
-          (labelAdded) => labelAdded.message?.id || '',
-        );
 
         const messagesDeleted = history.messagesDeleted?.map(
           (messageDeleted) => messageDeleted.message?.id || '',
         );
 
         if (messagesAdded) acc.messagesAdded.push(...messagesAdded);
-        if (labelsAdded) acc.messagesAdded.push(...labelsAdded);
         if (messagesDeleted) acc.messagesDeleted.push(...messagesDeleted);
 
         return acc;
@@ -98,18 +91,16 @@ export class GmailGetHistoryService {
     );
 
     const uniqueMessagesAdded = messagesAdded.filter(
-      (messageId) =>
-        isNonEmptyString(messageId) && !messagesDeleted.includes(messageId),
+      (messageId) => !messagesDeleted.includes(messageId),
     );
 
     const uniqueMessagesDeleted = messagesDeleted.filter(
-      (messageId) =>
-        isNonEmptyString(messageId) && !messagesAdded.includes(messageId),
+      (messageId) => !messagesAdded.includes(messageId),
     );
 
     return {
-      messagesAdded: [...new Set(uniqueMessagesAdded)],
-      messagesDeleted: [...new Set(uniqueMessagesDeleted)],
+      messagesAdded: uniqueMessagesAdded,
+      messagesDeleted: uniqueMessagesDeleted,
     };
   }
 }

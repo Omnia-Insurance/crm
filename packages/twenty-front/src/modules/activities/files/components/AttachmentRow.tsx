@@ -22,8 +22,8 @@ import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFla
 import { IconCalendar, OverflowingTextWithTooltip } from 'twenty-ui/display';
 import { isNavigationModifierPressed } from 'twenty-ui/utilities';
 import {
-  FeatureFlagKey,
   PermissionFlagType,
+  FeatureFlagKey,
 } from '~/generated-metadata/graphql';
 import { formatToHumanReadableDate } from '~/utils/date-utils';
 import { getFileNameAndExtension } from '~/utils/file/getFileNameAndExtension';
@@ -96,11 +96,7 @@ export const AttachmentRow = ({
   );
 
   const { name: originalFileName, extension: attachmentFileExtension } =
-    getFileNameAndExtension(
-      isFilesFieldMigrated
-        ? (attachment.file?.[0]?.label as string)
-        : attachment.name,
-    );
+    getFileNameAndExtension(attachment.name);
 
   const [attachmentFileName, setAttachmentFileName] =
     useState(originalFileName);
@@ -210,9 +206,7 @@ export const AttachmentRow = ({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <OverflowingTextWithTooltip
-                  text={`${attachmentFileName}${attachmentFileExtension}`}
-                />
+                <OverflowingTextWithTooltip text={attachment.name} />
               </StyledLink>
             </StyledLinkContainer>
           )}

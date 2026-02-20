@@ -2,8 +2,8 @@ import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataIte
 import { FILTER_FIELD_LIST_ID } from '@/object-record/object-filter-dropdown/constants/FilterFieldListId';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { useSelectableList } from '@/ui/layout/selectable-list/hooks/useSelectableList';
-import { isSelectedItemIdComponentFamilyState } from '@/ui/layout/selectable-list/states/isSelectedItemIdComponentFamilyState';
-import { useRecoilComponentFamilyValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentFamilyValueV2';
+import { isSelectedItemIdComponentFamilySelector } from '@/ui/layout/selectable-list/states/selectors/isSelectedItemIdComponentFamilySelector';
+import { useRecoilComponentFamilyValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentFamilyValue';
 import { useInitializeFilterOnFieldMetadataItemFromViewBarFilterDropdown } from '@/views/hooks/useInitializeFilterOnFieldMetadataItemFromViewBarFilterDropdown';
 import { useIcons } from 'twenty-ui/display';
 import { MenuItem } from 'twenty-ui/navigation';
@@ -17,8 +17,8 @@ export const ViewBarFilterDropdownFieldSelectMenuItem = ({
 }: ViewBarFilterDropdownFieldSelectMenuItemProps) => {
   const { resetSelectedItem } = useSelectableList(FILTER_FIELD_LIST_ID);
 
-  const isSelectedItem = useRecoilComponentFamilyValueV2(
-    isSelectedItemIdComponentFamilyState,
+  const isSelectedItem = useRecoilComponentFamilyValue(
+    isSelectedItemIdComponentFamilySelector,
     fieldMetadataItemToSelect.id,
   );
 

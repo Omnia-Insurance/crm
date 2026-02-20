@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { useRegisterInputEvents } from '@/object-record/record-field/ui/meta-types/input/hooks/useRegisterInputEvents';
 import {
@@ -9,7 +9,7 @@ import {
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { currentFocusIdSelector } from '@/ui/utilities/focus/states/currentFocusIdSelector';
-import { useStore } from 'jotai';
+import { useRecoilCallback } from 'recoil';
 import { type Temporal } from 'temporal-polyfill';
 import { type Nullable } from 'twenty-ui/utilities';
 
@@ -41,8 +41,6 @@ export const DateTimeInput = ({
   onSubmit,
   hideHeaderInput,
 }: DateTimeInputProps) => {
-  const store = useStore();
-
   const [internalValue, setInternalValue] = useState(value);
   const { userTimezone } = useUserTimezone();
 
@@ -80,23 +78,25 @@ export const DateTimeInput = ({
     onEscape(internalValue);
   };
 
-  const handleClickOutside = useCallback(
-    (event: MouseEvent | TouchEvent) => {
-      const currentFocusId = store.get(currentFocusIdSelector.atom);
+  const handleClickOutside = useRecoilCallback(
+    ({ snapshot }) =>
+      (event: MouseEvent | TouchEvent) => {
+        const currentFocusId = snapshot
+          .getLoadable(currentFocusIdSelector)
+          .getValue();
 
-      if (currentFocusId === instanceId) {
-        closeDropdownYearSelect(MONTH_AND_YEAR_DROPDOWN_YEAR_SELECT_ID);
-        closeDropdownMonthSelect(MONTH_AND_YEAR_DROPDOWN_MONTH_SELECT_ID);
-        onClickOutside(event, internalValue);
-      }
-    },
+        if (currentFocusId === instanceId) {
+          closeDropdownYearSelect(MONTH_AND_YEAR_DROPDOWN_YEAR_SELECT_ID);
+          closeDropdownMonthSelect(MONTH_AND_YEAR_DROPDOWN_MONTH_SELECT_ID);
+          onClickOutside(event, internalValue);
+        }
+      },
     [
       instanceId,
       closeDropdownYearSelect,
       closeDropdownMonthSelect,
       onClickOutside,
       internalValue,
-      store,
     ],
   );
 

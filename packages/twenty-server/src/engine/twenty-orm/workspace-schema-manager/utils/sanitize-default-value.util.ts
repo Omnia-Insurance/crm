@@ -1,9 +1,4 @@
-import { escapeLiteral } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
-
-const ALLOWED_DEFAULT_FUNCTIONS = new Set([
-  'public.uuid_generate_v4()',
-  'now()',
-]);
+import { removeSqlDDLInjection } from 'src/engine/workspace-manager/workspace-migration/utils/remove-sql-injection.util';
 
 export const sanitizeDefaultValue = (
   defaultValue: string | number | boolean | null,
@@ -12,12 +7,14 @@ export const sanitizeDefaultValue = (
     return 'NULL';
   }
 
+  const allowedFunctions = ['public.uuid_generate_v4()', 'now()'];
+
   if (typeof defaultValue === 'string') {
-    if (ALLOWED_DEFAULT_FUNCTIONS.has(defaultValue.toLowerCase())) {
+    if (allowedFunctions.includes(defaultValue.toLowerCase())) {
       return defaultValue;
     }
 
-    return escapeLiteral(defaultValue);
+    return `'${removeSqlDDLInjection(defaultValue)}'`;
   }
 
   return defaultValue;

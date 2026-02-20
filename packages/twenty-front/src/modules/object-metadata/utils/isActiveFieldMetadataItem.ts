@@ -1,6 +1,5 @@
 import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 
 type IsFieldMetadataAvailableForViewFieldArgs = {
   objectNameSingular: string;
@@ -24,7 +23,7 @@ export const isActiveFieldMetadataItem = ({
     return true;
   }
 
-  if (isHiddenSystemField(fieldMetadata)) {
+  if (fieldMetadata.isSystem === true) {
     return false;
   }
 

@@ -1,12 +1,9 @@
-import { Temporal } from 'temporal-polyfill';
-
 import { useGetDateFilterDisplayValue } from '@/object-record/object-filter-dropdown/hooks/useGetDateFilterDisplayValue';
 import { useGetDateTimeFilterDisplayValue } from '@/object-record/object-filter-dropdown/hooks/useGetDateTimeFilterDisplayValue';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { RecordFilterOperand } from '@/object-record/record-filter/types/RecordFilterOperand';
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
-import { useFeatureFlagsMap } from '@/workspace/hooks/useFeatureFlagsMap';
-
+import { Temporal } from 'temporal-polyfill';
 import { type FilterableAndTSVectorFieldType } from 'twenty-shared/types';
 
 const activeDatePickerOperands = [
@@ -19,9 +16,6 @@ export const useGetInitialFilterValue = () => {
   const { userTimezone } = useUserTimezone();
   const { getDateFilterDisplayValue } = useGetDateFilterDisplayValue();
   const { getDateTimeFilterDisplayValue } = useGetDateTimeFilterDisplayValue();
-  const featureFlags = useFeatureFlagsMap();
-  const isWholeDayFilterEnabled =
-    featureFlags.IS_DATE_TIME_WHOLE_DAY_FILTER_ENABLED ?? false;
 
   const getInitialFilterValue = (
     newType: FilterableAndTSVectorFieldType,
@@ -49,17 +43,6 @@ export const useGetInitialFilterValue = () => {
           const referenceDate =
             alreadyExistingZonedDateTime ??
             Temporal.Now.zonedDateTimeISO(userTimezone);
-
-          if (
-            isWholeDayFilterEnabled === true &&
-            newOperand === RecordFilterOperand.IS
-          ) {
-            const value = referenceDate.toPlainDate().toString();
-
-            const { displayValue } = getDateFilterDisplayValue(referenceDate);
-
-            return { value, displayValue };
-          }
 
           const value = referenceDate.toInstant().toString();
 

@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { Provider as JotaiProvider } from 'jotai';
 import { RecoilRoot } from 'recoil';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -7,11 +6,7 @@ import { DialogComponentInstanceContext } from '@/ui/feedback/dialog-manager/con
 import { useDialogManager } from '@/ui/feedback/dialog-manager/hooks/useDialogManager';
 import { dialogInternalComponentState } from '@/ui/feedback/dialog-manager/states/dialogInternalComponentState';
 import { type DialogOptions } from '@/ui/feedback/dialog-manager/types/DialogOptions';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
-import {
-  jotaiStore,
-  resetJotaiStore,
-} from '@/ui/utilities/state/jotai/jotaiStore';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 
 const mockedUuid = 'mocked-uuid';
 jest.mock('uuid');
@@ -20,13 +15,11 @@ jest.mock('uuid');
 
 const Wrapper = ({ children }: { children: React.ReactNode }) => (
   <RecoilRoot>
-    <JotaiProvider store={jotaiStore}>
-      <DialogComponentInstanceContext.Provider
-        value={{ instanceId: 'dialog-manager' }}
-      >
-        {children}
-      </DialogComponentInstanceContext.Provider>
-    </JotaiProvider>
+    <DialogComponentInstanceContext.Provider
+      value={{ instanceId: 'dialog-manager' }}
+    >
+      {children}
+    </DialogComponentInstanceContext.Provider>
   </RecoilRoot>
 );
 
@@ -84,7 +77,7 @@ const renderHooks = () => {
   const { result } = renderHook(
     () => ({
       dialogManager: useDialogManager(),
-      dialogInternal: useRecoilComponentValueV2(dialogInternalComponentState),
+      dialogInternal: useRecoilComponentValue(dialogInternalComponentState),
     }),
     renderHookConfig,
   );
@@ -102,10 +95,6 @@ const expectedReturnFromEnqueue = (
 };
 
 describe('useDialogManager', () => {
-  beforeEach(() => {
-    resetJotaiStore();
-  });
-
   describe('tests for useDialogManager - enqueueDialog', () => {
     it('Should enqueueDialog', () => {
       const result = renderHooks();

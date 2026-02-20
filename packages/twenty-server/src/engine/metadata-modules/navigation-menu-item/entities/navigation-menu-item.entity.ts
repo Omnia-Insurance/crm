@@ -97,7 +97,7 @@ export class NavigationMenuItemEntity
   @Column({ nullable: true, type: 'uuid' })
   folderId: string | null;
 
-  @Column({ nullable: false, type: 'double precision' })
+  @Column({ nullable: false })
   position: number;
 
   @CreateDateColumn({ type: 'timestamptz' })

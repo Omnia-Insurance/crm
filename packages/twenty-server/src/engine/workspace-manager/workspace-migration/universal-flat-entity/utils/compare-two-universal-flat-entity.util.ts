@@ -28,7 +28,6 @@ export const compareTwoFlatEntity = <T extends AllMetadataName>({
     [fromUniversalFlatEntity, toUniversalFlatEntity].map(
       (universalFlatEntity) =>
         transformUniversalFlatEntityForComparison({
-          metadataName,
           universalFlatEntity,
           propertiesToCompare,
           propertiesToStringify,

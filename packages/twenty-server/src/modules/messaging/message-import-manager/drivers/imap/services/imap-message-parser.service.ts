@@ -9,11 +9,6 @@ export type MessageParseResult = {
   error?: Error;
 };
 
-export type FolderParseResult = {
-  messages: MessageParseResult[];
-  uidValidity: bigint | null;
-};
-
 @Injectable()
 export class ImapMessageParserService {
   private readonly logger = new Logger(ImapMessageParserService.name);
@@ -22,19 +17,14 @@ export class ImapMessageParserService {
     messageUids: number[],
     folderPath: string,
     client: ImapFlow,
-  ): Promise<FolderParseResult> {
+  ): Promise<MessageParseResult[]> {
     if (!messageUids.length) {
-      return { messages: [], uidValidity: null };
+      return [];
     }
 
     const lock = await client.getMailboxLock(folderPath);
 
     try {
-      const uidValidity =
-        client.mailbox && typeof client.mailbox !== 'boolean'
-          ? client.mailbox.uidValidity
-          : null;
-
       const uidSet = messageUids.join(',');
       const startTime = Date.now();
 
@@ -62,16 +52,13 @@ export class ImapMessageParserService {
         `Fetched and parsed ${results.length} messages from ${folderPath} in ${Date.now() - startTime}ms`,
       );
 
-      return { messages: results, uidValidity };
+      return results;
     } catch (error) {
       this.logger.error(
         `Failed to parse messages from folder ${folderPath}: ${error.message}`,
       );
 
-      return {
-        messages: this.createErrorResults(messageUids, error as Error),
-        uidValidity: null,
-      };
+      return this.createErrorResults(messageUids, error as Error);
     } finally {
       lock.release();
     }

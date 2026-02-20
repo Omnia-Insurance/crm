@@ -1,5 +1,4 @@
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { TABLE_COLUMNS_DENY_LIST } from '@/object-record/constants/TableColumnsDenyList';
 import { useMemo } from 'react';
 
@@ -17,7 +16,7 @@ export const useAvailableFieldMetadataItems = ({
       objectMetadataItem.readableFields.filter((fieldMetadataItemToFilter) => {
         return (
           fieldMetadataItemToFilter.isActive &&
-          !isHiddenSystemField(fieldMetadataItemToFilter) &&
+          !fieldMetadataItemToFilter.isSystem &&
           !TABLE_COLUMNS_DENY_LIST.includes(fieldMetadataItemToFilter.name)
         );
       }),
