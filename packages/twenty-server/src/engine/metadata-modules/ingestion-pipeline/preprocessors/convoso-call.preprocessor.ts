@@ -438,8 +438,8 @@ export class ConvosoCallPreprocessor {
     return this.listMap?.[listId] ?? null;
   }
 
-  // Convoso API returns dates in America/Los_Angeles local time (e.g. "2026-02-19 09:45:09").
-  // Convert to UTC ISO string, handling PST (UTC-8) and PDT (UTC-7) correctly.
+  // Convoso API returns dates in America/New_York local time (account Default GMT).
+  // Convert to UTC ISO string, handling EST (UTC-5) and EDT (UTC-4) correctly.
   private convertConvosoDateToISO(dateStr: string | undefined): string | null {
     if (!dateStr) return null;
 
@@ -464,29 +464,29 @@ export class ConvosoCallPreprocessor {
       secondStr,
     ].map(Number);
 
-    // Try PST (UTC-8) first — standard time (Nov–Mar)
-    const asPst = new Date(
-      Date.UTC(year, month - 1, day, hour + 8, minute, second),
+    // Try EST (UTC-5) first — standard time (Nov–Mar)
+    const asEst = new Date(
+      Date.UTC(year, month - 1, day, hour + 5, minute, second),
     );
 
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Los_Angeles',
+      timeZone: 'America/New_York',
       hour: 'numeric',
       hour12: false,
-    }).formatToParts(asPst);
+    }).formatToParts(asEst);
 
-    const laHour = parseInt(
+    const nyHour = parseInt(
       parts.find((p) => p.type === 'hour')?.value || '0',
       10,
     );
 
-    if (laHour === hour) {
-      return asPst.toISOString();
+    if (nyHour === hour) {
+      return asEst.toISOString();
     }
 
-    // Fall back to PDT (UTC-7)
+    // Fall back to EDT (UTC-4)
     return new Date(
-      Date.UTC(year, month - 1, day, hour + 7, minute, second),
+      Date.UTC(year, month - 1, day, hour + 4, minute, second),
     ).toISOString();
   }
 
