@@ -85,9 +85,14 @@ export class ConvosoCallPreprocessor {
       return null;
     }
 
-    // Normalize system user IDs to the primary one (666666) so the
-    // user_id -> agentProfile relation mapping resolves to the System agent
-    if (userId && SYSTEM_USER_IDS.has(userId) && callType.includes('IN')) {
+    // Assign calls to the System agent profile when no human agent handled them:
+    // - Calls from known Convoso system user IDs (e.g. "System DID User")
+    // - Calls with an "After Hours" status (queue was closed, no agent available)
+    const statusName = (payload.status_name || '').toLowerCase();
+    const isSystemUser = userId ? SYSTEM_USER_IDS.has(userId) : false;
+    const isAfterHours = statusName.includes('after hours');
+
+    if ((isSystemUser || isAfterHours) && callType.includes('IN')) {
       payload.user_id = '666666';
     }
 
