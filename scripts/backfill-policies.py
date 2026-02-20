@@ -261,9 +261,21 @@ def normalize_phone(phone_str):
 def build_policy_input(policy, person_id):
     policy_number = policy.get("policy_number") or ""
     product_name = policy.get("product_name") or ""
+    carrier_name = policy.get("carrier_name") or ""
+
+    # Build display name: "Carrier - Product" (best effort from old CRM data)
+    if carrier_name and product_name:
+        display_name = f"{carrier_name} - {product_name}"
+    elif carrier_name:
+        display_name = f"{carrier_name} - Unknown"
+    elif product_name:
+        display_name = f"Unknown - {product_name}"
+    else:
+        display_name = "Policy"
 
     inp = {
-        "name": policy_number or product_name or "Policy",
+        "name": display_name,
+        "policyNumber": policy_number,
         "leadId": person_id,
         "oldCrmPolicyId": str(policy["policy_id"]),
     }
@@ -294,7 +306,6 @@ def build_policy_input(policy, person_id):
     if exp and exp != "0000-00-00":
         inp["expirationDate"] = exp
 
-    carrier_name = policy.get("carrier_name")
     if carrier_name:
         cid = find_or_create_carrier(carrier_name)
         if cid:

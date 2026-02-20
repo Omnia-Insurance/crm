@@ -52,15 +52,84 @@ export class HealthSherpaPolicyPreprocessor {
       throw new Error('Failed to find or create Person for policy');
     }
 
-    // 3. Inject computed fields into payload
+    // 3. Compute display name: "<Carrier> - <ProductType>"
+    const displayName = await this.computePolicyDisplayName(
+      payload,
+      workspaceId,
+    );
+
+    // 4. Inject computed fields into payload
     return {
       ...payload,
       _personId: person.id, // For leadId mapping
       _source: 'healthsherpa', // For externalSource mapping
       _now: new Date().toISOString(), // For lastExternalSync mapping
       _usd: 'USD', // For premium.currencyCode mapping
+      _displayName: displayName, // For name mapping (Carrier - ProductType)
+      _policyNumber: payload.application_id || '', // For policyNumber mapping
       member_phone: normalizedPhone, // Replace with normalized version
     };
+  }
+
+  private async computePolicyDisplayName(
+    payload: HealthSherpaWebhookPayload,
+    workspaceId: string,
+  ): Promise<string> {
+    const carrierName = payload.carrier_name?.toString().trim() || '';
+    let productTypeName = '';
+
+    // Look up ProductType through Product -> ProductType chain
+    if (payload.plan_name) {
+      try {
+        const productRepo =
+          await this.globalWorkspaceOrmManager.getRepository(
+            workspaceId,
+            'product',
+            { shouldBypassPermissionChecks: true },
+          );
+
+        const product = await productRepo.findOne({
+          where: { name: payload.plan_name },
+        });
+
+        if (isDefined(product)) {
+          const productTypeId = (product as Record<string, unknown>)
+            .productTypeId as string | undefined;
+
+          if (productTypeId) {
+            const productTypeRepo =
+              await this.globalWorkspaceOrmManager.getRepository(
+                workspaceId,
+                'productType',
+                { shouldBypassPermissionChecks: true },
+              );
+
+            const productType = await productTypeRepo.findOne({
+              where: { id: productTypeId },
+            });
+
+            if (isDefined(productType)) {
+              productTypeName =
+                ((productType as Record<string, unknown>).name as string) || '';
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to resolve product type: ${error}`);
+      }
+    }
+
+    const carrier = carrierName || 'Unknown';
+    const productType = productTypeName || 'Unknown';
+
+    // Don't return "Unknown - Unknown" — fall back to plan_name or application_id
+    if (!carrierName && !productTypeName) {
+      return (
+        payload.plan_name || payload.application_id || 'Unknown - Unknown'
+      );
+    }
+
+    return `${carrier} - ${productType}`;
   }
 
   private async findOrCreatePerson(

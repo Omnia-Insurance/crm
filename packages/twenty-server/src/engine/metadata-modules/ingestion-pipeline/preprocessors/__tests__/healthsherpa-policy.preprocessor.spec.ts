@@ -9,6 +9,8 @@ describe('HealthSherpaPolicyPreprocessor', () => {
   let mockWorkspaceOrmManager: jest.Mocked<GlobalWorkspaceOrmManager>;
   let mockPersonRepo: any;
   let mockAgentRepo: any;
+  let mockProductRepo: any;
+  let mockProductTypeRepo: any;
 
   const mockPipeline = {
     id: 'pipeline-123',
@@ -30,11 +32,21 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       findOne: jest.fn(),
     };
 
+    mockProductRepo = {
+      findOne: jest.fn(),
+    };
+
+    mockProductTypeRepo = {
+      findOne: jest.fn(),
+    };
+
     // Mock GlobalWorkspaceOrmManager
     mockWorkspaceOrmManager = {
       getRepository: jest.fn((_, objectName) => {
         if (objectName === 'person') return mockPersonRepo;
         if (objectName === 'agentProfile') return mockAgentRepo;
+        if (objectName === 'product') return mockProductRepo;
+        if (objectName === 'productType') return mockProductTypeRepo;
         return {};
       }),
     } as any;
@@ -421,6 +433,151 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       expect(result._usd).toBe('USD');
       expect(result._now).toBeDefined();
       expect(new Date(result._now as string)).toBeInstanceOf(Date);
+      expect(result._displayName).toBeDefined();
+      expect(result._policyNumber).toBe('app-123');
+    });
+  });
+
+  describe('Display Name Computation', () => {
+    it('should compute display name as "Carrier - ProductType"', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+      mockProductRepo.findOne.mockResolvedValue({
+        id: 'product-1',
+        productTypeId: 'pt-1',
+      });
+      mockProductTypeRepo.findOne.mockResolvedValue({
+        id: 'pt-1',
+        name: 'Major Medical',
+      });
+
+      const payload = {
+        application_id: 'app-123',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+        carrier_name: 'Oscar',
+        plan_name: 'Oscar Gold 2026',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._displayName).toBe('Oscar - Major Medical');
+    });
+
+    it('should use "Unknown" for missing product type', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+      mockProductRepo.findOne.mockResolvedValue({
+        id: 'product-1',
+        productTypeId: null,
+      });
+
+      const payload = {
+        application_id: 'app-123',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+        carrier_name: 'Ambetter',
+        plan_name: 'Some Plan',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._displayName).toBe('Ambetter - Unknown');
+    });
+
+    it('should use "Unknown" for missing carrier', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+      mockProductRepo.findOne.mockResolvedValue({
+        id: 'product-1',
+        productTypeId: 'pt-1',
+      });
+      mockProductTypeRepo.findOne.mockResolvedValue({
+        id: 'pt-1',
+        name: 'Dental',
+      });
+
+      const payload = {
+        application_id: 'app-123',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+        plan_name: 'Delta Dental Plan',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._displayName).toBe('Unknown - Dental');
+    });
+
+    it('should fall back to plan_name when neither carrier nor product type available', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+      mockProductRepo.findOne.mockResolvedValue(null);
+
+      const payload = {
+        application_id: 'app-123',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+        plan_name: 'Some Plan Name',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._displayName).toBe('Some Plan Name');
+    });
+
+    it('should fall back to application_id when nothing else available', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+
+      const payload = {
+        application_id: 'app-999',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._displayName).toBe('app-999');
+    });
+
+    it('should set _policyNumber from application_id', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+
+      const payload = {
+        application_id: '7746000833',
+        member_phone: '5551234567',
+        member_first_name: 'John',
+        member_last_name: 'Doe',
+      };
+
+      const result = await preprocessor.preProcess(
+        payload,
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(result._policyNumber).toBe('7746000833');
     });
   });
 });

@@ -135,18 +135,26 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         position: 2,
       },
 
+      // Policy display name (computed by preprocessor: "Carrier - ProductType")
+      {
+        pipelineId,
+        sourceFieldPath: '_displayName',
+        targetFieldName: 'name',
+        position: 3,
+      },
+
       // Policy basic info
       {
         pipelineId,
-        sourceFieldPath: 'plan_name',
-        targetFieldName: 'policyNumber', // Use plan name as policy number
-        position: 3,
+        sourceFieldPath: '_policyNumber', // application_id injected by preprocessor
+        targetFieldName: 'policyNumber',
+        position: 4,
       },
       {
         pipelineId,
         sourceFieldPath: 'plan_hios_id',
         targetFieldName: 'planIdentifier',
-        position: 4,
+        position: 5,
       },
 
       // Policy status (with mapping transform)
@@ -158,7 +166,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
           type: 'map',
           mapping: POLICY_STATUS_MAPPING,
         },
-        position: 5,
+        position: 6,
       },
 
       // Dates
@@ -166,13 +174,13 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         pipelineId,
         sourceFieldPath: 'effective_date',
         targetFieldName: 'effectiveDate',
-        position: 6,
+        position: 7,
       },
       {
         pipelineId,
         sourceFieldPath: 'expiration_date',
         targetFieldName: 'expirationDate',
-        position: 7,
+        position: 8,
       },
 
       // Premium (convert dollars to micros)
@@ -185,7 +193,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
           type: 'multiply',
           factor: 1000000, // Convert dollars to micros
         },
-        position: 8,
+        position: 9,
       },
       {
         pipelineId,
@@ -196,7 +204,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
           type: 'static',
           value: 'USD',
         },
-        position: 9,
+        position: 10,
       },
 
       // Payment tracking
@@ -204,7 +212,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         pipelineId,
         sourceFieldPath: 'payment_status',
         targetFieldName: 'paymentStatus',
-        position: 10,
+        position: 11,
       },
 
       // Member identifiers (array)
@@ -215,7 +223,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         transform: {
           type: 'json_array', // Ensure it's stored as JSON array
         },
-        position: 11,
+        position: 12,
       },
 
       // Sync metadata
@@ -223,7 +231,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         pipelineId,
         sourceFieldPath: '_now', // Will be set to current timestamp in preprocessor
         targetFieldName: 'lastExternalSync',
-        position: 12,
+        position: 13,
       },
 
       // Relations: Carrier (find or create)
@@ -234,7 +242,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         relationTargetObjectName: 'carrier',
         relationMatchFieldName: 'name',
         relationAutoCreate: true, // Auto-create carrier if not exists
-        position: 13,
+        position: 14,
       },
 
       // Relations: Product (find or create)
@@ -245,7 +253,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         relationTargetObjectName: 'product',
         relationMatchFieldName: 'name',
         relationAutoCreate: true, // Auto-create product if not exists
-        position: 14,
+        position: 15,
       },
 
       // Relations: Agent (find by NPN)
@@ -256,7 +264,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         relationTargetObjectName: 'agentProfile',
         relationMatchFieldName: 'npn', // Assuming AgentProfile has NPN field
         relationAutoCreate: false, // Don't auto-create agents
-        position: 15,
+        position: 16,
       },
 
       // Relations: Person/Lead (will be set by preprocessor after smart matching)
@@ -264,7 +272,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         pipelineId,
         sourceFieldPath: '_personId', // Injected by preprocessor
         targetFieldName: 'leadId',
-        position: 16,
+        position: 17,
       },
     ];
   }
@@ -273,7 +281,8 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
     this.logger.log('Field Mappings:');
     this.logger.log('  application_id → applicationId');
     this.logger.log('  policy_id → externalPolicyId');
-    this.logger.log('  plan_name → policyNumber');
+    this.logger.log('  _displayName → name (Carrier - ProductType)');
+    this.logger.log('  _policyNumber → policyNumber');
     this.logger.log('  plan_hios_id → planIdentifier');
     this.logger.log('  policy_status → status (with mapping)');
     this.logger.log('  effective_date → effectiveDate');
