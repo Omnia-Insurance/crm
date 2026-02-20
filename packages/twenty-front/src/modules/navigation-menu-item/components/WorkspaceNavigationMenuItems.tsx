@@ -28,7 +28,7 @@ import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavi
 import { useRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilStateV2';
 import { useRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilValueV2';
 import { useSetRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilStateV2';
-import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
+import { useStore } from 'jotai';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
@@ -43,6 +43,7 @@ const StyledRightIconsContainer = styled.div`
 
 export const WorkspaceNavigationMenuItems = () => {
   const items = useWorkspaceSectionItems();
+  const store = useStore();
   const enterEditMode = useRecoilCallback(
     ({ snapshot }) =>
       () => {
@@ -52,13 +53,13 @@ export const WorkspaceNavigationMenuItems = () => {
         const workspaceNavigationMenuItems = filterWorkspaceNavigationMenuItems(
           prefetchNavigationMenuItems,
         );
-        jotaiStore.set(
+        store.set(
           navigationMenuItemsDraftStateV2.atom,
           workspaceNavigationMenuItems,
         );
-        jotaiStore.set(isNavigationMenuInEditModeStateV2.atom, true);
+        store.set(isNavigationMenuInEditModeStateV2.atom, true);
       },
-    [],
+    [store],
   );
   const isNavigationMenuItemEditingFeatureEnabled = useIsFeatureEnabled(
     FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
