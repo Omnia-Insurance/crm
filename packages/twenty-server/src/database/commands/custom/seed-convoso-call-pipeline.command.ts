@@ -73,8 +73,7 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
     const pipeline = await this.pipelineRepository.save({
       workspaceId,
       name: 'Convoso Call Sync',
-      description:
-        'Automatically ingest call data from Convoso webhooks',
+      description: 'Automatically ingest call data from Convoso webhooks',
       mode: 'push',
       targetObjectNameSingular: 'call',
       webhookSecret,
@@ -250,6 +249,28 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
         relationAutoCreate: false,
         position: 14,
       },
+
+      // 16. recording[0].public_url -> recording.primaryLinkUrl
+      {
+        pipelineId,
+        sourceFieldPath: 'recording[0].public_url',
+        targetFieldName: 'recording',
+        targetCompositeSubField: 'primaryLinkUrl',
+        position: 15,
+      },
+
+      // 17. recording[0].public_url -> recording.primaryLinkLabel (static: "Play Recording")
+      {
+        pipelineId,
+        sourceFieldPath: 'recording[0].public_url',
+        targetFieldName: 'recording',
+        targetCompositeSubField: 'primaryLinkLabel',
+        transform: {
+          type: 'static',
+          value: 'Play Recording',
+        },
+        position: 16,
+      },
     ];
   }
 
@@ -262,13 +283,29 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
     this.logger.log('  status → status (sanitizeNull)');
     this.logger.log('  status_name → statusName (sanitizeNull)');
     this.logger.log('  queue_name → queueName (sanitizeNull)');
-    this.logger.log('  _direction → direction (preprocessor: INBOUND/OUTBOUND)');
+    this.logger.log(
+      '  _direction → direction (preprocessor: INBOUND/OUTBOUND)',
+    );
     this.logger.log('  _name → name (preprocessor: Direction - Label)');
-    this.logger.log('  _personId → leadId (preprocessor: find/create Person by phone)');
-    this.logger.log('  _leadSourceId → leadSourceId (preprocessor: find/create LeadSource)');
-    this.logger.log('  _billable → billable (preprocessor: billing by queue name)');
-    this.logger.log('  _costAmountMicros → cost.amountMicros (preprocessor: billing cost)');
-    this.logger.log('  _costCurrencyCode → cost.currencyCode (preprocessor: USD)');
+    this.logger.log(
+      '  _personId → leadId (preprocessor: find/create Person by phone)',
+    );
+    this.logger.log(
+      '  _leadSourceId → leadSourceId (preprocessor: find/create LeadSource)',
+    );
+    this.logger.log(
+      '  _billable → billable (preprocessor: billing by queue name)',
+    );
+    this.logger.log(
+      '  _costAmountMicros → cost.amountMicros (preprocessor: billing cost)',
+    );
+    this.logger.log(
+      '  _costCurrencyCode → cost.currencyCode (preprocessor: USD)',
+    );
     this.logger.log('  user_id → agentId (find AgentProfile by convosoUserId)');
+    this.logger.log('  recording[0].public_url → recording.primaryLinkUrl');
+    this.logger.log(
+      '  recording[0].public_url → recording.primaryLinkLabel (static: Play Recording)',
+    );
   }
 }

@@ -6,7 +6,7 @@ UPDATE core."ingestionPipeline"
 SET mode = 'pull',
     "sourceUrl" = 'https://api.convoso.com/v1/log/retrieve',
     "sourceAuthConfig" = '{"type":"query_param","paramName":"auth_token","envVar":"CONVOSO_API_TOKEN"}',
-    "sourceRequestConfig" = '{"queryParams":{"include_recordings":"0"},"dateRangeParams":{"startParam":"start_time","endParam":"end_time","lookbackMinutes":120,"timezone":"America/Los_Angeles"}}',
+    "sourceRequestConfig" = '{"queryParams":{"include_recordings":"1"},"dateRangeParams":{"startParam":"start_time","endParam":"end_time","lookbackMinutes":120,"timezone":"America/Los_Angeles"}}',
     "responseRecordsPath" = 'data.results',
     "paginationConfig" = '{"type":"offset","paramName":"offset","pageSize":500}',
     schedule = '*/5 * * * *',

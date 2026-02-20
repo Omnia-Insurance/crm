@@ -1644,7 +1644,7 @@ const syncRecentCalls = async (env: Env): Promise<void> => {
       end_time: toConvosoDate(now),
       limit: String(PAGE_SIZE),
       offset: String(offset),
-      include_recordings: "0",
+      include_recordings: "1",
     });
 
     const response = await fetch(

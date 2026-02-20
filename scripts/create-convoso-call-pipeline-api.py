@@ -76,7 +76,7 @@ def main():
                 "envVar": "CONVOSO_API_TOKEN",
             },
             "sourceRequestConfig": {
-                "queryParams": {"include_recordings": "0"},
+                "queryParams": {"include_recordings": "1"},
                 "dateRangeParams": {
                     "startParam": "start_time",
                     "endParam": "end_time",
