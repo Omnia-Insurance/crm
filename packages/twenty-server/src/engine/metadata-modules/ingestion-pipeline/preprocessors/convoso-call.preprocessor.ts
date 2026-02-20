@@ -85,6 +85,12 @@ export class ConvosoCallPreprocessor {
       return null;
     }
 
+    // Normalize system user IDs to the primary one (666666) so the
+    // user_id -> agentProfile relation mapping resolves to the System agent
+    if (userId && SYSTEM_USER_IDS.has(userId) && callType.includes('IN')) {
+      payload.user_id = '666666';
+    }
+
     // Derive direction from call_type
     const direction = callType.includes('IN') ? 'INBOUND' : 'OUTBOUND';
     const directionLabel = direction === 'INBOUND' ? 'Inbound' : 'Outbound';
