@@ -8,7 +8,6 @@ import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTab
 import { type SingleTabProps } from '@/ui/layout/tab-list/types/SingleTabProps';
 import { useComponentInstanceStateContext } from '@/ui/utilities/state/component-state/hooks/useComponentInstanceStateContext';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { useFlowOrThrow } from '@/workflow/hooks/useFlowOrThrow';
 import { useWorkflowRun } from '@/workflow/hooks/useWorkflowRun';
 import { useWorkflowRunIdOrThrow } from '@/workflow/hooks/useWorkflowRunIdOrThrow';
@@ -60,7 +59,7 @@ export const CommandMenuWorkflowRunViewStepContent = () => {
     );
   }
 
-  const activeTabId = useRecoilComponentValueV2(
+  const activeTabId = useRecoilComponentValue(
     activeTabIdComponentState,
     commandMenuPageComponentInstance.instanceId,
   );

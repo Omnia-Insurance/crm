@@ -439,39 +439,28 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         element={<SettingsTwoFactorAuthenticationMethod />}
       />
       <Route path={SettingsPath.Experience} element={<SettingsExperience />} />
+      <Route path={SettingsPath.Accounts} element={<SettingsAccounts />} />
+      <Route path={SettingsPath.NewAccount} element={<SettingsNewAccount />} />
       <Route
-        element={
-          <SettingsProtectedRouteWrapper
-            settingsPermission={PermissionFlagType.CONNECTED_ACCOUNTS}
-          />
-        }
-      >
-        <Route path={SettingsPath.Accounts} element={<SettingsAccounts />} />
-        <Route
-          path={SettingsPath.NewAccount}
-          element={<SettingsNewAccount />}
-        />
-        <Route
-          path={SettingsPath.AccountsConfiguration}
-          element={<SettingsAccountsConfiguration />}
-        />
-        <Route
-          path={SettingsPath.AccountsCalendars}
-          element={<SettingsAccountsCalendars />}
-        />
-        <Route
-          path={SettingsPath.AccountsEmails}
-          element={<SettingsAccountsEmails />}
-        />
-        <Route
-          path={SettingsPath.NewImapSmtpCaldavConnection}
-          element={<SettingsNewImapSmtpCaldavConnection />}
-        />
-        <Route
-          path={SettingsPath.EditImapSmtpCaldavConnection}
-          element={<SettingsEditImapSmtpCaldavConnection />}
-        />
-      </Route>
+        path={SettingsPath.AccountsConfiguration}
+        element={<SettingsAccountsConfiguration />}
+      />
+      <Route
+        path={SettingsPath.AccountsCalendars}
+        element={<SettingsAccountsCalendars />}
+      />
+      <Route
+        path={SettingsPath.AccountsEmails}
+        element={<SettingsAccountsEmails />}
+      />
+      <Route
+        path={SettingsPath.NewImapSmtpCaldavConnection}
+        element={<SettingsNewImapSmtpCaldavConnection />}
+      />
+      <Route
+        path={SettingsPath.EditImapSmtpCaldavConnection}
+        element={<SettingsEditImapSmtpCaldavConnection />}
+      />
       <Route
         element={
           <SettingsProtectedRouteWrapper

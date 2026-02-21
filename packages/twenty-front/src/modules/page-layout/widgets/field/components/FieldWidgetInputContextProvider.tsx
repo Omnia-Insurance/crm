@@ -8,8 +8,7 @@ import { RecordFieldComponentInstanceContext } from '@/object-record/record-fiel
 import { useInlineCell } from '@/object-record/record-inline-cell/hooks/useInlineCell';
 import { currentFocusIdSelector } from '@/ui/utilities/focus/states/currentFocusIdSelector';
 import { useAvailableComponentInstanceId } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceId';
-import { useStore } from 'jotai';
-import { useCallback } from 'react';
+import { useRecoilCallback } from 'recoil';
 
 type FieldWidgetInputContextProviderProps = {
   children: React.ReactNode;
@@ -18,7 +17,6 @@ type FieldWidgetInputContextProviderProps = {
 export const FieldWidgetInputContextProvider = ({
   children,
 }: FieldWidgetInputContextProviderProps) => {
-  const store = useStore();
   const { closeInlineCell } = useInlineCell();
 
   const instanceId = useAvailableComponentInstanceId(
@@ -48,23 +46,26 @@ export const FieldWidgetInputContextProvider = ({
     closeInlineCell();
   };
 
-  const handleClickOutside: FieldInputClickOutsideEvent = useCallback(
-    ({ newValue, event, skipPersist }) => {
-      const currentFocusId = store.get(currentFocusIdSelector.atom);
+  const handleClickOutside: FieldInputClickOutsideEvent = useRecoilCallback(
+    ({ snapshot }) =>
+      ({ newValue, event, skipPersist }) => {
+        const currentFocusId = snapshot
+          .getLoadable(currentFocusIdSelector)
+          .getValue();
 
-      if (currentFocusId !== instanceId) {
-        return;
-      }
-      event?.preventDefault();
-      event?.stopImmediatePropagation();
+        if (currentFocusId !== instanceId) {
+          return;
+        }
+        event?.preventDefault();
+        event?.stopImmediatePropagation();
 
-      if (skipPersist !== true) {
-        persistFieldFromFieldInputContext(newValue);
-      }
+        if (skipPersist !== true) {
+          persistFieldFromFieldInputContext(newValue);
+        }
 
-      closeInlineCell();
-    },
-    [closeInlineCell, instanceId, persistFieldFromFieldInputContext, store],
+        closeInlineCell();
+      },
+    [closeInlineCell, instanceId, persistFieldFromFieldInputContext],
   );
 
   const handleEscape: FieldInputEvent = ({ newValue, skipPersist }) => {

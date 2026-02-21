@@ -8,6 +8,7 @@ import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsO
 import { ADVANCED_SETTINGS_ANIMATION_DURATION } from '@/settings/constants/AdvancedSettingsAnimationDurations';
 import { useDateSettingsFormInitialValues } from '@/settings/data-model/fields/forms/date/hooks/useDateSettingsFormInitialValues';
 import { getDisplayFormatLabel } from '@/settings/data-model/fields/forms/date/utils/getDisplayFormatLabel';
+import { getDisplayFormatSelectDescription } from '@/settings/data-model/fields/forms/date/utils/getDisplayFormatSelectDescription';
 import { Select } from '@/ui/input/components/Select';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import styled from '@emotion/styled';
@@ -70,9 +71,7 @@ export const SettingsDataModelFieldDateForm = ({
     isDateFieldCustomDisplayFormat(activeDisplayFormat);
 
   const displayFormatSelectDescription =
-    activeDisplayFormat === FieldDateDisplayFormat.CUSTOM
-      ? t`Enter in Unicode format`
-      : t`Choose the format used to display date value`;
+    getDisplayFormatSelectDescription(activeDisplayFormat);
 
   return (
     <>

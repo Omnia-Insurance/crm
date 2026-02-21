@@ -17,7 +17,7 @@ export const computeRecordGqlOperationFilter = ({
   recordFilterGroups,
   filterValueDependencies,
 }: {
-  recordFilters: Omit<RecordFilter, 'id'>[];
+  recordFilters: RecordFilter[];
   fields: PartialFieldMetadataItem[];
   recordFilterGroups: RecordFilterGroup[];
   filterValueDependencies: RecordFilterValueDependencies;

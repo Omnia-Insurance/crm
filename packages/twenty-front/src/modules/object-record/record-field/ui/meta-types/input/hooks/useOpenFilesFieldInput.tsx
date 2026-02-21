@@ -5,6 +5,7 @@ import { filesFieldUploadState } from '@/object-record/record-field/ui/states/fi
 import { filesFieldUploadStateV2 } from '@/object-record/record-field/ui/states/filesFieldUploadStateV2';
 import { type FieldFilesValue } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { RECORD_TABLE_CELL_INPUT_ID_PREFIX } from '@/object-record/record-table/constants/RecordTableCellInputIdPrefix';
 import { RecordTableComponentInstanceContext } from '@/object-record/record-table/states/context/RecordTableComponentInstanceContext';
 import { recordTableCellEditModePositionComponentState } from '@/object-record/record-table/states/recordTableCellEditModePositionComponentState';
@@ -15,7 +16,6 @@ import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePush
 import { useRemoveLastFocusItemFromFocusStackByComponentType } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackByComponentType';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
 import { useAvailableComponentInstanceId } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceId';
-import { useStore } from 'jotai';
 import { useLingui } from '@lingui/react/macro';
 import { useRecoilCallback } from 'recoil';
 import { MULTI_ITEM_FIELD_DEFAULT_MAX_VALUES } from 'twenty-shared/constants';
@@ -34,7 +34,6 @@ export const useOpenFilesFieldInput = () => {
   );
   const { enqueueErrorSnackBar } = useSnackBar();
   const { t } = useLingui();
-  const store = useStore();
 
   const openFilesFieldInput = useRecoilCallback(
     ({ snapshot, set }) =>
@@ -102,7 +101,7 @@ export const useOpenFilesFieldInput = () => {
           filesFieldUploadState({ recordId, fieldName }),
           'UPLOAD_WINDOW_OPEN',
         );
-        store.set(
+        jotaiStore.set(
           filesFieldUploadStateV2.atomFamily({ recordId, fieldName }),
           'UPLOAD_WINDOW_OPEN',
         );
@@ -116,7 +115,7 @@ export const useOpenFilesFieldInput = () => {
               });
 
               set(filesFieldUploadState({ recordId, fieldName }), null);
-              store.set(
+              jotaiStore.set(
                 filesFieldUploadStateV2.atomFamily({ recordId, fieldName }),
                 null,
               );
@@ -142,7 +141,7 @@ export const useOpenFilesFieldInput = () => {
               filesFieldUploadState({ recordId, fieldName }),
               'UPLOADING_FILE',
             );
-            store.set(
+            jotaiStore.set(
               filesFieldUploadStateV2.atomFamily({ recordId, fieldName }),
               'UPLOADING_FILE',
             );
@@ -161,7 +160,7 @@ export const useOpenFilesFieldInput = () => {
               }
             } finally {
               set(filesFieldUploadState({ recordId, fieldName }), null);
-              store.set(
+              jotaiStore.set(
                 filesFieldUploadStateV2.atomFamily({ recordId, fieldName }),
                 null,
               );
@@ -184,7 +183,7 @@ export const useOpenFilesFieldInput = () => {
           },
           onCancel: () => {
             set(filesFieldUploadState({ recordId, fieldName }), null);
-            store.set(
+            jotaiStore.set(
               filesFieldUploadStateV2.atomFamily({ recordId, fieldName }),
               null,
             );
@@ -215,7 +214,6 @@ export const useOpenFilesFieldInput = () => {
       removeLastFocusItemFromFocusStackByComponentType,
       enqueueErrorSnackBar,
       t,
-      store,
     ],
   );
 

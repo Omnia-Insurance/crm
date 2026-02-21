@@ -15,7 +15,6 @@ import { RECORD_INDEX_REMOVE_SORTING_MODAL_ID } from '@/object-record/record-ind
 
 import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { isDefined } from 'twenty-shared/utils';
 
 type RecordBoardContainerProps = {
@@ -56,7 +55,7 @@ export const RecordBoardContainer = ({
       ...args,
     });
 
-  const isRecordIndexRemoveSortingModalOpened = useRecoilComponentValueV2(
+  const isRecordIndexRemoveSortingModalOpened = useRecoilComponentValue(
     isModalOpenedComponentState,
     RECORD_INDEX_REMOVE_SORTING_MODAL_ID,
   );

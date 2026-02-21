@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { TypeOrmQueryService } from '@ptc-org/nestjs-query-typeorm';
+import { fromArrayToUniqueKeyRecord, isDefined } from 'twenty-shared/utils';
+import { FindManyOptions, FindOneOptions, Repository } from 'typeorm';
+import { v4 as uuidv4, v4 } from 'uuid';
 import {
   ViewOpenRecordIn,
   ViewType,
   ViewVisibility,
 } from 'twenty-shared/types';
-import { fromArrayToUniqueKeyRecord, isDefined } from 'twenty-shared/utils';
-import { FindManyOptions, FindOneOptions, Repository } from 'typeorm';
-import { v4 as uuidv4, v4 } from 'uuid';
 
 import { ApplicationService } from 'src/engine/core-modules/application/services/application.service';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
@@ -443,10 +443,7 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
     };
 
     if (
-      existingFeatureFlagsMap[
-        FeatureFlagKey.IS_RECORD_PAGE_LAYOUT_EDITING_ENABLED
-      ] ??
-      false
+      this.twentyConfigService.get('SHOULD_SEED_STANDARD_RECORD_PAGE_LAYOUTS')
     ) {
       flatRecordPageFieldsViewToCreate =
         this.computeFlatRecordPageFieldsViewToCreate({
@@ -473,14 +470,19 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
         });
     }
 
-    const flatNavigationMenuItemToCreate =
-      await this.computeFlatNavigationMenuItemToCreate({
-        view: flatDefaultViewToCreate,
-        workspaceId,
-        workspaceCustomApplicationId: workspaceCustomFlatApplication.id,
-        workspaceCustomApplicationUniversalIdentifier:
-          workspaceCustomFlatApplication.universalIdentifier,
-      });
+    const isNavigationMenuItemEnabled =
+      existingFeatureFlagsMap[FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED] ??
+      false;
+
+    const flatNavigationMenuItemToCreate = isNavigationMenuItemEnabled
+      ? await this.computeFlatNavigationMenuItemToCreate({
+          view: flatDefaultViewToCreate,
+          workspaceId,
+          workspaceCustomApplicationId: workspaceCustomFlatApplication.id,
+          workspaceCustomApplicationUniversalIdentifier:
+            workspaceCustomFlatApplication.universalIdentifier,
+        })
+      : null;
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
@@ -587,10 +589,12 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
       );
     }
 
-    await this.createWorkspaceFavoriteForNewObjectDefaultView({
-      view: flatDefaultViewToCreate,
-      workspaceId,
-    });
+    if (!isNavigationMenuItemEnabled) {
+      await this.createWorkspaceFavoriteForNewObjectDefaultView({
+        view: flatDefaultViewToCreate,
+        workspaceId,
+      });
+    }
 
     return createdFlatObjectMetadata;
   }
@@ -929,6 +933,34 @@ export class ObjectMetadataService extends TypeOrmQueryService<ObjectMetadataEnt
         position: favoriteCount,
       });
     }, authContext);
+  }
+
+  public async deleteWorkspaceAllObjectMetadata({
+    workspaceId,
+  }: {
+    workspaceId: string;
+  }) {
+    const { flatObjectMetadataMaps } =
+      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId,
+          flatMapsKeys: ['flatObjectMetadataMaps'],
+        },
+      );
+
+    const deleteObjectInputs = Object.keys(
+      flatObjectMetadataMaps.universalIdentifierById,
+    )
+      .filter(isDefined)
+      .map<DeleteOneObjectInput>((id) => ({
+        id,
+      }));
+
+    await this.deleteManyObjectMetadatas({
+      deleteObjectInputs,
+      workspaceId,
+      isSystemBuild: true,
+    });
   }
 
   public async findOneWithinWorkspace(

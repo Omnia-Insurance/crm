@@ -1,5 +1,4 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { type WorkflowActionType } from '@/workflow/types/Workflow';
 import { CustomError } from 'twenty-shared/utils';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
@@ -47,21 +46,21 @@ export const shouldDisplayFormField = ({
       return (
         !isNotSupportedRelation &&
         !fieldMetadataItem.isUIReadOnly &&
-        !isHiddenSystemField(fieldMetadataItem) &&
+        !fieldMetadataItem.isSystem &&
         fieldMetadataItem.isActive
       );
     case 'UPSERT_RECORD':
       return (
         (!isNotSupportedRelation &&
           !fieldMetadataItem.isUIReadOnly &&
-          !isHiddenSystemField(fieldMetadataItem) &&
+          !fieldMetadataItem.isSystem &&
           fieldMetadataItem.isActive) ||
         isIdField
       );
     case 'FIND_RECORDS':
       return (
         !isNotSupportedRelation &&
-        (!isHiddenSystemField(fieldMetadataItem) || isIdField) &&
+        (!fieldMetadataItem.isSystem || isIdField) &&
         fieldMetadataItem.isActive
       );
     default:

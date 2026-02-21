@@ -116,19 +116,11 @@ export class PageLayoutUpdateService {
           workspaceCustomFlatApplication.universalIdentifier,
       });
 
-    const {
-      flatObjectMetadataMaps,
-      flatFieldMetadataMaps,
-      flatViewFieldGroupMaps,
-    } =
+    const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
           workspaceId,
-          flatMapsKeys: [
-            'flatObjectMetadataMaps',
-            'flatFieldMetadataMaps',
-            'flatViewFieldGroupMaps',
-          ],
+          flatMapsKeys: ['flatObjectMetadataMaps', 'flatFieldMetadataMaps'],
         },
       );
 
@@ -152,7 +144,6 @@ export class PageLayoutUpdateService {
         workspaceCustomApplicationUniversalIdentifier:
           workspaceCustomFlatApplication.universalIdentifier,
         flatFieldMetadataMaps,
-        flatViewFieldGroupMaps,
       });
 
     const validateAndBuildResult =
@@ -364,7 +355,6 @@ export class PageLayoutUpdateService {
     workspaceCustomApplicationId,
     workspaceCustomApplicationUniversalIdentifier,
     flatFieldMetadataMaps,
-    flatViewFieldGroupMaps,
   }: {
     tabs: UpdatePageLayoutTabWithWidgetsInput[];
     workspaceId: string;
@@ -374,7 +364,6 @@ export class PageLayoutUpdateService {
     AllFlatEntityMaps,
     | 'flatObjectMetadataMaps'
     | 'flatFieldMetadataMaps'
-    | 'flatViewFieldGroupMaps'
     | 'flatPageLayoutTabMaps'
     | 'flatPageLayoutWidgetMaps'
   >): {
@@ -397,7 +386,6 @@ export class PageLayoutUpdateService {
           workspaceCustomApplicationId,
           workspaceCustomApplicationUniversalIdentifier,
           flatFieldMetadataMaps,
-          flatViewFieldGroupMaps,
         });
 
       allWidgetsToCreate.push(...widgetsToCreate);
@@ -421,7 +409,6 @@ export class PageLayoutUpdateService {
     workspaceCustomApplicationId,
     workspaceCustomApplicationUniversalIdentifier,
     flatFieldMetadataMaps,
-    flatViewFieldGroupMaps,
   }: {
     tabId: string;
     widgets: UpdatePageLayoutWidgetWithIdInput[];
@@ -432,7 +419,6 @@ export class PageLayoutUpdateService {
     AllFlatEntityMaps,
     | 'flatObjectMetadataMaps'
     | 'flatFieldMetadataMaps'
-    | 'flatViewFieldGroupMaps'
     | 'flatPageLayoutTabMaps'
     | 'flatPageLayoutWidgetMaps'
   >): {
@@ -473,7 +459,10 @@ export class PageLayoutUpdateService {
             pageLayoutTabId: widgetInput.pageLayoutTabId,
             objectMetadataId: widgetInput.objectMetadataId,
           },
-          flatEntityMaps: { flatPageLayoutTabMaps, flatObjectMetadataMaps },
+          flatEntityMaps: {
+            flatPageLayoutTabMaps,
+            flatObjectMetadataMaps,
+          },
         });
 
         return {
@@ -501,8 +490,7 @@ export class PageLayoutUpdateService {
               configuration: widgetInput.configuration,
               fieldMetadataUniversalIdentifierById:
                 flatFieldMetadataMaps.universalIdentifierById,
-              viewFieldGroupUniversalIdentifierById:
-                flatViewFieldGroupMaps.universalIdentifierById,
+              shouldThrowOnMissingIdentifier: true,
             }),
         };
       },
@@ -517,26 +505,12 @@ export class PageLayoutUpdateService {
 
         const updatedConfiguration = widgetInput.configuration ?? null;
 
-        const {
-          pageLayoutTabUniversalIdentifier,
-          objectMetadataUniversalIdentifier,
-        } = resolveEntityRelationUniversalIdentifiers({
-          metadataName: 'pageLayoutWidget',
-          foreignKeyValues: {
-            pageLayoutTabId: widgetInput.pageLayoutTabId,
-            objectMetadataId: widgetInput.objectMetadataId,
-          },
-          flatEntityMaps: { flatPageLayoutTabMaps, flatObjectMetadataMaps },
-        });
-
         return {
           ...existingWidget,
           pageLayoutTabId: widgetInput.pageLayoutTabId,
-          pageLayoutTabUniversalIdentifier,
           title: widgetInput.title,
           type: widgetInput.type,
           objectMetadataId: widgetInput.objectMetadataId ?? null,
-          objectMetadataUniversalIdentifier,
           gridPosition: widgetInput.gridPosition,
           position: widgetInput.position ?? null,
           configuration: updatedConfiguration,
@@ -547,8 +521,6 @@ export class PageLayoutUpdateService {
                 configuration: updatedConfiguration,
                 fieldMetadataUniversalIdentifierById:
                   flatFieldMetadataMaps.universalIdentifierById,
-                viewFieldGroupUniversalIdentifierById:
-                  flatViewFieldGroupMaps.universalIdentifierById,
               }),
           }),
         };
@@ -564,26 +536,12 @@ export class PageLayoutUpdateService {
 
         const restoredConfiguration = widgetInput.configuration ?? null;
 
-        const {
-          pageLayoutTabUniversalIdentifier,
-          objectMetadataUniversalIdentifier,
-        } = resolveEntityRelationUniversalIdentifiers({
-          metadataName: 'pageLayoutWidget',
-          foreignKeyValues: {
-            pageLayoutTabId: widgetInput.pageLayoutTabId,
-            objectMetadataId: widgetInput.objectMetadataId,
-          },
-          flatEntityMaps: { flatPageLayoutTabMaps, flatObjectMetadataMaps },
-        });
-
         return {
           ...existingWidget,
           pageLayoutTabId: widgetInput.pageLayoutTabId,
-          pageLayoutTabUniversalIdentifier,
           title: widgetInput.title,
           type: widgetInput.type,
           objectMetadataId: widgetInput.objectMetadataId ?? null,
-          objectMetadataUniversalIdentifier,
           gridPosition: widgetInput.gridPosition,
           position: widgetInput.position ?? null,
           configuration: restoredConfiguration,
@@ -595,8 +553,6 @@ export class PageLayoutUpdateService {
                 configuration: restoredConfiguration,
                 fieldMetadataUniversalIdentifierById:
                   flatFieldMetadataMaps.universalIdentifierById,
-                viewFieldGroupUniversalIdentifierById:
-                  flatViewFieldGroupMaps.universalIdentifierById,
               }),
           }),
         };

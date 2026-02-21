@@ -13,6 +13,7 @@ import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-clie
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 
+import { FileByIdController } from './controllers/file-by-id.controller';
 import { FileController } from './controllers/file.controller';
 import { FileEntity } from './entities/file.entity';
 import { FileCorePictureModule } from './file-core-picture/file-core-picture.module';
@@ -58,6 +59,6 @@ import { FileService } from './services/file.service';
     FileWorkflowModule,
     FileUploadService,
   ],
-  controllers: [FileController],
+  controllers: [FileController, FileByIdController],
 })
 export class FileModule {}

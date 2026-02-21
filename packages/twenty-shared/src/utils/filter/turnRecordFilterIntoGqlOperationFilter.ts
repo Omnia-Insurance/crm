@@ -1,5 +1,4 @@
 import { isNonEmptyString } from '@sniptt/guards';
-import { Temporal } from 'temporal-polyfill';
 
 import {
   FieldMetadataType,
@@ -53,6 +52,7 @@ import {
 import { arrayOfStringsOrVariablesSchema } from '@/utils/filter/utils/validation-schemas/arrayOfStringsOrVariablesSchema';
 import { arrayOfUuidOrVariableSchema } from '@/utils/filter/utils/validation-schemas/arrayOfUuidsOrVariablesSchema';
 import { jsonRelationFilterValueSchema } from '@/utils/filter/utils/validation-schemas/jsonRelationFilterValueSchema';
+import { Temporal } from 'temporal-polyfill';
 
 type FieldShared = {
   id: string;
@@ -64,7 +64,7 @@ type FieldShared = {
 
 type TurnRecordFilterIntoRecordGqlOperationFilterParams = {
   filterValueDependencies: RecordFilterValueDependencies;
-  recordFilter: Omit<RecordFilter, 'id'>;
+  recordFilter: RecordFilter;
   fieldMetadataItems: FieldShared[];
 };
 
@@ -428,43 +428,6 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
           throw new Error(`Date filter is empty`);
         }
 
-        if (recordFilter.operand === RecordFilterOperand.IS) {
-          const timeZone = filterValueDependencies.timeZone ?? 'UTC';
-
-          let parsedPlainDate = null;
-
-          try {
-            parsedPlainDate = recordFilter.value.includes('T')
-              ? Temporal.Instant.from(recordFilter.value)
-                  .toZonedDateTimeISO(timeZone)
-                  .toPlainDate()
-              : Temporal.PlainDate.from(recordFilter.value);
-          } catch {
-            throw new Error(
-              `Cannot parse "${recordFilter.value}" for ${filterType} filter`,
-            );
-          }
-
-          const zonedDateTime = parsedPlainDate.toZonedDateTime(timeZone);
-          const start = zonedDateTime.toInstant();
-          const end = zonedDateTime.add({ days: 1 }).toInstant();
-
-          return {
-            and: [
-              {
-                [correspondingFieldMetadataItem.name]: {
-                  gte: start.toString(),
-                } as DateTimeFilter,
-              },
-              {
-                [correspondingFieldMetadataItem.name]: {
-                  lt: end.toString(),
-                } as DateTimeFilter,
-              },
-            ],
-          };
-        }
-
         const resolvedDateTime = Temporal.Instant.from(recordFilter.value);
 
         switch (recordFilter.operand) {
@@ -480,6 +443,34 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
               [correspondingFieldMetadataItem.name]: {
                 lt: resolvedDateTime.toString(),
               } as DateTimeFilter,
+            };
+          }
+          case RecordFilterOperand.IS: {
+            const start = resolvedDateTime
+              .toZonedDateTimeISO('UTC')
+              .with({
+                second: 0,
+                millisecond: 0,
+                microsecond: 0,
+                nanosecond: 0,
+              })
+              .toInstant();
+
+            const end = start.add({ minutes: 1 });
+
+            return {
+              and: [
+                {
+                  [correspondingFieldMetadataItem.name]: {
+                    lt: end.toString(),
+                  } as DateTimeFilter,
+                },
+                {
+                  [correspondingFieldMetadataItem.name]: {
+                    gte: start.toString(),
+                  } as DateTimeFilter,
+                },
+              ],
             };
           }
         }
@@ -1177,71 +1168,6 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
                   } satisfies RelationFilter,
                 },
               },
-            };
-          }
-          default: {
-            const fieldForRecordFilter = fieldMetadataItems.find(
-              (field) => field.id === recordFilter.fieldMetadataId,
-            );
-
-            throw new Error(
-              `Unknown operand ${recordFilter.operand} for ${fieldForRecordFilter?.label ?? ''} filter`,
-            );
-          }
-        }
-      }
-
-      if (subFieldName === 'workspaceMemberId') {
-        const { isCurrentWorkspaceMemberSelected, selectedRecordIds } =
-          jsonRelationFilterValueSchema
-            .catch({
-              isCurrentWorkspaceMemberSelected: false,
-              selectedRecordIds: arrayOfUuidOrVariableSchema.parse(
-                recordFilter.value,
-              ),
-            })
-            .parse(recordFilter.value);
-
-        const workspaceMemberIds = isCurrentWorkspaceMemberSelected
-          ? [
-              ...selectedRecordIds,
-              filterValueDependencies?.currentWorkspaceMemberId,
-            ].filter(isDefined)
-          : selectedRecordIds;
-
-        if (!isDefined(workspaceMemberIds) || workspaceMemberIds.length === 0) {
-          return;
-        }
-
-        switch (recordFilter.operand) {
-          case RecordFilterOperand.IS:
-            return {
-              [correspondingFieldMetadataItem.name]: {
-                workspaceMemberId: {
-                  in: workspaceMemberIds,
-                } satisfies UUIDFilter,
-              },
-            };
-          case RecordFilterOperand.IS_NOT: {
-            return {
-              or: [
-                {
-                  not: {
-                    [correspondingFieldMetadataItem.name]: {
-                      workspaceMemberId: {
-                        in: workspaceMemberIds,
-                      } satisfies UUIDFilter,
-                    },
-                  },
-                },
-                {
-                  [correspondingFieldMetadataItem.name]: {
-                    workspaceMemberId: {
-                      is: 'NULL',
-                    } satisfies UUIDFilter,
-                  },
-                },
-              ],
             };
           }
           default: {

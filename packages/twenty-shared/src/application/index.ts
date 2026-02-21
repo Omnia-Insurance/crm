@@ -25,11 +25,7 @@ export type {
   RelationFieldManifest,
   FieldManifest,
 } from './fieldManifestType';
-export type {
-  CommandMenuItemManifest,
-  FrontComponentCommandManifest,
-  FrontComponentManifest,
-} from './frontComponentManifestType';
+export type { FrontComponentManifest } from './frontComponentManifestType';
 export type {
   LogicFunctionManifest,
   CronTriggerSettings,
@@ -40,11 +36,6 @@ export type { Manifest } from './manifestType';
 export type { NavigationMenuItemManifest } from './navigationMenuItemManifestType';
 export type { ObjectFieldManifest } from './objectFieldManifest.type';
 export type { ObjectManifest } from './objectManifestType';
-export type {
-  PageLayoutWidgetManifest,
-  PageLayoutTabManifest,
-  PageLayoutManifest,
-} from './pageLayoutManifestType';
 export type {
   ObjectPermissionManifest,
   FieldPermissionManifest,

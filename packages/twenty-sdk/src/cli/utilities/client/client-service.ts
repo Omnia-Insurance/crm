@@ -22,7 +22,6 @@ export class ClientService {
     authToken?: string;
   }): Promise<void> {
     const outputPath = this.resolveGeneratedPath(appPath);
-    const tempPath = `${outputPath}.tmp`;
 
     const getSchemaResponse = await this.apiService.getSchema({ authToken });
 
@@ -34,12 +33,12 @@ export class ClientService {
 
     const { data: schema } = getSchemaResponse;
 
-    await fs.ensureDir(tempPath);
-    await fs.emptyDir(tempPath);
+    await fs.ensureDir(outputPath);
+    await fs.emptyDir(outputPath);
 
     await generate({
       schema,
-      output: tempPath,
+      output: outputPath,
       scalarTypes: {
         DateTime: 'string',
         JSON: 'Record<string, unknown>',
@@ -47,10 +46,7 @@ export class ClientService {
       },
     });
 
-    await this.injectTwentyClient(tempPath);
-
-    await fs.remove(outputPath);
-    await fs.move(tempPath, outputPath);
+    await this.injectTwentyClient(outputPath);
   }
 
   private resolveGeneratedPath(appPath: string): string {
@@ -74,16 +70,22 @@ const defaultOptions: ClientOptions = {
 
 export default class Twenty {
   private client: Client;
+  private apiUrl: string;
+  private authorizationToken: string;
 
   constructor(options?: ClientOptions) {
-    this.client = createClient({
+    const merged: ClientOptions = {
       ...defaultOptions,
       ...options,
       headers: {
         ...defaultOptions.headers,
         ...(options?.headers ?? {}),
       },
-    });
+    };
+
+    this.client = createClient(merged);
+    this.apiUrl = merged.url;
+    this.authorizationToken = merged.headers.Authorization;
   }
 
   query<R extends QueryGenqlSelection>(request: R & { __name?: string }) {
@@ -92,6 +94,41 @@ export default class Twenty {
 
   mutation<R extends MutationGenqlSelection>(request: R & { __name?: string }) {
     return this.client.mutation(request);
+  }
+
+  async uploadFile(
+    fileBuffer: Buffer,
+    filename: string,
+    contentType: string = 'application/octet-stream',
+    fileFolder: string = 'Attachment',
+  ): Promise<{ path: string; token: string }> {
+    const form = new FormData();
+
+    form.append('operations', JSON.stringify({
+      query: \`mutation UploadFile($file: Upload!, $fileFolder: FileFolder) {
+        uploadFile(file: $file, fileFolder: $fileFolder) { path token }
+      }\`,
+      variables: { file: null, fileFolder },
+    }));
+    form.append('map', JSON.stringify({ '0': ['variables.file'] }));
+    form.append('0', new Blob([fileBuffer], { type: contentType }), filename);
+
+
+    const response = await fetch(\`\${this.apiUrl}/graphql\`, {
+      method: 'POST',
+      headers: {
+        Authorization: this.authorizationToken,
+      },
+      body: form,
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new GenqlError(result.errors, result.data);
+    }
+
+    return result.data.uploadFile;
   }
 }
 

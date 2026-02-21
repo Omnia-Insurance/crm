@@ -6,7 +6,6 @@ import { ActionViewType } from '@/action-menu/actions/types/ActionViewType';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { isRecordReadOnly } from '@/object-record/read-only/utils/isRecordReadOnly';
 import { msg } from '@lingui/core/macro';
 import React from 'react';
@@ -36,7 +35,7 @@ export const useRelatedRecordActions = ({
     (field) =>
       field.type === 'RELATION' &&
       field.relation?.type === 'ONE_TO_MANY' &&
-      !isHiddenSystemField(field),
+      !field.isSystem,
   );
 
   let currentPosition = startPosition;

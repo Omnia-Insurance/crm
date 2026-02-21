@@ -12,7 +12,7 @@ import { getUpdatedTabLayouts } from '@/page-layout/utils/getUpdatedTabLayouts';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { useRecoilCallback } from 'recoil';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -26,7 +26,7 @@ export const useCreatePageLayoutIframeWidget = (
     pageLayoutIdFromProps,
   );
 
-  const activeTabId = useRecoilComponentValueV2(
+  const activeTabId = useRecoilComponentValue(
     activeTabIdComponentState,
     getTabListInstanceIdFromPageLayoutId(pageLayoutId),
   );

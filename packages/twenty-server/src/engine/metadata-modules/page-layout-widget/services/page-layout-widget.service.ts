@@ -243,7 +243,6 @@ export class PageLayoutWidgetService {
       flatPageLayoutTabMaps,
       flatObjectMetadataMaps,
       flatFieldMetadataMaps,
-      flatViewFieldGroupMaps,
     } =
       await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
         {
@@ -252,7 +251,6 @@ export class PageLayoutWidgetService {
             'flatPageLayoutTabMaps',
             'flatObjectMetadataMaps',
             'flatFieldMetadataMaps',
-            'flatViewFieldGroupMaps',
           ],
         },
       );
@@ -265,7 +263,6 @@ export class PageLayoutWidgetService {
         flatPageLayoutTabMaps,
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
-        flatViewFieldGroupMaps,
       });
 
     if (isDefined(createInput.configuration)) {
@@ -324,17 +321,13 @@ export class PageLayoutWidgetService {
     const {
       flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
       flatFieldMetadataMaps: existingFlatFieldMetadataMaps,
-      flatViewFieldGroupMaps: existingFlatViewFieldGroupMaps,
-    } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-      {
-        workspaceId,
-        flatMapsKeys: [
-          'flatObjectMetadataMaps',
-          'flatFieldMetadataMaps',
-          'flatViewFieldGroupMaps',
-        ],
-      },
-    );
+    } =
+      await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId,
+          flatMapsKeys: ['flatObjectMetadataMaps', 'flatFieldMetadataMaps'],
+        },
+      );
 
     const isConfigurationBeingUpdated = Object.prototype.hasOwnProperty.call(
       updateData,
@@ -364,7 +357,6 @@ export class PageLayoutWidgetService {
         flatPageLayoutWidgetMaps: existingFlatPageLayoutWidgetMaps,
         flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
         flatFieldMetadataMaps: existingFlatFieldMetadataMaps,
-        flatViewFieldGroupMaps: existingFlatViewFieldGroupMaps,
       });
 
     const shouldValidateChartFields =
