@@ -78,14 +78,14 @@ export class ApplicationManifestMigrationService {
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigrationFromTo(
         {
           buildOptions: {
-            isSystemBuild: false,
+            isSystemBuild: true,
             inferDeletionFromMissingEntities: true,
-            applicationUniversalIdentifier:
-              ownerFlatApplication.universalIdentifier,
           },
           fromToAllFlatEntityMaps,
           workspaceId,
           additionalCacheDataMaps: { featureFlagsMap },
+          applicationUniversalIdentifier:
+            ownerFlatApplication.universalIdentifier,
         },
       );
 

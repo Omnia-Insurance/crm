@@ -44,7 +44,7 @@ import { NavigationDrawerSubItem } from '@/ui/navigation/navigation-drawer/compo
 import { currentNavigationMenuItemFolderIdStateV2 } from '@/ui/navigation/navigation-drawer/states/currentNavigationMenuItemFolderIdStateV2';
 import { useSetRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilStateV2';
 import { getNavigationSubItemLeftAdornment } from '@/ui/navigation/navigation-drawer/utils/getNavigationSubItemLeftAdornment';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -123,7 +123,7 @@ export const CurrentWorkspaceMemberNavigationMenuItems = ({
 
   const dropdownId = `navigation-menu-item-folder-edit-${folder.id}`;
 
-  const isDropdownOpenComponent = useRecoilComponentValueV2(
+  const isDropdownOpenComponent = useRecoilComponentValue(
     isDropdownOpenComponentState,
     dropdownId,
   );
@@ -194,7 +194,7 @@ export const CurrentWorkspaceMemberNavigationMenuItems = ({
     />
   );
 
-  const isModalOpened = useRecoilComponentValueV2(
+  const isModalOpened = useRecoilComponentValue(
     isModalOpenedComponentState,
     modalId,
   );

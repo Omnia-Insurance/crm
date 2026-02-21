@@ -86,6 +86,16 @@ const failingNavigationMenuItemCreationTestCases: EachTestingContext<TestContext
         },
       },
     },
+    {
+      title: 'when creating with negative position',
+      context: {
+        input: {
+          targetRecordId: faker.string.uuid(),
+          targetObjectMetadataId: faker.string.uuid(),
+          position: -1,
+        },
+      },
+    },
   ];
 
 describe('NavigationMenuItem creation should fail', () => {

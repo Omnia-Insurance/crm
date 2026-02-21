@@ -50,7 +50,6 @@ export const RecordInlineCell = ({
   } = useContext(FieldContext);
   const fieldDependencyContext = useContext(FieldDependencyContext);
   const { scopeInstanceId } = useRecordFieldsScopeContextOrThrow();
-  const store = useStore();
 
   const { openFieldInput, closeFieldInput } = useOpenFieldInputEditMode();
 
@@ -151,41 +150,43 @@ export const RecordInlineCell = ({
     closeInlineCell();
   };
 
-  const handleClickOutside = useCallback(
-    ({
-      event,
-      newValue,
-      skipPersist,
-    }: Parameters<FieldInputClickOutsideEvent>[0]) => {
-      const currentDropdownFocusId = store.get(activeDropdownFocusIdState.atom);
+  const handleClickOutside = useRecoilCallback(
+    ({ snapshot }) =>
+      ({
+        event,
+        newValue,
+        skipPersist,
+      }: Parameters<FieldInputClickOutsideEvent>[0]) => {
+        const currentDropdownFocusId = snapshot
+          .getLoadable(activeDropdownFocusIdState)
+          .getValue();
 
-      const expectedDropdownFocusId = getDropdownFocusIdForRecordField({
-        recordId,
-        fieldMetadataId: fieldDefinition.fieldMetadataId,
-        componentType: 'inline-cell',
-        instanceId: scopeInstanceId,
-      });
+        const expectedDropdownFocusId = getDropdownFocusIdForRecordField({
+          recordId,
+          fieldMetadataId: fieldDefinition.fieldMetadataId,
+          componentType: 'inline-cell',
+          instanceId: scopeInstanceId,
+        });
 
-      if (currentDropdownFocusId !== expectedDropdownFocusId) {
-        return;
-      }
+        if (currentDropdownFocusId !== expectedDropdownFocusId) {
+          return;
+        }
 
-      event?.preventDefault();
-      event?.stopImmediatePropagation();
+        event?.preventDefault();
+        event?.stopImmediatePropagation();
 
-      if (skipPersist !== true) {
-        persistFieldFromFieldInputContext(newValue);
-      }
+        if (skipPersist !== true) {
+          persistFieldFromFieldInputContext(newValue);
+        }
 
-      closeInlineCell();
-    },
+        closeInlineCell();
+      },
     [
       recordId,
       fieldDefinition.fieldMetadataId,
       scopeInstanceId,
       closeInlineCell,
       persistFieldFromFieldInputContext,
-      store,
     ],
   );
 

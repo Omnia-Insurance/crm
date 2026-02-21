@@ -44,11 +44,13 @@ export class ImapGetMessagesService {
     const client = await this.imapClientProvider.getClient(connectedAccount);
 
     try {
-      return await this.fetchFromAllFolders(
+      const messages = await this.fetchFromAllFolders(
         messagesByFolder,
         client,
         connectedAccount,
       );
+
+      return messages;
     } finally {
       await this.imapClientProvider.closeClient(client);
     }
@@ -110,16 +112,11 @@ export class ImapGetMessagesService {
     );
     const startTime = Date.now();
 
-    const { messages: results, uidValidity } =
-      await this.messageParser.parseMessagesFromFolder(
-        messageUids,
-        folderPath,
-        client,
-      );
-
-    const folderExternalId = uidValidity
-      ? `${folderPath}:${uidValidity}`
-      : folderPath;
+    const results = await this.messageParser.parseMessagesFromFolder(
+      messageUids,
+      folderPath,
+      client,
+    );
 
     const messages: MessageWithParticipants[] = [];
 
@@ -144,7 +141,6 @@ export class ImapGetMessagesService {
           result.parsed,
           result.uid,
           folderPath,
-          folderExternalId,
           connectedAccount,
         ),
       );
@@ -161,7 +157,6 @@ export class ImapGetMessagesService {
     parsed: ParsedMail,
     uid: number,
     folderPath: string,
-    folderExternalId: string,
     connectedAccount: Pick<
       ConnectedAccountWorkspaceEntity,
       'handle' | 'handleAliases'
@@ -184,7 +179,6 @@ export class ImapGetMessagesService {
       direction: computeMessageDirection(senderAddress, connectedAccount),
       attachments: this.extractAttachments(parsed),
       participants: this.extractParticipants(parsed),
-      messageFolderExternalIds: [folderExternalId],
     };
   }
 

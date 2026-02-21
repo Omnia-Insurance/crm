@@ -15,18 +15,17 @@ import {
 } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import { CalendarStartDay } from 'twenty-shared/constants';
-import {
-  AggregateOperations,
-  type ChartFilter,
-  type GaugeChartConfiguration,
-  SerializedRelation,
-} from 'twenty-shared/types';
+import { AggregateOperations, SerializedRelation } from 'twenty-shared/types';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { WidgetConfigurationType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-configuration-type.type';
+import { ChartFilter } from 'src/engine/metadata-modules/page-layout-widget/types/chart-filter.type';
+import { PageLayoutWidgetConfigurationBase } from 'src/engine/metadata-modules/page-layout-widget/types/page-layout-widget-configurationt-base.type';
 
 @ObjectType('GaugeChartConfiguration')
-export class GaugeChartConfigurationDTO implements GaugeChartConfiguration {
+export class GaugeChartConfigurationDTO
+  implements PageLayoutWidgetConfigurationBase
+{
   @Field(() => WidgetConfigurationType)
   @IsIn([WidgetConfigurationType.GAUGE_CHART])
   @IsNotEmpty()

@@ -29,8 +29,8 @@ export const useShouldActionBeRegisteredParams = ({
 }): ShouldBeRegisteredFunctionParams => {
   const { sortedFavorites: favorites } = useFavorites();
   const { navigationMenuItems } = usePrefetchedNavigationMenuItemsData();
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
   const contextStoreTargetedRecordsRule = useRecoilComponentValue(
@@ -47,7 +47,7 @@ export const useShouldActionBeRegisteredParams = ({
       return false;
     }
 
-    if (isNavigationMenuItemEditingEnabled && isDefined(objectMetadataItem)) {
+    if (isNavigationMenuItemEnabled && isDefined(objectMetadataItem)) {
       const foundNavigationMenuItem = navigationMenuItems?.find(
         (item) =>
           item.targetRecordId === recordId &&
@@ -62,7 +62,7 @@ export const useShouldActionBeRegisteredParams = ({
     return !!foundFavorite;
   }, [
     recordId,
-    isNavigationMenuItemEditingEnabled,
+    isNavigationMenuItemEnabled,
     objectMetadataItem,
     navigationMenuItems,
     favorites,

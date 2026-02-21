@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { useSetRecoilState } from 'recoil';
 
 import { useObjectNamePluralFromSingular } from '@/object-metadata/hooks/useObjectNamePluralFromSingular';
 
@@ -9,7 +10,6 @@ import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
 import { navigationMemorizedUrlState } from '@/ui/navigation/states/navigationMemorizedUrlState';
-import { useSetRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilStateV2';
 import { ViewFieldsHiddenDropdownSection } from '@/views/components/ViewFieldsHiddenDropdownSection';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
@@ -31,7 +31,7 @@ export const ObjectOptionsDropdownHiddenFieldsContent = () => {
   });
 
   const location = useLocation();
-  const setNavigationMemorizedUrl = useSetRecoilStateV2(
+  const setNavigationMemorizedUrl = useSetRecoilState(
     navigationMemorizedUrlState,
   );
 

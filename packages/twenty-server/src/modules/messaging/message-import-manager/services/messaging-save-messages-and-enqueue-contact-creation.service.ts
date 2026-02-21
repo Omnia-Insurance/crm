@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
 import { FieldActorSource, MessageParticipantRole } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
 
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -22,10 +21,6 @@ import {
   type Participant,
   type ParticipantWithMessageId,
 } from 'src/modules/messaging/message-import-manager/drivers/gmail/types/gmail-message.type';
-import {
-  type MessageChannelMessageAssociationFolderAssociation,
-  MessagingMessageFolderAssociationService,
-} from 'src/modules/messaging/message-import-manager/services/messaging-message-folder-association.service';
 import { MessagingMessageService } from 'src/modules/messaging/message-import-manager/services/messaging-message.service';
 import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
 import { MessagingMessageParticipantService } from 'src/modules/messaging/message-participant-manager/services/messaging-message-participant.service';
@@ -38,7 +33,6 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
     private readonly messageQueueService: MessageQueueService,
     private readonly messageService: MessagingMessageService,
     private readonly messageParticipantService: MessagingMessageParticipantService,
-    private readonly messageFolderAssociationService: MessagingMessageFolderAssociationService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
@@ -59,15 +53,13 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
 
           return workspaceDataSource?.transaction(
             async (transactionManager: WorkspaceEntityManager) => {
-              const {
-                messageExternalIdsAndIdsMap,
-                messageExternalIdToMessageChannelMessageAssociationIdMap,
-              } = await this.messageService.saveMessagesWithinTransaction(
-                messagesToSave,
-                messageChannel.id,
-                transactionManager,
-                workspaceId,
-              );
+              const { messageExternalIdsAndIdsMap } =
+                await this.messageService.saveMessagesWithinTransaction(
+                  messagesToSave,
+                  messageChannel.id,
+                  transactionManager,
+                  workspaceId,
+                );
 
               const participantsWithMessageId: (ParticipantWithMessageId & {
                 shouldCreateContact: boolean;
@@ -116,37 +108,6 @@ export class MessagingSaveMessagesAndEnqueueContactCreationService {
 
               await this.messageParticipantService.saveMessageParticipants(
                 participantsWithMessageId,
-                workspaceId,
-                transactionManager,
-              );
-
-              const folderAssociations: MessageChannelMessageAssociationFolderAssociation[] =
-                messagesToSave.flatMap((message) => {
-                  const messageFolderIds = message.messageFolderIds ?? [];
-
-                  if (messageFolderIds.length === 0) {
-                    return [];
-                  }
-
-                  const associationId =
-                    messageExternalIdToMessageChannelMessageAssociationIdMap.get(
-                      message.externalId,
-                    );
-
-                  if (!isDefined(associationId)) {
-                    return [];
-                  }
-
-                  return [
-                    {
-                      messageChannelMessageAssociationId: associationId,
-                      messageFolderIds,
-                    },
-                  ];
-                });
-
-              await this.messageFolderAssociationService.saveMessageFolderAssociations(
-                folderAssociations,
                 workspaceId,
                 transactionManager,
               );

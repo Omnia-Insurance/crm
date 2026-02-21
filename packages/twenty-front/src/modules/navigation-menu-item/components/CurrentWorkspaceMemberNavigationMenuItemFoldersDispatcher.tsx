@@ -5,11 +5,11 @@ import { CurrentWorkspaceMemberNavigationMenuItemFolders } from '@/navigation-me
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 
 export const CurrentWorkspaceMemberNavigationMenuItemFoldersDispatcher = () => {
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
-  if (isNavigationMenuItemEditingEnabled) {
+  if (isNavigationMenuItemEnabled) {
     return <CurrentWorkspaceMemberNavigationMenuItemFolders />;
   }
 

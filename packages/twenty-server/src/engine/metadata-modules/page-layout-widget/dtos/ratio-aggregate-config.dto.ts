@@ -1,15 +1,12 @@
 import { Field, ObjectType } from '@nestjs/graphql';
 
 import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
-import {
-  type RatioAggregateConfig,
-  SerializedRelation,
-} from 'twenty-shared/types';
+import { SerializedRelation } from 'twenty-shared/types';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 
 @ObjectType('RatioAggregateConfig')
-export class RatioAggregateConfigDTO implements RatioAggregateConfig {
+export class RatioAggregateConfigDTO {
   @Field(() => UUIDScalarType)
   @IsUUID()
   @IsNotEmpty()

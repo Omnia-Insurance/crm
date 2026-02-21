@@ -1,31 +1,34 @@
-import { useCallback } from 'react';
+import { useRecoilCallback } from 'recoil';
 
 import { clickOutsideListenerIsActivatedComponentState } from '@/ui/utilities/pointer-event/states/clickOutsideListenerIsActivatedComponentState';
 import { clickOutsideListenerMouseDownHappenedComponentState } from '@/ui/utilities/pointer-event/states/clickOutsideListenerMouseDownHappenedComponentState';
-import { useStore } from 'jotai';
+import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
 
 export const useClickOutsideListener = (instanceId: string) => {
-  const store = useStore();
+  const clickOutsideListenerIsActivatedState = useRecoilComponentCallbackState(
+    clickOutsideListenerIsActivatedComponentState,
+    instanceId,
+  );
 
-  const toggleClickOutside = useCallback(
-    (activated: boolean) => {
-      store.set(
-        clickOutsideListenerIsActivatedComponentState.atomFamily({
-          instanceId,
-        }),
-        activated,
-      );
+  const clickOutsideListenerMouseDownHappenedState =
+    useRecoilComponentCallbackState(
+      clickOutsideListenerMouseDownHappenedComponentState,
+      instanceId,
+    );
 
-      if (!activated) {
-        store.set(
-          clickOutsideListenerMouseDownHappenedComponentState.atomFamily({
-            instanceId,
-          }),
-          false,
-        );
-      }
-    },
-    [instanceId, store],
+  const toggleClickOutside = useRecoilCallback(
+    ({ set }) =>
+      (activated: boolean) => {
+        set(clickOutsideListenerIsActivatedState, activated);
+
+        if (!activated) {
+          set(clickOutsideListenerMouseDownHappenedState, false);
+        }
+      },
+    [
+      clickOutsideListenerIsActivatedState,
+      clickOutsideListenerMouseDownHappenedState,
+    ],
   );
 
   return {

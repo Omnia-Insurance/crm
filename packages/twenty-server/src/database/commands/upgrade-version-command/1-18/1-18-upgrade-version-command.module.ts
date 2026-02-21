@@ -15,7 +15,6 @@ import { FeatureFlagEntity } from 'src/engine/core-modules/feature-flag/feature-
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
-import { SecureHttpClientModule } from 'src/engine/core-modules/secure-http-client/secure-http-client.module';
 import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user-workspace.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { DataSourceModule } from 'src/engine/metadata-modules/data-source/data-source.module';
@@ -52,7 +51,6 @@ import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/sta
     FileModule,
     UserWorkspaceModule,
     WorkspaceMigrationModule,
-    SecureHttpClientModule,
   ],
   providers: [
     MigratePersonAvatarFilesCommand,
@@ -73,8 +71,8 @@ import { WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/sta
     BackfillMessageChannelThrottleRetryAfterCommand,
     BackfillStandardViewsAndFieldMetadataCommand,
     MigrateWorkspacePicturesCommand,
-    MigrateWorkflowSendEmailAttachmentsCommand,
     BackfillFileSizeAndMimeTypeCommand,
+    MigrateWorkflowSendEmailAttachmentsCommand,
   ],
 })
 export class V1_18_UpgradeVersionCommandModule {}

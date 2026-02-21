@@ -1,6 +1,5 @@
+import { REST_API_BASE_URL } from '@/apollo/constant/rest-api-base-url';
 import { useFrontComponentExecutionContext } from '@/front-components/hooks/useFrontComponentExecutionContext';
-import { useOnFrontComponentUpdated } from '@/front-components/hooks/useOnFrontComponentUpdated';
-import { getFrontComponentUrl } from '@/front-components/utils/getFrontComponentUrl';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useTheme } from '@emotion/react';
 import { t } from '@lingui/core/macro';
@@ -22,6 +21,8 @@ export const FrontComponentRenderer = ({
   const { executionContext, frontComponentHostCommunicationApi } =
     useFrontComponentExecutionContext();
 
+  const componentUrl = `${REST_API_BASE_URL}/front-components/${frontComponentId}`;
+
   const handleError = useCallback(
     (error?: Error) => {
       if (!isDefined(error)) {
@@ -40,15 +41,6 @@ export const FrontComponentRenderer = ({
   const { data, loading } = useFindOneFrontComponentQuery({
     variables: { id: frontComponentId },
     onError: handleError,
-  });
-
-  useOnFrontComponentUpdated({
-    frontComponentId,
-  });
-
-  const componentUrl = getFrontComponentUrl({
-    frontComponentId,
-    checksum: data?.frontComponent?.builtComponentChecksum,
   });
 
   if (

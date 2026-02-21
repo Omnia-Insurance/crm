@@ -19,12 +19,3 @@ export const FIND_MANY_OBJECT_METADATA_ITEMS = gql`
     }
   }
 `;
-
-export const OBJECT_RECORD_COUNTS = gql`
-  query ObjectRecordCounts {
-    objectRecordCounts {
-      objectNamePlural
-      totalCount
-    }
-  }
-`;

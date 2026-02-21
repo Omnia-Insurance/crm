@@ -16,7 +16,6 @@ import { getTabListInstanceIdFromPageLayoutId } from '@/page-layout/utils/getTab
 import { updateWidgetMinimumSizeForGraphType } from '@/page-layout/utils/updateWidgetMinimumSizeForGraphType';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
-import { useStore } from 'jotai';
 import { useRecoilCallback } from 'recoil';
 import { isDefined } from 'twenty-shared/utils';
 import { BarChartLayout } from '~/generated-metadata/graphql';
@@ -32,6 +31,11 @@ export const useGetConfigToUpdateAfterGraphTypeChange = ({
 
   const tabListInstanceId = getTabListInstanceIdFromPageLayoutId(pageLayoutId);
 
+  const activeTabIdState = useRecoilComponentCallbackState(
+    activeTabIdComponentState,
+    tabListInstanceId,
+  );
+
   const currentlyEditingWidgetIdState = useRecoilComponentCallbackState(
     pageLayoutEditingWidgetIdComponentState,
     pageLayoutId,
@@ -46,8 +50,6 @@ export const useGetConfigToUpdateAfterGraphTypeChange = ({
     pageLayoutDraftComponentState,
     pageLayoutId,
   );
-
-  const store = useStore();
 
   const getConfigToUpdateAfterGraphTypeChange = useRecoilCallback(
     ({ set, snapshot }) =>
@@ -162,11 +164,7 @@ export const useGetConfigToUpdateAfterGraphTypeChange = ({
           };
         }
 
-        const activeTabId = store.get(
-          activeTabIdComponentState.atomFamily({
-            instanceId: tabListInstanceId,
-          }),
-        );
+        const activeTabId = snapshot.getLoadable(activeTabIdState).getValue();
 
         if (isDefined(activeTabId) && isDefined(currentlyEditingWidgetId)) {
           const currentLayouts = snapshot
@@ -186,12 +184,11 @@ export const useGetConfigToUpdateAfterGraphTypeChange = ({
         return configToUpdate;
       },
     [
+      activeTabIdState,
       currentlyEditingWidgetIdState,
       objectMetadataItems,
       pageLayoutCurrentLayoutsState,
       pageLayoutDraftState,
-      store,
-      tabListInstanceId,
       widget.objectMetadataId,
     ],
   );

@@ -7,7 +7,6 @@ export const ICON_NAME_BY_SUB_FIELD: Partial<
   amountMicros: 'IconNumber95Small',
   name: 'IconTextSize',
   source: 'IconTransferIn',
-  workspaceMemberId: 'IconUserCircle',
   primaryEmail: 'IconMail',
   additionalEmails: 'IconMailPlus',
   primaryLinkLabel: 'IconTextSize',
