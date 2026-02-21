@@ -205,9 +205,9 @@ spec:
               path: /healthz
               port: {{ include "twenty.server.containerPort" . }}
             initialDelaySeconds: 10
-            periodSeconds: 5
+            periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /healthz
