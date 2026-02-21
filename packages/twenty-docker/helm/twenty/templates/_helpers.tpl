@@ -18,7 +18,7 @@
 {{/* Server image fields merged with globals */}}
 {{- define "twenty.server.image" -}}
 {{- $repo := default $.Values.image.repository (index $.Values.server.image "repository" | default "") -}}
-{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.server.image "tag" | default "") -}}
+{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.server.image "tag" | default "") | toString -}}
 {{- $pp := default $.Values.image.pullPolicy (index $.Values.server.image "pullPolicy" | default "") -}}
 {{- printf "%s:%s|%s" $repo $tag $pp -}}
 {{- end -}}
@@ -26,7 +26,7 @@
 {{/* Worker image fields merged with globals */}}
 {{- define "twenty.worker.image" -}}
 {{- $repo := default $.Values.image.repository (index $.Values.worker.image "repository" | default "") -}}
-{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.worker.image "tag" | default "") -}}
+{{- $tag := default (default $.Chart.AppVersion $.Values.image.tag) (index $.Values.worker.image "tag" | default "") | toString -}}
 {{- $pp := default $.Values.image.pullPolicy (index $.Values.worker.image "pullPolicy" | default "") -}}
 {{- printf "%s:%s|%s" $repo $tag $pp -}}
 {{- end -}}
