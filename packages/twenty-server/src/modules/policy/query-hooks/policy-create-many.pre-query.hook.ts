@@ -7,8 +7,9 @@ import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-re
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
-// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
 @Injectable()
 @WorkspaceQueryHook(`policy.createMany`)
@@ -17,6 +18,7 @@ export class PolicyCreateManyPreQueryHook
 {
   constructor(
     private readonly agentProfileResolverService: AgentProfileResolverService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   async execute(
@@ -30,26 +32,46 @@ export class PolicyCreateManyPreQueryHook
       return payload;
     }
 
+    // Auto-assign agent profile
     const recordsWithoutAgent = payload.data.filter(
       (record) => !isDefined(record.agentId),
     );
 
-    if (recordsWithoutAgent.length === 0) {
-      return payload;
+    if (recordsWithoutAgent.length > 0) {
+      const agentProfileId =
+        await this.agentProfileResolverService.resolveAgentProfileId(
+          workspace.id,
+          authContext.workspaceMemberId,
+        );
+
+      if (isDefined(agentProfileId)) {
+        for (const record of recordsWithoutAgent) {
+          record.agentId = agentProfileId;
+        }
+      }
     }
 
-    const agentProfileId =
-      await this.agentProfileResolverService.resolveAgentProfileId(
-        workspace.id,
-        authContext.workspaceMemberId,
-      );
+    // Auto-fill LTV from CarrierProduct commission where not already set
+    for (const record of payload.data) {
+      if (
+        !isDefined(record.ltv?.amountMicros) &&
+        isDefined(record.carrierId) &&
+        isDefined(record.productId)
+      ) {
+        const ltvCommission = await lookupCarrierProductCommission(
+          record.carrierId,
+          record.productId,
+          workspace.id,
+          this.globalWorkspaceOrmManager,
+        );
 
-    if (!isDefined(agentProfileId)) {
-      return payload;
-    }
-
-    for (const record of recordsWithoutAgent) {
-      record.agentId = agentProfileId;
+        if (ltvCommission) {
+          record.ltv = {
+            amountMicros: ltvCommission.amountMicros,
+            currencyCode: ltvCommission.currencyCode,
+          };
+        }
+      }
     }
 
     return payload;
