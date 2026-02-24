@@ -23,6 +23,10 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: worker
     spec:
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
 {{- toYaml .Values.securityContext | nindent 8 }}
       initContainers:
