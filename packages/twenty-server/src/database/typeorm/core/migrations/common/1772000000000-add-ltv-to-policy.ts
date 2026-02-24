@@ -241,7 +241,7 @@ export class AddLtvToPolicy1772000000000 implements MigrationInterface {
       `SELECT id, name FROM core."ingestionPipeline"
        WHERE "workspaceId" = '${workspaceId}'
          AND "deletedAt" IS NULL
-         AND "targetObject" = 'policy'`,
+         AND "targetObjectNameSingular" = 'policy'`,
     );
 
     for (const pipeline of pipelines) {
