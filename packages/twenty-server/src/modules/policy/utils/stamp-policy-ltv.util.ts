@@ -33,13 +33,13 @@ export async function stampPolicyLtv(
     );
 
     if (ltvCommission) {
-      // Use flat column names since repository.update() doesn't go through
-      // formatData and won't expand composite field objects
       await policyRepo.update(
         { id },
         {
-          ltvAmountMicros: ltvCommission.amountMicros,
-          ltvCurrencyCode: ltvCommission.currencyCode,
+          ltv: {
+            amountMicros: ltvCommission.amountMicros,
+            currencyCode: ltvCommission.currencyCode,
+          },
         } as Record<string, unknown>,
       );
     }
