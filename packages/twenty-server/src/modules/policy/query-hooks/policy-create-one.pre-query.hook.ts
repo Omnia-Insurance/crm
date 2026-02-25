@@ -7,7 +7,10 @@ import { type CreateOneResolverArgs } from 'src/engine/api/graphql/workspace-res
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { getTodayForMember } from 'src/modules/policy/utils/get-today-for-member.util';
 
 @Injectable()
 @WorkspaceQueryHook(`policy.createOne`)
@@ -16,6 +19,7 @@ export class PolicyCreateOnePreQueryHook
 {
   constructor(
     private readonly agentProfileResolverService: AgentProfileResolverService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   async execute(
@@ -27,6 +31,20 @@ export class PolicyCreateOnePreQueryHook
 
     if (!isDefined(workspace) || !isDefined(authContext.workspaceMemberId)) {
       return payload;
+    }
+
+    // Auto-set submittedDate to today in the user's timezone
+    if (!isDefined(payload.data.submittedDate)) {
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          payload.data.submittedDate = await getTodayForMember(
+            workspace.id,
+            authContext.workspaceMemberId!,
+            this.globalWorkspaceOrmManager,
+          );
+        },
+        authContext as WorkspaceAuthContext,
+      );
     }
 
     // Auto-assign agent profile

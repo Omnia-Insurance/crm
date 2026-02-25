@@ -8,7 +8,7 @@ import { WorkspaceQueryHookType } from 'src/engine/api/graphql/workspace-query-r
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { stampPolicyLtv } from 'src/modules/policy/utils/stamp-policy-ltv.util';
+import { enrichPolicyAfterSave } from 'src/modules/policy/utils/enrich-policy-after-save.util';
 
 @WorkspaceQueryHook({
   key: `policy.updateMany`,
@@ -34,7 +34,7 @@ export class PolicyUpdateManyPostQueryHook
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        await stampPolicyLtv(
+        await enrichPolicyAfterSave(
           payload,
           workspace.id,
           this.globalWorkspaceOrmManager,

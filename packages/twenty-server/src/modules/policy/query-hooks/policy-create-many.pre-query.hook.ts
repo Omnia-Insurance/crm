@@ -7,7 +7,10 @@ import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-re
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { getTodayForMember } from 'src/modules/policy/utils/get-today-for-member.util';
 
 @Injectable()
 @WorkspaceQueryHook(`policy.createMany`)
@@ -16,6 +19,7 @@ export class PolicyCreateManyPreQueryHook
 {
   constructor(
     private readonly agentProfileResolverService: AgentProfileResolverService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   async execute(
@@ -27,6 +31,28 @@ export class PolicyCreateManyPreQueryHook
 
     if (!isDefined(workspace) || !isDefined(authContext.workspaceMemberId)) {
       return payload;
+    }
+
+    // Auto-set submittedDate to today in the user's timezone
+    const recordsWithoutDate = payload.data.filter(
+      (record) => !isDefined(record.submittedDate),
+    );
+
+    if (recordsWithoutDate.length > 0) {
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const today = await getTodayForMember(
+            workspace.id,
+            authContext.workspaceMemberId!,
+            this.globalWorkspaceOrmManager,
+          );
+
+          for (const record of recordsWithoutDate) {
+            record.submittedDate = today;
+          }
+        },
+        authContext as WorkspaceAuthContext,
+      );
     }
 
     // Auto-assign agent profile
