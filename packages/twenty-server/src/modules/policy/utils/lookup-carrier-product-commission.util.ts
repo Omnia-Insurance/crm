@@ -19,7 +19,10 @@ export async function lookupCarrierProductCommission(
       { shouldBypassPermissionChecks: true },
     );
   } catch (error) {
-    console.error('[lookupCarrierProductCommission] getRepository error:', error);
+    console.error(
+      '[lookupCarrierProductCommission] getRepository error:',
+      error,
+    );
 
     return null;
   }
@@ -33,11 +36,14 @@ export async function lookupCarrierProductCommission(
 
   // The workspace ORM returns CURRENCY composite fields as nested objects:
   // { commission: { amountMicros: number, currencyCode: string } }
-  const carrierProduct = carrierProducts.find((cp: Record<string, unknown>) => {
-    const commission = cp.commission as { amountMicros?: number | null } | null;
+  const carrierProduct =
+    carrierProducts.find((cp: Record<string, unknown>) => {
+      const commission = cp.commission as {
+        amountMicros?: number | null;
+      } | null;
 
-    return commission?.amountMicros && commission.amountMicros > 0;
-  }) ?? carrierProducts[0];
+      return commission?.amountMicros && commission.amountMicros > 0;
+    }) ?? carrierProducts[0];
 
   if (!carrierProduct) {
     return null;

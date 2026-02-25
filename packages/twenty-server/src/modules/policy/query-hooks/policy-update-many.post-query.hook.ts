@@ -32,15 +32,12 @@ export class PolicyUpdateManyPostQueryHook
       return;
     }
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        await enrichPolicyAfterSave(
-          payload,
-          workspace.id,
-          this.globalWorkspaceOrmManager,
-        );
-      },
-      authContext as WorkspaceAuthContext,
-    );
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      await enrichPolicyAfterSave(
+        payload,
+        workspace.id,
+        this.globalWorkspaceOrmManager,
+      );
+    }, authContext as WorkspaceAuthContext);
   }
 }

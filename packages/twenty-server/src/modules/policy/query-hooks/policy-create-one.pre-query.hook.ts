@@ -10,6 +10,7 @@ import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-contex
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
 import { getTodayForMember } from 'src/modules/policy/utils/get-today-for-member.util';
 
 @Injectable()
@@ -33,19 +34,33 @@ export class PolicyCreateOnePreQueryHook
       return payload;
     }
 
-    // Auto-set submittedDate to today in the user's timezone
-    if (!isDefined(payload.data.submittedDate)) {
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          payload.data.submittedDate = await getTodayForMember(
-            workspace.id,
-            authContext.workspaceMemberId!,
-            this.globalWorkspaceOrmManager,
-          );
-        },
-        authContext as WorkspaceAuthContext,
-      );
-    }
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      // Auto-set submittedDate to today in the user's timezone
+      if (!isDefined(payload.data.submittedDate)) {
+        payload.data.submittedDate = await getTodayForMember(
+          workspace.id,
+          authContext.workspaceMemberId!,
+          this.globalWorkspaceOrmManager,
+        );
+      }
+
+      // Auto-derive name from carrier + product
+      if (
+        isDefined(payload.data.carrierId) ||
+        isDefined(payload.data.productId)
+      ) {
+        const displayName = await buildPolicyDisplayName(
+          (payload.data.carrierId as string) ?? null,
+          (payload.data.productId as string) ?? null,
+          workspace.id,
+          this.globalWorkspaceOrmManager,
+        );
+
+        if (displayName) {
+          payload.data.name = displayName;
+        }
+      }
+    }, authContext as WorkspaceAuthContext);
 
     // Auto-assign agent profile
     if (!isDefined(payload.data.agentId)) {

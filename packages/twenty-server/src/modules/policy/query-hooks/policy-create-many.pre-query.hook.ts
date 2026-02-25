@@ -10,6 +10,7 @@ import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-contex
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
 import { getTodayForMember } from 'src/modules/policy/utils/get-today-for-member.util';
 
 @Injectable()
@@ -33,27 +34,40 @@ export class PolicyCreateManyPreQueryHook
       return payload;
     }
 
-    // Auto-set submittedDate to today in the user's timezone
-    const recordsWithoutDate = payload.data.filter(
-      (record) => !isDefined(record.submittedDate),
-    );
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      // Auto-set submittedDate to today in the user's timezone
+      const recordsWithoutDate = payload.data.filter(
+        (record) => !isDefined(record.submittedDate),
+      );
 
-    if (recordsWithoutDate.length > 0) {
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const today = await getTodayForMember(
+      if (recordsWithoutDate.length > 0) {
+        const today = await getTodayForMember(
+          workspace.id,
+          authContext.workspaceMemberId!,
+          this.globalWorkspaceOrmManager,
+        );
+
+        for (const record of recordsWithoutDate) {
+          record.submittedDate = today;
+        }
+      }
+
+      // Auto-derive name from carrier + product
+      for (const record of payload.data) {
+        if (isDefined(record.carrierId) || isDefined(record.productId)) {
+          const displayName = await buildPolicyDisplayName(
+            (record.carrierId as string) ?? null,
+            (record.productId as string) ?? null,
             workspace.id,
-            authContext.workspaceMemberId!,
             this.globalWorkspaceOrmManager,
           );
 
-          for (const record of recordsWithoutDate) {
-            record.submittedDate = today;
+          if (displayName) {
+            record.name = displayName;
           }
-        },
-        authContext as WorkspaceAuthContext,
-      );
-    }
+        }
+      }
+    }, authContext as WorkspaceAuthContext);
 
     // Auto-assign agent profile
     const recordsWithoutAgent = payload.data.filter(
