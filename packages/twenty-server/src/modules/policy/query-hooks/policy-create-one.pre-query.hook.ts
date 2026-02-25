@@ -7,6 +7,7 @@ import { type CreateOneResolverArgs } from 'src/engine/api/graphql/workspace-res
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
 import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
@@ -51,19 +52,24 @@ export class PolicyCreateOnePreQueryHook
       isDefined(payload.data.carrierId) &&
       isDefined(payload.data.productId)
     ) {
-      const ltvCommission = await lookupCarrierProductCommission(
-        payload.data.carrierId,
-        payload.data.productId,
-        workspace.id,
-        this.globalWorkspaceOrmManager,
-      );
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const ltvCommission = await lookupCarrierProductCommission(
+            payload.data.carrierId,
+            payload.data.productId,
+            workspace.id,
+            this.globalWorkspaceOrmManager,
+          );
 
-      if (ltvCommission) {
-        payload.data.ltv = {
-          amountMicros: ltvCommission.amountMicros,
-          currencyCode: ltvCommission.currencyCode,
-        };
-      }
+          if (ltvCommission) {
+            payload.data.ltv = {
+              amountMicros: ltvCommission.amountMicros,
+              currencyCode: ltvCommission.currencyCode,
+            };
+          }
+        },
+        authContext as WorkspaceAuthContext,
+      );
     }
 
     return payload;

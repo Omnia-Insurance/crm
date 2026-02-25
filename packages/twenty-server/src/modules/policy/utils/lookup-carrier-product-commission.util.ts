@@ -18,31 +18,43 @@ export async function lookupCarrierProductCommission(
       'carrierProduct',
       { shouldBypassPermissionChecks: true },
     );
-  } catch {
+  } catch (error) {
+    console.error('[lookupCarrierProductCommission] getRepository error:', error);
+
     return null;
   }
 
-  const carrierProduct = await carrierProductRepo.findOne({
+  const carrierProducts = await carrierProductRepo.find({
     where: {
       carrierId,
       productId,
     },
   });
 
+  // The workspace ORM returns CURRENCY composite fields as nested objects:
+  // { commission: { amountMicros: number, currencyCode: string } }
+  const carrierProduct = carrierProducts.find((cp: Record<string, unknown>) => {
+    const commission = cp.commission as { amountMicros?: number | null } | null;
+
+    return commission?.amountMicros && commission.amountMicros > 0;
+  }) ?? carrierProducts[0];
+
   if (!carrierProduct) {
     return null;
   }
 
   const record = carrierProduct as Record<string, unknown>;
-  const amountMicros = record.commissionAmountMicros as number | null;
-  const currencyCode = record.commissionCurrencyCode as string | null;
+  const commission = record.commission as {
+    amountMicros?: number | null;
+    currencyCode?: string | null;
+  } | null;
 
-  if (!amountMicros || amountMicros <= 0) {
+  if (!commission?.amountMicros || commission.amountMicros <= 0) {
     return null;
   }
 
   return {
-    amountMicros,
-    currencyCode: currencyCode || 'USD',
+    amountMicros: commission.amountMicros,
+    currencyCode: commission.currencyCode || 'USD',
   };
 }
