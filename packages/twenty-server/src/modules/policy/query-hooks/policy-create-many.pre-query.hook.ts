@@ -7,10 +7,7 @@ import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-re
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
 import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
-import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
-import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
 @Injectable()
 @WorkspaceQueryHook(`policy.createMany`)
@@ -19,7 +16,6 @@ export class PolicyCreateManyPreQueryHook
 {
   constructor(
     private readonly agentProfileResolverService: AgentProfileResolverService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
   async execute(
@@ -51,34 +47,6 @@ export class PolicyCreateManyPreQueryHook
         }
       }
     }
-
-    // Auto-fill LTV from CarrierProduct commission where not already set
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        for (const record of payload.data) {
-          if (
-            !isDefined(record.ltv?.amountMicros) &&
-            isDefined(record.carrierId) &&
-            isDefined(record.productId)
-          ) {
-            const ltvCommission = await lookupCarrierProductCommission(
-              record.carrierId,
-              record.productId,
-              workspace.id,
-              this.globalWorkspaceOrmManager,
-            );
-
-            if (ltvCommission) {
-              record.ltv = {
-                amountMicros: ltvCommission.amountMicros,
-                currencyCode: ltvCommission.currencyCode,
-              };
-            }
-          }
-        }
-      },
-      authContext as WorkspaceAuthContext,
-    );
 
     return payload;
   }
