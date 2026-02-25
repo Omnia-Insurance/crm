@@ -32,7 +32,10 @@ export class PolicyUpdateOnePreQueryHook
     }
 
     // Auto-derive name when carrier or product changes
-    if (isDefined(payload.data.carrierId) || isDefined(payload.data.productId)) {
+    if (
+      isDefined(payload.data.carrierId) ||
+      isDefined(payload.data.productId)
+    ) {
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
           // Fetch existing record to get the field not being changed

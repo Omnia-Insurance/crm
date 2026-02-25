@@ -32,7 +32,10 @@ export class PolicyUpdateManyPreQueryHook
     }
 
     // Auto-derive name when carrier or product changes in bulk update
-    if (isDefined(payload.data.carrierId) || isDefined(payload.data.productId)) {
+    if (
+      isDefined(payload.data.carrierId) ||
+      isDefined(payload.data.productId)
+    ) {
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
           const displayName = await buildPolicyDisplayName(

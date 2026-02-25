@@ -3,12 +3,18 @@ import { isDefined } from 'twenty-shared/utils';
 import type { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
-// Stamps LTV from CarrierProduct commission after save.
-// Uses bypassed permissions so it works regardless of field-level role settings.
+// Enriches policy records after save with bypassed permissions.
+// Handles: LTV from CarrierProduct commission, submittedDate, agentId.
+// These fields are set post-save because members may not have write
+// permission on them — pre-query hooks would fail field-level checks.
 export async function enrichPolicyAfterSave(
   records: Record<string, unknown>[],
   workspaceId: string,
   globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+  options?: {
+    submittedDate?: string;
+    agentProfileId?: string | null;
+  },
 ): Promise<void> {
   const policyRepo = await globalWorkspaceOrmManager.getRepository(
     workspaceId,
@@ -21,24 +27,37 @@ export async function enrichPolicyAfterSave(
     const productId = record.productId as string | null | undefined;
     const id = record.id as string;
 
-    if (!isDefined(carrierId) || !isDefined(productId)) {
-      continue;
-    }
+    const updates: Record<string, unknown> = {};
 
-    const ltvCommission = await lookupCarrierProductCommission(
-      carrierId,
-      productId,
-      workspaceId,
-      globalWorkspaceOrmManager,
-    );
+    // Stamp LTV from CarrierProduct commission
+    if (isDefined(carrierId) && isDefined(productId)) {
+      const ltvCommission = await lookupCarrierProductCommission(
+        carrierId,
+        productId,
+        workspaceId,
+        globalWorkspaceOrmManager,
+      );
 
-    if (ltvCommission) {
-      await policyRepo.update({ id }, {
-        ltv: {
+      if (ltvCommission) {
+        updates.ltv = {
           amountMicros: ltvCommission.amountMicros,
           currencyCode: ltvCommission.currencyCode,
-        },
-      } as Record<string, unknown>);
+        };
+      }
+    }
+
+    // Auto-set submittedDate if not already set on the record
+    if (options?.submittedDate && !isDefined(record.submittedDate)) {
+      updates.submittedDate = options.submittedDate;
+    }
+
+    // Auto-assign agent profile if not already set on the record
+    if (options?.agentProfileId && !isDefined(record.agentId)) {
+      updates.agentId = options.agentProfileId;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await policyRepo.update({ id }, updates as Record<string, unknown>);
     }
   }
 }
