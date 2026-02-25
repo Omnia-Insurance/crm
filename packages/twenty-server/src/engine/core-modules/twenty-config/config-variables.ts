@@ -72,7 +72,7 @@ export class ConfigVariables {
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.OTHER,
     description:
-      'Enable safe mode for outbound requests (prevents private IPs and other security risks). Applies to HTTP workflow actions, webhooks, and IMAP/SMTP/CalDAV connections.',
+      'Enable safe mode for outbound HTTP requests (prevents private IPs and other security risks). Applies to HTTP workflow actions and webhooks.',
     type: ConfigVariableType.BOOLEAN,
   })
   @IsOptional()
@@ -136,6 +136,16 @@ export class ConfigVariables {
   })
   @ValidateIf((env) => env.AUTH_GOOGLE_ENABLED)
   AUTH_GOOGLE_CLIENT_SECRET: string;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.GOOGLE_AUTH,
+    description:
+      'Google Workspace service account key JSON for domain-wide delegation',
+    type: ConfigVariableType.STRING,
+    isSensitive: true,
+  })
+  @IsOptional()
+  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: string;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.GOOGLE_AUTH,

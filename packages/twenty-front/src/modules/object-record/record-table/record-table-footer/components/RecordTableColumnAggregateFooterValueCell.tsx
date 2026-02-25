@@ -6,7 +6,6 @@ import { RecordTableColumnAggregateFooterValue } from '@/object-record/record-ta
 import { hasAggregateOperationForViewFieldFamilySelector } from '@/object-record/record-table/record-table-footer/states/hasAggregateOperationForViewFieldFamilySelector';
 import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { useTheme } from '@emotion/react';
 import styled from '@emotion/styled';
 import { useContext, useState } from 'react';
@@ -58,7 +57,7 @@ export const RecordTableColumnAggregateFooterValueCell = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  const isDropdownOpen = useRecoilComponentValueV2(
+  const isDropdownOpen = useRecoilComponentValue(
     isDropdownOpenComponentState,
     dropdownId,
   );

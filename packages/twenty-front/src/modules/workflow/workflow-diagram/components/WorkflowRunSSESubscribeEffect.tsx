@@ -1,5 +1,5 @@
 import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
-import { useListenToEventsForQuery } from '@/sse-db-event/hooks/useListenToEventsForQuery';
+import { useListenToObjectRecordEventsForQuery } from '@/sse-db-event/hooks/useListenToObjectRecordEventsForQuery';
 
 export const WorkflowRunSSESubscribeEffect = ({
   workflowRunId,
@@ -8,7 +8,7 @@ export const WorkflowRunSSESubscribeEffect = ({
 }) => {
   const queryId = `workflow-run-${workflowRunId}`;
 
-  useListenToEventsForQuery({
+  useListenToObjectRecordEventsForQuery({
     queryId,
     operationSignature: {
       objectNameSingular: CoreObjectNameSingular.WorkflowRun,

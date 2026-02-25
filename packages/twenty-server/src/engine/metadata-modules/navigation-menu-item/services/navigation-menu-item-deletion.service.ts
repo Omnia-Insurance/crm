@@ -68,7 +68,7 @@ export class NavigationMenuItemDeletionService {
             },
           },
           workspaceId,
-          isSystemBuild: false,
+          isSystemBuild: true,
           applicationUniversalIdentifier:
             workspaceCustomFlatApplication.universalIdentifier,
         },

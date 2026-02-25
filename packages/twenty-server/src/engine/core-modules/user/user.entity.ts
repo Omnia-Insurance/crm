@@ -70,6 +70,7 @@ export class UserEntity {
   @Column({ default: false })
   disabled: boolean;
 
+  @Field({ nullable: true })
   @Column({ nullable: true })
   passwordHash: string;
 

@@ -1,5 +1,3 @@
-import { randomBytes } from 'crypto';
-
 import { type FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type ObjectLiteral } from 'typeorm';
@@ -35,9 +33,9 @@ export const computeWhereConditionParts = ({
   fieldMetadataType: FieldMetadataType;
   useDirectTableReference?: boolean;
 }): WhereConditionParts => {
-  const paramSuffix = randomBytes(5).toString('hex');
+  const uuid = Math.random().toString(36).slice(2, 7);
 
-  const secondParamSuffix = randomBytes(5).toString('hex');
+  const secondUuid = Math.random().toString(36).slice(2, 7);
 
   const fieldReference = useDirectTableReference
     ? `"${key}"`
@@ -60,99 +58,99 @@ export const computeWhereConditionParts = ({
       };
     case 'eq':
       return {
-        sql: `${fieldReference} = :${key}${paramSuffix}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} = :${key}${uuid}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'neq':
       return {
-        sql: `${fieldReference} != :${key}${paramSuffix}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NOT NULL` : ''}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} != :${key}${uuid}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NOT NULL` : ''}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'gt':
       return {
-        sql: `${fieldReference} > :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} > :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'gte':
       return {
-        sql: `${fieldReference} >= :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} >= :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'lt':
       return {
-        sql: `${fieldReference} < :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} < :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'lte':
       return {
-        sql: `${fieldReference} <= :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} <= :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'in':
       return {
-        sql: `${fieldReference} IN (:...${key}${paramSuffix})`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} IN (:...${key}${uuid})`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'is':
       return {
-        sql: `${fieldReference} IS ${value === 'NULL' ? 'NULL' : 'NOT NULL'}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} = :${key}${secondParamSuffix}` : ''}`,
+        sql: `${fieldReference} IS ${value === 'NULL' ? 'NULL' : 'NOT NULL'}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} = :${key}${secondUuid}` : ''}`,
         params: hasNullEquivalentFieldValue
-          ? { [`${key}${secondParamSuffix}`]: nullEquivalentFieldValue }
+          ? { [`${key}${secondUuid}`]: nullEquivalentFieldValue }
           : {},
       };
     case 'like':
       return {
-        sql: `${fieldReference}::text LIKE :${key}${paramSuffix}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
-        params: { [`${key}${paramSuffix}`]: `${value}` },
+        sql: `${fieldReference}::text LIKE :${key}${uuid}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
+        params: { [`${key}${uuid}`]: `${value}` },
       };
     case 'ilike':
       return {
-        sql: `${fieldReference}::text ILIKE :${key}${paramSuffix}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
-        params: { [`${key}${paramSuffix}`]: `${value}` },
+        sql: `${fieldReference}::text ILIKE :${key}${uuid}${hasNullEquivalentFieldValue ? ` OR ${fieldReference} IS NULL` : ''}`,
+        params: { [`${key}${uuid}`]: `${value}` },
       };
     case 'startsWith':
       return {
-        sql: `${fieldReference}::text ^@ :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: `${value}` },
+        sql: `${fieldReference}::text ^@ :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: `${value}` },
       };
     case 'endsWith':
       return {
-        sql: `RIGHT(${fieldReference}::text, LENGTH(:${key}${paramSuffix})) = :${key}${paramSuffix}`,
-        params: { [`${key}${paramSuffix}`]: `${value}` },
+        sql: `RIGHT(${fieldReference}::text, LENGTH(:${key}${uuid})) = :${key}${uuid}`,
+        params: { [`${key}${uuid}`]: `${value}` },
       };
     case 'contains':
       return {
-        sql: `${fieldReference} @> ARRAY[:...${key}${paramSuffix}]`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference} @> ARRAY[:...${key}${uuid}]`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'search': {
       const tsQuery = formatSearchTerms(value, 'and');
 
       return {
         sql: `(
-          ${fieldReference} @@ to_tsquery('simple', public.unaccent_immutable(:${key}${paramSuffix}Ts)) OR
-          public.unaccent_immutable(${fieldReference}::text) ILIKE public.unaccent_immutable(:${key}${paramSuffix}Like)
+          ${fieldReference} @@ to_tsquery('simple', public.unaccent_immutable(:${key}${uuid}Ts)) OR
+          public.unaccent_immutable(${fieldReference}::text) ILIKE public.unaccent_immutable(:${key}${uuid}Like)
         )`,
         params: {
-          [`${key}${paramSuffix}Ts`]: tsQuery,
-          [`${key}${paramSuffix}Like`]: `%${value}%`,
+          [`${key}${uuid}Ts`]: tsQuery,
+          [`${key}${uuid}Like`]: `%${value}%`,
         },
       };
     }
     case 'notContains':
       return {
-        sql: `NOT (${fieldReference}::text[] && ARRAY[:...${key}${paramSuffix}]::text[])`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `NOT (${fieldReference}::text[] && ARRAY[:...${key}${uuid}]::text[])`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'containsAny':
       return {
-        sql: `${fieldReference}::text[] && ARRAY[:...${key}${paramSuffix}]::text[]`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `${fieldReference}::text[] && ARRAY[:...${key}${uuid}]::text[]`,
+        params: { [`${key}${uuid}`]: value },
       };
     case 'containsIlike':
       return {
-        sql: `EXISTS (SELECT 1 FROM unnest(${fieldReference}) AS elem WHERE elem ILIKE :${key}${paramSuffix})`,
-        params: { [`${key}${paramSuffix}`]: value },
+        sql: `EXISTS (SELECT 1 FROM unnest(${fieldReference}) AS elem WHERE elem ILIKE :${key}${uuid})`,
+        params: { [`${key}${uuid}`]: value },
       };
     default:
       throw new GraphqlQueryRunnerException(

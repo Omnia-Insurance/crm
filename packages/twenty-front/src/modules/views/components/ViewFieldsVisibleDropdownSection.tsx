@@ -12,7 +12,6 @@ import { DraggableList } from '@/ui/layout/draggable-list/components/DraggableLi
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { dropdownYPositionComponentState } from '@/ui/layout/dropdown/states/internal/dropdownYPositionComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { ViewType } from '@/views/types/ViewType';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
@@ -78,7 +77,7 @@ export const ViewFieldsVisibleDropdownSection = () => {
     )
     .toSorted(sortByProperty('position'));
 
-  const dropdownYPosition = useRecoilComponentValueV2(
+  const dropdownYPosition = useRecoilComponentValue(
     dropdownYPositionComponentState,
   );
 

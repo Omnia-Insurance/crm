@@ -1,7 +1,5 @@
 import { useRecoilCallback, useRecoilValue } from 'recoil';
 
-import { isDefined } from 'twenty-shared/utils';
-
 import {
   type CurrentUser,
   currentUserState,
@@ -11,36 +9,21 @@ import {
   currentWorkspaceState,
 } from '@/auth/states/currentWorkspaceState';
 import { calendarBookingPageIdState } from '@/client-config/states/calendarBookingPageIdState';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { isDefined } from 'twenty-shared/utils';
+import { OnboardingStatus } from '~/generated-metadata/graphql';
 
-import {
-  OnboardingStatus,
-  PermissionFlagType,
-} from '~/generated-metadata/graphql';
-
-type GetNextOnboardingStatusArgs = {
-  currentUser: CurrentUser | null;
-  currentWorkspace: CurrentWorkspace | null;
-  calendarBookingPageId: string | null;
-  isAccountSyncEnabled: boolean;
-};
-
-const getNextOnboardingStatus = ({
-  currentUser,
-  currentWorkspace,
-  calendarBookingPageId,
-  isAccountSyncEnabled,
-}: GetNextOnboardingStatusArgs) => {
+const getNextOnboardingStatus = (
+  currentUser: CurrentUser | null,
+  currentWorkspace: CurrentWorkspace | null,
+  calendarBookingPageId: string | null,
+) => {
   if (currentUser?.onboardingStatus === OnboardingStatus.WORKSPACE_ACTIVATION) {
     return OnboardingStatus.PROFILE_CREATION;
   }
 
   if (currentUser?.onboardingStatus === OnboardingStatus.PROFILE_CREATION) {
     if (currentWorkspace?.workspaceMembersCount === 1) {
-      if (isAccountSyncEnabled) {
-        return OnboardingStatus.SYNC_EMAIL;
-      }
-      return OnboardingStatus.INVITE_TEAM;
+      return OnboardingStatus.SYNC_EMAIL;
     }
     return OnboardingStatus.COMPLETED;
   }
@@ -65,19 +48,15 @@ export const useSetNextOnboardingStatus = () => {
   const currentUser = useRecoilValue(currentUserState);
   const currentWorkspace = useRecoilValue(currentWorkspaceState);
   const calendarBookingPageId = useRecoilValue(calendarBookingPageIdState);
-  const permissionMap = usePermissionFlagMap();
-  const isAccountSyncEnabled =
-    permissionMap[PermissionFlagType.CONNECTED_ACCOUNTS];
 
   return useRecoilCallback(
     ({ set }) =>
       () => {
-        const nextOnboardingStatus = getNextOnboardingStatus({
+        const nextOnboardingStatus = getNextOnboardingStatus(
           currentUser,
           currentWorkspace,
           calendarBookingPageId,
-          isAccountSyncEnabled,
-        });
+        );
         set(currentUserState, (current) => {
           if (isDefined(current)) {
             return {
@@ -88,11 +67,6 @@ export const useSetNextOnboardingStatus = () => {
           return current;
         });
       },
-    [
-      currentUser,
-      currentWorkspace,
-      calendarBookingPageId,
-      isAccountSyncEnabled,
-    ],
+    [currentWorkspace, currentUser, calendarBookingPageId],
   );
 };

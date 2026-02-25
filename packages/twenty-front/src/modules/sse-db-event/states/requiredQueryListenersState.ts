@@ -1,16 +1,8 @@
+import { type RecordGqlOperationSignature } from 'twenty-shared/types';
 import { createState } from '@/ui/utilities/state/utils/createState';
-import {
-  type MetadataGqlOperationSignature,
-  type RecordGqlOperationSignature,
-} from 'twenty-shared/types';
 
 export const requiredQueryListenersState = createState<
-  {
-    queryId: string;
-    operationSignature:
-      | RecordGqlOperationSignature
-      | MetadataGqlOperationSignature;
-  }[]
+  { queryId: string; operationSignature: RecordGqlOperationSignature }[]
 >({
   key: 'requiredQueryListenersState',
   defaultValue: [],

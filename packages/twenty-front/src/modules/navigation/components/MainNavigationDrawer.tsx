@@ -1,5 +1,5 @@
-import styled from '@emotion/styled';
 import { useRecoilValue } from 'recoil';
+import styled from '@emotion/styled';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useFavoritesByFolder } from '@/favorites/hooks/useFavoritesByFolder';
@@ -31,8 +31,8 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
   );
   const { favoritesByFolder } = useFavoritesByFolder();
   const { navigationMenuItemsByFolder } = useNavigationMenuItemsByFolder();
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
   const openedFavoriteFolder = favoritesByFolder.find(
@@ -43,7 +43,7 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
     (f) => f.id === currentNavigationMenuItemFolderId,
   );
 
-  const openedFolder = isNavigationMenuItemEditingEnabled
+  const openedFolder = isNavigationMenuItemEnabled
     ? openedNavigationMenuItemFolder
     : openedFavoriteFolder;
 
@@ -59,7 +59,7 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
       </NavigationDrawerFixedContent>
 
       <NavigationDrawerScrollableContent>
-        {isNavigationMenuItemEditingEnabled ? (
+        {isNavigationMenuItemEnabled ? (
           <StyledScrollableContent>
             {openedFolder ? (
               <NavigationMenuItemFolderContentDispatcherEffect

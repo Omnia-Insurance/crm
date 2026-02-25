@@ -29,8 +29,8 @@ export const NavigationDrawerOpenedSection = () => {
   const { workspaceFavoritesObjectMetadataItems } = useWorkspaceFavorites();
   const { workspaceNavigationMenuItemsObjectMetadataItems } =
     useWorkspaceNavigationMenuItems();
-  const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
   );
 
   const {
@@ -52,7 +52,7 @@ export const NavigationDrawerOpenedSection = () => {
     return;
   }
 
-  const workspaceItemsToExclude = isNavigationMenuItemEditingEnabled
+  const workspaceItemsToExclude = isNavigationMenuItemEnabled
     ? workspaceNavigationMenuItemsObjectMetadataItems
     : workspaceFavoritesObjectMetadataItems;
 

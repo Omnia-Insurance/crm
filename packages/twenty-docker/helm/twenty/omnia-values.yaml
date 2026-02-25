@@ -13,6 +13,10 @@ server:
     SENTRY_DSN: https://3364f6ba21801fb70491652bd784a367@o4510840638930944.ingest.us.sentry.io/4510840660819968
     SENTRY_FRONT_DSN: https://660cb58838f1dbf2ee91c1290136056e@o4510840638930944.ingest.us.sentry.io/4510840650989568
     NODE_OPTIONS: "--max-old-space-size=1536"
+  extraEnvSecrets:
+    CONVOSO_API_TOKEN:
+      secretName: convoso-credentials
+      key: apiToken
   resources:
     requests:
       cpu: 100m
@@ -28,6 +32,13 @@ server:
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/configuration-snippet: |
+        if ($request_uri ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico)$) {
+          add_header Cache-Control "public, max-age=31536000, immutable" always;
+        }
+        if ($request_uri !~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico|json|map|wasm)$) {
+          add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        }
     hosts:
       - host: crm.omniaagent.com
         paths:
@@ -42,6 +53,10 @@ worker:
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
+  extraEnvSecrets:
+    CONVOSO_API_TOKEN:
+      secretName: convoso-credentials
+      key: apiToken
   resources:
     requests:
       cpu: 100m
@@ -51,22 +66,15 @@ worker:
       memory: 1024Mi
 
 db:
-  internal:
-    image:
-      repository: twentycrm/twenty-postgres-spilo
-      tag: latest
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
-    persistence:
-      enabled: true
-      size: 10Gi
-      accessModes:
-        - ReadWriteOnce
+  enabled: false
+  external:
+    host: twenty-crm-db.cluster-cgx4wwy00vhj.us-east-1.rds.amazonaws.com
+    port: 5432
+    user: twenty_app_user
+    database: twenty
+    ssl: false
+    secretName: twenty-rds-credentials
+    passwordKey: password
 
 storage:
   type: s3
@@ -85,3 +93,11 @@ redisInternal:
     limits:
       cpu: 200m
       memory: 256Mi
+
+nodeSelector:
+  environment: production
+tolerations:
+  - key: "environment"
+    operator: "Equal"
+    value: "production"
+    effect: "NoSchedule"

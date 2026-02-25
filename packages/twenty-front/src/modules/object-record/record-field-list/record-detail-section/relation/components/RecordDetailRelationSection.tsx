@@ -21,7 +21,7 @@ import { AggregateOperations } from '@/object-record/record-table/constants/Aggr
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { coreIndexViewIdFromObjectMetadataItemFamilySelector } from '@/views/states/selectors/coreIndexViewIdFromObjectMetadataItemFamilySelector';
 import { useLingui } from '@lingui/react/macro';
 import {
@@ -100,7 +100,7 @@ export const RecordDetailRelationSection = ({
     instanceId: scopeInstanceId,
   });
 
-  const isDropdownOpen = useRecoilComponentValueV2(
+  const isDropdownOpen = useRecoilComponentValue(
     isDropdownOpenComponentState,
     dropdownId,
   );

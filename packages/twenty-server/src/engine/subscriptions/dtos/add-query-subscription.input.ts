@@ -1,8 +1,7 @@
 import { Field, InputType } from '@nestjs/graphql';
 
 import GraphQLJSON from 'graphql-type-json';
-
-import { type RecordOrMetadataGqlOperationSignature } from 'src/engine/subscriptions/types/event-stream-data.type';
+import { type RecordGqlOperationSignature } from 'twenty-shared/types';
 
 @InputType()
 export class AddQuerySubscriptionInput {
@@ -13,5 +12,5 @@ export class AddQuerySubscriptionInput {
   queryId: string;
 
   @Field(() => GraphQLJSON)
-  operationSignature: RecordOrMetadataGqlOperationSignature;
+  operationSignature: RecordGqlOperationSignature;
 }

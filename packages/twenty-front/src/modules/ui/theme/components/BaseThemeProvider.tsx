@@ -3,7 +3,7 @@ import { createContext } from 'react';
 
 import { useSystemColorScheme } from '@/ui/theme/hooks/useSystemColorScheme';
 import { persistedColorSchemeState } from '@/ui/theme/states/persistedColorSchemeState';
-import { useRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilStateV2';
+import { useRecoilState } from 'recoil';
 import { type ColorScheme } from 'twenty-ui/input';
 import { THEME_DARK, THEME_LIGHT, ThemeContextProvider } from 'twenty-ui/theme';
 
@@ -16,7 +16,7 @@ export const ThemeSchemeContext = createContext<(theme: ColorScheme) => void>(
 );
 
 export const BaseThemeProvider = ({ children }: BaseThemeProviderProps) => {
-  const [persistedColorScheme, setPersistedColorScheme] = useRecoilStateV2(
+  const [persistedColorScheme, setPersistedColorScheme] = useRecoilState(
     persistedColorSchemeState,
   );
   const systemColorScheme = useSystemColorScheme();

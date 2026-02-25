@@ -26,7 +26,7 @@ import { getShowPageTabListComponentId } from '@/ui/layout/show-page/utils/getSh
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { WORKFLOW_LOGIC_FUNCTION_TAB_LIST_COMPONENT_ID } from '@/workflow/workflow-steps/workflow-actions/code-action/constants/WorkflowLogicFunctionTabListComponentId';
 import { WorkflowLogicFunctionTabId } from '@/workflow/workflow-steps/workflow-actions/code-action/types/WorkflowLogicFunctionTabId';
-import { useStore } from 'jotai';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { useRecoilCallback } from 'recoil';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -38,8 +38,6 @@ export const useCommandMenuCloseAnimationCompleteCleanup = () => {
   const { resetContextStoreStates } = useResetContextStoreStates();
 
   const { closeDropdown } = useCloseDropdown();
-
-  const store = useStore();
 
   const commandMenuCloseAnimationCompleteCleanup = useRecoilCallback(
     ({ snapshot, set }) =>
@@ -108,7 +106,7 @@ export const useCommandMenuCloseAnimationCompleteCleanup = () => {
           instanceId: '',
         });
         set(isCommandMenuOpenedState, false);
-        store.set(isCommandMenuOpenedStateV2.atom, false);
+        jotaiStore.set(isCommandMenuOpenedStateV2.atom, false);
         set(commandMenuSearchState, '');
         set(commandMenuNavigationMorphItemsByPageState, new Map());
         set(commandMenuNavigationStackState, []);
@@ -117,7 +115,7 @@ export const useCommandMenuCloseAnimationCompleteCleanup = () => {
 
         emitSidePanelCloseEvent();
         set(isCommandMenuClosingState, false);
-        store.set(
+        set(
           activeTabIdComponentState.atomFamily({
             instanceId: WORKFLOW_LOGIC_FUNCTION_TAB_LIST_COMPONENT_ID,
           }),
@@ -127,7 +125,7 @@ export const useCommandMenuCloseAnimationCompleteCleanup = () => {
         for (const [pageId, morphItems] of snapshot
           .getLoadable(commandMenuNavigationMorphItemsByPageState)
           .getValue()) {
-          store.set(
+          set(
             activeTabIdComponentState.atomFamily({
               instanceId: getShowPageTabListComponentId({
                 pageId,
@@ -138,7 +136,7 @@ export const useCommandMenuCloseAnimationCompleteCleanup = () => {
           );
         }
       },
-    [closeDropdown, resetContextStoreStates, resetSelectedItem, store],
+    [closeDropdown, resetContextStoreStates, resetSelectedItem],
   );
 
   return {

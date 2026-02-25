@@ -29,7 +29,7 @@ type GetEmptyRecordGqlOperationFilterParams = {
   correspondingField: Pick<PartialFieldMetadataItem, 'id' | 'name' | 'type'> & {
     relationType?: string | null;
   };
-  recordFilter: Omit<RecordFilter, 'id'>;
+  recordFilter: RecordFilter;
 };
 
 export const getEmptyRecordGqlOperationFilter = ({

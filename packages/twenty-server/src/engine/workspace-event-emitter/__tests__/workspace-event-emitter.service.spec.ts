@@ -353,12 +353,8 @@ describe('WorkspaceEventEmitterService', () => {
 
       expect(publishCall.workspaceId).toBe(workspaceId);
       expect(publishCall.eventStreamChannelId).toBe(streamChannelId);
-      expect(publishCall.payload.objectRecordEventsWithQueryIds).toHaveLength(
-        1,
-      );
-      expect(
-        publishCall.payload.objectRecordEventsWithQueryIds[0].queryIds,
-      ).toContain('query-1');
+      expect(publishCall.payload).toHaveLength(1);
+      expect(publishCall.payload[0].queryIds).toContain('query-1');
     });
 
     it('should not publish events when object-level read permission is denied', async () => {
@@ -526,14 +522,12 @@ describe('WorkspaceEventEmitterService', () => {
         mockSubscriptionService.publishToEventStream as jest.Mock
       ).mock.calls[0][0];
 
-      expect(
-        publishCall.payload.objectRecordEventsWithQueryIds[0].objectRecordEvent
-          .properties.after,
-      ).not.toHaveProperty('secretField');
-      expect(
-        publishCall.payload.objectRecordEventsWithQueryIds[0].objectRecordEvent
-          .properties.after,
-      ).toHaveProperty('name');
+      expect(publishCall.payload[0].event.properties.after).not.toHaveProperty(
+        'secretField',
+      );
+      expect(publishCall.payload[0].event.properties.after).toHaveProperty(
+        'name',
+      );
     });
 
     it('should skip update events when all updated fields are restricted', async () => {
@@ -669,8 +663,7 @@ describe('WorkspaceEventEmitterService', () => {
         mockSubscriptionService.publishToEventStream as jest.Mock
       ).mock.calls[0][0];
 
-      const eventPayload =
-        publishCall.payload.objectRecordEventsWithQueryIds[0].objectRecordEvent;
+      const eventPayload = publishCall.payload[0].event;
 
       expect(eventPayload.properties.updatedFields).toEqual(['name']);
       expect(eventPayload.properties.diff).not.toHaveProperty('secretField');
@@ -841,9 +834,7 @@ describe('WorkspaceEventEmitterService', () => {
         mockSubscriptionService.publishToEventStream as jest.Mock
       ).mock.calls[0][0];
 
-      expect(publishCall.payload.objectRecordEventsWithQueryIds).toHaveLength(
-        2,
-      );
+      expect(publishCall.payload).toHaveLength(2);
     });
 
     it('should handle multiple matching queries', async () => {
@@ -882,12 +873,8 @@ describe('WorkspaceEventEmitterService', () => {
         mockSubscriptionService.publishToEventStream as jest.Mock
       ).mock.calls[0][0];
 
-      expect(
-        publishCall.payload.objectRecordEventsWithQueryIds[0].queryIds,
-      ).toContain('query-1');
-      expect(
-        publishCall.payload.objectRecordEventsWithQueryIds[0].queryIds,
-      ).toContain('query-2');
+      expect(publishCall.payload[0].queryIds).toContain('query-1');
+      expect(publishCall.payload[0].queryIds).toContain('query-2');
     });
 
     it('should use before record for delete events', async () => {

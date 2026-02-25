@@ -7,7 +7,6 @@ import { type ChartConfiguration } from '@/command-menu/pages/page-layout/types/
 import { buildChartGroupByFieldConfigUpdate } from '@/command-menu/pages/page-layout/utils/buildChartGroupByFieldConfigUpdate';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
@@ -19,7 +18,7 @@ import { SelectableList } from '@/ui/layout/selectable-list/components/Selectabl
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { t } from '@lingui/core/macro';
 import { useMemo, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
@@ -72,7 +71,7 @@ export const ChartGroupByFieldSelectionDropdownContentBase = <
     DropdownComponentInstanceContext,
   );
 
-  const selectedItemId = useRecoilComponentValueV2(
+  const selectedItemId = useRecoilComponentValue(
     selectedItemIdComponentState,
     dropdownId,
   );
@@ -84,7 +83,7 @@ export const ChartGroupByFieldSelectionDropdownContentBase = <
         searchQuery,
         getSearchableValues: (item) => [item.label, item.name],
       }).filter((field) => {
-        if (isHiddenSystemField(field)) {
+        if (field.isSystem === true) {
           return false;
         }
         if (isFieldRelation(field)) {

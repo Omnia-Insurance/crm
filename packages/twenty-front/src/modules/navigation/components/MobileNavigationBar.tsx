@@ -7,7 +7,6 @@ import { useDefaultHomePagePath } from '@/navigation/hooks/useDefaultHomePagePat
 import { useOpenSettingsMenu } from '@/navigation/hooks/useOpenSettings';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
-import { useRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilStateV2';
 import { useRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilValueV2';
 import { useRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentState';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +31,7 @@ export const MobileNavigationBar = () => {
   const { openRecordsSearchPage } = useOpenRecordsSearchPageInCommandMenu();
   const isSettingsPage = useIsSettingsPage();
   const [isNavigationDrawerExpanded, setIsNavigationDrawerExpanded] =
-    useRecoilStateV2(isNavigationDrawerExpandedState);
+    useRecoilState(isNavigationDrawerExpandedState);
   const [currentMobileNavigationDrawer, setCurrentMobileNavigationDrawer] =
     useRecoilState(currentMobileNavigationDrawerState);
   const { openSettingsMenu } = useOpenSettingsMenu();

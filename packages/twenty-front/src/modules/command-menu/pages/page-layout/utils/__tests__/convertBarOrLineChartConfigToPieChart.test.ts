@@ -19,9 +19,6 @@ describe('convertBarOrLineChartConfigToPieChart', () => {
         TEST_BAR_CHART_CONFIGURATION.primaryAxisGroupBySubFieldName,
       dateGranularity: TEST_BAR_CHART_CONFIGURATION.primaryAxisDateGranularity,
       orderBy: TEST_BAR_CHART_CONFIGURATION.primaryAxisOrderBy,
-      splitMultiValueFields: TEST_BAR_CHART_CONFIGURATION.splitMultiValueFields,
-      aggregateFieldMetadataId:
-        TEST_BAR_CHART_CONFIGURATION.aggregateFieldMetadataId,
     });
   });
 
@@ -37,10 +34,6 @@ describe('convertBarOrLineChartConfigToPieChart', () => {
         TEST_LINE_CHART_CONFIGURATION.primaryAxisGroupBySubFieldName,
       dateGranularity: TEST_LINE_CHART_CONFIGURATION.primaryAxisDateGranularity,
       orderBy: TEST_LINE_CHART_CONFIGURATION.primaryAxisOrderBy,
-      splitMultiValueFields:
-        TEST_LINE_CHART_CONFIGURATION.splitMultiValueFields,
-      aggregateFieldMetadataId:
-        TEST_LINE_CHART_CONFIGURATION.aggregateFieldMetadataId,
     });
   });
 

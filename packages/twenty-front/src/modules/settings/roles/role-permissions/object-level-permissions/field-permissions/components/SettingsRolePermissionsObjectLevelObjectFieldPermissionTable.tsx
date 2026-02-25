@@ -14,7 +14,6 @@ import { Table } from '@/ui/layout/table/components/Table';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableHeaderText } from '@/ui/layout/table/components/TableHeaderText';
 import { sortedFieldByTableFamilyState } from '@/ui/layout/table/states/sortedFieldByTableFamilyState';
-import { useFamilyRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useFamilyRecoilValueV2';
 import styled from '@emotion/styled';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -46,11 +45,10 @@ export const SettingsRolePermissionsObjectLevelObjectFieldPermissionTable = ({
   const { t } = useLingui();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const sortedFieldByTable = useFamilyRecoilValueV2(
-    sortedFieldByTableFamilyState,
-    {
+  const sortedFieldByTable = useRecoilValue(
+    sortedFieldByTableFamilyState({
       tableId: SETTINGS_ROLE_PERMISSION_OBJECT_LEVEL_FIELD_PERMISSION_TABLE_ID,
-    },
+    }),
   );
 
   const searchedFields = objectMetadataItem.fields.filter((fieldMetadataItem) =>

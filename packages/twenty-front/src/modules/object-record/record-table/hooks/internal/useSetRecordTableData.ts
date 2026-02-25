@@ -17,7 +17,7 @@ import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
 import { useRecoilComponentFamilyCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentFamilyCallbackState';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
-import { useStore } from 'jotai';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { getSnapshotValue } from '@/ui/utilities/state/utils/getSnapshotValue';
 import { isDefined } from 'twenty-shared/utils';
 import { isDeeplyEqual } from '~/utils/isDeeplyEqual';
@@ -69,7 +69,6 @@ export const useSetRecordTableData = ({
 
   const { unfocusRecordTableCell } = useUnfocusRecordTableCell(recordTableId);
   const { unfocusRecordTableRow } = useFocusedRecordTableRow(recordTableId);
-  const store = useStore();
 
   return useRecoilCallback(
     ({ set, snapshot }) =>
@@ -93,7 +92,7 @@ export const useSetRecordTableData = ({
             };
 
             set(recordStoreFamilyState(record.id), newRecord);
-            store.set(
+            jotaiStore.set(
               recordStoreFamilyStateV2.atomFamily(record.id),
               newRecord,
             );
@@ -163,7 +162,6 @@ export const useSetRecordTableData = ({
       isRowSelectedFamilyState,
       recordIdByRealIndexCallbackSelector,
       isRecordTableInitialLoadingCallbackState,
-      store,
     ],
   );
 };

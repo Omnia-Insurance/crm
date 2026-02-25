@@ -11,6 +11,7 @@ import {
 } from '@/workflow/types/Workflow';
 import { WorkflowStepBody } from '@/workflow/workflow-steps/components/WorkflowStepBody';
 import { WorkflowStepFooter } from '@/workflow/workflow-steps/components/WorkflowStepFooter';
+import { WorkflowMessage } from '@/workflow/workflow-steps/workflow-actions/components/WorkflowMessage';
 import { WorkflowEditActionFormFieldSettings } from '@/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormFieldSettings';
 import { type WorkflowFormActionField } from '@/workflow/workflow-steps/workflow-actions/form-action/types/WorkflowFormActionField';
 import { getDefaultFormFieldSettings } from '@/workflow/workflow-steps/workflow-actions/form-action/utils/getDefaultFormFieldSettings';
@@ -24,7 +25,6 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
   Callout,
-  IconAlertTriangle,
   IconChevronDown,
   IconGripVertical,
   IconPlus,
@@ -51,8 +51,7 @@ type FormData = WorkflowFormActionField[];
 
 const StyledWorkflowStepBody = styled(WorkflowStepBody)`
   display: block;
-  padding-left: ${({ theme }) => theme.spacing(2)};
-  padding-right: ${({ theme }) => theme.spacing(2)};
+  padding-inline: ${({ theme }) => theme.spacing(2)};
 `;
 
 const StyledFormFieldContainer = styled.div`
@@ -99,8 +98,7 @@ const StyledFieldContainer = styled.div<{
   border: none;
   display: flex;
   font-family: inherit;
-  padding-left: ${({ theme }) => theme.spacing(2)};
-  padding-right: ${({ theme }) => theme.spacing(2)};
+  padding-inline: ${({ theme }) => theme.spacing(2)};
   width: 100%;
 
   cursor: ${({ readonly }) => (readonly ? 'default' : 'pointer')};
@@ -120,8 +118,7 @@ const StyledPlaceholder = styled(FormFieldPlaceholder)`
 `;
 
 const StyledAddFieldButtonContainer = styled.div`
-  padding-left: ${({ theme }) => theme.spacing(7)};
-  padding-right: ${({ theme }) => theme.spacing(7)};
+  padding-inline: ${({ theme }) => theme.spacing(7)};
   padding-top: ${({ theme }) => theme.spacing(2)};
 `;
 
@@ -133,17 +130,6 @@ const StyledAddFieldButtonContentContainer = styled.div`
   gap: ${({ theme }) => theme.spacing(0.5)};
   justify-content: center;
   width: 100%;
-`;
-
-const StyledCalloutContainer = styled.div`
-  padding-bottom: ${({ theme }) => theme.spacing(2)};
-  padding-left: ${({ theme }) => theme.spacing(7)};
-  padding-right: ${({ theme }) => theme.spacing(7)};
-  padding-top: ${({ theme }) => theme.spacing(2)};
-`;
-
-const StyledNotClosableCalloutContainer = styled(StyledCalloutContainer)`
-  padding-bottom: ${({ theme }) => theme.spacing(4)};
 `;
 
 export const WorkflowEditActionFormBuilder = ({
@@ -235,35 +221,27 @@ export const WorkflowEditActionFormBuilder = ({
     <>
       <StyledWorkflowStepBody>
         {triggerType && triggerType !== 'MANUAL' && isCalloutVisible && (
-          <StyledCalloutContainer>
-            <Callout
-              variant={'warning'}
-              Icon={IconAlertTriangle}
-              title={t`This form will appear in workflow runs.`}
-              description={t`Because this workflow is not using a manual trigger, the form will not open on top of the interface. To fill it, open the corresponding workflow run and complete the form there.`}
-              isClosable
-              onClose={() => setIsCalloutVisible(false)}
-              action={{
-                label: t`Learn more`,
-                onClick: () =>
-                  window.open(
-                    'https://docs.twenty.com/user-guide/workflows/capabilities/workflow-actions#form',
-                    '_blank',
-                    'noopener,noreferrer',
-                  ),
-              }}
-            />
-          </StyledCalloutContainer>
+          <Callout
+            variant={'warning'}
+            title={t`This form will appear in workflow runs.`}
+            description={t`Because this workflow is not using a manual trigger, the form will not open on top of the interface. To fill it, open the corresponding workflow run and complete the form there.`}
+            onClose={() => setIsCalloutVisible(false)}
+            action={{
+              label: t`Learn more`,
+              onClick: () =>
+                window.open(
+                  'https://docs.twenty.com/user-guide/workflows/capabilities/workflow-actions#form',
+                  '_blank',
+                  'noopener,noreferrer',
+                ),
+            }}
+          />
         )}
         {formData.length === 0 && (
-          <StyledNotClosableCalloutContainer>
-            <Callout
-              variant={'neutral'}
-              isClosable={false}
-              title={t`Add inputs to your form`}
-              description={t`Click on "Add Field" below to add the first input to your form. The form will pop up on the user's screen when the workflow is launched from a manual trigger. For other types of triggers, it will be displayed in the Workflow run record page.`}
-            />
-          </StyledNotClosableCalloutContainer>
+          <WorkflowMessage
+            title={t`Add inputs to your form`}
+            description={t`Click on "Add Field" below to add the first input to your form. The form will pop up on the user's screen when the workflow is launched from a manual trigger. For other types of triggers, it will be displayed in the Workflow run record page.`}
+          />
         )}
         <DraggableList
           onDragEnd={handleDragEnd}

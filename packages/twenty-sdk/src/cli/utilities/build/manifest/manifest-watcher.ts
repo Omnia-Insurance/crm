@@ -50,7 +50,7 @@ export class ManifestWatcher {
     });
 
     this.watcher.on('all', (event, filePath) => {
-      if (event === 'addDir' || event === 'unlinkDir') {
+      if (event === 'addDir') {
         return;
       }
 

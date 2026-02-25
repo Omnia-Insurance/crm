@@ -1,5 +1,4 @@
 import { ON_EVENT_SUBSCRIPTION } from '@/sse-db-event/graphql/subscriptions/OnEventSubscription';
-import { useDispatchMetadataEventsFromSseToBrowserEvents } from '@/sse-db-event/hooks/useDispatchMetadataEventsFromSseToBrowserEvents';
 import { useDispatchObjectRecordEventsFromSseToBrowserEvents } from '@/sse-db-event/hooks/useDispatchObjectRecordEventsFromSseToBrowserEvents';
 import { useTriggerOptimisticEffectFromSseEvents } from '@/sse-db-event/hooks/useTriggerOptimisticEffectFromSseEvents';
 import { disposeFunctionForEventStreamState } from '@/sse-db-event/states/disposeFunctionByEventStreamMapState';
@@ -23,9 +22,6 @@ export const useTriggerEventStreamCreation = () => {
   const setIsCreatingSseEventStream = useSetRecoilState(
     isCreatingSseEventStreamState,
   );
-
-  const { dispatchMetadataEventsFromSseToBrowserEvents } =
-    useDispatchMetadataEventsFromSseToBrowserEvents();
 
   const { dispatchObjectRecordEventsFromSseToBrowserEvents } =
     useDispatchObjectRecordEventsFromSseToBrowserEvents();
@@ -77,55 +73,9 @@ export const useTriggerEventStreamCreation = () => {
             },
           },
           {
-            next: (
-              value: ExecutionResult<{
-                onEventSubscription: EventSubscription;
-              }>,
-            ) => {
-              if (isDefined(value?.errors)) {
-                captureException(
-                  new Error(
-                    `SSE subscription error: ${value.errors[0]?.message}`,
-                  ),
-                );
-                set(shouldDestroyEventStreamState, true);
-
-                return;
-              }
-
-              if (!hasReceivedFirstEvent) {
-                hasReceivedFirstEvent = true;
-                set(sseEventStreamReadyState, true);
-              }
-
-              const eventSubscription = value?.data?.onEventSubscription;
-
-              const objectRecordEventsWithQueryIds =
-                eventSubscription?.objectRecordEventsWithQueryIds ?? [];
-
-              const metadataEventsWithQueryIds =
-                eventSubscription?.metadataEventsWithQueryIds ?? [];
-
-              const objectRecordEvents = objectRecordEventsWithQueryIds.map(
-                (item) => item.objectRecordEvent,
-              );
-
-              triggerOptimisticEffectFromSseEvents({
-                objectRecordEvents,
-              });
-
-              dispatchObjectRecordEventsFromSseToBrowserEvents(
-                objectRecordEventsWithQueryIds,
-              );
-
-              dispatchMetadataEventsFromSseToBrowserEvents(
-                metadataEventsWithQueryIds,
-              );
-            },
-            error: (error) => {
-              captureException(error);
-            },
             complete: () => {},
+            error: () => {},
+            next: () => {},
           },
           {
             message: ({ data, event }) => {
@@ -159,12 +109,12 @@ export const useTriggerEventStreamCreation = () => {
 
                     const objectRecordEventsWithQueryIds =
                       result?.data?.onEventSubscription
-                        ?.objectRecordEventsWithQueryIds ?? [];
+                        ?.eventWithQueryIdsList ?? [];
 
                     const objectRecordEvents =
                       objectRecordEventsWithQueryIds.map(
-                        (objectRecordEventWithQueryIds) => {
-                          return objectRecordEventWithQueryIds.objectRecordEvent;
+                        (eventWithQueryIds) => {
+                          return eventWithQueryIds.event;
                         },
                       );
 
@@ -194,9 +144,9 @@ export const useTriggerEventStreamCreation = () => {
         setIsCreatingSseEventStream(false);
       },
     [
-      dispatchMetadataEventsFromSseToBrowserEvents,
       dispatchObjectRecordEventsFromSseToBrowserEvents,
       setIsCreatingSseEventStream,
+
       triggerOptimisticEffectFromSseEvents,
     ],
   );

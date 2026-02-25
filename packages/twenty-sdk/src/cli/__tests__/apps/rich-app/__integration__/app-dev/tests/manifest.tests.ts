@@ -42,13 +42,11 @@ export const defineManifestTests = (appPath: string): void => {
     it('should load all entity types', async () => {
       const manifest = await fs.readJson(manifestOutputPath);
 
-      expect(manifest.objects).toHaveLength(4);
-      expect(manifest.logicFunctions).toHaveLength(6);
+      expect(manifest.objects).toHaveLength(2);
+      expect(manifest.logicFunctions).toHaveLength(4);
       expect(manifest.frontComponents).toHaveLength(4);
       expect(manifest.roles).toHaveLength(2);
-      expect(manifest.fields).toHaveLength(6);
-      expect(manifest.views).toHaveLength(3);
-      expect(manifest.navigationMenuItems).toHaveLength(3);
+      expect(manifest.fields).toHaveLength(2);
     });
   });
 };

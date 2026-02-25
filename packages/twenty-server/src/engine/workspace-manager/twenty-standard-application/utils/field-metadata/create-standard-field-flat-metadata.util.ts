@@ -5,14 +5,13 @@ import {
   type FieldMetadataSettings,
   type FieldMetadataType,
 } from 'twenty-shared/types';
+import { v4 } from 'uuid';
 import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
 
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type AllStandardObjectFieldName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-field-name.type';
 import { type AllStandardObjectName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-name.type';
 import { type StandardBuilderArgs } from 'src/engine/workspace-manager/twenty-standard-application/types/metadata-standard-buillder-args.type';
-
-type WithRequiredId<T> = T & { id: string };
 
 export type CreateStandardFieldArgs<
   O extends AllStandardObjectName,
@@ -32,8 +31,8 @@ export type CreateStandardFieldArgs<
     defaultValue?: FieldMetadataDefaultValue<T>;
     settings?: FieldMetadataSettings<T>;
     options?:
-      | WithRequiredId<FieldMetadataDefaultOption>[]
-      | WithRequiredId<FieldMetadataComplexOption>[]
+      | FieldMetadataDefaultOption[]
+      | FieldMetadataComplexOption[]
       | null;
   };
 };
@@ -89,7 +88,7 @@ export const createStandardFieldFlatMetadata = <
     standardOverrides: null,
     defaultValue: defaultValue ?? null,
     settings: settings ?? null,
-    options: fieldOptions ?? null,
+    options: fieldOptions?.map((option) => ({ ...option, id: v4() })) ?? null,
     relationTargetFieldMetadataId: null,
     relationTargetObjectMetadataId: null,
     morphId: null,

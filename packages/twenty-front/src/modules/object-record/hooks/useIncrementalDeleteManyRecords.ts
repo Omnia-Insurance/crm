@@ -1,5 +1,4 @@
 import { triggerUpdateRecordOptimisticEffectByBatch } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffectByBatch';
-import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useRemoveNavigationMenuItemByTargetRecordId } from '@/navigation-menu-item/hooks/useRemoveNavigationMenuItemByTargetRecordId';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -17,8 +16,11 @@ import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions
 import { useRefetchAggregateQueries } from '@/object-record/hooks/useRefetchAggregateQueries';
 import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { dispatchObjectRecordOperationBrowserEvent } from '@/object-record/utils/dispatchObjectRecordOperationBrowserEvent';
+import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { FeatureFlagKey } from '~/generated-metadata/graphql';
 import { sleep } from '~/utils/sleep';
 
 const DEFAULT_DELAY_BETWEEN_MUTATIONS_MS = 50;
@@ -62,6 +64,9 @@ export const useIncrementalDeleteManyRecords = <T>({
   const { objectMetadataItems } = useObjectMetadataItems();
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
   const { refetchAggregateQueries } = useRefetchAggregateQueries();
+  const isNavigationMenuItemEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_ENABLED,
+  );
   const { removeNavigationMenuItemsByTargetRecordIds } =
     useRemoveNavigationMenuItemByTargetRecordId();
 
@@ -239,7 +244,9 @@ export const useIncrementalDeleteManyRecords = <T>({
       objectMetadataNamePlural: objectMetadataItem.namePlural,
     });
 
-    removeNavigationMenuItemsByTargetRecordIds(allDeletedRecordIds);
+    if (isNavigationMenuItemEnabled) {
+      removeNavigationMenuItemsByTargetRecordIds(allDeletedRecordIds);
+    }
 
     dispatchObjectRecordOperationBrowserEvent({
       objectMetadataItem,

@@ -2,7 +2,6 @@ import { getIsInputTabDisabled } from '@/command-menu/pages/workflow/step/view-r
 import { getIsOutputTabDisabled } from '@/command-menu/pages/workflow/step/view-run/utils/getIsOutputTabDisabled';
 import { commandMenuPageInfoState } from '@/command-menu/states/commandMenuPageInfoState';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
-import { useStore } from 'jotai';
 import { getSnapshotValue } from '@/ui/utilities/state/utils/getSnapshotValue';
 import { WorkflowRunTabId } from '@/workflow/workflow-steps/types/WorkflowRunTabId';
 import { useRecoilCallback } from 'recoil';
@@ -10,10 +9,8 @@ import { isDefined } from 'twenty-shared/utils';
 import { type WorkflowRunStepStatus } from '@/workflow/types/Workflow';
 
 export const useSetInitialWorkflowRunRightDrawerTab = () => {
-  const store = useStore();
-
   const setInitialWorkflowRunRightDrawerTab = useRecoilCallback(
-    ({ snapshot }) =>
+    ({ snapshot, set }) =>
       ({
         workflowSelectedNode,
         stepExecutionStatus,
@@ -26,12 +23,11 @@ export const useSetInitialWorkflowRunRightDrawerTab = () => {
           commandMenuPageInfoState,
         );
 
-        const activeTabIdAtom = activeTabIdComponentState.atomFamily({
-          instanceId: commandMenuPageInfo.instanceId,
-        });
-
-        const activeWorkflowRunRightDrawerTab = store.get(
-          activeTabIdAtom,
+        const activeWorkflowRunRightDrawerTab = getSnapshotValue(
+          snapshot,
+          activeTabIdComponentState.atomFamily({
+            instanceId: commandMenuPageInfo.instanceId,
+          }),
         ) as WorkflowRunTabId | null;
 
         const isInputTabDisabled = getIsInputTabDisabled({
@@ -47,7 +43,12 @@ export const useSetInitialWorkflowRunRightDrawerTab = () => {
             ? WorkflowRunTabId.NODE
             : WorkflowRunTabId.OUTPUT;
 
-          store.set(activeTabIdAtom, defaultTabId);
+          set(
+            activeTabIdComponentState.atomFamily({
+              instanceId: commandMenuPageInfo.instanceId,
+            }),
+            defaultTabId,
+          );
 
           return;
         }
@@ -58,10 +59,15 @@ export const useSetInitialWorkflowRunRightDrawerTab = () => {
           (isOutputTabDisabled &&
             activeWorkflowRunRightDrawerTab === WorkflowRunTabId.OUTPUT)
         ) {
-          store.set(activeTabIdAtom, WorkflowRunTabId.NODE);
+          set(
+            activeTabIdComponentState.atomFamily({
+              instanceId: commandMenuPageInfo.instanceId,
+            }),
+            WorkflowRunTabId.NODE,
+          );
         }
       },
-    [store],
+    [],
   );
 
   return {

@@ -1,83 +1,88 @@
-import { useCallback } from 'react';
-import { useStore } from 'jotai';
-
 import { isModalOpenedComponentState } from '@/ui/layout/modal/states/isModalOpenedComponentState';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { useRemoveFocusItemFromFocusStackById } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackById';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
+import { useRecoilCallback } from 'recoil';
 
 export const useModal = () => {
   const { pushFocusItemToFocusStack } = usePushFocusItemToFocusStack();
   const { removeFocusItemFromFocusStackById } =
     useRemoveFocusItemFromFocusStackById();
 
-  const store = useStore();
+  const closeModal = useRecoilCallback(
+    ({ set, snapshot }) =>
+      (modalId: string) => {
+        const isModalOpen = snapshot
+          .getLoadable(
+            isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+          )
+          .getValue();
 
-  const closeModal = useCallback(
-    (modalId: string) => {
-      const isModalOpen = store.get(
-        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
-      );
+        if (!isModalOpen) {
+          return;
+        }
 
-      if (!isModalOpen) {
-        return;
-      }
+        removeFocusItemFromFocusStackById({
+          focusId: modalId,
+        });
 
-      removeFocusItemFromFocusStackById({
-        focusId: modalId,
-      });
-
-      store.set(
-        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
-        false,
-      );
-    },
-    [store, removeFocusItemFromFocusStackById],
+        set(
+          isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+          false,
+        );
+      },
+    [removeFocusItemFromFocusStackById],
   );
 
-  const openModal = useCallback(
-    (modalId: string) => {
-      const isModalOpened = store.get(
-        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
-      );
+  const openModal = useRecoilCallback(
+    ({ set, snapshot }) =>
+      (modalId: string) => {
+        const isModalOpened = snapshot
+          .getLoadable(
+            isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+          )
+          .getValue();
 
-      if (isModalOpened) {
-        return;
-      }
+        if (isModalOpened) {
+          return;
+        }
 
-      store.set(
-        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
-        true,
-      );
+        set(
+          isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+          true,
+        );
 
-      pushFocusItemToFocusStack({
-        focusId: modalId,
-        component: {
-          type: FocusComponentType.MODAL,
-          instanceId: modalId,
-        },
-        globalHotkeysConfig: {
-          enableGlobalHotkeysWithModifiers: false,
-          enableGlobalHotkeysConflictingWithKeyboard: false,
-        },
-      });
-    },
-    [store, pushFocusItemToFocusStack],
+        pushFocusItemToFocusStack({
+          focusId: modalId,
+          component: {
+            type: FocusComponentType.MODAL,
+            instanceId: modalId,
+          },
+          globalHotkeysConfig: {
+            enableGlobalHotkeysWithModifiers: false,
+            enableGlobalHotkeysConflictingWithKeyboard: false,
+          },
+        });
+      },
+    [pushFocusItemToFocusStack],
   );
 
-  const toggleModal = useCallback(
-    (modalId: string) => {
-      const isModalOpen = store.get(
-        isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
-      );
+  const toggleModal = useRecoilCallback(
+    ({ snapshot }) =>
+      (modalId: string) => {
+        const isModalOpen = snapshot
+          .getLoadable(
+            isModalOpenedComponentState.atomFamily({ instanceId: modalId }),
+          )
+          .getValue();
 
-      if (isModalOpen) {
-        closeModal(modalId);
-      } else {
-        openModal(modalId);
-      }
-    },
-    [store, closeModal, openModal],
+        if (isModalOpen) {
+          closeModal(modalId);
+        } else {
+          openModal(modalId);
+        }
+      },
+    [closeModal, openModal],
   );
 
   return {

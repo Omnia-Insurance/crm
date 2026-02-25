@@ -37,11 +37,11 @@ export const SSEEventStreamEffect = () => {
   const { triggerEventStreamDestroy } = useTriggerEventStreamDestroy();
 
   useEffect(() => {
-    const isSseClientAvailable =
+    const isSseClientAvailabble =
       !isCreatingSseEventStream && !isDestroyingEventStream;
 
     const willCreateEventStream =
-      isSseClientAvailable &&
+      isSseClientAvailabble &&
       isLoggedIn &&
       isSseDbEventsEnabled &&
       isDefined(currentUser) &&
@@ -51,7 +51,7 @@ export const SSEEventStreamEffect = () => {
       isNonEmptyArray(objectMetadataItems);
 
     const willDestroyEventStream =
-      isSseClientAvailable &&
+      isSseClientAvailabble &&
       isNonEmptyString(sseEventStreamId) &&
       shouldDestroyEventStream;
 

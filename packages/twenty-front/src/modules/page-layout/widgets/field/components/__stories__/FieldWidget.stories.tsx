@@ -390,10 +390,7 @@ export const TextFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -485,10 +482,7 @@ export const AddressFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -583,10 +577,7 @@ export const NumberFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -678,10 +669,7 @@ export const LinkFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -784,10 +772,7 @@ export const ManyToOneRelationFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -881,10 +866,7 @@ export const OneToManyRelationFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -976,10 +958,7 @@ export const BooleanFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1070,10 +1049,7 @@ export const CurrencyFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1164,10 +1140,7 @@ export const EmailsFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1259,10 +1232,7 @@ export const PhonesFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1358,10 +1328,7 @@ export const SelectFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1454,10 +1421,7 @@ export const MultiSelectFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1563,10 +1527,7 @@ export const TimelineActivityRelationFieldWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1668,10 +1629,7 @@ export const ManyToOneRelationCardWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1773,10 +1731,7 @@ export const OneToManyRelationCardWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -1877,10 +1832,7 @@ export const TimelineActivityRelationCardWidget: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,
@@ -2039,10 +1991,7 @@ export const OneToManyRelationCardWidgetWithProgressiveLoading: Story = {
       <div style={{ width: '400px', padding: '20px' }}>
         <JestMetadataAndApolloMocksWrapper>
           <CoreClientProviderWrapper>
-            <PageLayoutTestWrapper
-              initializeState={initializeState}
-              store={jotaiStore}
-            >
+            <PageLayoutTestWrapper initializeState={initializeState}>
               <LayoutRenderingProvider
                 value={{
                   isInRightDrawer: false,

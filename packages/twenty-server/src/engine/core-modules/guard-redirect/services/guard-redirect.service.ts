@@ -97,13 +97,8 @@ export class GuardRedirectService {
   }) {
     this.captureException(error, workspace.id);
 
-    const errorMessage =
-      error instanceof AuthException
-        ? error.message
-        : `Authentication error: ${error instanceof Error ? error.message : String(error)}`;
-
     return this.workspaceDomainsService.computeWorkspaceRedirectErrorUrl(
-      errorMessage,
+      error instanceof AuthException ? error.message : 'Unknown error',
       {
         subdomain: workspace.subdomain,
         customDomain: workspace.customDomain,

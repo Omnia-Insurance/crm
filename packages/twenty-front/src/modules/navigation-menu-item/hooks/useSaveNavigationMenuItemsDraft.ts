@@ -12,7 +12,7 @@ import { navigationMenuItemsDraftStateV2 } from '@/navigation-menu-item/states/n
 import { filterWorkspaceNavigationMenuItems } from '@/navigation-menu-item/utils/filterWorkspaceNavigationMenuItems';
 import { isNavigationMenuItemFolder } from '@/navigation-menu-item/utils/isNavigationMenuItemFolder';
 import { isNavigationMenuItemLink } from '@/navigation-menu-item/utils/isNavigationMenuItemLink';
-import { useStore } from 'jotai';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavigationMenuItemsState';
 
 export const useSaveNavigationMenuItemsDraft = () => {
@@ -23,12 +23,10 @@ export const useSaveNavigationMenuItemsDraft = () => {
       refetchQueries: ['FindManyNavigationMenuItems'],
     });
 
-  const store = useStore();
-
   const saveDraft = useRecoilCallback(
     ({ snapshot }) =>
       async () => {
-        const draft = store.get(navigationMenuItemsDraftStateV2.atom);
+        const draft = jotaiStore.get(navigationMenuItemsDraftStateV2.atom);
         const prefetch = snapshot
           .getLoadable(prefetchNavigationMenuItemsState)
           .getValue();
@@ -192,7 +190,6 @@ export const useSaveNavigationMenuItemsDraft = () => {
       updateNavigationMenuItem,
       deleteNavigationMenuItem,
       createNavigationMenuItemMutation,
-      store,
     ],
   );
 

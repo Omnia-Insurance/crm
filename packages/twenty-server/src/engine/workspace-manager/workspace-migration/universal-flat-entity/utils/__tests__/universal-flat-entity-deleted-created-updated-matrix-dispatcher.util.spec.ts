@@ -40,7 +40,6 @@ describe('flatEntityDeletedCreatedUpdatedMatrixDispatcher', () => {
         buildOptions: {
           inferDeletionFromMissingEntities: { fieldMetadata: false },
           isSystemBuild: false,
-          applicationUniversalIdentifier: 'application-universal-identifier-1',
         },
       },
     },
@@ -68,7 +67,6 @@ describe('flatEntityDeletedCreatedUpdatedMatrixDispatcher', () => {
         buildOptions: {
           inferDeletionFromMissingEntities: { fieldMetadata: true },
           isSystemBuild: false,
-          applicationUniversalIdentifier: 'application-universal-identifier-1',
         },
       },
     },
@@ -113,7 +111,6 @@ describe('flatEntityDeletedCreatedUpdatedMatrixDispatcher', () => {
         buildOptions: {
           inferDeletionFromMissingEntities: { fieldMetadata: false },
           isSystemBuild: false,
-          applicationUniversalIdentifier: 'application-universal-identifier-1',
         },
       },
     },
@@ -186,7 +183,6 @@ describe('flatEntityDeletedCreatedUpdatedMatrixDispatcher', () => {
         buildOptions: {
           inferDeletionFromMissingEntities: { fieldMetadata: true },
           isSystemBuild: false,
-          applicationUniversalIdentifier: 'application-universal-identifier-1',
         },
       },
     },
@@ -215,7 +211,6 @@ describe('flatEntityDeletedCreatedUpdatedMatrixDispatcher', () => {
         buildOptions: {
           inferDeletionFromMissingEntities: { fieldMetadata: false },
           isSystemBuild: false,
-          applicationUniversalIdentifier: 'application-universal-identifier-1',
         },
       },
     },

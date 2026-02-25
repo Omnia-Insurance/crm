@@ -1,5 +1,4 @@
 import { flattenedReadableFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedReadableFieldMetadataItemIdsSelector';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
 import { useRecoilValue } from 'recoil';
 
@@ -18,7 +17,7 @@ export const useFilterVisibleAndReadableRecordField = () => {
           fieldMetadataItemToFilter.id ===
             recordFieldToFilter.fieldMetadataItemId &&
           fieldMetadataItemToFilter.isActive === true &&
-          !isHiddenSystemField(fieldMetadataItemToFilter),
+          fieldMetadataItemToFilter.isSystem !== true,
       )
     );
   };

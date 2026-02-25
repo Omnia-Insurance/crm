@@ -8,7 +8,6 @@ import {
   settingsDataModelObjectAboutFormSchema,
 } from '@/settings/data-model/validation-schemas/settingsDataModelObjectAboutFormSchema';
 import { navigationMemorizedUrlState } from '@/ui/navigation/states/navigationMemorizedUrlState';
-import { useSetRecoilStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilStateV2';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FormProvider, useForm } from 'react-hook-form';
 import { useSetRecoilState } from 'recoil';
@@ -31,7 +30,7 @@ export const SettingsUpdateDataModelObjectAboutForm = ({
   const setUpdatedObjectNamePlural = useSetRecoilState(
     updatedObjectNamePluralState,
   );
-  const setNavigationMemorizedUrl = useSetRecoilStateV2(
+  const setNavigationMemorizedUrl = useSetRecoilState(
     navigationMemorizedUrlState,
   );
 

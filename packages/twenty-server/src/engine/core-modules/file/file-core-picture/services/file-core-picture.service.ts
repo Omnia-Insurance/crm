@@ -64,7 +64,7 @@ export class FileCorePictureService {
 
     const savedFile = await this.fileStorageService.writeFile({
       sourceFile: sanitizedFile,
-      resourcePath: finalName,
+      resourcePath: `${FileFolder.CorePicture}/${finalName}`,
       mimeType,
       fileFolder: FileFolder.CorePicture,
       applicationUniversalIdentifier: universalIdentifier,
@@ -182,25 +182,6 @@ export class FileCorePictureService {
     });
   }
 
-  private async fetchImageBufferFromUrl(
-    imageUrl: string,
-  ): Promise<{ buffer: Buffer; extension: string } | undefined> {
-    try {
-      const httpClient = this.secureHttpClientService.getHttpClient();
-      const buffer = await getImageBufferFromUrl(imageUrl, httpClient);
-
-      const type = await FileType.fromBuffer(buffer);
-
-      if (!isDefined(type) || !type.mime.startsWith('image/')) {
-        return undefined;
-      }
-
-      return { buffer, extension: type.ext };
-    } catch {
-      return undefined;
-    }
-  }
-
   async uploadWorkspaceMemberProfilePictureFromUrl({
     imageUrl,
     workspaceId,
@@ -212,41 +193,18 @@ export class FileCorePictureService {
     applicationUniversalIdentifier?: string;
     queryRunner?: QueryRunner;
   }): Promise<FileWithSignedUrlDto | undefined> {
-    const imageData = await this.fetchImageBufferFromUrl(imageUrl);
+    const httpClient = this.secureHttpClientService.getHttpClient();
+    const buffer = await getImageBufferFromUrl(imageUrl, httpClient);
 
-    if (!isDefined(imageData)) {
-      return undefined;
+    const type = await FileType.fromBuffer(buffer);
+
+    if (!isDefined(type) || !type.mime.startsWith('image/')) {
+      return;
     }
 
     return this.uploadWorkspaceMemberProfilePicture({
-      file: imageData.buffer,
-      filename: `avatar.${imageData.extension}`,
-      workspaceId,
-      applicationUniversalIdentifier,
-      queryRunner,
-    });
-  }
-
-  async uploadWorkspaceLogoFromUrl({
-    imageUrl,
-    workspaceId,
-    applicationUniversalIdentifier,
-    queryRunner,
-  }: {
-    imageUrl: string;
-    workspaceId: string;
-    applicationUniversalIdentifier?: string;
-    queryRunner?: QueryRunner;
-  }): Promise<FileEntity | undefined> {
-    const imageData = await this.fetchImageBufferFromUrl(imageUrl);
-
-    if (!isDefined(imageData)) {
-      return undefined;
-    }
-
-    return this.uploadCorePicture({
-      file: imageData.buffer,
-      filename: `logo.${imageData.extension}`,
+      file: buffer,
+      filename: `avatar.${type.ext}`,
       workspaceId,
       applicationUniversalIdentifier,
       queryRunner,

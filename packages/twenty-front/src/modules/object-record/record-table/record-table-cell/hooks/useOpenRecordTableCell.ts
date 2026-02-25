@@ -28,8 +28,8 @@ import { useFocusedRecordTableRow } from '@/object-record/record-table/hooks/use
 import { useFocusRecordTableCell } from '@/object-record/record-table/record-table-cell/hooks/useFocusRecordTableCell';
 import { isRecordTableRowFocusActiveComponentState } from '@/object-record/record-table/states/isRecordTableRowFocusActiveComponentState';
 import { clickOutsideListenerIsActivatedComponentState } from '@/ui/utilities/pointer-event/states/clickOutsideListenerIsActivatedComponentState';
+import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
-import { useStore } from 'jotai';
 import { ViewOpenRecordInType } from '@/views/types/ViewOpenRecordInType';
 
 export type OpenTableCellArgs = {
@@ -43,8 +43,11 @@ export type OpenTableCellArgs = {
 
 export const useOpenRecordTableCell = (recordTableId: string) => {
   const { scopeInstanceId } = useRecordFieldsScopeContextOrThrow();
-  const store = useStore();
 
+  const clickOutsideListenerIsActivatedState = useRecoilComponentCallbackState(
+    clickOutsideListenerIsActivatedComponentState,
+    RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+  );
   const setCurrentTableCellInEditModePosition = useSetRecoilComponentState(
     recordTableCellEditModePositionComponentState,
     recordTableId,
@@ -79,7 +82,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
   const { openRecordFromIndexView } = useOpenRecordFromIndexView();
 
   const openTableCell = useRecoilCallback(
-    ({ snapshot }) =>
+    ({ snapshot, set }) =>
       ({
         initialValue,
         cellPosition,
@@ -88,12 +91,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
         recordId,
         isNavigating,
       }: OpenTableCellArgs) => {
-        store.set(
-          clickOutsideListenerIsActivatedComponentState.atomFamily({
-            instanceId: RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
-          }),
-          false,
-        );
+        set(clickOutsideListenerIsActivatedState, false);
 
         const isFirstColumnCell = cellPosition.column === 0;
 
@@ -171,6 +169,7 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
         );
       },
     [
+      clickOutsideListenerIsActivatedState,
       deactivateRecordTableRow,
       focusRecordTableCell,
       setIsRowFocusActive,
@@ -185,7 +184,6 @@ export const useOpenRecordTableCell = (recordTableId: string) => {
       openRecordFromIndexView,
       activateRecordTableRow,
       unfocusRecordTableRow,
-      store,
     ],
   );
 

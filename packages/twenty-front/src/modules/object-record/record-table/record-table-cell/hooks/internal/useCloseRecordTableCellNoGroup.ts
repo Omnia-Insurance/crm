@@ -6,12 +6,11 @@ import { RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID } from '@/object-record/record-t
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useCloseCurrentTableCellInEditMode } from '@/object-record/record-table/hooks/internal/useCloseCurrentTableCellInEditMode';
 import { clickOutsideListenerIsActivatedComponentState } from '@/ui/utilities/pointer-event/states/clickOutsideListenerIsActivatedComponentState';
-import { useStore } from 'jotai';
-import { useCallback } from 'react';
+import { useRecoilComponentCallbackState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentCallbackState';
+import { useRecoilCallback } from 'recoil';
 
 export const useCloseRecordTableCellNoGroup = () => {
   const { recordTableId } = useRecordTableContextOrThrow();
-  const store = useStore();
 
   const { setDragSelectionStartEnabled } = useDragSelect();
 
@@ -22,22 +21,26 @@ export const useCloseRecordTableCellNoGroup = () => {
   const closeCurrentTableCellInEditMode =
     useCloseCurrentTableCellInEditMode(recordTableId);
 
-  const closeTableCellNoGroup = useCallback(() => {
-    toggleClickOutside(true);
-    setDragSelectionStartEnabled(true);
-    closeCurrentTableCellInEditMode();
-    store.set(
-      clickOutsideListenerIsActivatedComponentState.atomFamily({
-        instanceId: RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
-      }),
-      true,
-    );
-  }, [
-    closeCurrentTableCellInEditMode,
-    setDragSelectionStartEnabled,
-    toggleClickOutside,
-    store,
-  ]);
+  const clickOutsideListenerIsActivatedState = useRecoilComponentCallbackState(
+    clickOutsideListenerIsActivatedComponentState,
+    RECORD_TABLE_CLICK_OUTSIDE_LISTENER_ID,
+  );
+
+  const closeTableCellNoGroup = useRecoilCallback(
+    ({ set }) =>
+      () => {
+        toggleClickOutside(true);
+        setDragSelectionStartEnabled(true);
+        closeCurrentTableCellInEditMode();
+        set(clickOutsideListenerIsActivatedState, true);
+      },
+    [
+      clickOutsideListenerIsActivatedState,
+      closeCurrentTableCellInEditMode,
+      setDragSelectionStartEnabled,
+      toggleClickOutside,
+    ],
+  );
 
   return {
     closeTableCellNoGroup,

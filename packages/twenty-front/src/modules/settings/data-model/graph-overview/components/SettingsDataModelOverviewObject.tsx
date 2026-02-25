@@ -4,7 +4,6 @@ import { type Node, type NodeProps } from '@xyflow/react';
 import { Link } from 'react-router-dom';
 
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { ObjectFieldRow } from '@/settings/data-model/graph-overview/components/SettingsDataModelOverviewField';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
@@ -111,7 +110,7 @@ export const SettingsDataModelOverviewObject = ({
   });
 
   const fields = objectMetadataItem.fields.filter(
-    (x) => !isHiddenSystemField(x) && x.isActive,
+    (x) => !x.isSystem && x.isActive,
   );
 
   const countNonRelation = fields.filter(

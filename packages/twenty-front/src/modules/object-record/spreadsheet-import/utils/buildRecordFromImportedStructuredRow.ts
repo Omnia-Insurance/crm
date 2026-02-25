@@ -349,22 +349,13 @@ export const buildRecordFromImportedStructuredRow = ({
         break;
       }
       case FieldMetadataType.UUID:
-        if (
-          isDefined(importedFieldValue) &&
-          isNonEmptyString(importedFieldValue)
-        ) {
-          recordToBuild[field.name] = importedFieldValue;
-        }
-        break;
       case FieldMetadataType.DATE:
       case FieldMetadataType.DATE_TIME:
         if (
           isDefined(importedFieldValue) &&
           isNonEmptyString(importedFieldValue)
         ) {
-          recordToBuild[field.name] = new Date(
-            importedFieldValue,
-          ).toISOString();
+          recordToBuild[field.name] = importedFieldValue;
         }
         break;
       case FieldMetadataType.SELECT:

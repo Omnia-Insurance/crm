@@ -24,6 +24,7 @@ import { ImapSmtpCalDavAPIService } from 'src/modules/connected-account/services
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
 @UseFilters(AuthGraphqlApiExceptionFilter, PermissionsGraphqlApiExceptionFilter)
+@UseGuards(SettingsPermissionGuard(PermissionFlagType.WORKSPACE))
 export class ImapSmtpCaldavResolver {
   constructor(
     private readonly ImapSmtpCaldavConnectionService: ImapSmtpCaldavService,
@@ -32,10 +33,7 @@ export class ImapSmtpCaldavResolver {
   ) {}
 
   @Query(() => ConnectedImapSmtpCaldavAccountDTO)
-  @UseGuards(
-    WorkspaceAuthGuard,
-    SettingsPermissionGuard(PermissionFlagType.CONNECTED_ACCOUNTS),
-  )
+  @UseGuards(WorkspaceAuthGuard)
   async getConnectedImapSmtpCaldavAccount(
     @Args('id', { type: () => UUIDScalarType }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -62,10 +60,7 @@ export class ImapSmtpCaldavResolver {
   }
 
   @Mutation(() => ImapSmtpCaldavConnectionSuccessDTO)
-  @UseGuards(
-    WorkspaceAuthGuard,
-    SettingsPermissionGuard(PermissionFlagType.CONNECTED_ACCOUNTS),
-  )
+  @UseGuards(WorkspaceAuthGuard)
   async saveImapSmtpCaldavAccount(
     @Args('accountOwnerId', { type: () => UUIDScalarType })
     accountOwnerId: string,
@@ -107,7 +102,7 @@ export class ImapSmtpCaldavResolver {
 
       if (params) {
         validatedParams[protocol] =
-          await this.mailConnectionValidatorService.validateProtocolConnectionParams(
+          this.mailConnectionValidatorService.validateProtocolConnectionParams(
             params,
           );
         const validatedProtocolParams = validatedParams[protocol];

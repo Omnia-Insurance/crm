@@ -46,6 +46,7 @@ export default defineLogicFunction({
     // databaseEventTriggerSettings: {
     //   eventName: 'objectName.created',
     // },
+  ],
 });
 `;
 };

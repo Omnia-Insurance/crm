@@ -1,14 +1,12 @@
 import { dialogInternalComponentState } from '@/ui/feedback/dialog-manager/states/dialogInternalComponentState';
 import { useDialogManager } from '@/ui/feedback/dialog-manager/hooks/useDialogManager';
 
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
+import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
 import { Dialog } from './Dialog';
 import { DialogManagerEffect } from './DialogManagerEffect';
 
 export const DialogManager = ({ children }: React.PropsWithChildren) => {
-  const dialogInternal = useRecoilComponentValueV2(
-    dialogInternalComponentState,
-  );
+  const dialogInternal = useRecoilComponentValue(dialogInternalComponentState);
   const { closeDialog } = useDialogManager();
 
   return (

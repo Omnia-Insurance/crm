@@ -3,10 +3,9 @@ import { pageLayoutCurrentLayoutsComponentState } from '@/page-layout/states/pag
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
 import { act, renderHook } from '@testing-library/react';
-import { useSetAtom } from 'jotai';
+import { useSetRecoilState } from 'recoil';
 import { PageLayoutType } from '~/generated-metadata/graphql';
 import {
   PAGE_LAYOUT_TEST_INSTANCE_ID,
@@ -37,7 +36,7 @@ describe('useCreatePageLayoutTab', () => {
           pageLayoutCurrentLayoutsComponentState,
           PAGE_LAYOUT_TEST_INSTANCE_ID,
         ),
-        activeTabId: useSetAtom(
+        activeTabId: useSetRecoilState(
           activeTabIdComponentState.atomFamily({
             instanceId: `${PAGE_LAYOUT_TEST_INSTANCE_ID}-tab-list`,
           }),
@@ -175,7 +174,7 @@ describe('useCreatePageLayoutTab', () => {
 
     const { result } = renderHook(
       () => {
-        const getActiveTabId = useRecoilComponentValueV2(
+        const getActiveTabId = useRecoilComponentValue(
           activeTabIdComponentState,
           `${PAGE_LAYOUT_TEST_INSTANCE_ID}-tab-list`,
         );

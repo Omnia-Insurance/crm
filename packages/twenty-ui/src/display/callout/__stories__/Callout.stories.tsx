@@ -19,11 +19,10 @@ type Story = StoryObj<typeof Callout>;
 export const Default: Story = {
   args: {
     variant: 'neutral',
-    title: 'This form will appear in workflow runs.',
-    description:
-      'Because this workflow is not using a manual trigger, the form will not open on top of the interface. To fill it, open the corresponding workflow run and complete the form there.',
+    title: 'An callout component',
+    description: 'Description of callout component',
     action: {
-      label: 'Learn more',
+      label: 'Learn more link',
       onClick: () => {},
     },
   },
@@ -32,11 +31,10 @@ export const Default: Story = {
 
 export const Catalog: CatalogStory<Story, typeof Callout> = {
   args: {
-    title: 'This form will appear in workflow runs.',
-    description:
-      'Because this workflow is not using a manual trigger, the form will not open on top of the interface. To fill it, open the corresponding workflow run and complete the form there.',
+    title: 'An callout component',
+    description: 'Description of callout component',
     action: {
-      label: 'Learn more',
+      label: 'Learn more link',
       onClick: () => {},
     },
   },
@@ -49,20 +47,15 @@ export const Catalog: CatalogStory<Story, typeof Callout> = {
         {
           name: 'accents',
           values: [
-            'success',
             'warning',
-            'error',
             'neutral',
+            'error',
             'info',
+            'success',
           ] satisfies CalloutVariant[],
           props: (variant: CalloutVariant) => ({ variant }),
         },
       ],
-      options: {
-        elementContainer: {
-          width: 512,
-        },
-      },
     },
   },
   decorators: [CatalogDecorator],

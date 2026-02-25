@@ -5,7 +5,6 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { CustomError, isDefined } from 'twenty-shared/utils';
 
 import { type ImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
-import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { type ConnectedAccountWorkspaceEntity } from 'src/modules/connected-account/standard-objects/connected-account.workspace-entity';
 import { MessageImportDriverExceptionCode } from 'src/modules/messaging/message-import-manager/drivers/exceptions/message-import-driver.exception';
 import { parseImapAuthenticationError } from 'src/modules/messaging/message-import-manager/drivers/imap/utils/parse-imap-authentication-error.util';
@@ -21,10 +20,6 @@ export class ImapClientProvider {
 
   private static readonly CONNECTION_TIMEOUT_MS = 30000;
   private static readonly GREETING_TIMEOUT_MS = 16000;
-
-  constructor(
-    private readonly secureHttpClientService: SecureHttpClientService,
-  ) {}
 
   async getClient(
     connectedAccount: ConnectedAccountIdentifier,
@@ -71,13 +66,8 @@ export class ImapClientProvider {
       );
     }
 
-    const validatedImapHost =
-      await this.secureHttpClientService.getValidatedHost(
-        connectionParameters.IMAP?.host || '',
-      );
-
     const client = new ImapFlow({
-      host: validatedImapHost,
+      host: connectionParameters.IMAP?.host || '',
       port: connectionParameters.IMAP?.port || 993,
       secure: connectionParameters.IMAP?.secure,
       auth: {

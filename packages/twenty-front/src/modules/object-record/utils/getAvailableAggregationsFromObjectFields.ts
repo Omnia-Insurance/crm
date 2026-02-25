@@ -1,5 +1,4 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
 import { DateAggregateOperations } from '@/object-record/record-table/constants/DateAggregateOperations';
 import { type ExtendedAggregateOperations } from '@/object-record/record-table/types/ExtendedAggregateOperations';
@@ -20,7 +19,7 @@ export const getAvailableAggregationsFromObjectFields = (
 ): Aggregations => {
   return fields.reduce<Record<string, NameForAggregation>>(
     (acc, field) => {
-      if (isHiddenSystemField(field)) {
+      if (field.isSystem === true) {
         return acc;
       }
 

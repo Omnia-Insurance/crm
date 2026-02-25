@@ -20,8 +20,8 @@ export const ObjectFilterDropdownFilterSelectMenuItem = ({
 }: ObjectFilterDropdownFilterSelectMenuItemProps) => {
   const { resetSelectedItem } = useSelectableList(FILTER_FIELD_LIST_ID);
 
-  const isSelectedItem = useRecoilComponentFamilyValueV2(
-    isSelectedItemIdComponentFamilyState,
+  const isSelectedItem = useRecoilComponentFamilyValue(
+    isSelectedItemIdComponentFamilySelector,
     fieldMetadataItemToSelect.id,
   );
 

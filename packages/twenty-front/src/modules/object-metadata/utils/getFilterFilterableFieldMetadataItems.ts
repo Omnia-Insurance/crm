@@ -1,5 +1,4 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 export const getFilterFilterableFieldMetadataItems = ({
@@ -8,6 +7,7 @@ export const getFilterFilterableFieldMetadataItems = ({
   isJsonFilterEnabled: boolean;
 }) => {
   return (field: FieldMetadataItem) => {
+    const isSystemField = field.isSystem;
     const isFieldActive = field.isActive;
     const isIdField = field.name === 'id';
 
@@ -45,7 +45,7 @@ export const getFilterFilterableFieldMetadataItems = ({
     ].includes(field.type);
 
     const isFieldFilterable =
-      (!isHiddenSystemField(field) || isIdField || isWorkflowRelationField) &&
+      (!isSystemField || isIdField || isWorkflowRelationField) &&
       isFieldActive &&
       isRelationFieldHandled &&
       isFieldTypeFilterable;

@@ -1,8 +1,6 @@
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { formatFieldMetadataItemAsColumnDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsColumnDefinition';
-import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useIsRecordFieldReadOnly } from '@/object-record/read-only/hooks/useIsRecordFieldReadOnly';
 import {
@@ -12,7 +10,6 @@ import {
 } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { FieldFocusContextProvider } from '@/object-record/record-field/ui/contexts/FieldFocusContextProvider';
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
-import { isJunctionRelationForbidden } from '@/object-record/record-field/ui/utils/junction/isJunctionRelationForbidden';
 import { RecordInlineCellAnchoredPortalContext } from '@/object-record/record-inline-cell/components/RecordInlineCellAnchoredPortalContext';
 import { RecordInlineCellCloseOnCommandMenuOpeningEffect } from '@/object-record/record-inline-cell/components/RecordInlineCellCloseOnCommandMenuOpeningEffect';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
@@ -22,14 +19,7 @@ import { isDefined } from 'twenty-shared/utils';
 type RecordInlineCellAnchoredPortalProps = {
   fieldMetadataItem: Pick<
     FieldMetadataItem,
-    | 'id'
-    | 'name'
-    | 'type'
-    | 'createdAt'
-    | 'updatedAt'
-    | 'label'
-    | 'settings'
-    | 'relation'
+    'id' | 'name' | 'type' | 'createdAt' | 'updatedAt' | 'label'
   >;
   objectMetadataItem: ObjectMetadataItem;
   recordId: string;
@@ -60,16 +50,6 @@ export const RecordInlineCellAnchoredPortal = ({
     fieldMetadataId: fieldMetadataItem.id,
     objectMetadataId: objectMetadataItem.id,
     recordId: recordId ?? '',
-  });
-
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
-  const { objectMetadataItems } = useObjectMetadataItems();
-
-  const isForbidden = isJunctionRelationForbidden({
-    fieldMetadataItem,
-    sourceObjectMetadataId: objectMetadataItem.id,
-    objectMetadataItems,
-    objectPermissionsByObjectMetadataId,
   });
 
   const { updateOneRecord } = useUpdateOneRecord();
@@ -108,7 +88,6 @@ export const RecordInlineCellAnchoredPortal = ({
           useUpdateRecord: useUpdateOneObjectRecordMutation,
           isDisplayModeFixHeight: true,
           isRecordFieldReadOnly,
-          isForbidden,
           onCloseEditMode,
         }}
       >

@@ -1,40 +1,45 @@
-import { useStore } from 'jotai';
-import { useCallback } from 'react';
+import { useRecoilCallback } from 'recoil';
 
 import { isNavigationSectionOpenFamilyState } from '@/ui/navigation/navigation-drawer/states/isNavigationSectionOpenFamilyState';
-import { useFamilyRecoilValueV2 } from '@/ui/utilities/state/jotai/hooks/useFamilyRecoilValueV2';
 
 export const useNavigationSection = (navigationSectionId: string) => {
-  const store = useStore();
-  const isNavigationSectionOpen = useFamilyRecoilValueV2(
-    isNavigationSectionOpenFamilyState,
-    navigationSectionId,
+  const closeNavigationSection = useRecoilCallback(
+    ({ set }) =>
+      () => {
+        set(isNavigationSectionOpenFamilyState(navigationSectionId), false);
+      },
+    [navigationSectionId],
   );
 
-  const closeNavigationSection = useCallback(() => {
-    store.set(
-      isNavigationSectionOpenFamilyState.atomFamily(navigationSectionId),
-      false,
-    );
-  }, [store, navigationSectionId]);
+  const openNavigationSection = useRecoilCallback(
+    ({ set }) =>
+      () => {
+        set(isNavigationSectionOpenFamilyState(navigationSectionId), true);
+      },
+    [navigationSectionId],
+  );
 
-  const openNavigationSection = useCallback(() => {
-    store.set(
-      isNavigationSectionOpenFamilyState.atomFamily(navigationSectionId),
-      true,
-    );
-  }, [store, navigationSectionId]);
+  const toggleNavigationSection = useRecoilCallback(
+    ({ snapshot }) =>
+      () => {
+        const isNavigationSectionOpen = snapshot
+          .getLoadable(isNavigationSectionOpenFamilyState(navigationSectionId))
+          .getValue();
 
-  const toggleNavigationSection = useCallback(() => {
-    if (isNavigationSectionOpen) {
-      closeNavigationSection();
-    } else {
-      openNavigationSection();
-    }
-  }, [isNavigationSectionOpen, closeNavigationSection, openNavigationSection]);
+        if (isNavigationSectionOpen) {
+          closeNavigationSection();
+        } else {
+          openNavigationSection();
+        }
+      },
+    [closeNavigationSection, openNavigationSection, navigationSectionId],
+  );
+
+  const isNavigationSectionOpenState =
+    isNavigationSectionOpenFamilyState(navigationSectionId);
 
   return {
-    isNavigationSectionOpen,
+    isNavigationSectionOpenState,
     closeNavigationSection,
     openNavigationSection,
     toggleNavigationSection,

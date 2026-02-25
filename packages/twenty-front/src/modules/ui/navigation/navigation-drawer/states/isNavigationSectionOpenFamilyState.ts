@@ -1,10 +1,11 @@
-import { createFamilyStateV2 } from '@/ui/utilities/state/jotai/utils/createFamilyStateV2';
+import { createFamilyState } from '@/ui/utilities/state/utils/createFamilyState';
+import { localStorageEffect } from '~/utils/recoil/localStorageEffect';
 
-export const isNavigationSectionOpenFamilyState = createFamilyStateV2<
+export const isNavigationSectionOpenFamilyState = createFamilyState<
   boolean,
   string
 >({
   key: 'isNavigationSectionOpenFamilyState',
   defaultValue: true,
-  useLocalStorage: true,
+  effects: [localStorageEffect()],
 });

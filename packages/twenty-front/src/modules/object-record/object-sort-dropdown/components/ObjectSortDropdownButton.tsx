@@ -27,9 +27,7 @@ import { SelectableListItem } from '@/ui/layout/selectable-list/components/Selec
 import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
 import { useRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentState';
 import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/hooks/useRecoilComponentValue';
-import { useRecoilComponentValueV2 } from '@/ui/utilities/state/jotai/hooks/useRecoilComponentValueV2';
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
-import { useSetRecoilComponentStateV2 } from '@/ui/utilities/state/jotai/hooks/useSetRecoilComponentStateV2';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useRecoilValue } from 'recoil';
 import { findByProperty } from 'twenty-shared/utils';
@@ -140,7 +138,7 @@ export const ObjectSortDropdownButton = () => {
     setIsRecordSortDirectionMenuUnfolded(false);
   };
 
-  const isDropdownOpen = useRecoilComponentValueV2(
+  const isDropdownOpen = useRecoilComponentValue(
     isDropdownOpenComponentState,
     OBJECT_SORT_DROPDOWN_ID,
   );
@@ -152,12 +150,12 @@ export const ObjectSortDropdownButton = () => {
     ...hiddenFieldMetadataItemsSorted.map((item) => item.id),
   ];
 
-  const selectedItemId = useRecoilComponentValueV2(
+  const selectedItemId = useRecoilComponentValue(
     selectedItemIdComponentState,
     OBJECT_SORT_DROPDOWN_ID,
   );
 
-  const setSelectedItemId = useSetRecoilComponentStateV2(
+  const setSelectedItemId = useSetRecoilComponentState(
     selectedItemIdComponentState,
     OBJECT_SORT_DROPDOWN_ID,
   );
