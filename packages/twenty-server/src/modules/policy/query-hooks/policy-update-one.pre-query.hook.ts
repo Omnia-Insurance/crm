@@ -35,13 +35,32 @@ export class PolicyUpdateOnePreQueryHook
       isDefined(payload.data.carrierId) ||
       isDefined(payload.data.productId)
     ) {
-      const carrierId = payload.data.carrierId as string | null;
-      const productId = payload.data.productId as string | null;
+      let carrierId = payload.data.carrierId as string | null | undefined;
+      let productId = payload.data.productId as string | null | undefined;
 
-      // Both must be known to look up commission; if only one is being updated,
-      // we'd need the other from the existing record. For now, only auto-fill
-      // when both are present in the payload (e.g., on create or bulk edit).
-      // The UI typically sends both when changing either relation.
+      // If only one is in the payload, fetch the other from the existing record
+      if (!isDefined(carrierId) || !isDefined(productId)) {
+        const policyRepo = await this.globalWorkspaceOrmManager.getRepository(
+          workspace.id,
+          'policy',
+          { shouldBypassPermissionChecks: true },
+        );
+
+        const existing = (await policyRepo.findOne({
+          where: { id: payload.id },
+        })) as Record<string, unknown> | null;
+
+        if (isDefined(existing)) {
+          if (!isDefined(carrierId)) {
+            carrierId = existing.carrierId as string | null;
+          }
+
+          if (!isDefined(productId)) {
+            productId = existing.productId as string | null;
+          }
+        }
+      }
+
       if (isDefined(carrierId) && isDefined(productId)) {
         const ltvCommission = await lookupCarrierProductCommission(
           carrierId,
