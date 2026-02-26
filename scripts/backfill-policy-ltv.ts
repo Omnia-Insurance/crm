@@ -25,16 +25,9 @@ const DATE_OVERRIDES: Record<
   }>
 > = {
   // UHF health sharing: was $117 (ancillary rate) before Jan 20 2025, then $630
-  'united health fellowship': [
+  'universal health fellowship': [
     {
-      productTypeNamePattern: /health sharing/i,
-      cutoffDate: '2025-01-20',
-      beforeAmountMicros: 117_000_000,
-    },
-  ],
-  uhf: [
-    {
-      productTypeNamePattern: /health sharing/i,
+      productTypeNamePattern: /./i, // All UHF products (Thrive, Standard, STx)
       cutoffDate: '2025-01-20',
       beforeAmountMicros: 117_000_000,
     },
