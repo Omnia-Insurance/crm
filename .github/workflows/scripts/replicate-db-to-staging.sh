@@ -2,103 +2,110 @@
 set -euo pipefail
 
 # Replicate production DB to staging with anonymization.
-# Works with external RDS by spinning up a temporary postgres pod.
+# Uses a temporary postgres pod inside the cluster for direct Aurora access.
 #
 # Required env vars:
-#   PROD_NAMESPACE    - k8s namespace for production (e.g. twentycrm)
-#   STAGING_NAMESPACE - k8s namespace for staging (e.g. twentycrm-staging)
+#   PROD_NAMESPACE       - k8s namespace for prod (to read RDS secret)
+#   STAGING_NAMESPACE    - k8s namespace for staging
 #
-# Optional env vars (with defaults):
-#   RDS_HOST          - RDS hostname (default: from Helm values)
-#   RDS_PORT          - RDS port (default: 5432)
-#   RDS_MASTER_USER   - RDS master username (default: postgres)
-#   RDS_MASTER_SECRET - k8s secret with master password (default: twenty-rds-master-credentials)
-#   RDS_MASTER_PASS_KEY - key in the master secret (default: password)
+# Optional env vars:
+#   RDS_MASTER_PASSWORD  - Aurora master password (if not set, reads from k8s secret)
+#   RDS_MASTER_SECRET    - k8s secret name for master password (default: twenty-rds-master-credentials)
+#   RDS_HOST             - Aurora cluster endpoint (default: from helm values)
+#   PROD_DB              - Production database name (default: twenty)
+#   STAGING_DB           - Staging database name (default: twenty_staging)
 
 PROD_NS="${PROD_NAMESPACE:?PROD_NAMESPACE must be set}"
 STAGING_NS="${STAGING_NAMESPACE:?STAGING_NAMESPACE must be set}"
-PROD_DB="twenty"
-STAGING_DB="twenty_staging"
 
 RDS_HOST="${RDS_HOST:-twenty-crm-db.cluster-cgx4wwy00vhj.us-east-1.rds.amazonaws.com}"
-RDS_PORT="${RDS_PORT:-5432}"
-MASTER_USER="${RDS_MASTER_USER:-postgres}"
-MASTER_SECRET="${RDS_MASTER_SECRET:-twenty-rds-master-credentials}"
-MASTER_PASS_KEY="${RDS_MASTER_PASS_KEY:-password}"
+PROD_DB="${PROD_DB:-twenty}"
+STAGING_DB="${STAGING_DB:-twenty_staging}"
+MASTER_USER="postgres"
 
-POD_NAME="db-replicator-$(date +%s)"
-DUMP_PATH="/tmp/prod-dump.sql"
+# Read master password from env var or k8s secret
+if [ -z "${RDS_MASTER_PASSWORD:-}" ]; then
+  MASTER_SECRET="${RDS_MASTER_SECRET:-twenty-rds-master-credentials}"
+  echo "==> Reading RDS master password from k8s secret '$MASTER_SECRET'..."
+  MASTER_PASS=$(kubectl get secret "$MASTER_SECRET" -n "$PROD_NS" -o jsonpath='{.data.password}' | base64 -d)
+  if [ -z "$MASTER_PASS" ]; then
+    echo "ERROR: Could not read master password from secret '$MASTER_SECRET' in namespace '$PROD_NS'."
+    echo "Either set RDS_MASTER_PASSWORD env var or create the secret:"
+    echo "  kubectl create secret generic $MASTER_SECRET -n $PROD_NS --from-literal=password=YOUR_PASSWORD"
+    exit 1
+  fi
+else
+  MASTER_PASS="$RDS_MASTER_PASSWORD"
+fi
+
+HELPER_POD="db-replication-helper"
+HELPER_IMAGE="postgres:16-alpine"
 
 cleanup() {
-  echo "==> Cleaning up temporary pod..."
-  kubectl delete pod "$POD_NAME" -n "$PROD_NS" --ignore-not-found --wait=false
+  echo "==> Cleaning up helper pod..."
+  kubectl delete pod "$HELPER_POD" -n "$PROD_NS" --ignore-not-found --wait=false 2>/dev/null || true
 }
 trap cleanup EXIT
 
-echo "==> Reading RDS master password from secret '$MASTER_SECRET' in namespace '$PROD_NS'..."
-MASTER_PASS=$(kubectl get secret "$MASTER_SECRET" -n "$PROD_NS" -o jsonpath="{.data.${MASTER_PASS_KEY}}" | base64 -d)
-
-if [ -z "$MASTER_PASS" ]; then
-  echo "ERROR: Could not read master password from secret '$MASTER_SECRET'."
-  echo "Create it with: kubectl create secret generic $MASTER_SECRET -n $PROD_NS --from-literal=password=YOUR_RDS_MASTER_PASSWORD"
-  exit 1
-fi
-
+echo "==> Launching temporary postgres pod for replication..."
 echo "  RDS host: $RDS_HOST"
-echo "  Master user: $MASTER_USER"
-echo "  Prod DB: $PROD_DB"
-echo "  Staging DB: $STAGING_DB"
+echo "  Prod DB: $PROD_DB -> Staging DB: $STAGING_DB"
 
-echo "==> Starting temporary postgres pod '$POD_NAME'..."
-kubectl run "$POD_NAME" -n "$PROD_NS" \
-  --image=postgres:16-alpine \
+kubectl run "$HELPER_POD" -n "$PROD_NS" \
+  --image="$HELPER_IMAGE" \
   --restart=Never \
-  --env="PGHOST=$RDS_HOST" \
-  --env="PGPORT=$RDS_PORT" \
-  --env="PGUSER=$MASTER_USER" \
   --env="PGPASSWORD=$MASTER_PASS" \
+  --env="PGHOST=$RDS_HOST" \
+  --env="PGUSER=$MASTER_USER" \
+  --overrides='{
+    "spec": {
+      "tolerations": [
+        {"key": "environment", "operator": "Equal", "value": "production", "effect": "NoSchedule"},
+        {"key": "environment", "operator": "Equal", "value": "staging", "effect": "NoSchedule"}
+      ]
+    }
+  }' \
   --command -- sleep 3600
 
 echo "  Waiting for pod to be ready..."
-kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$PROD_NS" --timeout=60s
+kubectl wait --for=condition=Ready pod/"$HELPER_POD" -n "$PROD_NS" --timeout=60s
 
 echo "==> Verifying RDS connectivity..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
-  psql -d "$PROD_DB" -c "SELECT 1;" > /dev/null
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- psql -d "$PROD_DB" -c "SELECT 1;" > /dev/null
 echo "  Connected successfully."
 
-echo "==> Dumping production database (excluding file/attachment data)..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
-  pg_dump -d "$PROD_DB" \
-    --no-owner --no-acl \
-    --exclude-table-data='*.file' \
-    --exclude-table-data='*.attachment' \
-    -f "$DUMP_PATH"
-
-DUMP_SIZE=$(kubectl exec -n "$PROD_NS" "$POD_NAME" -- du -h "$DUMP_PATH" | cut -f1)
-echo "  Dump size: $DUMP_SIZE"
-
-echo "==> Terminating active connections to staging database..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+# Step 1: Terminate active connections to staging DB
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d postgres -c "
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
     WHERE datname = '$STAGING_DB' AND pid <> pg_backend_pid();
-  " || true
+  " 2>/dev/null || true
 
+# Step 2: Drop and recreate staging database
 echo "==> Dropping and recreating staging database..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d postgres -c "DROP DATABASE IF EXISTS $STAGING_DB;"
 
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d postgres -c "CREATE DATABASE $STAGING_DB;"
 
-echo "==> Restoring dump into staging (triggers disabled to avoid FK ordering issues)..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
-  sh -c "{ echo \"SET session_replication_role = 'replica';\"; cat $DUMP_PATH; echo \"SET session_replication_role = 'origin';\"; } | psql -d $STAGING_DB"
+# Step 3: Dump prod and pipe directly to staging (no intermediate file)
+echo "==> Streaming prod -> staging (this may take a few minutes)..."
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
+  bash -c "
+    { echo 'SET session_replication_role = replica;';
+      pg_dump -d $PROD_DB \
+        --no-owner --no-acl \
+        --exclude-table-data='*.file' \
+        --exclude-table-data='*.attachment';
+      echo 'SET session_replication_role = origin;';
+    } | psql -d $STAGING_DB -v ON_ERROR_STOP=0
+  "
 
+# Step 4: Anonymize staging data
 echo "==> Anonymizing staging data..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d "$STAGING_DB" -c "
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -108,7 +115,7 @@ kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
     -- Keep real emails so Google OAuth works on staging
     -- (same team, private environment)
 
-    -- Delete refresh tokens (stored in appToken table with type)
+    -- Delete refresh tokens
     DELETE FROM core.\"appToken\" WHERE type = 'REFRESH_TOKEN';
 
     -- Regenerate remaining app tokens
@@ -123,8 +130,9 @@ kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
       AND value::text LIKE '%crm.omniaagent.com%';
   "
 
+# Step 5: Grant permissions to app user
 echo "==> Granting permissions to twenty_app_user..."
-kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d "$STAGING_DB" -c "
     DO \$\$
     DECLARE
@@ -142,4 +150,4 @@ kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
     \$\$;
   "
 
-echo "==> DB replication complete. Staging database '$STAGING_DB' is ready."
+echo "==> DB replication complete (prod '$PROD_DB' -> staging '$STAGING_DB')."
