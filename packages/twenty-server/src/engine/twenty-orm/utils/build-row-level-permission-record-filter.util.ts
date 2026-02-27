@@ -49,7 +49,7 @@ type BuildRowLevelPermissionRecordFilterArgs = {
   workspaceSchemaName?: string;
 };
 
-const logger = new Logger(buildRowLevelPermissionRecordFilter.name);
+const logger = new Logger('buildRowLevelPermissionRecordFilter');
 
 export const buildRowLevelPermissionRecordFilter = async ({
   flatRowLevelPermissionPredicateMaps,
