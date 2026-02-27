@@ -74,16 +74,18 @@ echo "==> Verifying RDS connectivity..."
 kubectl exec -n "$PROD_NS" "$HELPER_POD" -- psql -d "$PROD_DB" -c "SELECT 1;" > /dev/null
 echo "  Connected successfully."
 
-# Step 1: Terminate active connections to staging DB
+# Step 1: Revoke connections and drop staging database
+echo "==> Dropping and recreating staging database..."
 kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d postgres -c "
+    -- Prevent new connections
+    ALTER DATABASE $STAGING_DB ALLOW_CONNECTIONS false;
+    -- Kill existing connections
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
     WHERE datname = '$STAGING_DB' AND pid <> pg_backend_pid();
   " 2>/dev/null || true
 
-# Step 2: Drop and recreate staging database
-echo "==> Dropping and recreating staging database..."
 kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
   psql -d postgres -c "DROP DATABASE IF EXISTS $STAGING_DB;"
 
