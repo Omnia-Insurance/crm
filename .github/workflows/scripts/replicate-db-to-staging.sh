@@ -7,21 +7,36 @@ set -euo pipefail
 # Required env vars:
 #   PROD_NAMESPACE       - k8s namespace for prod (to read RDS secret)
 #   STAGING_NAMESPACE    - k8s namespace for staging
-#   RDS_MASTER_PASSWORD  - Aurora master (postgres) password
 #
 # Optional env vars:
-#   RDS_HOST     - Aurora cluster endpoint (default: auto-detected from helm values)
-#   PROD_DB      - Production database name (default: twenty)
-#   STAGING_DB   - Staging database name (default: twenty_staging)
+#   RDS_MASTER_PASSWORD  - Aurora master password (if not set, reads from k8s secret)
+#   RDS_MASTER_SECRET    - k8s secret name for master password (default: twenty-rds-master-credentials)
+#   RDS_HOST             - Aurora cluster endpoint (default: from helm values)
+#   PROD_DB              - Production database name (default: twenty)
+#   STAGING_DB           - Staging database name (default: twenty_staging)
 
 PROD_NS="${PROD_NAMESPACE:?PROD_NAMESPACE must be set}"
 STAGING_NS="${STAGING_NAMESPACE:?STAGING_NAMESPACE must be set}"
-MASTER_PASS="${RDS_MASTER_PASSWORD:?RDS_MASTER_PASSWORD must be set}"
 
 RDS_HOST="${RDS_HOST:-twenty-crm-db.cluster-cgx4wwy00vhj.us-east-1.rds.amazonaws.com}"
 PROD_DB="${PROD_DB:-twenty}"
 STAGING_DB="${STAGING_DB:-twenty_staging}"
 MASTER_USER="postgres"
+
+# Read master password from env var or k8s secret
+if [ -z "${RDS_MASTER_PASSWORD:-}" ]; then
+  MASTER_SECRET="${RDS_MASTER_SECRET:-twenty-rds-master-credentials}"
+  echo "==> Reading RDS master password from k8s secret '$MASTER_SECRET'..."
+  MASTER_PASS=$(kubectl get secret "$MASTER_SECRET" -n "$PROD_NS" -o jsonpath='{.data.password}' | base64 -d)
+  if [ -z "$MASTER_PASS" ]; then
+    echo "ERROR: Could not read master password from secret '$MASTER_SECRET' in namespace '$PROD_NS'."
+    echo "Either set RDS_MASTER_PASSWORD env var or create the secret:"
+    echo "  kubectl create secret generic $MASTER_SECRET -n $PROD_NS --from-literal=password=YOUR_PASSWORD"
+    exit 1
+  fi
+else
+  MASTER_PASS="$RDS_MASTER_PASSWORD"
+fi
 
 HELPER_POD="db-replication-helper"
 HELPER_IMAGE="postgres:16-alpine"
@@ -33,6 +48,9 @@ cleanup() {
 trap cleanup EXIT
 
 echo "==> Launching temporary postgres pod for replication..."
+echo "  RDS host: $RDS_HOST"
+echo "  Prod DB: $PROD_DB -> Staging DB: $STAGING_DB"
+
 kubectl run "$HELPER_POD" -n "$PROD_NS" \
   --image="$HELPER_IMAGE" \
   --restart=Never \
@@ -52,7 +70,9 @@ kubectl run "$HELPER_POD" -n "$PROD_NS" \
 echo "  Waiting for pod to be ready..."
 kubectl wait --for=condition=Ready pod/"$HELPER_POD" -n "$PROD_NS" --timeout=60s
 
-echo "==> Dumping prod and restoring to staging (direct Aurora-to-Aurora)..."
+echo "==> Verifying RDS connectivity..."
+kubectl exec -n "$PROD_NS" "$HELPER_POD" -- psql -d "$PROD_DB" -c "SELECT 1;" > /dev/null
+echo "  Connected successfully."
 
 # Step 1: Terminate active connections to staging DB
 kubectl exec -n "$PROD_NS" "$HELPER_POD" -- \
