@@ -2,61 +2,104 @@
 set -euo pipefail
 
 # Replicate production DB to staging with anonymization.
-# Expects PROD_NAMESPACE and STAGING_NAMESPACE env vars.
+# Works with external RDS by spinning up a temporary postgres pod.
+#
+# Required env vars:
+#   PROD_NAMESPACE    - k8s namespace for production (e.g. twentycrm)
+#   STAGING_NAMESPACE - k8s namespace for staging (e.g. twentycrm-staging)
+#
+# Optional env vars (with defaults):
+#   RDS_HOST          - RDS hostname (default: from Helm values)
+#   RDS_PORT          - RDS port (default: 5432)
+#   RDS_MASTER_USER   - RDS master username (default: postgres)
+#   RDS_MASTER_SECRET - k8s secret with master password (default: twenty-rds-master-credentials)
+#   RDS_MASTER_PASS_KEY - key in the master secret (default: password)
 
 PROD_NS="${PROD_NAMESPACE:?PROD_NAMESPACE must be set}"
 STAGING_NS="${STAGING_NAMESPACE:?STAGING_NAMESPACE must be set}"
-DB_NAME="twenty"
-DUMP_FILE="/tmp/prod-dump.sql"
-LABEL_SELECTOR="app.kubernetes.io/name=twenty,app.kubernetes.io/component=db"
+PROD_DB="twenty"
+STAGING_DB="twenty_staging"
 
-echo "==> Finding database pods..."
-PROD_POD=$(kubectl get pods -n "$PROD_NS" -l "$LABEL_SELECTOR" -o jsonpath='{.items[0].metadata.name}')
-STAGING_POD=$(kubectl get pods -n "$STAGING_NS" -l "$LABEL_SELECTOR" -o jsonpath='{.items[0].metadata.name}')
+RDS_HOST="${RDS_HOST:-twenty-crm-db.cluster-cgx4wwy00vhj.us-east-1.rds.amazonaws.com}"
+RDS_PORT="${RDS_PORT:-5432}"
+MASTER_USER="${RDS_MASTER_USER:-postgres}"
+MASTER_SECRET="${RDS_MASTER_SECRET:-twenty-rds-master-credentials}"
+MASTER_PASS_KEY="${RDS_MASTER_PASS_KEY:-password}"
 
-if [ -z "$PROD_POD" ] || [ -z "$STAGING_POD" ]; then
-  echo "ERROR: Could not find database pods."
-  echo "  Prod pod: ${PROD_POD:-not found}"
-  echo "  Staging pod: ${STAGING_POD:-not found}"
+POD_NAME="db-replicator-$(date +%s)"
+DUMP_PATH="/tmp/prod-dump.sql"
+
+cleanup() {
+  echo "==> Cleaning up temporary pod..."
+  kubectl delete pod "$POD_NAME" -n "$PROD_NS" --ignore-not-found --wait=false
+}
+trap cleanup EXIT
+
+echo "==> Reading RDS master password from secret '$MASTER_SECRET' in namespace '$PROD_NS'..."
+MASTER_PASS=$(kubectl get secret "$MASTER_SECRET" -n "$PROD_NS" -o jsonpath="{.data.${MASTER_PASS_KEY}}" | base64 -d)
+
+if [ -z "$MASTER_PASS" ]; then
+  echo "ERROR: Could not read master password from secret '$MASTER_SECRET'."
+  echo "Create it with: kubectl create secret generic $MASTER_SECRET -n $PROD_NS --from-literal=password=YOUR_RDS_MASTER_PASSWORD"
   exit 1
 fi
 
-echo "  Prod DB pod:    $PROD_POD (ns: $PROD_NS)"
-echo "  Staging DB pod: $STAGING_POD (ns: $STAGING_NS)"
+echo "  RDS host: $RDS_HOST"
+echo "  Master user: $MASTER_USER"
+echo "  Prod DB: $PROD_DB"
+echo "  Staging DB: $STAGING_DB"
+
+echo "==> Starting temporary postgres pod '$POD_NAME'..."
+kubectl run "$POD_NAME" -n "$PROD_NS" \
+  --image=postgres:16-alpine \
+  --restart=Never \
+  --env="PGHOST=$RDS_HOST" \
+  --env="PGPORT=$RDS_PORT" \
+  --env="PGUSER=$MASTER_USER" \
+  --env="PGPASSWORD=$MASTER_PASS" \
+  --command -- sleep 3600
+
+echo "  Waiting for pod to be ready..."
+kubectl wait --for=condition=Ready pod/"$POD_NAME" -n "$PROD_NS" --timeout=60s
+
+echo "==> Verifying RDS connectivity..."
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d "$PROD_DB" -c "SELECT 1;" > /dev/null
+echo "  Connected successfully."
 
 echo "==> Dumping production database (excluding file/attachment data)..."
-kubectl exec -n "$PROD_NS" "$PROD_POD" -- \
-  pg_dump -U postgres -d "$DB_NAME" \
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  pg_dump -d "$PROD_DB" \
     --no-owner --no-acl \
     --exclude-table-data='*.file' \
     --exclude-table-data='*.attachment' \
-  > "$DUMP_FILE"
+    -f "$DUMP_PATH"
 
-DUMP_SIZE=$(du -h "$DUMP_FILE" | cut -f1)
+DUMP_SIZE=$(kubectl exec -n "$PROD_NS" "$POD_NAME" -- du -h "$DUMP_PATH" | cut -f1)
 echo "  Dump size: $DUMP_SIZE"
 
-echo "==> Dropping and recreating staging database..."
-kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -c "
+echo "==> Terminating active connections to staging database..."
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d postgres -c "
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
-    WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();
+    WHERE datname = '$STAGING_DB' AND pid <> pg_backend_pid();
   " || true
 
-kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -c "DROP DATABASE IF EXISTS $DB_NAME;"
+echo "==> Dropping and recreating staging database..."
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d postgres -c "DROP DATABASE IF EXISTS $STAGING_DB;"
 
-kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -c "CREATE DATABASE $DB_NAME;"
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d postgres -c "CREATE DATABASE $STAGING_DB;"
 
 echo "==> Restoring dump into staging (triggers disabled to avoid FK ordering issues)..."
-{ echo "SET session_replication_role = 'replica';"; cat "$DUMP_FILE"; echo "SET session_replication_role = 'origin';"; } | \
-  kubectl exec -i -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -d "$DB_NAME"
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  sh -c "{ echo \"SET session_replication_role = 'replica';\"; cat $DUMP_PATH; echo \"SET session_replication_role = 'origin';\"; } | psql -d $STAGING_DB"
 
 echo "==> Anonymizing staging data..."
-kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -d "$DB_NAME" -c "
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d "$STAGING_DB" -c "
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
     -- Null out password hashes (force Google SSO on staging)
@@ -74,7 +117,6 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
         \"expiresAt\" = NOW() + INTERVAL '30 days';
 
     -- Rewrite config URLs from prod domain to staging domain
-    -- Config is stored in keyValuePair table as jsonb
     UPDATE core.\"keyValuePair\"
     SET value = REPLACE(value::text, 'crm.omniaagent.com', 'staging-crm.omniaagent.com')::jsonb
     WHERE type = 'CONFIG_VARIABLE'
@@ -82,13 +124,12 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
   "
 
 echo "==> Granting permissions to twenty_app_user..."
-kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
-  psql -U postgres -d "$DB_NAME" -c "
+kubectl exec -n "$PROD_NS" "$POD_NAME" -- \
+  psql -d "$STAGING_DB" -c "
     DO \$\$
     DECLARE
       schema_name TEXT;
     BEGIN
-      -- Grant usage on all schemas
       FOR schema_name IN
         SELECT nspname FROM pg_namespace
         WHERE nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
@@ -101,7 +142,4 @@ kubectl exec -n "$STAGING_NS" "$STAGING_POD" -- \
     \$\$;
   "
 
-echo "==> Cleaning up dump file..."
-rm -f "$DUMP_FILE"
-
-echo "==> DB replication complete."
+echo "==> DB replication complete. Staging database '$STAGING_DB' is ready."
