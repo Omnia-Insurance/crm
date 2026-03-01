@@ -4,6 +4,7 @@ import { useRecoilValue } from 'recoil';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useRecordFieldsScopeContextOrThrow } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { useAddNewRecordAndOpenRightDrawer } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer';
@@ -113,19 +114,34 @@ export const RecordDetailRelationSectionDropdownToMany = ({
     dropdownId,
   );
 
-  // Filter out related records already attached to a different parent record.
-  // Shows only records where the inverse relation field is null (unattached)
-  // or points to the current record (already linked here).
-  const excludeAttachedFilter = useMemo((): ObjectRecordFilterInput => {
-    const inverseFieldName = relationFieldMetadataItem.name;
+  // Pre-fetch IDs of related records that are either unattached (inverse FK is
+  // null) or already linked to this record. The search API only accepts generic
+  // filters (id, createdAt, etc.), so we resolve eligible IDs here and pass an
+  // id-based filter instead.
+  const inverseFieldName = relationFieldMetadataItem.name;
 
-    return {
+  const { records: eligibleRecords } = useFindManyRecords({
+    objectNameSingular: relationObjectMetadataNameSingular,
+    filter: {
       or: [
         { [`${inverseFieldName}Id`]: { is: 'NULL' } },
         { [`${inverseFieldName}Id`]: { eq: recordId } },
       ],
-    };
-  }, [relationFieldMetadataItem.name, recordId]);
+    },
+    limit: 1000,
+  });
+
+  const excludeAttachedFilter = useMemo((): ObjectRecordFilterInput => {
+    const eligibleIds = eligibleRecords.map((record) => record.id);
+
+    if (eligibleIds.length === 0) {
+      return {
+        id: { eq: '00000000-0000-0000-0000-000000000000' },
+      } as ObjectRecordFilterInput;
+    }
+
+    return { id: { in: eligibleIds } } as ObjectRecordFilterInput;
+  }, [eligibleRecords]);
 
   const { performSearch: multipleRecordPickerPerformSearch } =
     useMultipleRecordPickerPerformSearch();

@@ -7,82 +7,107 @@ import { useRecoilComponentValue } from '@/ui/utilities/state/component-state/ho
 import { useSetRecoilComponentState } from '@/ui/utilities/state/component-state/hooks/useSetRecoilComponentState';
 import { type ObjectRecordFilterInput } from '~/generated/graphql';
 
-// Mirrors the filter logic in RecordDetailRelationSectionDropdownToMany.
-// The component builds an additionalFilter from the inverse relation field
-// name so that the picker only shows records that are either unattached
-// (FK is NULL) or already linked to the current parent record.
-const buildExcludeAttachedFilter = (
-  inverseFieldName: string,
-  recordId: string,
-): ObjectRecordFilterInput => ({
-  or: [
-    { [`${inverseFieldName}Id`]: { is: 'NULL' } },
-    { [`${inverseFieldName}Id`]: { eq: recordId } },
-  ],
-});
+// The search API's ObjectRecordFilterInput only supports generic fields
+// (id, createdAt, updatedAt, deletedAt). To filter by custom relation fields
+// like "leadId", the component pre-fetches eligible record IDs via
+// useFindManyRecords (which uses per-object GraphQL filters), then passes
+// { id: { in: [...] } } as the additionalFilter to the search-based picker.
 
-const LEAD_RECORD_ID = 'test-lead-record-id';
+const SENTINEL_UUID = '00000000-0000-0000-0000-000000000000';
 const DROPDOWN_ID = 'test-dropdown-id';
 
-describe('RecordDetailRelationSectionDropdownToMany - excludeAttachedFilter', () => {
-  describe('filter construction for Lead → Policies relation', () => {
-    // In the workspace the Policy object has a "lead" relation (Belongs to one)
-    // pointing back to the Person (Lead) object. The FK column is "leadId".
-    const inverseFieldName = 'lead';
+// Simulates the filter the component builds from useFindManyRecords results
+const buildIdFilter = (
+  eligibleIds: string[],
+): ObjectRecordFilterInput => {
+  if (eligibleIds.length === 0) {
+    return { id: { eq: SENTINEL_UUID } } as ObjectRecordFilterInput;
+  }
 
-    it('should exclude policies already attached to a different lead', () => {
-      const filter = buildExcludeAttachedFilter(inverseFieldName, LEAD_RECORD_ID);
+  return { id: { in: eligibleIds } } as ObjectRecordFilterInput;
+};
+
+describe('RecordDetailRelationSectionDropdownToMany - excludeAttachedFilter', () => {
+  describe('ID-based filter from pre-fetched eligible records', () => {
+    it('should produce an id-in filter when eligible policies exist', () => {
+      const eligiblePolicyIds = [
+        'policy-1-no-lead',
+        'policy-2-no-lead',
+        'policy-3-this-lead',
+      ];
+
+      const filter = buildIdFilter(eligiblePolicyIds);
 
       expect(filter).toEqual({
-        or: [
-          { leadId: { is: 'NULL' } },
-          { leadId: { eq: LEAD_RECORD_ID } },
-        ],
+        id: { in: ['policy-1-no-lead', 'policy-2-no-lead', 'policy-3-this-lead'] },
       });
     });
 
-    it('should allow policies with no lead (leadId is NULL)', () => {
-      const filter = buildExcludeAttachedFilter(inverseFieldName, LEAD_RECORD_ID);
+    it('should produce a sentinel filter when no eligible policies exist', () => {
+      const filter = buildIdFilter([]);
 
-      const nullClause = (filter.or as ObjectRecordFilterInput[])[0];
-      expect(nullClause).toEqual({ leadId: { is: 'NULL' } });
+      expect(filter).toEqual({
+        id: { eq: SENTINEL_UUID },
+      });
     });
 
-    it('should allow policies already linked to this lead', () => {
-      const filter = buildExcludeAttachedFilter(inverseFieldName, LEAD_RECORD_ID);
+    it('should only contain id field which is valid for ObjectRecordFilterInput', () => {
+      const filter = buildIdFilter(['policy-1']);
 
-      const eqClause = (filter.or as ObjectRecordFilterInput[])[1];
-      expect(eqClause).toEqual({ leadId: { eq: LEAD_RECORD_ID } });
+      // The search API only supports id, createdAt, updatedAt, deletedAt, and/or/not.
+      // Custom field names like leadId are NOT valid and would cause a GraphQL error.
+      const keys = Object.keys(filter);
+      expect(keys).toEqual(['id']);
     });
   });
 
-  describe('filter construction adapts to different inverse field names', () => {
-    it('should use agentId for a Policy → Agent relation', () => {
-      const filter = buildExcludeAttachedFilter('agent', 'some-agent-id');
+  describe('useFindManyRecords filter for Lead → Policies', () => {
+    // This is the per-object filter passed to useFindManyRecords, which
+    // DOES support custom field names because it uses the object-specific
+    // GraphQL type, not the generic ObjectRecordFilterInput.
+    it('should construct the correct per-object filter for policies', () => {
+      const inverseFieldName = 'lead';
+      const recordId = 'test-lead-id';
 
-      expect(filter).toEqual({
+      const findManyFilter = {
         or: [
-          { agentId: { is: 'NULL' } },
-          { agentId: { eq: 'some-agent-id' } },
+          { [`${inverseFieldName}Id`]: { is: 'NULL' } },
+          { [`${inverseFieldName}Id`]: { eq: recordId } },
+        ],
+      };
+
+      expect(findManyFilter).toEqual({
+        or: [
+          { leadId: { is: 'NULL' } },
+          { leadId: { eq: 'test-lead-id' } },
         ],
       });
     });
 
-    it('should use carrierId for a Policy → Carrier relation', () => {
-      const filter = buildExcludeAttachedFilter('carrier', 'some-carrier-id');
+    it('should adapt to different inverse field names', () => {
+      const cases = [
+        { inverseFieldName: 'agent', recordId: 'agent-1', expectedKey: 'agentId' },
+        { inverseFieldName: 'carrier', recordId: 'carrier-1', expectedKey: 'carrierId' },
+        { inverseFieldName: 'company', recordId: 'company-1', expectedKey: 'companyId' },
+      ];
 
-      expect(filter).toEqual({
-        or: [
-          { carrierId: { is: 'NULL' } },
-          { carrierId: { eq: 'some-carrier-id' } },
-        ],
-      });
+      for (const { inverseFieldName, recordId, expectedKey } of cases) {
+        const filter = {
+          or: [
+            { [`${inverseFieldName}Id`]: { is: 'NULL' } },
+            { [`${inverseFieldName}Id`]: { eq: recordId } },
+          ],
+        };
+
+        expect(filter.or[0]).toHaveProperty(expectedKey);
+        expect(filter.or[1]).toHaveProperty(expectedKey);
+      }
     });
   });
 
   describe('Recoil state integration', () => {
-    it('should store the filter in multipleRecordPickerAdditionalFilter state', () => {
-      const expectedFilter = buildExcludeAttachedFilter('lead', LEAD_RECORD_ID);
+    it('should store the id-based filter in multipleRecordPickerAdditionalFilter state', () => {
+      const expectedFilter = buildIdFilter(['policy-1', 'policy-2']);
 
       const Wrapper = ({ children }: { children: ReactNode }) => (
         <RecoilRoot>{children}</RecoilRoot>
@@ -111,15 +136,12 @@ describe('RecordDetailRelationSectionDropdownToMany - excludeAttachedFilter', ()
       });
 
       expect(result.current.additionalFilter).toEqual({
-        or: [
-          { leadId: { is: 'NULL' } },
-          { leadId: { eq: LEAD_RECORD_ID } },
-        ],
+        id: { in: ['policy-1', 'policy-2'] },
       });
     });
 
     it('should allow clearing the filter by setting undefined', () => {
-      const filter = buildExcludeAttachedFilter('lead', LEAD_RECORD_ID);
+      const filter = buildIdFilter(['policy-1']);
 
       const Wrapper = ({ children }: { children: ReactNode }) => (
         <RecoilRoot>{children}</RecoilRoot>
