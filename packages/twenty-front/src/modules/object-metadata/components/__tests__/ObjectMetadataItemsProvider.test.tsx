@@ -1,5 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { renderHook } from '@testing-library/react';
+import { render, screen, waitFor, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { RecoilRoot, useRecoilValue } from 'recoil';
 

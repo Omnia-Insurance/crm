@@ -17,9 +17,7 @@ const SENTINEL_UUID = '00000000-0000-0000-0000-000000000000';
 const DROPDOWN_ID = 'test-dropdown-id';
 
 // Simulates the filter the component builds from useFindManyRecords results
-const buildIdFilter = (
-  eligibleIds: string[],
-): ObjectRecordFilterInput => {
+const buildIdFilter = (eligibleIds: string[]): ObjectRecordFilterInput => {
   if (eligibleIds.length === 0) {
     return { id: { eq: SENTINEL_UUID } } as ObjectRecordFilterInput;
   }
@@ -39,7 +37,9 @@ describe('RecordDetailRelationSectionDropdownToMany - excludeAttachedFilter', ()
       const filter = buildIdFilter(eligiblePolicyIds);
 
       expect(filter).toEqual({
-        id: { in: ['policy-1-no-lead', 'policy-2-no-lead', 'policy-3-this-lead'] },
+        id: {
+          in: ['policy-1-no-lead', 'policy-2-no-lead', 'policy-3-this-lead'],
+        },
       });
     });
 
@@ -77,18 +77,27 @@ describe('RecordDetailRelationSectionDropdownToMany - excludeAttachedFilter', ()
       };
 
       expect(findManyFilter).toEqual({
-        or: [
-          { leadId: { is: 'NULL' } },
-          { leadId: { eq: 'test-lead-id' } },
-        ],
+        or: [{ leadId: { is: 'NULL' } }, { leadId: { eq: 'test-lead-id' } }],
       });
     });
 
     it('should adapt to different inverse field names', () => {
       const cases = [
-        { inverseFieldName: 'agent', recordId: 'agent-1', expectedKey: 'agentId' },
-        { inverseFieldName: 'carrier', recordId: 'carrier-1', expectedKey: 'carrierId' },
-        { inverseFieldName: 'company', recordId: 'company-1', expectedKey: 'companyId' },
+        {
+          inverseFieldName: 'agent',
+          recordId: 'agent-1',
+          expectedKey: 'agentId',
+        },
+        {
+          inverseFieldName: 'carrier',
+          recordId: 'carrier-1',
+          expectedKey: 'carrierId',
+        },
+        {
+          inverseFieldName: 'company',
+          recordId: 'company-1',
+          expectedKey: 'companyId',
+        },
       ];
 
       for (const { inverseFieldName, recordId, expectedKey } of cases) {

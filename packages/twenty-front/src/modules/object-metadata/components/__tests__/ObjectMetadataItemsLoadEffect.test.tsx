@@ -91,14 +91,21 @@ const renderEffect = (options: {
 }) => {
   return renderHook(
     () => {
-      const items = useRecoilValue(objectMetadataItemsState);
+      const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
       const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
       return { items, shouldAppBeLoading };
     },
     {
       wrapper: ({ children }: { children: ReactNode }) => (
         <>
-          {getWrapper(options)({ children: <>{children}<ObjectMetadataItemsLoadEffect /></> })}
+          {getWrapper(options)({
+            children: (
+              <>
+                {children}
+                <ObjectMetadataItemsLoadEffect />
+              </>
+            ),
+          })}
         </>
       ),
     },

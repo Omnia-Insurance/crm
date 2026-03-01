@@ -66,8 +66,8 @@ describe('useRefreshObjectMetadataItems', () => {
     const { result } = renderHook(
       () => {
         const hook = useRefreshObjectMetadataItems();
-        const items = useRecoilValue(objectMetadataItemsState);
-        const shouldLoad = useRecoilValue(shouldAppBeLoadingState);
+        const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
+        const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
         return { ...hook, items, shouldLoad };
       },
       { wrapper: getWrapper({ withUserWorkspace: false }) },
@@ -94,7 +94,7 @@ describe('useRefreshObjectMetadataItems', () => {
     const { result } = renderHook(
       () => {
         const hook = useRefreshObjectMetadataItems();
-        const items = useRecoilValue(objectMetadataItemsState);
+        const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
         return { ...hook, items };
       },
       { wrapper: getWrapper({ withUserWorkspace: false }) },
@@ -122,7 +122,7 @@ describe('useRefreshObjectMetadataItems', () => {
     const { result } = renderHook(
       () => {
         const hook = useRefreshObjectMetadataItems();
-        const items = useRecoilValue(objectMetadataItemsState);
+        const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
         return { ...hook, items };
       },
       { wrapper: getWrapper({ withUserWorkspace: true }) },
@@ -149,8 +149,8 @@ describe('useRefreshObjectMetadataItems', () => {
     const { result } = renderHook(
       () => {
         const hook = useRefreshObjectMetadataItems();
-        const items = useRecoilValue(objectMetadataItemsState);
-        const shouldLoad = useRecoilValue(shouldAppBeLoadingState);
+        const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
+        const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
         return { ...hook, items, shouldLoad };
       },
       { wrapper: getWrapper({ withUserWorkspace: true }) },
@@ -168,10 +168,9 @@ describe('useRefreshObjectMetadataItems', () => {
   });
 
   it('should use cache-first fetch policy by default', async () => {
-    const { result } = renderHook(
-      () => useRefreshObjectMetadataItems(),
-      { wrapper: getWrapper({ withUserWorkspace: true }) },
-    );
+    const { result } = renderHook(() => useRefreshObjectMetadataItems(), {
+      wrapper: getWrapper({ withUserWorkspace: true }),
+    });
 
     await act(async () => {
       await result.current.refreshObjectMetadataItems();
