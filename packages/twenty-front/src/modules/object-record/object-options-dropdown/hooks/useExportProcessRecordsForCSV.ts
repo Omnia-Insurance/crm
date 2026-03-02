@@ -55,8 +55,7 @@ export const useExportProcessRecordsForCSV = (objectNameSingular: string) => {
             case FieldMetadataType.EMAILS:
               return {
                 ...processedRecord,
-                [field.name]:
-                  record[field.name].primaryEmail?.trim() ?? '',
+                [field.name]: record[field.name].primaryEmail?.trim() ?? '',
               };
             case FieldMetadataType.FULL_NAME: {
               const name = record[field.name];

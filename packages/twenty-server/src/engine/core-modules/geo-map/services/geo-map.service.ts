@@ -78,9 +78,7 @@ export class GeoMapService {
 
       this.logger.warn(
         `Google Places autocomplete returned status: ${result.data.status}` +
-          (result.data.error_message
-            ? ` — ${result.data.error_message}`
-            : ''),
+          (result.data.error_message ? ` — ${result.data.error_message}` : ''),
       );
     } catch (error) {
       this.logger.error(
@@ -118,9 +116,7 @@ export class GeoMapService {
 
       this.logger.warn(
         `Google Places details returned status: ${result.data.status}` +
-          (result.data.error_message
-            ? ` — ${result.data.error_message}`
-            : ''),
+          (result.data.error_message ? ` — ${result.data.error_message}` : ''),
       );
     } catch (error) {
       this.logger.error(
