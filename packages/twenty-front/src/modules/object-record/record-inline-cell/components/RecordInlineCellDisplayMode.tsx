@@ -28,6 +28,7 @@ const StyledRecordInlineCellNormalModeOuterContainer = styled.div<
   overflow: hidden;
   padding-right: ${({ theme }) => theme.spacing(1)};
   padding-left: ${({ theme }) => theme.spacing(1)};
+  width: 100%;
   ${(props) => {
     if (props.isHovered === true && !props.readonly) {
       return css`

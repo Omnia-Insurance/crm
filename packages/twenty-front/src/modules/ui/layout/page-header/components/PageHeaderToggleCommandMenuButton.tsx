@@ -132,9 +132,9 @@ export const PageHeaderToggleCommandMenuButton = () => {
   const alignWithCommandMenuTopBar =
     isMobile && isNavigationMenuInEditMode && isCommandMenuOpened;
 
-  const ariaLabel = isCommandMenuOpened
-    ? t`Close command menu`
-    : t`Open command menu`;
+  const openLabel = t`Open command menu`;
+  const closeLabel = t`Close command menu`;
+  const ariaLabel = isCommandMenuOpened ? closeLabel : openLabel;
 
   const theme = useTheme();
 

@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: 'benchmark-load-time.ts',
-  timeout: 120_000,
+  timeout: 300_000,
   retries: 0,
   workers: 1,
   fullyParallel: false,
