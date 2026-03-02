@@ -23,7 +23,6 @@ import { test, expect } from '@playwright/test';
 const BASE_URL = process.env.FRONTEND_BASE_URL || 'http://localhost:3001';
 const EMAIL = process.env.DEFAULT_LOGIN || 'tim@apple.dev';
 const PASSWORD = process.env.DEFAULT_PASSWORD || 'Applecar2025';
-const TOKEN_PAIR_COOKIE = process.env.TOKEN_PAIR_COOKIE || '';
 const RUNS_PER_SCENARIO = 3;
 
 type TimingResult = {
@@ -38,40 +37,31 @@ type TimingResult = {
 
 const results: TimingResult[] = [];
 
-async function injectCookie(context: any) {
-  if (!TOKEN_PAIR_COOKIE) {
-    throw new Error(
-      'TOKEN_PAIR_COOKIE env var is required. Copy the tokenPair cookie value from your browser.',
-    );
-  }
-  const url = new URL(BASE_URL);
-  await context.addCookies([
-    {
-      name: 'tokenPair',
-      value: TOKEN_PAIR_COOKIE,
-      domain: url.hostname,
-      path: '/',
-      sameSite: 'Lax' as const,
-      httpOnly: false,
-      secure: url.protocol === 'https:',
-    },
-  ]);
-}
+async function login(page: any) {
+  await page.goto(`${BASE_URL}/welcome`);
+  await page.waitForLoadState('networkidle');
 
-async function waitForAppReady(page: any) {
+  // Click "Continue with Email" if visible
+  const emailButton = page.getByRole('button', {
+    name: 'Continue with Email',
+  });
+  if (await emailButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await emailButton.click();
+  }
+
+  await page.getByPlaceholder('Email').fill(EMAIL);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByPlaceholder('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  // Wait for app to fully load past the skeleton
   await page.waitForFunction(
     () => {
-      const url = window.location.href;
-      if (url.includes('welcome') || url.includes('verify')) {
-        return false;
-      }
-      // Check for record table indicators: data-testid, grid role, table, or
-      // the nav sidebar with settings link (which means the app is loaded)
+      // Wait until we're past the login page and skeleton is gone
       return (
-        document.querySelector('[data-testid="record-index-page"]') !== null ||
-        document.querySelector('[role="grid"]') !== null ||
-        document.querySelector('table') !== null ||
-        document.querySelector('a[href="/settings/profile"]') !== null
+        !window.location.href.includes('welcome') &&
+        !window.location.href.includes('verify') &&
+        document.querySelector('[data-testid="record-index-page"]') !== null
       );
     },
     { timeout: 60000 },
@@ -122,20 +112,19 @@ async function measureLoad(
   let contentVisibleTime: number;
 
   try {
-    // Wait for the skeleton loader to disappear and content to render
+    // Wait for the skeleton loader to disappear
     await page.waitForFunction(
       () => {
         const skeletons = document.querySelectorAll(
           '.react-loading-skeleton, [class*="SkeletonLoader"]',
         );
         const hasNoSkeletons = skeletons.length === 0;
-        // Check for content: record table, grid, or settings link in nav
-        const hasContent =
+        // Also check that actual content is rendered
+        const hasTable =
           document.querySelector('table') !== null ||
           document.querySelector('[data-testid="record-table"]') !== null ||
-          document.querySelector('[role="grid"]') !== null ||
-          document.querySelector('a[href="/settings/profile"]') !== null;
-        return hasNoSkeletons && hasContent;
+          document.querySelector('[role="grid"]') !== null;
+        return hasNoSkeletons && hasTable;
       },
       { timeout: 60000 },
     );
@@ -230,9 +219,20 @@ test.describe('Load Time Benchmark', () => {
     for (let i = 1; i <= RUNS_PER_SCENARIO; i++) {
       // Fresh context = no cookies, no localStorage
       const context = await browser.newContext();
-      await injectCookie(context);
       const page = await context.newPage();
 
+      // Login first
+      await login(page);
+
+      // Clear all storage to simulate cold load
+      await page.evaluate(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+      });
+      await context.clearCookies();
+
+      // Re-login and measure
+      await login(page);
       const result = await measureLoad(page, 'Cold Load', i);
 
       console.log(
@@ -244,13 +244,10 @@ test.describe('Load Time Benchmark', () => {
   });
 
   test('Warm load (page refresh, cache intact)', async ({ browser }) => {
+    // Login once, then measure refreshes
     const context = await browser.newContext();
-    await injectCookie(context);
     const page = await context.newPage();
-
-    // Do an initial load to populate caches
-    await page.goto(`${BASE_URL}/objects/companies`, { waitUntil: 'commit' });
-    await waitForAppReady(page);
+    await login(page);
 
     for (let i = 1; i <= RUNS_PER_SCENARIO; i++) {
       const result = await measureLoad(page, 'Warm Load (Refresh)', i);
@@ -264,12 +261,8 @@ test.describe('Load Time Benchmark', () => {
 
   test('SPA navigation (in-app route change)', async ({ browser }) => {
     const context = await browser.newContext();
-    await injectCookie(context);
     const page = await context.newPage();
-
-    // Initial load
-    await page.goto(`${BASE_URL}/objects/companies`, { waitUntil: 'commit' });
-    await waitForAppReady(page);
+    await login(page);
 
     // Wait for initial load to complete
     await page.waitForTimeout(2000);
@@ -279,17 +272,16 @@ test.describe('Load Time Benchmark', () => {
 
       // Navigate to settings then back to companies
       await page.goto(`${BASE_URL}/settings/profile`);
-      await page.waitForLoadState('domcontentloaded');
+      await page.waitForLoadState('networkidle');
 
       await page.goto(`${BASE_URL}/objects/companies`);
       await page.waitForFunction(
         () => {
-          const hasContent =
+          const hasTable =
             document.querySelector('table') !== null ||
             document.querySelector('[data-testid="record-table"]') !== null ||
-            document.querySelector('[role="grid"]') !== null ||
-            document.querySelector('a[href="/settings/profile"]') !== null;
-          return hasContent;
+            document.querySelector('[role="grid"]') !== null;
+          return hasTable;
         },
         { timeout: 30000 },
       );
