@@ -24,7 +24,7 @@ const getExpandableContainerTitle = (
     'matchedOptions' in column &&
     column.matchedOptions?.filter((option) => !isDefined(option.value)).length;
 
-  return t`Match ${fieldLabel} (${unmatchedCount} Unmatched)`;
+  return t`Match ${fieldLabel ?? ''} (${unmatchedCount || 0} Unmatched)`;
 };
 
 type UnmatchColumnProps = {

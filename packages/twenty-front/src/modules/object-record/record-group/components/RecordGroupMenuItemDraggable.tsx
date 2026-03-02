@@ -46,8 +46,8 @@ export const RecordGroupMenuItemDraggable = ({
       {
         Icon: recordGroup.isVisible ? IconEyeOff : IconEye,
         ariaLabel: recordGroup.isVisible
-          ? t`Hide group ${groupValue}`
-          : t`Show group ${groupValue}`,
+          ? t`Hide group ${groupValue ?? ''}`
+          : t`Show group ${groupValue ?? ''}`,
         dataTestId: recordGroup.isVisible
           ? `hide-group-${recordGroup.value?.toLowerCase().replace(' ', '-') ?? ''}`
           : `show-group-${recordGroup.value?.toLowerCase().replace(' ', '-') ?? ''}`,

@@ -55,10 +55,7 @@ const mockTokenPair = {
 const mockUserWorkspace: CurrentUserWorkspace = {
   objectsPermissions: [],
   permissionFlags: [],
-  twoFactorAuthenticationMethodSummary: {
-    hasTotp: false,
-    hasBackupCodes: false,
-  },
+  twoFactorAuthenticationMethodSummary: [],
 };
 
 const getWrapper =
@@ -93,7 +90,7 @@ const renderEffect = (options: {
     () => {
       const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
       const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
-      return { items, shouldAppBeLoading };
+      return { items: objectMetadataItems, shouldAppBeLoading };
     },
     {
       wrapper: ({ children }: { children: ReactNode }) => (

@@ -28,10 +28,7 @@ import { useRefreshObjectMetadataItems } from '@/object-metadata/hooks/useRefres
 const mockUserWorkspace: CurrentUserWorkspace = {
   objectsPermissions: [],
   permissionFlags: [],
-  twoFactorAuthenticationMethodSummary: {
-    hasTotp: false,
-    hasBackupCodes: false,
-  },
+  twoFactorAuthenticationMethodSummary: [],
 };
 
 const getWrapper =
@@ -68,7 +65,7 @@ describe('useRefreshObjectMetadataItems', () => {
         const hook = useRefreshObjectMetadataItems();
         const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
         const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
-        return { ...hook, items, shouldLoad };
+        return { ...hook, items: objectMetadataItems, shouldLoad: shouldAppBeLoading };
       },
       { wrapper: getWrapper({ withUserWorkspace: false }) },
     );
@@ -95,7 +92,7 @@ describe('useRefreshObjectMetadataItems', () => {
       () => {
         const hook = useRefreshObjectMetadataItems();
         const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
-        return { ...hook, items };
+        return { ...hook, items: objectMetadataItems };
       },
       { wrapper: getWrapper({ withUserWorkspace: false }) },
     );
@@ -123,7 +120,7 @@ describe('useRefreshObjectMetadataItems', () => {
       () => {
         const hook = useRefreshObjectMetadataItems();
         const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
-        return { ...hook, items };
+        return { ...hook, items: objectMetadataItems };
       },
       { wrapper: getWrapper({ withUserWorkspace: true }) },
     );
@@ -151,7 +148,7 @@ describe('useRefreshObjectMetadataItems', () => {
         const hook = useRefreshObjectMetadataItems();
         const objectMetadataItems = useRecoilValue(objectMetadataItemsState);
         const shouldAppBeLoading = useRecoilValue(shouldAppBeLoadingState);
-        return { ...hook, items, shouldLoad };
+        return { ...hook, items: objectMetadataItems, shouldLoad: shouldAppBeLoading };
       },
       { wrapper: getWrapper({ withUserWorkspace: true }) },
     );
