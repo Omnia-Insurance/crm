@@ -1,9 +1,5 @@
 import styled from '@emotion/styled';
-import { t } from '@lingui/core/macro';
-import { IconSearch } from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
 
-import { useOpenRecordsSearchPageInCommandMenu } from '@/command-menu/hooks/useOpenRecordsSearchPageInCommandMenu';
 import { PAGE_BAR_MIN_HEIGHT } from '@/ui/layout/page/constants/PageBarMinHeight';
 import { MultiWorkspaceDropdownButton } from '@/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/MultiWorkspaceDropdownButton';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
@@ -47,7 +43,6 @@ export const NavigationDrawerHeader = ({
   showCollapseButton,
 }: NavigationDrawerHeaderProps) => {
   const isMobile = useIsMobile();
-  const { openRecordsSearchPage } = useOpenRecordsSearchPageInCommandMenu();
   const isNavigationDrawerExpanded = useAtomStateValue(
     isNavigationDrawerExpandedState,
   );
@@ -57,13 +52,6 @@ export const NavigationDrawerHeader = ({
       <MultiWorkspaceDropdownButton />
       {!isMobile && (
         <StyledRightActions isExpanded={isNavigationDrawerExpanded}>
-          <LightIconButton
-            Icon={IconSearch}
-            accent="secondary"
-            size="small"
-            onClick={openRecordsSearchPage}
-            aria-label={t`Search`}
-          />
           {isNavigationDrawerExpanded && showCollapseButton && (
             <StyledNavigationDrawerCollapseButton direction="left" />
           )}
