@@ -174,6 +174,24 @@ IMPORTANT: Use Context7 for code generation, setup or configuration steps, or li
 4. Check that GraphQL schema changes are backward compatible
 5. Run `graphql:generate` after any GraphQL schema changes
 
+### After Making Changes (MANDATORY)
+**IMPORTANT: You MUST run the customization check after ANY of the following:**
+- Merging upstream (twentyhq/twenty) changes
+- Modifying any file listed in `CUSTOMIZATIONS.md`
+- Resolving merge conflicts
+- Any change touching RLS, permissions, spreadsheet import/export, or navigation
+
+```bash
+./scripts/check-customizations.sh
+```
+
+If any check fails (shows RED), you **must** fix it before committing. This script verifies that Omnia's critical customizations haven't been accidentally overwritten. See `CUSTOMIZATIONS.md` for details on each customization.
+
+Also re-extract Lingui translations if any `.po` files changed or new `t` tagged strings were added:
+```bash
+npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile
+```
+
 ### Code Style Notes
 - Use **Emotion** for styling with styled-components pattern
 - Follow **Nx** workspace conventions for imports
