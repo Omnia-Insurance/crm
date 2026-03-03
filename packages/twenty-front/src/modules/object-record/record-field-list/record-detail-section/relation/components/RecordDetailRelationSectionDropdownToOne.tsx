@@ -29,6 +29,7 @@ import { assertFieldMetadata } from '@/object-record/record-field/ui/types/guard
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
+import { useMemo } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { CustomError, isDefined } from 'twenty-shared/utils';
 import { IconForbid, IconPencil } from 'twenty-ui/display';
@@ -97,14 +98,14 @@ export const RecordDetailRelationSectionDropdownToOne = ({
   const fieldDependencyContext = useContext(FieldDependencyContext);
   const dependencyFilter = fieldDependencyContext?.getFilterForField(fieldName);
 
-  const recordStore = useAtomFamilyStateValue(recordStoreFamilyState, recordId);
+  const recordData = useAtomFamilyStateValue(recordStoreFamilyState, recordId);
 
   const junctionBridgeFilter = useJunctionBridgeFilter({
     objectMetadataItem,
     fieldMetadataItem,
     recordId,
     objectMetadataItems,
-    recordData: recordStore,
+    recordData,
   });
 
   const additionalFilter = useMemo((): ObjectRecordFilterInput | undefined => {
