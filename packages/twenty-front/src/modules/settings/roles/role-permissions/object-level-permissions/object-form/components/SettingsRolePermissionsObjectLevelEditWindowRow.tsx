@@ -141,8 +141,8 @@ export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
             <>
               {' · '}
               {t`Inherited from role`} (
-              {editWindowOptions.find((o) => o.value === roleDefault)
-                ?.label ?? `${roleDefault} min`}
+              {editWindowOptions.find((o) => o.value === roleDefault)?.label ??
+                `${roleDefault} min`}
               )
             </>
           ) : null}
