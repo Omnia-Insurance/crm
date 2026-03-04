@@ -1,10 +1,10 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import {
+  type ImportedStructuredRow,
   type SpreadsheetImportField,
   type SpreadsheetImportFields,
 } from '@/spreadsheet-import/types';
-import { type ImportedStructuredRow } from '@/spreadsheet-import/types';
 import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined, isEmptyObject } from 'twenty-shared/utils';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
@@ -64,8 +64,7 @@ const buildRelationGroups = (
     const relationName = relationField.name;
     if (!groups.has(relationName)) {
       const targetObjectMetadataItem = objectMetadataItems.find(
-        (obj) =>
-          obj.id === relationField.relation?.targetObjectMetadata.id,
+        (obj) => obj.id === relationField.relation?.targetObjectMetadata.id,
       );
 
       // Find the connect field for "id" on this relation
@@ -96,9 +95,8 @@ const buildUpdateRecordFromField = (
   const targetField = field.targetFieldMetadataItem;
   if (!isDefined(targetField)) return undefined;
 
-  if (field.isCompositeSubField && isDefined(field.compositeSubFieldKey)) {
-    const transformConfig =
-      COMPOSITE_FIELD_TRANSFORM_CONFIGS[targetField.type];
+  if (!!field.isCompositeSubField && isDefined(field.compositeSubFieldKey)) {
+    const transformConfig = COMPOSITE_FIELD_TRANSFORM_CONFIGS[targetField.type];
     const transform = transformConfig?.[field.compositeSubFieldKey];
     const value = transform ? transform(rawValue) : rawValue;
 
