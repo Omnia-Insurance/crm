@@ -95,8 +95,9 @@ const buildUpdateRecordFromField = (
   const targetField = field.targetFieldMetadataItem;
   if (!isDefined(targetField)) return undefined;
 
-  if (!!field.isCompositeSubField && isDefined(field.compositeSubFieldKey)) {
-    const transformConfig = COMPOSITE_FIELD_TRANSFORM_CONFIGS[targetField.type];
+  if (field.isCompositeSubField && isDefined(field.compositeSubFieldKey)) {
+    const transformConfig =
+      COMPOSITE_FIELD_TRANSFORM_CONFIGS[targetField.type];
     const transform = transformConfig?.[field.compositeSubFieldKey];
     const value = transform ? transform(rawValue) : rawValue;
 
