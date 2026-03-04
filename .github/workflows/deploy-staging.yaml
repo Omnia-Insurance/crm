@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - staging
+      # - staging  # disabled — staging env torn down
   workflow_dispatch:
     inputs:
       deploy_only:
