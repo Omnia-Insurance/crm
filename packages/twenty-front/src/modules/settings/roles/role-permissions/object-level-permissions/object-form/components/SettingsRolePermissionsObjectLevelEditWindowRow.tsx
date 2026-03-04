@@ -70,6 +70,8 @@ const StyledIcon = styled.div`
 const EDIT_WINDOW_OPTIONS: SelectOption<number | null>[] = [
   { value: null, label: 'No limit' },
   { value: 5, label: '5 minutes' },
+  { value: 10, label: '10 minutes' },
+  { value: 15, label: '15 minutes' },
   { value: 60, label: '1 hour' },
   { value: 240, label: '4 hours' },
   { value: 720, label: '12 hours' },
