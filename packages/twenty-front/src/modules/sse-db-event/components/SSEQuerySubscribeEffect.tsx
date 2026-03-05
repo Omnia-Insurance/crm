@@ -7,6 +7,7 @@ import { sseEventStreamIdState } from '@/sse-db-event/states/sseEventStreamIdSta
 import { sseEventStreamReadyState } from '@/sse-db-event/states/sseEventStreamReadyState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { ApolloError, useMutation } from '@apollo/client';
+import { captureException } from '@sentry/react';
 import { isNonEmptyString } from '@sniptt/guards';
 import { useCallback, useEffect } from 'react';
 import {
@@ -90,15 +91,17 @@ export const SSEQuerySubscribeEffect = () => {
 
         switch (subCode) {
           case 'EVENT_STREAM_DOES_NOT_EXIST':
-          case 'EVENT_STREAM_ALREADY_EXISTS': {
+          case 'EVENT_STREAM_ALREADY_EXISTS':
+          case 'NOT_AUTHORIZED': {
             store.set(activeQueryListenersState.atom, []);
             store.set(shouldDestroyEventStreamState.atom, true);
             return;
           }
           default: {
-            throw new Error(
-              `Unhandled error for event stream: ${error.message}`,
-            );
+            captureException(error);
+            store.set(activeQueryListenersState.atom, []);
+            store.set(shouldDestroyEventStreamState.atom, true);
+            return;
           }
         }
       }
