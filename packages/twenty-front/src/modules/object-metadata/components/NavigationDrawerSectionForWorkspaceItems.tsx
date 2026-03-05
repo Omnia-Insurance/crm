@@ -1,10 +1,11 @@
 import { NavigationDropTargetContext } from '@/navigation-menu-item/contexts/NavigationDropTargetContext';
-import styled from '@emotion/styled';
+import { styled } from '@linaria/react';
 import { Droppable } from '@hello-pangea/dnd';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconLink, IconPlus } from 'twenty-ui/display';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { NavigationItemDropTarget } from '@/navigation-menu-item/components/NavigationItemDropTarget';
 import { WorkspaceNavigationMenuItemsFolder } from '@/navigation-menu-item/components/WorkspaceNavigationMenuItemsFolder';
@@ -37,7 +38,7 @@ import { convertCoreViewToView } from '@/views/utils/convertCoreViewToView';
 const StyledWorkspaceDroppableList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.betweenSiblingsGap};
+  gap: ${themeCssVariables.betweenSiblingsGap};
 `;
 
 type NavigationDrawerSectionForWorkspaceItemsProps = {
@@ -98,12 +99,9 @@ export const NavigationDrawerSectionForWorkspaceItems = ({
     (item) => item.itemType === NavigationMenuItemType.FOLDER,
   ).length;
 
-  const filteredItems = flatItems.filter((item) => {
+  const isItemVisible = (item: FlatWorkspaceItem): boolean => {
     const type = item.itemType;
-    if (
-      type === NavigationMenuItemType.FOLDER ||
-      type === NavigationMenuItemType.LINK
-    ) {
+    if (type === NavigationMenuItemType.LINK) {
       return true;
     }
     if (
@@ -115,16 +113,23 @@ export const NavigationDrawerSectionForWorkspaceItems = ({
         objectMetadataItems,
         views,
       );
-      return (
-        isDefined(objectMetadataItem) &&
-        getObjectPermissionsForObject(
-          objectPermissionsByObjectMetadataId,
-          objectMetadataItem.id,
-        ).canReadObjectRecords
+      if (!isDefined(objectMetadataItem)) return false;
+      const permissions = getObjectPermissionsForObject(
+        objectPermissionsByObjectMetadataId,
+        objectMetadataItem.id,
       );
+
+      return permissions.canReadObjectRecords && permissions.showInSidebar;
+    }
+    if (type === NavigationMenuItemType.FOLDER) {
+      const children = folderChildrenById.get(item.id) ?? [];
+
+      return children.some((child) => isItemVisible(child));
     }
     return false;
-  });
+  };
+
+  const filteredItems = flatItems.filter(isItemVisible);
 
   const getEditModeProps = (item: FlatWorkspaceItem) => {
     const itemId = item.id;

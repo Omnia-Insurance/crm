@@ -3,6 +3,7 @@ import { RemoteNavigationDrawerSection } from '@/object-metadata/components/Remo
 import { styled } from '@linaria/react';
 import { lazy, Suspense } from 'react';
 
+import { NavigationDrawerOtherSection } from '@/navigation/components/NavigationDrawerOtherSection';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const CurrentWorkspaceMemberNavigationMenuItemFoldersDispatcher = lazy(() =>
@@ -38,6 +39,7 @@ export const MainNavigationDrawerScrollableItems = () => {
         <WorkspaceNavigationMenuItemsDispatcher />
       </Suspense>
       <RemoteNavigationDrawerSection />
+      <NavigationDrawerOtherSection />
     </StyledScrollableItemsContainer>
   );
 };

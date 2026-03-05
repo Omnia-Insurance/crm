@@ -1,5 +1,5 @@
 import { NavigationDrawerItemForObjectMetadataItem } from '@/object-metadata/components/NavigationDrawerItemForObjectMetadataItem';
-import { CoreObjectNameSingular } from '@/object-metadata/types/CoreObjectNameSingular';
+import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
@@ -103,13 +103,14 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
   ];
 
   const objectMetadataItemsForNavigationItemsWithReadPermission =
-    objectMetadataItemsForNavigationItems.filter(
-      (objectMetadataItem) =>
-        getObjectPermissionsForObject(
-          objectPermissionsByObjectMetadataId,
-          objectMetadataItem.id,
-        ).canReadObjectRecords,
-    );
+    objectMetadataItemsForNavigationItems.filter((objectMetadataItem) => {
+      const permissions = getObjectPermissionsForObject(
+        objectPermissionsByObjectMetadataId,
+        objectMetadataItem.id,
+      );
+
+      return permissions.canReadObjectRecords && permissions.showInSidebar;
+    });
 
   return (
     objectMetadataItems.length > 0 && (
