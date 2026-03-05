@@ -25,7 +25,10 @@ import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
-import { ViewCalendarLayout } from '~/generated-metadata/graphql';
+import {
+  type CreateCoreViewFilterMutationVariables,
+  ViewCalendarLayout,
+} from '~/generated-metadata/graphql';
 import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 
 export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
@@ -197,7 +200,7 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
         });
 
         const viewSortsToCreate = currentRecordSorts
-          .map((recordSort) => mapRecordSortToViewSort(recordSort, newViewId))
+          .map((recordSort) => mapRecordSortToViewSort(recordSort))
           .map((viewSort) => ({
             ...viewSort,
             id: v4(),
@@ -208,18 +211,20 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
         });
 
         const createViewFilterInputs = viewFiltersToCreate.map(
-          (viewFilter) => ({
-            input: {
-              id: viewFilter.id,
-              fieldMetadataId: viewFilter.fieldMetadataId,
-              viewId: newViewId,
-              value: viewFilter.value,
-              operand: viewFilter.operand,
-              viewFilterGroupId: viewFilter.viewFilterGroupId,
-              positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
-              subFieldName: viewFilter.subFieldName ?? null,
-            },
-          }),
+          (viewFilter) =>
+            ({
+              input: {
+                id: viewFilter.id,
+                fieldMetadataId: viewFilter.fieldMetadataId,
+                viewId: newViewId,
+                value: viewFilter.value,
+                operand: viewFilter.operand,
+                viewFilterGroupId: viewFilter.viewFilterGroupId ?? null,
+                positionInViewFilterGroup:
+                  viewFilter.positionInViewFilterGroup ?? null,
+                subFieldName: viewFilter.subFieldName ?? null,
+              },
+            }) as CreateCoreViewFilterMutationVariables,
         );
 
         const filterResult = await performViewFilterAPICreate(
@@ -230,7 +235,20 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
           return undefined;
         }
 
-        await performViewSortAPICreate(viewSortsToCreate, { id: newViewId });
+        const createViewSortInputs = viewSortsToCreate.map((viewSort) => ({
+          input: {
+            id: viewSort.id,
+            fieldMetadataId: viewSort.fieldMetadataId,
+            viewId: newViewId,
+            direction: viewSort.direction,
+          },
+        }));
+
+        const sortResult = await performViewSortAPICreate(createViewSortInputs);
+
+        if (sortResult.status === 'failed') {
+          return undefined;
+        }
       }
 
       await refreshCoreViewsByObjectMetadataId(objectMetadataItem.id);
