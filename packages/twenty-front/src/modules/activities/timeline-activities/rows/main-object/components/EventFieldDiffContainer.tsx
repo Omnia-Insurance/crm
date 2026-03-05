@@ -6,7 +6,6 @@ type EventFieldDiffContainerProps = {
   mainObjectMetadataItem: ObjectMetadataItem;
   diffKey: string;
   diffValue: any;
-  diffBeforeValue?: any;
   eventId: string;
   fieldMetadataItemMap: Record<string, FieldMetadataItem>;
 };
@@ -15,7 +14,6 @@ export const EventFieldDiffContainer = ({
   mainObjectMetadataItem,
   diffKey,
   diffValue,
-  diffBeforeValue,
   eventId,
   fieldMetadataItemMap,
 }: EventFieldDiffContainerProps) => {
@@ -28,18 +26,14 @@ export const EventFieldDiffContainer = ({
   }
 
   const diffArtificialRecordStoreId = eventId + '--' + fieldMetadataItem.id;
-  const diffBeforeArtificialRecordStoreId =
-    eventId + '--before--' + fieldMetadataItem.id;
 
   return (
     <EventFieldDiff
       key={diffArtificialRecordStoreId}
       diffRecord={diffValue}
-      diffBeforeRecord={diffBeforeValue}
       fieldMetadataItem={fieldMetadataItem}
       mainObjectMetadataItem={mainObjectMetadataItem}
       diffArtificialRecordStoreId={diffArtificialRecordStoreId}
-      diffBeforeArtificialRecordStoreId={diffBeforeArtificialRecordStoreId}
     />
   );
 };
