@@ -1,0 +1,192 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force sync even if merge conflicts exist (Claude will resolve them)'
+        required: false
+        default: 'true'
+        type: boolean
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/twentyhq/twenty.git 2>/dev/null || true
+          git fetch upstream main
+
+      - name: Check for new upstream changes
+        id: check
+        run: |
+          BEHIND=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$(git rev-parse upstream/main)" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha_short=$(git rev-parse --short upstream/main)" >> "$GITHUB_OUTPUT"
+
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "status=up-to-date" >> "$GITHUB_OUTPUT"
+            echo "Already up to date with upstream."
+          else
+            echo "Fork is $BEHIND commits behind upstream."
+            echo "status=behind" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Attempt merge
+        if: steps.check.outputs.status == 'behind'
+        id: merge
+        run: |
+          # Try a clean merge first
+          if git merge upstream/main --no-edit; then
+            echo "result=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+            # Capture the list of conflicted files
+            CONFLICTS=$(git diff --name-only --diff-filter=U | head -50)
+            echo "conflicts<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$CONFLICTS" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            # Abort the failed merge
+            git merge --abort
+          fi
+
+      - name: Push clean merge
+        if: steps.merge.outputs.result == 'clean'
+        run: |
+          git push origin main
+          echo "Successfully merged ${{ steps.check.outputs.behind }} upstream commits into main."
+
+      - name: Create sync summary (clean merge)
+        if: steps.merge.outputs.result == 'clean'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const behind = '${{ steps.check.outputs.behind }}';
+            const sha = '${{ steps.check.outputs.upstream_sha_short }}';
+            console.log(`Clean merge: ${behind} commits synced up to upstream ${sha}`);
+
+      - name: Create sync branch for conflict resolution
+        if: steps.merge.outputs.result == 'conflict'
+        id: sync-branch
+        run: |
+          BRANCH="sync/upstream-$(date +%Y%m%d)"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+          # Create sync branch from current main
+          git checkout -b "$BRANCH"
+
+          # Merge upstream with conflict markers left in place
+          git merge upstream/main --no-edit || true
+
+          # Stage everything (including conflict markers) so we can commit and push
+          git add -A
+          git commit -m "chore: merge upstream/main with conflicts for resolution
+
+          Upstream SHA: ${{ steps.check.outputs.upstream_sha }}
+          Commits behind: ${{ steps.check.outputs.behind }}
+          Conflicted files:
+          ${{ steps.merge.outputs.conflicts }}"
+
+          git push -u origin "$BRANCH"
+
+      - name: Create issue for Claude to resolve conflicts
+        if: steps.merge.outputs.result == 'conflict'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = '${{ steps.sync-branch.outputs.branch }}';
+            const behind = '${{ steps.check.outputs.behind }}';
+            const sha = '${{ steps.check.outputs.upstream_sha_short }}';
+            const conflicts = `${{ steps.merge.outputs.conflicts }}`;
+
+            const issueBody = `@claude
+
+            ## Upstream Sync — Merge Conflict Resolution
+
+            The daily upstream sync from \`twentyhq/twenty:main\` found **${behind} new commits** (up to \`${sha}\`) but encountered merge conflicts.
+
+            A sync branch \`${branch}\` has been created with the conflict markers in place.
+
+            ### Conflicted files
+            \`\`\`
+            ${conflicts}
+            \`\`\`
+
+            ### Instructions
+
+            1. Check out the branch \`${branch}\`
+            2. For each conflicted file, resolve the merge conflict by:
+               - Keeping our custom Omnia-Insurance changes where they are intentional customizations
+               - Accepting upstream changes for everything else
+               - If unsure, prefer upstream changes but preserve any code in blocks marked with comments like \`// Omnia\`, \`// custom\`, or similar
+            3. After resolving all conflicts, ensure the code compiles:
+               - Run \`bash packages/twenty-utils/setup-dev-env.sh\`
+               - Run \`npx nx build twenty-shared\`
+               - Run \`npx nx typecheck twenty-front\`
+               - Run \`npx nx typecheck twenty-server\`
+            4. Commit the resolved files
+            5. Create a PR from \`${branch}\` into \`main\` with a summary of what was resolved
+
+            ### Context
+            - Upstream repository: [twentyhq/twenty](https://github.com/twentyhq/twenty)
+            - Upstream SHA: \`${{ steps.check.outputs.upstream_sha }}\`
+            - Sync branch: \`${branch}\`
+            `;
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Upstream sync: resolve merge conflicts (${sha})`,
+              body: issueBody,
+              labels: ['upstream-sync', 'automated']
+            });
+
+            console.log(`Created issue #${issue.data.number} for conflict resolution`);
+
+      - name: Summary
+        if: always()
+        run: |
+          STATUS="${{ steps.check.outputs.status }}"
+          MERGE="${{ steps.merge.outputs.result }}"
+
+          if [ "$STATUS" = "up-to-date" ]; then
+            echo "### ✅ Already up to date" >> "$GITHUB_STEP_SUMMARY"
+            echo "No new commits from upstream." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$MERGE" = "clean" ]; then
+            echo "### ✅ Clean merge" >> "$GITHUB_STEP_SUMMARY"
+            echo "Merged ${{ steps.check.outputs.behind }} upstream commits into main." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$MERGE" = "conflict" ]; then
+            echo "### ⚠️ Merge conflicts detected" >> "$GITHUB_STEP_SUMMARY"
+            echo "Created sync branch \`${{ steps.sync-branch.outputs.branch }}\` and opened an issue for Claude to resolve." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Conflicted files:**" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "${{ steps.merge.outputs.conflicts }}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
