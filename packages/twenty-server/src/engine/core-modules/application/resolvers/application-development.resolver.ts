@@ -33,7 +33,6 @@ import { FileDTO } from 'src/engine/core-modules/file/dtos/file.dto';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { DevelopmentGuard } from 'src/engine/guards/development.guard';
 import { RequireFeatureFlag } from 'src/engine/guards/feature-flag.guard';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
@@ -46,7 +45,6 @@ import { streamToBuffer } from 'src/utils/stream-to-buffer';
 @UseFilters(ApplicationExceptionFilter)
 @UseGuards(
   WorkspaceAuthGuard,
-  DevelopmentGuard,
   SettingsPermissionGuard(PermissionFlagType.APPLICATIONS),
 )
 export class ApplicationDevelopmentResolver {

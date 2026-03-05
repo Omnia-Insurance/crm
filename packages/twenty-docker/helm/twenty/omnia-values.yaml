@@ -17,6 +17,9 @@ server:
     CONVOSO_API_TOKEN:
       secretName: convoso-credentials
       key: apiToken
+    DEEPGRAM_API_KEY:
+      secretName: deepgram-credentials
+      key: apiKey
   resources:
     requests:
       cpu: 100m
@@ -60,6 +63,9 @@ worker:
     CONVOSO_API_TOKEN:
       secretName: convoso-credentials
       key: apiToken
+    DEEPGRAM_API_KEY:
+      secretName: deepgram-credentials
+      key: apiKey
   resources:
     requests:
       cpu: 100m

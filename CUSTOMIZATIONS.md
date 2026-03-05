@@ -56,6 +56,18 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `query-hooks/call-create-many.post-query.hook.ts` — Same for bulk
 - `query-hooks/call-query-hook.module.ts` — Module registration
 
+### `packages/twenty-apps/internal/compliance-qa/`
+- `src/application-config.ts` — App registration (Compliance QA)
+- `src/objects/qa-scorecard.ts` — QA Scorecard object definition with 25+ fields (scores, red flags, rich text details)
+- `src/constants/compliance-rules.ts` — All compliance rules, scripts, scoring criteria, red flag definitions, AI prompts
+- `src/logic-functions/analyze-call-compliance.ts` — Two-pass AI analysis (red flags + full scorecard) via HTTP endpoint
+- `src/logic-functions/backfill-compliance-qa.ts` — Batch backfill for existing call recordings
+- `src/utils/transcribe-recording.ts` — Deepgram Nova-3 batch transcription with speaker diarization
+- `src/utils/call-ai.ts` — Wrapper for Twenty's AI text generation endpoint
+- `src/roles/default-role.ts` — App role with read/write/AI permissions
+- `src/views/qa-scorecard-view.ts` — Default list view for QA Scorecards
+- `src/navigation-menu-items/qa-scorecard-navigation-menu-item.ts` — Sidebar navigation entry
+
 ### `packages/twenty-server/src/modules/lead/`
 - `query-hooks/lead-create-one.pre-query.hook.ts` — Lead pre-processing
 - `query-hooks/lead-create-many.pre-query.hook.ts` — Same for bulk
@@ -106,6 +118,11 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 ### Other Frontend
 
 ## Modified Upstream Server Files
+
+### Application Deployment
+| File | Modification |
+|------|-------------|
+| `engine/core-modules/application/resolvers/application-development.resolver.ts` | Removed `DevelopmentGuard` — allows `app:dev` deployment on self-hosted production server |
 
 ### RLS / Permissions Engine
 | File | Modification |
