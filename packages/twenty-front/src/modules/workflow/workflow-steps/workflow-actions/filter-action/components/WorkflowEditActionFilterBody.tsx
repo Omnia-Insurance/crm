@@ -30,6 +30,10 @@ const StyledChildContainer = styled.div`
   width: 100%;
 `;
 
+const StyledFilterBodyContainer = styled(WorkflowStepBody)`
+  gap: ${themeCssVariables.spacing[0]};
+`;
+
 type WorkflowEditActionFilterBodyProps = {
   action: WorkflowFilterAction;
   actionOptions:
@@ -80,7 +84,7 @@ export const WorkflowEditActionFilterBody = ({
         onFilterSettingsUpdate,
       }}
     >
-      <WorkflowStepBody rowGap={themeCssVariables.spacing[0]}>
+      <StyledFilterBodyContainer>
         <InputLabel>{t`Conditions`}</InputLabel>
         {isDefined(rootStepFilterGroup) ? (
           <StyledContainer>
@@ -115,7 +119,7 @@ export const WorkflowEditActionFilterBody = ({
         ) : (
           <WorkflowStepFilterAddRootStepFilterButton />
         )}
-      </WorkflowStepBody>
+      </StyledFilterBodyContainer>
     </WorkflowStepFilterContext.Provider>
   );
 };

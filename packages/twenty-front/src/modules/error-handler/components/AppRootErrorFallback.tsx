@@ -1,13 +1,15 @@
 import { type AppErrorDisplayProps } from '@/error-handler/types/AppErrorDisplayProps';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
+import { motion } from 'framer-motion';
 import { IconReload } from 'twenty-ui/display';
-import { ICON_SIZES, themeCssVariables } from 'twenty-ui/theme-constants';
+import { THEME_DARK } from 'twenty-ui/theme';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type AppRootErrorFallbackProps = AppErrorDisplayProps;
 
 const StyledContainer = styled.div`
-  background: ${themeCssVariables.background.noisy};
+  background: ${THEME_DARK.background.noisy};
   box-sizing: border-box;
   display: flex;
   height: 100vh;
@@ -25,7 +27,7 @@ const StyledPanel = styled.div`
   width: 100%;
 `;
 
-const StyledEmptyContainer = styled.div`
+const StyledEmptyContainer = styled(motion.div)`
   align-items: center;
   width: 100%;
   height: 100%;
@@ -92,9 +94,8 @@ const StyledButton = styled.button`
   padding: 8px;
 `;
 
-const StyledIconContainer = styled.span`
+const StyledIcon = styled(IconReload)`
   color: ${themeCssVariables.grayScale.gray12};
-  display: inline-flex;
   margin-right: 8px;
 `;
 
@@ -123,9 +124,7 @@ export const AppRootErrorFallback = ({
             </StyledEmptySubTitle>
           </StyledEmptyTextContainer>
           <StyledButton onClick={resetErrorBoundary}>
-            <StyledIconContainer>
-              <IconReload size={ICON_SIZES.md} />
-            </StyledIconContainer>
+            <StyledIcon size={16} />
             {t`Reload`}
           </StyledButton>
         </StyledEmptyContainer>

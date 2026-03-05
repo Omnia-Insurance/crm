@@ -34,9 +34,10 @@ import {
   type Point,
   type SliceTooltipProps,
 } from '@nivo/line';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useContext, useRef, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { useDebouncedCallback } from 'use-debounce';
+import { ThemeContext } from 'twenty-ui/theme';
 
 type CrosshairLayerProps = LineCustomSvgLayerProps<LineSeries>;
 type PointLabelsLayerProps = LineCustomSvgLayerProps<LineSeries>;
@@ -91,7 +92,8 @@ export const GraphWidgetLineChart = ({
   customFormatter,
   onSliceClick,
 }: GraphWidgetLineChartProps) => {
-  const colorRegistry = createGraphColorRegistry();
+  const { theme } = useContext(ThemeContext);
+  const colorRegistry = createGraphColorRegistry(theme);
   const chartTheme = useLineChartTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -205,7 +207,7 @@ export const GraphWidgetLineChart = ({
       <CustomPointLabelsLayer
         points={layerProps.points}
         formatValue={(value) => formatGraphValue(value, formatOptions)}
-        offset={8}
+        offset={theme.spacingMultiplicator * 2}
         groupMode={groupMode}
         omitNullValues={omitNullValues}
         enablePointLabel={enablePointLabel}

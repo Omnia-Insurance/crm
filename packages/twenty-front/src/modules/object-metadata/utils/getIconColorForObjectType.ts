@@ -1,11 +1,17 @@
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { type ThemeType } from 'twenty-ui/theme';
 
-export const getIconColorForObjectType = (objectType: string): string => {
+export const getIconColorForObjectType = ({
+  objectType,
+  theme,
+}: {
+  objectType: string;
+  theme: ThemeType;
+}): string => {
   switch (objectType) {
     case 'note':
-      return themeCssVariables.color.yellow;
+      return theme.color.yellow;
     case 'task':
-      return themeCssVariables.color.blue;
+      return theme.color.blue;
     default:
       return 'currentColor';
   }

@@ -1,18 +1,11 @@
 import { WorkflowStepBody } from '@/workflow/workflow-steps/components/WorkflowStepBody';
+import { styled } from '@linaria/react';
 
-const WorkflowRunStepJsonContainerInner = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => (
-  <WorkflowStepBody
-    display="grid"
-    gridTemplateRows="max-content"
-    rowGap="0"
-    overflow="auto"
-  >
-    {children}
-  </WorkflowStepBody>
-);
+const StyledWorkflowRunStepJsonContainer = styled(WorkflowStepBody)`
+  grid-template-rows: max-content;
+  gap: 0;
+  display: grid;
+  overflow: auto;
+`;
 
-export { WorkflowRunStepJsonContainerInner as WorkflowRunStepJsonContainer };
+export { StyledWorkflowRunStepJsonContainer as WorkflowRunStepJsonContainer };

@@ -15,6 +15,8 @@ import { useLingui } from '@lingui/react/macro';
 import { IconFunction } from 'twenty-ui/display';
 import { MenuItem } from 'twenty-ui/navigation';
 import { FeatureFlagKey } from '~/generated-metadata/graphql';
+import { useContext } from 'react';
+import { ThemeContext } from 'twenty-ui/theme';
 
 export type WorkflowActionSelection = {
   type: WorkflowActionType;
@@ -30,6 +32,7 @@ export const CommandMenuWorkflowSelectAction = ({
   const isDraftEmailEnabled = useIsFeatureEnabled(
     FeatureFlagKey.IS_DRAFT_EMAIL_ENABLED,
   );
+  const { theme } = useContext(ThemeContext);
 
   const { t } = useLingui();
 
@@ -111,7 +114,10 @@ export const CommandMenuWorkflowSelectAction = ({
               withIconContainer={true}
               LeftIcon={() => (
                 <IconFunction
-                  color={getActionIconColorOrThrow('LOGIC_FUNCTION')}
+                  color={getActionIconColorOrThrow({
+                    theme,
+                    actionType: 'LOGIC_FUNCTION',
+                  })}
                   size={16}
                 />
               )}

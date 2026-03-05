@@ -4,7 +4,8 @@ import { NODE_HANDLE_WIDTH_PX } from '@/workflow/workflow-diagram/constants/Node
 import { getWorkflowDiagramColors } from '@/workflow/workflow-diagram/utils/getWorkflowDiagramColors';
 import { styled } from '@linaria/react';
 import { Handle, Position, type HandleProps } from '@xyflow/react';
-import { useMemo, type CSSProperties } from 'react';
+import { useContext, useMemo, type CSSProperties } from 'react';
+import { ThemeContext } from 'twenty-ui/theme';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const HANDLE_SCALE_ON_HOVER = 1.5;
@@ -69,6 +70,8 @@ export const WorkflowDiagramHandleSource = ({
   disableHoverEffect,
   runStatus,
 }: WorkflowDiagramHandleSourceProps) => {
+  const { theme } = useContext(ThemeContext);
+
   const dynamicStyles = useMemo(() => {
     const isRight = position === Position.Right;
     const transform = isRight ? 'translate(50%, -50%)' : 'translate(-50%, 50%)';
@@ -79,15 +82,15 @@ export const WorkflowDiagramHandleSource = ({
     let borderColor: string;
 
     if (selected) {
-      const colors = getWorkflowDiagramColors({ runStatus });
+      const colors = getWorkflowDiagramColors({ theme, runStatus });
       bg = colors.selected.background;
       borderColor = colors.selected.borderColor;
     } else {
-      bg = themeCssVariables.background.primary;
+      bg = theme.background.primary;
       borderColor =
         hovered && disableHoverEffect !== true
-          ? themeCssVariables.font.color.light
-          : themeCssVariables.border.color.strong;
+          ? theme.font.color.light
+          : theme.border.color.strong;
     }
 
     const styles: Record<string, string> = {
@@ -99,7 +102,7 @@ export const WorkflowDiagramHandleSource = ({
     };
 
     if (disableHoverEffect !== true) {
-      const hoverColors = getWorkflowDiagramColors({});
+      const hoverColors = getWorkflowDiagramColors({ theme });
       styles['--handle-hover-bg'] = hoverColors.selected.background;
       styles['--handle-hover-border-color'] = hoverColors.selected.borderColor;
       styles['--handle-hover-transform'] =
@@ -107,7 +110,7 @@ export const WorkflowDiagramHandleSource = ({
     }
 
     return styles as CSSProperties;
-  }, [position, selected, hovered, disableHoverEffect, runStatus, type]);
+  }, [position, selected, hovered, disableHoverEffect, runStatus, type, theme]);
 
   return (
     <StyledHandle

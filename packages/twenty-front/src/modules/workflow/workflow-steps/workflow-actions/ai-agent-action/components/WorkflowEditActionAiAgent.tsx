@@ -55,6 +55,11 @@ const StyledTabList = styled(TabList)`
   padding-left: ${themeCssVariables.spacing[2]};
 `;
 
+const StyledPermissionsStepBody = styled(WorkflowStepBody)`
+  padding-block: 0;
+  padding-inline: 0;
+`;
+
 export const WorkflowEditActionAiAgent = ({
   action,
   actionOptions,
@@ -276,14 +281,14 @@ export const WorkflowEditActionAiAgent = ({
         behaveAsLinks={false}
       />
       {currentTabId === WORKFLOW_AI_AGENT_TABS.PERMISSIONS ? (
-        <WorkflowStepBody paddingBlock="0" paddingInline="0">
+        <StyledPermissionsStepBody>
           <WorkflowAiAgentPermissionsTab
             action={action}
             readonly={actionOptions.readonly === true}
             isAgentLoading={agentLoading}
             refetchAgent={refetchAgent}
           />
-        </WorkflowStepBody>
+        </StyledPermissionsStepBody>
       ) : (
         <WorkflowStepBody>
           <WorkflowAiAgentPromptTab

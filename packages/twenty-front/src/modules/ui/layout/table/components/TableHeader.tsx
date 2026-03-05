@@ -4,7 +4,6 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 const StyledTableHeader = styled.div<{
   align?: 'left' | 'center' | 'right';
   onClick?: () => void;
-  padding?: string;
 }>`
   gap: ${themeCssVariables.spacing[1]};
   align-items: center;
@@ -19,7 +18,7 @@ const StyledTableHeader = styled.div<{
       : align === 'center'
         ? 'center'
         : 'flex-start'};
-  padding: ${({ padding }) => padding ?? `0 ${themeCssVariables.spacing[2]}`};
+  padding: 0 ${themeCssVariables.spacing[2]};
   text-align: ${({ align }) => align ?? 'left'};
   cursor: ${({ onClick }) => (onClick ? 'pointer' : 'default')};
 `;

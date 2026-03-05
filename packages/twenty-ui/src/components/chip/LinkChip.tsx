@@ -22,14 +22,11 @@ export type LinkChipProps = Omit<
   target?: '_blank' | '_self';
 };
 
-const StyledLinkContainer = styled.span`
+const StyledLink = styled(Link)`
   display: inline-flex;
+  text-decoration: none;
   min-width: 0;
   vertical-align: middle;
-
-  & > a {
-    text-decoration: none;
-  }
 `;
 
 export const LinkChip = ({
@@ -58,34 +55,32 @@ export const LinkChip = ({
     });
 
   return (
-    <StyledLinkContainer>
-      <Link
-        to={to}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClickHandler(event);
-        }}
-        onMouseDown={onMouseDownHandler}
-        data-click-outside-id={LINK_CHIP_CLICK_OUTSIDE_ID}
-        target={target}
-        rel={target === '_blank' ? 'noopener noreferrer' : undefined}
-      >
-        <Chip
-          size={size}
-          label={label}
-          isLabelHidden={isLabelHidden}
-          isBold={isBold}
-          clickable={true}
-          variant={variant}
-          leftComponent={leftComponent}
-          rightComponent={rightComponent}
-          rightComponentDivider={rightComponentDivider}
-          accent={accent}
-          className={className}
-          maxWidth={maxWidth}
-          emptyLabel={emptyLabel}
-        />
-      </Link>
-    </StyledLinkContainer>
+    <StyledLink
+      to={to}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClickHandler(event);
+      }}
+      onMouseDown={onMouseDownHandler}
+      data-click-outside-id={LINK_CHIP_CLICK_OUTSIDE_ID}
+      target={target}
+      rel={target === '_blank' ? 'noopener noreferrer' : undefined}
+    >
+      <Chip
+        size={size}
+        label={label}
+        isLabelHidden={isLabelHidden}
+        isBold={isBold}
+        clickable={true}
+        variant={variant}
+        leftComponent={leftComponent}
+        rightComponent={rightComponent}
+        rightComponentDivider={rightComponentDivider}
+        accent={accent}
+        className={className}
+        maxWidth={maxWidth}
+        emptyLabel={emptyLabel}
+      />
+    </StyledLink>
   );
 };

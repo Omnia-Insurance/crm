@@ -1,4 +1,5 @@
 import {
+  FeatureFlagKey,
   FieldMetadataType,
   FileFolder,
   type ObjectRecord,
@@ -7,8 +8,10 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { type QueryResultGetterHandlerInterface } from 'src/engine/api/graphql/workspace-query-runner/factories/query-result-getters/interfaces/query-result-getter-handler.interface';
 
+import { type FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { type FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
 import { extractFileIdFromUrl } from 'src/engine/core-modules/file/files-field/utils/extract-file-id-from-url.util';
+import { type FileService } from 'src/engine/core-modules/file/services/file.service';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,7 +36,11 @@ const parseBlocknoteJsonSafely = (
 export class RichTextV2FieldQueryResultGetterHandler
   implements QueryResultGetterHandlerInterface
 {
-  constructor(private readonly fileUrlService: FileUrlService) {}
+  constructor(
+    private readonly fileService: FileService,
+    private readonly fileUrlService: FileUrlService,
+    private readonly featureFlagService: FeatureFlagService,
+  ) {}
 
   async handle(
     record: ObjectRecord,
@@ -47,6 +54,11 @@ export class RichTextV2FieldQueryResultGetterHandler
     if (richTextV2Fields.length === 0) {
       return record;
     }
+
+    const isFilesFieldMigrated = await this.featureFlagService.isFeatureEnabled(
+      FeatureFlagKey.IS_FILES_FIELD_MIGRATED,
+      workspaceId,
+    );
 
     for (const field of richTextV2Fields) {
       const fieldValue = record[field.name];
@@ -65,6 +77,7 @@ export class RichTextV2FieldQueryResultGetterHandler
       const signedBlocks = this.signBlocknoteImageUrls(
         blocknoteBlocks,
         workspaceId,
+        isFilesFieldMigrated,
       );
 
       record[field.name] = {
@@ -79,32 +92,69 @@ export class RichTextV2FieldQueryResultGetterHandler
   signBlocknoteImageUrls = (
     blocknoteBlocks: RichTextBlock[],
     workspaceId: string,
+    isFilesFieldMigrated: boolean,
   ): RichTextBlock[] => {
     return blocknoteBlocks.map((block: RichTextBlock) => {
-      if (!isDefined(block.props?.url)) {
+      if (isFilesFieldMigrated && isDefined(block.props?.url)) {
+        const fileIdFromUrl = extractFileIdFromUrl(
+          block.props.url,
+          FileFolder.FilesField,
+        );
+
+        if (!isDefined(fileIdFromUrl)) {
+          return block;
+        }
+
+        const url = this.fileUrlService.signFileByIdUrl({
+          fileId: fileIdFromUrl,
+          workspaceId,
+          fileFolder: FileFolder.FilesField,
+        });
+
+        return {
+          ...block,
+          props: {
+            ...block.props,
+            url,
+          },
+        };
+      }
+
+      if (block.type !== 'image' || !block.props?.url) {
         return block;
       }
 
-      const fileIdFromUrl = extractFileIdFromUrl(
-        block.props.url,
-        FileFolder.FilesField,
-      );
+      let url: URL;
 
-      if (!isDefined(fileIdFromUrl)) {
+      try {
+        url = new URL(block.props.url);
+      } catch {
         return block;
       }
 
-      const url = this.fileUrlService.signFileByIdUrl({
-        fileId: fileIdFromUrl,
+      const pathname = url.pathname;
+      const isLinkExternal = !pathname.startsWith('/files/attachment/');
+
+      if (isLinkExternal) {
+        return block;
+      }
+
+      const fileName = pathname.match(/files\/attachment\/(?:.+)\/(.+)$/)?.[1];
+
+      if (!isDefined(fileName)) {
+        return block;
+      }
+
+      const signedPath = this.fileService.signFileUrl({
+        url: `attachment/${fileName}`,
         workspaceId,
-        fileFolder: FileFolder.FilesField,
       });
 
       return {
         ...block,
         props: {
           ...block.props,
-          url,
+          url: `${process.env.SERVER_URL}/files/${signedPath}`,
         },
       };
     });

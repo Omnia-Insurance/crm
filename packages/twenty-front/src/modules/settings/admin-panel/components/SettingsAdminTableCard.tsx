@@ -2,10 +2,52 @@ import { Table } from '@/ui/layout/table/components/Table';
 import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
+import { styled } from '@linaria/react';
+import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { type IconComponent } from 'twenty-ui/display';
 import { Card } from 'twenty-ui/layout';
-import { ICON_SIZES, themeCssVariables } from 'twenty-ui/theme-constants';
+import { ThemeContext } from 'twenty-ui/theme';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
+
+const StyledCard = styled(Card)`
+  background-color: ${themeCssVariables.background.secondary};
+  border: 1px solid ${themeCssVariables.border.color.medium};
+`;
+
+const StyledTableRow = styled(TableRow)`
+  height: ${themeCssVariables.spacing[6]};
+`;
+
+const StyledTableCellLabel = styled(TableCell)<{
+  align?: 'left' | 'center' | 'right';
+}>`
+  color: ${themeCssVariables.font.color.tertiary};
+  height: ${themeCssVariables.spacing[6]};
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: ${({ align }) =>
+    align === 'right'
+      ? 'flex-end'
+      : align === 'center'
+        ? 'center'
+        : 'flex-start'};
+`;
+
+const StyledTableCellValue = styled(TableCell)<{
+  align?: 'left' | 'center' | 'right';
+  clickable?: boolean;
+}>`
+  color: ${themeCssVariables.font.color.primary};
+  cursor: ${({ clickable }) => (clickable ? 'pointer' : 'default')};
+  height: ${themeCssVariables.spacing[6]};
+  justify-content: ${({ align }) =>
+    align === 'left'
+      ? 'flex-start'
+      : align === 'center'
+        ? 'center'
+        : 'flex-end'};
+`;
 
 type TableItem = {
   Icon?: IconComponent;
@@ -31,42 +73,32 @@ export const SettingsAdminTableCard = ({
   valueAlign = 'left',
   className,
 }: SettingsAdminTableCardProps) => {
+  const { theme } = useContext(ThemeContext);
+
   return (
-    <Card
-      rounded={rounded}
-      className={className}
-      backgroundColor={themeCssVariables.background.secondary}
-    >
+    <StyledCard rounded={rounded} className={className}>
       <Table>
         <TableBody>
           {items.map((item, index) => (
-            <TableRow
+            <StyledTableRow
               key={index + item.label}
               gridAutoColumns={gridAutoColumns}
-              height={themeCssVariables.spacing[6]}
             >
-              <TableCell
-                align={labelAlign}
-                color={themeCssVariables.font.color.tertiary}
-                height={themeCssVariables.spacing[6]}
-                gap={themeCssVariables.spacing[2]}
-              >
-                {item.Icon && <item.Icon size={ICON_SIZES.md} />}
+              <StyledTableCellLabel align={labelAlign}>
+                {item.Icon && <item.Icon size={theme.icon.size.md} />}
                 <span>{item.label}</span>
-              </TableCell>
-              <TableCell
+              </StyledTableCellLabel>
+              <StyledTableCellValue
                 align={valueAlign}
-                color={themeCssVariables.font.color.primary}
-                height={themeCssVariables.spacing[6]}
                 onClick={item.onClick}
                 clickable={isDefined(item.onClick)}
               >
                 {item.value}
-              </TableCell>
-            </TableRow>
+              </StyledTableCellValue>
+            </StyledTableRow>
           ))}
         </TableBody>
       </Table>
-    </Card>
+    </StyledCard>
   );
 };

@@ -3,7 +3,7 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { isNonEmptyString } from '@sniptt/guards';
 import { Command } from 'nest-commander';
 import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
-import { FileFolder } from 'twenty-shared/types';
+import { FileFolder, FeatureFlagKey } from 'twenty-shared/types';
 import {
   extractFolderPathFilenameAndTypeOrThrow,
   isDefined,
@@ -14,6 +14,7 @@ import { v4 } from 'uuid';
 import { ActiveOrSuspendedWorkspacesMigrationCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspaces-migration.command-runner';
 import { RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspaces-migration.command-runner';
 import { ApplicationService } from 'src/engine/core-modules/application/services/application.service';
+import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
@@ -35,7 +36,7 @@ type RichTextBlock = Record<string, unknown>;
 @Command({
   name: 'upgrade:1-18:migrate-activity-rich-text-attachment-file-ids',
   description:
-    '[DEPRECATED] Migrate activity rich text blocks - this migration is now complete and no longer needed',
+    'Migrate activity rich text blocks to include attachmentFileId from attachment.file field',
 })
 export class MigrateActivityRichTextAttachmentFileIdsCommand extends ActiveOrSuspendedWorkspacesMigrationCommandRunner {
   constructor(
@@ -43,6 +44,7 @@ export class MigrateActivityRichTextAttachmentFileIdsCommand extends ActiveOrSus
     protected readonly workspaceRepository: Repository<WorkspaceEntity>,
     protected readonly twentyORMGlobalManager: GlobalWorkspaceOrmManager,
     protected readonly dataSourceService: DataSourceService,
+    private readonly featureFlagService: FeatureFlagService,
     private readonly fileStorageService: FileStorageService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly applicationService: ApplicationService,
@@ -55,20 +57,23 @@ export class MigrateActivityRichTextAttachmentFileIdsCommand extends ActiveOrSus
 
   override async runOnWorkspace({
     workspaceId,
+    options,
   }: RunOnWorkspaceArgs): Promise<void> {
-    this.logger.log(
-      `[DEPRECATED] Activity rich text attachment file IDs migration is no longer needed for workspace ${workspaceId}. ` +
-        `The IS_FILES_FIELD_MIGRATED feature flag has been removed as all workspaces are now migrated.`,
-    );
-  }
+    const isDryRun = options.dryRun ?? false;
 
-  private _deprecatedMigrationLogic = async ({
-    workspaceId,
-    isDryRun,
-  }: {
-    workspaceId: string;
-    isDryRun: boolean;
-  }) => {
+    const isFilesFieldMigrated = await this.featureFlagService.isFeatureEnabled(
+      FeatureFlagKey.IS_FILES_FIELD_MIGRATED,
+      workspaceId,
+    );
+
+    if (isFilesFieldMigrated) {
+      this.logger.log(
+        `Files field already migrated for workspace ${workspaceId}, skipping`,
+      );
+
+      return;
+    }
+
     this.logger.log(
       `${isDryRun ? '[DRY RUN] ' : ''}Starting activity rich text attachment file IDs migration for workspace ${workspaceId}`,
     );
@@ -166,11 +171,18 @@ export class MigrateActivityRichTextAttachmentFileIdsCommand extends ActiveOrSus
         isDryRun,
       });
 
+      if (!isDryRun) {
+        await this.featureFlagService.enableFeatureFlags(
+          [FeatureFlagKey.IS_FILES_FIELD_MIGRATED],
+          workspaceId,
+        );
+      }
+
       this.logger.log(
         `${isDryRun ? '[DRY RUN] ' : ''}Completed activity rich text attachment file IDs migration for workspace ${workspaceId}`,
       );
     }, systemAuthContext);
-  };
+  }
 
   private async migrateActivityTable({
     activityRepository,
