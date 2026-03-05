@@ -59,7 +59,6 @@ export {
   ThemeContext,
   ThemeContextProvider,
 } from './provider/ThemeContextProvider';
-export { ThemeCssVariableInjectorEffect } from './provider/ThemeCssVariableInjectorEffect';
 export { ThemeProvider } from './provider/ThemeProvider';
 export type { ThemeType } from './types/ThemeType';
 export { getNextThemeColor } from './utils/getNextThemeColor';
