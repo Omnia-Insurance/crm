@@ -39,7 +39,7 @@ RUN npx lingui extract --config packages/twenty-server/lingui.config.ts && \
 RUN npx nx run twenty-server:build
 
 RUN if [ -n "$SENTRY_AUTH_TOKEN" ]; then \
-  npx sentry-cli sourcemaps upload \
+  npx --yes @sentry/cli sourcemaps upload \
     --auth-token "$SENTRY_AUTH_TOKEN" \
     --org omnia-insurance \
     --project crm-server \
