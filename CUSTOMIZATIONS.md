@@ -18,6 +18,7 @@ These files have been overwritten by upstream merges multiple times. **Always ve
 | `packages/twenty-front/src/modules/object-record/hooks/useBuildRecordInputFromRLSPredicates.ts` | Indirect RLS relation resolution (Agent → WorkspaceMember) | Members can't create policies without it — frontend throws before mutation |
 | `packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectForm.tsx` | Removed Organization plan gate on RLS | Self-hosted, no billing — RLS must always be available |
 | `packages/twenty-front/src/modules/navigation/components/MainNavigationDrawer.tsx` | Sidebar: Settings at top, Documentation removed, Search restored | UX preferences |
+| `packages/twenty-front/src/modules/navigation/hooks/useDefaultHomePagePath.ts` | Members always land on People (Leads) page; skip last-visited storage for non-admins | Members shouldn't land on non-sidebar pages like Agents |
 | `packages/twenty-front/src/locales/*.po` and `src/locales/generated/*.ts` | Custom Lingui translations | Must re-run `lingui extract && lingui compile` after upstream merge |
 | `packages/twenty-server/src/engine/metadata-modules/role/role.entity.ts` | Added `editWindowMinutes` column | Configurable edit window per role |
 | `packages/twenty-server/src/engine/metadata-modules/object-permission/object-permission.entity.ts` | Added `editWindowMinutes` column | Per-object edit window override |
@@ -159,7 +160,8 @@ After every upstream merge:
 2. **Re-extract Lingui**: `npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile`
 3. **Verify RLS works**: Log in as member role, create a policy from Policies page
 4. **Verify sidebar**: Settings at top, no Documentation link, Search in sidebar
-5. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
-6. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
-7. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
-8. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
+5. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
+6. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
+7. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
+8. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
+9. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`

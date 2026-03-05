@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Twenty is an open-source CRM built with modern technologies in a monorepo structure. The codebase is organized as an Nx workspace with multiple packages.
 
+## Omnia Customizations
+
+This is a fork of twentyhq/twenty with Omnia-specific customizations. **Whenever you modify an upstream file or add new Omnia-specific code, you MUST update `CUSTOMIZATIONS.md`** to document the change. This ensures customizations survive future upstream merges. Add entries to the appropriate table (Critical Files, Custom Server Modules, Modified Frontend/Server Files) and update the Post-Merge Checklist if the change needs manual verification after merges.
+
 ## Key Commands
 
 ### Development
