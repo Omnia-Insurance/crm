@@ -4,6 +4,7 @@ import { type ObjectPathInfo } from '@/navigation/types/ObjectPathInfo';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { coreViewsState } from '@/views/states/coreViewState';
 import { convertCoreViewToView } from '@/views/utils/convertCoreViewToView';
@@ -12,11 +13,14 @@ import { useCallback, useMemo } from 'react';
 import { AppPath, SettingsPath } from 'twenty-shared/types';
 import { getAppPath, getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { useStore } from 'jotai';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 export const useDefaultHomePagePath = () => {
   const store = useStore();
   const currentUser = useAtomStateValue(currentUserState);
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const permissionFlagMap = usePermissionFlagMap();
+  const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
 
   const { alphaSortedActiveNonSystemObjectMetadataItems } =
     useFilteredObjectMetadataItems();
@@ -57,34 +61,48 @@ export const useDefaultHomePagePath = () => {
   );
 
   const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    const [firstObjectMetadataItem] =
-      readableAlphaSortedActiveNonSystemObjectMetadataItems;
+    // For non-admin users, prefer "person" (Leads) over alphabetical first
+    const preferredItem = !isAdmin
+      ? readableAlphaSortedActiveNonSystemObjectMetadataItems.find(
+          (item) => item.nameSingular === 'person',
+        )
+      : undefined;
 
-    if (!isDefined(firstObjectMetadataItem)) {
+    const targetItem =
+      preferredItem ?? readableAlphaSortedActiveNonSystemObjectMetadataItems[0];
+
+    if (!isDefined(targetItem)) {
       return null;
     }
 
-    const view = getFirstView(firstObjectMetadataItem?.id);
+    const view = getFirstView(targetItem.id);
 
-    return { objectMetadataItem: firstObjectMetadataItem, view };
-  }, [getFirstView, readableAlphaSortedActiveNonSystemObjectMetadataItems]);
+    return { objectMetadataItem: targetItem, view };
+  }, [
+    getFirstView,
+    isAdmin,
+    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+  ]);
 
   const getDefaultObjectPathInfo = useCallback(() => {
-    const lastVisitedObjectMetadataItemId = store.get(
-      lastVisitedObjectMetadataItemIdState.atom,
-    );
+    // Only use last-visited storage for admins; members always land on Leads (People)
+    if (isAdmin) {
+      const lastVisitedObjectMetadataItemId = store.get(
+        lastVisitedObjectMetadataItemIdState.atom,
+      );
 
-    const lastVisitedObjectMetadataItem = isDefined(
-      lastVisitedObjectMetadataItemId,
-    )
-      ? getActiveObjectMetadataItemMatchingId(lastVisitedObjectMetadataItemId)
-      : undefined;
+      const lastVisitedObjectMetadataItem = isDefined(
+        lastVisitedObjectMetadataItemId,
+      )
+        ? getActiveObjectMetadataItemMatchingId(lastVisitedObjectMetadataItemId)
+        : undefined;
 
-    if (isDefined(lastVisitedObjectMetadataItem)) {
-      return {
-        view: getFirstView(lastVisitedObjectMetadataItemId),
-        objectMetadataItem: lastVisitedObjectMetadataItem,
-      };
+      if (isDefined(lastVisitedObjectMetadataItem)) {
+        return {
+          view: getFirstView(lastVisitedObjectMetadataItemId),
+          objectMetadataItem: lastVisitedObjectMetadataItem,
+        };
+      }
     }
 
     return firstObjectPathInfo;
@@ -92,6 +110,7 @@ export const useDefaultHomePagePath = () => {
     firstObjectPathInfo,
     getActiveObjectMetadataItemMatchingId,
     getFirstView,
+    isAdmin,
     store,
   ]);
 
