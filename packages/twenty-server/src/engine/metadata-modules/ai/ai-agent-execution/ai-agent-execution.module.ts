@@ -2,8 +2,10 @@ import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceDomainsModule } from 'src/engine/core-modules/domain/workspace-domains/workspace-domains.module';
+import { FileUrlModule } from 'src/engine/core-modules/file/file-url/file-url.module';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
 import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user-workspace.module';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AiAgentModule } from 'src/engine/metadata-modules/ai/ai-agent/ai-agent.module';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { AiBillingModule } from 'src/engine/metadata-modules/ai/ai-billing/ai-billing.module';
@@ -17,6 +19,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
 import { AgentMessagePartEntity } from './entities/agent-message-part.entity';
 import { AgentMessageEntity } from './entities/agent-message.entity';
 import { AgentTurnEntity } from './entities/agent-turn.entity';
+import { AgentMessagePartResolver } from './resolvers/agent-message-part.resolver';
 import { AgentActorContextService } from './services/agent-actor-context.service';
 import { AgentAsyncExecutorService } from './services/agent-async-executor.service';
 
@@ -25,6 +28,7 @@ import { AgentAsyncExecutorService } from './services/agent-async-executor.servi
     AiBillingModule,
     AiModelsModule,
     AiAgentModule,
+    FileUrlModule,
     WorkspaceDomainsModule,
     UserWorkspaceModule,
     UserRoleModule,
@@ -40,7 +44,11 @@ import { AgentAsyncExecutorService } from './services/agent-async-executor.servi
       WorkspaceEntity,
     ]),
   ],
-  providers: [AgentAsyncExecutorService, AgentActorContextService],
+  providers: [
+    AgentAsyncExecutorService,
+    AgentActorContextService,
+    AgentMessagePartResolver,
+  ],
   exports: [
     AgentAsyncExecutorService,
     AgentActorContextService,

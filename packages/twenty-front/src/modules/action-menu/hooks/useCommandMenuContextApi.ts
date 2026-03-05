@@ -86,8 +86,6 @@ export const useCommandMenuContextApi = (): CommandMenuContextApi => {
         canUpdateObjectRecords: false,
         canSoftDeleteObjectRecords: false,
         canDestroyObjectRecords: false,
-        showInSidebar: false,
-        editWindowMinutes: null,
         restrictedFields: {},
         objectMetadataId: '',
         rowLevelPermissionPredicates: [],
