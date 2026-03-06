@@ -40,12 +40,23 @@ export const DateTimeDisplay = ({
     <EllipsisDisplay>
       {formattedDate}
       <span></span>
-      {isNonEmptyString(value) && (
-        <>
-          <StyledTimeZoneSpacer />
-          <TimeZoneAbbreviation instant={Temporal.Instant.from(value)} />
-        </>
-      )}
+      {isNonEmptyString(value) &&
+        (() => {
+          try {
+            const instant = Temporal.Instant.from(
+              // eslint-disable-next-line lingui/no-unlocalized-strings
+              value.includes('T') ? value : `${value}T00:00:00Z`,
+            );
+            return (
+              <>
+                <StyledTimeZoneSpacer />
+                <TimeZoneAbbreviation instant={instant} />
+              </>
+            );
+          } catch {
+            return null;
+          }
+        })()}
     </EllipsisDisplay>
   );
 };

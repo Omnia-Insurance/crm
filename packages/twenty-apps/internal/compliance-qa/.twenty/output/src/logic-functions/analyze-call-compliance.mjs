@@ -58140,9 +58140,11 @@ var defaultOptions2 = {
 };
 
 // src/logic-functions/analyze-call-compliance.ts
+var VALID_CALL_TYPES = /* @__PURE__ */ new Set(["ACA_SALE", "ANCILLARY", "GENERAL"]);
+var sanitizeCallType = (callType) => VALID_CALL_TYPES.has(callType ?? "") ? callType : "GENERAL";
 var resolveAgentName = async (agentId) => {
   const apiBaseUrl = process.env.TWENTY_API_URL;
-  const token = process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
+  const token = process.env.TWENTY_API_KEY ?? process.env.TWENTY_APP_ACCESS_TOKEN;
   if (!apiBaseUrl || !token) return null;
   const response = await fetch(`${apiBaseUrl}/graphql`, {
     method: "POST",
@@ -58154,8 +58156,22 @@ var resolveAgentName = async (agentId) => {
       query: `query { agentProfile(filter: { id: { eq: "${agentId}" } }) { name } }`
     })
   });
-  if (!response.ok) return null;
+  if (!response.ok) {
+    console.warn(
+      "[analyze] resolveAgentName failed:",
+      response.status,
+      await response.text()
+    );
+    return null;
+  }
   const data = await response.json();
+  if (data.errors?.length) {
+    console.warn(
+      "[analyze] resolveAgentName GraphQL errors:",
+      JSON.stringify(data.errors)
+    );
+    return null;
+  }
   return data.data?.agentProfile?.name ?? null;
 };
 var buildRedFlagUserPrompt = (transcript) => {
@@ -58275,9 +58291,14 @@ var handler = async (event) => {
     try {
       const apiBaseUrl = process.env.TWENTY_API_URL;
       const token = process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
-      if (!apiBaseUrl || !token) return;
+      if (!apiBaseUrl || !token) {
+        console.warn(
+          "[analyze] No token available \u2014 cannot link relations"
+        );
+        return;
+      }
       const dataStr = Object.entries(updateFields).map(([k, v]) => `${k}: "${v}"`).join(", ");
-      await fetch(`${apiBaseUrl}/graphql`, {
+      const resp = await fetch(`${apiBaseUrl}/graphql`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58287,11 +58308,19 @@ var handler = async (event) => {
           query: `mutation { updateQaScorecard(id: "${scorecardId2}", data: { ${dataStr} }) { id } }`
         })
       });
-      console.log(
-        "[analyze] Linked relations to scorecard",
-        scorecardId2,
-        updateFields
-      );
+      const respBody = await resp.json();
+      if (respBody.errors?.length) {
+        console.error(
+          "[analyze] linkRelations GraphQL errors:",
+          JSON.stringify(respBody.errors)
+        );
+      } else {
+        console.log(
+          "[analyze] Linked relations to scorecard",
+          scorecardId2,
+          updateFields
+        );
+      }
     } catch (err) {
       console.warn("[analyze] Failed to link relations:", err);
     }
@@ -58380,7 +58409,7 @@ var handler = async (event) => {
       name: scorecardName,
       overallScore: 0,
       overallResult: "NOT_APPLICABLE",
-      callType: redFlagAnalysis.callType || "GENERAL",
+      callType: sanitizeCallType(redFlagAnalysis.callType),
       redFlagRecordedLine: false,
       redFlagMarketplace: false,
       redFlagAor: false,
@@ -58444,7 +58473,7 @@ var handler = async (event) => {
     FULL_SCORECARD_SYSTEM_PROMPT,
     buildScorecardUserPrompt(
       transcriptMarkdown,
-      redFlagAnalysis.callType || "GENERAL"
+      sanitizeCallType(redFlagAnalysis.callType)
     )
   );
   const scorecardAnalysis = parseAiJson(scorecardText);
@@ -58469,7 +58498,7 @@ var handler = async (event) => {
     name: scorecardName,
     overallScore,
     overallResult: scorecardAnalysis.overallResult,
-    callType: redFlagAnalysis.callType || "GENERAL",
+    callType: sanitizeCallType(redFlagAnalysis.callType),
     redFlagRecordedLine: redFlagAnalysis.redFlags.recordedLineDisclosure?.violated ?? false,
     redFlagMarketplace: redFlagAnalysis.redFlags.marketplaceDisclosure?.violated ?? false,
     redFlagAor: redFlagAnalysis.redFlags.aorDisclosure?.violated ?? false,

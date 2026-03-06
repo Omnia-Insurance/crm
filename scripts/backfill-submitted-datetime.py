@@ -29,8 +29,9 @@ NEW_HEADERS = {
     "Content-Type": "application/json",
 }
 
-DELAY = 0.02  # seconds between CRM writes
-WORKERS = 10  # parallel page fetchers
+DELAY = 0.05  # seconds between CRM writes
+FETCH_WORKERS = 5  # parallel page fetchers
+UPDATE_WORKERS = 3  # parallel update workers
 
 
 def eastern_to_utc_iso(reg_date_str):
@@ -44,33 +45,47 @@ def eastern_to_utc_iso(reg_date_str):
     return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def gql(query, variables=None):
+def gql(query, variables=None, retries=3):
     payload = {"query": query}
     if variables:
         payload["variables"] = variables
-    resp = requests.post(NEW_CRM_GQL, headers=NEW_HEADERS, json=payload, timeout=30)
-    time.sleep(DELAY)
-    data = resp.json()
-    if "errors" in data:
-        return None, data["errors"]
-    return data.get("data"), None
+    for attempt in range(retries):
+        try:
+            resp = requests.post(NEW_CRM_GQL, headers=NEW_HEADERS, json=payload, timeout=30)
+            time.sleep(DELAY)
+            data = resp.json()
+            if "errors" in data:
+                return None, data["errors"]
+            return data.get("data"), None
+        except (requests.exceptions.RequestException, ValueError):
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                return None, [{"message": "request failed after retries"}]
 
 
-def fetch_old_crm_page(page):
+def fetch_old_crm_page(page, retries=3):
     """Fetch one page from the old CRM lead-report-api."""
-    resp = requests.get(
-        f"{OLD_CRM_BASE}/lead-report-api",
-        params={"page": page, "per_page": 10},
-        headers={"Accept": "application/json"},
-        timeout=30,
-    )
-    if not resp.ok:
-        return [], 0
-    data = resp.json()
-    response = data.get("response", {})
-    policies = response.get("data", [])
-    total_pages = response.get("total_page", 1)
-    return policies, total_pages
+    for attempt in range(retries):
+        try:
+            resp = requests.get(
+                f"{OLD_CRM_BASE}/lead-report-api",
+                params={"page": page, "per_page": 10},
+                headers={"Accept": "application/json"},
+                timeout=60,
+            )
+            if not resp.ok:
+                return [], 0
+            data = resp.json()
+            response = data.get("response", {})
+            policies = response.get("data", [])
+            total_pages = response.get("total_page", 1)
+            return policies, total_pages
+        except requests.exceptions.RequestException:
+            if attempt < retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                return [], 0
 
 
 def build_reg_date_lookup():
@@ -92,9 +107,9 @@ def build_reg_date_lookup():
 
     # Fetch remaining pages in parallel
     remaining = list(range(2, total_pages + 1))
-    print(f"  Fetching pages 2-{total_pages} with {WORKERS} workers...")
+    print(f"  Fetching pages 2-{total_pages} with {FETCH_WORKERS} workers...")
 
-    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+    with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as executor:
         futures = {executor.submit(fetch_old_crm_page, pg): pg for pg in remaining}
         done = 0
         for future in as_completed(futures):
@@ -160,11 +175,10 @@ def main():
     # Step 2: Fetch CRM policies with old CRM IDs
     crm_policies = fetch_crm_policies_with_old_id()
 
-    # Step 3: Update each matching policy
-    updated = 0
+    # Step 3: Build update tasks
+    tasks = []
     skipped_no_match = 0
     skipped_same = 0
-    failed = 0
 
     for policy in crm_policies:
         old_id = policy["oldCrmPolicyId"]
@@ -176,34 +190,45 @@ def main():
 
         utc_iso = eastern_to_utc_iso(reg_date)
 
-        # Skip if already correct (avoid unnecessary writes)
         existing = policy.get("submittedDate", "")
         if existing and existing.startswith(utc_iso[:19]):
             skipped_same += 1
             continue
 
+        tasks.append((policy["id"], old_id, utc_iso))
+
+    print(f"  {len(tasks)} policies to update, {skipped_same} already correct, {skipped_no_match} no match")
+
+    # Step 4: Execute updates in parallel
+    updated = 0
+    failed = 0
+
+    def do_update(task):
+        pid, old_id, utc_iso = task
         if dry_run:
-            print(f"  [DRY RUN] Policy {policy['id']} (old={old_id}): "
-                  f"reg_date={reg_date} -> {utc_iso}")
-            updated += 1
-            continue
-
+            return True, pid, old_id, utc_iso, None
         data, err = gql("""
-            mutation($id: ID!, $input: PolicyUpdateInput!) {
-                updatePolicy(id: $id, data: $input) { id }
+            mutation($input: PolicyUpdateInput!) {
+                updatePolicy(id: "%s", data: $input) { id }
             }
-        """, {"id": policy["id"], "input": {"submittedDate": utc_iso}})
+        """ % pid, {"input": {"submittedDate": utc_iso}})
+        return data is not None, pid, old_id, utc_iso, err
 
-        if data:
-            updated += 1
-        else:
-            failed += 1
-            if failed <= 20:
-                err_msg = err[0]["message"] if err else "unknown"
-                print(f"  FAIL {policy['id']}: {err_msg[:150]}")
-
-        if updated % 100 == 0 and updated > 0:
-            print(f"  Progress: {updated} updated...")
+    with ThreadPoolExecutor(max_workers=UPDATE_WORKERS) as executor:
+        futures = {executor.submit(do_update, t): t for t in tasks}
+        for future in as_completed(futures):
+            ok, pid, old_id, utc_iso, err = future.result()
+            if ok:
+                updated += 1
+                if dry_run:
+                    print(f"  [DRY RUN] Policy {pid} (old={old_id}): -> {utc_iso}")
+            else:
+                failed += 1
+                if failed <= 20:
+                    err_msg = err[0]["message"] if err else "unknown"
+                    print(f"  FAIL {pid}: {err_msg[:150]}")
+            if (updated + failed) % 500 == 0:
+                print(f"  Progress: {updated} updated, {failed} failed / {len(tasks)} total...")
 
     print("\n" + "=" * 60)
     print("BACKFILL COMPLETE" + (" (DRY RUN)" if dry_run else ""))

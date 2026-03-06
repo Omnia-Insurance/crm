@@ -78,10 +78,20 @@ type RequestBody = {
 // Helpers
 // ============================================================
 
+const VALID_CALL_TYPES = new Set(['ACA_SALE', 'ANCILLARY', 'GENERAL']);
+
+const sanitizeCallType = (
+  callType: string | undefined,
+): QaScorecardCallTypeEnum =>
+  (VALID_CALL_TYPES.has(callType ?? '')
+    ? callType
+    : 'GENERAL') as QaScorecardCallTypeEnum;
+
 const resolveAgentName = async (agentId: string): Promise<string | null> => {
   const apiBaseUrl = process.env.TWENTY_API_URL;
+  // Try workspace key first (can query workspace objects), fall back to app token
   const token =
-    process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
+    process.env.TWENTY_API_KEY ?? process.env.TWENTY_APP_ACCESS_TOKEN;
 
   if (!apiBaseUrl || !token) return null;
 
@@ -96,11 +106,29 @@ const resolveAgentName = async (agentId: string): Promise<string | null> => {
     }),
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    console.warn(
+      '[analyze] resolveAgentName failed:',
+      response.status,
+      await response.text(),
+    );
+
+    return null;
+  }
 
   const data = (await response.json()) as {
     data?: { agentProfile?: { name?: string } };
+    errors?: { message: string }[];
   };
+
+  if (data.errors?.length) {
+    console.warn(
+      '[analyze] resolveAgentName GraphQL errors:',
+      JSON.stringify(data.errors),
+    );
+
+    return null;
+  }
 
   return data.data?.agentProfile?.name ?? null;
 };
@@ -265,7 +293,9 @@ const handler = async (event: { body: RequestBody | null }) => {
     console.log('[analyze] Resolved agent name:', agentName ?? 'not found');
   }
 
-  // Helper to link agentProfile and call after scorecard creation
+  // Helper to link agentProfile and call after scorecard creation.
+  // Uses the workspace API key because these relations point to
+  // workspace objects (agentProfile, call) that the app token can't access.
   const linkRelations = async (scorecardId: string) => {
     const updateFields: Record<string, string> = {};
 
@@ -276,16 +306,23 @@ const handler = async (event: { body: RequestBody | null }) => {
 
     try {
       const apiBaseUrl = process.env.TWENTY_API_URL;
+      // Try app token first (updating app's own object), fall back to workspace key
       const token =
         process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
 
-      if (!apiBaseUrl || !token) return;
+      if (!apiBaseUrl || !token) {
+        console.warn(
+          '[analyze] No token available — cannot link relations',
+        );
+
+        return;
+      }
 
       const dataStr = Object.entries(updateFields)
         .map(([k, v]) => `${k}: "${v}"`)
         .join(', ');
 
-      await fetch(`${apiBaseUrl}/graphql`, {
+      const resp = await fetch(`${apiBaseUrl}/graphql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -296,11 +333,22 @@ const handler = async (event: { body: RequestBody | null }) => {
         }),
       });
 
-      console.log(
-        '[analyze] Linked relations to scorecard',
-        scorecardId,
-        updateFields,
-      );
+      const respBody = (await resp.json()) as {
+        errors?: { message: string }[];
+      };
+
+      if (respBody.errors?.length) {
+        console.error(
+          '[analyze] linkRelations GraphQL errors:',
+          JSON.stringify(respBody.errors),
+        );
+      } else {
+        console.log(
+          '[analyze] Linked relations to scorecard',
+          scorecardId,
+          updateFields,
+        );
+      }
     } catch (err) {
       console.warn('[analyze] Failed to link relations:', err);
     }
@@ -416,7 +464,7 @@ const handler = async (event: { body: RequestBody | null }) => {
       overallScore: 0,
       overallResult:
         'NOT_APPLICABLE' as unknown as QaScorecardOverallResultEnum,
-      callType: redFlagAnalysis.callType || 'GENERAL',
+      callType: sanitizeCallType(redFlagAnalysis.callType),
       redFlagRecordedLine: false,
       redFlagMarketplace: false,
       redFlagAor: false,
@@ -488,7 +536,7 @@ const handler = async (event: { body: RequestBody | null }) => {
     FULL_SCORECARD_SYSTEM_PROMPT,
     buildScorecardUserPrompt(
       transcriptMarkdown,
-      redFlagAnalysis.callType || 'GENERAL',
+      sanitizeCallType(redFlagAnalysis.callType),
     ),
   );
   const scorecardAnalysis = parseAiJson<ScorecardAnalysis>(scorecardText);
@@ -526,7 +574,7 @@ const handler = async (event: { body: RequestBody | null }) => {
     name: scorecardName,
     overallScore,
     overallResult: scorecardAnalysis.overallResult,
-    callType: redFlagAnalysis.callType || 'GENERAL',
+    callType: sanitizeCallType(redFlagAnalysis.callType),
     redFlagRecordedLine:
       redFlagAnalysis.redFlags.recordedLineDisclosure?.violated ?? false,
     redFlagMarketplace:
