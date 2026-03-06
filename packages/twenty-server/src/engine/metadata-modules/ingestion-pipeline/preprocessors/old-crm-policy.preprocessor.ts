@@ -277,7 +277,7 @@ export class OldCrmPolicyPreprocessor {
     // Parse dates
     const effectiveDate = this.parseDate(payload.effective_date);
     const expirationDate = this.parseDate(payload.expires_date);
-    const submittedDate = this.parseDate(payload.reg_date);
+    const submittedDate = this.parseDateTimeAsEastern(payload.reg_date);
 
     this.logger.log(
       `Policy ${payload.policy_number}: personId=${personId}, agentId=${agentId}, carrierId=${carrierId}, productId=${productId}`,
@@ -921,6 +921,41 @@ export class OldCrmPolicyPreprocessor {
     }
 
     return dateStr.substring(0, 10);
+  }
+
+  // Converts "YYYY-MM-DD HH:MM:SS" (Eastern) → UTC ISO string.
+  // Handles EDT/EST automatically via Intl.
+  private parseDateTimeAsEastern(dateStr: string | undefined): string | null {
+    if (
+      !dateStr ||
+      dateStr === '0000-00-00' ||
+      dateStr === '0000-00-00 00:00:00'
+    ) {
+      return null;
+    }
+
+    const trimmed = dateStr.trim();
+    const dateOnly = trimmed.substring(0, 10);
+    const timeOnly =
+      trimmed.length > 10 ? trimmed.substring(11, 19) : '00:00:00';
+    const easternIso = `${dateOnly}T${timeOnly}`;
+
+    // Determine the Eastern offset for this date (handles EDT vs EST)
+    const testDate = new Date(`${easternIso}Z`);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      timeZoneName: 'shortOffset',
+    });
+    const parts = formatter.formatToParts(testDate);
+    const offsetPart = parts.find((p) => p.type === 'timeZoneName')?.value;
+    const offsetHours = parseInt(offsetPart?.replace('GMT', '') ?? '-5');
+
+    // Eastern time + inverse offset = UTC
+    const utcDate = new Date(`${easternIso}Z`);
+
+    utcDate.setHours(utcDate.getHours() - offsetHours);
+
+    return utcDate.toISOString();
   }
 
   private normalizePhone(phone: string | undefined): string | null {

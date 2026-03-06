@@ -1,97 +1,187 @@
 import { defineLogicFunction } from 'twenty-sdk';
-import { CoreApiClient } from 'twenty-sdk/generated';
 
-// Backfill logic function: queries Call records with recording URLs
-// but no existing QA Scorecard, then triggers analysis for each.
+// Call records live in the workspace, not this app — use REST API directly.
 
 type RequestBody = {
-  // Max number of calls to process in this batch (default: 10)
   batchSize?: number;
-  // Only process calls after this date (ISO string)
   afterDate?: string;
-  // Only process calls for a specific agent profile ID
   agentId?: string;
-  // If true, just count eligible calls without processing
   dryRun?: boolean;
 };
 
-const handler = async (event: any) => {
-  const body = (event.body as RequestBody) || {};
+type CallNode = {
+  id: string;
+  name: string;
+  recording: {
+    primaryLinkUrl?: string;
+    primaryLinkLabel?: string;
+  } | null;
+  agentId: string | null;
+  callDate: string | null;
+};
+
+type CallEdge = {
+  node: CallNode;
+};
+
+type CallConnectionResponse = {
+  data: {
+    calls: {
+      edges: CallEdge[];
+    };
+  };
+};
+
+type QaScorecardEdge = {
+  node: { id: string };
+};
+
+type QaScorecardConnectionResponse = {
+  data: {
+    qaScorecards: {
+      edges: QaScorecardEdge[];
+    };
+  };
+};
+
+type ProcessResult = {
+  callId: string;
+  callName: string;
+  status: 'success' | 'error';
+  error?: string;
+};
+
+const getApiConfig = () => {
+  const apiBaseUrl = process.env.TWENTY_API_URL;
+  // App token can only access app-scoped objects (qaScorecard).
+  // Workspace API key is needed for workspace objects (call, agentProfile).
+  const appToken = process.env.TWENTY_APP_ACCESS_TOKEN;
+  const workspaceToken = process.env.TWENTY_API_KEY;
+
+  if (!apiBaseUrl || (!appToken && !workspaceToken)) {
+    throw new Error('Missing TWENTY_API_URL or token');
+  }
+
+  return {
+    apiBaseUrl,
+    appToken: appToken ?? workspaceToken!,
+    workspaceToken: workspaceToken ?? appToken!,
+  };
+};
+
+const graphqlQuery = async <T>(
+  query: string,
+  token: string,
+  variables?: Record<string, unknown>,
+): Promise<T> => {
+  const { apiBaseUrl } = getApiConfig();
+
+  const response = await fetch(`${apiBaseUrl}/graphql`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+
+    throw new Error(`GraphQL request failed (${response.status}): ${errorBody}`);
+  }
+
+  const json = await response.json();
+  const gqlResponse = json as { errors?: { message: string }[] };
+
+  if (gqlResponse.errors?.length) {
+    throw new Error(
+      `GraphQL errors: ${gqlResponse.errors.map((e) => e.message).join('; ')}`,
+    );
+  }
+
+  return json as T;
+};
+
+const handler = async (event: { body: RequestBody | null }) => {
+  const body = event.body ?? {};
   const batchSize = Math.min(body.batchSize ?? 10, 50);
 
-  const client = new CoreApiClient();
-
-  // Query calls that have a recording URL
-  // The recording field is a LINKS composite type with primaryLinkUrl
-  const filter: Record<string, unknown> = {};
+  // Build filter for calls query
+  const filterClauses: string[] = [];
 
   if (body.afterDate) {
-    filter.callDate = { gte: body.afterDate };
+    filterClauses.push(`callDate: { gte: "${body.afterDate}" }`);
   }
 
   if (body.agentId) {
-    filter.agentId = { eq: body.agentId };
+    filterClauses.push(`agentId: { eq: "${body.agentId}" }`);
   }
+
+  const filterArg =
+    filterClauses.length > 0
+      ? `filter: { ${filterClauses.join(', ')} },`
+      : '';
 
   console.log(
     '[backfill] Querying calls with recordings...',
-    JSON.stringify({ batchSize, filter }),
+    JSON.stringify({ batchSize, afterDate: body.afterDate, agentId: body.agentId }),
   );
 
-  // Fetch calls that have recording links
-  const { calls } = (await client.query({
-    calls: {
-      __args: {
-        filter: Object.keys(filter).length > 0 ? filter : undefined,
-        first: batchSize,
-        orderBy: [{ callDate: 'DescNullsLast' }],
-      },
-      edges: {
-        node: {
-          id: true,
-          name: true,
-          recording: true,
-          agentId: true,
-          callDate: true,
-        },
-      },
-    },
-  } as any)) as any;
+  const { workspaceToken, appToken } = getApiConfig();
 
-  const callNodes = calls?.edges?.map((e: any) => e.node) ?? [];
+  // Fetch calls via workspace GraphQL (Call is not in this app's schema)
+  const callsResponse = await graphqlQuery<CallConnectionResponse>(`
+    query BackfillCallsQuery {
+      calls(
+        ${filterArg}
+        first: ${batchSize},
+        orderBy: [{ callDate: DescNullsLast }]
+      ) {
+        edges {
+          node {
+            id
+            name
+            recording
+            agentId
+            callDate
+          }
+        }
+      }
+    }
+  `, workspaceToken);
+
+  const callNodes = callsResponse.data.calls.edges.map((e) => e.node);
 
   // Filter to calls that have a recording URL
-  const callsWithRecording = callNodes.filter((call: any) => {
-    const recording = call.recording;
-
-    return recording?.primaryLinkUrl && recording.primaryLinkUrl.length > 0;
-  });
+  const callsWithRecording = callNodes.filter(
+    (call) =>
+      call.recording?.primaryLinkUrl &&
+      call.recording.primaryLinkUrl.length > 0,
+  );
 
   console.log(
     `[backfill] Found ${callsWithRecording.length} calls with recordings out of ${callNodes.length} total`,
   );
 
   // Check which calls already have scorecards
-  const callsToProcess: any[] = [];
+  const callsToProcess: CallNode[] = [];
 
   for (const call of callsWithRecording) {
-    const { qaScorecards } = (await client.query({
-      qaScorecards: {
-        __args: {
-          filter: {
-            name: { like: `%${call.id.slice(0, 8)}%` },
-          },
-          first: 1,
-        },
-        edges: {
-          node: { id: true },
-        },
-      },
-    } as any)) as any;
+    const scorecardResponse = await graphqlQuery<QaScorecardConnectionResponse>(`
+      query CheckExistingScorecard {
+        qaScorecards(
+          filter: { name: { like: "%${call.id.slice(0, 8)}%" } },
+          first: 1
+        ) {
+          edges {
+            node { id }
+          }
+        }
+      }
+    `, appToken);
 
-    const existingScorecards = qaScorecards?.edges ?? [];
-
-    if (existingScorecards.length === 0) {
+    if (scorecardResponse.data.qaScorecards.edges.length === 0) {
       callsToProcess.push(call);
     }
   }
@@ -106,32 +196,18 @@ const handler = async (event: any) => {
       totalCalls: callNodes.length,
       callsWithRecording: callsWithRecording.length,
       callsNeedingScorecard: callsToProcess.length,
-      callIds: callsToProcess.map((c: any) => c.id),
+      callIds: callsToProcess.map((c) => c.id),
     };
   }
 
   // Process each call by calling the analyze endpoint
-  const apiBaseUrl = process.env.TWENTY_API_URL;
-  const token =
-    process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
-
-  if (!apiBaseUrl || !token) {
-    throw new Error('Missing TWENTY_API_URL or token');
-  }
-
-  const results: Array<{
-    callId: string;
-    callName: string;
-    status: string;
-    error?: string;
-  }> = [];
+  const { apiBaseUrl } = getApiConfig();
+  const results: ProcessResult[] = [];
 
   for (const call of callsToProcess) {
     const recordingUrl = call.recording?.primaryLinkUrl;
 
-    console.log(
-      `[backfill] Processing call ${call.id}: ${call.name}`,
-    );
+    console.log(`[backfill] Processing call ${call.id}: ${call.name}`);
 
     try {
       const analyzeResponse = await fetch(
@@ -140,11 +216,13 @@ const handler = async (event: any) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${appToken}`,
           },
           body: JSON.stringify({
             callId: call.id,
             recordingUrl,
+            agentId: call.agentId ?? undefined,
+            callName: call.name,
           }),
         },
       );

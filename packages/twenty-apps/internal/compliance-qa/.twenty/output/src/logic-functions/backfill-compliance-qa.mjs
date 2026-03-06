@@ -3,70 +3,99 @@ const require = __createRequire(import.meta.url);
 
 // src/logic-functions/backfill-compliance-qa.ts
 import { defineLogicFunction } from "twenty-sdk";
-
-// node_modules/twenty-sdk/generated/core/index.ts
-var CoreApiClient = class {
+var getApiConfig = () => {
+  const apiBaseUrl = process.env.TWENTY_API_URL;
+  const appToken = process.env.TWENTY_APP_ACCESS_TOKEN;
+  const workspaceToken = process.env.TWENTY_API_KEY;
+  if (!apiBaseUrl || !appToken && !workspaceToken) {
+    throw new Error("Missing TWENTY_API_URL or token");
+  }
+  return {
+    apiBaseUrl,
+    appToken: appToken ?? workspaceToken,
+    workspaceToken: workspaceToken ?? appToken
+  };
 };
-
-// src/logic-functions/backfill-compliance-qa.ts
+var graphqlQuery = async (query, token, variables) => {
+  const { apiBaseUrl } = getApiConfig();
+  const response = await fetch(`${apiBaseUrl}/graphql`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ query, variables })
+  });
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`GraphQL request failed (${response.status}): ${errorBody}`);
+  }
+  const json = await response.json();
+  const gqlResponse = json;
+  if (gqlResponse.errors?.length) {
+    throw new Error(
+      `GraphQL errors: ${gqlResponse.errors.map((e) => e.message).join("; ")}`
+    );
+  }
+  return json;
+};
 var handler = async (event) => {
-  const body = event.body || {};
+  const body = event.body ?? {};
   const batchSize = Math.min(body.batchSize ?? 10, 50);
-  const client = new CoreApiClient();
-  const filter = {};
+  const filterClauses = [];
   if (body.afterDate) {
-    filter.callDate = { gte: body.afterDate };
+    filterClauses.push(`callDate: { gte: "${body.afterDate}" }`);
   }
   if (body.agentId) {
-    filter.agentId = { eq: body.agentId };
+    filterClauses.push(`agentId: { eq: "${body.agentId}" }`);
   }
+  const filterArg = filterClauses.length > 0 ? `filter: { ${filterClauses.join(", ")} },` : "";
   console.log(
     "[backfill] Querying calls with recordings...",
-    JSON.stringify({ batchSize, filter })
+    JSON.stringify({ batchSize, afterDate: body.afterDate, agentId: body.agentId })
   );
-  const { calls } = await client.query({
-    calls: {
-      __args: {
-        filter: Object.keys(filter).length > 0 ? filter : void 0,
-        first: batchSize,
-        orderBy: [{ callDate: "DescNullsLast" }]
-      },
-      edges: {
-        node: {
-          id: true,
-          name: true,
-          recording: true,
-          agentId: true,
-          callDate: true
+  const { workspaceToken, appToken } = getApiConfig();
+  const callsResponse = await graphqlQuery(`
+    query BackfillCallsQuery {
+      calls(
+        ${filterArg}
+        first: ${batchSize},
+        orderBy: [{ callDate: DescNullsLast }]
+      ) {
+        edges {
+          node {
+            id
+            name
+            recording
+            agentId
+            callDate
+          }
         }
       }
     }
-  });
-  const callNodes = calls?.edges?.map((e) => e.node) ?? [];
-  const callsWithRecording = callNodes.filter((call) => {
-    const recording = call.recording;
-    return recording?.primaryLinkUrl && recording.primaryLinkUrl.length > 0;
-  });
+  `, workspaceToken);
+  const callNodes = callsResponse.data.calls.edges.map((e) => e.node);
+  const callsWithRecording = callNodes.filter(
+    (call) => call.recording?.primaryLinkUrl && call.recording.primaryLinkUrl.length > 0
+  );
   console.log(
     `[backfill] Found ${callsWithRecording.length} calls with recordings out of ${callNodes.length} total`
   );
   const callsToProcess = [];
   for (const call of callsWithRecording) {
-    const { qaScorecards } = await client.query({
-      qaScorecards: {
-        __args: {
-          filter: {
-            name: { like: `%${call.id.slice(0, 8)}%` }
-          },
+    const scorecardResponse = await graphqlQuery(`
+      query CheckExistingScorecard {
+        qaScorecards(
+          filter: { name: { like: "%${call.id.slice(0, 8)}%" } },
           first: 1
-        },
-        edges: {
-          node: { id: true }
+        ) {
+          edges {
+            node { id }
+          }
         }
       }
-    });
-    const existingScorecards = qaScorecards?.edges ?? [];
-    if (existingScorecards.length === 0) {
+    `, appToken);
+    if (scorecardResponse.data.qaScorecards.edges.length === 0) {
       callsToProcess.push(call);
     }
   }
@@ -82,17 +111,11 @@ var handler = async (event) => {
       callIds: callsToProcess.map((c) => c.id)
     };
   }
-  const apiBaseUrl = process.env.TWENTY_API_URL;
-  const token = process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
-  if (!apiBaseUrl || !token) {
-    throw new Error("Missing TWENTY_API_URL or token");
-  }
+  const { apiBaseUrl } = getApiConfig();
   const results = [];
   for (const call of callsToProcess) {
     const recordingUrl = call.recording?.primaryLinkUrl;
-    console.log(
-      `[backfill] Processing call ${call.id}: ${call.name}`
-    );
+    console.log(`[backfill] Processing call ${call.id}: ${call.name}`);
     try {
       const analyzeResponse = await fetch(
         `${apiBaseUrl}/rest/logic-functions/s/analyze-call-compliance`,
@@ -100,11 +123,13 @@ var handler = async (event) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${appToken}`
           },
           body: JSON.stringify({
             callId: call.id,
-            recordingUrl
+            recordingUrl,
+            agentId: call.agentId ?? void 0,
+            callName: call.name
           })
         }
       );

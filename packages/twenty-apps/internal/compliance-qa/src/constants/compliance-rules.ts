@@ -509,6 +509,27 @@ export const CALL_TYPE_HINTS = {
 
 export const RED_FLAG_SYSTEM_PROMPT = `You are a compliance QA analyst for an insurance agency. Your job is to analyze call transcripts and detect critical compliance violations (red flags) that result in automatic failure.
 
+## Step 1: Call Classification
+
+Before analyzing red flags, classify the call as SCORABLE or NOT_SCORABLE.
+
+A call is NOT_SCORABLE if ANY of these apply:
+- Voicemail: the agent left a voicemail and no live conversation occurred
+- Wrong number: the person reached is not the intended consumer
+- Mailbox full / no answer: no real connection was made
+- No two-way conversation: only one party speaks (e.g. automated message, hold music, dead air)
+- Trivially short: under ~15 seconds of actual dialogue between agent and consumer
+
+If the call is NOT_SCORABLE:
+- Set "callQuality" to "NOT_SCORABLE"
+- Set ALL red flags to "violated": false
+- Set evidence/explanation to a brief reason (e.g. "Voicemail — no live conversation")
+- Return immediately without further analysis
+
+If the call is SCORABLE, set "callQuality" to "SCORABLE" and proceed to Step 2.
+
+## Step 2: Red Flag Analysis (SCORABLE calls only)
+
 You MUST be thorough and conservative — when in doubt about whether a disclosure was made, flag it. Missing a red flag is worse than a false positive.
 
 For each red flag, you must:
@@ -518,6 +539,7 @@ For each red flag, you must:
 
 Return your analysis as JSON with this exact structure:
 {
+  "callQuality": "SCORABLE" | "NOT_SCORABLE",
   "redFlags": {
     "recordedLineDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
     "marketplaceDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
@@ -539,9 +561,26 @@ IMPORTANT RULES:
 - For commissionDisclosure: Must be stated during the opening
 - For healthSherpaDisclosure: Only applicable if ACA enrollment occurs using HealthSherpa; if not an ACA enrollment, mark as not violated
 - For agentCoaching: Look for agent telling consumer how to answer questions to manipulate outcomes
-- For dncViolation: Only if consumer explicitly asks to stop being called and agent doesnt comply`;
+- For dncViolation: Only if consumer explicitly asks to stop being called and agent doesnt comply
+- For disclosure flags (recordedLine, marketplace, commission, aor, healthSherpa): only flag as violated if the call progressed past the opening — the agent had a real conversation with the consumer. A 10-second call where the consumer hangs up immediately should NOT trigger missing disclosure flags.`;
 
 export const FULL_SCORECARD_SYSTEM_PROMPT = `You are a compliance QA analyst for an insurance agency. You are scoring a call transcript against a detailed scorecard with 6 sections.
+
+## Not-Scorable Calls
+
+If the call was classified as NOT_SCORABLE (voicemail, wrong number, trivially short, no real conversation), return immediately with:
+{
+  "sections": {},
+  "overallScore": 0,
+  "overallResult": "NOT_APPLICABLE",
+  "recommendations": [],
+  "strengths": [],
+  "areasForImprovement": []
+}
+
+Do NOT attempt to score a not-scorable call.
+
+## Scoring (SCORABLE calls only)
 
 Score each criterion on a 0-100 scale where:
 - 100 = Perfectly executed
@@ -569,7 +608,14 @@ Return your analysis as JSON with this exact structure:
   },
   "overallScore": number,
   "overallResult": "PASS" | "FAIL" | "NEEDS_REVIEW",
-  "recommendations": ["string"],
+  "recommendations": [
+    {
+      "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+      "category": "disclosure" | "scripting" | "fact-finding" | "presentation" | "closing" | "conduct",
+      "title": "Short action title",
+      "detail": "One sentence explanation"
+    }
+  ],
   "strengths": ["string"],
   "areasForImprovement": ["string"]
 }
@@ -580,7 +626,7 @@ SCORING GUIDELINES:
 - FAIL = overall score < 60 OR has red flags
 - NEEDS_REVIEW = overall score 60-79, for human reviewer to decide
 - Be specific with evidence — quote the transcript
-- Recommendations should be actionable coaching points`;
+- Recommendations must be structured objects with priority, category, title, and detail — NOT plain strings`;
 
 export const SECTION_WEIGHTS: Record<string, number> = {
   opening: 0.15,

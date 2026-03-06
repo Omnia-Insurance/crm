@@ -1,4 +1,5 @@
-// Wrapper for Twenty's AI text generation endpoint.
+// Calls Twenty's built-in AI text generation endpoint.
+// Requires an AI provider key (e.g. ANTHROPIC_API_KEY) configured on the server.
 
 type AiResponse = {
   text?: string;
@@ -56,17 +57,61 @@ export const callAi = async (
   return data.text;
 };
 
-// Extract JSON from AI response that may contain markdown code fences
+// Extract JSON from AI response that may contain markdown code fences or trailing text
 export const parseAiJson = <T>(text: string): T => {
-  // Strip markdown code fences if present
   let cleaned = text.trim();
 
+  // Strip markdown code fences
   if (cleaned.startsWith('```')) {
-    // Remove opening fence (with optional language tag)
     cleaned = cleaned.replace(/^```[a-z]*\n?/, '');
-    // Remove closing fence
     cleaned = cleaned.replace(/\n?```\s*$/, '');
   }
 
-  return JSON.parse(cleaned) as T;
+  // Try parsing as-is first
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    // Find the outermost JSON object or array
+    const startIdx = cleaned.search(/[{[]/);
+
+    if (startIdx === -1) {
+      throw new Error('No JSON found in AI response');
+    }
+
+    const opener = cleaned[startIdx];
+    const closer = opener === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = startIdx; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (ch === '\\' && inString) {
+        escaped = true;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (inString) continue;
+
+      if (ch === opener) depth++;
+      if (ch === closer) depth--;
+
+      if (depth === 0) {
+        return JSON.parse(cleaned.slice(startIdx, i + 1)) as T;
+      }
+    }
+
+    throw new Error('Malformed JSON in AI response');
+  }
 };

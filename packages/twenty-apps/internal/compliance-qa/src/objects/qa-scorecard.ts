@@ -7,50 +7,50 @@ export const QA_SCORECARD_OBJECT_UNIVERSAL_IDENTIFIER =
 // Field identifiers
 export const NAME_FIELD_ID = 'b4f6d8c2-9e57-4a3b-af2d-6c4e8b0a2f13';
 export const OVERALL_SCORE_FIELD_ID = 'c5a7e9d3-0f68-4b4c-ba3e-7d5f9c1b3a24';
-export const OVERALL_RESULT_FIELD_ID = 'd6b8f0e4-1a79-4c5d-cb4f-8e6a0d2c4b35';
-export const CALL_TYPE_FIELD_ID = 'e7c9a1f5-2b80-4d6e-dc5a-9f7b1e3d5c46';
+export const OVERALL_RESULT_FIELD_ID = '4dca7ef6-ff56-49a8-9965-fddf0da94b24';
+export const CALL_TYPE_FIELD_ID = '0dcd9235-1658-4e73-be5b-1a8df13ab4d4';
 
 // Red flag fields
 export const RED_FLAG_RECORDED_LINE_ID =
-  'f8d0b2a6-3c91-4e7f-ed6b-0a8c2f4e6d57';
+  '552fb185-ccb3-4c3a-93a3-7489a702b05f';
 export const RED_FLAG_MARKETPLACE_ID =
-  'a9e1c3b7-4d02-4f8a-fe7c-1b9d3a5f7e68';
+  '265edca0-7b14-4ebd-8649-c29b97323d8f';
 export const RED_FLAG_AOR_ID = 'b0f2d4c8-5e13-4a9b-af8d-2c0e4b6a8f79';
 export const RED_FLAG_COMMISSION_ID =
   'c1a3e5d9-6f24-4b0c-ba9e-3d1f5c7b9a80';
 export const RED_FLAG_HEALTHSHERPA_ID =
-  'd2b4f6e0-7a35-4c1d-cb0f-4e2a6d8c0b91';
+  'd605da11-0ade-4e6a-8500-21c75d132eac';
 export const RED_FLAG_AGENT_COACHING_ID =
-  'e3c5a7f1-8b46-4d2e-dc1a-5f3b7e9d1c02';
+  'a0bcfd1d-ef24-45c9-b525-5e610cf5518d';
 export const RED_FLAG_DNC_VIOLATION_ID =
-  'f4d6b8a2-9c57-4e3f-ed2b-6a4c8f0e2d13';
-export const HAS_RED_FLAG_FIELD_ID = 'a5e7c9b3-0d68-4f4a-fe3c-7b5d9a1f3e24';
+  '7749c2c8-fbe6-4e6b-9cba-50bd5fe7a77b';
+export const HAS_RED_FLAG_FIELD_ID = '631ba702-2f06-41a3-b234-388c684b0770';
 
 // Section score fields
 export const OPENING_SCORE_FIELD_ID = 'b6f8d0c4-1e79-4a5b-af4d-8c6e0b2a4f35';
 export const FACT_FINDING_SCORE_FIELD_ID =
   'c7a9e1d5-2f80-4b6c-ba5e-9d7f1c3b5a46';
 export const ELIGIBILITY_SCORE_FIELD_ID =
-  'd8b0f2e6-3a91-4c7d-cb6f-0e8a2d4c6b57';
+  'ba8403de-11d2-4fa2-889e-0924748035f7';
 export const PRESENTATION_SCORE_FIELD_ID =
-  'e9c1a3f7-4b02-4d8e-dc7a-1f9b3e5d7c68';
+  'd4420a95-cf85-4bed-b2c0-3dbab48d19ba';
 export const APPLICATION_SCORE_FIELD_ID =
-  'f0d2b4a8-5c13-4e9f-ed8b-2a0c4f6e8d79';
-export const CLOSING_SCORE_FIELD_ID = 'a1e3c5b9-6d24-4f0a-fe9c-3b1d5a7f9e80';
+  '2e957ae5-c883-4024-9157-403a649f0f9a';
+export const CLOSING_SCORE_FIELD_ID = '47eb3d5b-1625-41dd-b6b5-87e5cf89bbfa';
 
 // Rich text fields
 export const SCORE_DETAILS_FIELD_ID = 'b2f4d6c0-7e35-4a1b-af0d-4c2e6b8a0f91';
 export const RED_FLAG_DETAILS_FIELD_ID =
   'c3a5e7d1-8f46-4b2c-ba1e-5d3f7c9b1a02';
-export const TRANSCRIPT_FIELD_ID = 'd4b6f8e2-9a57-4c3d-cb2f-6e4a8d0c2b13';
+export const TRANSCRIPT_FIELD_ID = '2a70ae05-75c2-401f-8494-6a32ed913887';
 export const RECOMMENDATIONS_FIELD_ID =
-  'e5c7a9f3-0b68-4d4e-dc3a-7f5b9e1d3c24';
+  'a5057902-dfa4-47f2-b576-5a2c0dd9caf4';
 
 // Status field
-export const STATUS_FIELD_ID = 'f6d8b0a4-1c79-4e5f-ed4b-8a6c0f2e4d35';
+export const STATUS_FIELD_ID = '42b314a1-34ce-4862-9efb-0ff8b28942bf';
 
 // Analyzed at field
-export const ANALYZED_AT_FIELD_ID = 'a7e9c1b5-2d80-4f6a-fe5c-9b7d1a3f5e46';
+export const ANALYZED_AT_FIELD_ID = 'ba569a0d-75f3-4c31-b442-e02c2bcd53ec';
 
 export default defineObject({
   universalIdentifier: QA_SCORECARD_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -111,6 +111,13 @@ export default defineObject({
           label: 'Needs Review',
           position: 2,
           color: 'orange',
+        },
+        {
+          id: 'a1b2c3d4-0001-4000-8000-000000000004',
+          value: 'NOT_APPLICABLE',
+          label: 'Not Applicable',
+          position: 3,
+          color: 'gray',
         },
       ],
     },
@@ -346,6 +353,13 @@ export default defineObject({
           label: 'Failed',
           position: 4,
           color: 'red',
+        },
+        {
+          id: 'a1b2c3d4-0003-4000-8000-000000000006',
+          value: 'SKIPPED',
+          label: 'Skipped',
+          position: 5,
+          color: 'gray',
         },
       ],
     },

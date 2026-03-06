@@ -10,7 +10,7 @@ import { type SystemWorkspaceAuthContext } from 'src/engine/core-modules/auth/ty
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
 import { enrichPolicyAfterSave } from 'src/modules/policy/utils/enrich-policy-after-save.util';
-import { getTodayForMember } from 'src/modules/policy/utils/get-today-for-member.util';
+import { getNowUtc } from 'src/modules/policy/utils/get-today-for-member.util';
 
 @WorkspaceQueryHook({
   key: `policy.createMany`,
@@ -40,11 +40,7 @@ export class PolicyCreateManyPostQueryHook
     let agentProfileId: string | null = null;
 
     if (isDefined(authContext.workspaceMemberId)) {
-      submittedDate = await getTodayForMember(
-        workspace.id,
-        authContext.workspaceMemberId,
-        this.globalWorkspaceOrmManager,
-      );
+      submittedDate = getNowUtc();
 
       agentProfileId =
         await this.agentProfileResolverService.resolveAgentProfileId(

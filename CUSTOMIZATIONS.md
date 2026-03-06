@@ -46,7 +46,7 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `query-hooks/policy-query-hook.module.ts` — Module registration (imports `WorkspaceCacheModule` for role checks)
 - `utils/build-policy-display-name.util.ts` — "Carrier - Product" name derivation
 - `utils/enrich-policy-after-save.util.ts` — Post-save enrichment (LTV, dates)
-- `utils/get-today-for-member.util.ts` — Timezone-aware date helper
+- `utils/get-today-for-member.util.ts` — `getNowUtc()` helper (returns UTC ISO string for submittedDate)
 - `utils/lookup-carrier-product-commission.util.ts` — LTV lookup from CarrierProduct
 
 ### `packages/twenty-server/src/modules/call/`
@@ -67,6 +67,9 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `src/roles/default-role.ts` — App role with read/write/AI permissions
 - `src/views/qa-scorecard-view.ts` — Default list view for QA Scorecards
 - `src/navigation-menu-items/qa-scorecard-navigation-menu-item.ts` — Sidebar navigation entry
+
+### `packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/`
+- `old-crm-policy.preprocessor.ts` — Old CRM policy ingestion: person resolution, carrier/product creation, `parseDateTimeAsEastern()` for `submittedDate` (Eastern → UTC)
 
 ### `packages/twenty-server/src/modules/lead/`
 - `query-hooks/lead-create-one.pre-query.hook.ts` — Lead pre-processing
@@ -149,6 +152,7 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 | `engine/workspace-manager/.../create-standard-role-flat-metadata.util.ts` | Defaults `editWindowMinutes: null` for standard roles |
 | `engine/twenty-orm/utils/compute-permission-intersection.util.ts` | Includes `editWindowMinutes: null` in permission intersection |
 | `database/typeorm/core/migrations/common/1772591146793-add-edit-window-minutes.ts` | **NEW** migration adding column to `role` and `objectPermission` tables |
+| `database/typeorm/core/migrations/common/1772600000000-change-submitted-date-to-datetime.ts` | **NEW** migration changing policy `submittedDate` from DATE to DATE_TIME (timestamptz), converts existing dates as Eastern midnight |
 
 **Frontend — Edit Window UI:**
 | File | Modification |

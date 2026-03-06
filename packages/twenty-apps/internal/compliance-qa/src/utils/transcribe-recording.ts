@@ -68,6 +68,28 @@ export const transcribeRecording = async (
     recordingUrl,
   );
 
+  // Download the recording first — some servers (e.g. Convoso) reject
+  // Deepgram's URL-based fetch with 411 "Length Required".
+  console.log('[transcribeRecording] Downloading recording...');
+
+  const downloadResponse = await fetch(recordingUrl);
+
+  if (!downloadResponse.ok) {
+    throw new Error(
+      `Failed to download recording (${downloadResponse.status}): ${await downloadResponse.text()}`,
+    );
+  }
+
+  const audioBuffer = await downloadResponse.arrayBuffer();
+  const contentType =
+    downloadResponse.headers.get('content-type') ?? 'audio/mpeg';
+
+  console.log(
+    '[transcribeRecording] Downloaded',
+    audioBuffer.byteLength,
+    'bytes, sending to Deepgram...',
+  );
+
   const response = await fetch(
     'https://api.deepgram.com/v1/listen?' +
       new URLSearchParams({
@@ -81,9 +103,9 @@ export const transcribeRecording = async (
       method: 'POST',
       headers: {
         Authorization: `Token ${apiKey}`,
-        'Content-Type': 'application/json',
+        'Content-Type': contentType,
       },
-      body: JSON.stringify({ url: recordingUrl }),
+      body: audioBuffer,
     },
   );
 
