@@ -8,7 +8,10 @@ Twenty is an open-source CRM built with modern technologies in a monorepo struct
 
 ## Omnia Customizations
 
-This is a fork of twentyhq/twenty with Omnia-specific customizations. **Whenever you modify an upstream file or add new Omnia-specific code, you MUST update `CUSTOMIZATIONS.md`** to document the change. This ensures customizations survive future upstream merges. Add entries to the appropriate table (Critical Files, Custom Server Modules, Modified Frontend/Server Files) and update the Post-Merge Checklist if the change needs manual verification after merges.
+This is a fork of twentyhq/twenty with Omnia-specific customizations. **Whenever you modify an upstream file or add new Omnia-specific code, you MUST:**
+1. Update `CUSTOMIZATIONS.md` to document the change (appropriate table + Post-Merge Checklist if needed)
+2. Add a corresponding check to `scripts/check-customizations.sh` so upstream merges can't silently revert it
+3. Use `check_file_contains` for patterns that must exist, `check_file_not_contains` for patterns that must NOT exist, and `check_file_exists` for new Omnia-only files
 
 ## Key Commands
 
@@ -85,8 +88,8 @@ npx nx run twenty-server:database:migrate:prod # Run migrations
 # Generate migration (replace [name] with kebab-case descriptive name)
 npx nx run twenty-server:typeorm migration:generate src/database/typeorm/core/migrations/common/[name] -d src/database/typeorm/core/core.datasource.ts
 
-# Sync metadata
-npx nx run twenty-server:command workspace:sync-metadata
+# Sync metadata (production: exec into k8s pod and run cache:flat-cache-invalidate --all-metadata)
+# The old workspace:sync-metadata command no longer exists; use the upgrade command or direct DB + cache invalidation
 ```
 
 ### GraphQL
