@@ -41,7 +41,7 @@ import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-DEFAULT_PIPELINE_ID = "716afad6-a45a-4bdd-b8a4-0e64ed466bf8"
+DEFAULT_PIPELINE_NAME = "Convoso Call Ingestion"
 PROGRESS_FILE = "backfill-progress.json"
 POLL_INTERVAL_SECONDS = 5
 DAY_TIMEOUT_SECONDS = 600
@@ -67,21 +67,117 @@ def meta_gql(base_url, token, query, variables=None):
         sys.exit(1)
 
 
+def require_gql_data(result, context):
+    if "errors" in result and result["errors"]:
+        print(f"Error {context}: {json.dumps(result['errors'], indent=2)}")
+        sys.exit(1)
+
+    data = result.get("data")
+    if data is None:
+        print(f"Error {context}: metadata API returned no data")
+        print(json.dumps(result, indent=2))
+        sys.exit(1)
+
+    return data
+
+
+def list_pipelines(base_url, token):
+    data = require_gql_data(meta_gql(base_url, token, """
+    {
+      ingestionPipelines {
+        id
+        name
+        mode
+        targetObjectNameSingular
+        isEnabled
+      }
+    }
+    """), "listing ingestion pipelines")
+
+    return data.get("ingestionPipelines") or []
+
+
+def print_available_pipelines(pipelines):
+    if not pipelines:
+        print("  No ingestion pipelines were returned for this workspace/token.")
+        return
+
+    print("  Available ingestion pipelines:")
+    for pipeline in pipelines:
+        status = "enabled" if pipeline.get("isEnabled") else "disabled"
+        print(
+            f"    {pipeline['id']} | {pipeline['name']} | "
+            f"{pipeline['mode']} -> {pipeline['targetObjectNameSingular']} | {status}"
+        )
+
+
+def resolve_pipeline(base_url, token, requested_pipeline_id):
+    pipelines = list_pipelines(base_url, token)
+
+    if requested_pipeline_id:
+        for pipeline in pipelines:
+            if pipeline["id"] == requested_pipeline_id:
+                return pipeline
+
+        print(f"Pipeline {requested_pipeline_id} not found or not accessible.")
+        print_available_pipelines(pipelines)
+        sys.exit(1)
+
+    exact_name_matches = [
+        pipeline
+        for pipeline in pipelines
+        if pipeline.get("name") == DEFAULT_PIPELINE_NAME
+    ]
+    if len(exact_name_matches) == 1:
+        return exact_name_matches[0]
+
+    call_candidates = [
+        pipeline
+        for pipeline in pipelines
+        if pipeline.get("mode") == "pull"
+        and pipeline.get("targetObjectNameSingular") == "call"
+    ]
+    if len(call_candidates) == 1:
+        return call_candidates[0]
+
+    if len(call_candidates) > 1:
+        print(
+            "Multiple pull pipelines targeting calls were found. "
+            "Pass --pipeline-id explicitly."
+        )
+    else:
+        print(
+            f"Could not auto-discover the {DEFAULT_PIPELINE_NAME!r} pipeline. "
+            "Pass --pipeline-id explicitly."
+        )
+
+    print_available_pipelines(pipelines)
+    sys.exit(1)
+
+
 def get_pipeline_config(base_url, token, pipeline_id):
-    result = meta_gql(base_url, token, """
+    data = require_gql_data(meta_gql(base_url, token, """
     {
       ingestionPipeline(id: "%s") {
         id
         sourceRequestConfig
       }
     }
-    """ % pipeline_id)
-    return result["data"]["ingestionPipeline"]["sourceRequestConfig"]
+    """ % pipeline_id), f"fetching pipeline {pipeline_id}")
+
+    pipeline = data.get("ingestionPipeline")
+    if pipeline is None:
+        print(f"Pipeline {pipeline_id} was not returned by the metadata API.")
+        print("This usually means the pipeline id is stale for this workspace.")
+        print_available_pipelines(list_pipelines(base_url, token))
+        sys.exit(1)
+
+    return pipeline.get("sourceRequestConfig") or {}
 
 
 def update_pipeline_config(base_url, token, pipeline_id, config):
     """Update the full sourceRequestConfig."""
-    result = meta_gql(base_url, token, """
+    data = require_gql_data(meta_gql(base_url, token, """
     mutation UpdateIngestionPipeline($input: UpdateIngestionPipelineInput!) {
       updateIngestionPipeline(input: $input) {
         id
@@ -95,13 +191,14 @@ def update_pipeline_config(base_url, token, pipeline_id, config):
                 "sourceRequestConfig": config,
             },
         }
-    })
+    }), f"updating pipeline {pipeline_id}")
 
-    if "errors" in result:
-        print(f"Error updating config: {json.dumps(result['errors'], indent=2)}")
+    pipeline = data.get("updateIngestionPipeline")
+    if pipeline is None:
+        print(f"Pipeline {pipeline_id} was not updated by the metadata API.")
         sys.exit(1)
 
-    return result["data"]["updateIngestionPipeline"]["sourceRequestConfig"]
+    return pipeline.get("sourceRequestConfig") or {}
 
 
 def set_date_overrides(base_url, token, pipeline_id, config, start_time, end_time):
@@ -120,20 +217,21 @@ def clear_date_overrides(base_url, token, pipeline_id, original_config):
 
 
 def trigger_pull(base_url, token, pipeline_id):
-    result = meta_gql(base_url, token, """
+    data = require_gql_data(meta_gql(base_url, token, """
     mutation {
       triggerIngestionPull(pipelineId: "%s") {
         id
         status
       }
     }
-    """ % pipeline_id)
+    """ % pipeline_id), f"triggering pull for pipeline {pipeline_id}")
 
-    if "errors" in result:
-        print(f"Error triggering pull: {json.dumps(result['errors'], indent=2)}")
+    log = data.get("triggerIngestionPull")
+    if log is None:
+        print(f"Pipeline {pipeline_id} did not return an ingestion log when triggered.")
         sys.exit(1)
 
-    return result["data"]["triggerIngestionPull"]
+    return log
 
 
 def poll_completion(base_url, token, pipeline_id, log_id, timeout_seconds=DAY_TIMEOUT_SECONDS):
@@ -215,16 +313,23 @@ def main():
     parser.add_argument("--date", help="Single date to backfill (YYYY-MM-DD)")
     parser.add_argument("--start", help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end", help="End date exclusive (YYYY-MM-DD), defaults to today")
-    parser.add_argument("--pipeline-id", default=DEFAULT_PIPELINE_ID, help="Pipeline ID")
+    parser.add_argument(
+        "--pipeline-id",
+        help=(
+            "Pipeline ID. If omitted, the script auto-discovers the "
+            f"{DEFAULT_PIPELINE_NAME!r} pull pipeline for calls."
+        ),
+    )
     parser.add_argument("--resume", action="store_true", help="Resume from last completed day")
     parser.add_argument("--dry-run", action="store_true", help="Print plan without executing")
     parser.add_argument("--timeout", type=int, default=DAY_TIMEOUT_SECONDS,
                         help=f"Timeout per day in seconds (default: {DAY_TIMEOUT_SECONDS})")
     args = parser.parse_args()
 
-    pipeline_id = args.pipeline_id
     base_url = args.url.rstrip("/")
     token = args.token
+    pipeline = resolve_pipeline(base_url, token, args.pipeline_id)
+    pipeline_id = pipeline["id"]
 
     # Determine date range
     if args.date:
@@ -267,6 +372,7 @@ def main():
     print(f"  Already completed: {total_days - len(days_to_process)}")
     print(f"  Days to process: {len(days_to_process)}")
     print(f"  Pipeline: {pipeline_id}")
+    print(f"  Pipeline name: {pipeline['name']}")
 
     if args.dry_run:
         print(f"\nDry run -- would process these days:")
