@@ -373,7 +373,7 @@ export const isRecordMatchingFilter = ({
         if (isDefined(actorFilter.workspaceMemberId)) {
           return isMatchingUUIDFilter({
             uuidFilter: actorFilter.workspaceMemberId,
-            value: record[filterKey].workspaceMemberId,
+            value: record[filterKey]?.workspaceMemberId,
           });
         }
 

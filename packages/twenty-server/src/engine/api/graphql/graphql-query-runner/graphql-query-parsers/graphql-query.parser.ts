@@ -59,11 +59,11 @@ export class GraphqlQueryParser {
   }
 
   public applyFilterToBuilder(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     queryBuilder: WorkspaceSelectQueryBuilder<any>,
     objectNameSingular: string,
     recordFilter: Partial<ObjectRecordFilter>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   ): WorkspaceSelectQueryBuilder<any> {
     return this.filterConditionParser.parse(
       queryBuilder,
@@ -73,10 +73,10 @@ export class GraphqlQueryParser {
   }
 
   public applyDeletedAtToBuilder(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     queryBuilder: WorkspaceSelectQueryBuilder<any>,
     recordFilter: Partial<ObjectRecordFilter>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   ): WorkspaceSelectQueryBuilder<any> {
     if (this.checkForDeletedAtFilter(recordFilter)) {
       queryBuilder.withDeleted();
@@ -112,7 +112,7 @@ export class GraphqlQueryParser {
   };
 
   public applyOrderToBuilder(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     queryBuilder: WorkspaceSelectQueryBuilder<any>,
     orderBy: ObjectRecordOrderBy | OrderByWithGroupBy,
     objectNameSingular: string,
@@ -139,7 +139,7 @@ export class GraphqlQueryParser {
   }
 
   public addRelationOrderColumnsToBuilder(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     queryBuilder: WorkspaceSelectQueryBuilder<any>,
     parsedOrderBy: Record<string, OrderByClause>,
     objectNameSingular: string,
@@ -217,11 +217,11 @@ export class GraphqlQueryParser {
   }
 
   public applyGroupByOrderToBuilder(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     queryBuilder: WorkspaceSelectQueryBuilder<any>,
     orderBy: ObjectRecordOrderBy | OrderByWithGroupBy,
     groupByFields: GroupByField[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   ): WorkspaceSelectQueryBuilder<any> {
     const parsedOrderBys = this.orderGroupByParser.parse({
       orderBy,
@@ -242,7 +242,7 @@ export class GraphqlQueryParser {
   }
 
   public parseSelectedFields(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
     graphqlSelectedFields: Partial<Record<string, any>>,
   ): GraphqlQuerySelectedFieldsResult {
     const selectedFieldsParser = new GraphqlQuerySelectedFieldsParser(

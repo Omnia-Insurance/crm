@@ -12,8 +12,7 @@ import { type WidgetCardVariant } from '@/page-layout/widgets/types/WidgetCardVa
 import { WidgetGrip } from '@/page-layout/widgets/widget-card/components/WidgetGrip';
 import { AnimatePresence, motion } from 'framer-motion';
 import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
-import { ThemeContext } from 'twenty-ui/theme';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables, ThemeContext } from 'twenty-ui/theme-constants';
 
 export type WidgetCardHeaderProps = {
   variant: WidgetCardVariant;
@@ -34,8 +33,8 @@ export type WidgetCardHeaderProps = {
 const StyledWidgetCardHeader = styled.div`
   align-items: center;
   display: flex;
-  height: ${themeCssVariables.spacing[6]};
   flex-shrink: 0;
+  height: ${themeCssVariables.spacing[6]};
 `;
 
 const StyledTitleContainer = styled.div<{
@@ -49,28 +48,28 @@ const StyledTitleContainer = styled.div<{
   flex: 1;
   font-size: ${themeCssVariables.font.size.md};
   font-weight: ${themeCssVariables.font.weight.medium};
-  user-select: none;
   overflow: hidden;
-
   padding-inline: ${({ variant }) =>
     variant === 'side-column' ? '0' : themeCssVariables.spacing[1]};
+
+  user-select: none;
 `;
 
 const StyledRightContainer = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   gap: ${themeCssVariables.spacing[0.5]};
 `;
 
 const StyledActionsContainer = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   gap: ${themeCssVariables.spacing[1]};
 `;
 
 const StyledIconButtonContainerBase = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   justify-content: center;
 `;
 const StyledIconButtonContainer = motion.create(StyledIconButtonContainerBase);
@@ -91,7 +90,6 @@ export const WidgetCardHeader = ({
   isRequiredEmpty = false,
 }: WidgetCardHeaderProps) => {
   const { theme } = useContext(ThemeContext);
-
   const widgetCardHovered = useAtomComponentFamilyStateValue(
     widgetCardHoveredComponentFamilyState,
     widgetId,

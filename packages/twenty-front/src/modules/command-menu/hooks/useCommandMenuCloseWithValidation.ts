@@ -1,20 +1,20 @@
-import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
-import { useCommandMenuHistory } from '@/command-menu/hooks/useCommandMenuHistory';
-import { viewableRecordIdComponentState } from '@/command-menu/pages/record-page/states/viewableRecordIdComponentState';
-import { viewableRecordNameSingularComponentState } from '@/command-menu/pages/record-page/states/viewableRecordNameSingularComponentState';
-import { commandMenuNavigationStackState } from '@/command-menu/states/commandMenuNavigationStackState';
-import { commandMenuPageState } from '@/command-menu/states/commandMenuPageState';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { useSidePanelHistory } from '@/side-panel/hooks/useSidePanelHistory';
+import { viewableRecordIdComponentState } from '@/side-panel/pages/record-page/states/viewableRecordIdComponentState';
+import { viewableRecordNameSingularComponentState } from '@/side-panel/pages/record-page/states/viewableRecordNameSingularComponentState';
+import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
+import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { requiredFieldsValidationState } from '@/command-menu/states/requiredFieldsValidationState';
 import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
 import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
 import { type FieldViolation } from '@/object-record/record-field/ui/hooks/useRecordRequiredFieldViolations';
 import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
-import { newlyCreatedRecordIdsState } from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
+import { newlyCreatedRecordIdsState } from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
-import { CommandMenuPages } from 'twenty-shared/types';
+import { SidePanelPages } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 export const REQUIRED_FIELDS_VALIDATION_MODAL_ID =
@@ -22,18 +22,18 @@ export const REQUIRED_FIELDS_VALIDATION_MODAL_ID =
 
 export const useCommandMenuCloseWithValidation = () => {
   const store = useStore();
-  const { closeCommandMenu } = useCommandMenu();
-  const { goBackFromCommandMenu } = useCommandMenuHistory();
+  const { closeSidePanelMenu } = useSidePanelMenu();
+  const { goBackFromSidePanel } = useSidePanelHistory();
   const { openModal } = useModal();
 
   const getCurrentRecordInfo = useCallback(() => {
-    const navigationStack = store.get(commandMenuNavigationStackState.atom);
+    const navigationStack = store.get(sidePanelNavigationStackState.atom);
     const currentItem = navigationStack.at(-1);
 
     if (!isDefined(currentItem)) return null;
 
-    const commandMenuPage = store.get(commandMenuPageState.atom);
-    if (commandMenuPage !== CommandMenuPages.ViewRecord) return null;
+    const sidePanelPage = store.get(sidePanelPageState.atom);
+    if (sidePanelPage !== SidePanelPages.ViewRecord) return null;
 
     const recordId = store.get(
       viewableRecordIdComponentState.atomFamily({
@@ -150,7 +150,7 @@ export const useCommandMenuCloseWithValidation = () => {
     const recordInfo = getCurrentRecordInfo();
 
     if (!recordInfo) {
-      closeCommandMenu();
+      closeSidePanelMenu();
       return;
     }
 
@@ -158,14 +158,14 @@ export const useCommandMenuCloseWithValidation = () => {
     const newlyCreatedMap = store.get(newlyCreatedRecordIdsState.atom);
 
     if (!newlyCreatedMap.has(recordId)) {
-      closeCommandMenu();
+      closeSidePanelMenu();
       return;
     }
 
     const violations = getViolationsForRecord(recordId, objectNameSingular);
 
     if (violations.length === 0) {
-      closeCommandMenu();
+      closeSidePanelMenu();
       return;
     }
 
@@ -177,7 +177,7 @@ export const useCommandMenuCloseWithValidation = () => {
     });
     openModal(REQUIRED_FIELDS_VALIDATION_MODAL_ID);
   }, [
-    closeCommandMenu,
+    closeSidePanelMenu,
     getCurrentRecordInfo,
     getViolationsForRecord,
     openModal,
@@ -188,7 +188,7 @@ export const useCommandMenuCloseWithValidation = () => {
     const recordInfo = getCurrentRecordInfo();
 
     if (!recordInfo) {
-      goBackFromCommandMenu();
+      goBackFromSidePanel();
       return;
     }
 
@@ -196,14 +196,14 @@ export const useCommandMenuCloseWithValidation = () => {
     const newlyCreatedMap = store.get(newlyCreatedRecordIdsState.atom);
 
     if (!newlyCreatedMap.has(recordId)) {
-      goBackFromCommandMenu();
+      goBackFromSidePanel();
       return;
     }
 
     const violations = getViolationsForRecord(recordId, objectNameSingular);
 
     if (violations.length === 0) {
-      goBackFromCommandMenu();
+      goBackFromSidePanel();
       return;
     }
 
@@ -215,7 +215,7 @@ export const useCommandMenuCloseWithValidation = () => {
     });
     openModal(REQUIRED_FIELDS_VALIDATION_MODAL_ID);
   }, [
-    goBackFromCommandMenu,
+    goBackFromSidePanel,
     getCurrentRecordInfo,
     getViolationsForRecord,
     openModal,

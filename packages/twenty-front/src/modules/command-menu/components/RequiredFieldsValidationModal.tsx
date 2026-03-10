@@ -1,12 +1,12 @@
-import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
 import { REQUIRED_FIELDS_VALIDATION_MODAL_ID } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
-import { useCommandMenuHistory } from '@/command-menu/hooks/useCommandMenuHistory';
 import { requiredFieldsValidationState } from '@/command-menu/states/requiredFieldsValidationState';
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import {
   newlyCreatedRecordIdsState,
   persistNewlyCreatedRecordIds,
-} from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
+} from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { useSidePanelHistory } from '@/side-panel/hooks/useSidePanelHistory';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
@@ -16,8 +16,8 @@ import { useCallback } from 'react';
 export const RequiredFieldsValidationModal = () => {
   const store = useStore();
   const validationData = useAtomStateValue(requiredFieldsValidationState);
-  const { closeCommandMenu } = useCommandMenu();
-  const { goBackFromCommandMenu } = useCommandMenuHistory();
+  const { closeSidePanelMenu } = useSidePanelMenu();
+  const { goBackFromSidePanel } = useSidePanelHistory();
 
   const objectNameSingular =
     validationData?.objectNameSingular || 'person';
@@ -47,14 +47,14 @@ export const RequiredFieldsValidationModal = () => {
     await deleteOneRecord(recordId);
 
     if (pendingAction === 'close') {
-      closeCommandMenu();
+      closeSidePanelMenu();
     } else {
-      goBackFromCommandMenu();
+      goBackFromSidePanel();
     }
   }, [
-    closeCommandMenu,
+    closeSidePanelMenu,
     deleteOneRecord,
-    goBackFromCommandMenu,
+    goBackFromSidePanel,
     store,
     validationData,
   ]);

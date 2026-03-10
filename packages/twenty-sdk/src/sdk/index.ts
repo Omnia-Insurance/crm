@@ -68,22 +68,30 @@ export { definePageLayout } from './page-layouts/define-page-layout';
 export type { PageLayoutConfig } from './page-layouts/page-layout-config';
 export { defineRole } from './roles/define-role';
 export { PermissionFlag } from './roles/permission-flag-type';
+export { defineAgent } from './agents/define-agent';
 export { defineSkill } from './skills/define-skill';
 export { defineView } from './views/define-view';
 export type { ViewConfig } from './views/view-config';
+export { ViewKey } from './views/view-key';
 
-// Action components for front components
-export { Action, ActionLink, ActionOpenSidePanelPage } from './action';
+// Command components for front components
+export {
+  Command,
+  CommandLink,
+  CommandModal,
+  CommandOpenSidePanelPage,
+} from './command';
 export type {
-  ActionLinkProps,
-  ActionOpenSidePanelPageProps,
-  ActionProps,
-} from './action';
+  CommandLinkProps,
+  CommandModalProps,
+  CommandOpenSidePanelPageProps,
+  CommandProps,
+} from './command';
 
 // Conditional availability typed variables for command menu items
 export {
   isShowPage,
-  isInRightDrawer,
+  isInSidePanel,
   isFavorite,
   isRemote,
   isNoteOrTask,
@@ -103,8 +111,9 @@ export {
 export {
   closeSidePanel,
   enqueueSnackbar,
-  getFrontComponentActionErrorDedupeKey,
+  getFrontComponentCommandErrorDedupeKey,
   navigate,
+  openCommandConfirmationModal,
   openSidePanelPage,
   unmountFrontComponent,
   useFrontComponentExecutionContext,
@@ -112,9 +121,13 @@ export {
   useRecordId,
   useUserId,
 } from './front-component-api';
-export type { FrontComponentExecutionContext } from './front-component-api';
+export type {
+  CommandConfirmationModalAccent,
+  CommandConfirmationModalResult,
+  FrontComponentExecutionContext,
+} from './front-component-api';
 
-export { AppPath, CommandMenuPages } from 'twenty-shared/types';
+export { AppPath, SidePanelPages } from 'twenty-shared/types';
 export type {
   EnqueueSnackbarParams,
   SnackBarVariant,

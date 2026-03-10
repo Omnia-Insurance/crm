@@ -1,7 +1,7 @@
 import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
 import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
 import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
-import { newlyCreatedRecordIdsState } from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
+import { newlyCreatedRecordIdsState } from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useStore } from 'jotai';
 import { useEffect } from 'react';
