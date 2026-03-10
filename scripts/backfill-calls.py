@@ -45,6 +45,8 @@ DEFAULT_PIPELINE_NAME = "Convoso Call Ingestion"
 PROGRESS_FILE = "backfill-progress.json"
 POLL_INTERVAL_SECONDS = 5
 DAY_TIMEOUT_SECONDS = 600
+LOG_LOOKBACK_LIMIT = 50
+LOG_MATCH_SKEW_SECONDS = 15
 
 
 def meta_gql(base_url, token, query, variables=None):
@@ -216,6 +218,46 @@ def clear_date_overrides(base_url, token, pipeline_id, original_config):
     return update_pipeline_config(base_url, token, pipeline_id, original_config)
 
 
+def strip_date_overrides(config):
+    cleaned = json.loads(json.dumps(config))
+    date_range_params = cleaned.get("dateRangeParams")
+
+    if not isinstance(date_range_params, dict):
+        return cleaned, False
+
+    removed = False
+    for key in ("startTimeOverride", "endTimeOverride"):
+        if key in date_range_params:
+            del date_range_params[key]
+            removed = True
+
+    if not date_range_params:
+        cleaned.pop("dateRangeParams", None)
+
+    return cleaned, removed
+
+
+def list_ingestion_logs(base_url, token, pipeline_id, limit=LOG_LOOKBACK_LIMIT):
+    data = require_gql_data(meta_gql(base_url, token, """
+    {
+      ingestionLogs(pipelineId: "%s", limit: %d) {
+        id
+        status
+        triggerType
+        totalRecordsReceived
+        recordsCreated
+        recordsUpdated
+        recordsFailed
+        errors
+        startedAt
+        completedAt
+      }
+    }
+    """ % (pipeline_id, limit)), f"listing ingestion logs for pipeline {pipeline_id}")
+
+    return data.get("ingestionLogs") or []
+
+
 def trigger_pull(base_url, token, pipeline_id):
     data = require_gql_data(meta_gql(base_url, token, """
     mutation {
@@ -234,41 +276,84 @@ def trigger_pull(base_url, token, pipeline_id):
     return log
 
 
-def poll_completion(base_url, token, pipeline_id, log_id, timeout_seconds=DAY_TIMEOUT_SECONDS):
-    """Poll for the specific log entry to complete."""
-    start = time.time()
-    while time.time() - start < timeout_seconds:
-        time.sleep(POLL_INTERVAL_SECONDS)
-        result = meta_gql(base_url, token, """
-        {
-          ingestionLogs(pipelineId: "%s", limit: 5) {
-            id status totalRecordsReceived recordsCreated
-            recordsUpdated recordsFailed errors completedAt
-          }
-        }
-        """ % pipeline_id)
+def parse_timestamp(value):
+    if not value:
+        return None
 
-        if "errors" in result:
+    normalized = value.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def select_backfill_log(logs, known_log_ids, watch_started_at):
+    threshold = watch_started_at - timedelta(seconds=LOG_MATCH_SKEW_SECONDS)
+    new_logs = []
+
+    for log in logs:
+        if log.get("triggerType") != "pull":
             continue
 
-        logs = result["data"]["ingestionLogs"]
+        started_at = parse_timestamp(log.get("startedAt"))
+        is_new_id = log.get("id") not in known_log_ids
+        is_recent = started_at is not None and started_at >= threshold
+
+        if is_new_id or is_recent:
+            new_logs.append(log)
+
+    # The placeholder log created by the GraphQL mutation stays pending.
+    # Prefer the worker-owned log that actually transitions to running/completed.
+    actionable_logs = [
+        log for log in new_logs
+        if log.get("status") in ("running", "completed", "failed", "partial")
+    ]
+    if actionable_logs:
+        return actionable_logs[0]
+
+    return None
+
+
+def poll_completion(
+    base_url,
+    token,
+    pipeline_id,
+    known_log_ids,
+    watch_started_at,
+    timeout_seconds=DAY_TIMEOUT_SECONDS,
+):
+    """Poll for the worker-owned pull log created after the trigger."""
+    start = time.time()
+    tracked_log_id = None
+
+    while time.time() - start < timeout_seconds:
+        time.sleep(POLL_INTERVAL_SECONDS)
+        try:
+            logs = list_ingestion_logs(base_url, token, pipeline_id)
+        except SystemExit:
+            continue
+
         if not logs:
             continue
 
-        # Find our specific log entry
-        target_log = None
-        for log in logs:
-            if log["id"] == log_id:
-                target_log = log
-                break
-
-        if target_log is None:
-            # Log not found yet, check the latest
-            target_log = logs[0]
+        if tracked_log_id is not None:
+            target_log = next(
+                (log for log in logs if log.get("id") == tracked_log_id),
+                None,
+            )
+        else:
+            target_log = select_backfill_log(logs, known_log_ids, watch_started_at)
+            if target_log is not None:
+                tracked_log_id = target_log.get("id")
 
         elapsed = int(time.time() - start)
 
-        if target_log["status"] in ("completed", "failed"):
+        if target_log is None:
+            if elapsed % 30 == 0 and elapsed > 0:
+                print(f"    [{elapsed}s] waiting for worker log...")
+            continue
+
+        if target_log["status"] in ("completed", "failed", "partial"):
             print(f"    [{elapsed}s] {target_log['status']} | "
                   f"received={target_log.get('totalRecordsReceived', '?')} "
                   f"created={target_log.get('recordsCreated', '?')} "
@@ -400,6 +485,9 @@ def main():
     print("\nSaving original pipeline config...")
     original_config = get_pipeline_config(base_url, token, pipeline_id)
     print(f"  Original dateRangeParams: {json.dumps(original_config.get('dateRangeParams', {}))}")
+    restore_config, had_existing_overrides = strip_date_overrides(original_config)
+    if had_existing_overrides:
+        print("  Found existing start/end overrides. They will be cleared when the script restores the pipeline config.")
 
     # Signal handler for graceful shutdown
     interrupted = False
@@ -428,7 +516,14 @@ def main():
             print(f"  Setting overrides: {start_time} -> {end_time}")
 
             # Set date overrides
-            set_date_overrides(base_url, token, pipeline_id, original_config, start_time, end_time)
+            set_date_overrides(base_url, token, pipeline_id, restore_config, start_time, end_time)
+
+            known_log_ids = {
+                log.get("id")
+                for log in list_ingestion_logs(base_url, token, pipeline_id)
+                if log.get("id")
+            }
+            watch_started_at = datetime.now(timezone.utc)
 
             # Trigger pull
             log = trigger_pull(base_url, token, pipeline_id)
@@ -436,9 +531,16 @@ def main():
             print(f"  Triggered pull, log={log_id}")
 
             # Poll for completion
-            result = poll_completion(base_url, token, pipeline_id, log_id, timeout_seconds=args.timeout)
+            result = poll_completion(
+                base_url,
+                token,
+                pipeline_id,
+                known_log_ids,
+                watch_started_at,
+                timeout_seconds=args.timeout,
+            )
 
-            if result and result["status"] == "completed":
+            if result and result["status"] in ("completed", "partial"):
                 received = result.get("totalRecordsReceived", 0) or 0
                 created = result.get("recordsCreated", 0) or 0
                 updated = result.get("recordsUpdated", 0) or 0
@@ -457,6 +559,8 @@ def main():
                 print(f"  Done: {received:,} received, {created:,} created, "
                       f"{updated:,} updated, {failed:,} failed "
                       f"(running total: {total_proc:,})")
+                if result["status"] == "partial":
+                    print("  WARNING: Day completed with partial failures.")
             elif result and result["status"] == "failed":
                 print(f"  FAILED: {result.get('errors', 'Unknown error')}")
                 print(f"  Stopping backfill. Resume with --resume to skip failed day.")
@@ -472,7 +576,7 @@ def main():
         # Always restore original config
         print(f"\nRestoring original pipeline config...")
         try:
-            clear_date_overrides(base_url, token, pipeline_id, original_config)
+            clear_date_overrides(base_url, token, pipeline_id, restore_config)
             print("  Restored.")
         except Exception as e:
             print(f"  WARNING: Failed to restore config: {e}")
