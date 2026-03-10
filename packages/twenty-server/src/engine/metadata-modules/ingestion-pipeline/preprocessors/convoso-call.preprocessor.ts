@@ -30,6 +30,7 @@ type ConvosoCallPayload = Record<string, unknown> & {
 const SYSTEM_USER_IDS = new Set(['666666', '666667', '666671']);
 
 const LIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_CONVOSO_CALL_TIMEZONE = 'America/Los_Angeles';
 
 @Injectable()
 export class ConvosoCallPreprocessor {
@@ -43,7 +44,7 @@ export class ConvosoCallPreprocessor {
 
   async preProcess(
     payload: ConvosoCallPayload,
-    _pipeline: IngestionPipelineEntity,
+    pipeline: IngestionPipelineEntity,
     workspaceId: string,
   ): Promise<Record<string, unknown> | null> {
     // Filter incomplete payloads — Convoso fires early with minimal data
@@ -141,8 +142,11 @@ export class ConvosoCallPreprocessor {
       workspaceId,
     );
 
-    // Convert call_date from LA local time to UTC ISO string
-    const callDateISO = this.convertConvosoDateToISO(payload.call_date);
+    const callDateTimeZone = this.resolveConvosoCallTimeZone(pipeline);
+    const callDateISO = this.convertConvosoDateToISO(
+      payload.call_date,
+      callDateTimeZone,
+    );
 
     return {
       ...payload,
@@ -438,9 +442,35 @@ export class ConvosoCallPreprocessor {
     return this.listMap?.[listId] ?? null;
   }
 
-  // Convoso API returns dates in America/New_York local time (account Default GMT).
-  // Convert to UTC ISO string, handling EST (UTC-5) and EDT (UTC-4) correctly.
-  private convertConvosoDateToISO(dateStr: string | undefined): string | null {
+  private resolveConvosoCallTimeZone(pipeline: IngestionPipelineEntity): string {
+    const configuredTimeZone =
+      pipeline.sourceRequestConfig?.dateRangeParams?.timezone;
+
+    if (!configuredTimeZone) {
+      return DEFAULT_CONVOSO_CALL_TIMEZONE;
+    }
+
+    try {
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: configuredTimeZone,
+      }).format(new Date());
+
+      return configuredTimeZone;
+    } catch {
+      this.logger.warn(
+        `Invalid Convoso call timezone "${configuredTimeZone}", falling back to ${DEFAULT_CONVOSO_CALL_TIMEZONE}`,
+      );
+
+      return DEFAULT_CONVOSO_CALL_TIMEZONE;
+    }
+  }
+
+  // Convoso API returns naive local timestamps. Use the pipeline's configured
+  // source timezone so the stored UTC instant matches the source account.
+  private convertConvosoDateToISO(
+    dateStr: string | undefined,
+    timeZone: string,
+  ): string | null {
     if (!dateStr) return null;
 
     const match = dateStr.match(
@@ -455,39 +485,58 @@ export class ConvosoCallPreprocessor {
     }
 
     const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr] = match;
-    const [year, month, day, hour, minute, second] = [
-      yearStr,
-      monthStr,
-      dayStr,
-      hourStr,
-      minuteStr,
-      secondStr,
-    ].map(Number);
+    const localIso =
+      `${yearStr}-${monthStr}-${dayStr}T` +
+      `${hourStr}:${minuteStr}:${secondStr}`;
+    const offsetMinutes = this.getTimeZoneOffsetMinutes(localIso, timeZone);
 
-    // Try EST (UTC-5) first — standard time (Nov–Mar)
-    const asEst = new Date(
-      Date.UTC(year, month - 1, day, hour + 5, minute, second),
-    );
-
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      hour: 'numeric',
-      hour12: false,
-    }).formatToParts(asEst);
-
-    const nyHour = parseInt(
-      parts.find((p) => p.type === 'hour')?.value || '0',
-      10,
-    );
-
-    if (nyHour === hour) {
-      return asEst.toISOString();
+    if (offsetMinutes === null) {
+      return null;
     }
 
-    // Fall back to EDT (UTC-4)
-    return new Date(
-      Date.UTC(year, month - 1, day, hour + 4, minute, second),
-    ).toISOString();
+    const utcDate = new Date(`${localIso}Z`);
+
+    utcDate.setUTCMinutes(utcDate.getUTCMinutes() - offsetMinutes);
+
+    return utcDate.toISOString();
+  }
+
+  private getTimeZoneOffsetMinutes(
+    localIso: string,
+    timeZone: string,
+  ): number | null {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        timeZoneName: 'shortOffset',
+      });
+      const parts = formatter.formatToParts(new Date(`${localIso}Z`));
+      const offsetPart = parts.find((part) => part.type === 'timeZoneName')
+        ?.value;
+
+      if (!offsetPart) {
+        return null;
+      }
+
+      if (offsetPart === 'GMT') {
+        return 0;
+      }
+
+      const match = offsetPart.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+
+      if (!match) {
+        return null;
+      }
+
+      const [, sign, hoursStr, minutesStr] = match;
+      const hours = parseInt(hoursStr, 10);
+      const minutes = parseInt(minutesStr ?? '0', 10);
+      const totalMinutes = hours * 60 + minutes;
+
+      return sign === '-' ? -totalMinutes : totalMinutes;
+    } catch {
+      return null;
+    }
   }
 
   private normalizePhone(phone: string | undefined): string | null {

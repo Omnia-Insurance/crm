@@ -124,15 +124,11 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
         position: 1,
       },
 
-      // 3. call_date -> callDate (dateFormat)
+      // 3. _callDate -> callDate (preprocessor-normalized UTC ISO)
       {
         pipelineId,
-        sourceFieldPath: 'call_date',
+        sourceFieldPath: '_callDate',
         targetFieldName: 'callDate',
-        transform: {
-          type: 'dateFormat',
-          sourceFormat: 'ISO',
-        },
         position: 2,
       },
 
@@ -278,7 +274,7 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
     this.logger.log('Field Mappings:');
     this.logger.log('  uniqueid → convosoCallId');
     this.logger.log('  lead_id → convosoLeadId (sanitizeNull)');
-    this.logger.log('  call_date → callDate (dateFormat: ISO)');
+    this.logger.log('  _callDate → callDate (preprocessor UTC ISO)');
     this.logger.log('  call_length → duration (numberScale ×1)');
     this.logger.log('  status → status (sanitizeNull)');
     this.logger.log('  status_name → statusName (sanitizeNull)');
