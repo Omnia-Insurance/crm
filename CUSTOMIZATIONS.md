@@ -225,6 +225,7 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 ### Standard Object Index (Unique Constraints)
 | File | Modification |
 |------|-------------|
+| `engine/workspace-manager/.../compute-person-standard-flat-field-metadata.util.ts` | Emails `isUnique: false`, Phones `isUnique: true` (upstream default is reversed) |
 | `engine/workspace-manager/.../compute-person-standard-flat-index-metadata.util.ts` | Phone is unique (not email) |
 
 ## Post-Merge Checklist
@@ -239,5 +240,6 @@ After every upstream merge:
 6. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
 7. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
 8. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
-9. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
+10. **Verify uniqueness flags**: Emails `isUnique: false`, Phones `isUnique: true` in `compute-person-standard-flat-field-metadata.util.ts`
+11. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
 9. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
