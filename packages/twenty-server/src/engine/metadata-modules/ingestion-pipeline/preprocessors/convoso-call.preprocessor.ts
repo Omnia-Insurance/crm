@@ -27,16 +27,57 @@ type ConvosoCallPayload = Record<string, unknown> & {
   list_id?: string;
 };
 
+type ConvosoLeadRecord = Record<string, unknown> & {
+  id?: string | number;
+  lead_id?: string | number;
+  list_id?: string | number;
+  phone_number?: string;
+  alt_phone_1?: string;
+  alt_phone_2?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  address?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  province?: string;
+  postal_code?: string;
+  zipcode?: string;
+  country?: string;
+};
+
+type CachedConvosoLeadLookup = {
+  fetchedAt: number;
+  lead: ConvosoLeadRecord | null;
+};
+
 const SYSTEM_USER_IDS = new Set(['666666', '666667', '666671']);
+const JUNK_EMAILS = new Set([
+  'none@none.com',
+  'test@test.com',
+  'n/a@n/a.com',
+  'na@na.com',
+  'noemail@noemail.com',
+  'no@email.com',
+  'none@gmail.com',
+  'none@email.com',
+  'fake@fakemail.com',
+  'none@noemail.com',
+]);
 
 const LIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const DEFAULT_CONVOSO_CALL_TIMEZONE = 'America/Los_Angeles';
+const CONVOSO_API_BASE_URL = 'https://api.convoso.com/v1';
+const CONVOSO_API_USER_AGENT = 'Omnia CRM Ingestion/1.0';
 
 @Injectable()
 export class ConvosoCallPreprocessor {
   private readonly logger = new Logger(ConvosoCallPreprocessor.name);
   private listMap: Record<string, string> | null = null;
   private listMapFetchedAt = 0;
+  private readonly leadLookupCache = new Map<string, CachedConvosoLeadLookup>();
 
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
@@ -123,7 +164,7 @@ export class ConvosoCallPreprocessor {
     );
 
     // Resolve person by phone, create if not found
-    const personId = await this.findOrCreatePersonByPhone(
+    const personId = await this.findOrCreatePersonForCall(
       payload,
       leadSourceId,
       workspaceId,
@@ -161,7 +202,7 @@ export class ConvosoCallPreprocessor {
     };
   }
 
-  private async findOrCreatePersonByPhone(
+  private async findOrCreatePersonForCall(
     payload: ConvosoCallPayload,
     leadSourceId: string | null,
     workspaceId: string,
@@ -187,30 +228,61 @@ export class ConvosoCallPreprocessor {
     });
 
     if (existing) {
-      this.logger.log(
-        `Matched Person ${(existing as Record<string, unknown>).id} by phone`,
+      const existingRecord = existing as Record<string, unknown>;
+      const existingId = existingRecord.id as string;
+
+      const directUpdates = this.buildLeadSourceUpdate(
+        existingRecord,
+        leadSourceId,
       );
 
-      return (existing as Record<string, unknown>).id as string;
+      if (!this.shouldFetchLeadDetailsForPerson(existingRecord)) {
+        await this.applyPersonUpdates(
+          personRepo,
+          existingId,
+          directUpdates,
+          `Updated Person ${existingId} from call metadata`,
+        );
+
+        this.logger.log(`Matched Person ${existingId} by phone`);
+
+        return existingId;
+      }
+
+      const leadDetails = await this.resolveConvosoLeadDetails(
+        payload,
+        normalizedPhone,
+      );
+      const enrichmentUpdates = this.buildPersonEnrichmentUpdates(
+        existingRecord,
+        leadDetails,
+        leadSourceId,
+      );
+
+      await this.applyPersonUpdates(
+        personRepo,
+        existingId,
+        enrichmentUpdates,
+        `Enriched Person ${existingId} from Convoso lead data`,
+      );
+
+      this.logger.log(`Matched Person ${existingId} by phone`);
+
+      return existingId;
     }
+
+    const leadDetails = await this.resolveConvosoLeadDetails(
+      payload,
+      normalizedPhone,
+    );
 
     // Create person from call data if not found
     try {
-      const personData: Record<string, unknown> = {
-        phones: {
-          primaryPhoneNumber: normalizedPhone,
-          primaryPhoneCallingCode: '+1',
-          primaryPhoneCountryCode: 'US',
-        },
-        name: {
-          firstName: '',
-          lastName: '',
-        },
-      };
-
-      if (leadSourceId) {
-        personData.leadSourceId = leadSourceId;
-      }
+      const personData = this.buildPersonData(
+        normalizedPhone,
+        leadDetails,
+        leadSourceId,
+      );
 
       const created = await personRepo.save(personData);
       const createdId = (created as Record<string, unknown>).id as string;
@@ -226,6 +298,516 @@ export class ConvosoCallPreprocessor {
       );
 
       return null;
+    }
+  }
+
+  private async resolveConvosoLeadDetails(
+    payload: ConvosoCallPayload,
+    normalizedPhone: string | null,
+  ): Promise<ConvosoLeadRecord | null> {
+    const leadId = this.cleanText(payload.lead_id);
+
+    if (leadId) {
+      const byLeadId = await this.getCachedConvosoLead(`lead:${leadId}`, () =>
+        this.fetchConvosoLeadByLeadId(leadId),
+      );
+
+      if (byLeadId) {
+        return byLeadId;
+      }
+    }
+
+    if (!normalizedPhone) {
+      return null;
+    }
+
+    const listId = this.cleanText(payload.list_id);
+
+    return await this.getCachedConvosoLead(
+      `phone:${normalizedPhone}:list:${listId ?? ''}`,
+      () => this.fetchConvosoLeadByPhone(normalizedPhone, listId),
+    );
+  }
+
+  private async getCachedConvosoLead(
+    cacheKey: string,
+    loader: () => Promise<ConvosoLeadRecord | null>,
+  ): Promise<ConvosoLeadRecord | null> {
+    const cached = this.leadLookupCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && now - cached.fetchedAt <= LIST_CACHE_TTL_MS) {
+      return cached.lead;
+    }
+
+    const lead = await loader();
+
+    this.leadLookupCache.set(cacheKey, {
+      fetchedAt: now,
+      lead,
+    });
+
+    return lead;
+  }
+
+  private async fetchConvosoLeadByLeadId(
+    leadId: string,
+  ): Promise<ConvosoLeadRecord | null> {
+    const leads = await this.searchConvosoLeads({ lead_id: leadId });
+
+    if (!leads.length) {
+      return null;
+    }
+
+    const exactMatches = leads.filter((lead) =>
+      this.matchesLeadId(lead, leadId),
+    );
+
+    if (exactMatches.length > 0) {
+      return exactMatches[0];
+    }
+
+    return leads.length === 1 ? leads[0] : null;
+  }
+
+  private async fetchConvosoLeadByPhone(
+    normalizedPhone: string,
+    listId: string | null,
+  ): Promise<ConvosoLeadRecord | null> {
+    if (listId) {
+      const scopedLead = this.pickLeadFromPhoneMatches(
+        await this.searchConvosoLeads({
+          phone_number: normalizedPhone,
+          list_id: listId,
+        }),
+        normalizedPhone,
+        listId,
+      );
+
+      if (scopedLead) {
+        return scopedLead;
+      }
+    }
+
+    return this.pickLeadFromPhoneMatches(
+      await this.searchConvosoLeads({ phone_number: normalizedPhone }),
+      normalizedPhone,
+      null,
+    );
+  }
+
+  private async searchConvosoLeads(
+    params: Record<string, string | null | undefined>,
+  ): Promise<ConvosoLeadRecord[]> {
+    const apiToken = process.env.CONVOSO_API_TOKEN;
+
+    if (!apiToken) {
+      this.logger.warn(
+        'CONVOSO_API_TOKEN not set, cannot resolve lead details for call ingestion',
+      );
+
+      return [];
+    }
+
+    try {
+      const searchParams = new URLSearchParams({
+        auth_token: apiToken,
+        offset: '0',
+        limit: '10',
+      });
+
+      for (const [key, value] of Object.entries(params)) {
+        if (value) {
+          searchParams.set(key, value);
+        }
+      }
+
+      const response = await fetch(
+        `${CONVOSO_API_BASE_URL}/leads/search?${searchParams.toString()}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'User-Agent': CONVOSO_API_USER_AGENT,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        this.logger.error(`Convoso Leads API returned ${response.status}`);
+
+        return [];
+      }
+
+      return this.extractConvosoLeadCandidates(await response.json());
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch Convoso leads: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+
+      return [];
+    }
+  }
+
+  private extractConvosoLeadCandidates(json: unknown): ConvosoLeadRecord[] {
+    if (Array.isArray(json)) {
+      return json.filter((value): value is ConvosoLeadRecord =>
+        this.looksLikeConvosoLeadRecord(value),
+      );
+    }
+
+    if (!json || typeof json !== 'object') {
+      return [];
+    }
+
+    const root = json as Record<string, unknown>;
+    const nestedData =
+      root.data && typeof root.data === 'object'
+        ? (root.data as Record<string, unknown>)
+        : null;
+
+    if (this.looksLikeConvosoLeadRecord(root)) {
+      return [root as ConvosoLeadRecord];
+    }
+
+    if (nestedData && this.looksLikeConvosoLeadRecord(nestedData)) {
+      return [nestedData as ConvosoLeadRecord];
+    }
+
+    const candidateCollections = [
+      root.data,
+      root.results,
+      root.leads,
+      ...(nestedData
+        ? [nestedData.data, nestedData.results, nestedData.leads]
+        : []),
+    ];
+
+    for (const collection of candidateCollections) {
+      if (!Array.isArray(collection)) {
+        continue;
+      }
+
+      const leads = collection.filter((value): value is ConvosoLeadRecord =>
+        this.looksLikeConvosoLeadRecord(value),
+      );
+
+      if (leads.length > 0) {
+        return leads;
+      }
+    }
+
+    return [];
+  }
+
+  private looksLikeConvosoLeadRecord(
+    value: unknown,
+  ): value is ConvosoLeadRecord {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+
+    const record = value as Record<string, unknown>;
+
+    return (
+      record.lead_id !== undefined ||
+      record.id !== undefined ||
+      record.phone_number !== undefined ||
+      record.first_name !== undefined ||
+      record.last_name !== undefined ||
+      record.email !== undefined
+    );
+  }
+
+  private pickLeadFromPhoneMatches(
+    leads: ConvosoLeadRecord[],
+    normalizedPhone: string,
+    listId: string | null,
+  ): ConvosoLeadRecord | null {
+    if (!leads.length) {
+      return null;
+    }
+
+    const phoneMatches = leads.filter((lead) =>
+      this.matchesLeadPhone(lead, normalizedPhone),
+    );
+    const candidates = phoneMatches.length > 0 ? phoneMatches : leads;
+    const listScopedCandidates =
+      listId === null
+        ? candidates
+        : candidates.filter((lead) => this.matchesListId(lead, listId));
+    const selectedCandidates =
+      listScopedCandidates.length > 0 ? listScopedCandidates : candidates;
+
+    if (selectedCandidates.length === 1) {
+      return selectedCandidates[0];
+    }
+
+    const uniqueLeadIds = new Set(
+      selectedCandidates
+        .map((lead) => this.getLeadIdentifier(lead))
+        .filter((value): value is string => !!value),
+    );
+
+    if (selectedCandidates.length > 0 && uniqueLeadIds.size <= 1) {
+      return selectedCandidates[0];
+    }
+
+    if (selectedCandidates.length > 1) {
+      this.logger.warn(
+        `Convoso phone lookup returned multiple leads for ${normalizedPhone}, skipping enrichment`,
+      );
+    }
+
+    return null;
+  }
+
+  private matchesLeadId(lead: ConvosoLeadRecord, leadId: string): boolean {
+    const candidateId = this.getLeadIdentifier(lead);
+
+    return candidateId === leadId;
+  }
+
+  private matchesLeadPhone(
+    lead: ConvosoLeadRecord,
+    normalizedPhone: string,
+  ): boolean {
+    return [lead.phone_number, lead.alt_phone_1, lead.alt_phone_2].some(
+      (phone) =>
+        this.normalizePhone(this.cleanText(phone) ?? undefined) ===
+        normalizedPhone,
+    );
+  }
+
+  private matchesListId(lead: ConvosoLeadRecord, listId: string): boolean {
+    return this.cleanText(lead.list_id) === listId;
+  }
+
+  private getLeadIdentifier(lead: ConvosoLeadRecord): string | null {
+    return this.cleanText(lead.lead_id) ?? this.cleanText(lead.id);
+  }
+
+  private shouldFetchLeadDetailsForPerson(
+    person: Record<string, unknown>,
+  ): boolean {
+    return !this.hasPersonName(person) || !this.hasPrimaryEmail(person);
+  }
+
+  private hasPersonName(person: Record<string, unknown>): boolean {
+    const name = person.name as Record<string, unknown> | undefined;
+
+    return (
+      this.hasNonEmptyString(name?.firstName) ||
+      this.hasNonEmptyString(name?.lastName)
+    );
+  }
+
+  private hasPrimaryEmail(person: Record<string, unknown>): boolean {
+    const emails = person.emails as Record<string, unknown> | undefined;
+
+    return this.isValidEmail(this.cleanText(emails?.primaryEmail) ?? '');
+  }
+
+  private buildLeadSourceUpdate(
+    person: Record<string, unknown>,
+    leadSourceId: string | null,
+  ): Record<string, unknown> {
+    const updates: Record<string, unknown> = {};
+
+    if (leadSourceId && !person.leadSourceId) {
+      updates.leadSourceId = leadSourceId;
+    }
+
+    return updates;
+  }
+
+  private buildPersonData(
+    normalizedPhone: string,
+    leadDetails: ConvosoLeadRecord | null,
+    leadSourceId: string | null,
+  ): Record<string, unknown> {
+    const personData: Record<string, unknown> = {
+      phones: {
+        primaryPhoneNumber: normalizedPhone,
+        primaryPhoneCallingCode: '+1',
+        primaryPhoneCountryCode: 'US',
+      },
+      name: this.buildPersonName(leadDetails),
+    };
+
+    const email = this.extractPrimaryEmail(leadDetails);
+
+    if (email) {
+      personData.emails = { primaryEmail: email };
+    }
+
+    const address = this.buildPersonAddress(leadDetails);
+
+    if (address) {
+      personData.addressCustom = address;
+    }
+
+    if (leadSourceId) {
+      personData.leadSourceId = leadSourceId;
+    }
+
+    return personData;
+  }
+
+  private buildPersonEnrichmentUpdates(
+    person: Record<string, unknown>,
+    leadDetails: ConvosoLeadRecord | null,
+    leadSourceId: string | null,
+  ): Record<string, unknown> {
+    const updates = this.buildLeadSourceUpdate(person, leadSourceId);
+    const currentName =
+      (person.name as Record<string, unknown> | undefined) ?? {};
+    const incomingName = this.buildPersonName(leadDetails);
+    const nextFirstName =
+      this.cleanText(currentName.firstName) ?? incomingName.firstName;
+    const nextLastName =
+      this.cleanText(currentName.lastName) ?? incomingName.lastName;
+
+    if (
+      nextFirstName !== (this.cleanText(currentName.firstName) ?? '') ||
+      nextLastName !== (this.cleanText(currentName.lastName) ?? '')
+    ) {
+      updates.name = {
+        ...currentName,
+        firstName: nextFirstName,
+        lastName: nextLastName,
+      };
+    }
+
+    const currentEmails =
+      (person.emails as Record<string, unknown> | undefined) ?? {};
+    const incomingEmail = this.extractPrimaryEmail(leadDetails);
+
+    if (
+      incomingEmail &&
+      !this.isValidEmail(this.cleanText(currentEmails.primaryEmail) ?? '')
+    ) {
+      updates.emails = {
+        ...currentEmails,
+        primaryEmail: incomingEmail,
+      };
+    }
+
+    const mergedAddress = this.mergePersonAddress(
+      person.addressCustom as Record<string, unknown> | undefined,
+      this.buildPersonAddress(leadDetails),
+    );
+
+    if (mergedAddress) {
+      updates.addressCustom = mergedAddress;
+    }
+
+    return updates;
+  }
+
+  private buildPersonName(leadDetails: ConvosoLeadRecord | null): {
+    firstName: string;
+    lastName: string;
+  } {
+    return {
+      firstName: this.formatNamePart(leadDetails?.first_name),
+      lastName: this.formatNamePart(leadDetails?.last_name),
+    };
+  }
+
+  private buildPersonAddress(
+    leadDetails: ConvosoLeadRecord | null,
+  ): Record<string, string> | null {
+    if (!leadDetails) {
+      return null;
+    }
+
+    const addressStreet1 =
+      this.cleanText(leadDetails.address1) ??
+      this.cleanText(leadDetails.address);
+    const addressStreet2 = this.cleanText(leadDetails.address2);
+    const addressCity = this.cleanText(leadDetails.city);
+    const addressState =
+      this.cleanText(leadDetails.state) ?? this.cleanText(leadDetails.province);
+    const addressPostcode =
+      this.cleanText(leadDetails.postal_code) ??
+      this.cleanText(leadDetails.zipcode);
+    const addressCountry = this.cleanText(leadDetails.country);
+
+    if (
+      !addressStreet1 &&
+      !addressStreet2 &&
+      !addressCity &&
+      !addressState &&
+      !addressPostcode &&
+      !addressCountry
+    ) {
+      return null;
+    }
+
+    const address: Record<string, string> = {};
+
+    if (addressStreet1) address.addressStreet1 = addressStreet1;
+    if (addressStreet2) address.addressStreet2 = addressStreet2;
+    if (addressCity) address.addressCity = addressCity;
+    if (addressState) address.addressState = addressState;
+    if (addressPostcode) address.addressPostcode = addressPostcode;
+    if (addressCountry) address.addressCountry = addressCountry;
+
+    return address;
+  }
+
+  private mergePersonAddress(
+    currentAddress: Record<string, unknown> | undefined,
+    incomingAddress: Record<string, string> | null,
+  ): Record<string, unknown> | null {
+    if (!incomingAddress) {
+      return null;
+    }
+
+    const mergedAddress = { ...(currentAddress ?? {}) };
+    let hasChanges = false;
+
+    for (const [key, value] of Object.entries(incomingAddress)) {
+      if (!this.hasNonEmptyString(mergedAddress[key]) && value) {
+        mergedAddress[key] = value;
+        hasChanges = true;
+      }
+    }
+
+    return hasChanges ? mergedAddress : null;
+  }
+
+  private extractPrimaryEmail(
+    leadDetails: ConvosoLeadRecord | null,
+  ): string | null {
+    const email = this.cleanText(leadDetails?.email)?.toLowerCase() ?? '';
+
+    return this.isValidEmail(email) ? email : null;
+  }
+
+  private async applyPersonUpdates(
+    personRepo: {
+      update?: (
+        id: string,
+        updates: Record<string, unknown>,
+      ) => Promise<unknown>;
+    },
+    personId: string,
+    updates: Record<string, unknown>,
+    successMessage: string,
+  ): Promise<void> {
+    if (Object.keys(updates).length === 0 || !personRepo.update) {
+      return;
+    }
+
+    try {
+      await personRepo.update(personId, updates);
+      this.logger.log(successMessage);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update Person ${personId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -403,8 +985,14 @@ export class ConvosoCallPreprocessor {
 
       try {
         const response = await fetch(
-          `https://api.convoso.com/v1/lists/search?auth_token=${apiToken}`,
-          { headers: { 'Content-Type': 'application/json' } },
+          `${CONVOSO_API_BASE_URL}/lists/search?auth_token=${apiToken}`,
+          {
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              'User-Agent': CONVOSO_API_USER_AGENT,
+            },
+          },
         );
 
         if (!response.ok) {
@@ -442,7 +1030,9 @@ export class ConvosoCallPreprocessor {
     return this.listMap?.[listId] ?? null;
   }
 
-  private resolveConvosoCallTimeZone(pipeline: IngestionPipelineEntity): string {
+  private resolveConvosoCallTimeZone(
+    pipeline: IngestionPipelineEntity,
+  ): string {
     const configuredTimeZone =
       pipeline.sourceRequestConfig?.dateRangeParams?.timezone;
 
@@ -511,8 +1101,9 @@ export class ConvosoCallPreprocessor {
         timeZoneName: 'shortOffset',
       });
       const parts = formatter.formatToParts(new Date(`${localIso}Z`));
-      const offsetPart = parts.find((part) => part.type === 'timeZoneName')
-        ?.value;
+      const offsetPart = parts.find(
+        (part) => part.type === 'timeZoneName',
+      )?.value;
 
       if (!offsetPart) {
         return null;
@@ -550,5 +1141,55 @@ export class ConvosoCallPreprocessor {
     }
 
     return digits.length === 10 ? digits : null;
+  }
+
+  private cleanText(value: unknown): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const trimmed = value.toString().trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    const lowered = trimmed.toLowerCase();
+
+    if (lowered === 'null' || lowered === 'undefined' || lowered === 'n/a') {
+      return null;
+    }
+
+    return trimmed;
+  }
+
+  private hasNonEmptyString(value: unknown): boolean {
+    return !!this.cleanText(value);
+  }
+
+  private formatNamePart(value: unknown): string {
+    const cleaned = this.cleanText(value);
+
+    if (!cleaned) {
+      return '';
+    }
+
+    return cleaned
+      .toLowerCase()
+      .replace(/(^|[\s'-])[a-z]/g, (match) => match.toUpperCase());
+  }
+
+  private isValidEmail(email: string): boolean {
+    if (!email) {
+      return false;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    return (
+      normalizedEmail.includes('@') &&
+      normalizedEmail.includes('.') &&
+      !JUNK_EMAILS.has(normalizedEmail)
+    );
   }
 }
