@@ -21,7 +21,7 @@ import { CoreObjectNameSingular, SidePanelPages } from 'twenty-shared/types';
 import {
   newlyCreatedRecordIdsState,
   persistNewlyCreatedRecordIds,
-} from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
+} from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
 import { useRunWorkflowRunOpeningInSidePanelEffects } from '@/workflow/hooks/useRunWorkflowRunOpeningInSidePanelEffects';
 import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';

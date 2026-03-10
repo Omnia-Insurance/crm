@@ -68,8 +68,35 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `src/views/qa-scorecard-view.ts` — Default list view for QA Scorecards
 - `src/navigation-menu-items/qa-scorecard-navigation-menu-item.ts` — Sidebar navigation entry
 
-### `packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/`
-- `old-crm-policy.preprocessor.ts` — Old CRM policy ingestion: person resolution, carrier/product creation, `parseDateTimeAsEastern()` for `submittedDate` (Eastern → UTC)
+### `packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/`
+Full ingestion pipeline engine — configurable pull/push data pipelines with field mappings, preprocessors, scheduling, and logging.
+- `ingestion-pipeline.module.ts` — Module registration
+- `entities/ingestion-pipeline.entity.ts` — Pipeline entity (mode, schedule, source config, auth, pagination, dedup)
+- `entities/ingestion-field-mapping.entity.ts` — Per-field mapping entity (source path → target field, transforms)
+- `entities/ingestion-log.entity.ts` — Ingestion run log (status, counts, errors, incoming payload)
+- `services/ingestion-pipeline.service.ts` — CRUD + test execution for pipelines
+- `services/ingestion-pull-scheduler.service.ts` — Cron-based pull scheduling on server startup
+- `services/ingestion-record-processor.service.ts` — Processes ingested rows: maps fields, resolves relations, upserts records
+- `services/ingestion-relation-resolver.service.ts` — Resolves relation fields by lookup during ingestion
+- `services/ingestion-field-mapping.service.ts` — CRUD for field mappings
+- `services/ingestion-log.service.ts` — Log queries and creation
+- `controllers/ingestion-pipeline-webhook.controller.ts` — Push-mode webhook endpoint (receives external payloads)
+- `jobs/ingestion-pull.job.ts` — BullMQ job: fetches data from source URL, processes records
+- `jobs/ingestion-push-process.job.ts` — BullMQ job: processes pushed webhook payloads
+- `jobs/ingestion-job.module.ts` — Job module registration
+- `resolvers/ingestion-pipeline.resolver.ts` — GraphQL CRUD + test mutation
+- `resolvers/ingestion-field-mapping.resolver.ts` — GraphQL CRUD for field mappings
+- `resolvers/ingestion-log.resolver.ts` — GraphQL log queries
+- `preprocessors/ingestion-preprocessor.registry.ts` — Registry for pipeline-specific preprocessors
+- `preprocessors/old-crm-policy.preprocessor.ts` — Old CRM policy ingestion: person resolution, carrier/product creation, `parseDateTimeAsEastern()` for `submittedDate` (Eastern → UTC)
+- `preprocessors/healthsherpa-policy.preprocessor.ts` — HealthSherpa policy ingestion preprocessor
+- `preprocessors/convoso-call.preprocessor.ts` — Convoso call ingestion preprocessor
+- `preprocessors/convoso-lead.preprocessor.ts` — Convoso lead ingestion preprocessor
+- `utils/build-record-from-mappings.util.ts` — Builds record from field mappings + source data
+- `utils/apply-field-transform.util.ts` — Field value transforms (date, number, etc.)
+- `utils/extract-value-by-path.util.ts` — Dot-path value extraction from nested objects
+- `database/typeorm/core/migrations/common/1771284860000-add-ingestion-pipeline-entities.ts` — **Migration** creating `ingestionPipeline`, `ingestionFieldMapping`, `ingestionLog` tables
+- `database/typeorm/core/migrations/common/1771400000000-add-ingestion-log-incoming-payload.ts` — **Migration** adding `incomingPayload` column to `ingestionLog`
 
 ### `packages/twenty-server/src/modules/lead/`
 - `query-hooks/lead-create-one.pre-query.hook.ts` — Lead pre-processing
@@ -147,21 +174,24 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 | `page-layout/widgets/states/widgetCardRequiredEmptyComponentFamilyState.ts` | **NEW** — Jotai family state for per-widget required-empty status |
 | `generated-metadata/graphql.ts` | Added `requiredCondition` to Field type, CreateFieldInput, UpdateFieldInput, and all query fragments |
 | `object-record/record-field/ui/hooks/useRecordRequiredFieldViolations.ts` | **NEW** — Batch validation: returns all required-field violations for a record (used by close validation) |
-| `object-record/record-right-drawer/states/newlyCreatedRecordIdsState.ts` | **NEW** — Jotai atom tracking record IDs created via the side panel |
-| `command-menu/hooks/useOpenRecordInCommandMenu.ts` | Adds record ID to `newlyCreatedRecordIdsState` when `isNewRecord: true` |
+| `object-record/record-side-panel/states/newlyCreatedRecordIdsState.ts` | **NEW** — Jotai atom tracking record IDs created via the side panel (was `record-right-drawer/`) |
+| `side-panel/hooks/useOpenRecordInSidePanel.ts` | Adds record ID to `newlyCreatedRecordIdsState` when `isNewRecord: true` (was `command-menu/hooks/useOpenRecordInCommandMenu.ts`) |
 | `command-menu/hooks/useCommandMenuCloseWithValidation.ts` | **NEW** — Wraps close/back with required-field validation; shows modal if new record has violations |
 | `command-menu/states/requiredFieldsValidationState.ts` | **NEW** — Jotai atom for pending validation modal data |
 | `command-menu/components/RequiredFieldsValidationModal.tsx` | **NEW** — Confirmation modal: "Delete Record" or "Go Back" when required fields are empty |
-| `command-menu/components/CommandMenuTopBar.tsx` | X button uses `closeWithValidation` instead of `closeCommandMenu` |
-| `command-menu/components/CommandMenuOpenContainer.tsx` | Click-outside uses `closeWithValidation` instead of `closeCommandMenu` |
-| `command-menu/components/CommandMenuBackButton.tsx` | Back button uses `goBackWithValidation` instead of `goBackFromCommandMenu` |
-| `command-menu/hooks/useCommandMenuHotKeys.ts` | Escape/Backspace/Delete use `goBackWithValidation` instead of `goBackFromCommandMenu` |
-| `command-menu/components/CommandMenuSidePanelForDesktop.tsx` | Collapse uses `closeWithValidation`; renders `RequiredFieldsValidationModal`; cleanup + beforeunload hooks |
+| `side-panel/components/SidePanelTopBar.tsx` | X button uses `closeWithValidation` instead of `closeSidePanelMenu` (was `CommandMenuTopBar.tsx`) |
+| `command-menu/components/CommandMenuOpenContainer.tsx` | Click-outside uses `closeWithValidation` instead of `closeSidePanelMenu` |
+| `side-panel/components/SidePanelBackButton.tsx` | Back button uses `goBackWithValidation` instead of `goBackFromSidePanel` (was `CommandMenuBackButton.tsx`) |
+| `command-menu/hooks/useCommandMenuHotKeys.ts` | Escape/Backspace/Delete use `goBackWithValidation` instead of `goBackFromSidePanel` |
+| `side-panel/components/SidePanelForDesktop.tsx` | Collapse uses `closeWithValidation`; renders `RequiredFieldsValidationModal`; cleanup + beforeunload hooks (was `CommandMenuSidePanelForDesktop.tsx`) |
 | `command-menu/hooks/useBeforeUnloadRequiredFieldsCheck.ts` | **NEW** — Blocks browser refresh/close when newly created records have required field violations |
 | `command-menu/hooks/useCleanupNewlyCreatedRecordIds.ts` | **NEW** — Prunes stale record IDs from sessionStorage on app startup |
 | `object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer.ts` | Added `isNewRecord: true` so "Add new" from relation fields is tracked for validation |
 
 ### Other Frontend
+| File | Modification |
+|------|-------------|
+| `packages/twenty-ui/src/navigation/link/components/AudioLink.tsx` | **NEW** — Audio player component for call recordings (inline pill with `<audio>` controls) |
 
 ## Modified Upstream Server Files
 
@@ -227,17 +257,38 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 |------|-------------|
 | `engine/workspace-manager/.../compute-person-standard-flat-index-metadata.util.ts` | Phone is unique (not email) |
 
+## Fragile Import Dependencies (Check After Upstream Renames)
+
+Our custom files import from upstream modules that may be renamed/moved. After merging, grep for broken imports:
+
+```bash
+npx nx typecheck twenty-front  # Catches TS2307 "Cannot find module" errors
+npx nx typecheck twenty-ui     # AudioLink etc.
+```
+
+| Our Custom File | Imports From (upstream) | Previously Was |
+|----------------|------------------------|----------------|
+| `command-menu/hooks/useCommandMenuCloseWithValidation.ts` | `@/side-panel/hooks/useSidePanelMenu`, `@/side-panel/hooks/useSidePanelHistory`, `@/side-panel/states/*` | `@/command-menu/hooks/useCommandMenu`, `@/command-menu/hooks/useCommandMenuHistory` |
+| `command-menu/hooks/useCommandMenuHotKeys.ts` | `@/side-panel/hooks/useSidePanelMenu`, `@/side-panel/constants/*` | `@/command-menu/hooks/useCommandMenu` |
+| `command-menu/components/CommandMenuOpenContainer.tsx` | `@/side-panel/types/*`, `@/side-panel/constants/*` | `@/command-menu/types/*` |
+| `navigation/components/MainNavigationDrawer.tsx` | `@/side-panel/hooks/useOpenRecordsSearchPageInSidePanel` | `@/command-menu/hooks/useOpenRecordsSearchPageInCommandMenu` |
+| `side-panel/hooks/useOpenRecordInSidePanel.ts` | `@/object-record/record-side-panel/states/newlyCreatedRecordIdsState` | `@/object-record/record-right-drawer/states/...` |
+| `packages/twenty-ui/.../AudioLink.tsx` | `@ui/theme-constants` (for `ThemeContext`) | Was `@ui/theme` |
+| `settings/.../EditWindowRow.tsx` | `twenty-ui/theme-constants` (for `ThemeContext`) | Was `twenty-ui/theme` |
+
 ## Post-Merge Checklist
 
 After every upstream merge:
 
 1. **Run the check script**: `./scripts/check-customizations.sh`
-2. **Re-extract Lingui**: `npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile`
-3. **Verify RLS works**: Log in as member role, create a policy from Policies page
-4. **Verify sidebar**: Settings at top, no Documentation link, Search in sidebar
-5. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
-6. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
-7. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
-8. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
-9. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
-9. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
+2. **Run typecheck**: `npx nx typecheck twenty-front && npx nx typecheck twenty-ui` — catches broken imports from upstream renames
+3. **Re-extract Lingui**: `npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile`
+4. **Verify RLS works**: Log in as member role, create a policy from Policies page
+5. **Verify sidebar**: Settings at top, no Documentation link, Search in sidebar
+6. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
+7. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
+8. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
+9. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
+10. **Run lint**: `npx nx lint:diff-with-main twenty-front`
+11. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
+12. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`

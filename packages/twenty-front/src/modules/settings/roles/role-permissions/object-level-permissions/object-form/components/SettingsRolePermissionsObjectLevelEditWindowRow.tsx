@@ -10,8 +10,7 @@ import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconClockHour8 } from 'twenty-ui/display';
 import { type SelectOption } from 'twenty-ui/input';
-import { ThemeContext } from 'twenty-ui/theme';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 import { type ObjectPermission } from '~/generated-metadata/graphql';
 
 const StyledTableRow = styled(TableRow)`
