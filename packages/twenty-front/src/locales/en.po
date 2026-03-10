@@ -1590,6 +1590,11 @@ msgstr "alphabetical"
 msgid "Already in navbar"
 msgstr "Already in navbar"
 
+#. js-lingui-id: 0gPQCa
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "Always"
+msgstr "Always"
+
 #. js-lingui-id: uprOiC
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Amber"
@@ -3705,7 +3710,6 @@ msgstr "Create Webhook"
 
 #. js-lingui-id: kdLGki
 #: src/utils/title-utils.ts
-#: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx
 msgid "Create Workspace"
 msgstr "Create Workspace"
 
@@ -4421,6 +4425,11 @@ msgstr "Delete node"
 #: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
 msgid "Delete Pipeline"
 msgstr "Delete Pipeline"
+
+#. js-lingui-id: LUsa0/
+#: src/modules/command-menu/components/RequiredFieldsValidationModal.tsx
+msgid "Delete Record"
+msgstr "Delete Record"
 
 #. js-lingui-id: kf0A63
 #: src/modules/action-menu/actions/record-actions/constants/DefaultRecordActionsConfig.tsx
@@ -5292,6 +5301,11 @@ msgstr "End trial period to continue using Workflow or AI features."
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
 msgid "Endpoint URL"
 msgstr "Endpoint URL"
+
+#. js-lingui-id: wwnsB9
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "Enforce that this field must have a value"
+msgstr "Enforce that this field must have a value"
 
 #. js-lingui-id: Vv4JVS
 #: src/modules/settings/security/components/Toggle2FA.tsx
@@ -7675,6 +7689,11 @@ msgstr "Is after or equal"
 msgid "Is before"
 msgstr "Is before"
 
+#. js-lingui-id: 5YQ+ks
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "is empty"
+msgstr "is empty"
+
 #. js-lingui-id: Hte7bc
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid "Is empty"
@@ -7744,6 +7763,11 @@ msgstr "is not a valid URL"
 #: src/modules/object-record/spreadsheet-import/utils/getSpreadSheetFieldValidationDefinitions.ts
 msgid "is not a valid UUID"
 msgstr "is not a valid UUID"
+
+#. js-lingui-id: Y6yeW3
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "is not empty"
+msgstr "is not empty"
 
 #. js-lingui-id: ldI7NO
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
@@ -8671,6 +8695,11 @@ msgstr "Minutes between triggers"
 msgid "Missing email draft permission."
 msgstr "Missing email draft permission."
 
+#. js-lingui-id: W+nEZh
+#: src/modules/command-menu/components/RequiredFieldsValidationModal.tsx
+msgid "Missing Required Fields"
+msgstr "Missing Required Fields"
+
 #. js-lingui-id: mibKsa
 #: src/modules/activities/tasks/components/TaskGroups.tsx
 msgid "Mission accomplished!"
@@ -8974,6 +9003,7 @@ msgstr "Navigation tabs"
 
 #. js-lingui-id: qqeAJM
 #: src/modules/settings/developers/utils/formatExpiration.ts
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
 msgid "Never"
 msgstr "Never"
 
@@ -10560,6 +10590,12 @@ msgstr "Please check your email for a verification link."
 msgid "Please enter a valid URL"
 msgstr "Please enter a valid URL"
 
+#. js-lingui-id: rhYgOu
+#. placeholder {0}: fields.join(', ')
+#: src/modules/command-menu/components/RequiredFieldsValidationModal.tsx
+msgid "Please fill in: {0}"
+msgstr "Please fill in: {0}"
+
 #. js-lingui-id: qg68zg
 #: src/modules/information-banner/components/reconnect-account/InformationBannerReconnectAccountEmailAliases.tsx
 msgid "Please reconnect your mailbox {mailboxHandle} to update your email aliases:"
@@ -11276,6 +11312,7 @@ msgstr "Request Failed"
 
 #. js-lingui-id: TMLAx2
 #: src/pages/settings/applications/SettingsApplicationRegistrationDetails.tsx
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
 msgid "Required"
 msgstr "Required"
 
@@ -11682,7 +11719,6 @@ msgid "Score"
 msgstr "Score"
 
 #. js-lingui-id: A1taO8
-#: src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx
 #: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownWorkspacesListComponents.tsx
 #: src/modules/ui/layout/dropdown/components/DropdownMenuSearchInput.tsx
 #: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
@@ -14935,6 +14971,11 @@ msgstr "What can I help you with?"
 msgid "What this API can do: Select a user role to define its permissions."
 msgstr "What this API can do: Select a user role to define its permissions."
 
+#. js-lingui-id: 1ZF9KQ
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "When"
+msgstr "When"
+
 #. js-lingui-id: m7GziZ
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "When a deal's stage changes to Closed Won, create a task assigned to the deal owner, due 7 days after the close date, with title \"Post-sale check-in\" and the company name in the description."
@@ -14979,6 +15020,11 @@ msgstr "When the API key will expire."
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 msgid "When the key will be disabled"
 msgstr "When the key will be disabled"
+
+#. js-lingui-id: TquA/j
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "When..."
+msgstr "When..."
 
 #. js-lingui-id: YvwwqC
 #: src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterLogicalOperatorCell.tsx
