@@ -3,6 +3,7 @@ import { styled } from '@linaria/react';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { useIsFieldEmpty } from '@/object-record/record-field/ui/hooks/useIsFieldEmpty';
 import { useIsFieldInputOnly } from '@/object-record/record-field/ui/hooks/useIsFieldInputOnly';
+import { useIsFieldRequired } from '@/object-record/record-field/ui/hooks/useIsFieldRequired';
 import {
   useRecordInlineCellContext,
   type RecordInlineCellContextProps,
@@ -55,9 +56,12 @@ const StyledRecordInlineCellNormalModeInnerContainer = styled.div`
   padding-bottom: 2px;
 `;
 
-const StyledEmptyField = styled.div`
+const StyledEmptyField = styled.div<{ isRequired?: boolean }>`
   align-items: center;
-  color: ${themeCssVariables.font.color.light};
+  color: ${({ isRequired }) =>
+    isRequired
+      ? themeCssVariables.color.red
+      : themeCssVariables.font.color.light};
   display: flex;
   height: 20px;
 `;
@@ -78,6 +82,7 @@ export const RecordInlineCellDisplayMode = ({
   const { isForbidden } = useContext(FieldContext);
 
   const isFieldEmpty = useIsFieldEmpty();
+  const isFieldRequired = useIsFieldRequired();
   const showEditButton =
     buttonIcon &&
     isHovered &&
@@ -104,7 +109,9 @@ export const RecordInlineCellDisplayMode = ({
           {shouldShowValue ? (
             children
           ) : shouldShowEmptyPlaceholder ? (
-            <StyledEmptyField>{emptyPlaceHolder}</StyledEmptyField>
+            <StyledEmptyField isRequired={isFieldRequired}>
+              {emptyPlaceHolder}
+            </StyledEmptyField>
           ) : null}
         </StyledRecordInlineCellNormalModeInnerContainer>
       </StyledRecordInlineCellNormalModeOuterContainer>

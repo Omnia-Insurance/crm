@@ -118,6 +118,49 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 | `record-field/ui/meta-types/input/hooks/useOpenRelationFromManyFieldInput.tsx` | Removed `performSearch` — initial search moved to `RelationOneToManyFieldInput` so excluded IDs are applied before results show |
 | `record-field/ui/hooks/useOpenFieldInputEditMode.ts` | Removed unused `excludedRecordIds` param |
 
+### Required Fields (Per-Field Validation with Conditional Rules)
+| File | Modification |
+|------|-------------|
+| `settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx` | **NEW** — Required toggle + conditional rule builder (Always / When [field] is [empty/not empty]) |
+| `settings/data-model/fields/forms/components/SettingsDataModelFieldSettingsFormCard.tsx` | Added `requiredCondition` to all field type form schemas + renders Required form |
+| `settings/data-model/fields/forms/number/components/SettingsDataModelFieldNumberSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/components/text/SettingsDataModelFieldTextSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/date/components/SettingsDataModelFieldDateSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/phones/components/SettingsDataModelFieldPhonesSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/address/components/SettingsDataModelFieldAddressSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/boolean/components/SettingsDataModelFieldBooleanSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/currency/components/SettingsDataModelFieldCurrencySettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectSettingsFormCard.tsx` | Added Required form |
+| `settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationFormCard.tsx` | Added Required form |
+| `object-metadata/utils/formatFieldMetadataItemInput.ts` | Added `requiredCondition` to field update payload |
+| `object-metadata/hooks/useUpdateOneFieldMetadataItem.ts` | Added `requiredCondition` to mutation payload type |
+| `object-metadata/graphql/fragment.ts` | Added `requiredCondition` to `fieldsList` GraphQL fragment |
+| `object-metadata/utils/formatFieldMetadataItemAsFieldDefinition.ts` | Passes `requiredCondition` into `FieldDefinition` |
+| `object-record/record-field/ui/types/FieldDefinition.ts` | Added `RequiredCondition` type and `requiredCondition` field |
+| `object-record/record-inline-cell/components/RecordInlineCellDisplayMode.tsx` | Red placeholder text for required empty inline fields |
+| `object-record/record-field/ui/hooks/useIsFieldRequired.ts` | **NEW** — Hook evaluating `requiredCondition` against current field/record state |
+| `object-record/record-field-list/record-detail-section/components/RecordDetailSectionContainer.tsx` | Red title label when `isRequired` prop is true (non-widget layout path) |
+| `object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationSection.tsx` | Passes `isRequired` from `useIsFieldRequired` to section container |
+| `page-layout/widgets/field/components/FieldWidget.tsx` | Computes `isRequiredEmpty` for relation widgets, sets widget-level state for red title |
+| `page-layout/widgets/widget-card/components/WidgetCardHeader.tsx` | Added `isRequiredEmpty` prop — turns title red when relation is required and empty |
+| `page-layout/widgets/components/WidgetRenderer.tsx` | Reads `widgetCardRequiredEmptyComponentFamilyState` and passes to `WidgetCardHeader` |
+| `page-layout/widgets/states/widgetCardRequiredEmptyComponentFamilyState.ts` | **NEW** — Jotai family state for per-widget required-empty status |
+| `generated-metadata/graphql.ts` | Added `requiredCondition` to Field type, CreateFieldInput, UpdateFieldInput, and all query fragments |
+| `object-record/record-field/ui/hooks/useRecordRequiredFieldViolations.ts` | **NEW** — Batch validation: returns all required-field violations for a record (used by close validation) |
+| `object-record/record-right-drawer/states/newlyCreatedRecordIdsState.ts` | **NEW** — Jotai atom tracking record IDs created via the side panel |
+| `command-menu/hooks/useOpenRecordInCommandMenu.ts` | Adds record ID to `newlyCreatedRecordIdsState` when `isNewRecord: true` |
+| `command-menu/hooks/useCommandMenuCloseWithValidation.ts` | **NEW** — Wraps close/back with required-field validation; shows modal if new record has violations |
+| `command-menu/states/requiredFieldsValidationState.ts` | **NEW** — Jotai atom for pending validation modal data |
+| `command-menu/components/RequiredFieldsValidationModal.tsx` | **NEW** — Confirmation modal: "Delete Record" or "Go Back" when required fields are empty |
+| `command-menu/components/CommandMenuTopBar.tsx` | X button uses `closeWithValidation` instead of `closeCommandMenu` |
+| `command-menu/components/CommandMenuOpenContainer.tsx` | Click-outside uses `closeWithValidation` instead of `closeCommandMenu` |
+| `command-menu/components/CommandMenuBackButton.tsx` | Back button uses `goBackWithValidation` instead of `goBackFromCommandMenu` |
+| `command-menu/hooks/useCommandMenuHotKeys.ts` | Escape/Backspace/Delete use `goBackWithValidation` instead of `goBackFromCommandMenu` |
+| `command-menu/components/CommandMenuSidePanelForDesktop.tsx` | Collapse uses `closeWithValidation`; renders `RequiredFieldsValidationModal`; cleanup + beforeunload hooks |
+| `command-menu/hooks/useBeforeUnloadRequiredFieldsCheck.ts` | **NEW** — Blocks browser refresh/close when newly created records have required field violations |
+| `command-menu/hooks/useCleanupNewlyCreatedRecordIds.ts` | **NEW** — Prunes stale record IDs from sessionStorage on app startup |
+| `object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenRightDrawer.ts` | Added `isNewRecord: true` so "Add new" from relation fields is tracked for validation |
+
 ### Other Frontend
 
 ## Modified Upstream Server Files
@@ -168,6 +211,17 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 |------|-------------|
 | `packages/twenty-shared/src/types/ObjectPermissions.ts` | Added `editWindowMinutes: number \| null` |
 
+### Required Fields (Field Metadata Extension)
+| File | Modification |
+|------|-------------|
+| `engine/metadata-modules/field-metadata/field-metadata.entity.ts` | Added `requiredCondition` JSONB column (`{type: 'always'|'fieldEmpty'|'fieldNotEmpty', fieldId?: string}`) |
+| `engine/metadata-modules/field-metadata/dtos/field-metadata.dto.ts` | Added `requiredCondition` GraphQL field |
+| `engine/metadata-modules/flat-field-metadata/utils/from-flat-field-metadata-to-field-metadata-dto.util.ts` | Added `requiredCondition` to DTO mapping (read path) |
+| `engine/metadata-modules/flat-field-metadata/constants/flat-field-metadata-editable-properties.constant.ts` | Added `requiredCondition` to custom + standard editable properties |
+| `engine/metadata-modules/flat-field-metadata/constants/flat-field-metadata-relation-properties-to-compare.constant.ts` | Added `requiredCondition` to relation field editable properties |
+| `engine/metadata-modules/flat-entity/constant/all-entity-properties-configuration-by-metadata-name.constant.ts` | Added `requiredCondition` property config |
+| `database/typeorm/core/migrations/common/1773069763255-add-field-metadata-required.ts` | **NEW** migration adding `requiredCondition` to `fieldMetadata` table |
+
 ### Standard Object Index (Unique Constraints)
 | File | Modification |
 |------|-------------|
@@ -184,5 +238,6 @@ After every upstream merge:
 5. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
 6. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
 7. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
-8. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
+8. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
+9. **Run lint + typecheck**: `npx nx lint:diff-with-main twenty-front && npx nx typecheck twenty-front`
 9. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`

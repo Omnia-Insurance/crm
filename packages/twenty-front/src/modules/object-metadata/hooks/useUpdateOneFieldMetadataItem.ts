@@ -50,6 +50,7 @@ export const useUpdateOneFieldMetadataItem = () => {
       | 'defaultValue'
       | 'options'
       | 'isLabelSyncedWithName'
+      | 'requiredCondition'
     >;
   }): Promise<
     MetadataRequestResult<

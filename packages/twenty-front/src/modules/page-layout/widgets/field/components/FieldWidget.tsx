@@ -14,12 +14,15 @@ import { FieldWidgetMorphRelationField } from '@/page-layout/widgets/field/compo
 import { FieldWidgetRelationCard } from '@/page-layout/widgets/field/components/FieldWidgetRelationCard';
 import { FieldWidgetRelationField } from '@/page-layout/widgets/field/components/FieldWidgetRelationField';
 import { assertFieldWidgetOrThrow } from '@/page-layout/widgets/field/utils/assertFieldWidgetOrThrow';
+import { widgetCardRequiredEmptyComponentFamilyState } from '@/page-layout/widgets/states/widgetCardRequiredEmptyComponentFamilyState';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
 import { RightDrawerProvider } from '@/ui/layout/right-drawer/contexts/RightDrawerContext';
+import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
+import { useSetAtomComponentFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentFamilyState';
+import { useEffect } from 'react';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { isDefined } from 'twenty-shared/utils';
 import {
   AnimatedPlaceholder,
@@ -41,6 +44,11 @@ type FieldWidgetProps = {
 
 export const FieldWidget = ({ widget }: FieldWidgetProps) => {
   assertFieldWidgetOrThrow(widget);
+
+  const setWidgetCardRequiredEmpty = useSetAtomComponentFamilyState(
+    widgetCardRequiredEmptyComponentFamilyState,
+    widget.id,
+  );
 
   const targetRecord = useTargetRecord();
   const { isInRightDrawer } = useLayoutRenderingContext();
@@ -66,6 +74,19 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
     recordId: targetRecord.id,
     fieldName: fieldMetadataItem?.name ?? '',
   });
+
+  const isRelationEmpty =
+    !isDefined(record) || (Array.isArray(record) && record.length === 0);
+  const requiredCondition = fieldMetadataItem?.requiredCondition as
+    | { type: string }
+    | null
+    | undefined;
+  const isRequiredEmpty =
+    isRelationEmpty && requiredCondition?.type === 'always';
+
+  useEffect(() => {
+    setWidgetCardRequiredEmpty(isRequiredEmpty);
+  }, [isRequiredEmpty, setWidgetCardRequiredEmpty]);
 
   if (isPrefetchLoading) {
     return (

@@ -1,7 +1,9 @@
 import { useFormContext } from 'react-hook-form';
 import { type z } from 'zod';
 
+import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import {
   type settingsDataModelFieldMultiSelectFormSchema,
   SettingsDataModelFieldSelectForm,
@@ -49,11 +51,19 @@ export const SettingsDataModelFieldSelectSettingsFormCard = ({
         />
       }
       form={
-        <SettingsDataModelFieldSelectForm
-          fieldType={fieldType}
-          existingFieldMetadataId={existingFieldMetadataId}
-          disabled={disabled}
-        />
+        <>
+          <SettingsDataModelFieldSelectForm
+            fieldType={fieldType}
+            existingFieldMetadataId={existingFieldMetadataId}
+            disabled={disabled}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+        </>
       }
     />
   );

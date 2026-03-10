@@ -18,6 +18,10 @@ import { viewableRecordIdState } from '@/object-record/record-right-drawer/state
 import { useOpenNewRecordTitleCell } from '@/object-record/record-title-cell/hooks/useOpenNewRecordTitleCell';
 import { CommandMenuPages, CoreObjectNameSingular } from 'twenty-shared/types';
 
+import {
+  newlyCreatedRecordIdsState,
+  persistNewlyCreatedRecordIds,
+} from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
 import { useRunWorkflowRunOpeningInCommandMenuSideEffects } from '@/workflow/hooks/useRunWorkflowRunOpeningInCommandMenuSideEffects';
 import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
@@ -191,6 +195,12 @@ export const useOpenRecordInCommandMenu = () => {
       }
 
       if (isNewRecord) {
+        const currentMap = store.get(newlyCreatedRecordIdsState.atom);
+        const updatedMap = new Map(currentMap);
+        updatedMap.set(recordId, objectNameSingular);
+        store.set(newlyCreatedRecordIdsState.atom, updatedMap);
+        persistNewlyCreatedRecordIds(updatedMap);
+
         const labelIdentifierField =
           getLabelIdentifierFieldMetadataItem(objectMetadataItem);
 

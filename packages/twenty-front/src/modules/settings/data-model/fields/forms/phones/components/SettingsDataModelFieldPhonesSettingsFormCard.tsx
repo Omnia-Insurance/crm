@@ -2,6 +2,7 @@ import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/componen
 
 import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelFieldIsUniqueForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldIsUniqueForm';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import { SettingsDataModelFieldMaxValuesForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldMaxValuesForm';
 import { SettingsDataModelFieldOnClickActionForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldOnClickActionForm';
 import {
@@ -63,6 +64,12 @@ export const SettingsDataModelFieldPhonesSettingsFormCard = ({
           <Separator />
           <SettingsDataModelFieldIsUniqueForm
             fieldType={FieldMetadataType.PHONES}
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}
             disabled={disabled}

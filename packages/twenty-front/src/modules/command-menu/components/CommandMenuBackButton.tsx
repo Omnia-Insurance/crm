@@ -1,6 +1,6 @@
 import { COMMAND_MENU_NAVIGATION_HISTORY_DROPDOWN_ID } from '@/command-menu/constants/CommandMenuNavigationHistoryDropdownId';
 import { useCommandMenuContextChips } from '@/command-menu/hooks/useCommandMenuContextChips';
-import { useCommandMenuHistory } from '@/command-menu/hooks/useCommandMenuHistory';
+import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
@@ -24,7 +24,7 @@ const StyledIconChevronLeft = styled(IconChevronLeft)`
 `;
 
 export const CommandMenuBackButton = () => {
-  const { goBackFromCommandMenu } = useCommandMenuHistory();
+  const { goBackWithValidation } = useCommandMenuCloseWithValidation();
 
   const { contextChips } = useCommandMenuContextChips();
 
@@ -56,7 +56,7 @@ export const CommandMenuBackButton = () => {
             Icon={StyledIconChevronLeft}
             size="small"
             variant="tertiary"
-            onClick={goBackFromCommandMenu}
+            onClick={goBackWithValidation}
           />
         </StyledNavigationIcon>
       }

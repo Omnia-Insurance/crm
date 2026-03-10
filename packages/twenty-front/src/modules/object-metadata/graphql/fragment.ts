@@ -55,6 +55,7 @@ export const OBJECT_METADATA_FRAGMENT = gql`
       isUIReadOnly
       isNullable
       isUnique
+      requiredCondition
       createdAt
       updatedAt
       defaultValue

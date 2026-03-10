@@ -65,5 +65,6 @@ export const formatFieldMetadataItemAsFieldDefinition = ({
       metadata: fieldDefintionMetadata,
       type: field.type,
     }),
+    requiredCondition: field.requiredCondition ?? null,
   };
 };

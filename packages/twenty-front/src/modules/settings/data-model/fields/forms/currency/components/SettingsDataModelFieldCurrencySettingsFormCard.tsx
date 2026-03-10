@@ -1,6 +1,8 @@
 import { useFormContext } from 'react-hook-form';
 
+import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import {
   SettingsDataModelFieldCurrencyForm,
   type SettingsDataModelFieldCurrencyFormValues,
@@ -40,10 +42,18 @@ export const SettingsDataModelFieldCurrencySettingsFormCard = ({
         />
       }
       form={
-        <SettingsDataModelFieldCurrencyForm
-          disabled={disabled}
-          existingFieldMetadataId={existingFieldMetadataId}
-        />
+        <>
+          <SettingsDataModelFieldCurrencyForm
+            disabled={disabled}
+            existingFieldMetadataId={existingFieldMetadataId}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+        </>
       }
     />
   );

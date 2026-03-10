@@ -1,7 +1,7 @@
 import { COMMAND_MENU_COMPONENT_INSTANCE_ID } from '@/command-menu/constants/CommandMenuComponentInstanceId';
 import { SIDE_PANEL_FOCUS_ID } from '@/command-menu/constants/SidePanelFocusId';
 import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
-import { useCommandMenuHistory } from '@/command-menu/hooks/useCommandMenuHistory';
+import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { useOpenAskAIPageInCommandMenu } from '@/command-menu/hooks/useOpenAskAIPageInCommandMenu';
 import { useOpenRecordsSearchPageInCommandMenu } from '@/command-menu/hooks/useOpenRecordsSearchPageInCommandMenu';
 import { useSetGlobalCommandMenuContext } from '@/command-menu/hooks/useSetGlobalCommandMenuContext';
@@ -26,7 +26,7 @@ export const useCommandMenuHotKeys = () => {
 
   const { openAskAIPage } = useOpenAskAIPageInCommandMenu();
 
-  const { goBackFromCommandMenu } = useCommandMenuHistory();
+  const { goBackWithValidation } = useCommandMenuCloseWithValidation();
 
   const { setGlobalCommandMenuContext } = useSetGlobalCommandMenuContext();
 
@@ -82,10 +82,10 @@ export const useCommandMenuHotKeys = () => {
   useHotkeysOnFocusedElement({
     keys: [Key.Escape],
     callback: () => {
-      goBackFromCommandMenu();
+      goBackWithValidation();
     },
     focusId: SIDE_PANEL_FOCUS_ID,
-    dependencies: [goBackFromCommandMenu],
+    dependencies: [goBackWithValidation],
     options: {
       enableOnFormTags: false,
     },
@@ -108,7 +108,7 @@ export const useCommandMenuHotKeys = () => {
         setGlobalCommandMenuContext();
       }
       if (commandMenuPage !== CommandMenuPages.Root) {
-        goBackFromCommandMenu();
+        goBackWithValidation();
       }
     },
     focusId: SIDE_PANEL_FOCUS_ID,
@@ -116,7 +116,7 @@ export const useCommandMenuHotKeys = () => {
       commandMenuPage,
       commandMenuSearch,
       contextStoreTargetedRecordsRule,
-      goBackFromCommandMenu,
+      goBackWithValidation,
       setGlobalCommandMenuContext,
     ],
     options: {

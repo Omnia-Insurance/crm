@@ -1,7 +1,9 @@
 import { useFormContext } from 'react-hook-form';
 
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
 import {
   SettingsDataModelFieldRelationForm,
@@ -137,6 +139,12 @@ export const SettingsDataModelFieldRelationFormCard = ({
               objectNameSingular={objectNameSingular}
             />
           )}
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
         </>
       }
     />

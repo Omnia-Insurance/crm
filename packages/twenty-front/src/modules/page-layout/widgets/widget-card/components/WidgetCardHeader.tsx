@@ -12,8 +12,8 @@ import { type WidgetCardVariant } from '@/page-layout/widgets/types/WidgetCardVa
 import { WidgetGrip } from '@/page-layout/widgets/widget-card/components/WidgetGrip';
 import { AnimatePresence, motion } from 'framer-motion';
 import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { ThemeContext } from 'twenty-ui/theme';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type WidgetCardHeaderProps = {
   variant: WidgetCardVariant;
@@ -28,6 +28,7 @@ export type WidgetCardHeaderProps = {
   isResizing?: boolean;
   isReorderEnabled?: boolean;
   isDeletingWidgetEnabled?: boolean;
+  isRequiredEmpty?: boolean;
 };
 
 const StyledWidgetCardHeader = styled.div`
@@ -37,8 +38,14 @@ const StyledWidgetCardHeader = styled.div`
   flex-shrink: 0;
 `;
 
-const StyledTitleContainer = styled.div<{ variant: WidgetCardVariant }>`
-  color: ${themeCssVariables.font.color.primary};
+const StyledTitleContainer = styled.div<{
+  variant: WidgetCardVariant;
+  isRequiredEmpty?: boolean;
+}>`
+  color: ${({ isRequiredEmpty }) =>
+    isRequiredEmpty
+      ? themeCssVariables.color.red
+      : themeCssVariables.font.color.primary};
   flex: 1;
   font-size: ${themeCssVariables.font.size.md};
   font-weight: ${themeCssVariables.font.weight.medium};
@@ -81,6 +88,7 @@ export const WidgetCardHeader = ({
   forbiddenDisplay,
   actions,
   className,
+  isRequiredEmpty = false,
 }: WidgetCardHeaderProps) => {
   const { theme } = useContext(ThemeContext);
 
@@ -99,7 +107,7 @@ export const WidgetCardHeader = ({
           />
         )}
       </AnimatePresence>
-      <StyledTitleContainer variant={variant}>
+      <StyledTitleContainer variant={variant} isRequiredEmpty={isRequiredEmpty}>
         <OverflowingTextWithTooltip text={isEmpty ? t`Add Widget` : title} />
       </StyledTitleContainer>
       <StyledRightContainer>

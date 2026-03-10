@@ -1,4 +1,6 @@
+import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import {
   SettingsDataModelFieldAddressForm,
   type SettingsDataModelFieldTextFormValues,
@@ -38,10 +40,18 @@ export const SettingsDataModelFieldAddressSettingsFormCard = ({
         />
       }
       form={
-        <SettingsDataModelFieldAddressForm
-          disabled={disabled}
-          existingFieldMetadataId={existingFieldMetadataId}
-        />
+        <>
+          <SettingsDataModelFieldAddressForm
+            disabled={disabled}
+            existingFieldMetadataId={existingFieldMetadataId}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+        </>
       }
     />
   );

@@ -14,6 +14,7 @@ export const formatFieldMetadataItemInput = (
       | 'settings'
       | 'isLabelSyncedWithName'
       | 'isUnique'
+      | 'requiredCondition'
     >
   >,
 ) => {
@@ -27,5 +28,6 @@ export const formatFieldMetadataItemInput = (
     settings: input.settings,
     isLabelSyncedWithName: input.isLabelSyncedWithName,
     isUnique: input.isUnique,
+    requiredCondition: input.requiredCondition,
   };
 };

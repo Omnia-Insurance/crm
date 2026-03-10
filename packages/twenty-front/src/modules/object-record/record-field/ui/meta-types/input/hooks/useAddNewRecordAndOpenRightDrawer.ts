@@ -107,6 +107,7 @@ export const useAddNewRecordAndOpenRightDrawer = ({
       openRecordInCommandMenu({
         recordId: newRecordId,
         objectNameSingular: relationObjectMetadataNameSingular,
+        isNewRecord: true,
       });
 
       return newRecordId;

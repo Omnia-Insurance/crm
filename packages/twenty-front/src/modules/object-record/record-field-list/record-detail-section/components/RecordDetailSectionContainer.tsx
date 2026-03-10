@@ -32,7 +32,9 @@ const StyledTitle = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledTitleLabel = styled.div`
+const StyledTitleLabel = styled.div<{ isRequired?: boolean }>`
+  color: ${({ isRequired }) =>
+    isRequired ? themeCssVariables.color.red : 'inherit'};
   font-weight: ${themeCssVariables.font.weight.medium};
 `;
 
@@ -54,6 +56,7 @@ type RecordDetailSectionContainerProps = {
   hideRightAdornmentOnMouseLeave?: boolean;
   areRecordsAvailable?: boolean;
   dataTestId?: string;
+  isRequired?: boolean;
 };
 
 export const RecordDetailSectionContainer = ({
@@ -64,6 +67,7 @@ export const RecordDetailSectionContainer = ({
   hideRightAdornmentOnMouseLeave = true,
   areRecordsAvailable = false,
   dataTestId,
+  isRequired = false,
 }: RecordDetailSectionContainerProps) => {
   const [isHovered, setIsHovered] = useState(false);
   return (
@@ -75,7 +79,7 @@ export const RecordDetailSectionContainer = ({
         data-testid={dataTestId}
       >
         <StyledTitle>
-          <StyledTitleLabel>{title}</StyledTitleLabel>
+          <StyledTitleLabel isRequired={isRequired}>{title}</StyledTitleLabel>
           {link && <StyledLink to={link.to}>{link.label}</StyledLink>}
         </StyledTitle>
         {hideRightAdornmentOnMouseLeave && !isHovered && areRecordsAvailable

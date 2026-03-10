@@ -126,6 +126,12 @@ export class FieldMetadataEntity<
   @Column({ nullable: true, default: false, type: 'boolean' })
   isUnique: boolean | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  requiredCondition: JsonbProperty<{
+    type: 'always' | 'fieldEmpty' | 'fieldNotEmpty';
+    fieldId?: string;
+  }> | null;
+
   @Column({ default: false })
   isLabelSyncedWithName: boolean;
 

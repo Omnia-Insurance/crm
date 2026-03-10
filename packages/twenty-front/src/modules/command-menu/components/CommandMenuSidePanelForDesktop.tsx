@@ -1,6 +1,9 @@
 import { CommandMenuRouter } from '@/command-menu/components/CommandMenuRouter';
 import { CommandMenuWidthEffect } from '@/command-menu/components/CommandMenuWidthEffect';
-import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
+import { RequiredFieldsValidationModal } from '@/command-menu/components/RequiredFieldsValidationModal';
+import { useBeforeUnloadRequiredFieldsCheck } from '@/command-menu/hooks/useBeforeUnloadRequiredFieldsCheck';
+import { useCleanupNewlyCreatedRecordIds } from '@/command-menu/hooks/useCleanupNewlyCreatedRecordIds';
+import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { useCommandMenuCloseAnimationCompleteCleanup } from '@/command-menu/hooks/useCommandMenuCloseAnimationCompleteCleanup';
 import {
   COMMAND_MENU_WIDTH_VAR,
@@ -64,7 +67,9 @@ export const CommandMenuSidePanelForDesktop = () => {
   const [commandMenuWidth, setCommandMenuWidth] = useAtomState(
     commandMenuWidthState,
   );
-  const { closeCommandMenu } = useCommandMenu();
+  const { closeWithValidation } = useCommandMenuCloseWithValidation();
+  useBeforeUnloadRequiredFieldsCheck();
+  useCleanupNewlyCreatedRecordIds();
   const { commandMenuCloseAnimationCompleteCleanup } =
     useCommandMenuCloseAnimationCompleteCleanup();
 
@@ -116,10 +121,10 @@ export const CommandMenuSidePanelForDesktop = () => {
   }, [setTableWidthResizeIsActive]);
 
   const handleCollapse = useCallback(() => {
-    closeCommandMenu();
+    closeWithValidation();
     setIsResizing(false);
     setTableWidthResizeIsActive(true);
-  }, [closeCommandMenu, setTableWidthResizeIsActive]);
+  }, [closeWithValidation, setTableWidthResizeIsActive]);
 
   return (
     <>
@@ -145,6 +150,7 @@ export const CommandMenuSidePanelForDesktop = () => {
           <StyledModalContainer ref={handleModalContainerRef} />
           <ModalContainerContext.Provider value={{ container: modalContainer }}>
             {shouldShowContent && <CommandMenuRouter />}
+            <RequiredFieldsValidationModal />
           </ModalContainerContext.Provider>
         </StyledSidePanel>
       </StyledSidePanelWrapper>

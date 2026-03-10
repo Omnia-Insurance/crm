@@ -8,6 +8,7 @@ import { RecordDetailSectionContainer } from '@/object-record/record-field-list/
 import { RecordDetailRelationRecordsList } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsList';
 import { RecordDetailRelationSectionDropdown } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationSectionDropdown';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
+import { useIsFieldRequired } from '@/object-record/record-field/ui/hooks/useIsFieldRequired';
 import {
   FieldInputEventContext,
   type FieldInputEvent,
@@ -59,6 +60,7 @@ export const RecordDetailRelationSection = ({
   } = fieldDefinition.metadata as FieldRelationMetadata;
 
   const isMobile = useIsMobile();
+  const isRequired = useIsFieldRequired();
   const { objectMetadataItem: relationObjectMetadataItem } =
     useObjectMetadataItem({
       objectNameSingular: relationObjectMetadataNameSingular,
@@ -203,6 +205,7 @@ export const RecordDetailRelationSection = ({
         }
         hideRightAdornmentOnMouseLeave={!isDropdownOpen && !isMobile}
         areRecordsAvailable={relationRecords.length > 0}
+        isRequired={isRequired}
         rightAdornment={
           <RecordDetailRelationSectionDropdown loading={loading} />
         }

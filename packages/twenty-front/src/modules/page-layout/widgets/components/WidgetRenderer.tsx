@@ -16,6 +16,7 @@ import { useWidgetActions } from '@/page-layout/widgets/hooks/useWidgetActions';
 import { useWidgetPermissions } from '@/page-layout/widgets/hooks/useWidgetPermissions';
 import { WidgetComponentInstanceContext } from '@/page-layout/widgets/states/contexts/WidgetComponentInstanceContext';
 import { widgetCardHoveredComponentFamilyState } from '@/page-layout/widgets/states/widgetCardHoveredComponentFamilyState';
+import { widgetCardRequiredEmptyComponentFamilyState } from '@/page-layout/widgets/states/widgetCardRequiredEmptyComponentFamilyState';
 import { getWidgetCardVariant } from '@/page-layout/widgets/utils/getWidgetCardVariant';
 import { WidgetCard } from '@/page-layout/widgets/widget-card/components/WidgetCard';
 import { WidgetCardContent } from '@/page-layout/widgets/widget-card/components/WidgetCardContent';
@@ -23,6 +24,7 @@ import { WidgetCardHeader } from '@/page-layout/widgets/widget-card/components/W
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateValue';
 import { useSetAtomComponentFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentFamilyState';
 import { styled } from '@linaria/react';
 import { type MouseEvent, useContext } from 'react';
@@ -114,6 +116,11 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
     widget.id,
   );
 
+  const widgetCardRequiredEmpty = useAtomComponentFamilyStateValue(
+    widgetCardRequiredEmptyComponentFamilyState,
+    widget.id,
+  );
+
   const handleMouseEnter = () => {
     setWidgetCardHovered(true);
   };
@@ -158,6 +165,7 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
             isReorderEnabled={isReorderEnabled}
             isDeletingWidgetEnabled={isDeletingWidgetEnabled}
             title={widget.title}
+            isRequiredEmpty={widgetCardRequiredEmpty}
             onRemove={handleRemove}
             actions={actions}
             forbiddenDisplay={

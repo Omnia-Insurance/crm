@@ -8,6 +8,7 @@ export const FLAT_FIELD_METADATA_EDITABLE_PROPERTIES = {
     'isActive',
     'isLabelSyncedWithName',
     'isUnique',
+    'requiredCondition',
     'label',
     'name',
     'options',
@@ -22,6 +23,7 @@ export const FLAT_FIELD_METADATA_EDITABLE_PROPERTIES = {
     'options',
     'settings',
     'isUnique',
+    'requiredCondition',
   ],
 } as const satisfies Record<
   'standard' | 'custom',

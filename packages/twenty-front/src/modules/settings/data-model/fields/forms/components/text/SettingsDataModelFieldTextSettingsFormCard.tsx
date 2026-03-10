@@ -2,6 +2,7 @@ import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
 
 import { SettingsDataModelFieldIsUniqueForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldIsUniqueForm';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import { SettingsDataModelFieldTextForm } from '@/settings/data-model/fields/forms/components/text/SettingsDataModelFieldTextForm';
 import { SettingsDataModelFieldPreviewWidget } from '@/settings/data-model/fields/preview/components/SettingsDataModelFieldPreviewWidget';
 import { useFormContext } from 'react-hook-form';
@@ -42,6 +43,12 @@ export const SettingsDataModelFieldTextSettingsFormCard = ({
           <Separator />
           <SettingsDataModelFieldIsUniqueForm
             fieldType={FieldMetadataType.TEXT}
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}
             disabled={disabled}

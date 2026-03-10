@@ -1,6 +1,8 @@
 import { useFormContext } from 'react-hook-form';
 
+import { Separator } from '@/settings/components/Separator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import {
   SettingsDataModelFieldBooleanForm,
   type SettingsDataModelFieldBooleanFormValues,
@@ -39,10 +41,18 @@ export const SettingsDataModelFieldBooleanSettingsFormCard = ({
         />
       }
       form={
-        <SettingsDataModelFieldBooleanForm
-          disabled={disabled}
-          existingFieldMetadataId={existingFieldMetadataId}
-        />
+        <>
+          <SettingsDataModelFieldBooleanForm
+            disabled={disabled}
+            existingFieldMetadataId={existingFieldMetadataId}
+          />
+          <Separator />
+          <SettingsDataModelFieldRequiredForm
+            existingFieldMetadataId={existingFieldMetadataId}
+            objectNameSingular={objectNameSingular}
+            disabled={disabled}
+          />
+        </>
       }
     />
   );

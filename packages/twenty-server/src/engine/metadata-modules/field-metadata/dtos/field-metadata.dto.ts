@@ -131,6 +131,13 @@ export class FieldMetadataDTO<T extends FieldMetadataType = FieldMetadataType> {
 
   @IsOptional()
   @Field(() => GraphQLJSON, { nullable: true })
+  requiredCondition?: {
+    type: 'always' | 'fieldEmpty' | 'fieldNotEmpty';
+    fieldId?: string;
+  };
+
+  @IsOptional()
+  @Field(() => GraphQLJSON, { nullable: true })
   defaultValue?: FieldMetadataDefaultValue<T>;
 
   @Transform(({ value }) =>

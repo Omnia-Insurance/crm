@@ -1129,6 +1129,7 @@ export type CreateFieldInput = {
   isSystem?: InputMaybe<Scalars['Boolean']>;
   isUIReadOnly?: InputMaybe<Scalars['Boolean']>;
   isUnique?: InputMaybe<Scalars['Boolean']>;
+  requiredCondition?: InputMaybe<Scalars['JSON']>;
   label: Scalars['String'];
   morphRelationsCreationPayload?: InputMaybe<Array<Scalars['JSON']>>;
   name: Scalars['String'];
@@ -1659,6 +1660,7 @@ export type Field = {
   isSystem?: Maybe<Scalars['Boolean']>;
   isUIReadOnly?: Maybe<Scalars['Boolean']>;
   isUnique?: Maybe<Scalars['Boolean']>;
+  requiredCondition?: Maybe<Scalars['JSON']>;
   label: Scalars['String'];
   morphId?: Maybe<Scalars['UUID']>;
   morphRelations?: Maybe<Array<Relation>>;
@@ -4821,6 +4823,7 @@ export type UpdateFieldInput = {
   isSystem?: InputMaybe<Scalars['Boolean']>;
   isUIReadOnly?: InputMaybe<Scalars['Boolean']>;
   isUnique?: InputMaybe<Scalars['Boolean']>;
+  requiredCondition?: InputMaybe<Scalars['JSON']>;
   label?: InputMaybe<Scalars['String']>;
   morphRelationsUpdatePayload?: InputMaybe<Array<Scalars['JSON']>>;
   name?: InputMaybe<Scalars['String']>;
@@ -6240,7 +6243,7 @@ export type CreateOneFieldMetadataItemMutationVariables = Exact<{
 }>;
 
 
-export type CreateOneFieldMetadataItemMutation = { __typename?: 'Mutation', createOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, defaultValue?: any | null, options?: any | null, isLabelSyncedWithName?: boolean | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
+export type CreateOneFieldMetadataItemMutation = { __typename?: 'Mutation', createOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, requiredCondition?: any | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, defaultValue?: any | null, options?: any | null, isLabelSyncedWithName?: boolean | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
 
 export type UpdateOneFieldMetadataItemMutationVariables = Exact<{
   idToUpdate: Scalars['UUID'];
@@ -6248,7 +6251,7 @@ export type UpdateOneFieldMetadataItemMutationVariables = Exact<{
 }>;
 
 
-export type UpdateOneFieldMetadataItemMutation = { __typename?: 'Mutation', updateOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, isLabelSyncedWithName?: boolean | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
+export type UpdateOneFieldMetadataItemMutation = { __typename?: 'Mutation', updateOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, requiredCondition?: any | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, isLabelSyncedWithName?: boolean | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
 
 export type UpdateOneObjectMetadataItemMutationVariables = Exact<{
   idToUpdate: Scalars['UUID'];
@@ -6270,7 +6273,7 @@ export type DeleteOneFieldMetadataItemMutationVariables = Exact<{
 }>;
 
 
-export type DeleteOneFieldMetadataItemMutation = { __typename?: 'Mutation', deleteOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
+export type DeleteOneFieldMetadataItemMutation = { __typename?: 'Mutation', deleteOneField: { __typename?: 'Field', id: string, type: FieldMetadataType, name: string, label: string, description?: string | null, icon?: string | null, isCustom?: boolean | null, isActive?: boolean | null, isUnique?: boolean | null, requiredCondition?: any | null, isNullable?: boolean | null, createdAt: string, updatedAt: string, settings?: any | null, applicationId: string, object?: { __typename?: 'Object', id: string } | null } };
 
 export type ObjectMetadataItemsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -7353,6 +7356,7 @@ export const ObjectMetadataFieldsFragmentDoc = gql`
     isUIReadOnly
     isNullable
     isUnique
+    requiredCondition
     createdAt
     updatedAt
     defaultValue
@@ -11604,6 +11608,7 @@ export const CreateOneFieldMetadataItemDocument = gql`
     isCustom
     isActive
     isUnique
+    requiredCondition
     isNullable
     createdAt
     updatedAt
@@ -11656,6 +11661,7 @@ export const UpdateOneFieldMetadataItemDocument = gql`
     isCustom
     isActive
     isUnique
+    requiredCondition
     isNullable
     createdAt
     updatedAt
@@ -11802,6 +11808,7 @@ export const DeleteOneFieldMetadataItemDocument = gql`
     isCustom
     isActive
     isUnique
+    requiredCondition
     isNullable
     createdAt
     updatedAt

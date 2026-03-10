@@ -5,7 +5,7 @@ import { CommandMenuTopBarRightCornerIcon } from '@/command-menu/components/Comm
 import { COMMAND_MENU_SEARCH_BAR_HEIGHT } from '@/command-menu/constants/CommandMenuSearchBarHeight';
 import { COMMAND_MENU_SEARCH_BAR_HEIGHT_MOBILE } from '@/command-menu/constants/CommandMenuSearchBarHeightMobile';
 import { SIDE_PANEL_FOCUS_ID } from '@/command-menu/constants/SidePanelFocusId';
-import { useCommandMenu } from '@/command-menu/hooks/useCommandMenu';
+import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { useCommandMenuContextChips } from '@/command-menu/hooks/useCommandMenuContextChips';
 import { commandMenuNavigationStackState } from '@/command-menu/states/commandMenuNavigationStackState';
 import { commandMenuPageState } from '@/command-menu/states/commandMenuPageState';
@@ -93,7 +93,7 @@ export const CommandMenuTopBar = () => {
 
   const isMobile = useIsMobile();
 
-  const { closeCommandMenu } = useCommandMenu();
+  const { closeWithValidation } = useCommandMenuCloseWithValidation();
 
   const commandMenuPage = useAtomStateValue(commandMenuPageState);
 
@@ -162,7 +162,7 @@ export const CommandMenuTopBar = () => {
                 Icon={IconX}
                 size="small"
                 variant="tertiary"
-                onClick={closeCommandMenu}
+                onClick={closeWithValidation}
               />
             </motion.div>
           )}
