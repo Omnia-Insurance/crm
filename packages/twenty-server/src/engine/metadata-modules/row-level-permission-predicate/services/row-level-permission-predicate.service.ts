@@ -2,6 +2,7 @@
 
 import { Injectable } from '@nestjs/common';
 
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
 
@@ -207,6 +208,13 @@ export class RowLevelPermissionPredicateService {
           group.objectMetadataId === objectMetadataId,
       );
 
+    this.validateScopedPredicateTree({
+      inputGroups: predicateGroups,
+      inputPredicates: predicates,
+      existingGroups,
+      existingPredicates,
+    });
+
     const {
       groupsToCreate,
       groupsToUpdate,
@@ -387,6 +395,116 @@ export class RowLevelPermissionPredicateService {
       groupsToDelete,
       flatRowLevelPermissionPredicateGroupMaps: currentGroupMaps,
     };
+  }
+
+  private validateScopedPredicateTree({
+    inputGroups,
+    inputPredicates,
+    existingGroups,
+    existingPredicates,
+  }: {
+    inputGroups: RowLevelPermissionPredicateGroupInput[];
+    inputPredicates: RowLevelPermissionPredicateInput[];
+    existingGroups: FlatRowLevelPermissionPredicateGroup[];
+    existingPredicates: FlatRowLevelPermissionPredicate[];
+  }): void {
+    const existingGroupScopeById = new Map(
+      existingGroups.map((group) => [group.id, group.scope]),
+    );
+    const existingPredicateScopeById = new Map(
+      existingPredicates.map((predicate) => [predicate.id, predicate.scope]),
+    );
+    const resolvedGroupScopesById = new Map<
+      string,
+      RowLevelPermissionPredicateScope
+    >();
+
+    for (const inputGroup of inputGroups) {
+      if (!isDefined(inputGroup.id)) {
+        continue;
+      }
+
+      resolvedGroupScopesById.set(
+        inputGroup.id,
+        this.resolveRowLevelPermissionPredicateScope({
+          inputScope: inputGroup.scope,
+          existingScope: existingGroupScopeById.get(inputGroup.id),
+        }),
+      );
+    }
+
+    for (const inputGroup of inputGroups) {
+      const groupId = inputGroup.id;
+      const groupScope = this.resolveRowLevelPermissionPredicateScope({
+        inputScope: inputGroup.scope,
+        existingScope: groupId
+          ? existingGroupScopeById.get(groupId)
+          : undefined,
+      });
+
+      if (!isDefined(inputGroup.parentRowLevelPermissionPredicateGroupId)) {
+        continue;
+      }
+
+      const parentGroupScope = resolvedGroupScopesById.get(
+        inputGroup.parentRowLevelPermissionPredicateGroupId,
+      );
+
+      if (!isDefined(parentGroupScope)) {
+        throw new RowLevelPermissionPredicateException(
+          `Predicate group ${groupId ?? '<new>'} references missing parent group ${inputGroup.parentRowLevelPermissionPredicateGroupId}`,
+          RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        );
+      }
+
+      if (parentGroupScope !== groupScope) {
+        throw new RowLevelPermissionPredicateException(
+          `Predicate group ${groupId ?? '<new>'} scope ${groupScope} must match parent group scope ${parentGroupScope}`,
+          RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        );
+      }
+    }
+
+    for (const inputPredicate of inputPredicates) {
+      const predicateScope = this.resolveRowLevelPermissionPredicateScope({
+        inputScope: inputPredicate.scope,
+        existingScope: inputPredicate.id
+          ? existingPredicateScopeById.get(inputPredicate.id)
+          : undefined,
+      });
+
+      if (!isDefined(inputPredicate.rowLevelPermissionPredicateGroupId)) {
+        continue;
+      }
+
+      const predicateGroupScope = resolvedGroupScopesById.get(
+        inputPredicate.rowLevelPermissionPredicateGroupId,
+      );
+
+      if (!isDefined(predicateGroupScope)) {
+        throw new RowLevelPermissionPredicateException(
+          `Predicate ${inputPredicate.id ?? '<new>'} references missing group ${inputPredicate.rowLevelPermissionPredicateGroupId}`,
+          RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        );
+      }
+
+      if (predicateGroupScope !== predicateScope) {
+        throw new RowLevelPermissionPredicateException(
+          `Predicate ${inputPredicate.id ?? '<new>'} scope ${predicateScope} must match group scope ${predicateGroupScope}`,
+          RowLevelPermissionPredicateExceptionCode.INVALID_ROW_LEVEL_PERMISSION_PREDICATE_DATA,
+        );
+      }
+    }
+  }
+
+  private resolveRowLevelPermissionPredicateScope({
+    inputScope,
+    existingScope,
+  }: {
+    inputScope?: RowLevelPermissionPredicateScope | null;
+    existingScope?: RowLevelPermissionPredicateScope | null;
+  }): RowLevelPermissionPredicateScope {
+    return inputScope ?? existingScope ?? RowLevelPermissionPredicateScope.ALL;
   }
 
   private computePredicateOperations({

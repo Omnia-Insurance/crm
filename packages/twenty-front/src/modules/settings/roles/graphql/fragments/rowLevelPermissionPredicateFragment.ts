@@ -7,6 +7,7 @@ export const ROW_LEVEL_PERMISSION_PREDICATE_FRAGMENT = gql`
     id
     fieldMetadataId
     objectMetadataId
+    scope
     operand
     subFieldName
     workspaceMemberFieldMetadataId

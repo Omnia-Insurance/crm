@@ -7,6 +7,7 @@ import {
   FieldMetadataType,
   RecordFilterGroupLogicalOperator,
   RowLevelPermissionPredicateGroupLogicalOperator,
+  RowLevelPermissionPredicateScope,
   type CompositeFieldSubFieldName,
   type PartialFieldMetadataItemOption,
   type RecordGqlOperationFilter,
@@ -33,6 +34,7 @@ import {
 } from 'src/engine/metadata-modules/permissions/permissions.exception';
 import { type FlatRowLevelPermissionPredicateGroupMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group-maps.type';
 import { type FlatRowLevelPermissionPredicateMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-maps.type';
+import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
 import { validateEnumValueCompatibility } from 'src/engine/twenty-orm/utils/validate-enum-value-compatibility.util';
 import { computeTableName } from 'src/engine/utils/compute-table-name.util';
 
@@ -41,6 +43,10 @@ type BuildRowLevelPermissionRecordFilterArgs = {
   flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   objectMetadata: FlatObjectMetadata;
+  targetScope: Exclude<
+    RowLevelPermissionPredicateScope,
+    RowLevelPermissionPredicateScope.ALL
+  >;
   roleId: string | undefined;
   workspaceMember?: UserWorkspaceAuthContext['workspaceMember'];
   flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>;
@@ -57,6 +63,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
   flatRowLevelPermissionPredicateGroupMaps,
   flatFieldMetadataMaps,
   objectMetadata,
+  targetScope,
   roleId,
   workspaceMember,
   flatObjectMetadataMaps,
@@ -69,6 +76,57 @@ export const buildRowLevelPermissionRecordFilter = async ({
     return null;
   }
 
+  const compatibleScopes = new Set<RowLevelPermissionPredicateScope>([
+    RowLevelPermissionPredicateScope.ALL,
+    targetScope,
+  ]);
+  const compatibleGroupChainIdsByGroupId = new Map<string, string[] | null>();
+  const getCompatibleGroupChainIds = ({
+    groupId,
+    predicateScope,
+  }: {
+    groupId: string;
+    predicateScope: RowLevelPermissionPredicateScope;
+  }): string[] | null => {
+    const cacheKey = `${predicateScope}:${groupId}`;
+    const cachedGroupChainIds = compatibleGroupChainIdsByGroupId.get(cacheKey);
+
+    if (cachedGroupChainIds !== undefined) {
+      return cachedGroupChainIds;
+    }
+
+    const groupChainIds: string[] = [];
+    let currentGroupId: string | null = groupId;
+
+    while (isDefined(currentGroupId)) {
+      const predicateGroup: FlatRowLevelPermissionPredicateGroup | undefined =
+        findFlatEntityByIdInFlatEntityMaps({
+          flatEntityId: currentGroupId,
+          flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
+        });
+
+      if (
+        !isDefined(predicateGroup) ||
+        predicateGroup.roleId !== roleId ||
+        predicateGroup.objectMetadataId !== objectMetadata.id ||
+        isDefined(predicateGroup.deletedAt) ||
+        predicateGroup.scope !== predicateScope ||
+        !compatibleScopes.has(predicateGroup.scope)
+      ) {
+        compatibleGroupChainIdsByGroupId.set(cacheKey, null);
+
+        return null;
+      }
+
+      groupChainIds.push(predicateGroup.id);
+      currentGroupId = predicateGroup.parentRowLevelPermissionPredicateGroupId;
+    }
+
+    compatibleGroupChainIdsByGroupId.set(cacheKey, groupChainIds);
+
+    return groupChainIds;
+  };
+
   const predicates = Object.values(
     flatRowLevelPermissionPredicateMaps.byUniversalIdentifier,
   )
@@ -77,16 +135,30 @@ export const buildRowLevelPermissionRecordFilter = async ({
       (predicate) =>
         predicate.roleId === roleId &&
         predicate.objectMetadataId === objectMetadata.id &&
-        !isDefined(predicate.deletedAt),
+        !isDefined(predicate.deletedAt) &&
+        compatibleScopes.has(predicate.scope),
     );
 
-  if (predicates.length === 0) {
+  const scopedPredicates = predicates.filter((predicate) => {
+    if (!isDefined(predicate.rowLevelPermissionPredicateGroupId)) {
+      return true;
+    }
+
+    return isDefined(
+      getCompatibleGroupChainIds({
+        groupId: predicate.rowLevelPermissionPredicateGroupId,
+        predicateScope: predicate.scope,
+      }),
+    );
+  });
+
+  if (scopedPredicates.length === 0) {
     return null;
   }
 
   const recordFilters = (
     await Promise.all(
-      predicates.map(async (predicate) => {
+      scopedPredicates.map(async (predicate) => {
         const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
           flatEntityId: predicate.fieldMetadataId,
           flatEntityMaps: flatFieldMetadataMaps,
@@ -266,22 +338,20 @@ export const buildRowLevelPermissionRecordFilter = async ({
 
   const relevantGroupIds = new Set<string>();
 
-  for (const predicate of predicates) {
+  for (const predicate of scopedPredicates) {
     if (isDefined(predicate.rowLevelPermissionPredicateGroupId)) {
-      relevantGroupIds.add(predicate.rowLevelPermissionPredicateGroupId);
+      const compatibleGroupChainIds = getCompatibleGroupChainIds({
+        groupId: predicate.rowLevelPermissionPredicateGroupId,
+        predicateScope: predicate.scope,
+      });
 
-      let parentGroupId = findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: predicate.rowLevelPermissionPredicateGroupId,
-        flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
-      })?.parentRowLevelPermissionPredicateGroupId;
-
-      while (isDefined(parentGroupId) && !relevantGroupIds.has(parentGroupId)) {
-        relevantGroupIds.add(parentGroupId);
-        parentGroupId = findFlatEntityByIdInFlatEntityMaps({
-          flatEntityId: parentGroupId,
-          flatEntityMaps: flatRowLevelPermissionPredicateGroupMaps,
-        })?.parentRowLevelPermissionPredicateGroupId;
+      if (!isDefined(compatibleGroupChainIds)) {
+        continue;
       }
+
+      compatibleGroupChainIds.forEach((groupId) =>
+        relevantGroupIds.add(groupId),
+      );
     }
   }
 
@@ -296,7 +366,9 @@ export const buildRowLevelPermissionRecordFilter = async ({
     .filter(
       (predicateGroup) =>
         predicateGroup.roleId === roleId &&
-        !isDefined(predicateGroup.deletedAt),
+        predicateGroup.objectMetadataId === objectMetadata.id &&
+        !isDefined(predicateGroup.deletedAt) &&
+        compatibleScopes.has(predicateGroup.scope),
     )
     .map((predicateGroup) => ({
       id: predicateGroup.id,
@@ -309,7 +381,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
         predicateGroup.parentRowLevelPermissionPredicateGroupId,
     }));
 
-  const fieldMetadataItems = predicates
+  const fieldMetadataItems = scopedPredicates
     .map((predicate) =>
       findFlatEntityByIdInFlatEntityMaps({
         flatEntityId: predicate.fieldMetadataId,

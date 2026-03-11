@@ -15,6 +15,7 @@ import {
   type RowLevelPermissionPredicateGroup,
   RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
+  type RowLevelPermissionPredicateScope,
 } from '~/generated-metadata/graphql';
 
 export const convertPredicateToRecordFilter = (
@@ -65,6 +66,7 @@ export const convertRecordFilterToPredicate = (
   filter: RecordFilter,
   roleId: string,
   objectMetadataId: string,
+  scope: RowLevelPermissionPredicateScope,
 ): RowLevelPermissionPredicate => {
   if (isDefined(filter.rlsDynamicValue)) {
     return {
@@ -72,6 +74,7 @@ export const convertRecordFilterToPredicate = (
       id: filter.id,
       fieldMetadataId: filter.fieldMetadataId,
       objectMetadataId,
+      scope,
       operand: filter.operand as unknown as RowLevelPermissionPredicateOperand,
       value: null,
       subFieldName: filter.subFieldName ?? null,
@@ -91,6 +94,7 @@ export const convertRecordFilterToPredicate = (
     id: filter.id,
     fieldMetadataId: filter.fieldMetadataId,
     objectMetadataId,
+    scope,
     operand: filter.operand as unknown as RowLevelPermissionPredicateOperand,
     value: filter.value || null,
     subFieldName: filter.subFieldName ?? null,
@@ -124,10 +128,12 @@ export const convertRecordFilterGroupToPredicateGroup = (
   filterGroup: RecordFilterGroup,
   roleId: string,
   objectMetadataId: string,
+  scope: RowLevelPermissionPredicateScope,
 ): RowLevelPermissionPredicateGroup => {
   return {
     __typename: 'RowLevelPermissionPredicateGroup',
     id: filterGroup.id,
+    scope,
     parentRowLevelPermissionPredicateGroupId:
       filterGroup.parentRecordFilterGroupId ?? null,
     logicalOperator:

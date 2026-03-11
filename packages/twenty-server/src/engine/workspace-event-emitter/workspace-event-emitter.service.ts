@@ -9,6 +9,7 @@ import {
   type RecordGqlOperationFilter,
   type RecordGqlOperationSignature,
   type RestrictedFieldsPermissions,
+  RowLevelPermissionPredicateScope,
 } from 'twenty-shared/types';
 import {
   combineFilters,
@@ -498,6 +499,7 @@ export class WorkspaceEventEmitterService {
         permissionsContext.flatRowLevelPermissionPredicateGroupMaps,
       flatFieldMetadataMaps: permissionsContext.flatFieldMetadataMaps,
       objectMetadata,
+      targetScope: RowLevelPermissionPredicateScope.READ,
       roleId,
       workspaceMember,
     });

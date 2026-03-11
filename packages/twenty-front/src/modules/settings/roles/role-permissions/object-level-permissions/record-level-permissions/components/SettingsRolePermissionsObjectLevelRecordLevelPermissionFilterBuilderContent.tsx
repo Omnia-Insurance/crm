@@ -27,6 +27,7 @@ import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
 
 const StyledContainer = styled.div`
   align-items: start;
@@ -49,12 +50,14 @@ const StyledActionButtonWrapper = styled.div`
 type SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContentProps =
   {
     roleId: string;
+    scope: RowLevelPermissionPredicateScope;
     objectMetadataItem: ObjectMetadataItem;
   };
 
 export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent =
   ({
     roleId,
+    scope,
     objectMetadataItem,
   }: SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContentProps) => {
     const settingsDraftRole = useAtomFamilyStateValue(
@@ -96,6 +99,7 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilde
 
     const { hasInitialized } = useRecordLevelPermissionFilterInitialization({
       roleId,
+      scope,
       objectMetadataItem,
       settingsDraftRole,
       filterableFieldMetadataItems,
@@ -106,6 +110,7 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilde
 
     useRecordLevelPermissionSyncToDraftRole({
       roleId,
+      scope,
       objectMetadataItem,
       currentRecordFilters,
       currentRecordFilterGroups,

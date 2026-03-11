@@ -1,7 +1,6 @@
 /* @license Enterprise */
 
 import { useCallback, useEffect } from 'react';
-import { isDefined } from 'twenty-shared/utils';
 
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { type RecordFilterGroup } from '@/object-record/record-filter-group/types/RecordFilterGroup';
@@ -12,9 +11,11 @@ import {
 } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
+import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
 
 type UseRecordLevelPermissionSyncToDraftRoleProps = {
   roleId: string;
+  scope: RowLevelPermissionPredicateScope;
   objectMetadataItem: ObjectMetadataItem;
   currentRecordFilters: RecordFilter[];
   currentRecordFilterGroups: RecordFilterGroup[];
@@ -23,6 +24,7 @@ type UseRecordLevelPermissionSyncToDraftRoleProps = {
 
 export const useRecordLevelPermissionSyncToDraftRole = ({
   roleId,
+  scope,
   objectMetadataItem,
   currentRecordFilters,
   currentRecordFilterGroups,
@@ -38,31 +40,26 @@ export const useRecordLevelPermissionSyncToDraftRole = ({
       const otherObjectPredicates = (
         previousRole.rowLevelPermissionPredicates ?? []
       ).filter(
-        (predicate) => predicate.objectMetadataId !== objectMetadataItem.id,
-      );
-
-      const currentObjectGroupIds = new Set(
-        currentRecordFilters
-          .map((filter) => filter.recordFilterGroupId)
-          .filter(isDefined),
-      );
-
-      const currentObjectRootGroupIds = new Set(
-        currentRecordFilterGroups
-          .filter((group) => !group.parentRecordFilterGroupId)
-          .map((group) => group.id),
+        (predicate) =>
+          predicate.objectMetadataId !== objectMetadataItem.id ||
+          predicate.scope !== scope,
       );
 
       const otherObjectGroups = (
         previousRole.rowLevelPermissionPredicateGroups ?? []
       ).filter(
         (group) =>
-          !currentObjectGroupIds.has(group.id) &&
-          !currentObjectRootGroupIds.has(group.id),
+          group.objectMetadataId !== objectMetadataItem.id ||
+          group.scope !== scope,
       );
 
       const newPredicates = currentRecordFilters.map((filter) =>
-        convertRecordFilterToPredicate(filter, roleId, objectMetadataItem.id),
+        convertRecordFilterToPredicate(
+          filter,
+          roleId,
+          objectMetadataItem.id,
+          scope,
+        ),
       );
 
       const newPredicateGroups = currentRecordFilterGroups.map((group) =>
@@ -70,6 +67,7 @@ export const useRecordLevelPermissionSyncToDraftRole = ({
           group,
           roleId,
           objectMetadataItem.id,
+          scope,
         ),
       );
 
@@ -90,6 +88,7 @@ export const useRecordLevelPermissionSyncToDraftRole = ({
     currentRecordFilterGroups,
     objectMetadataItem.id,
     roleId,
+    scope,
     setSettingsDraftRole,
   ]);
 

@@ -3,6 +3,7 @@
 import {
   RowLevelPermissionPredicate,
   RowLevelPermissionPredicateOperand,
+  RowLevelPermissionPredicateScope,
   RowLevelPermissionPredicateValue,
 } from 'twenty-shared/types';
 import {
@@ -70,6 +71,14 @@ export class RowLevelPermissionPredicateEntity
     default: RowLevelPermissionPredicateOperand.CONTAINS,
   })
   operand: RowLevelPermissionPredicateOperand;
+
+  @Column({
+    nullable: false,
+    type: 'enum',
+    enum: Object.values(RowLevelPermissionPredicateScope),
+    default: RowLevelPermissionPredicateScope.ALL,
+  })
+  scope: RowLevelPermissionPredicateScope;
 
   @Column({ nullable: true, type: 'jsonb' })
   value: JsonbProperty<RowLevelPermissionPredicateValue> | null;

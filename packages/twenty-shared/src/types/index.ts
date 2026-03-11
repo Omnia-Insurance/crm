@@ -243,6 +243,7 @@ export type { RowLevelPermissionPredicate } from './RowLevelPermissionPredicate'
 export type { RowLevelPermissionPredicateGroup } from './RowLevelPermissionPredicateGroup';
 export { RowLevelPermissionPredicateGroupLogicalOperator } from './RowLevelPermissionPredicateGroupLogicalOperator';
 export { RowLevelPermissionPredicateOperand } from './RowLevelPermissionPredicateOperand';
+export { RowLevelPermissionPredicateScope } from './RowLevelPermissionPredicateScope';
 export type {
   RelationPredicateValue,
   RowLevelPermissionPredicateValue,

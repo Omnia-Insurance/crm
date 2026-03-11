@@ -2,10 +2,16 @@
 
 import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 
-import { RowLevelPermissionPredicateGroupLogicalOperator } from 'twenty-shared/types';
+import {
+  RowLevelPermissionPredicateGroupLogicalOperator,
+  RowLevelPermissionPredicateScope,
+} from 'twenty-shared/types';
 
 registerEnumType(RowLevelPermissionPredicateGroupLogicalOperator, {
   name: 'RowLevelPermissionPredicateGroupLogicalOperator',
+});
+registerEnumType(RowLevelPermissionPredicateScope, {
+  name: 'RowLevelPermissionPredicateScope',
 });
 @ObjectType('RowLevelPermissionPredicateGroup')
 export class RowLevelPermissionPredicateGroupDTO {
@@ -17,6 +23,9 @@ export class RowLevelPermissionPredicateGroupDTO {
 
   @Field(() => RowLevelPermissionPredicateGroupLogicalOperator)
   logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
+
+  @Field(() => RowLevelPermissionPredicateScope)
+  scope: RowLevelPermissionPredicateScope;
 
   @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;

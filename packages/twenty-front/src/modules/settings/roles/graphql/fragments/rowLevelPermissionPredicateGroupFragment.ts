@@ -7,6 +7,7 @@ export const ROW_LEVEL_PERMISSION_PREDICATE_GROUP_FRAGMENT = gql`
     id
     parentRowLevelPermissionPredicateGroupId
     logicalOperator
+    scope
     positionInRowLevelPermissionPredicateGroup
     roleId
     objectMetadataId

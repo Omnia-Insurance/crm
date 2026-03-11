@@ -8,6 +8,7 @@ import {
   type RowLevelPermissionPredicateGroup,
   type RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
+  type RowLevelPermissionPredicateScope,
 } from '~/generated-metadata/graphql';
 
 export type UpsertRowLevelPermissionPredicatesInput = {
@@ -16,6 +17,7 @@ export type UpsertRowLevelPermissionPredicatesInput = {
   predicates: Array<{
     id?: string;
     fieldMetadataId: string;
+    scope: RowLevelPermissionPredicateScope;
     operand: RowLevelPermissionPredicateOperand;
     value?: unknown;
     subFieldName?: string | null;
@@ -27,6 +29,7 @@ export type UpsertRowLevelPermissionPredicatesInput = {
   predicateGroups: Array<{
     id?: string;
     objectMetadataId: string;
+    scope: RowLevelPermissionPredicateScope;
     parentRowLevelPermissionPredicateGroupId?: string | null;
     logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
     positionInRowLevelPermissionPredicateGroup?: number | null;

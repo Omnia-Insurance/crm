@@ -170,6 +170,29 @@ check_file_contains \
   "Opened section must avoid duplicating fixed member workspace items"
 
 echo ""
+echo "--- Critical: Cloudflare Stale Asset Fix ---"
+check_file_contains \
+  "packages/twenty-server/src/app.module.ts" \
+  "stale asset URLs after deploys" \
+  "ServeStatic fallback must keep the Cloudflare stale-asset protection comment/customization"
+check_file_contains \
+  "packages/twenty-server/src/app.module.ts" \
+  "if (filePath.match" \
+  "Static server must set long-lived immutable cache headers only on hashed asset files"
+check_file_contains \
+  "packages/twenty-server/src/app.module.ts" \
+  "no-cache, no-store, must-revalidate" \
+  "HTML responses must stay uncacheable so deploys do not pin old index.html"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  'public, max-age=31536000, immutable' \
+  "Ingress must keep immutable caching for JS/CSS/font/image assets"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  'no-cache, no-store, must-revalidate' \
+  "Ingress must keep HTML/app routes uncacheable"
+
+echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/role/role.entity.ts" \

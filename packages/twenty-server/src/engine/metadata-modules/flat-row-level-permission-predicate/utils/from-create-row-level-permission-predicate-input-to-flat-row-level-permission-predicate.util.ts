@@ -1,4 +1,5 @@
 import { v4 } from 'uuid';
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
@@ -61,6 +62,7 @@ export const fromCreateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
       fieldMetadataId: input.fieldMetadataId,
       fieldMetadataUniversalIdentifier,
       operand: input.operand,
+      scope: input.scope ?? RowLevelPermissionPredicateScope.ALL,
       value: input.value ?? null,
       subFieldName: input.subFieldName ?? null,
       workspaceMemberFieldMetadataId:

@@ -2,6 +2,7 @@ import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/typ
 import { resolveEntityRelationUniversalIdentifiers } from 'src/engine/metadata-modules/flat-entity/utils/resolve-entity-relation-universal-identifiers.util';
 import { type RowLevelPermissionPredicateGroupInput } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/inputs/upsert-row-level-permission-predicates.input';
 import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 export const fromUpdateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermissionPredicateGroup =
   ({
@@ -28,6 +29,10 @@ export const fromUpdateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermis
     return {
       ...existingGroup,
       logicalOperator: input.logicalOperator,
+      scope:
+        input.scope ??
+        existingGroup.scope ??
+        RowLevelPermissionPredicateScope.ALL,
       parentRowLevelPermissionPredicateGroupId:
         input.parentRowLevelPermissionPredicateGroupId ?? null,
       parentRowLevelPermissionPredicateGroupUniversalIdentifier,

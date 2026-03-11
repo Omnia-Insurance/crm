@@ -12,9 +12,11 @@ import {
   convertPredicateToRecordFilter,
 } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion';
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
+import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
 
 type UseRecordLevelPermissionFilterInitializationProps = {
   roleId: string;
+  scope: RowLevelPermissionPredicateScope;
   objectMetadataItem: ObjectMetadataItem;
   settingsDraftRole: RoleWithPartialMembers;
   filterableFieldMetadataItems: FieldMetadataItem[];
@@ -27,6 +29,7 @@ type UseRecordLevelPermissionFilterInitializationProps = {
 
 export const useRecordLevelPermissionFilterInitialization = ({
   roleId,
+  scope,
   objectMetadataItem,
   settingsDraftRole,
   filterableFieldMetadataItems,
@@ -43,7 +46,9 @@ export const useRecordLevelPermissionFilterInitialization = ({
   const initialFilters = useMemo(() => {
     const predicates = settingsDraftRole.rowLevelPermissionPredicates ?? [];
     const objectPredicates = predicates.filter(
-      (predicate) => predicate.objectMetadataId === objectMetadataItem.id,
+      (predicate) =>
+        predicate.objectMetadataId === objectMetadataItem.id &&
+        predicate.scope === scope,
     );
 
     return objectPredicates
@@ -58,48 +63,60 @@ export const useRecordLevelPermissionFilterInitialization = ({
   }, [
     settingsDraftRole.rowLevelPermissionPredicates,
     objectMetadataItem.id,
+    scope,
     filterableFieldMetadataItems,
   ]);
 
   const initialFilterGroups = useMemo(() => {
-    const predicateGroups =
-      settingsDraftRole.rowLevelPermissionPredicateGroups ?? [];
+    const predicateGroups = (
+      settingsDraftRole.rowLevelPermissionPredicateGroups ?? []
+    ).filter(
+      (group) =>
+        group.objectMetadataId === objectMetadataItem.id &&
+        group.scope === scope,
+    );
 
     const objectPredicateGroupIds = new Set(
       (settingsDraftRole.rowLevelPermissionPredicates ?? [])
         .filter(
-          (predicate) => predicate.objectMetadataId === objectMetadataItem.id,
+          (predicate) =>
+            predicate.objectMetadataId === objectMetadataItem.id &&
+            predicate.scope === scope,
         )
         .map((predicate) => predicate.rowLevelPermissionPredicateGroupId)
         .filter(isDefined),
     );
 
-    const relevantGroups = predicateGroups.filter(
-      (group) =>
-        objectPredicateGroupIds.has(group.id) ||
-        (isDefined(group.parentRowLevelPermissionPredicateGroupId) &&
-          objectPredicateGroupIds.has(
-            group.parentRowLevelPermissionPredicateGroupId,
-          )),
+    const groupsById = new Map(
+      predicateGroups.map((predicateGroup) => [
+        predicateGroup.id,
+        predicateGroup,
+      ]),
     );
 
-    const rootGroups = predicateGroups.filter(
-      (group) =>
-        !group.parentRowLevelPermissionPredicateGroupId &&
-        relevantGroups.some(
-          (relevantGroup) =>
-            relevantGroup.id === group.id ||
-            relevantGroup.parentRowLevelPermissionPredicateGroupId === group.id,
-        ),
-    );
+    for (const groupId of [...objectPredicateGroupIds]) {
+      let currentGroupId: string | null | undefined = groupId;
 
-    const allRelevantGroups = [...new Set([...rootGroups, ...relevantGroups])];
+      while (isDefined(currentGroupId)) {
+        const currentGroup = groupsById.get(currentGroupId);
 
-    return allRelevantGroups.map(convertPredicateGroupToRecordFilterGroup);
+        if (!isDefined(currentGroup)) {
+          break;
+        }
+
+        objectPredicateGroupIds.add(currentGroup.id);
+        currentGroupId = currentGroup.parentRowLevelPermissionPredicateGroupId;
+      }
+    }
+
+    return predicateGroups
+      .filter((group) => objectPredicateGroupIds.has(group.id))
+      .map(convertPredicateGroupToRecordFilterGroup);
   }, [
     settingsDraftRole.rowLevelPermissionPredicateGroups,
     settingsDraftRole.rowLevelPermissionPredicates,
     objectMetadataItem.id,
+    scope,
   ]);
 
   useEffect(() => {

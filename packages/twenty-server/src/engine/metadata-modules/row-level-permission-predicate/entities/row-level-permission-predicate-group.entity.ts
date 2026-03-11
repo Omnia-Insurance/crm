@@ -3,6 +3,7 @@
 import {
   RowLevelPermissionPredicateGroup,
   RowLevelPermissionPredicateGroupLogicalOperator,
+  RowLevelPermissionPredicateScope,
 } from 'twenty-shared/types';
 import {
   Column,
@@ -51,6 +52,14 @@ export class RowLevelPermissionPredicateGroupEntity
     default: RowLevelPermissionPredicateGroupLogicalOperator.AND,
   })
   logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
+
+  @Column({
+    type: 'enum',
+    enum: Object.values(RowLevelPermissionPredicateScope),
+    nullable: false,
+    default: RowLevelPermissionPredicateScope.ALL,
+  })
+  scope: RowLevelPermissionPredicateScope;
 
   @Column({ nullable: true, type: 'double precision' })
   positionInRowLevelPermissionPredicateGroup: number | null;

@@ -14,6 +14,7 @@ import GraphQLJSON from 'graphql-type-json';
 import {
   RowLevelPermissionPredicateGroupLogicalOperator,
   RowLevelPermissionPredicateOperand,
+  RowLevelPermissionPredicateScope,
   RowLevelPermissionPredicateValue,
 } from 'twenty-shared/types';
 
@@ -33,6 +34,9 @@ export class RowLevelPermissionPredicateInput {
 
   @Field(() => RowLevelPermissionPredicateOperand)
   operand: RowLevelPermissionPredicateOperand;
+
+  @Field(() => RowLevelPermissionPredicateScope, { nullable: true })
+  scope?: RowLevelPermissionPredicateScope | null;
 
   @Field(() => GraphQLJSON, { nullable: true })
   value?: RowLevelPermissionPredicateValue | null;
@@ -74,6 +78,9 @@ export class RowLevelPermissionPredicateGroupInput {
 
   @Field(() => RowLevelPermissionPredicateGroupLogicalOperator)
   logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
+
+  @Field(() => RowLevelPermissionPredicateScope, { nullable: true })
+  scope?: RowLevelPermissionPredicateScope | null;
 
   @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;

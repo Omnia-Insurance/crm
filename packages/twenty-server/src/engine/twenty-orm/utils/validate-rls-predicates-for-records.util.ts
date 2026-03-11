@@ -1,6 +1,9 @@
 /* @license Enterprise */
 
-import { type ObjectRecord } from 'twenty-shared/types';
+import {
+  RowLevelPermissionPredicateScope,
+  type ObjectRecord,
+} from 'twenty-shared/types';
 import { type ObjectLiteral } from 'typeorm';
 
 import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
@@ -55,6 +58,7 @@ export const validateRLSPredicatesForRecords = async <T extends ObjectLiteral>({
       internalContext.flatRowLevelPermissionPredicateGroupMaps,
     flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
+    targetScope: RowLevelPermissionPredicateScope.WRITE,
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember

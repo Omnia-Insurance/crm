@@ -2,7 +2,7 @@
 
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { H2Title, IconArrowUp, IconLock } from 'twenty-ui/display';
+import { H2Title, H3Title, IconArrowUp, IconLock } from 'twenty-ui/display';
 import { Card, Section } from 'twenty-ui/layout';
 
 import { billingState } from '@/client-config/states/billingState';
@@ -13,6 +13,7 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { SettingsPath } from 'twenty-shared/types';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 const StyledContent = styled.div`
@@ -23,6 +24,21 @@ const StyledContent = styled.div`
 const StyledCardContainer = styled.div`
   margin-top: ${themeCssVariables.spacing[4]};
   overflow: hidden;
+`;
+
+const StyledScopeSections = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[4]};
+`;
+
+const StyledScopeSection = styled.div`
+  border: 1px solid ${themeCssVariables.border.color.light};
+  border-radius: ${themeCssVariables.border.radius.md};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[3]};
+  padding: ${themeCssVariables.spacing[4]};
 `;
 
 const StyledPillContainer = styled.span`
@@ -42,6 +58,24 @@ type SettingsRolePermissionsObjectLevelRecordLevelSectionProps = {
   roleId: string;
   hasOrganizationPlan: boolean;
 };
+
+const RECORD_LEVEL_PERMISSION_SCOPE_SECTIONS = [
+  {
+    scope: RowLevelPermissionPredicateScope.ALL,
+    title: t`Read + write`,
+    description: t`Rules applied when this role both views and edits records.`,
+  },
+  {
+    scope: RowLevelPermissionPredicateScope.READ,
+    title: t`Read only`,
+    description: t`Rules applied only when this role views records.`,
+  },
+  {
+    scope: RowLevelPermissionPredicateScope.WRITE,
+    title: t`Write only`,
+    description: t`Rules applied only when this role creates, updates, deletes, or restores records.`,
+  },
+] as const;
 
 export const SettingsRolePermissionsObjectLevelRecordLevelSection = ({
   objectMetadataItem,
@@ -94,13 +128,24 @@ export const SettingsRolePermissionsObjectLevelRecordLevelSection = ({
     <Section>
       <H2Title
         title={t`Record-level`}
-        description={t`Ability to filter the records a user can interact with.`}
+        description={t`Ability to filter the records a user can view and edit.`}
       />
       <StyledContent>
-        <SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder
-          roleId={roleId}
-          objectMetadataItem={objectMetadataItem}
-        />
+        <StyledScopeSections>
+          {RECORD_LEVEL_PERMISSION_SCOPE_SECTIONS.map((scopeSection) => (
+            <StyledScopeSection key={scopeSection.scope}>
+              <H3Title
+                title={scopeSection.title}
+                description={scopeSection.description}
+              />
+              <SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder
+                roleId={roleId}
+                scope={scopeSection.scope}
+                objectMetadataItem={objectMetadataItem}
+              />
+            </StyledScopeSection>
+          ))}
+        </StyledScopeSections>
       </StyledContent>
     </Section>
   );

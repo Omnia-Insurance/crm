@@ -1,6 +1,9 @@
 /* @license Enterprise */
 
-import { FeatureFlagKey } from 'twenty-shared/types';
+import {
+  FeatureFlagKey,
+  RowLevelPermissionPredicateScope,
+} from 'twenty-shared/types';
 import {
   Brackets,
   NotBrackets,
@@ -58,6 +61,13 @@ export const applyRowLevelPermissionPredicates = async <
       internalContext.flatRowLevelPermissionPredicateGroupMaps,
     flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
+    targetScope:
+      queryBuilder.expressionMap.queryType === 'update' ||
+      queryBuilder.expressionMap.queryType === 'soft-delete' ||
+      queryBuilder.expressionMap.queryType === 'delete' ||
+      queryBuilder.expressionMap.queryType === 'restore'
+        ? RowLevelPermissionPredicateScope.WRITE
+        : RowLevelPermissionPredicateScope.READ,
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
@@ -76,7 +86,8 @@ export const applyRowLevelPermissionPredicates = async <
   const isUpdateOrDeleteQuery =
     queryBuilder.expressionMap.queryType === 'update' ||
     queryBuilder.expressionMap.queryType === 'soft-delete' ||
-    queryBuilder.expressionMap.queryType === 'delete';
+    queryBuilder.expressionMap.queryType === 'delete' ||
+    queryBuilder.expressionMap.queryType === 'restore';
 
   applyObjectRecordFilterToQueryBuilder({
     queryBuilder,
