@@ -8,7 +8,12 @@ import {
   TooltipDelay,
   TooltipPosition,
 } from 'twenty-ui/display';
-import { Button, IconButton } from 'twenty-ui/input';
+import {
+  Button,
+  IconButton,
+  type ButtonAccent,
+  type ButtonVariant,
+} from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledWrapper = styled.div`
@@ -21,6 +26,8 @@ export type CommandMenuButtonProps = {
     label: string | MessageDescriptor;
     shortLabel?: string | MessageDescriptor;
     Icon: IconComponent;
+    accent?: ButtonAccent;
+    buttonVariant?: ButtonVariant;
     isPrimaryCTA?: boolean;
   };
   onClick?: (event?: MouseEvent<HTMLElement>) => void;
@@ -45,7 +52,9 @@ export const CommandMenuButton = ({
       ? undefined
       : getCommandMenuButtonLabel(command.shortLabel);
 
-  const buttonAccent = command.isPrimaryCTA ? 'blue' : 'default';
+  const buttonAccent =
+    command.accent ?? (command.isPrimaryCTA ? 'blue' : 'default');
+  const buttonVariant = command.buttonVariant ?? 'secondary';
 
   return (
     <>
@@ -53,7 +62,7 @@ export const CommandMenuButton = ({
         <Button
           Icon={command.Icon}
           size="small"
-          variant="secondary"
+          variant={buttonVariant}
           accent={buttonAccent}
           to={to}
           onClick={onClick}

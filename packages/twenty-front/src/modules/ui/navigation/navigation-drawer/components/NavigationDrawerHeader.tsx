@@ -1,10 +1,6 @@
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { IconSearch } from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
-import { useOpenRecordsSearchPageInSidePanel } from '@/side-panel/hooks/useOpenRecordsSearchPageInSidePanel';
 import { PAGE_BAR_MIN_HEIGHT } from '@/ui/layout/page/constants/PageBarMinHeight';
 import { MultiWorkspaceDropdownButton } from '@/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/MultiWorkspaceDropdownButton';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
@@ -56,7 +52,6 @@ export const NavigationDrawerHeader = ({
   showCollapseButton,
 }: NavigationDrawerHeaderProps) => {
   const isMobile = useIsMobile();
-  const { openRecordsSearchPage } = useOpenRecordsSearchPageInSidePanel();
   const isNavigationDrawerExpanded = useAtomStateValue(
     isNavigationDrawerExpandedState,
   );
@@ -66,20 +61,12 @@ export const NavigationDrawerHeader = ({
       <StyledWorkspaceDropdownContainer>
         <MultiWorkspaceDropdownButton />
       </StyledWorkspaceDropdownContainer>
-      {!isMobile && (
+      {!isMobile && isNavigationDrawerExpanded && showCollapseButton && (
         <StyledRightActions isExpanded={isNavigationDrawerExpanded}>
-          <LightIconButton
-            Icon={IconSearch}
-            accent="secondary"
-            size="small"
-            onClick={openRecordsSearchPage}
-            aria-label={t`Search`}
-          />
-          {isNavigationDrawerExpanded && showCollapseButton && (
-            <StyledNavigationDrawerCollapseButtonContainer>
-              <NavigationDrawerCollapseButton direction="left" />
-            </StyledNavigationDrawerCollapseButtonContainer>
-          )}
+          {/* OMNIA-CUSTOM: keep search in the sidebar, not inline with the workspace switcher. */}
+          <StyledNavigationDrawerCollapseButtonContainer>
+            <NavigationDrawerCollapseButton direction="left" />
+          </StyledNavigationDrawerCollapseButtonContainer>
         </StyledRightActions>
       )}
     </StyledContainer>

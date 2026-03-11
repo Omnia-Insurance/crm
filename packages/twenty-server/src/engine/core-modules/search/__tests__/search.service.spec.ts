@@ -114,6 +114,50 @@ describe('SearchService', () => {
     });
   });
 
+  describe('buildSearchQueryAndGetRecordsWithFallback', () => {
+    it('should merge all-field fallback results for custom objects without duplicates', async () => {
+      const tsvectorResults = [
+        { id: 'record-1', tsRankCD: 2, tsRank: 2 },
+        { id: 'record-2', tsRankCD: 1, tsRank: 1 },
+      ];
+      const fallbackResults = [
+        { id: 'record-2', tsRankCD: 3, tsRank: 3 },
+        { id: 'record-3', tsRankCD: 1, tsRank: 1 },
+      ];
+
+      jest
+        .spyOn(service, 'buildSearchQueryAndGetRecords')
+        .mockResolvedValueOnce(tsvectorResults as any);
+
+      const buildAllFieldIlikeFallbackQuerySpy = jest
+        .spyOn(service as any, 'buildAllFieldIlikeFallbackQuery')
+        .mockResolvedValueOnce(fallbackResults);
+
+      const buildSearchVectorTextFallbackQuerySpy = jest
+        .spyOn(service as any, 'buildSearchVectorTextFallbackQuery')
+        .mockResolvedValueOnce([]);
+
+      const result = await service.buildSearchQueryAndGetRecordsWithFallback({
+        entityManager: {} as any,
+        flatObjectMetadata: mockFlatObjectMetadatas[2],
+        flatFieldMetadataMaps: mockFlatFieldMetadataMaps,
+        searchInput: 'policy number',
+        searchTerms: 'policy:* & number:*',
+        searchTermsOr: 'policy:* | number:*',
+        limit: 10,
+        filter: {} as any,
+      });
+
+      expect(result).toEqual([
+        tsvectorResults[0],
+        tsvectorResults[1],
+        fallbackResults[1],
+      ]);
+      expect(buildAllFieldIlikeFallbackQuerySpy).toHaveBeenCalled();
+      expect(buildSearchVectorTextFallbackQuerySpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('sortSearchObjectResults', () => {
     it('should sort the search object results by tsRankCD', () => {
       const objectResults = [

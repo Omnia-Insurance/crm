@@ -1,5 +1,6 @@
 import { useRecordAgnosticCommands } from '@/command-menu-item/record-agnostic/hooks/useRecordAgnosticCommands';
 import { useRelatedRecordCommands } from '@/command-menu-item/record-agnostic/hooks/useRelatedRecordCommands';
+import { resolveCreateRecordActionLabels } from '@/command-menu-item/utils/resolveCreateRecordActionLabels';
 import { CommandMenuItemViewType } from 'twenty-shared/types';
 import { type ShouldBeRegisteredFunctionParams } from '@/command-menu-item/types/ShouldBeRegisteredFunctionParams';
 import { getCommandMenuItemConfig } from '@/command-menu-item/utils/getCommandMenuItemConfig';
@@ -92,5 +93,5 @@ export const useRegisteredCommandMenuItems = (
     })
     .sort((a, b) => a.position - b.position);
 
-  return commandMenuItems;
+  return resolveCreateRecordActionLabels(commandMenuItems, objectMetadataItem);
 };

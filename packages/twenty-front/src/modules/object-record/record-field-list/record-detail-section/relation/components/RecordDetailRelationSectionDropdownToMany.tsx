@@ -1,4 +1,10 @@
-import { type ReactNode, useCallback, useContext, useMemo } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
@@ -8,8 +14,8 @@ import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldCont
 import { useAddNewRecordAndOpenSidePanel } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel';
 import { useUpdateRelationOneToManyFieldInput } from '@/object-record/record-field/ui/meta-types/input/hooks/useUpdateRelationOneToManyFieldInput';
 import { type FieldRelationMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
+import { useLeadPolicyRecordPickerAdditionalFilter } from '@/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter';
 import { useMultipleRecordPickerOpen } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerOpen';
 import { useMultipleRecordPickerPerformSearch } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
@@ -72,29 +78,15 @@ export const RecordDetailRelationSectionDropdownToMany = ({
     );
   }
 
-  const isPolicyRelation = relationObjectMetadataNameSingular === 'policy';
-
-  // Fetch policies already assigned to other leads (ineligible for this lead)
-  const { records: policiesAssignedToOtherLeads } = useFindManyRecords({
-    objectNameSingular: 'policy',
-    filter: {
-      and: [
-        { leadId: { is: 'NOT_NULL' } },
-        { not: { leadId: { eq: recordId } } },
-      ],
-    },
-    recordGqlFields: { id: true },
-    skip: !isPolicyRelation,
-    limit: 1000,
+  const {
+    additionalFilter: leadPolicyRecordPickerAdditionalFilter,
+    isLeadPolicyRelation,
+    loading: isLeadPolicyRecordPickerAdditionalFilterLoading,
+  } = useLeadPolicyRecordPickerAdditionalFilter({
+    recordId,
+    inverseFieldName: relationFieldMetadataItem.name,
+    relationObjectMetadataNameSingular,
   });
-
-  const ineligiblePolicyIds = useMemo(
-    () =>
-      isPolicyRelation
-        ? policiesAssignedToOtherLeads.map((record) => record.id)
-        : [],
-    [isPolicyRelation, policiesAssignedToOtherLeads],
-  );
 
   const fieldValue = useAtomFamilySelectorValue(recordStoreFamilySelector, {
     recordId,
@@ -102,6 +94,13 @@ export const RecordDetailRelationSectionDropdownToMany = ({
   }) as ({ id: string } & Record<string, unknown>) | ObjectRecord[] | null;
 
   const relationRecords: ObjectRecord[] = (fieldValue as ObjectRecord[]) ?? [];
+  const [isRelationPickerOpen, setIsRelationPickerOpen] = useState(false);
+  const selectedRelationPickableMorphItems = relationRecords.map((record) => ({
+    recordId: record.id,
+    objectMetadataId: relationObjectMetadataItem.id,
+    isSelected: true,
+    isMatchingSearchFilter: true,
+  }));
 
   const dropdownId = getRecordFieldCardRelationPickerDropdownId({
     fieldDefinition,
@@ -138,6 +137,7 @@ export const RecordDetailRelationSectionDropdownToMany = ({
   const { openMultipleRecordPicker } = useMultipleRecordPickerOpen();
 
   const handleCloseRelationPickerDropdown = useCallback(() => {
+    setIsRelationPickerOpen(false);
     setMultipleRecordPickerSearchFilter('');
   }, [setMultipleRecordPickerSearchFilter]);
 
@@ -158,29 +158,41 @@ export const RecordDetailRelationSectionDropdownToMany = ({
     ]);
     setMultipleRecordPickerSearchFilter('');
     setMultipleRecordPickerPickableMorphItems(
-      relationRecords.map((record) => ({
-        recordId: record.id,
-        objectMetadataId: relationObjectMetadataItem.id,
-        isSelected: true,
-        isMatchingSearchFilter: true,
-      })),
+      selectedRelationPickableMorphItems,
     );
 
     openMultipleRecordPicker(dropdownId);
+    setIsRelationPickerOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isRelationPickerOpen) {
+      return;
+    }
+
+    if (
+      isLeadPolicyRelation &&
+      isLeadPolicyRecordPickerAdditionalFilterLoading
+    ) {
+      return;
+    }
 
     multipleRecordPickerPerformSearch({
       multipleRecordPickerInstanceId: dropdownId,
-      forceSearchFilter: '',
       forceSearchableObjectMetadataItems: [relationObjectMetadataItem],
-      forcePickableMorphItems: relationRecords.map((record) => ({
-        recordId: record.id,
-        objectMetadataId: relationObjectMetadataItem.id,
-        isSelected: true,
-        isMatchingSearchFilter: true,
-      })),
-      forceExcludedRecordIds: ineligiblePolicyIds,
+      forcePickableMorphItems: selectedRelationPickableMorphItems,
+      forceAdditionalFilter: leadPolicyRecordPickerAdditionalFilter,
     });
-  };
+  }, [
+    dropdownId,
+    isLeadPolicyRelation,
+    isLeadPolicyRecordPickerAdditionalFilterLoading,
+    isRelationPickerOpen,
+    leadPolicyRecordPickerAdditionalFilter,
+    multipleRecordPickerPerformSearch,
+    relationObjectMetadataItem,
+    selectedRelationPickableMorphItems,
+  ]);
 
   const handleCreateNew = (searchString?: string) => {
     closeDropdown(dropdownId);
@@ -207,6 +219,7 @@ export const RecordDetailRelationSectionDropdownToMany = ({
         <MultipleRecordPicker
           focusId={dropdownId}
           componentInstanceId={dropdownId}
+          additionalFilter={leadPolicyRecordPickerAdditionalFilter}
           onCreate={
             isDefined(createNewRecordAndOpenSidePanel)
               ? handleCreateNew

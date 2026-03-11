@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'jotai';
 
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
@@ -6,6 +6,7 @@ import { MultipleRecordPickerItemsDisplay } from '@/object-record/record-picker/
 import { MultipleRecordPickerOnClickOutsideEffect } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerOnClickOutsideEffect';
 import { MultipleRecordPickerSearchInput } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPickerSearchInput';
 import { MultipleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/multiple-record-picker/states/contexts/MultipleRecordPickerComponentInstanceContext';
+import { multipleRecordPickerAdditionalFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerAdditionalFilterComponentState';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
 import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchFilterComponentState';
 import { getMultipleRecordPickerSelectableListId } from '@/object-record/record-picker/multiple-record-picker/utils/getMultipleRecordPickerSelectableListId';
@@ -21,6 +22,7 @@ import { Key } from 'ts-key-enum';
 import { isDefined } from 'twenty-shared/utils';
 import { t } from '@lingui/core/macro';
 import { IconPlus } from 'twenty-ui/display';
+import { type ObjectRecordFilterInput } from '~/generated/graphql';
 
 type MultipleRecordPickerProps = {
   onChange?: (morphItem: RecordPickerPickableMorphItem) => void;
@@ -32,6 +34,7 @@ type MultipleRecordPickerProps = {
   focusId: string;
   objectMetadataItemIdForCreate?: string;
   dropdownWidth?: number;
+  additionalFilter?: ObjectRecordFilterInput;
 };
 
 export const MultipleRecordPicker = ({
@@ -44,6 +47,7 @@ export const MultipleRecordPicker = ({
   focusId,
   objectMetadataItemIdForCreate,
   dropdownWidth,
+  additionalFilter,
 }: MultipleRecordPickerProps) => {
   const selectableListComponentInstanceId =
     getMultipleRecordPickerSelectableListId(componentInstanceId);
@@ -64,12 +68,24 @@ export const MultipleRecordPicker = ({
       componentInstanceId,
     );
 
+  const multipleRecordPickerAdditionalFilterState =
+    useAtomComponentStateCallbackState(
+      multipleRecordPickerAdditionalFilterComponentState,
+      componentInstanceId,
+    );
+
   const store = useStore();
+
+  useEffect(() => {
+    store.set(multipleRecordPickerAdditionalFilterState, additionalFilter);
+  }, [additionalFilter, multipleRecordPickerAdditionalFilterState, store]);
 
   const resetState = useCallback(() => {
     store.set(multipleRecordPickerPickableMorphItemsState, []);
     store.set(multipleRecordPickerSearchFilterState, '');
+    store.set(multipleRecordPickerAdditionalFilterState, undefined);
   }, [
+    multipleRecordPickerAdditionalFilterState,
     multipleRecordPickerPickableMorphItemsState,
     multipleRecordPickerSearchFilterState,
     store,

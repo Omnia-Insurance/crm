@@ -1,17 +1,24 @@
 import { useParams } from 'react-router-dom';
 
 import { useWorkspaceFavorites } from '@/favorites/hooks/useWorkspaceFavorites';
+import { getOmniaMemberWorkspaceObjectMetadataItems } from '@/navigation-menu-item/utils/getOmniaMemberWorkspaceObjectMetadataItems';
 import { useWorkspaceNavigationMenuItems } from '@/navigation-menu-item/hooks/useWorkspaceNavigationMenuItems';
 import { NavigationDrawerSectionForObjectMetadataItems } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { useIsPrefetchLoading } from '@/prefetch/hooks/useIsPrefetchLoading';
 import { prefetchIsLoadedFamilyState } from '@/prefetch/states/prefetchIsLoadedFamilyState';
 import { PrefetchKey } from '@/prefetch/types/PrefetchKey';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { useLingui } from '@lingui/react/macro';
-import { FeatureFlagKey } from '~/generated-metadata/graphql';
+import {
+  FeatureFlagKey,
+  PermissionFlagType,
+} from '~/generated-metadata/graphql';
 
 const WORKFLOW_OBJECTS_IN_SIDEBAR = [
   CoreObjectNameSingular.Workflow,
@@ -30,6 +37,7 @@ export const NavigationDrawerOpenedSection = () => {
   const isNavigationMenuItemEditingEnabled = useIsFeatureEnabled(
     FeatureFlagKey.IS_NAVIGATION_MENU_ITEM_EDITING_ENABLED,
   );
+  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
   const prefetchIsLoaded = useAtomFamilyStateValue(
     prefetchIsLoadedFamilyState,
     PrefetchKey.AllNavigationMenuItems,
@@ -37,11 +45,18 @@ export const NavigationDrawerOpenedSection = () => {
 
   const loading =
     isPrefetchLoading ||
-    (isNavigationMenuItemEditingEnabled && !prefetchIsLoaded);
+    (isNavigationMenuItemEditingEnabled &&
+      hasLayoutsPermission &&
+      !prefetchIsLoaded);
 
   const { workspaceFavoritesObjectMetadataItems } = useWorkspaceFavorites();
   const { workspaceNavigationMenuItemsObjectMetadataItems } =
     useWorkspaceNavigationMenuItems();
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const omniaMemberWorkspaceObjectMetadataItems =
+    getOmniaMemberWorkspaceObjectMetadataItems(
+      filteredActiveNonSystemObjectMetadataItems,
+    );
 
   const {
     objectNamePlural: currentObjectNamePlural,
@@ -63,15 +78,32 @@ export const NavigationDrawerOpenedSection = () => {
   }
 
   const workspaceItemsToExclude = isNavigationMenuItemEditingEnabled
-    ? workspaceNavigationMenuItemsObjectMetadataItems
+    ? hasLayoutsPermission
+      ? workspaceNavigationMenuItemsObjectMetadataItems
+      : omniaMemberWorkspaceObjectMetadataItems
     : workspaceFavoritesObjectMetadataItems;
 
   const isWorkflowObjectInSidebar = WORKFLOW_OBJECTS_IN_SIDEBAR.includes(
     objectMetadataItem.nameSingular as CoreObjectNameSingular,
   );
+  const objectPermissions = getObjectPermissionsForObject(
+    objectPermissionsByObjectMetadataId,
+    objectMetadataItem.id,
+  );
+  const isOmniaMemberWorkspaceObject =
+    omniaMemberWorkspaceObjectMetadataItems.some(
+      (workspaceObjectMetadataItem) =>
+        workspaceObjectMetadataItem.id === objectMetadataItem.id,
+    );
+  const shouldDisplayObjectInOpenedSectionForMemberWorkspace =
+    isNavigationMenuItemEditingEnabled &&
+    !hasLayoutsPermission &&
+    isOmniaMemberWorkspaceObject;
 
   const shouldDisplayObjectInOpenedSection =
     !isWorkflowObjectInSidebar &&
+    (objectPermissions.showInSidebar ||
+      shouldDisplayObjectInOpenedSectionForMemberWorkspace) &&
     !workspaceItemsToExclude
       .map((item) => item.id)
       .includes(objectMetadataItem.id);

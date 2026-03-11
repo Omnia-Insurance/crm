@@ -87,8 +87,8 @@ export const useOpenRelationFromManyFieldInput = () => {
       );
 
       // Initial search is triggered by RelationOneToManyFieldInput on mount
-      // so it can include excluded record IDs (e.g. policies assigned to
-      // other leads). Do NOT call performSearch here.
+      // so it can wait for the lead->policy allowlist filter before showing
+      // results. Do NOT call performSearch here.
 
       pushFocusItemToFocusStack({
         focusId: recordPickerInstanceId,

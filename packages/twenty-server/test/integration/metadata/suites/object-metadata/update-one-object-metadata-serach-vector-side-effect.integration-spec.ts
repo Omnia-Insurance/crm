@@ -147,7 +147,7 @@ describe('Object metadata update - search vector side effect', () => {
     jestExpectToBeDefined(settings);
     expect(settings.asExpression).toBeDefined();
     expect(settings.asExpression).toContain(NEW_LABEL_IDENTIFIER_FIELD_NAME);
-    expect(settings.asExpression).not.toContain('name');
+    expect(settings.asExpression).toContain('name');
 
     const searchResult = await search({
       searchInput: RECORD_FIELD_VALUE,

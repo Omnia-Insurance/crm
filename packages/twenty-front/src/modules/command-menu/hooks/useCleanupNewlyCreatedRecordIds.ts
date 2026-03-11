@@ -22,7 +22,7 @@ export const useCleanupNewlyCreatedRecordIds = () => {
 
       for (const [recordId] of cleanedMap) {
         const record = store.get(recordStoreFamilyState.atomFamily(recordId));
-        if (!record) {
+        if (!record || record.deletedAt) {
           cleanedMap.delete(recordId);
           changed = true;
         }

@@ -7,7 +7,7 @@ import { type MessageDescriptor } from '@lingui/core';
 import { useContext } from 'react';
 import { assertUnreachable } from 'twenty-shared/utils';
 import { type IconComponent } from 'twenty-ui/display';
-import { type MenuItemAccent } from 'twenty-ui/navigation';
+import { type ButtonAccent, type ButtonVariant } from 'twenty-ui/input';
 
 export type CommandMenuItemDisplayProps = {
   key: string;
@@ -16,7 +16,8 @@ export type CommandMenuItemDisplayProps = {
   description?: MessageDescriptor | string;
   Icon: IconComponent;
   isPrimaryCTA?: boolean;
-  accent?: MenuItemAccent;
+  accent?: ButtonAccent;
+  buttonVariant?: ButtonVariant;
   hotKeys?: string[];
 };
 

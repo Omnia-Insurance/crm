@@ -84,10 +84,18 @@ check_file_not_contains \
 
 echo ""
 echo "--- Critical: Sidebar Customization ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation/components/MainNavigationDrawer.tsx" \
+  'label={t`Search`}' \
+  "Search item should remain in the sidebar"
 check_file_not_contains \
   "packages/twenty-front/src/modules/navigation/components/MainNavigationDrawer.tsx" \
   "Documentation" \
   "Documentation link should be removed from sidebar"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx" \
+  "IconSearch" \
+  "Inline search icon beside the workspace name should remain removed"
 
 echo ""
 echo "--- Critical: Member Home Page Redirect ---"
@@ -95,6 +103,52 @@ check_file_contains \
   "packages/twenty-front/src/modules/navigation/hooks/useDefaultHomePagePath.ts" \
   "person" \
   "Members should land on People (Leads) page, not alphabetical first object"
+
+echo ""
+echo "--- Critical: Create Record CTA ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu/components/CommandMenuButton.tsx" \
+  "command.buttonVariant ?? 'secondary'" \
+  "Pinned command buttons must honor explicit buttonVariant overrides"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/record/constants/DefaultRecordCommandMenuItemsConfig.tsx" \
+  "buttonVariant: 'primary'" \
+  "Create-record action must remain a filled primary CTA"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/utils/resolveCreateRecordActionLabels.ts" \
+  'Create ${objectMetadataItem.labelSingular}' \
+  "Create-record button label must stay object-specific (Create Policy, Create Lead, etc.)"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/utils/resolveCreateRecordActionLabels.ts" \
+  "buttonVariant: 'primary'" \
+  "Create-record label resolver must preserve filled primary CTA styling"
+
+echo ""
+echo "--- Critical: Member Workspace Sidebar ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/components/WorkspaceNavigationMenuItemsDispatcher.tsx" \
+  "OmniaMemberWorkspaceNavigationMenuItems" \
+  "Members must use the fixed Omnia workspace section instead of the editable workspace tree"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/components/WorkspaceNavigationMenuItems.tsx" \
+  "canEditSidebar" \
+  "Workspace sidebar editing must stay gated behind LAYOUTS permission"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/utils/getOmniaMemberWorkspaceObjectMetadataItems.ts" \
+  "CoreObjectNameSingular.Task" \
+  "Omnia member workspace list must include Tasks"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/utils/getOmniaMemberWorkspaceObjectMetadataItems.ts" \
+  "'policy'" \
+  "Omnia member workspace list must include Policies"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/components/OmniaMemberWorkspaceNavigationMenuItems.tsx" \
+  "ignoreShowInSidebar" \
+  "Curated member workspace section must bypass upstream showInSidebar filtering for fixed items"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-metadata/components/NavigationDrawerOpenedSection.tsx" \
+  "shouldDisplayObjectInOpenedSectionForMemberWorkspace" \
+  "Opened section must avoid duplicating fixed member workspace items"
 
 echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
@@ -204,6 +258,70 @@ check_file_exists \
   "Strip restricted fields instead of rejecting queries"
 
 echo ""
+echo "--- Global Search: Custom Object Coverage ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/search/services/search.service.ts" \
+  "buildAllFieldIlikeFallbackQuery" \
+  "Custom-object global search fallback must search all searchable fields"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/search/services/search.service.ts" \
+  "flatObjectMetadata.isCustom" \
+  "Search service must keep the custom-object fallback branch"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/search/services/search.service.ts" \
+  "getSearchableFieldExpressions" \
+  "Search service must derive fallback search expressions from object field metadata"
+check_file_exists \
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util.ts" \
+  "Shared helper for building custom-object searchVector settings"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util.ts" \
+  "getCustomObjectSearchVectorFields" \
+  "Custom-object searchVector helper must filter to active searchable fields"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/object-metadata/utils/build-default-flat-field-metadatas-for-custom-object.util.ts" \
+  "buildCustomObjectSearchVectorFieldSettings" \
+  "Default custom objects must build searchVector from the shared helper"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/field-metadata/services/field-metadata.service.ts" \
+  "buildCustomObjectSearchVectorUpdate" \
+  "Field metadata service must recompute custom-object searchVector on create/delete"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/field-metadata/services/field-metadata.service.ts" \
+  "fieldUniversalIdentifiersToRemove" \
+  "Field delete path must update custom-object searchVector after removing a field"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-flat-field-metadata-update-side-effect.util.ts" \
+  "handleSearchVectorChangesDuringFieldUpdate" \
+  "Field update side effects must recompute custom-object searchVector"
+check_file_exists \
+  "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util.ts" \
+  "Field update helper for custom-object searchVector recomputation"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/flat-object-metadata/utils/recompute-search-vector-field-after-label-identifier-update.util.ts" \
+  "buildCustomObjectSearchVectorFieldSettings" \
+  "Label-identifier updates must preserve all searchable custom fields in searchVector"
+check_file_contains \
+  "packages/twenty-server/src/engine/workspace-manager/utils/get-ts-vector-column-expression.util.ts" \
+  "getSearchableColumnExpressionsFromField" \
+  "Search column expression helper must stay exported for searchVector + fallback reuse"
+
+echo ""
+echo "--- Policy Search: Derived Name + Policy Number ---"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/policy-create-one.pre-query.hook.ts" \
+  "buildPolicyDisplayName" \
+  "Policy create hook must keep deriving display name from carrier/product"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts" \
+  "buildPolicyDisplayName" \
+  "Policy update hook must keep deriving display name from carrier/product"
+check_file_contains \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1771600000000-add-policy-number-and-rename.ts" \
+  'ADD COLUMN IF NOT EXISTS "policyNumber" text' \
+  "Policy number must remain a text field so global search can match pasted policy IDs"
+
+echo ""
 echo "--- Required Fields: Backend Entity + Properties ---"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/field-metadata/field-metadata.entity.ts" \
@@ -279,9 +397,44 @@ check_file_contains \
   "additionalFilter" \
   "SingleRecordPicker must pass additionalFilter through"
 check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker.tsx" \
+  "multipleRecordPickerAdditionalFilterComponentState" \
+  "MultipleRecordPicker must sync/reset shared additionalFilter state"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch.ts" \
   "forceExcludedRecordIds" \
   "Multiple record picker must support forceExcludedRecordIds"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch.ts" \
+  "forceAdditionalFilter" \
+  "Multiple record picker search must support forceAdditionalFilter"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch.ts" \
+  "combineFilters(\\[excludeFilter, additionalFilter\\])" \
+  "Lead policy allowlist must persist while excluding already-picked records"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter.ts" \
+  "Lead policy picker allowlist helper"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter.ts" \
+  "inverseFieldName === 'lead'" \
+  "Lead policy picker helper must stay scoped to lead -> policy relations"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter.ts" \
+  "buildIdAllowlistFilter" \
+  "Lead policy picker helper must build an id allowlist filter for search"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationSectionDropdownToMany.tsx" \
+  "useLeadPolicyRecordPickerAdditionalFilter" \
+  "Lead detail sidebar policy picker must reuse the allowlist helper"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RelationOneToManyFieldInput.tsx" \
+  "useLeadPolicyRecordPickerAdditionalFilter" \
+  "Inline/table-cell policy picker must reuse the allowlist helper"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RelationOneToManyFieldInput.tsx" \
+  "additionalFilter={leadPolicyRecordPickerAdditionalFilter}" \
+  "Inline/table-cell policy picker must pass the allowlist into MultipleRecordPicker"
 
 echo ""
 echo "--- Required Fields: Frontend Core ---"
@@ -321,12 +474,24 @@ check_file_contains \
   "packages/twenty-front/src/modules/side-panel/components/SidePanelBackButton.tsx" \
   "goBackWithValidation" \
   "Back button must use goBackWithValidation"
-check_file_exists \
+check_file_contains \
   "packages/twenty-front/src/modules/command-menu/hooks/useCommandMenuCloseWithValidation.ts" \
-  "Close with validation hook"
+  "record.deletedAt" \
+  "Close/back validation must bypass deleted records"
 check_file_exists \
   "packages/twenty-front/src/modules/command-menu/components/RequiredFieldsValidationModal.tsx" \
   "Required fields validation modal"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu/hooks/useBeforeUnloadRequiredFieldsCheck.ts" \
+  "record.deletedAt" \
+  "Deleted records must not block browser unload"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu/hooks/useCleanupNewlyCreatedRecordIds.ts" \
+  "record.deletedAt" \
+  "Deleted tracked records must be pruned from session storage"
+check_file_exists \
+  "packages/twenty-front/src/modules/command-menu/hooks/__tests__/useCommandMenuCloseWithValidation.test.tsx" \
+  "Deleted-record required-fields regression test"
 
 echo ""
 echo "--- Edit Window: Frontend ---"

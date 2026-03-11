@@ -3,6 +3,7 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { usePerformCombinedFindManyRecords } from '@/object-record/multiple-objects/hooks/usePerformCombinedFindManyRecords';
+import { multipleRecordPickerAdditionalFilterComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerAdditionalFilterComponentState';
 import { multipleRecordPickerIsLoadingComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerIsLoadingComponentState';
 import { multipleRecordPickerPaginationState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPaginationState';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
@@ -10,6 +11,7 @@ import { multipleRecordPickerSearchFilterComponentState } from '@/object-record/
 import { multipleRecordPickerExcludedRecordIdsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerExcludedRecordIdsComponentState';
 import { multipleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerSearchableObjectMetadataItemsComponentState';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
+import { combineFilters } from '@/object-record/record-picker/multiple-record-picker/utils/combineFilters';
 import { sortMorphItems } from '@/object-record/record-picker/multiple-record-picker/utils/sortMorphItems';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
@@ -18,7 +20,11 @@ import { isNonEmptyArray } from '@sniptt/guards';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { capitalize, isDefined } from 'twenty-shared/utils';
-import { type SearchRecord, type SearchResultEdge } from '~/generated/graphql';
+import {
+  type ObjectRecordFilterInput,
+  type SearchRecord,
+  type SearchResultEdge,
+} from '~/generated/graphql';
 
 const MULTIPLE_RECORD_PICKER_PAGE_SIZE = 30;
 
@@ -34,10 +40,11 @@ export const useMultipleRecordPickerPerformSearch = () => {
   const performSearch = useCallback(
     async ({
       multipleRecordPickerInstanceId,
-      forceSearchFilter = '',
+      forceSearchFilter,
       forceSearchableObjectMetadataItems = [],
       forcePickableMorphItems = [],
       forceExcludedRecordIds = [],
+      forceAdditionalFilter,
       loadMore = false,
     }: {
       multipleRecordPickerInstanceId: string;
@@ -45,6 +52,7 @@ export const useMultipleRecordPickerPerformSearch = () => {
       forceSearchableObjectMetadataItems?: ObjectMetadataItem[];
       forcePickableMorphItems?: RecordPickerPickableMorphItem[];
       forceExcludedRecordIds?: string[];
+      forceAdditionalFilter?: ObjectRecordFilterInput;
       loadMore?: boolean;
     }) => {
       const atomFamilyKey = { instanceId: multipleRecordPickerInstanceId };
@@ -67,6 +75,23 @@ export const useMultipleRecordPickerPerformSearch = () => {
                 atomFamilyKey,
               ),
             );
+
+      if (isDefined(forceAdditionalFilter)) {
+        store.set(
+          multipleRecordPickerAdditionalFilterComponentState.atomFamily(
+            atomFamilyKey,
+          ),
+          forceAdditionalFilter,
+        );
+      }
+
+      const additionalFilter = isDefined(forceAdditionalFilter)
+        ? forceAdditionalFilter
+        : store.get(
+            multipleRecordPickerAdditionalFilterComponentState.atomFamily(
+              atomFamilyKey,
+            ),
+          );
 
       const paginationState = store.get(
         multipleRecordPickerPaginationState.atomFamily(atomFamilyKey),
@@ -138,6 +163,7 @@ export const useMultipleRecordPickerPerformSearch = () => {
         ),
         excludedRecordIds,
         after: loadMore ? paginationState.endCursor : null,
+        additionalFilter,
       });
 
       const existingMorphItems = store.get(
@@ -403,6 +429,7 @@ const performSearchQueries = async ({
   excludedRecordIds = [],
   limit = MULTIPLE_RECORD_PICKER_PAGE_SIZE,
   after = null,
+  additionalFilter,
 }: {
   client: ApolloClient<object>;
   searchFilter: string;
@@ -411,6 +438,7 @@ const performSearchQueries = async ({
   excludedRecordIds?: string[];
   limit?: number;
   after?: string | null;
+  additionalFilter?: ObjectRecordFilterInput;
 }): Promise<
   [
     SearchRecord[],
@@ -442,8 +470,7 @@ const performSearchQueries = async ({
   };
 
   const allExcludedIds = [...pickedRecordIds, ...excludedRecordIds];
-
-  const searchRecordsExcludingPickedRecordsResult = await searchRecords(
+  const excludeFilter =
     allExcludedIds.length > 0
       ? {
           not: {
@@ -452,21 +479,27 @@ const performSearchQueries = async ({
             },
           },
         }
-      : undefined,
+      : undefined;
+
+  const searchRecordsExcludingPickedRecordsResult = await searchRecords(
+    combineFilters([excludeFilter, additionalFilter]),
   );
 
   const eligiblePickedRecordIds = pickedRecordIds.filter(
     (id) => !excludedRecordIds.includes(id),
   );
-
-  const searchRecordsIncludingPickedRecordsResult =
+  const includeFilter =
     eligiblePickedRecordIds.length > 0
-      ? await searchRecords({
+      ? {
           id: {
             in: eligiblePickedRecordIds,
           },
-        })
-      : { records: [], pageInfo: { hasNextPage: false, endCursor: null } };
+        }
+      : undefined;
+
+  const searchRecordsIncludingPickedRecordsResult = isDefined(includeFilter)
+    ? await searchRecords(combineFilters([includeFilter, additionalFilter]))
+    : { records: [], pageInfo: { hasNextPage: false, endCursor: null } };
 
   return [
     searchRecordsIncludingPickedRecordsResult.records,

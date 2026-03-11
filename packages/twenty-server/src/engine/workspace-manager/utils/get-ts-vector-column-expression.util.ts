@@ -21,7 +21,7 @@ export const getTsVectorColumnExpressionFromFields = (
   fieldsUsedForSearch: FieldTypeAndNameMetadata[],
 ): string => {
   const columnExpressions = fieldsUsedForSearch.flatMap(
-    getColumnExpressionsFromField,
+    getSearchableColumnExpressionsFromField,
   );
   const concatenatedExpression =
     columnExpressions.length > 0
@@ -31,7 +31,7 @@ export const getTsVectorColumnExpressionFromFields = (
   return `to_tsvector('simple', ${concatenatedExpression})`;
 };
 
-const getColumnExpressionsFromField = (
+export const getSearchableColumnExpressionsFromField = (
   fieldMetadataTypeAndName: FieldTypeAndNameMetadata,
 ): string[] => {
   if (isCompositeFieldMetadataType(fieldMetadataTypeAndName.type)) {

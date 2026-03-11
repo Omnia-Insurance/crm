@@ -115,6 +115,9 @@ export const DEFAULT_RECORD_COMMAND_MENU_ITEMS_CONFIG: Record<
     shortLabel: msg`New record`,
     position: 2,
     isPinned: true,
+    isPrimaryCTA: true,
+    accent: 'blue',
+    buttonVariant: 'primary',
     Icon: IconPlus,
     shouldBeRegistered: ({
       objectMetadataItem,

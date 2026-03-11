@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo } from 'react';
+import { useCallback, useContext, useEffect } from 'react';
 import { useStore } from 'jotai';
 import { v4 } from 'uuid';
 
@@ -11,7 +11,6 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { type CoreObjectNameSingular } from 'twenty-shared/types';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { isActivityTargetField } from '@/object-record/record-field-list/utils/categorizeRelationFields';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
@@ -28,6 +27,7 @@ import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junctio
 import { getSourceJoinColumnName } from '@/object-record/record-field/ui/utils/junction/getSourceJoinColumnName';
 import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
 import { MultipleRecordPicker } from '@/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker';
+import { useLeadPolicyRecordPickerAdditionalFilter } from '@/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter';
 import { useMultipleRecordPickerPerformSearch } from '@/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch';
 import { multipleRecordPickerPickableMorphItemsComponentState } from '@/object-record/record-picker/multiple-record-picker/states/multipleRecordPickerPickableMorphItemsComponentState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
@@ -137,6 +137,17 @@ export const RelationOneToManyFieldInput = () => {
     );
   }
 
+  const {
+    additionalFilter: leadPolicyRecordPickerAdditionalFilter,
+    isLeadPolicyRelation,
+    loading: isLeadPolicyRecordPickerAdditionalFilterLoading,
+  } = useLeadPolicyRecordPickerAdditionalFilter({
+    recordId,
+    inverseFieldName: relationFieldMetadataItem.name,
+    relationObjectMetadataNameSingular:
+      relationFieldDefinition.metadata.relationObjectMetadataNameSingular,
+  });
+
   const { createNewRecordAndOpenSidePanel } = useAddNewRecordAndOpenSidePanel({
     fieldMetadataItem,
     objectMetadataItem,
@@ -170,52 +181,26 @@ export const RelationOneToManyFieldInput = () => {
   const { performSearch: multipleRecordPickerPerformSearch } =
     useMultipleRecordPickerPerformSearch();
 
-  // For policies on a lead, exclude policies already assigned to other leads.
-  // Show a loading state until the query resolves so wrong results never flash.
-  const isPolicyRelation =
-    relationFieldDefinition.metadata.relationObjectMetadataNameSingular ===
-    'policy';
-
-  const { records: policiesAssignedToOtherLeads, loading: excludedIdsLoading } =
-    useFindManyRecords({
-      objectNameSingular: 'policy',
-      filter: {
-        and: [
-          { leadId: { is: 'NOT_NULL' } },
-          { not: { leadId: { eq: recordId } } },
-        ],
-      },
-      recordGqlFields: { id: true },
-      skip: !isPolicyRelation,
-      limit: 1000,
-    });
-
-  const ineligiblePolicyIds = useMemo(
-    () =>
-      isPolicyRelation
-        ? policiesAssignedToOtherLeads.map((record) => record.id)
-        : [],
-    [isPolicyRelation, policiesAssignedToOtherLeads],
-  );
-
   // The hook (useOpenRelationFromManyFieldInput) sets up picker state but
   // does NOT trigger the initial search — this component owns that so it can
-  // include excluded IDs for policies. For non-policy relations the search
-  // fires immediately (excludedIdsLoading is false, skip is true).
+  // wait for the lead->policy allowlist before any picker results show.
   useEffect(() => {
-    if (isPolicyRelation && excludedIdsLoading) {
+    if (
+      isLeadPolicyRelation &&
+      isLeadPolicyRecordPickerAdditionalFilterLoading
+    ) {
       return;
     }
 
     multipleRecordPickerPerformSearch({
       multipleRecordPickerInstanceId: instanceId,
-      forceExcludedRecordIds: ineligiblePolicyIds,
+      forceAdditionalFilter: leadPolicyRecordPickerAdditionalFilter,
     });
   }, [
-    excludedIdsLoading,
-    ineligiblePolicyIds,
     instanceId,
-    isPolicyRelation,
+    isLeadPolicyRelation,
+    isLeadPolicyRecordPickerAdditionalFilterLoading,
+    leadPolicyRecordPickerAdditionalFilter,
     multipleRecordPickerPerformSearch,
   ]);
 
@@ -247,6 +232,7 @@ export const RelationOneToManyFieldInput = () => {
           forceSearchFilter: searchInput,
           forceSearchableObjectMetadataItems: searchableObjectMetadataItems,
           forcePickableMorphItems: newMorphItems,
+          forceAdditionalFilter: leadPolicyRecordPickerAdditionalFilter,
         });
       };
 
@@ -334,6 +320,7 @@ export const RelationOneToManyFieldInput = () => {
       isJunctionRelation,
       junctionConfig,
       junctionTargetObjectMetadata,
+      leadPolicyRecordPickerAdditionalFilter,
       multipleRecordPickerPickableMorphItemsCallbackState,
       multipleRecordPickerPerformSearch,
       objectMetadataItem,
@@ -357,6 +344,7 @@ export const RelationOneToManyFieldInput = () => {
     <MultipleRecordPicker
       focusId={instanceId}
       componentInstanceId={instanceId}
+      additionalFilter={leadPolicyRecordPickerAdditionalFilter}
       onSubmit={handleSubmit}
       onChange={(morphItem) => {
         if (isRelationFromActivityTargets) {

@@ -30,12 +30,15 @@ import { formatSearchTerms } from 'src/engine/core-modules/search/utils/format-s
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { findManyFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { SEARCH_VECTOR_FIELD } from 'src/engine/metadata-modules/search-field-metadata/constants/search-vector-field.constants';
+import { getCustomObjectSearchVectorFields } from 'src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { getSearchableColumnExpressionsFromField } from 'src/engine/workspace-manager/utils/get-ts-vector-column-expression.util';
 
 type LastRanks = { tsRankCD: number; tsRank: number };
 
@@ -151,11 +154,11 @@ export class SearchService {
     );
   }
 
-  // Runs a fast tsvector query first (uses GIN index). If tsvector returns zero
-  // results for an object type on the first page, falls back to ILIKE on the
-  // searchVector text to catch cases where tokenization fails (e.g. CJK text).
-  // Skipped when tsvector finds any results (partial results mean the data just
-  // has fewer matches, not a tokenization issue) and on paginated requests.
+  // Runs a fast tsvector query first (uses GIN index). Custom objects then run
+  // an all-searchable-field ILIKE fallback to catch fields that were never added
+  // to the stored searchVector. Standard objects keep the existing searchVector
+  // text fallback for tokenization issues such as CJK. All fallbacks are skipped
+  // on paginated requests to keep cursor semantics stable.
   async buildSearchQueryAndGetRecordsWithFallback<
     Entity extends ObjectLiteral,
   >({
@@ -190,15 +193,28 @@ export class SearchService {
       after,
     });
 
-    if (
-      tsvectorResults.length > 0 ||
-      !isNonEmptyString(searchInput.trim()) ||
-      isDefined(after)
-    ) {
+    if (!isNonEmptyString(searchInput.trim()) || isDefined(after)) {
       return tsvectorResults;
     }
 
-    const fallbackResults = await this.buildIlikeFallbackQuery({
+    if (flatObjectMetadata.isCustom) {
+      const fallbackResults = await this.buildAllFieldIlikeFallbackQuery({
+        entityManager,
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+        searchInput,
+        limit: limit + 1,
+        filter,
+      });
+
+      return this.mergeSearchResults(tsvectorResults, fallbackResults);
+    }
+
+    if (tsvectorResults.length > 0) {
+      return tsvectorResults;
+    }
+
+    const fallbackResults = await this.buildSearchVectorTextFallbackQuery({
       entityManager,
       flatObjectMetadata,
       flatFieldMetadataMaps,
@@ -207,7 +223,7 @@ export class SearchService {
       filter,
     });
 
-    return [...tsvectorResults, ...fallbackResults];
+    return this.mergeSearchResults(tsvectorResults, fallbackResults);
   }
 
   async buildSearchQueryAndGetRecords<Entity extends ObjectLiteral>({
@@ -311,7 +327,9 @@ export class SearchService {
       .getRawMany();
   }
 
-  private async buildIlikeFallbackQuery<Entity extends ObjectLiteral>({
+  private async buildSearchVectorTextFallbackQuery<
+    Entity extends ObjectLiteral,
+  >({
     entityManager,
     flatObjectMetadata,
     flatFieldMetadataMaps,
@@ -384,6 +402,160 @@ export class SearchService {
       tsRankCD: 0,
       tsRank: 0,
     }));
+  }
+
+  private async buildAllFieldIlikeFallbackQuery<Entity extends ObjectLiteral>({
+    entityManager,
+    flatObjectMetadata,
+    flatFieldMetadataMaps,
+    searchInput,
+    limit,
+    filter,
+  }: {
+    entityManager: WorkspaceRepository<Entity>;
+    flatObjectMetadata: FlatObjectMetadata;
+    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+    searchInput: string;
+    limit: number;
+    filter: ObjectRecordFilterInput;
+  }) {
+    const searchableFieldExpressions = this.getSearchableFieldExpressions(
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    );
+
+    if (searchableFieldExpressions.length === 0) {
+      return [];
+    }
+
+    const queryBuilder = entityManager.createQueryBuilder();
+
+    const { flatObjectMetadataMaps } = entityManager.internalContext;
+
+    const queryParser = new GraphqlQueryParser(
+      flatObjectMetadata,
+      flatObjectMetadataMaps,
+      flatFieldMetadataMaps,
+    );
+
+    queryParser.applyFilterToBuilder(
+      queryBuilder,
+      flatObjectMetadata.nameSingular,
+      filter,
+    );
+
+    queryParser.applyDeletedAtToBuilder(queryBuilder, filter);
+
+    const imageIdentifierField = this.getImageIdentifierColumn(
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    );
+
+    const fieldsToSelect = [
+      'id',
+      ...this.getLabelIdentifierColumns(
+        flatObjectMetadata,
+        flatFieldMetadataMaps,
+      ),
+      ...(imageIdentifierField ? [imageIdentifierField] : []),
+    ].map((field) => `"${field}"`);
+
+    const normalizedSearchableFieldExpressions = searchableFieldExpressions.map(
+      (expression) => `public.unaccent_immutable(${expression})`,
+    );
+
+    const exactMatchScoreExpression = normalizedSearchableFieldExpressions
+      .map(
+        (expression) =>
+          `CASE WHEN ${expression} = public.unaccent_immutable(:exactSearchInput) THEN 1 ELSE 0 END`,
+      )
+      .join(' + ');
+
+    const containsMatchScoreExpression = normalizedSearchableFieldExpressions
+      .map(
+        (expression) =>
+          `CASE WHEN ${expression} ILIKE public.unaccent_immutable(:containsSearchInput) THEN 1 ELSE 0 END`,
+      )
+      .join(' + ');
+
+    queryBuilder
+      .select(fieldsToSelect)
+      .addSelect(exactMatchScoreExpression, 'tsRankCD')
+      .addSelect(containsMatchScoreExpression, 'tsRank');
+
+    const searchWords = searchInput
+      .trim()
+      .split(/\s+/)
+      .filter(isNonEmptyString);
+
+    searchWords.forEach((word, index) => {
+      const paramName = `allFieldIlike${index}`;
+
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          normalizedSearchableFieldExpressions.forEach((expression, idx) => {
+            const condition = `${expression} ILIKE public.unaccent_immutable(:${paramName})`;
+
+            if (idx === 0) {
+              qb.where(condition, {
+                [paramName]: `%${escapeForIlike(word)}%`,
+              });
+
+              return;
+            }
+
+            qb.orWhere(condition, {
+              [paramName]: `%${escapeForIlike(word)}%`,
+            });
+          });
+        }),
+      );
+    });
+
+    return await queryBuilder
+      .orderBy(exactMatchScoreExpression, 'DESC')
+      .addOrderBy(containsMatchScoreExpression, 'DESC')
+      .addOrderBy('"id"', 'ASC')
+      .setParameter('exactSearchInput', searchInput.trim())
+      .setParameter(
+        'containsSearchInput',
+        `%${escapeForIlike(searchInput.trim())}%`,
+      )
+      .take(limit)
+      .getRawMany();
+  }
+
+  private getSearchableFieldExpressions(
+    flatObjectMetadata: FlatObjectMetadata,
+    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  ) {
+    const objectFlatFields = findManyFlatEntityByIdInFlatEntityMapsOrThrow({
+      flatEntityMaps: flatFieldMetadataMaps,
+      flatEntityIds: flatObjectMetadata.fieldIds,
+    });
+
+    return getCustomObjectSearchVectorFields(objectFlatFields).flatMap(
+      (field) => getSearchableColumnExpressionsFromField(field),
+    );
+  }
+
+  private mergeSearchResults<T extends { id: string }>(
+    primaryResults: T[],
+    secondaryResults: T[],
+  ) {
+    const mergedResults = [...primaryResults];
+    const seenIds = new Set(primaryResults.map((result) => result.id));
+
+    secondaryResults.forEach((result) => {
+      if (seenIds.has(result.id)) {
+        return;
+      }
+
+      seenIds.add(result.id);
+      mergedResults.push(result);
+    });
+
+    return mergedResults;
   }
 
   computeCursorWhereCondition({

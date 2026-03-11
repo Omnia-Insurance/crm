@@ -11,7 +11,10 @@ import {
 } from 'twenty-ui/display';
 import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { FeatureFlagKey } from '~/generated-metadata/graphql';
+import {
+  FeatureFlagKey,
+  PermissionFlagType,
+} from '~/generated-metadata/graphql';
 
 import { FOLDER_ICON_DEFAULT } from '@/navigation-menu-item/constants/FolderIconDefault';
 import { NavigationMenuItemType } from '@/navigation-menu-item/constants/NavigationMenuItemType';
@@ -32,6 +35,7 @@ import { NavigationDrawerSectionForWorkspaceItems } from '@/object-metadata/comp
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useIsPrefetchLoading } from '@/prefetch/hooks/useIsPrefetchLoading';
 import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavigationMenuItemsState';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useNavigateSidePanel } from '@/side-panel/hooks/useNavigateSidePanel';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -81,6 +85,10 @@ export const WorkspaceNavigationMenuItems = () => {
 
   const loading = useIsPrefetchLoading();
   const { t } = useLingui();
+  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
+  const canEditSidebar =
+    isNavigationMenuItemEditingEnabled && hasLayoutsPermission;
+  const isEditMode = canEditSidebar && isNavigationMenuInEditMode;
 
   const handleEditClick = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -180,9 +188,9 @@ export const WorkspaceNavigationMenuItems = () => {
       sectionTitle={t`Workspace`}
       items={items}
       rightIcon={
-        isNavigationMenuItemEditingEnabled ? (
+        canEditSidebar ? (
           <StyledRightIconsContainer>
-            {isNavigationMenuInEditMode ? (
+            {isEditMode ? (
               <LightIconButton
                 Icon={IconPlus}
                 accent="tertiary"
@@ -204,12 +212,10 @@ export const WorkspaceNavigationMenuItems = () => {
       }
       selectedNavigationMenuItemId={selectedNavigationMenuItemInEditMode}
       onNavigationMenuItemClick={
-        isNavigationMenuInEditMode ? handleNavigationMenuItemClick : undefined
+        isEditMode ? handleNavigationMenuItemClick : undefined
       }
       onActiveObjectMetadataItemClick={
-        isNavigationMenuItemEditingEnabled
-          ? handleActiveObjectMetadataItemClick
-          : undefined
+        canEditSidebar ? handleActiveObjectMetadataItemClick : undefined
       }
     />
   );

@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { TypeOrmQueryService } from '@ptc-org/nestjs-query-typeorm';
 import { isDefined } from 'twenty-shared/utils';
 import { type FindOneOptions, type Repository } from 'typeorm';
-import { FeatureFlagKey } from 'twenty-shared/types';
+import { FeatureFlagKey, FieldMetadataType } from 'twenty-shared/types';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
@@ -17,19 +17,25 @@ import {
   FieldMetadataExceptionCode,
 } from 'src/engine/metadata-modules/field-metadata/field-metadata.exception';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
+import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier-or-throw.util';
+import { findManyFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findManyFlatEntityByUniversalIdentifierInUniversalFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-universal-identifier-in-universal-flat-entity-maps-or-throw.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { fromCreateFieldInputToFlatFieldMetadatasToCreate } from 'src/engine/metadata-modules/flat-field-metadata/utils/from-create-field-input-to-flat-field-metadatas-to-create.util';
 import { fromDeleteFieldInputToFlatFieldMetadatasToDelete } from 'src/engine/metadata-modules/flat-field-metadata/utils/from-delete-field-input-to-flat-field-metadatas-to-delete.util';
 import { fromUpdateFieldInputToFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/from-update-field-input-to-flat-field-metadata.util';
 import { throwOnFieldInputTranspilationsError } from 'src/engine/metadata-modules/flat-field-metadata/utils/throw-on-field-input-transpilations-error.util';
 import { computeFlatViewFieldsFromFieldsWidgets } from 'src/engine/metadata-modules/flat-view-field/utils/compute-flat-view-fields-from-fields-widgets.util';
+import { SEARCH_VECTOR_FIELD } from 'src/engine/metadata-modules/search-field-metadata/constants/search-vector-field.constants';
+import { buildCustomObjectSearchVectorFieldSettings } from 'src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { EMPTY_ORCHESTRATOR_FAILURE_REPORT } from 'src/engine/workspace-manager/workspace-migration/constant/empty-orchestrator-failure-report.constant';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+import { type UniversalFlatFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-field-metadata.type';
 import { UniversalFlatViewField } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-view-field.type';
 
 @Injectable()
@@ -43,6 +49,62 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
     private readonly workspaceCacheService: WorkspaceCacheService,
   ) {
     super(fieldMetadataRepository);
+  }
+
+  private buildCustomObjectSearchVectorUpdate({
+    flatObjectMetadataId,
+    existingFlatObjectMetadataMaps,
+    existingFlatFieldMetadataMaps,
+    fieldsToAdd = [],
+    fieldUniversalIdentifiersToRemove = [],
+  }: {
+    flatObjectMetadataId: string;
+    existingFlatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
+    existingFlatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+    fieldsToAdd?: Parameters<
+      typeof buildCustomObjectSearchVectorFieldSettings
+    >[0];
+    fieldUniversalIdentifiersToRemove?: string[];
+  }): FlatFieldMetadata<FieldMetadataType.TS_VECTOR> | undefined {
+    const flatObjectMetadata =
+      findFlatEntityByIdInFlatEntityMapsOrThrow<FlatObjectMetadata>({
+        flatEntityMaps: existingFlatObjectMetadataMaps,
+        flatEntityId: flatObjectMetadataId,
+      });
+
+    if (!flatObjectMetadata.isCustom || !flatObjectMetadata.isSearchable) {
+      return undefined;
+    }
+
+    const existingObjectFields =
+      findManyFlatEntityByIdInFlatEntityMapsOrThrow<FlatFieldMetadata>({
+        flatEntityMaps: existingFlatFieldMetadataMaps,
+        flatEntityIds: flatObjectMetadata.fieldIds,
+      }).filter(
+        (field) =>
+          !fieldUniversalIdentifiersToRemove.includes(
+            field.universalIdentifier,
+          ),
+      );
+
+    const searchVectorField = existingObjectFields.find(
+      (field) => field.name === SEARCH_VECTOR_FIELD.name,
+    ) as FlatFieldMetadata<FieldMetadataType.TS_VECTOR> | undefined;
+
+    if (!isDefined(searchVectorField)) {
+      return undefined;
+    }
+
+    return {
+      ...searchVectorField,
+      universalSettings: {
+        ...searchVectorField.universalSettings,
+        ...buildCustomObjectSearchVectorFieldSettings([
+          ...existingObjectFields,
+          ...fieldsToAdd,
+        ]),
+      },
+    };
   }
 
   async createOneField({
@@ -115,12 +177,20 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
       flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
     });
 
-    const deletedFlatFieldMetadata = findFlatEntityByUniversalIdentifierOrThrow(
-      {
+    const deletedFlatFieldMetadata =
+      findFlatEntityByUniversalIdentifierOrThrow<FlatFieldMetadata>({
         universalIdentifier: flatFieldMetadatasToDelete[0].universalIdentifier,
         flatEntityMaps: existingFlatFieldMetadataMaps,
-      },
-    );
+      });
+
+    const searchVectorFieldToUpdate = this.buildCustomObjectSearchVectorUpdate({
+      flatObjectMetadataId: deletedFlatFieldMetadata.objectMetadataId,
+      existingFlatObjectMetadataMaps,
+      existingFlatFieldMetadataMaps,
+      fieldUniversalIdentifiersToRemove: flatFieldMetadatasToDelete.map(
+        (field) => field.universalIdentifier,
+      ),
+    });
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
@@ -129,7 +199,9 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
             fieldMetadata: {
               flatEntityToCreate: [],
               flatEntityToDelete: flatFieldMetadatasToDelete,
-              flatEntityToUpdate: [],
+              flatEntityToUpdate: isDefined(searchVectorFieldToUpdate)
+                ? [searchVectorFieldToUpdate]
+                : [],
             },
             index: {
               flatEntityToCreate: [],
@@ -385,6 +457,33 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
       { flatFieldMetadatas: [], indexMetadatas: [] },
     );
 
+    const customObjectSearchVectorFieldUpdates = [
+      ...new Set(
+        flatFieldMetadatasToCreate.map(
+          (field) => field.objectMetadataUniversalIdentifier,
+        ),
+      ),
+    ]
+      .map((objectMetadataUniversalIdentifier) => {
+        const flatObjectMetadata =
+          findFlatEntityByUniversalIdentifierOrThrow<FlatObjectMetadata>({
+            flatEntityMaps: existingFlatObjectMetadataMaps,
+            universalIdentifier: objectMetadataUniversalIdentifier,
+          });
+
+        return this.buildCustomObjectSearchVectorUpdate({
+          flatObjectMetadataId: flatObjectMetadata.id,
+          existingFlatObjectMetadataMaps,
+          existingFlatFieldMetadataMaps,
+          fieldsToAdd: flatFieldMetadatasToCreate.filter(
+            (field) =>
+              field.objectMetadataUniversalIdentifier ===
+              objectMetadataUniversalIdentifier,
+          ),
+        });
+      })
+      .filter(isDefined);
+
     let flatViewFieldsToCreate: UniversalFlatViewField[] = [];
 
     if (
@@ -416,7 +515,7 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
             fieldMetadata: {
               flatEntityToCreate: flatFieldMetadatasToCreate,
               flatEntityToDelete: [],
-              flatEntityToUpdate: [],
+              flatEntityToUpdate: customObjectSearchVectorFieldUpdates,
             },
             index: {
               flatEntityToCreate: flatIndexMetadatasToCreate,

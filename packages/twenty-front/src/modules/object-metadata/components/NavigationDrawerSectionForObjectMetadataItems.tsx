@@ -28,6 +28,8 @@ type NavigationDrawerSectionForObjectMetadataItemsProps = {
   isRemote: boolean;
   objectMetadataItems: ObjectMetadataItem[];
   rightIcon?: React.ReactNode;
+  respectProvidedOrder?: boolean;
+  ignoreShowInSidebar?: boolean;
   selectedObjectMetadataItemId?: string | null;
   onObjectMetadataItemClick?: (objectMetadataItem: ObjectMetadataItem) => void;
   onActiveObjectMetadataItemClick?: (
@@ -40,6 +42,8 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
   isRemote,
   objectMetadataItems,
   rightIcon,
+  respectProvidedOrder = false,
+  ignoreShowInSidebar = false,
   selectedObjectMetadataItemId = null,
   onObjectMetadataItemClick,
   onActiveObjectMetadataItemClick,
@@ -53,52 +57,56 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
 
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  const sortedStandardObjectMetadataItems = [...objectMetadataItems]
-    .filter(
-      (item) =>
-        ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
-        !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
-    )
-    .sort((objectMetadataItemA, objectMetadataItemB) => {
-      const indexA = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
-        objectMetadataItemA.nameSingular,
-      );
-      const indexB = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
-        objectMetadataItemB.nameSingular,
-      );
-      if (indexA === -1 || indexB === -1) {
-        return objectMetadataItemA.nameSingular.localeCompare(
-          objectMetadataItemB.nameSingular,
-        );
-      }
-      return indexA - indexB;
-    });
+  const objectMetadataItemsForNavigationItems = respectProvidedOrder
+    ? objectMetadataItems
+    : (() => {
+        const sortedStandardObjectMetadataItems = [...objectMetadataItems]
+          .filter(
+            (item) =>
+              ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
+              !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
+          )
+          .sort((objectMetadataItemA, objectMetadataItemB) => {
+            const indexA = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
+              objectMetadataItemA.nameSingular,
+            );
+            const indexB = ORDERED_FIRST_STANDARD_OBJECTS.indexOf(
+              objectMetadataItemB.nameSingular,
+            );
+            if (indexA === -1 || indexB === -1) {
+              return objectMetadataItemA.nameSingular.localeCompare(
+                objectMetadataItemB.nameSingular,
+              );
+            }
+            return indexA - indexB;
+          });
 
-  const sortedCustomObjectMetadataItems = [...objectMetadataItems]
-    .filter(
-      (item) =>
-        !ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
-        !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
-    )
-    .sort((objectMetadataItemA, objectMetadataItemB) => {
-      return new Date(objectMetadataItemA.createdAt) <
-        new Date(objectMetadataItemB.createdAt)
-        ? 1
-        : -1;
-    });
+        const sortedCustomObjectMetadataItems = [...objectMetadataItems]
+          .filter(
+            (item) =>
+              !ORDERED_FIRST_STANDARD_OBJECTS.includes(item.nameSingular) &&
+              !ORDERED_LAST_STANDARD_OBJECTS.includes(item.nameSingular),
+          )
+          .sort((objectMetadataItemA, objectMetadataItemB) => {
+            return new Date(objectMetadataItemA.createdAt) <
+              new Date(objectMetadataItemB.createdAt)
+              ? 1
+              : -1;
+          });
 
-  const sortedLastStandardObjectMetadataItems =
-    ORDERED_LAST_STANDARD_OBJECTS.map((nameSingular) => {
-      return objectMetadataItems.find(
-        (item) => item.nameSingular === nameSingular,
-      );
-    }).filter(isDefined);
+        const sortedLastStandardObjectMetadataItems =
+          ORDERED_LAST_STANDARD_OBJECTS.map((nameSingular) => {
+            return objectMetadataItems.find(
+              (item) => item.nameSingular === nameSingular,
+            );
+          }).filter(isDefined);
 
-  const objectMetadataItemsForNavigationItems = [
-    ...sortedStandardObjectMetadataItems,
-    ...sortedCustomObjectMetadataItems,
-    ...sortedLastStandardObjectMetadataItems,
-  ];
+        return [
+          ...sortedStandardObjectMetadataItems,
+          ...sortedCustomObjectMetadataItems,
+          ...sortedLastStandardObjectMetadataItems,
+        ];
+      })();
 
   const objectMetadataItemsForNavigationItemsWithReadPermission =
     objectMetadataItemsForNavigationItems.filter((objectMetadataItem) => {
@@ -107,11 +115,14 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
         objectMetadataItem.id,
       );
 
-      return permissions.canReadObjectRecords && permissions.showInSidebar;
+      return (
+        permissions.canReadObjectRecords &&
+        (ignoreShowInSidebar || permissions.showInSidebar)
+      );
     });
 
   return (
-    objectMetadataItems.length > 0 && (
+    objectMetadataItemsForNavigationItemsWithReadPermission.length > 0 && (
       <NavigationDrawerSection>
         <NavigationDrawerAnimatedCollapseWrapper>
           <NavigationDrawerSectionTitle

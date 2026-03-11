@@ -4,7 +4,7 @@ import { type CommandMenuItemViewType } from 'twenty-shared/types';
 import { type ShouldBeRegisteredFunctionParams } from '@/command-menu-item/types/ShouldBeRegisteredFunctionParams';
 import { type MessageDescriptor } from '@lingui/core';
 import { type IconComponent } from 'twenty-ui/display';
-import { type MenuItemAccent } from 'twenty-ui/navigation';
+import { type ButtonAccent, type ButtonVariant } from 'twenty-ui/input';
 import { type PermissionFlagType } from '~/generated-metadata/graphql';
 
 export type CommandMenuItemConfig = {
@@ -18,7 +18,8 @@ export type CommandMenuItemConfig = {
   Icon: IconComponent;
   isPinned?: boolean;
   isPrimaryCTA?: boolean;
-  accent?: MenuItemAccent;
+  accent?: ButtonAccent;
+  buttonVariant?: ButtonVariant;
   availableOn?: CommandMenuItemViewType[];
   shouldBeRegistered: (params: ShouldBeRegisteredFunctionParams) => boolean;
   component: React.ReactNode;

@@ -15,8 +15,8 @@ import {
   type FieldMetadataUpdateIndexSideEffect,
   handleIndexChangesDuringFieldUpdate,
 } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-index-changes-during-field-update.util';
-import { handleLabelIdentifierChangesDuringFieldUpdate } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-label-identifier-changes-during-field-update.util';
 import { isEnumFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-enum-flat-field-metadata.util';
+import { handleSearchVectorChangesDuringFieldUpdate } from 'src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util';
 import { type FlatViewFiltersToDeleteAndUpdate } from 'src/engine/metadata-modules/flat-field-metadata/utils/recompute-view-filters-on-flat-field-metadata-options-update.util';
 import { type FlatViewGroupsToDeleteUpdateAndCreate } from 'src/engine/metadata-modules/flat-field-metadata/utils/recompute-view-groups-on-flat-field-metadata-options-update.util';
 
@@ -143,24 +143,18 @@ export const handleFlatFieldMetadataUpdateSideEffect = ({
     flatEntityId: fromFlatFieldMetadata.objectMetadataId,
   });
 
-  const isLabelIdentifierFieldMetadata =
-    flatObjectMetadata.labelIdentifierFieldMetadataId ===
-    toFlatFieldMetadata.id;
+  const flatSearchVectorFieldToUpdate =
+    handleSearchVectorChangesDuringFieldUpdate({
+      fromFlatFieldMetadata,
+      toFlatFieldMetadata,
+      flatObjectMetadata,
+      flatFieldMetadataMaps,
+    });
 
-  if (isLabelIdentifierFieldMetadata) {
-    const flatSearchVectorFieldToUpdate =
-      handleLabelIdentifierChangesDuringFieldUpdate({
-        fromFlatFieldMetadata,
-        toFlatFieldMetadata,
-        flatObjectMetadata,
-        flatFieldMetadataMaps,
-      });
-
-    if (isDefined(flatSearchVectorFieldToUpdate)) {
-      sideEffectResult.flatFieldMetadatasToUpdate.push(
-        flatSearchVectorFieldToUpdate,
-      );
-    }
+  if (isDefined(flatSearchVectorFieldToUpdate)) {
+    sideEffectResult.flatFieldMetadatasToUpdate.push(
+      flatSearchVectorFieldToUpdate,
+    );
   }
 
   const {

@@ -64,7 +64,9 @@ export const useCommandMenuCloseWithValidation = () => {
       if (!objectMetadataItem) return [];
 
       const record = store.get(recordStoreFamilyState.atomFamily(recordId));
-      if (!record) return [];
+      // OMNIA-CUSTOM: once a new record is deleted, closing/backing out should
+      // bypass required-fields validation instead of reopening the delete modal.
+      if (!record || record.deletedAt) return [];
 
       const violations: FieldViolation[] = [];
 

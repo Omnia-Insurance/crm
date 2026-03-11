@@ -26,7 +26,9 @@ export const useBeforeUnloadRequiredFieldsCheck = () => {
         if (!objectMetadataItem) continue;
 
         const record = store.get(recordStoreFamilyState.atomFamily(recordId));
-        if (!record) continue;
+        // OMNIA-CUSTOM: deleted records should not block unload just because
+        // they were originally tracked as newly created.
+        if (!record || record.deletedAt) continue;
 
         for (const field of objectMetadataItem.fields) {
           const requiredCondition = field.requiredCondition as
