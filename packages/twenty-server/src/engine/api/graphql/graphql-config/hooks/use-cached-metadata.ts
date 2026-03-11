@@ -14,6 +14,11 @@ export type CacheMetadataPluginConfig = {
   operationsToCache: string[];
 };
 
+const USER_SCOPED_METADATA_OPERATIONS = new Set([
+  'FindAllCoreViews',
+  'FindFieldsWidgetCoreViews',
+]);
+
 export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
   const computeCacheKey = ({
     operationName,
@@ -34,8 +39,8 @@ export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
       .update(request.body.query)
       .digest('hex');
 
-    // For FindAllCoreViews, use user-specific cache key since visibility filtering is user-dependent
-    if (operationName === 'FindAllCoreViews') {
+    // Core-view visibility is user-dependent, so these responses must stay user-scoped.
+    if (USER_SCOPED_METADATA_OPERATIONS.has(operationName)) {
       return `graphql:operations:${operationName}:${workspace.id}:${workspaceMetadataVersion}:${request.userWorkspaceId}:${queryHash}`;
     }
 

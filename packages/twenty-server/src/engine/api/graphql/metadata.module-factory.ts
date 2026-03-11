@@ -46,7 +46,13 @@ export const metadataModuleFactory = async (
       useCachedMetadata({
         cacheGetter: cacheStorageService.get.bind(cacheStorageService),
         cacheSetter: cacheStorageService.set.bind(cacheStorageService),
-        operationsToCache: ['ObjectMetadataItems', 'FindAllCoreViews'],
+        operationsToCache: [
+          'ObjectMetadataItems',
+          'FindAllCoreViews',
+          'FindFieldsWidgetCoreViews',
+          'FindAllRecordPageLayouts',
+          'FindManyLogicFunctions',
+        ],
       }),
       useDisableIntrospectionAndSuggestionsForUnauthenticatedUsers(
         twentyConfigService.get('NODE_ENV') === NodeEnvironment.PRODUCTION,

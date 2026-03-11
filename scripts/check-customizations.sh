@@ -205,6 +205,29 @@ check_file_contains \
   "Ingress must keep HTML/app routes uncacheable"
 
 echo ""
+echo "--- Critical: Metadata Response Cache ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \
+  "'FindAllRecordPageLayouts'" \
+  "Metadata response cache must include FindAllRecordPageLayouts"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \
+  "'FindFieldsWidgetCoreViews'" \
+  "Metadata response cache must include FindFieldsWidgetCoreViews"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \
+  "'FindManyLogicFunctions'" \
+  "Metadata response cache must include FindManyLogicFunctions"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
+  "USER_SCOPED_METADATA_OPERATIONS" \
+  "Metadata cache hook must keep user-scoped core-view operations grouped together"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
+  "'FindFieldsWidgetCoreViews'" \
+  "Fields-widget core views must stay user-scoped in metadata response cache keys"
+
+echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/role/role.entity.ts" \
