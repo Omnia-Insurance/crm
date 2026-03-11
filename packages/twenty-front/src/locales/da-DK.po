@@ -11903,7 +11903,6 @@ msgid "Score"
 msgstr ""
 
 #. js-lingui-id: A1taO8
-#: src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx
 #: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownWorkspacesListComponents.tsx
 #: src/modules/ui/layout/dropdown/components/DropdownMenuSearchInput.tsx
 #: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
@@ -15412,6 +15411,7 @@ msgstr "Arbejdsgange"
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownVisibilityContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/navigation-menu-item/components/WorkspaceNavigationMenuItems.tsx
+#: src/modules/navigation-menu-item/components/OmniaMemberWorkspaceNavigationMenuItems.tsx
 #: src/modules/favorites/components/WorkspaceFavorites.tsx
 msgid "Workspace"
 msgstr "Arbejdsområde"
