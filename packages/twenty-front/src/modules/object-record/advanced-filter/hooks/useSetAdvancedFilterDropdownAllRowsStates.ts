@@ -9,8 +9,8 @@ import { type RecordFilter } from '@/object-record/record-filter/types/RecordFil
 import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useCallback } from 'react';
 import { useStore } from 'jotai';
+import { useCallback } from 'react';
 
 export const useSetAdvancedFilterDropdownStates = () => {
   const store = useStore();

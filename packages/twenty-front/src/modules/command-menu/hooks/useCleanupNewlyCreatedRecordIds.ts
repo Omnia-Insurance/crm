@@ -1,7 +1,7 @@
 import {
   newlyCreatedRecordIdsState,
   persistNewlyCreatedRecordIds,
-} from '@/object-record/record-right-drawer/states/newlyCreatedRecordIdsState';
+} from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useStore } from 'jotai';
 import { useEffect } from 'react';

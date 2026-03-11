@@ -221,8 +221,12 @@ export class CommonFindManyQueryRunnerService extends CommonBaseQueryRunnerServi
       objectRecords.reverse();
     }
 
-    const parentObjectRecordsAggregatedValues =
-      await aggregateQueryBuilder.getRawOne();
+    const hasAggregatedFields =
+      Object.keys(args.selectedFieldsResult.aggregate ?? {}).length > 0;
+
+    const parentObjectRecordsAggregatedValues = hasAggregatedFields
+      ? await aggregateQueryBuilder.getRawOne()
+      : undefined;
 
     if (isDefined(filteredRelations)) {
       await this.processNestedRelationsHelper.processNestedRelations({

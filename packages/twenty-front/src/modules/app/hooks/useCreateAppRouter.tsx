@@ -1,4 +1,5 @@
 import { AppRouterProviders } from '@/app/components/AppRouterProviders';
+import { LazyRoute } from '@/app/components/LazyRoute';
 import { SettingsRoutes } from '@/app/components/SettingsRoutes';
 import { VerifyLoginTokenEffect } from '@/auth/components/VerifyLoginTokenEffect';
 
@@ -8,16 +9,12 @@ import { BlankLayout } from '@/ui/layout/page/components/BlankLayout';
 import { DefaultLayout } from '@/ui/layout/page/components/DefaultLayout';
 import { AppPath } from 'twenty-shared/types';
 
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import {
   createBrowserRouter,
   createRoutesFromElements,
   Route,
 } from 'react-router-dom';
-import { Authorize } from '~/pages/auth/Authorize';
-import { PasswordReset } from '~/pages/auth/PasswordReset';
-import { SignInUp } from '~/pages/auth/SignInUp';
-import { NotFound } from '~/pages/not-found/NotFound';
 
 const RecordIndexPage = lazy(() =>
   import('~/pages/object-record/RecordIndexPage').then((module) => ({
@@ -31,27 +28,21 @@ const RecordShowPage = lazy(() =>
   })),
 );
 
-const BookCall = lazy(() =>
-  import('~/pages/onboarding/BookCall').then((module) => ({
-    default: module.BookCall,
+const SignInUp = lazy(() =>
+  import('~/pages/auth/SignInUp').then((module) => ({
+    default: module.SignInUp,
   })),
 );
 
-const BookCallDecision = lazy(() =>
-  import('~/pages/onboarding/BookCallDecision').then((module) => ({
-    default: module.BookCallDecision,
+const PasswordReset = lazy(() =>
+  import('~/pages/auth/PasswordReset').then((module) => ({
+    default: module.PasswordReset,
   })),
 );
 
-const ChooseYourPlan = lazy(() =>
-  import('~/pages/onboarding/ChooseYourPlan').then((module) => ({
-    default: module.ChooseYourPlan,
-  })),
-);
-
-const CreateProfile = lazy(() =>
-  import('~/pages/onboarding/CreateProfile').then((module) => ({
-    default: module.CreateProfile,
+const Authorize = lazy(() =>
+  import('~/pages/auth/Authorize').then((module) => ({
+    default: module.Authorize,
   })),
 );
 
@@ -61,9 +52,27 @@ const CreateWorkspace = lazy(() =>
   })),
 );
 
+const CreateProfile = lazy(() =>
+  import('~/pages/onboarding/CreateProfile').then((module) => ({
+    default: module.CreateProfile,
+  })),
+);
+
+const SyncEmails = lazy(() =>
+  import('~/pages/onboarding/SyncEmails').then((module) => ({
+    default: module.SyncEmails,
+  })),
+);
+
 const InviteTeam = lazy(() =>
   import('~/pages/onboarding/InviteTeam').then((module) => ({
     default: module.InviteTeam,
+  })),
+);
+
+const ChooseYourPlan = lazy(() =>
+  import('~/pages/onboarding/ChooseYourPlan').then((module) => ({
+    default: module.ChooseYourPlan,
   })),
 );
 
@@ -73,9 +82,21 @@ const PaymentSuccess = lazy(() =>
   })),
 );
 
-const SyncEmails = lazy(() =>
-  import('~/pages/onboarding/SyncEmails').then((module) => ({
-    default: module.SyncEmails,
+const BookCallDecision = lazy(() =>
+  import('~/pages/onboarding/BookCallDecision').then((module) => ({
+    default: module.BookCallDecision,
+  })),
+);
+
+const BookCall = lazy(() =>
+  import('~/pages/onboarding/BookCall').then((module) => ({
+    default: module.BookCall,
+  })),
+);
+
+const NotFound = lazy(() =>
+  import('~/pages/not-found/NotFound').then((module) => ({
+    default: module.NotFound,
   })),
 );
 
@@ -94,88 +115,109 @@ export const useCreateAppRouter = (
         <Route element={<DefaultLayout />}>
           <Route path={AppPath.Verify} element={<VerifyLoginTokenEffect />} />
           <Route path={AppPath.VerifyEmail} element={<VerifyEmailEffect />} />
-          <Route path={AppPath.SignInUp} element={<SignInUp />} />
-          <Route path={AppPath.Invite} element={<SignInUp />} />
-          <Route path={AppPath.ResetPassword} element={<PasswordReset />} />
+          <Route
+            path={AppPath.SignInUp}
+            element={
+              <LazyRoute>
+                <SignInUp />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path={AppPath.Invite}
+            element={
+              <LazyRoute>
+                <SignInUp />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path={AppPath.ResetPassword}
+            element={
+              <LazyRoute>
+                <PasswordReset />
+              </LazyRoute>
+            }
+          />
           <Route
             path={AppPath.CreateWorkspace}
             element={
-              <Suspense>
+              <LazyRoute>
                 <CreateWorkspace />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.CreateProfile}
             element={
-              <Suspense>
+              <LazyRoute>
                 <CreateProfile />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.SyncEmails}
             element={
-              <Suspense>
+              <LazyRoute>
                 <SyncEmails />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.InviteTeam}
             element={
-              <Suspense>
+              <LazyRoute>
                 <InviteTeam />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.PlanRequired}
             element={
-              <Suspense>
+              <LazyRoute>
                 <ChooseYourPlan />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.PlanRequiredSuccess}
             element={
-              <Suspense>
+              <LazyRoute>
                 <PaymentSuccess />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.BookCallDecision}
             element={
-              <Suspense>
+              <LazyRoute>
                 <BookCallDecision />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.BookCall}
             element={
-              <Suspense>
+              <LazyRoute>
                 <BookCall />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route path={indexAppPath.getIndexAppPath()} element={<></>} />
           <Route
             path={AppPath.RecordIndexPage}
             element={
-              <Suspense>
+              <LazyRoute>
                 <RecordIndexPage />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
             path={AppPath.RecordShowPage}
             element={
-              <Suspense>
+              <LazyRoute>
                 <RecordShowPage />
-              </Suspense>
+              </LazyRoute>
             }
           />
           <Route
@@ -187,10 +229,24 @@ export const useCreateAppRouter = (
               />
             }
           />
-          <Route path={AppPath.NotFoundWildcard} element={<NotFound />} />
+          <Route
+            path={AppPath.NotFoundWildcard}
+            element={
+              <LazyRoute>
+                <NotFound />
+              </LazyRoute>
+            }
+          />
         </Route>
         <Route element={<BlankLayout />}>
-          <Route path={AppPath.Authorize} element={<Authorize />} />
+          <Route
+            path={AppPath.Authorize}
+            element={
+              <LazyRoute>
+                <Authorize />
+              </LazyRoute>
+            }
+          />
         </Route>
       </Route>,
     ),

@@ -1084,9 +1084,8 @@ describe('WorkspaceEventEmitterService', () => {
 
         expect(buildRowLevelPermissionRecordFilter).toHaveBeenCalledWith(
           expect.objectContaining({
-            authContext: expect.objectContaining({
-              userWorkspaceId,
-              workspaceMemberId,
+            workspaceMember: expect.objectContaining({
+              id: workspaceMemberId,
             }),
           }),
         );
@@ -1167,11 +1166,7 @@ describe('WorkspaceEventEmitterService', () => {
 
         expect(buildRowLevelPermissionRecordFilter).toHaveBeenCalledWith(
           expect.objectContaining({
-            authContext: expect.objectContaining({
-              userWorkspaceId,
-              workspaceMemberId,
-              workspaceMember: customWorkspaceMember,
-            }),
+            workspaceMember: customWorkspaceMember,
           }),
         );
       });
@@ -1226,11 +1221,7 @@ describe('WorkspaceEventEmitterService', () => {
 
         expect(buildRowLevelPermissionRecordFilter).toHaveBeenCalledWith(
           expect.objectContaining({
-            authContext: expect.objectContaining({
-              userWorkspaceId,
-              workspaceMemberId,
-              workspaceMember: undefined,
-            }),
+            workspaceMember: undefined,
           }),
         );
       });

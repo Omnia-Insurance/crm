@@ -21,7 +21,7 @@ import {
   type RecordFilterGroup,
 } from 'twenty-shared/utils';
 
-import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
@@ -42,11 +42,12 @@ type BuildRowLevelPermissionRecordFilterArgs = {
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   objectMetadata: FlatObjectMetadata;
   roleId: string | undefined;
-  authContext: AuthContext;
+  workspaceMember?: UserWorkspaceAuthContext['workspaceMember'];
   flatObjectMetadataMaps?: FlatEntityMaps<FlatObjectMetadata>;
   objectIdByNameSingular?: Record<string, string>;
   workspaceDataSource?: DataSource;
   workspaceSchemaName?: string;
+  workspaceId?: string;
 };
 
 const logger = new Logger('buildRowLevelPermissionRecordFilter');
@@ -57,11 +58,12 @@ export const buildRowLevelPermissionRecordFilter = async ({
   flatFieldMetadataMaps,
   objectMetadata,
   roleId,
-  authContext,
+  workspaceMember,
   flatObjectMetadataMaps,
   objectIdByNameSingular,
   workspaceDataSource,
   workspaceSchemaName,
+  workspaceId,
 }: BuildRowLevelPermissionRecordFilterArgs): Promise<RecordGqlOperationFilter | null> => {
   if (!isDefined(roleId)) {
     return null;
@@ -81,8 +83,6 @@ export const buildRowLevelPermissionRecordFilter = async ({
   if (predicates.length === 0) {
     return null;
   }
-
-  const workspaceMember = authContext.workspaceMember;
 
   const recordFilters = (
     await Promise.all(
@@ -216,7 +216,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
 
               if (rows.length === 0) {
                 logger.warn(
-                  `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${authContext.workspace?.id}). Predicate will deny access.`,
+                  `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${workspaceId}). Predicate will deny access.`,
                 );
 
                 return null;
@@ -228,7 +228,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
                   : rows.map((r: { id: string }) => r.id);
             } catch (error) {
               logger.warn(
-                `[RLS] Error resolving indirect relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${authContext.workspace?.id}): ${error instanceof Error ? error.message : String(error)}`,
+                `[RLS] Error resolving indirect relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${workspaceId}): ${error instanceof Error ? error.message : String(error)}`,
               );
 
               return null;
@@ -330,7 +330,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
     recordFilterGroups,
     fields: fieldMetadataItems,
     filterValueDependencies: {
-      currentWorkspaceMemberId: authContext.workspaceMemberId,
+      currentWorkspaceMemberId: workspaceMember?.id,
     },
   });
 };

@@ -17,7 +17,7 @@ import { assertFieldWidgetOrThrow } from '@/page-layout/widgets/field/utils/asse
 import { widgetCardRequiredEmptyComponentFamilyState } from '@/page-layout/widgets/states/widgetCardRequiredEmptyComponentFamilyState';
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
-import { RightDrawerProvider } from '@/ui/layout/right-drawer/contexts/RightDrawerContext';
+import { SidePanelProvider } from '@/ui/layout/side-panel/contexts/SidePanelContext';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useSetAtomComponentFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentFamilyState';
 import { useEffect } from 'react';
@@ -51,7 +51,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
   );
 
   const targetRecord = useTargetRecord();
-  const { isInRightDrawer } = useLayoutRenderingContext();
+  const { isInSidePanel } = useLayoutRenderingContext();
 
   const { isPrefetchLoading } = useRecordShowContainerData({
     objectRecordId: targetRecord.id,
@@ -90,20 +90,20 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
 
   if (isPrefetchLoading) {
     return (
-      <RightDrawerProvider value={{ isInRightDrawer }}>
+      <SidePanelProvider value={{ isInSidePanel }}>
         <StyledContainer>
           <PropertyBoxSkeletonLoader />
         </StyledContainer>
-      </RightDrawerProvider>
+      </SidePanelProvider>
     );
   }
 
   if (!isDefined(fieldMetadataItem) || !fieldMetadataItem.isActive) {
     return (
-      <RightDrawerProvider value={{ isInRightDrawer }}>
+      <SidePanelProvider value={{ isInSidePanel }}>
         <StyledContainer>
           <AnimatedPlaceholderEmptyContainer
-            // eslint-disable-next-line react/jsx-props-no-spreading
+            // oxlint-disable-next-line react/jsx-props-no-spreading
             {...EMPTY_PLACEHOLDER_TRANSITION_PROPS}
           >
             <AnimatedPlaceholder type="noRecord" />
@@ -117,7 +117,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
             </AnimatedPlaceholderEmptyTextContainer>
           </AnimatedPlaceholderEmptyContainer>
         </StyledContainer>
-      </RightDrawerProvider>
+      </SidePanelProvider>
     );
   }
 
@@ -137,7 +137,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
         <FieldWidgetMorphRelationCard
           fieldDefinition={fieldDefinition}
           recordId={targetRecord.id}
-          isInRightDrawer={isInRightDrawer}
+          isInSidePanel={isInSidePanel}
         />
       );
     }
@@ -146,7 +146,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
       <FieldWidgetMorphRelationField
         fieldDefinition={fieldDefinition}
         recordId={targetRecord.id}
-        isInRightDrawer={isInRightDrawer}
+        isInSidePanel={isInSidePanel}
       />
     );
   }
@@ -157,7 +157,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
         <FieldWidgetRelationCard
           fieldDefinition={fieldDefinition}
           relationValue={record}
-          isInRightDrawer={isInRightDrawer}
+          isInSidePanel={isInSidePanel}
         />
       );
     }
@@ -166,7 +166,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
       <FieldWidgetRelationField
         fieldDefinition={fieldDefinition}
         relationValue={record}
-        isInRightDrawer={isInRightDrawer}
+        isInSidePanel={isInSidePanel}
       />
     );
   }
@@ -177,7 +177,7 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
       fieldMetadataItem={fieldMetadataItem}
       objectMetadataItem={objectMetadataItem}
       recordId={targetRecord.id}
-      isInRightDrawer={isInRightDrawer}
+      isInSidePanel={isInSidePanel}
     />
   );
 };

@@ -9,15 +9,12 @@ import {
 } from 'twenty-ui/display';
 import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import {
-  FeatureFlagKey,
-  PermissionFlagType,
-} from '~/generated-metadata/graphql';
+import { FeatureFlagKey } from '~/generated-metadata/graphql';
 
-import { useNavigateCommandMenu } from '@/command-menu/hooks/useNavigateCommandMenu';
+import { useNavigateSidePanel } from '@/side-panel/hooks/useNavigateSidePanel';
 import { FOLDER_ICON_DEFAULT } from '@/navigation-menu-item/constants/FolderIconDefault';
 import { NavigationMenuItemType } from '@/navigation-menu-item/constants/NavigationMenuItemType';
-import { useOpenNavigationMenuItemInCommandMenu } from '@/navigation-menu-item/hooks/useOpenNavigationMenuItemInCommandMenu';
+import { useOpenNavigationMenuItemInSidePanel } from '@/navigation-menu-item/hooks/useOpenNavigationMenuItemInSidePanel';
 import {
   type NavigationMenuItemClickParams,
   useWorkspaceSectionItems,
@@ -27,18 +24,18 @@ import { navigationMenuItemsDraftState } from '@/navigation-menu-item/states/nav
 import { openNavigationMenuItemFolderIdsState } from '@/navigation-menu-item/states/openNavigationMenuItemFolderIdsState';
 import { selectedNavigationMenuItemInEditModeState } from '@/navigation-menu-item/states/selectedNavigationMenuItemInEditModeState';
 import { filterWorkspaceNavigationMenuItems } from '@/navigation-menu-item/utils/filterWorkspaceNavigationMenuItems';
+import { preloadWorkspaceDndKit } from '@/navigation/preloadWorkspaceDndKit';
 import { NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader';
 import { NavigationDrawerSectionForWorkspaceItems } from '@/object-metadata/components/NavigationDrawerSectionForWorkspaceItems';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
 import { useIsPrefetchLoading } from '@/prefetch/hooks/useIsPrefetchLoading';
 import { prefetchNavigationMenuItemsState } from '@/prefetch/states/prefetchNavigationMenuItemsState';
-import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { useStore } from 'jotai';
-import { CommandMenuPages } from 'twenty-shared/types';
+import { SidePanelPages } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 const StyledRightIconsContainer = styled.div`
@@ -73,16 +70,13 @@ export const WorkspaceNavigationMenuItems = () => {
   const setOpenNavigationMenuItemFolderIds = useSetAtomState(
     openNavigationMenuItemFolderIdsState,
   );
-  const { navigateCommandMenu } = useNavigateCommandMenu();
-  const { openNavigationMenuItemInCommandMenu } =
-    useOpenNavigationMenuItemInCommandMenu();
+  const { navigateSidePanel } = useNavigateSidePanel();
+  const { openNavigationMenuItemInSidePanel } =
+    useOpenNavigationMenuItemInSidePanel();
   const { getIcon } = useIcons();
 
   const loading = useIsPrefetchLoading();
   const { t } = useLingui();
-  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
-  const canEditSidebar =
-    isNavigationMenuItemEditingEnabled && hasLayoutsPermission;
 
   const handleEditClick = (event: React.MouseEvent) => {
     event.stopPropagation();
@@ -101,12 +95,12 @@ export const WorkspaceNavigationMenuItems = () => {
           ? currentOpenFolders
           : [...currentOpenFolders, id],
       );
-      openNavigationMenuItemInCommandMenu({
+      openNavigationMenuItemInSidePanel({
         pageTitle: t`Edit folder`,
         pageIcon: getIcon(item.icon ?? item.Icon ?? FOLDER_ICON_DEFAULT),
       });
     } else if (item.itemType === NavigationMenuItemType.LINK) {
-      openNavigationMenuItemInCommandMenu({
+      openNavigationMenuItemInSidePanel({
         pageTitle: t`Edit link`,
         pageIcon: IconLink,
       });
@@ -115,7 +109,7 @@ export const WorkspaceNavigationMenuItems = () => {
         item.itemType === NavigationMenuItemType.VIEW
           ? item.labelIdentifier
           : objectMetadataItem.labelSingular;
-      openNavigationMenuItemInCommandMenu({
+      openNavigationMenuItemInSidePanel({
         pageTitle,
         pageIcon: getIcon(objectMetadataItem.icon),
       });
@@ -128,7 +122,7 @@ export const WorkspaceNavigationMenuItems = () => {
   ) => {
     enterEditMode();
     setSelectedNavigationMenuItemInEditMode(navigationMenuItemId);
-    openNavigationMenuItemInCommandMenu({
+    openNavigationMenuItemInSidePanel({
       pageTitle: objectMetadataItem.labelSingular,
       pageIcon: getIcon(objectMetadataItem.icon),
     });
@@ -136,16 +130,13 @@ export const WorkspaceNavigationMenuItems = () => {
 
   const handleAddMenuItem = (event?: React.MouseEvent) => {
     event?.stopPropagation();
-    navigateCommandMenu({
-      page: CommandMenuPages.NavigationMenuAddItem,
+    navigateSidePanel({
+      page: SidePanelPages.NavigationMenuAddItem,
       pageTitle: t`New sidebar item`,
       pageIcon: IconColumnInsertRight,
       resetNavigationStack: true,
     });
   };
-
-  const isEditMode =
-    isNavigationMenuItemEditingEnabled && isNavigationMenuInEditMode;
 
   if (loading) {
     return <NavigationDrawerSectionForObjectMetadataItemsSkeletonLoader />;
@@ -156,9 +147,9 @@ export const WorkspaceNavigationMenuItems = () => {
       sectionTitle={t`Workspace`}
       items={items}
       rightIcon={
-        canEditSidebar ? (
+        isNavigationMenuItemEditingEnabled ? (
           <StyledRightIconsContainer>
-            {isEditMode ? (
+            {isNavigationMenuInEditMode ? (
               <LightIconButton
                 Icon={IconPlus}
                 accent="tertiary"
@@ -166,23 +157,21 @@ export const WorkspaceNavigationMenuItems = () => {
                 onClick={handleAddMenuItem}
               />
             ) : (
-              <LightIconButton
-                Icon={IconTool}
-                accent="tertiary"
-                size="small"
-                onClick={handleEditClick}
-              />
+              <div onMouseEnter={preloadWorkspaceDndKit}>
+                <LightIconButton
+                  Icon={IconTool}
+                  accent="tertiary"
+                  size="small"
+                  onClick={handleEditClick}
+                />
+              </div>
             )}
           </StyledRightIconsContainer>
         ) : undefined
       }
-      onAddMenuItem={
-        canEditSidebar && isEditMode ? handleAddMenuItem : undefined
-      }
-      isEditMode={isEditMode}
       selectedNavigationMenuItemId={selectedNavigationMenuItemInEditMode}
       onNavigationMenuItemClick={
-        isEditMode ? handleNavigationMenuItemClick : undefined
+        isNavigationMenuInEditMode ? handleNavigationMenuItemClick : undefined
       }
       onActiveObjectMetadataItemClick={
         isNavigationMenuItemEditingEnabled

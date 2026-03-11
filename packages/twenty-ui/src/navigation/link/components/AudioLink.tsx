@@ -1,5 +1,6 @@
 import { styled } from '@linaria/react';
-import { THEME_COMMON, ThemeContext } from '@ui/theme';
+import { THEME_COMMON } from '@ui/theme';
+import { ThemeContext } from '@ui/theme-constants';
 import { useContext } from 'react';
 
 type AudioLinkProps = {

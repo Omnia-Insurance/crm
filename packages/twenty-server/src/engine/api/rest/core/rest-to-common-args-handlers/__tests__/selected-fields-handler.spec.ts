@@ -438,11 +438,12 @@ describe('RestToCommonSelectedFieldsHandler', () => {
 
       expect(result).toEqual({
         name: true,
+        companyId: true,
         company: {
           name: true,
           people: {
             name: true,
-            company: true, // Nested relation at depth 2 shows as boolean
+            companyId: true,
           },
         },
       });
@@ -575,12 +576,12 @@ describe('RestToCommonSelectedFieldsHandler', () => {
         depth: 1,
       });
 
-      // For noteTarget, only note and task relations are included
-      // but company is a MANY_TO_ONE so it's included as a boolean
       expect(result).toEqual({
+        noteId: true,
         note: {
           title: true,
         },
+        companyId: true,
         company: {
           name: true,
         },
