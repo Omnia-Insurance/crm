@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Command } from 'nest-commander';
+import { Command, Option } from 'nest-commander';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -31,6 +31,15 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
     SeedHealthSherpaPipelineCommand.name,
   );
 
+  @Option({
+    flags: '-f, --force',
+    description: 'Delete and recreate the pipeline if it already exists.',
+    required: false,
+  })
+  parseForce(): boolean {
+    return true;
+  }
+
   constructor(
     @InjectRepository(WorkspaceEntity)
     protected readonly workspaceRepository: Repository<WorkspaceEntity>,
@@ -48,6 +57,8 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
+    const force = (options as { force?: boolean }).force ?? false;
+
     this.logger.log(
       `Seeding Health Sherpa pipeline for workspace ${workspaceId}`,
     );
@@ -60,7 +71,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
       },
     });
 
-    if (existing && !options.force) {
+    if (existing && !force) {
       this.logger.log(
         `Pipeline already exists for workspace ${workspaceId}, skipping (use --force to recreate)`,
       );
@@ -68,7 +79,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
       return;
     }
 
-    if (existing && options.force) {
+    if (existing && force) {
       this.logger.log(`Deleting existing pipeline ${existing.id}`);
       await this.pipelineRepository.delete(existing.id);
     }
@@ -164,7 +175,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         targetFieldName: 'status',
         transform: {
           type: 'map',
-          mapping: POLICY_STATUS_MAPPING,
+          values: POLICY_STATUS_MAPPING,
         },
         position: 6,
       },
@@ -190,8 +201,8 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         targetFieldName: 'premium',
         targetCompositeSubField: 'amountMicros',
         transform: {
-          type: 'multiply',
-          factor: 1000000, // Convert dollars to micros
+          type: 'numberScale',
+          multiplier: 1000000, // Convert dollars to micros
         },
         position: 9,
       },
@@ -220,9 +231,6 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
         pipelineId,
         sourceFieldPath: 'member_ids',
         targetFieldName: 'memberIdentifiers',
-        transform: {
-          type: 'json_array', // Ensure it's stored as JSON array
-        },
         position: 12,
       },
 

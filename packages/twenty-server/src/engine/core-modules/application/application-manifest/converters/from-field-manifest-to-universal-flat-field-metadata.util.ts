@@ -84,6 +84,7 @@ export const fromFieldManifestToUniversalFlatFieldMetadata = ({
     isUIReadOnly: false,
     isNullable: fieldManifest.isNullable ?? true,
     isUnique: false,
+    requiredCondition: null,
     isLabelSyncedWithName: false,
     morphId:
       fieldManifest.type === FieldMetadataType.MORPH_RELATION

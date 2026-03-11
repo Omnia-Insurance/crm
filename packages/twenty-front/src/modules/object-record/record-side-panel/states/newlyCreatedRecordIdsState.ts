@@ -25,9 +25,8 @@ export const persistNewlyCreatedRecordIds = (map: NewlyCreatedRecordMap) => {
   }
 };
 
-export const newlyCreatedRecordIdsState = createAtomState<NewlyCreatedRecordMap>(
-  {
+export const newlyCreatedRecordIdsState =
+  createAtomState<NewlyCreatedRecordMap>({
     key: 'newlyCreatedRecordIdsState',
     defaultValue: loadFromSession(),
-  },
-);
+  });

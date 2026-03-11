@@ -21,6 +21,7 @@ type Assertions = [
       | 'options'
       | 'settings'
       | 'isUnique'
+      | 'requiredCondition'
       | 'isLabelSyncedWithName'
       | 'universalSettings'
     >

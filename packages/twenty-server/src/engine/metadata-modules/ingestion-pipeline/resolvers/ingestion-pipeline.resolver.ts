@@ -170,6 +170,7 @@ export class IngestionPipelineResolver {
       recordsSkipped: log.recordsSkipped,
       recordsFailed: log.recordsFailed,
       errors: null,
+      incomingPayload: log.incomingPayload ?? null,
       startedAt: log.startedAt,
       completedAt: log.completedAt,
       durationMs: log.durationMs,

@@ -167,8 +167,8 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelec
 
     const isRelationToWorkspaceMember =
       selectedFieldMetadataItem?.type === FieldMetadataType.RELATION &&
-      (selectedFieldMetadataItem.relation?.targetObjectMetadata
-        .nameSingular === CoreObjectNameSingular.WorkspaceMember ||
+      (selectedFieldMetadataItem.relation?.targetObjectMetadata.nameSingular ===
+        CoreObjectNameSingular.WorkspaceMember ||
         hasRelationToWorkspaceMember(
           selectedFieldMetadataItem.relation?.targetObjectMetadata
             .nameSingular ?? '',

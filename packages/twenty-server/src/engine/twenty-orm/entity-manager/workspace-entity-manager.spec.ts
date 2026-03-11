@@ -153,6 +153,7 @@ describe('WorkspaceEntityManager', () => {
       isSystem: false,
       isUIReadOnly: false,
       isUnique: false,
+      requiredCondition: null,
       options: null,
       settings: null,
       standardOverrides: null,

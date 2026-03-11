@@ -39,6 +39,7 @@ type Assertions = [
       | 'standardOverrides'
       | 'options'
       | 'isUnique'
+      | 'requiredCondition'
       | 'isLabelSyncedWithName'
       | 'universalSettings'
     >

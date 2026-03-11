@@ -22,6 +22,7 @@ import {
   type PhonesFilter,
   type RatingFilter,
   type RawJsonFilter,
+  type RelationFilter,
   type RecordGqlOperationFilter,
   type RichTextV2Filter,
   type SelectFilter,
@@ -437,9 +438,9 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
         // ONE_TO_MANY relation: handle { is: 'NULL' } / { is: 'NOT_NULL' }
         // The actual filtering is done at the SQL query level;
         // at record-validation level, just check if related records exist
-        const relationIsFilter = filterValue as IsFilter | undefined;
+        const relationFilter = filterValue as RelationFilter | undefined;
 
-        if (relationIsFilter?.is === 'NULL') {
+        if (relationFilter?.is === 'NULL') {
           return (
             !recordFieldValue ||
             (Array.isArray(recordFieldValue) &&
@@ -447,7 +448,7 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
           );
         }
 
-        if (relationIsFilter?.is === 'NOT_NULL') {
+        if (relationFilter?.is === 'NOT_NULL') {
           return (
             Array.isArray(recordFieldValue) && recordFieldValue.length > 0
           );

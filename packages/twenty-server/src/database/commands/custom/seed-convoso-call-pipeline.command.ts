@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Command } from 'nest-commander';
+import { Command, Option } from 'nest-commander';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,6 +22,15 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
     SeedConvosoCallPipelineCommand.name,
   );
 
+  @Option({
+    flags: '-f, --force',
+    description: 'Delete and recreate the pipeline if it already exists.',
+    required: false,
+  })
+  parseForce(): boolean {
+    return true;
+  }
+
   constructor(
     @InjectRepository(WorkspaceEntity)
     protected readonly workspaceRepository: Repository<WorkspaceEntity>,
@@ -39,6 +48,8 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
     workspaceId,
     options,
   }: RunOnWorkspaceArgs): Promise<void> {
+    const force = (options as { force?: boolean }).force ?? false;
+
     this.logger.log(
       `Seeding Convoso Call pipeline for workspace ${workspaceId}`,
     );
@@ -51,7 +62,7 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
       },
     });
 
-    if (existing && !options.force) {
+    if (existing && !force) {
       this.logger.log(
         `Pipeline already exists for workspace ${workspaceId}, skipping (use --force to recreate)`,
       );
@@ -59,7 +70,7 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspacesM
       return;
     }
 
-    if (existing && options.force) {
+    if (existing && force) {
       this.logger.log(`Deleting existing pipeline ${existing.id}`);
       await this.pipelineRepository.delete(existing.id);
     }

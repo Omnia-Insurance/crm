@@ -14,8 +14,7 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 import { WorkspaceMigrationRunnerService } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/services/workspace-migration-runner.service';
 
 const FIRST_FIELD_UNIVERSAL_IDENTIFIER =
-  ADD_MISSING_SYSTEM_FIELDS_TO_STANDARD_OBJECTS_1771420702241.actions[0]
-    .flatEntity.universalIdentifier;
+  'cef8f62c-cd46-4444-8cbb-17d463b7464a';
 
 @Command({
   name: 'upgrade:1-19:add-missing-system-fields-to-standard-objects',

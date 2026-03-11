@@ -1,10 +1,27 @@
 import { FieldMetadataType } from 'twenty-shared/types';
 
 import { type WorkspaceMigration } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration.type';
+import { type UniversalCreateFieldAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/field/types/workspace-migration-field-action';
 
-export const ADD_MISSING_SYSTEM_FIELDS_TO_STANDARD_OBJECTS_1771420702241 = {
-  applicationUniversalIdentifier: '20202020-64aa-4b6f-b003-9c74b97cee20',
-  actions: [
+type LegacyUniversalCreateFieldAction = Omit<
+  UniversalCreateFieldAction,
+  'flatEntity'
+> & {
+  flatEntity: Omit<UniversalCreateFieldAction['flatEntity'], 'requiredCondition'>;
+};
+
+const addRequiredConditionToFieldActions = (
+  actions: LegacyUniversalCreateFieldAction[],
+): UniversalCreateFieldAction[] =>
+  actions.map((action) => ({
+    ...action,
+    flatEntity: {
+      ...action.flatEntity,
+      requiredCondition: null,
+    },
+  }));
+
+const rawActions: LegacyUniversalCreateFieldAction[] = [
     {
       type: 'create',
       metadataName: 'fieldMetadata',
@@ -2577,5 +2594,11 @@ export const ADD_MISSING_SYSTEM_FIELDS_TO_STANDARD_OBJECTS_1771420702241 = {
         universalSettings: null,
       },
     },
-  ],
-} as const satisfies WorkspaceMigration;
+];
+
+const actions = addRequiredConditionToFieldActions(rawActions);
+
+export const ADD_MISSING_SYSTEM_FIELDS_TO_STANDARD_OBJECTS_1771420702241 = {
+  applicationUniversalIdentifier: '20202020-64aa-4b6f-b003-9c74b97cee20',
+  actions,
+} satisfies WorkspaceMigration<UniversalCreateFieldAction>;

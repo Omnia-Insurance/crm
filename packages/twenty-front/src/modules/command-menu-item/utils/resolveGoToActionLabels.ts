@@ -5,7 +5,8 @@ import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataI
 // Maps "Go to" action keys to the object they navigate to
 const GO_TO_ACTION_OBJECT_MAP: Record<string, CoreObjectNameSingular> = {
   [NoSelectionRecordCommandKeys.GO_TO_PEOPLE]: CoreObjectNameSingular.Person,
-  [NoSelectionRecordCommandKeys.GO_TO_COMPANIES]: CoreObjectNameSingular.Company,
+  [NoSelectionRecordCommandKeys.GO_TO_COMPANIES]:
+    CoreObjectNameSingular.Company,
   [NoSelectionRecordCommandKeys.GO_TO_OPPORTUNITIES]:
     CoreObjectNameSingular.Opportunity,
   [NoSelectionRecordCommandKeys.GO_TO_TASKS]: CoreObjectNameSingular.Task,

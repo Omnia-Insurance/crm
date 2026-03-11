@@ -37,6 +37,7 @@ export const getMockFieldMetadataEntity = <
     isUIReadOnly: false,
     isSystem: false,
     isUnique: null,
+    requiredCondition: null,
     object: {} as ObjectMetadataEntity,
     relationTargetFieldMetadata: null,
     relationTargetFieldMetadataId: null,

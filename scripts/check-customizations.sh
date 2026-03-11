@@ -384,7 +384,8 @@ fi
 
 echo ""
 echo "--- Lingui Translations ---"
-if grep -q "Show All Objects in Sidebar" "packages/twenty-front/src/locales/en.po" 2>/dev/null; then
+if grep -q "Missing Required Fields" "packages/twenty-front/src/locales/en.po" 2>/dev/null && \
+   grep -q "Please fill in: {0}" "packages/twenty-front/src/locales/en.po" 2>/dev/null; then
   echo -e "${GREEN}OK${NC} Lingui translations contain custom strings"
 else
   echo -e "${YELLOW}WARNING${NC} Custom Lingui strings missing — run: npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile"

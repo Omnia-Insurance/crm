@@ -1687,7 +1687,7 @@ export const STANDARD_OBJECTS = {
       companyIdIndex: {
         universalIdentifier: '8a265a5c-d3ae-47dc-bdf9-b42cfa2ba639',
       },
-      emailsUniqueIndex: {
+      phonesUniqueIndex: {
         universalIdentifier: '8183a8b2-9114-4f6c-8a5b-12e3f14e5e13',
       },
       searchVectorGinIndex: {

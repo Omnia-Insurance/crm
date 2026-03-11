@@ -2,7 +2,6 @@ import { NavigationDrawerOpenedSection } from '@/object-metadata/components/Navi
 import { NavigationDrawerWorkspaceSectionSkeletonLoader } from '@/object-metadata/components/NavigationDrawerWorkspaceSectionSkeletonLoader';
 import { RemoteNavigationDrawerSection } from '@/object-metadata/components/RemoteNavigationDrawerSection';
 
-import { NavigationDrawerOtherSection } from '@/navigation/components/NavigationDrawerOtherSection';
 import { styled } from '@linaria/react';
 import { lazy, Suspense } from 'react';
 

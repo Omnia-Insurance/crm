@@ -15,27 +15,29 @@ import { useCallback } from 'react';
 
 export const RequiredFieldsValidationModal = () => {
   const store = useStore();
-  const validationData = useAtomStateValue(requiredFieldsValidationState);
+  const requiredFieldsValidation = useAtomStateValue(
+    requiredFieldsValidationState,
+  );
   const { closeSidePanelMenu } = useSidePanelMenu();
   const { goBackFromSidePanel } = useSidePanelHistory();
 
   const objectNameSingular =
-    validationData?.objectNameSingular || 'person';
+    requiredFieldsValidation?.objectNameSingular || 'person';
 
   const { deleteOneRecord } = useDeleteOneRecord({
     objectNameSingular,
   });
 
   const subtitle = (() => {
-    if (!validationData) return '';
-    const fields = validationData.violations.map((v) => v.fieldLabel);
+    if (!requiredFieldsValidation) return '';
+    const fields = requiredFieldsValidation.violations.map((v) => v.fieldLabel);
     return t`Please fill in: ${fields.join(', ')}`;
   })();
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!validationData) return;
+    if (!requiredFieldsValidation) return;
 
-    const { recordId, pendingAction } = validationData;
+    const { recordId, pendingAction } = requiredFieldsValidation;
 
     const currentMap = store.get(newlyCreatedRecordIdsState.atom);
     const updatedMap = new Map(currentMap);
@@ -55,8 +57,8 @@ export const RequiredFieldsValidationModal = () => {
     closeSidePanelMenu,
     deleteOneRecord,
     goBackFromSidePanel,
+    requiredFieldsValidation,
     store,
-    validationData,
   ]);
 
   const handleClose = useCallback(() => {
