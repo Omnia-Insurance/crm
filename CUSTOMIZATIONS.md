@@ -16,7 +16,8 @@ These files have been overwritten by upstream merges multiple times. **Always ve
 
 | File                                                                                                                                                                 | What We Changed                                                                                                           | Why                                                                                                         |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `packages/twenty-front/src/modules/object-record/hooks/useBuildRecordInputFromRLSPredicates.ts`                                                                      | Indirect RLS relation resolution (Agent → WorkspaceMember)                                                                | Members can't create policies without it — frontend throws before mutation                                  |
+| `packages/twenty-front/src/modules/object-record/hooks/useBuildRecordInputFromRLSPredicates.ts`                                                                      | Write-scoped dynamic relation resolution for `policy.agent -> agentProfile.workspaceMember`                                | `Policy / Write only / Agent is Me` breaks create/edit without resolving the intermediate agent-profile id   |
+| `packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/hooks/useFilteredSelectOptionsFromRLSPredicates.ts`                                      | Select-option RLS filtering only uses `ALL + WRITE` predicates                                                            | Read-only rules must not leak into editable pickers/selects after the scoped RLS rollout                    |
 | `packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectForm.tsx` | Removed Organization plan gate on RLS                                                                                     | Self-hosted, no billing — RLS must always be available                                                      |
 | `packages/twenty-front/src/modules/navigation/components/MainNavigationDrawer.tsx`                                                                                   | Sidebar: Settings at top, Documentation removed, Search item retained in sidebar                                          | UX preferences                                                                                              |
 | `packages/twenty-front/src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerHeader.tsx`                                                            | Removed inline search icon next to workspace name                                                                         | Search should only live in the sidebar                                                                      |
@@ -31,7 +32,7 @@ These files have been overwritten by upstream merges multiple times. **Always ve
 | `packages/twenty-server/src/engine/metadata-modules/object-permission/object-permission.entity.ts`                                                                   | Added `editWindowMinutes` column                                                                                          | Per-object edit window override                                                                             |
 | `packages/twenty-server/src/engine/metadata-modules/role/services/workspace-roles-permissions-cache.service.ts`                                                      | Resolves `editWindowMinutes` in cache                                                                                     | Edit window enforcement depends on this                                                                     |
 | `packages/twenty-shared/src/types/ObjectPermissions.ts`                                                                                                              | Added `editWindowMinutes` to shared type                                                                                  | Both server + frontend depend on this                                                                       |
-| `packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                                                               | RLS predicates are action-scoped (`ALL` / `READ` / `WRITE`)                                                              | Policies must stay globally visible while only write-restricted for non-owners                              |
+| `packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                                                               | RLS predicates are action-scoped (`ALL` / `READ` / `WRITE`) and relation-based `Me` predicates resolve through linked records | Policies must stay globally visible while only write-restricted for non-owners; `policy.agent = Me` must resolve via AgentProfile, not raw `workspaceMemberId` |
 
 ## Custom Server Modules (Entirely New)
 
@@ -180,6 +181,15 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - Member role should keep a `WRITE`-scoped Policy predicate matching policy ownership (`policy.agent`) to the current workspace member/agent chain.
 - Result: agents can search and view all policies, but create/update/delete/restore is restricted to their own policies.
 
+**Regression hit on March 11, 2026:**
+
+- Symptom: `Member -> Policy -> Write only -> Agent is Me` looked correct in Settings, but policy create/edit still failed with `Record does not satisfy security constraints`.
+- Root cause: the scoped RLS rollout correctly split `READ` vs `WRITE`, but relation-based dynamic `Me` predicates were still treating `workspaceMember.id` as if it matched `policy.agentId` directly. For policies, the real path is `policy.agentId -> agentProfile.id -> agentProfile.workspaceMemberId -> workspaceMember.id`.
+- Frontend fix: `useBuildRecordInputFromRLSPredicates.ts` now only uses `ALL + WRITE` predicates for record creation and pre-resolves the intermediate relation record ID before prefilling `agentId`. `useFilteredSelectOptionsFromRLSPredicates.ts` also limits editable option filtering to `ALL + WRITE`.
+- Backend fix: `build-row-level-permission-record-filter.util.ts` now resolves relation-based `Me` predicates through the relation target object's link back to `workspaceMember`, then builds the final filter against the resolved related record IDs.
+- Why pre-query hooks were not enough: Omnia's policy pre-query hooks still auto-assign `agentId`, but backend `WRITE`-scope RLS validation runs independently and must also understand the `workspaceMember -> agentProfile -> policy.agent` chain.
+- Regression coverage: `packages/twenty-server/src/engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts` covers the exact `policy.agent = Me` relation-resolution case.
+
 ### Relation Picker Filtering (Policy Assignment)
 
 | File                                                                                                 | Modification                                                                                                                                                      |
@@ -270,7 +280,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | File                                           | Modification                                                                                                                           |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `packages/twenty-server/src/app.module.ts`     | Excludes `/assets/*` and `/images/*` from the SPA fallback so missing hashed assets return real 404s, and sets `no-store` on HTML     |
-| `packages/twenty-docker/helm/twenty/omnia-values.yaml` | Nginx ingress adds `immutable` cache headers for JS/CSS/fonts/images and `no-cache, no-store, must-revalidate` for HTML/app routes |
+| `packages/twenty-docker/helm/twenty/omnia-values.yaml` | Nginx ingress adds `immutable` cache headers for successful JS/CSS/fonts/images only, and `no-cache, no-store, must-revalidate` for HTML/app routes |
 
 ### RLS / Permissions Engine
 
@@ -279,6 +289,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                  | Indirect relation support, deny-by-default when predicates can't resolve, and action-scoped predicate filtering |
 | `engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts`                     | Applies `READ` predicates to queries and `WRITE` predicates to update/delete/restore query builders            |
 | `engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts`                       | RLS validation on create/update now always enforces `WRITE`-scoped predicates                                  |
+| `engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts`   | Regression test covering relation-based `policy.agent = Me` resolution through the linked AgentProfile record  |
 | `engine/workspace-event-emitter/workspace-event-emitter.service.ts`                         | Event-stream subscriptions use `READ`-scoped predicates                                                         |
 | `engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util.ts` | **NEW** — Strip restricted fields instead of rejecting queries                                                 |
 | `engine/metadata-modules/row-level-permission-predicate/services/row-level-permission-predicate.service.ts` | Rejects mixed-scope predicate trees so groups/predicates stay internally consistent                |
@@ -393,12 +404,12 @@ After every upstream merge:
 1. **Run the check script**: `./scripts/check-customizations.sh`
 2. **Run typecheck**: `npx nx typecheck twenty-front && npx nx typecheck twenty-ui` — catches broken imports from upstream renames
 3. **Re-extract Lingui**: `npx nx run twenty-front:lingui:extract && npx nx run twenty-front:lingui:compile`
-4. **Verify RLS works**: Log in as member role, create a policy from Policies page
+4. **Verify policy create under write-only RLS**: Settings → Roles → Member → Permissions → Policy → Record-level should be `Write only: Agent is Me`; then log in as a member and create a policy from Policies page without hitting `Record does not satisfy security constraints`
 5. **Verify sidebar/header**: Settings at top, no Documentation link, Search in sidebar, no inline search icon beside workspace name
 6. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
 7. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
 8. **Verify scoped RLS UI**: Settings → Roles → Member → Permissions → Policy → Record-level shows `Read + write`, `Read only`, and `Write only`
-9. **Verify policy scoped RLS behavior**: Member can open/search all policies, but only edit/delete/restore policies they own; Policy `WRITE` rule persists while `ALL`/`READ` scopes stay empty
+9. **Verify policy scoped RLS behavior**: Member can open/search all policies, create policies for themselves, and only edit/delete/restore policies they own; Policy `WRITE` rule persists while `ALL`/`READ` scopes stay empty
 10. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
 11. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
 12. **Verify uniqueness flags**: Emails `isUnique: false`, Phones `isUnique: true` in `compute-person-standard-flat-field-metadata.util.ts`

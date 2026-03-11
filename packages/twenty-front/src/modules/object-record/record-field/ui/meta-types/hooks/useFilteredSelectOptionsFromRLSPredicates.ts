@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import {
   type RowLevelPermissionPredicate,
   RowLevelPermissionPredicateOperand,
+  RowLevelPermissionPredicateScope,
 } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type SelectOption } from 'twenty-ui/input';
@@ -124,7 +125,11 @@ export const useFilteredSelectOptionsFromRLSPredicates = ({
 
     const selectPredicates =
       objectPermissions.rowLevelPermissionPredicates.filter(
-        (predicate) => predicate.fieldMetadataId === fieldMetadataId,
+        (predicate) =>
+          predicate.fieldMetadataId === fieldMetadataId &&
+          (predicate.scope === RowLevelPermissionPredicateScope.ALL ||
+            predicate.scope === RowLevelPermissionPredicateScope.WRITE ||
+            !isDefined(predicate.scope)),
       );
 
     if (selectPredicates.length === 0) {

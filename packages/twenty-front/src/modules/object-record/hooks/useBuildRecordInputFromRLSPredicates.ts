@@ -6,7 +6,12 @@ import { convertPredicateToRecordFilter } from '@/settings/roles/role-permission
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { CoreObjectNameSingular, RelationType } from 'twenty-shared/types';
+import {
+  CoreObjectNameSingular,
+  FieldMetadataType,
+  RelationType,
+  RowLevelPermissionPredicateScope,
+} from 'twenty-shared/types';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
@@ -53,23 +58,70 @@ export const useBuildRecordInputFromRLSPredicates = ({
 
   const { objectMetadataItems } = useObjectMetadataItems();
 
-  // Detect indirect relation: when an RLS predicate's workspaceMemberFieldMetadataId
-  // refers to a field on an intermediate object (e.g., Agent.workspaceMember)
-  // rather than directly on WorkspaceMember
-  const intermediateObjectInfo = useMemo(() => {
-    const predicates = objectPermissions.rowLevelPermissionPredicates.filter(
-      (predicate) => predicate.objectMetadataId === objectMetadataItem.id,
-    );
+  const writeScopedRlsPredicates = useMemo(
+    () =>
+      objectPermissions.rowLevelPermissionPredicates.filter(
+        (predicate) =>
+          predicate.objectMetadataId === objectMetadataItem.id &&
+          (predicate.scope === RowLevelPermissionPredicateScope.ALL ||
+            predicate.scope === RowLevelPermissionPredicateScope.WRITE ||
+            !isDefined(predicate.scope)),
+      ),
+    [objectMetadataItem.id, objectPermissions.rowLevelPermissionPredicates],
+  );
 
-    for (const predicate of predicates) {
+  // Detect indirect relation: when an RLS predicate's workspaceMemberFieldMetadataId
+  // needs to resolve through an intermediate object (e.g. Policy.agent ->
+  // AgentProfile.workspaceMember) instead of using the raw workspaceMember id.
+  const intermediateObjectInfo = useMemo(() => {
+    for (const predicate of writeScopedRlsPredicates) {
       const wmFieldId = predicate.workspaceMemberFieldMetadataId;
 
-      if (!wmFieldId) continue;
+      if (!wmFieldId) {
+        continue;
+      }
+
+      const predicateFieldMetadataItem = objectMetadataItem.fields.find(
+        (field) => field.id === predicate.fieldMetadataId,
+      );
 
       const isOnWorkspaceMember =
         workspaceMemberObjectMetadataItem?.fields.some(
           (field) => field.id === wmFieldId,
         );
+
+      if (
+        isDefined(predicateFieldMetadataItem) &&
+        predicateFieldMetadataItem.type === FieldMetadataType.RELATION
+      ) {
+        const relationTargetObjectNameSingular =
+          predicateFieldMetadataItem.relation?.targetObjectMetadata
+            .nameSingular;
+
+        if (
+          isDefined(relationTargetObjectNameSingular) &&
+          relationTargetObjectNameSingular !==
+            CoreObjectNameSingular.WorkspaceMember
+        ) {
+          const relationTargetObjectMetadataItem = objectMetadataItems.find(
+            (item) => item.nameSingular === relationTargetObjectNameSingular,
+          );
+          const relationToWorkspaceMemberField =
+            relationTargetObjectMetadataItem?.fields.find(
+              (field) =>
+                field.type === FieldMetadataType.RELATION &&
+                field.relation?.targetObjectMetadata.nameSingular ===
+                  CoreObjectNameSingular.WorkspaceMember,
+            );
+
+          if (isDefined(relationToWorkspaceMemberField)) {
+            return {
+              objectNameSingular: relationTargetObjectNameSingular,
+              relationFieldName: relationToWorkspaceMemberField.name,
+            };
+          }
+        }
+      }
 
       if (!isOnWorkspaceMember) {
         for (const obj of objectMetadataItems) {
@@ -87,10 +139,10 @@ export const useBuildRecordInputFromRLSPredicates = ({
 
     return null;
   }, [
-    objectPermissions,
-    objectMetadataItem,
-    workspaceMemberObjectMetadataItem,
     objectMetadataItems,
+    objectMetadataItem.fields,
+    workspaceMemberObjectMetadataItem,
+    writeScopedRlsPredicates,
   ]);
 
   // Pre-fetch intermediate object record for the current user
@@ -124,9 +176,11 @@ export const useBuildRecordInputFromRLSPredicates = ({
       : fieldMetadataItem.name;
 
   const getWorkspaceMemberFieldValue = ({
+    fieldMetadataItem,
     workspaceMemberFieldMetadataId,
     workspaceMemberSubFieldName,
   }: {
+    fieldMetadataItem: ObjectMetadataItem['fields'][number];
     workspaceMemberFieldMetadataId?: string | null;
     workspaceMemberSubFieldName?: string | null;
   }) => {
@@ -147,6 +201,16 @@ export const useBuildRecordInputFromRLSPredicates = ({
       // a removed field. Skip gracefully; the server-side hook will set
       // the correct value with bypassed permissions.
       return undefined;
+    }
+
+    if (
+      fieldMetadataItem.type === FieldMetadataType.RELATION &&
+      workspaceMemberFieldMetadataItem.name === 'id' &&
+      fieldMetadataItem.relation?.targetObjectMetadata.nameSingular ===
+        intermediateObjectInfo?.objectNameSingular &&
+      isDefined(intermediateRecordId)
+    ) {
+      return intermediateRecordId;
     }
 
     let workspaceMemberFieldValue =
@@ -175,15 +239,11 @@ export const useBuildRecordInputFromRLSPredicates = ({
   };
 
   const buildRecordInputFromRLSPredicates = (): Partial<ObjectRecord> => {
-    const rlsPredicates = objectPermissions.rowLevelPermissionPredicates.filter(
-      (predicate) => predicate.objectMetadataId === objectMetadataItem.id,
-    );
-
     const fieldMetadataItemMap = new Map(
       objectMetadataItem.fields.map((field) => [field.id, field]),
     );
 
-    const rlsPredicatesAsRecordFilters = rlsPredicates
+    const rlsPredicatesAsRecordFilters = writeScopedRlsPredicates
       .map((predicate) =>
         convertPredicateToRecordFilter(
           predicate,
@@ -215,6 +275,7 @@ export const useBuildRecordInputFromRLSPredicates = ({
 
         const recordInputField = getRecordInputFieldName(fieldMetadataItem);
         const currentWorkspaceMemberFieldValue = getWorkspaceMemberFieldValue({
+          fieldMetadataItem,
           workspaceMemberFieldMetadataId:
             filter.rlsDynamicValue?.workspaceMemberFieldMetadataId,
           workspaceMemberSubFieldName:

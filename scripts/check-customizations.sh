@@ -69,11 +69,19 @@ echo ""
 # Critical Files (repeatedly wiped by upstream merges)
 # ==========================================================
 
-echo "--- Critical: RLS Indirect Relation Resolution ---"
+echo "--- Critical: RLS Relation Write Resolution ---"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/hooks/useBuildRecordInputFromRLSPredicates.ts" \
-  "intermediateObjectInfo" \
-  "Indirect RLS resolution (Agent→WM) — members can't create policies without this"
+  "writeScopedRlsPredicates" \
+  "Create-time RLS prefill must stay scoped to ALL + WRITE predicates"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/hooks/useBuildRecordInputFromRLSPredicates.ts" \
+  "intermediateRecordId" \
+  "Create-time RLS prefill must resolve relation-based Me rules through the intermediate record id"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/hooks/useFilteredSelectOptionsFromRLSPredicates.ts" \
+  "RowLevelPermissionPredicateScope.WRITE" \
+  "Editable select/picker option filtering must only use ALL + WRITE scoped predicates"
 
 echo ""
 echo "--- Critical: Organization Plan Gate Removed ---"
@@ -187,6 +195,10 @@ check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
   'public, max-age=31536000, immutable' \
   "Ingress must keep immutable caching for JS/CSS/font/image assets"
+check_file_not_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  'immutable" always;' \
+  "Ingress must not mark missing asset 404s as immutable cache hits"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
   'no-cache, no-store, must-revalidate' \
@@ -279,12 +291,20 @@ echo ""
 echo "--- RLS Engine: Indirect Relation + Deny-by-Default ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
-  "isDirectRelation" \
-  "Backend RLS must support indirect relations"
+  "resolveWorkspaceMemberLinkedRelationRecordIds" \
+  "Backend RLS must resolve relation-based Me predicates through linked records"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
+  "relationToWorkspaceMemberField" \
+  "Backend RLS must find the relation target's link back to workspaceMember"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
   "00000000-0000-0000-0000-000000000000" \
   "Deny-by-default when predicates can't resolve"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts" \
+  "resolves relation predicates to related workspace-member records for write filters" \
+  "Regression test for policy.agent = Me relation resolution"
 
 echo ""
 echo "--- RLS Engine: Scoped Read/Write Predicates ---"
