@@ -681,10 +681,10 @@ msgstr "Ability to edit all settings"
 msgid "Ability to filter the records a user can interact with"
 msgstr "Ability to filter the records a user can interact with"
 
-#. js-lingui-id: 7J3Y++
+#. js-lingui-id: 03ABau
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
-msgid "Ability to filter the records a user can interact with."
-msgstr "Ability to filter the records a user can interact with."
+msgid "Ability to filter the records a user can view and edit."
+msgstr "Ability to filter the records a user can view and edit."
 
 #. js-lingui-id: wTKqOI
 #: src/modules/settings/roles/role-permissions/object-level-permissions/field-permissions/components/SettingsRolePermissionsObjectLevelObjectFieldPermissionTable.tsx
@@ -11117,6 +11117,11 @@ msgstr "Ratio"
 msgid "Raw JSON"
 msgstr "Raw JSON"
 
+#. js-lingui-id: QBwtSq
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read + write"
+msgstr "Read + write"
+
 #. js-lingui-id: 549d7o
 #: src/pages/settings/updates/SettingsUpdates.tsx
 msgid "Read changelog"
@@ -11126,6 +11131,11 @@ msgstr "Read changelog"
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "Read documentation"
 msgstr "Read documentation"
+
+#. js-lingui-id: uNQ6eB
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read only"
+msgstr "Read only"
 
 #. js-lingui-id: afMuDE
 #: src/pages/auth/Authorize.tsx
@@ -11758,6 +11768,21 @@ msgstr "row level permission predicate group"
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Ruby"
 msgstr "Ruby"
+
+#. js-lingui-id: qrh/HC
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role creates, updates, deletes, or restores records."
+msgstr "Rules applied only when this role creates, updates, deletes, or restores records."
+
+#. js-lingui-id: VQyw+z
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role views records."
+msgstr "Rules applied only when this role views records."
+
+#. js-lingui-id: kkMkQg
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied when this role both views and edits records."
+msgstr "Rules applied when this role both views and edits records."
 
 #. js-lingui-id: 3JjdaA
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
@@ -15492,6 +15517,11 @@ msgstr "Write a description"
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
 msgid "Write a description for this agent"
 msgstr "Write a description for this agent"
+
+#. js-lingui-id: ML27+F
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Write only"
+msgstr "Write only"
 
 #. js-lingui-id: zeCIJi
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionCodeEditorTab.tsx

@@ -12,6 +12,12 @@ import {
   type UseRecordDataOptions,
 } from '@/object-record/record-index/export/hooks/useRecordIndexLazyFetchRecords';
 import { type ExportConfig } from '@/object-record/record-index/export/types/ExportConfig';
+import {
+  buildExportableRelationFieldPaths,
+  buildRecordGqlFieldsFromSelectedFieldPaths,
+  getRelationFieldFlatKey,
+  getRelationFieldValueFromPath,
+} from '@/object-record/record-index/export/utils/relationExportFieldPaths';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
@@ -247,10 +253,9 @@ export const useRecordIndexExportRecords = ({
           continue;
         }
 
-        const recordGqlFields: Record<string, boolean> = { id: true };
-        for (const subFieldName of relationConfig.selectedSubFields) {
-          recordGqlFields[subFieldName] = true;
-        }
+        const recordGqlFields = buildRecordGqlFieldsFromSelectedFieldPaths(
+          relationConfig.selectedFieldPaths,
+        );
 
         try {
           const query = generateFindManyRecordsQuery({
@@ -348,27 +353,24 @@ export const useRecordIndexExportRecords = ({
           continue;
         }
 
-        for (const subFieldName of relationConfig.selectedSubFields) {
-          const subFieldMetadata = targetObjectMetadataItem.fields.find(
-            (f) => f.name === subFieldName,
-          );
+        const exportableFieldPaths = buildExportableRelationFieldPaths({
+          objectMetadataItem: targetObjectMetadataItem,
+          objectMetadataItems,
+        }).filter((subField) =>
+          relationConfig.selectedFieldPaths.includes(subField.fieldPath),
+        );
 
-          if (!isDefined(subFieldMetadata)) {
-            continue;
-          }
-
-          const subFieldType = subFieldMetadata.type as FieldMetadataType;
-
-          if (isCompositeFieldType(subFieldType)) {
+        for (const exportableFieldPath of exportableFieldPaths) {
+          if (isCompositeFieldType(exportableFieldPath.fieldType)) {
             const subFieldLabels =
-              COMPOSITE_FIELD_SUB_FIELD_LABELS[subFieldType];
+              COMPOSITE_FIELD_SUB_FIELD_LABELS[exportableFieldPath.fieldType];
 
             for (const [compositeKey, compositeLabel] of Object.entries(
               subFieldLabels,
             )) {
-              const flatFieldName = `${fieldName}__${subFieldName}__${compositeKey}`;
+              const flatFieldName = `${getRelationFieldFlatKey(fieldName, exportableFieldPath.fieldPath)}__${compositeKey}`;
               expandedColumns.push({
-                label: `${relationConfig.relationFieldLabel} / ${subFieldMetadata.label} / ${compositeLabel}`,
+                label: `${relationConfig.relationFieldLabel} / ${exportableFieldPath.fieldLabel} / ${compositeLabel}`,
                 type: FieldMetadataType.TEXT,
                 metadata: {
                   fieldName: flatFieldName,
@@ -376,10 +378,13 @@ export const useRecordIndexExportRecords = ({
               });
             }
           } else {
-            const flatFieldName = `${fieldName}__${subFieldName}`;
+            const flatFieldName = getRelationFieldFlatKey(
+              fieldName,
+              exportableFieldPath.fieldPath,
+            );
             expandedColumns.push({
-              label: `${relationConfig.relationFieldLabel} / ${subFieldMetadata.label}`,
-              type: subFieldType,
+              label: `${relationConfig.relationFieldLabel} / ${exportableFieldPath.fieldLabel}`,
+              type: exportableFieldPath.fieldType,
               metadata: {
                 fieldName: flatFieldName,
               },
@@ -388,7 +393,7 @@ export const useRecordIndexExportRecords = ({
         }
       }
 
-      // Pre-compute sub-field types per relation
+      // Pre-compute field path metadata per relation
       const relationSubFieldTypes = new Map<
         string,
         Map<string, FieldMetadataType>
@@ -399,11 +404,22 @@ export const useRecordIndexExportRecords = ({
         );
         const subFieldTypes = new Map<string, FieldMetadataType>();
         if (isDefined(targetMeta)) {
-          for (const subFieldName of rc.selectedSubFields) {
-            const meta = targetMeta.fields.find((f) => f.name === subFieldName);
-            if (isDefined(meta)) {
-              subFieldTypes.set(subFieldName, meta.type as FieldMetadataType);
+          const exportableFieldPaths = buildExportableRelationFieldPaths({
+            objectMetadataItem: targetMeta,
+            objectMetadataItems,
+          });
+
+          for (const exportableFieldPath of exportableFieldPaths) {
+            if (
+              !rc.selectedFieldPaths.includes(exportableFieldPath.fieldPath)
+            ) {
+              continue;
             }
+
+            subFieldTypes.set(
+              exportableFieldPath.fieldPath,
+              exportableFieldPath.fieldType,
+            );
           }
         }
         relationSubFieldTypes.set(rc.relationFieldName, subFieldTypes);
@@ -432,9 +448,12 @@ export const useRecordIndexExportRecords = ({
             relationConfig.relationFieldName,
           );
 
-          for (const subFieldName of relationConfig.selectedSubFields) {
-            const rawValue = relatedRecord?.[subFieldName];
-            const fieldType = subFieldTypes?.get(subFieldName);
+          for (const selectedFieldPath of relationConfig.selectedFieldPaths) {
+            const rawValue = getRelationFieldValueFromPath(
+              relatedRecord,
+              selectedFieldPath,
+            );
+            const fieldType = subFieldTypes?.get(selectedFieldPath);
 
             if (
               isDefined(rawValue) &&
@@ -447,12 +466,18 @@ export const useRecordIndexExportRecords = ({
                 COMPOSITE_FIELD_SUB_FIELD_LABELS[fieldType];
 
               for (const compositeKey of Object.keys(subFieldLabels)) {
-                const flatFieldName = `${relationConfig.relationFieldName}__${subFieldName}__${compositeKey}`;
+                const flatFieldName = `${getRelationFieldFlatKey(
+                  relationConfig.relationFieldName,
+                  selectedFieldPath,
+                )}__${compositeKey}`;
                 expandedRecord[flatFieldName] =
                   compositeRecord[compositeKey] ?? '';
               }
             } else {
-              const flatFieldName = `${relationConfig.relationFieldName}__${subFieldName}`;
+              const flatFieldName = getRelationFieldFlatKey(
+                relationConfig.relationFieldName,
+                selectedFieldPath,
+              );
               expandedRecord[flatFieldName] = rawValue ?? '';
             }
           }

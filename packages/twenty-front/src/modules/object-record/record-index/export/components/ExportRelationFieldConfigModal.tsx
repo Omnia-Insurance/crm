@@ -36,12 +36,12 @@ const StyledModalContent = styled.div`
 `;
 
 const StyledFooter = styled.div`
-  justify-content: flex-end;
-  gap: ${themeCssVariables.spacing[2]};
   align-items: center;
   display: flex;
   flex-direction: row;
+  gap: ${themeCssVariables.spacing[2]};
   height: 60px;
+  justify-content: flex-end;
   overflow: hidden;
   padding: ${themeCssVariables.spacing[5]};
 `;
@@ -52,12 +52,12 @@ const StyledRelationSection = styled.div`
 `;
 
 const StyledRelationHeader = styled.div`
-  display: flex;
   align-items: center;
+  border-radius: ${themeCssVariables.border.radius.sm};
+  cursor: pointer;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
   padding: ${themeCssVariables.spacing['1.5']} ${themeCssVariables.spacing[2]};
-  cursor: pointer;
-  border-radius: ${themeCssVariables.border.radius.sm};
   &:hover {
     background: ${themeCssVariables.background.transparent.light};
   }
@@ -80,8 +80,8 @@ const StyledSubFieldList = styled.div`
 `;
 
 const StyledDescription = styled.div`
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
   padding: ${themeCssVariables.spacing[0]} ${themeCssVariables.spacing[4]}
     ${themeCssVariables.spacing[2]};
 `;
@@ -110,7 +110,7 @@ export const ExportRelationFieldConfigModal = ({
     const initial: RelationSelectionState = {};
     for (const relation of exportableRelationFields) {
       initial[relation.fieldName] = new Set(
-        relation.exportableSubFields.map((f) => f.fieldName),
+        relation.exportableSubFields.map((f) => f.fieldPath),
       );
     }
     return initial;
@@ -159,7 +159,7 @@ export const ExportRelationFieldConfigModal = ({
         return {
           ...prev,
           [relationFieldName]: new Set(
-            relation.exportableSubFields.map((f) => f.fieldName),
+            relation.exportableSubFields.map((f) => f.fieldPath),
           ),
         };
       });
@@ -174,7 +174,7 @@ export const ExportRelationFieldConfigModal = ({
         relationFieldName: relation.fieldName,
         relationFieldLabel: relation.fieldLabel,
         targetObjectNameSingular: relation.targetObjectNameSingular,
-        selectedSubFields: Array.from(selections[relation.fieldName] ?? []),
+        selectedFieldPaths: Array.from(selections[relation.fieldName] ?? []),
       }));
 
     closeModal(modalId);
@@ -248,16 +248,16 @@ export const ExportRelationFieldConfigModal = ({
                 <StyledSubFieldList>
                   {relation.exportableSubFields.map((subField) => (
                     <MenuItemMultiSelect
-                      key={subField.fieldName}
+                      key={subField.fieldPath}
                       text={subField.fieldLabel}
                       selected={
                         selections[relation.fieldName]?.has(
-                          subField.fieldName,
+                          subField.fieldPath,
                         ) ?? false
                       }
                       className=""
                       onSelectChange={() =>
-                        toggleSubField(relation.fieldName, subField.fieldName)
+                        toggleSubField(relation.fieldName, subField.fieldPath)
                       }
                     />
                   ))}

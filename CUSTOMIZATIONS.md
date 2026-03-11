@@ -24,11 +24,13 @@ These files have been overwritten by upstream merges multiple times. **Always ve
 | `packages/twenty-front/src/modules/navigation-menu-item/components/WorkspaceNavigationMenuItemsDispatcher.tsx`                                                       | Members bypass the editable workspace tree and use a fixed Omnia workspace section (Leads, Calls, Policies, Notes, Tasks) | Prevents admin-only folders like Carriers from leaking back into member sidebars after upstream nav changes |
 | `packages/twenty-front/src/modules/command-menu/components/CommandMenuButton.tsx`                                                                                    | Pinned create CTA supports explicit button variant/accent so Policies/Leads pages keep a filled blue "Create ..." button  | Upstream hardcodes secondary buttons here and will revert to blue outline / generic CTA                     |
 | `packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/components/MultipleRecordPicker.tsx`                                           | Restores shared `additionalFilter` support for multi-select relation pickers                                              | Lead → Policy picker relies on this to hide policies already linked to other leads across typing/load-more  |
+| `packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx` | Record-level permissions are split into Read + write / Read only / Write only sections                                    | Omnia policy access depends on action-scoped RLS, not one shared predicate tree                             |
 | `packages/twenty-front/src/locales/*.po` and `src/locales/generated/*.ts`                                                                                            | Custom Lingui translations                                                                                                | Must re-run `lingui extract && lingui compile` after upstream merge                                         |
 | `packages/twenty-server/src/engine/metadata-modules/role/role.entity.ts`                                                                                             | Added `editWindowMinutes` column                                                                                          | Configurable edit window per role                                                                           |
 | `packages/twenty-server/src/engine/metadata-modules/object-permission/object-permission.entity.ts`                                                                   | Added `editWindowMinutes` column                                                                                          | Per-object edit window override                                                                             |
 | `packages/twenty-server/src/engine/metadata-modules/role/services/workspace-roles-permissions-cache.service.ts`                                                      | Resolves `editWindowMinutes` in cache                                                                                     | Edit window enforcement depends on this                                                                     |
 | `packages/twenty-shared/src/types/ObjectPermissions.ts`                                                                                                              | Added `editWindowMinutes` to shared type                                                                                  | Both server + frontend depend on this                                                                       |
+| `packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                                                               | RLS predicates are action-scoped (`ALL` / `READ` / `WRITE`)                                                              | Policies must stay globally visible while only write-restricted for non-owners                              |
 
 ## Custom Server Modules (Entirely New)
 
@@ -128,6 +130,9 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts` | Execute relation updates after parent upsert                           |
 | `object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow.ts`        | Explicit `isRelationConnectField` filter                               |
 | `object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts`          | Keep composite fields as objects for proper sub-field export           |
+| `command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Restore the related-fields modal before export when visible relations exist |
+| `object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx`        | Select relation export leaves by field path so nested relational fields can be chosen |
+| `object-record/record-index/export/hooks/useExportableRelationFields.ts`                | Recursively enumerate exportable `MANY_TO_ONE` relation leaves         |
 | `object-record/record-index/export/hooks/useRecordIndexExportRecords.ts`                | Split composite relation sub-fields into separate CSV columns          |
 | `spreadsheet-import/utils/dataMutations.ts`                                             | Trim whitespace before validation                                      |
 | `spreadsheet-import/utils/normalizeTableData.ts`                                        | Trim whitespace on matched column values                               |
@@ -141,12 +146,38 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `object-record/spreadsheet-import/utils/spreadsheetImportGetRelationUpdateSubFieldKey.ts`   | Key format for update fields                            |
 | `object-record/spreadsheet-import/utils/spreadsheetImportGetRelationUpdateSubFieldLabel.ts` | Label format for update fields                          |
 
+### New Export Utilities
+
+| File                                                                     | Purpose                                                                          |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `object-record/record-index/export/utils/relationExportFieldPaths.ts`    | Builds recursive relation export field paths, nested GraphQL selections, and flat CSV keys |
+| `object-record/record-index/export/types/ExportConfig.ts`                | Stores selected related export fields as dotted field paths (`selectedFieldPaths`) |
+
 ### RLS and Permissions
 
 | File                                                                  | Modification                                                            |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `object-record/hooks/useBuildRecordInputFromRLSPredicates.ts`         | **CRITICAL** — Indirect relation resolution for Agent → WorkspaceMember |
 | `settings/roles/.../SettingsRolePermissionsObjectLevelObjectForm.tsx` | Removed Organization plan billing gate                                  |
+
+### Action-Scoped RLS (Read vs Write)
+
+| File                                                                                                                                    | Modification                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings/roles/.../record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx`                       | Splits record-level permissions into three builders: `Read + write`, `Read only`, `Write only`                                       |
+| `settings/roles/.../record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder.tsx`       | Builder instance ids are scope-specific so per-scope drafts do not bleed into each other                                              |
+| `settings/roles/.../record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent.tsx` | Threads scope through initialization and draft sync                                                                                    |
+| `settings/roles/.../record-level-permissions/hooks/useRecordLevelPermissionFilterInitialization.ts`                                     | Hydrates only predicates/groups for the selected object + scope                                                                        |
+| `settings/roles/.../record-level-permissions/hooks/useRecordLevelPermissionSyncToDraftRole.ts`                                         | Replaces only the selected object + scope slice when editing                                                                          |
+| `settings/roles/.../record-level-permissions/utils/recordLevelPermissionPredicateConversion.ts`                                         | Converts draft filters/groups into scoped predicates/groups                                                                            |
+| `settings/roles/role/hooks/useSaveDraftRoleToDB.ts`                                                                                     | Persists predicate/group `scope` back to GraphQL                                                                                       |
+| `generated-metadata/graphql.ts`                                                                                                         | Regenerated metadata GraphQL types include `RowLevelPermissionPredicateScope` and predicate/group `scope` fields                      |
+
+**Omnia policy configuration target:**
+
+- Member role should have no Policy `ALL` or `READ` row-level predicates.
+- Member role should keep a `WRITE`-scoped Policy predicate matching policy ownership (`policy.agent`) to the current workspace member/agent chain.
+- Result: agents can search and view all policies, but create/update/delete/restore is restricted to their own policies.
 
 ### Relation Picker Filtering (Policy Assignment)
 
@@ -235,11 +266,28 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 
 ### RLS / Permissions Engine
 
-| File                                                                                        | Modification                                                             |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                  | Indirect relation support, deny-by-default when predicates can't resolve |
-| `engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts`                       | RLS validation on record create/update                                   |
-| `engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util.ts` | **NEW** — Strip restricted fields instead of rejecting queries           |
+| File                                                                                        | Modification                                                                                                   |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                  | Indirect relation support, deny-by-default when predicates can't resolve, and action-scoped predicate filtering |
+| `engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts`                     | Applies `READ` predicates to queries and `WRITE` predicates to update/delete/restore query builders            |
+| `engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts`                       | RLS validation on create/update now always enforces `WRITE`-scoped predicates                                  |
+| `engine/workspace-event-emitter/workspace-event-emitter.service.ts`                         | Event-stream subscriptions use `READ`-scoped predicates                                                         |
+| `engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util.ts` | **NEW** — Strip restricted fields instead of rejecting queries                                                 |
+| `engine/metadata-modules/row-level-permission-predicate/services/row-level-permission-predicate.service.ts` | Rejects mixed-scope predicate trees so groups/predicates stay internally consistent                |
+| `database/typeorm/core/migrations/common/1773079000000-add-scope-to-row-level-permission-predicates.ts` | **NEW** migration adding `scope` to predicates and predicate groups, defaulting existing rows to `ALL`         |
+
+### Shared Types: Action-Scoped RLS
+
+| File                                                                                                            | Modification                                                                 |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `packages/twenty-shared/src/types/RowLevelPermissionPredicateScope.ts`                                          | **NEW** shared enum defining `ALL`, `READ`, and `WRITE` predicate scopes     |
+| `packages/twenty-shared/src/types/RowLevelPermissionPredicate.ts`                                               | Added `scope` to shared predicate type                                       |
+| `packages/twenty-shared/src/types/RowLevelPermissionPredicateGroup.ts`                                          | Added `scope` to shared predicate-group type                                 |
+| `packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate.entity.ts` | Added persisted predicate `scope` column                         |
+| `packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity.ts` | Added persisted predicate-group `scope` column               |
+| `packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate.dto.ts` | Exposes predicate `scope` over GraphQL                                 |
+| `packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate-group.dto.ts` | Exposes predicate-group `scope` over GraphQL                           |
+| `packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/dtos/inputs/upsert-row-level-permission-predicates.input.ts` | Allows scope-aware predicate/group upserts                    |
 
 ### Global Search / Custom Object Search Coverage
 
@@ -341,11 +389,13 @@ After every upstream merge:
 5. **Verify sidebar/header**: Settings at top, no Documentation link, Search in sidebar, no inline search icon beside workspace name
 6. **Verify member login redirect**: Log in as member — should land on People (Leads), not alphabetical first object
 7. **Verify RLS settings UI**: No "Upgrade to access" gate on Record-level permissions
-8. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
-9. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
-10. **Verify uniqueness flags**: Emails `isUnique: false`, Phones `isUnique: true` in `compute-person-standard-flat-field-metadata.util.ts`
-11. **Verify create CTA**: Policies/Leads/etc. index page shows a filled blue `Create Policy` / `Create Lead` header button, not outlined `New record`
-12. **Verify member workspace sidebar**: Member role cannot edit workspace items; workspace section shows Leads, Calls, Policies, Notes, Tasks; Carriers folder is absent
-13. **Run lint**: `npx nx lint:diff-with-main twenty-front`
-14. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
-15. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
+8. **Verify scoped RLS UI**: Settings → Roles → Member → Permissions → Policy → Record-level shows `Read + write`, `Read only`, and `Write only`
+9. **Verify policy scoped RLS behavior**: Member can open/search all policies, but only edit/delete/restore policies they own; Policy `WRITE` rule persists while `ALL`/`READ` scopes stay empty
+10. **Verify edit window**: Settings → Roles → Member → Permissions → Policy → "Edit window" dropdown present, saves correctly
+11. **Verify required fields**: Settings → Data Model → Policy → any field → "Required" toggle present with condition options
+12. **Verify uniqueness flags**: Emails `isUnique: false`, Phones `isUnique: true` in `compute-person-standard-flat-field-metadata.util.ts`
+13. **Verify create CTA**: Policies/Leads/etc. index page shows a filled blue `Create Policy` / `Create Lead` header button, not outlined `New record`
+14. **Verify member workspace sidebar**: Member role cannot edit workspace items; workspace section shows Leads, Calls, Policies, Notes, Tasks; Carriers folder is absent
+15. **Run lint**: `npx nx lint:diff-with-main twenty-front`
+16. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
+17. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`

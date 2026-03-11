@@ -686,9 +686,9 @@ msgstr "Kyky muokata kaikkia asetuksia"
 msgid "Ability to filter the records a user can interact with"
 msgstr ""
 
-#. js-lingui-id: 7J3Y++
+#. js-lingui-id: 03ABau
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
-msgid "Ability to filter the records a user can interact with."
+msgid "Ability to filter the records a user can view and edit."
 msgstr ""
 
 #. js-lingui-id: wTKqOI
@@ -11122,6 +11122,11 @@ msgstr "Suhde"
 msgid "Raw JSON"
 msgstr "Raaka JSON"
 
+#. js-lingui-id: QBwtSq
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read + write"
+msgstr ""
+
 #. js-lingui-id: 549d7o
 #: src/pages/settings/updates/SettingsUpdates.tsx
 msgid "Read changelog"
@@ -11131,6 +11136,11 @@ msgstr "Lue muutosloki"
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "Read documentation"
 msgstr "Lue dokumentaatio"
+
+#. js-lingui-id: uNQ6eB
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read only"
+msgstr ""
 
 #. js-lingui-id: afMuDE
 #: src/pages/auth/Authorize.tsx
@@ -11763,6 +11773,21 @@ msgstr ""
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Ruby"
 msgstr "Rubiini"
+
+#. js-lingui-id: qrh/HC
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role creates, updates, deletes, or restores records."
+msgstr ""
+
+#. js-lingui-id: VQyw+z
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role views records."
+msgstr ""
+
+#. js-lingui-id: kkMkQg
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied when this role both views and edits records."
+msgstr ""
 
 #. js-lingui-id: 3JjdaA
 #: src/pages/settings/ai/components/SettingsAgentEvalsTab.tsx
@@ -15495,6 +15520,11 @@ msgstr "Kirjoita kuvaus"
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
 msgid "Write a description for this agent"
 msgstr "Kirjoita kuvaus tälle agentille"
+
+#. js-lingui-id: ML27+F
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Write only"
+msgstr ""
 
 #. js-lingui-id: zeCIJi
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionCodeEditorTab.tsx

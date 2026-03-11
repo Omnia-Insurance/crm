@@ -83,6 +83,25 @@ check_file_not_contains \
   "Organization plan gate should be removed — RLS always enabled"
 
 echo ""
+echo "--- Critical: Scoped RLS UI ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx" \
+  'Read + write' \
+  "Record-level permissions must stay split into Read + write / Read only / Write only sections"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx" \
+  "RowLevelPermissionPredicateScope.WRITE" \
+  "Record-level permissions UI must expose the write-only scope"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role/hooks/useSaveDraftRoleToDB.ts" \
+  "scope: predicate.scope" \
+  "Saving roles must persist predicate scope to GraphQL"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role/hooks/useSaveDraftRoleToDB.ts" \
+  "scope: group.scope" \
+  "Saving roles must persist predicate-group scope to GraphQL"
+
+echo ""
 echo "--- Critical: Sidebar Customization ---"
 check_file_contains \
   "packages/twenty-front/src/modules/navigation/components/MainNavigationDrawer.tsx" \
@@ -245,6 +264,51 @@ check_file_contains \
   "Deny-by-default when predicates can't resolve"
 
 echo ""
+echo "--- RLS Engine: Scoped Read/Write Predicates ---"
+check_file_exists \
+  "packages/twenty-shared/src/types/RowLevelPermissionPredicateScope.ts" \
+  "Shared RLS predicate scope enum"
+check_file_contains \
+  "packages/twenty-shared/src/types/RowLevelPermissionPredicateScope.ts" \
+  "WRITE = 'WRITE'" \
+  "RLS scope enum must include WRITE"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate.entity.ts" \
+  "scope: RowLevelPermissionPredicateScope" \
+  "Predicate entity must persist scope"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity.ts" \
+  "scope: RowLevelPermissionPredicateScope" \
+  "Predicate-group entity must persist scope"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1773079000000-add-scope-to-row-level-permission-predicates.ts" \
+  "Migration adding scope to row-level predicates"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
+  "targetScope" \
+  "RLS filter builder must accept a target scope"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts" \
+  "RowLevelPermissionPredicateScope.WRITE" \
+  "Query-time RLS must route writes through WRITE scope"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts" \
+  "RowLevelPermissionPredicateScope.READ" \
+  "Query-time RLS must route reads through READ scope"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts" \
+  "targetScope: RowLevelPermissionPredicateScope.WRITE" \
+  "Record validation must always enforce WRITE-scoped predicates"
+check_file_contains \
+  "packages/twenty-server/src/engine/workspace-event-emitter/workspace-event-emitter.service.ts" \
+  "targetScope: RowLevelPermissionPredicateScope.READ" \
+  "Workspace event subscriptions must stay READ-scoped"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/row-level-permission-predicate/services/row-level-permission-predicate.service.ts" \
+  "validateScopedPredicateTree" \
+  "Role permission service must reject mixed-scope predicate trees"
+
+echo ""
 echo "--- RLS Validation on Create/Update ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts" \
@@ -382,6 +446,33 @@ check_file_not_contains \
   "packages/twenty-front/src/modules/object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts" \
   "formatPhoneNumber" \
   "Composite fields should be kept as objects, not flattened"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
+  "ExportRelationFieldConfigModal" \
+  "Export view must open the related-fields modal instead of exporting directly when relation fields are available"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportableRelationFields.ts" \
+  "buildExportableRelationFieldPaths" \
+  "Related export fields must recurse through nested MANY_TO_ONE relations"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
+  "Nested relation export utility"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
+  "visitedObjectMetadataKeys" \
+  "Nested relation export utility must guard against cyclical relation traversal"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/types/ExportConfig.ts" \
+  "selectedFieldPaths" \
+  "Export config must preserve nested relation field paths"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
+  "buildRecordGqlFieldsFromSelectedFieldPaths" \
+  "Related export query builder must support nested relation field paths"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
+  "getRelationFieldValueFromPath" \
+  "Related export row flattening must resolve nested relation values by path"
 
 echo ""
 echo "--- Whitespace Trimming ---"
@@ -435,6 +526,21 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RelationOneToManyFieldInput.tsx" \
   "additionalFilter={leadPolicyRecordPickerAdditionalFilter}" \
   "Inline/table-cell policy picker must pass the allowlist into MultipleRecordPicker"
+
+echo ""
+echo "--- RLS UI: Scoped Draft Sync ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/hooks/useRecordLevelPermissionFilterInitialization.ts" \
+  "predicate.scope === scope" \
+  "Record-level filter initialization must load only predicates for the current scope"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/hooks/useRecordLevelPermissionSyncToDraftRole.ts" \
+  "predicate.scope !== scope" \
+  "Record-level draft sync must preserve other scopes for the same object"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion.ts" \
+  "scope," \
+  "Record-level predicate conversion must stamp scope onto draft predicates/groups"
 
 echo ""
 echo "--- Required Fields: Frontend Core ---"

@@ -681,9 +681,9 @@ msgstr ""
 msgid "Ability to filter the records a user can interact with"
 msgstr ""
 
-#. js-lingui-id: 7J3Y++
+#. js-lingui-id: 03ABau
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
-msgid "Ability to filter the records a user can interact with."
+msgid "Ability to filter the records a user can view and edit."
 msgstr ""
 
 #. js-lingui-id: wTKqOI
@@ -11117,6 +11117,11 @@ msgstr ""
 msgid "Raw JSON"
 msgstr ""
 
+#. js-lingui-id: QBwtSq
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read + write"
+msgstr ""
+
 #. js-lingui-id: 549d7o
 #: src/pages/settings/updates/SettingsUpdates.tsx
 msgid "Read changelog"
@@ -11125,6 +11130,11 @@ msgstr ""
 #. js-lingui-id: ibPuCP
 #: src/pages/settings/applications/tabs/SettingsApplicationsDeveloperTab.tsx
 msgid "Read documentation"
+msgstr ""
+
+#. js-lingui-id: uNQ6eB
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Read only"
 msgstr ""
 
 #. js-lingui-id: afMuDE
@@ -11757,6 +11767,21 @@ msgstr ""
 #. js-lingui-id: 7jTlsu
 #: src/modules/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectFormOptionRow.tsx
 msgid "Ruby"
+msgstr ""
+
+#. js-lingui-id: qrh/HC
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role creates, updates, deletes, or restores records."
+msgstr ""
+
+#. js-lingui-id: VQyw+z
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied only when this role views records."
+msgstr ""
+
+#. js-lingui-id: kkMkQg
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Rules applied when this role both views and edits records."
 msgstr ""
 
 #. js-lingui-id: 3JjdaA
@@ -15487,6 +15512,11 @@ msgstr ""
 #: src/pages/settings/ai/forms/components/SettingsAIAgentForm.tsx
 #: src/pages/settings/ai/components/SettingsAgentSettingsTab.tsx
 msgid "Write a description for this agent"
+msgstr ""
+
+#. js-lingui-id: ML27+F
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx
+msgid "Write only"
 msgstr ""
 
 #. js-lingui-id: zeCIJi

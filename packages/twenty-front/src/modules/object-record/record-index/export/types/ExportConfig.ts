@@ -5,8 +5,8 @@ export type RelationExportConfig = {
   relationFieldLabel: string;
   // target object name singular (e.g., "person", "company")
   targetObjectNameSingular: string;
-  // target object fields to include (e.g., ["name", "phones", "emails"])
-  selectedSubFields: string[];
+  // target object field paths to include (e.g., ["name", "productType.name"])
+  selectedFieldPaths: string[];
 };
 
 export type ExportConfig = {

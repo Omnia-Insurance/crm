@@ -1,6 +1,9 @@
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type ObjectMetadataItem } from '@/object-metadata/types/ObjectMetadataItem';
+import {
+  buildExportableRelationFieldPaths,
+  type ExportableRelationFieldPath,
+} from '@/object-record/record-index/export/utils/relationExportFieldPaths';
 import { useMemo } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
@@ -10,59 +13,7 @@ type ExportableRelationField = {
   fieldLabel: string;
   targetObjectNameSingular: string;
   targetObjectLabel: string;
-  exportableSubFields: {
-    fieldName: string;
-    fieldLabel: string;
-    fieldType: FieldMetadataType;
-  }[];
-};
-
-const EXCLUDED_FIELD_NAMES = new Set([
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-  'position',
-  'id',
-]);
-
-const EXPORTABLE_FIELD_TYPES = new Set([
-  FieldMetadataType.TEXT,
-  FieldMetadataType.NUMBER,
-  FieldMetadataType.DATE_TIME,
-  FieldMetadataType.DATE,
-  FieldMetadataType.BOOLEAN,
-  FieldMetadataType.PHONES,
-  FieldMetadataType.EMAILS,
-  FieldMetadataType.FULL_NAME,
-  FieldMetadataType.ADDRESS,
-  FieldMetadataType.CURRENCY,
-  FieldMetadataType.LINKS,
-  FieldMetadataType.SELECT,
-  FieldMetadataType.MULTI_SELECT,
-  FieldMetadataType.RATING,
-  FieldMetadataType.UUID,
-]);
-
-const isExportableField = (field: FieldMetadataItem): boolean => {
-  if (field.isActive === false || field.isSystem === true) {
-    return false;
-  }
-  if (EXCLUDED_FIELD_NAMES.has(field.name)) {
-    return false;
-  }
-  if (field.type === FieldMetadataType.RELATION) {
-    return false;
-  }
-  if (field.type === FieldMetadataType.ACTOR) {
-    return false;
-  }
-  if (field.type === FieldMetadataType.RICH_TEXT_V2) {
-    return false;
-  }
-  if (field.type === FieldMetadataType.FILES) {
-    return false;
-  }
-  return EXPORTABLE_FIELD_TYPES.has(field.type as FieldMetadataType);
+  exportableSubFields: ExportableRelationFieldPath[];
 };
 
 export const useExportableRelationFields = ({
@@ -99,13 +50,10 @@ export const useExportableRelationFields = ({
           return null;
         }
 
-        const exportableSubFields = targetObjectMetadataItem.fields
-          .filter(isExportableField)
-          .map((subField) => ({
-            fieldName: subField.name,
-            fieldLabel: subField.label,
-            fieldType: subField.type as FieldMetadataType,
-          }));
+        const exportableSubFields = buildExportableRelationFieldPaths({
+          objectMetadataItem: targetObjectMetadataItem,
+          objectMetadataItems,
+        });
 
         if (exportableSubFields.length === 0) {
           return null;
