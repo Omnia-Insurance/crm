@@ -312,13 +312,13 @@ check_file_exists \
   "Required field violations hook"
 
 echo ""
-echo "--- Required Fields: Command Menu Validation ---"
+echo "--- Required Fields: Side Panel Validation ---"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu/components/CommandMenuTopBar.tsx" \
+  "packages/twenty-front/src/modules/side-panel/components/SidePanelTopBar.tsx" \
   "closeWithValidation" \
   "X button must use closeWithValidation"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu/components/CommandMenuBackButton.tsx" \
+  "packages/twenty-front/src/modules/side-panel/components/SidePanelBackButton.tsx" \
   "goBackWithValidation" \
   "Back button must use goBackWithValidation"
 check_file_exists \
