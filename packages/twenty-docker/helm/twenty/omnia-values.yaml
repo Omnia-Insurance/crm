@@ -40,8 +40,11 @@ server:
       nginx.ingress.kubernetes.io/proxy-next-upstream-timeout: "10"
       nginx.ingress.kubernetes.io/proxy-body-size: "10m"
       nginx.ingress.kubernetes.io/configuration-snippet: |
+        # OMNIA-CUSTOM: Do not mark missing chunks/images as immutable. If a
+        # stale tab requests an old hashed asset during a rolling deploy, the
+        # 404 must not become a cacheable edge response.
         if ($request_uri ~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico)$) {
-          add_header Cache-Control "public, max-age=31536000, immutable" always;
+          add_header Cache-Control "public, max-age=31536000, immutable";
         }
         if ($request_uri !~* \.(?:js|css|woff2?|svg|png|jpg|jpeg|gif|ico|json|map|wasm)$) {
           add_header Cache-Control "no-cache, no-store, must-revalidate" always;
