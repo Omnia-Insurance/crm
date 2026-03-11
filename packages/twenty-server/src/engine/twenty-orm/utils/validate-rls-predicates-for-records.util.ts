@@ -68,6 +68,7 @@ export const validateRLSPredicatesForRecords = async <T extends ObjectLiteral>({
     workspaceDataSource: internalContext.coreDataSource,
     workspaceSchemaName: getWorkspaceSchemaName(internalContext.workspaceId),
     workspaceId: internalContext.workspaceId,
+    rlsComputationCache: internalContext.rlsComputationCache,
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {

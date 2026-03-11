@@ -37,6 +37,7 @@ import {
 import { type FlatRowLevelPermissionPredicateGroupMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group-maps.type';
 import { type FlatRowLevelPermissionPredicateMaps } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-maps.type';
 import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
+import { type WorkspaceRlsComputationCache } from 'src/engine/twenty-orm/types/workspace-rls-computation-cache.type';
 import { validateEnumValueCompatibility } from 'src/engine/twenty-orm/utils/validate-enum-value-compatibility.util';
 import { computeTableName } from 'src/engine/utils/compute-table-name.util';
 
@@ -58,6 +59,7 @@ type BuildRowLevelPermissionRecordFilterArgs = {
   workspaceDataSource?: Pick<DataSource, 'query'>;
   workspaceSchemaName?: string;
   workspaceId?: string;
+  rlsComputationCache?: WorkspaceRlsComputationCache;
 };
 
 const logger = new Logger('buildRowLevelPermissionRecordFilter');
@@ -104,6 +106,39 @@ type ResolveWorkspaceMemberLinkedRelationRecordIdsArgs = {
   workspaceDataSource?: Pick<DataSource, 'query'>;
   workspaceSchemaName?: string;
   workspaceId?: string;
+  rlsComputationCache?: WorkspaceRlsComputationCache;
+};
+
+const getOrSetCachedPromise = async <T>({
+  cache,
+  key,
+  compute,
+}: {
+  cache?: Map<string, Promise<T>>;
+  key?: string;
+  compute: () => Promise<T>;
+}): Promise<T> => {
+  if (!isDefined(cache) || !isDefined(key)) {
+    return compute();
+  }
+
+  const cachedPromise = cache.get(key);
+
+  if (isDefined(cachedPromise)) {
+    return cachedPromise;
+  }
+
+  const computedPromise = compute();
+
+  cache.set(key, computedPromise);
+
+  computedPromise.catch(() => {
+    if (cache.get(key) === computedPromise) {
+      cache.delete(key);
+    }
+  });
+
+  return computedPromise;
 };
 
 const resolveWorkspaceMemberLinkedRelationRecordIds = async ({
@@ -116,6 +151,7 @@ const resolveWorkspaceMemberLinkedRelationRecordIds = async ({
   workspaceDataSource,
   workspaceSchemaName,
   workspaceId,
+  rlsComputationCache,
 }: ResolveWorkspaceMemberLinkedRelationRecordIdsArgs): Promise<{
   applicable: boolean;
   value: RowLevelPermissionPredicateValue | null;
@@ -197,43 +233,51 @@ const resolveWorkspaceMemberLinkedRelationRecordIds = async ({
   );
   const fkColumn = `${relationToWorkspaceMemberField.name}Id`;
 
-  try {
-    const rows = await workspaceDataSource.query(
-      `SELECT "id" FROM "${workspaceSchemaName}"."${tableName}" WHERE "${fkColumn}" = $1 AND "deletedAt" IS NULL`,
-      [workspaceMember.id],
-    );
+  const relationResolutionCacheKey = [
+    workspaceId ?? 'unknown-workspace',
+    workspaceMember.id,
+    fieldMetadata.id,
+    workspaceMemberFieldMetadata.id,
+  ].join(':');
 
-    if (rows.length === 0) {
-      logger.warn(
-        `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${workspaceId}). Predicate will deny access.`,
-      );
+  const value = await getOrSetCachedPromise({
+    cache: rlsComputationCache?.relationValuesByKey,
+    key: relationResolutionCacheKey,
+    compute: async () => {
+      try {
+        const rows = await workspaceDataSource.query(
+          `SELECT "id" FROM "${workspaceSchemaName}"."${tableName}" WHERE "${fkColumn}" = $1 AND "deletedAt" IS NULL`,
+          [workspaceMember.id],
+        );
 
-      return {
-        applicable: true,
-        value: null,
-      };
-    }
+        if (rows.length === 0) {
+          logger.warn(
+            `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${workspaceId}). Predicate will deny access.`,
+          );
 
-    return {
-      applicable: true,
-      value:
-        rows.length === 1
+          return null;
+        }
+
+        return rows.length === 1
           ? rows[0].id
-          : rows.map((row: { id: string }) => row.id),
-    };
-  } catch (error) {
-    logger.warn(
-      `[RLS] Error resolving relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${workspaceId}): ${error instanceof Error ? error.message : String(error)}`,
-    );
+          : rows.map((row: { id: string }) => row.id);
+      } catch (error) {
+        logger.warn(
+          `[RLS] Error resolving relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${workspaceId}): ${error instanceof Error ? error.message : String(error)}`,
+        );
 
-    return {
-      applicable: true,
-      value: null,
-    };
-  }
+        return null;
+      }
+    },
+  });
+
+  return {
+    applicable: true,
+    value,
+  };
 };
 
-export const buildRowLevelPermissionRecordFilter = async ({
+const buildRowLevelPermissionRecordFilterUncached = async ({
   flatRowLevelPermissionPredicateMaps,
   flatRowLevelPermissionPredicateGroupMaps,
   flatFieldMetadataMaps,
@@ -246,11 +290,8 @@ export const buildRowLevelPermissionRecordFilter = async ({
   workspaceDataSource,
   workspaceSchemaName,
   workspaceId,
+  rlsComputationCache,
 }: BuildRowLevelPermissionRecordFilterArgs): Promise<RecordGqlOperationFilter | null> => {
-  if (!isDefined(roleId)) {
-    return null;
-  }
-
   const compatibleScopes = new Set<RowLevelPermissionPredicateScope>([
     RowLevelPermissionPredicateScope.ALL,
     targetScope,
@@ -375,6 +416,7 @@ export const buildRowLevelPermissionRecordFilter = async ({
               workspaceDataSource,
               workspaceSchemaName,
               workspaceId,
+              rlsComputationCache,
             });
 
           if (relationRecordIdsResolution.applicable) {
@@ -490,29 +532,45 @@ export const buildRowLevelPermissionRecordFilter = async ({
               // The FK column is the field name + "Id"
               const fkColumn = `${workspaceMemberFieldMetadata.name}Id`;
 
-              try {
-                const rows = await workspaceDataSource.query(
-                  `SELECT "id" FROM "${workspaceSchemaName}"."${tableName}" WHERE "${fkColumn}" = $1 AND "deletedAt" IS NULL`,
-                  [workspaceMember.id],
-                );
+              const indirectRelationCacheKey = [
+                workspaceId ?? 'unknown-workspace',
+                workspaceMember.id,
+                intermediateObjectMetadata.id,
+                workspaceMemberFieldMetadata.id,
+              ].join(':');
 
-                if (rows.length === 0) {
-                  logger.warn(
-                    `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${workspaceId}). Predicate will deny access.`,
-                  );
+              predicateValue = await getOrSetCachedPromise({
+                cache: rlsComputationCache?.relationValuesByKey,
+                key: indirectRelationCacheKey,
+                compute: async () => {
+                  try {
+                    const rows = await workspaceDataSource.query(
+                      `SELECT "id" FROM "${workspaceSchemaName}"."${tableName}" WHERE "${fkColumn}" = $1 AND "deletedAt" IS NULL`,
+                      [workspaceMember.id],
+                    );
 
-                  return null;
-                }
+                    if (rows.length === 0) {
+                      logger.warn(
+                        `[RLS] No rows found in "${tableName}" for workspace member ${workspaceMember.id} (fkColumn="${fkColumn}", workspace=${workspaceId}). Predicate will deny access.`,
+                      );
 
-                predicateValue =
-                  rows.length === 1
-                    ? rows[0].id
-                    : rows.map((r: { id: string }) => r.id);
-              } catch (error) {
-                logger.warn(
-                  `[RLS] Error resolving indirect relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${workspaceId}): ${error instanceof Error ? error.message : String(error)}`,
-                );
+                      return null;
+                    }
 
+                    return rows.length === 1
+                      ? rows[0].id
+                      : rows.map((r: { id: string }) => r.id);
+                  } catch (error) {
+                    logger.warn(
+                      `[RLS] Error resolving indirect relation predicate for workspace member ${workspaceMember.id} (table="${tableName}", fkColumn="${fkColumn}", workspace=${workspaceId}): ${error instanceof Error ? error.message : String(error)}`,
+                    );
+
+                    return null;
+                  }
+                },
+              });
+
+              if (!isDefined(predicateValue)) {
                 return null;
               }
             }
@@ -618,5 +676,27 @@ export const buildRowLevelPermissionRecordFilter = async ({
     filterValueDependencies: {
       currentWorkspaceMemberId: workspaceMember?.id,
     },
+  });
+};
+
+export const buildRowLevelPermissionRecordFilter = async (
+  args: BuildRowLevelPermissionRecordFilterArgs,
+): Promise<RecordGqlOperationFilter | null> => {
+  if (!isDefined(args.roleId)) {
+    return null;
+  }
+
+  const recordFilterCacheKey = [
+    args.workspaceId ?? 'unknown-workspace',
+    args.roleId,
+    args.objectMetadata.id,
+    args.targetScope,
+    args.workspaceMember?.id ?? 'anonymous',
+  ].join(':');
+
+  return getOrSetCachedPromise({
+    cache: args.rlsComputationCache?.recordFiltersByKey,
+    key: recordFilterCacheKey,
+    compute: async () => buildRowLevelPermissionRecordFilterUncached(args),
   });
 };

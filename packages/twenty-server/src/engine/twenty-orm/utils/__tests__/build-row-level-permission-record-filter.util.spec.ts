@@ -12,6 +12,7 @@ import { getFlatObjectMetadataMock } from 'src/engine/metadata-modules/flat-obje
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
 import { type FlatRowLevelPermissionPredicate } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate.type';
+import { createWorkspaceRlsComputationCache } from 'src/engine/twenty-orm/types/workspace-rls-computation-cache.type';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
 
 const buildFlatEntityMaps = <T extends SyncableFlatEntity>(
@@ -281,5 +282,122 @@ describe('buildRowLevelPermissionRecordFilter', () => {
         in: [agentProfileRecordId],
       },
     });
+  });
+
+  it('reuses cached relation and record-filter computation within a request context', async () => {
+    const workspaceMemberRecordId = '33333333-3333-4333-8333-333333333333';
+    const agentProfileRecordId = '44444444-4444-4444-8444-444444444444';
+    const rlsComputationCache = createWorkspaceRlsComputationCache();
+    const relationFieldMetadata = [
+      createMockFlatFieldMetadata('policy-agent-field-id', 'agent', {
+        type: FieldMetadataType.RELATION,
+        relationTargetObjectMetadataId: 'agent-profile-object-id',
+      }),
+      createMockFlatFieldMetadata('workspace-member-id-field-id', 'id', {
+        type: FieldMetadataType.UUID,
+        objectMetadataId: 'workspace-member-object-id',
+      }),
+      createMockFlatFieldMetadata(
+        'agent-profile-workspace-member-field-id',
+        'workspaceMember',
+        {
+          type: FieldMetadataType.RELATION,
+          objectMetadataId: 'agent-profile-object-id',
+          relationTargetObjectMetadataId: 'workspace-member-object-id',
+        },
+      ),
+    ];
+
+    const relationFlatFieldMetadataMaps = buildFlatEntityMaps(
+      relationFieldMetadata,
+    );
+    const relationFlatObjectMetadata = getFlatObjectMetadataMock({
+      id: 'policy-object-id',
+      nameSingular: 'policy',
+      namePlural: 'policies',
+      fieldIds: ['policy-agent-field-id'],
+      universalIdentifier: 'policy-object-uid',
+      isCustom: false,
+      labelIdentifierFieldMetadataId: 'label-id',
+      imageIdentifierFieldMetadataId: 'image-id',
+      labelIdentifierFieldMetadataUniversalIdentifier: 'label-uid',
+      imageIdentifierFieldMetadataUniversalIdentifier: 'image-uid',
+    });
+    const relationFlatObjectMetadataMaps = buildFlatEntityMaps([
+      relationFlatObjectMetadata,
+      getFlatObjectMetadataMock({
+        id: 'agent-profile-object-id',
+        nameSingular: 'agentProfile',
+        namePlural: 'agentProfiles',
+        labelSingular: 'Agent Profile',
+        labelPlural: 'Agent Profiles',
+        fieldIds: ['agent-profile-workspace-member-field-id'],
+        isCustom: true,
+        universalIdentifier: 'agent-profile-object-uid',
+        labelIdentifierFieldMetadataId: 'agent-profile-label-id',
+        imageIdentifierFieldMetadataId: 'agent-profile-image-id',
+        labelIdentifierFieldMetadataUniversalIdentifier:
+          'agent-profile-label-uid',
+        imageIdentifierFieldMetadataUniversalIdentifier:
+          'agent-profile-image-uid',
+      }),
+      getFlatObjectMetadataMock({
+        id: 'workspace-member-object-id',
+        nameSingular: 'workspaceMember',
+        namePlural: 'workspaceMembers',
+        labelSingular: 'Workspace Member',
+        labelPlural: 'Workspace Members',
+        fieldIds: ['workspace-member-id-field-id'],
+        universalIdentifier: 'workspace-member-object-uid',
+      }),
+    ]);
+    const relationFlatPredicateMaps = buildFlatEntityMaps([
+      {
+        ...createMockPredicate({
+          id: 'policy-agent-write-predicate-id',
+          fieldMetadataId: 'policy-agent-field-id',
+          fieldMetadataUniversalIdentifier: 'policy-agent-field-id-uid',
+          scope: RowLevelPermissionPredicateScope.WRITE,
+          value: '',
+        }),
+        operand: RowLevelPermissionPredicateOperand.IS,
+        workspaceMemberFieldMetadataId: 'workspace-member-id-field-id',
+        workspaceMemberFieldMetadataUniversalIdentifier:
+          'workspace-member-id-field-id-uid',
+      },
+    ]);
+    const workspaceDataSource = {
+      query: jest.fn().mockResolvedValue([{ id: agentProfileRecordId }]),
+    };
+    const args = {
+      flatRowLevelPermissionPredicateMaps: relationFlatPredicateMaps,
+      flatRowLevelPermissionPredicateGroupMaps,
+      flatFieldMetadataMaps: relationFlatFieldMetadataMaps,
+      objectMetadata: relationFlatObjectMetadata,
+      targetScope: RowLevelPermissionPredicateScope.WRITE,
+      roleId: 'role-id',
+      workspaceMember: {
+        id: workspaceMemberRecordId,
+      },
+      flatObjectMetadataMaps: relationFlatObjectMetadataMaps,
+      objectIdByNameSingular: {
+        workspaceMember: 'workspace-member-object-id',
+      },
+      workspaceDataSource,
+      workspaceSchemaName: 'workspace_schema',
+      workspaceId: 'workspace-id',
+      rlsComputationCache,
+    } as const;
+
+    const firstRecordFilter = await buildRowLevelPermissionRecordFilter(args);
+    const secondRecordFilter = await buildRowLevelPermissionRecordFilter(args);
+
+    expect(workspaceDataSource.query).toHaveBeenCalledTimes(1);
+    expect(firstRecordFilter).toEqual({
+      agentId: {
+        in: [agentProfileRecordId],
+      },
+    });
+    expect(secondRecordFilter).toEqual(firstRecordFilter);
   });
 });

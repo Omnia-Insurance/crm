@@ -61,6 +61,7 @@ import { WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/wo
 import { WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { createWorkspaceRlsComputationCache } from 'src/engine/twenty-orm/types/workspace-rls-computation-cache.type';
 import { computePermissionIntersection } from 'src/engine/twenty-orm/utils/compute-permission-intersection.util';
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
@@ -98,6 +99,8 @@ export class WorkspaceEntityManager extends EntityManager {
 
   get internalContext(): WorkspaceInternalContext {
     const context = getWorkspaceContext();
+    const rlsComputationCache = (context.rlsComputationCache ??=
+      createWorkspaceRlsComputationCache());
 
     return {
       workspaceId: context.authContext.workspace.id,
@@ -113,6 +116,7 @@ export class WorkspaceEntityManager extends EntityManager {
       userWorkspaceRoleMap: context.userWorkspaceRoleMap,
       eventEmitterService: this.eventEmitterService,
       coreDataSource: this.connection.coreDataSource,
+      rlsComputationCache,
     };
   }
 

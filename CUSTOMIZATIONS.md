@@ -33,6 +33,7 @@ These files have been overwritten by upstream merges multiple times. **Always ve
 | `packages/twenty-server/src/engine/metadata-modules/role/services/workspace-roles-permissions-cache.service.ts`                                                      | Resolves `editWindowMinutes` in cache                                                                                     | Edit window enforcement depends on this                                                                     |
 | `packages/twenty-shared/src/types/ObjectPermissions.ts`                                                                                                              | Added `editWindowMinutes` to shared type                                                                                  | Both server + frontend depend on this                                                                       |
 | `packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                                                               | RLS predicates are action-scoped (`ALL` / `READ` / `WRITE`) and relation-based `Me` predicates resolve through linked records | Policies must stay globally visible while only write-restricted for non-owners; `policy.agent = Me` must resolve via AgentProfile, not raw `workspaceMemberId` |
+| `packages/twenty-server/src/engine/twenty-orm/entity-manager/workspace-entity-manager.ts`                                                                           | Seeds a request-scoped RLS computation cache into the ORM workspace context                                              | GraphQL requests become painfully slow if the same role/object filter is rebuilt repeatedly per resolver    |
 
 ## Custom Server Modules (Entirely New)
 
@@ -190,6 +191,14 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - Why pre-query hooks were not enough: Omnia's policy pre-query hooks still auto-assign `agentId`, but backend `WRITE`-scope RLS validation runs independently and must also understand the `workspaceMember -> agentProfile -> policy.agent` chain.
 - Regression coverage: `packages/twenty-server/src/engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts` covers the exact `policy.agent = Me` relation-resolution case.
 
+**Performance regression hit on March 11, 2026:**
+
+- Symptom: production GraphQL requests became extremely slow after the scoped RLS rollout even though server pods were healthy and under low CPU load.
+- Root cause: the new relation-aware RLS builder was recomputing the same role/object/scope filter and re-resolving the same linked-record IDs many times within a single GraphQL request as resolvers fanned out.
+- Backend fix: `workspace-entity-manager.ts` now seeds a request-scoped RLS computation cache into the AsyncLocal ORM workspace context, and `build-row-level-permission-record-filter.util.ts` memoizes both resolved relation values and final record filters per request. `apply-row-level-permission-predicates.util.ts` and `validate-rls-predicates-for-records.util.ts` both reuse that same cache.
+- Files that matter: `engine/twenty-orm/types/workspace-rls-computation-cache.type.ts`, `engine/twenty-orm/storage/orm-workspace-context.storage.ts`, `engine/twenty-orm/interfaces/workspace-internal-context.interface.ts`, `engine/twenty-orm/entity-manager/workspace-entity-manager.ts`, and `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`.
+- Regression coverage: `packages/twenty-server/src/engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts` now verifies identical relation-based RLS computations are reused within one request context instead of hitting the database repeatedly.
+
 ### Relation Picker Filtering (Policy Assignment)
 
 | File                                                                                                 | Modification                                                                                                                                                      |
@@ -286,7 +295,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 
 | File                                                                                        | Modification                                                                                                   |
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                  | Indirect relation support, deny-by-default when predicates can't resolve, and action-scoped predicate filtering |
+| `engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts`                  | Indirect relation support, deny-by-default when predicates can't resolve, action-scoped predicate filtering, and request-scoped memoization |
 | `engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts`                     | Applies `READ` predicates to queries and `WRITE` predicates to update/delete/restore query builders            |
 | `engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts`                       | RLS validation on create/update now always enforces `WRITE`-scoped predicates                                  |
 | `engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts`   | Regression test covering relation-based `policy.agent = Me` resolution through the linked AgentProfile record  |
@@ -294,6 +303,10 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util.ts` | **NEW** — Strip restricted fields instead of rejecting queries                                                 |
 | `engine/metadata-modules/row-level-permission-predicate/services/row-level-permission-predicate.service.ts` | Rejects mixed-scope predicate trees so groups/predicates stay internally consistent                |
 | `database/typeorm/core/migrations/common/1773079000000-add-scope-to-row-level-permission-predicates.ts` | **NEW** migration adding `scope` to predicates and predicate groups, defaulting existing rows to `ALL`         |
+| `engine/twenty-orm/types/workspace-rls-computation-cache.type.ts`                           | **NEW** request-scoped cache for computed RLS filters and resolved linked-record ids                           |
+| `engine/twenty-orm/storage/orm-workspace-context.storage.ts`                                | AsyncLocal workspace context now carries the request-scoped RLS cache                                           |
+| `engine/twenty-orm/interfaces/workspace-internal-context.interface.ts`                      | Internal ORM context exposes the request-scoped RLS cache to all query builders                                 |
+| `engine/twenty-orm/entity-manager/workspace-entity-manager.ts`                              | Initializes one RLS cache per request so GraphQL resolvers reuse the same filter/link-resolution work          |
 
 ### Shared Types: Action-Scoped RLS
 

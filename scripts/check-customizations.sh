@@ -352,6 +352,44 @@ check_file_contains \
   "Role permission service must reject mixed-scope predicate trees"
 
 echo ""
+echo "--- RLS Engine: Request-Scoped Memoization ---"
+check_file_exists \
+  "packages/twenty-server/src/engine/twenty-orm/types/workspace-rls-computation-cache.type.ts" \
+  "Request-scoped RLS computation cache type"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/types/workspace-rls-computation-cache.type.ts" \
+  "recordFiltersByKey" \
+  "RLS cache type must track memoized record filters"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/storage/orm-workspace-context.storage.ts" \
+  "rlsComputationCache" \
+  "AsyncLocal ORM workspace context must carry the request-scoped RLS cache"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/interfaces/workspace-internal-context.interface.ts" \
+  "rlsComputationCache" \
+  "Internal ORM context must expose the request-scoped RLS cache"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/entity-manager/workspace-entity-manager.ts" \
+  "createWorkspaceRlsComputationCache" \
+  "Workspace entity manager must initialize one RLS cache per request"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
+  "getOrSetCachedPromise" \
+  "RLS filter builder must memoize repeated linked-record and filter computations"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/apply-row-level-permission-predicates.util.ts" \
+  "internalContext.rlsComputationCache" \
+  "Query-time RLS must pass the request-scoped cache into filter building"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts" \
+  "internalContext.rlsComputationCache" \
+  "Write-time RLS validation must reuse the request-scoped cache"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/utils/__tests__/build-row-level-permission-record-filter.util.spec.ts" \
+  "reuses cached relation and record-filter computation within a request context" \
+  "Regression test must guard request-scoped RLS memoization"
+
+echo ""
 echo "--- RLS Validation on Create/Update ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util.ts" \
