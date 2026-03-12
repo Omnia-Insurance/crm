@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { makeExecutableSchema } from '@graphql-tools/schema';
 import { GraphQLSchema, printSchema } from 'graphql';
@@ -22,11 +22,16 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatIndexMetadata } from 'src/engine/metadata-modules/flat-index-metadata/types/flat-index-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
+import { createSlowPathObserver } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 import { WorkspaceCacheStorageService } from 'src/engine/workspace-cache-storage/workspace-cache-storage.service';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 
+const SLOW_WORKSPACE_GRAPHQL_SCHEMA_BUILD_MS = 750;
+
 @Injectable()
 export class WorkspaceSchemaFactory {
+  private readonly logger = new Logger(WorkspaceSchemaFactory.name);
+
   constructor(
     private readonly dataSourceService: DataSourceService,
     private readonly scalarsExplorerService: ScalarsExplorerService,
@@ -40,10 +45,19 @@ export class WorkspaceSchemaFactory {
     workspace: WorkspaceEntity,
     applicationId?: string,
   ): Promise<GraphQLSchema> {
-    const dataSourcesMetadata =
-      await this.dataSourceService.getDataSourcesMetadataFromWorkspaceId(
-        workspace.id,
-      );
+    const schemaBuildObserver = createSlowPathObserver({
+      logger: this.logger,
+      message: 'Slow workspace GraphQL schema build',
+      thresholdMs: SLOW_WORKSPACE_GRAPHQL_SCHEMA_BUILD_MS,
+    });
+
+    const dataSourcesMetadata = await schemaBuildObserver.observeAsync(
+      'dataSourcesMs',
+      () =>
+        this.dataSourceService.getDataSourcesMetadataFromWorkspaceId(
+          workspace.id,
+        ),
+    );
 
     if (!dataSourcesMetadata || dataSourcesMetadata.length === 0) {
       return new GraphQLSchema({});
@@ -54,16 +68,18 @@ export class WorkspaceSchemaFactory {
       flatFieldMetadataMaps: allFlatFieldMetadataMaps,
       flatIndexMaps: allFlatIndexMaps,
       flatApplicationMaps,
-    } = await this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-      {
-        workspaceId: workspace.id,
-        flatMapsKeys: [
-          'flatObjectMetadataMaps',
-          'flatFieldMetadataMaps',
-          'flatIndexMaps',
-          'flatApplicationMaps',
-        ],
-      },
+    } = await schemaBuildObserver.observeAsync('flatEntityMapsMs', () =>
+      this.workspaceManyOrAllFlatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId: workspace.id,
+          flatMapsKeys: [
+            'flatObjectMetadataMaps',
+            'flatFieldMetadataMaps',
+            'flatIndexMaps',
+            'flatApplicationMaps',
+          ],
+        },
+      ),
     );
 
     if (!isDefined(allFlatObjectMetadataMaps)) {
@@ -117,78 +133,122 @@ export class WorkspaceSchemaFactory {
       }
     }
 
-    let metadataVersion =
-      await this.workspaceCacheStorageService.getMetadataVersion(workspace.id);
+    const metadataVersion = await schemaBuildObserver.observeAsync(
+      'metadataVersionMs',
+      async () => {
+        let cachedMetadataVersion =
+          await this.workspaceCacheStorageService.getMetadataVersion(
+            workspace.id,
+          );
 
-    if (!isDefined(metadataVersion)) {
-      metadataVersion = isDefined(workspace.metadataVersion)
-        ? workspace.metadataVersion
-        : 0;
-      await this.workspaceCacheStorageService.setMetadataVersion(
-        workspace.id,
-        metadataVersion,
-      );
-    }
+        if (!isDefined(cachedMetadataVersion)) {
+          cachedMetadataVersion = isDefined(workspace.metadataVersion)
+            ? workspace.metadataVersion
+            : 0;
+          await this.workspaceCacheStorageService.setMetadataVersion(
+            workspace.id,
+            cachedMetadataVersion,
+          );
+        }
+
+        return cachedMetadataVersion;
+      },
+    );
 
     const { idByNameSingular } = buildObjectIdByNameMaps(
       flatObjectMetadataMaps,
     );
 
-    let typeDefs = await this.workspaceCacheStorageService.getGraphQLTypeDefs(
-      workspace.id,
-      metadataVersion,
-      applicationId,
-    );
-    let usedScalarNames =
-      await this.workspaceCacheStorageService.getGraphQLUsedScalarNames(
-        workspace.id,
-        metadataVersion,
-        applicationId,
+    const { typeDefs: cachedTypeDefs, usedScalarNames: cachedUsedScalarNames } =
+      await schemaBuildObserver.observeAsync(
+        'schemaArtifactsCacheMs',
+        async () => {
+          const typeDefs =
+            await this.workspaceCacheStorageService.getGraphQLTypeDefs(
+              workspace.id,
+              metadataVersion,
+              applicationId,
+            );
+          const usedScalarNames =
+            await this.workspaceCacheStorageService.getGraphQLUsedScalarNames(
+              workspace.id,
+              metadataVersion,
+              applicationId,
+            );
+
+          return { typeDefs, usedScalarNames };
+        },
+      );
+    let typeDefs = cachedTypeDefs;
+    let usedScalarNames = cachedUsedScalarNames;
+    const hadSchemaArtifactsCacheMiss = !typeDefs || !usedScalarNames;
+
+    if (hadSchemaArtifactsCacheMiss) {
+      const generatedArtifacts = await schemaBuildObserver.observeAsync(
+        'schemaGenerationMs',
+        async () => {
+          const autoGeneratedSchema =
+            await this.workspaceGraphQLSchemaGenerator.generateSchema({
+              flatObjectMetadataMaps,
+              flatFieldMetadataMaps,
+              flatIndexMaps,
+            });
+
+          const usedScalarNames =
+            this.scalarsExplorerService.getUsedScalarNames(autoGeneratedSchema);
+          const typeDefs = printSchema(autoGeneratedSchema);
+
+          await this.workspaceCacheStorageService.setGraphQLTypeDefs(
+            workspace.id,
+            metadataVersion,
+            typeDefs,
+            applicationId,
+          );
+          await this.workspaceCacheStorageService.setGraphQLUsedScalarNames(
+            workspace.id,
+            metadataVersion,
+            usedScalarNames,
+            applicationId,
+          );
+
+          return { typeDefs, usedScalarNames };
+        },
       );
 
-    if (!typeDefs || !usedScalarNames) {
-      const autoGeneratedSchema =
-        await this.workspaceGraphQLSchemaGenerator.generateSchema({
-          flatObjectMetadataMaps,
-          flatFieldMetadataMaps,
-          flatIndexMaps,
-        });
-
-      usedScalarNames =
-        this.scalarsExplorerService.getUsedScalarNames(autoGeneratedSchema);
-      typeDefs = printSchema(autoGeneratedSchema);
-
-      await this.workspaceCacheStorageService.setGraphQLTypeDefs(
-        workspace.id,
-        metadataVersion,
-        typeDefs,
-        applicationId,
-      );
-      await this.workspaceCacheStorageService.setGraphQLUsedScalarNames(
-        workspace.id,
-        metadataVersion,
-        usedScalarNames,
-        applicationId,
-      );
+      typeDefs = generatedArtifacts.typeDefs;
+      usedScalarNames = generatedArtifacts.usedScalarNames;
     }
 
-    const autoGeneratedResolvers = await this.workspaceResolverFactory.create(
-      flatObjectMetadataMaps,
-      flatFieldMetadataMaps,
-      idByNameSingular,
-      workspaceResolverBuilderMethodNames,
+    const autoGeneratedResolvers = await schemaBuildObserver.observeAsync(
+      'resolverCreationMs',
+      () =>
+        this.workspaceResolverFactory.create(
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+          idByNameSingular,
+          workspaceResolverBuilderMethodNames,
+        ),
     );
     const scalarsResolvers =
       this.scalarsExplorerService.getScalarResolvers(usedScalarNames);
 
-    const executableSchema = makeExecutableSchema({
-      typeDefs: gql`
-        ${typeDefs}
-      `,
-      resolvers: {
-        ...scalarsResolvers,
-        ...autoGeneratedResolvers,
-      },
+    const executableSchema = schemaBuildObserver.observeSync(
+      'makeExecutableSchemaMs',
+      () =>
+        makeExecutableSchema({
+          typeDefs: gql`
+            ${typeDefs}
+          `,
+          resolvers: {
+            ...scalarsResolvers,
+            ...autoGeneratedResolvers,
+          },
+        }),
+    );
+    schemaBuildObserver.warnIfSlow({
+      workspaceId: workspace.id,
+      applicationId: applicationId ?? '-',
+      cacheMiss: hadSchemaArtifactsCacheMiss,
     });
 
     return executableSchema;

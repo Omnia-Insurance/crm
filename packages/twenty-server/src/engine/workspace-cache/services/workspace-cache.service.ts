@@ -10,6 +10,10 @@ import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/wo
 import { InjectCacheStorage } from 'src/engine/core-modules/cache-storage/decorators/cache-storage.decorator';
 import { CacheStorageService } from 'src/engine/core-modules/cache-storage/services/cache-storage.service';
 import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/types/cache-storage-namespace.enum';
+import {
+  createSlowPathObserver,
+  warnIfSlowDuration,
+} from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 import { PromiseMemoizer } from 'src/engine/twenty-orm/storage/promise-memoizer.storage';
 import {
   WORKSPACE_CACHE_KEY,
@@ -35,6 +39,10 @@ const STALE_VERSION_TTL_MS = 5_000; // 5 seconds
 const MAX_LOCAL_STALE_VERSIONS = 5; // 5 stale versions
 const MAX_LOCAL_CACHE_ENTRIES = 1_000;
 const MIN_EVICT_KEYS = 100;
+const SLOW_WORKSPACE_CACHE_HASH_LOOKUP_MS = 250;
+const SLOW_WORKSPACE_CACHE_REDIS_FETCH_MS = 250;
+const SLOW_WORKSPACE_CACHE_RECOMPUTE_MS = 500;
+const SLOW_WORKSPACE_CACHE_RESOLUTION_MS = 500;
 
 type CacheDataType = WorkspaceCacheDataMap[WorkspaceCacheKeyName];
 
@@ -119,6 +127,11 @@ export class WorkspaceCacheService implements OnModuleInit {
     const result = await this.memoizer.memoizePromiseAndExecute(
       memoKey,
       async () => {
+        const resolutionObserver = createSlowPathObserver({
+          logger: this.logger,
+          message: 'Slow workspace cache resolution',
+          thresholdMs: SLOW_WORKSPACE_CACHE_RESOLUTION_MS,
+        });
         // Stage 1: Check local TTL
         const { freshKeys, staleKeys } = this.checkLocalTTL(
           workspaceId,
@@ -132,21 +145,32 @@ export class WorkspaceCacheService implements OnModuleInit {
 
         // Stage 2: Validate ttl stale keys against Redis hash
         const { validKeys, keysNeedingDataFromRedis, keysNeedingRecompute } =
-          await this.validateLocalHashAgainstRedisHash(workspaceId, staleKeys);
+          await resolutionObserver.observeAsync('hashValidationMs', () =>
+            this.validateLocalHashAgainstRedisHash(workspaceId, staleKeys),
+          );
         const validatedData = this.getFromLocalCache(workspaceId, validKeys);
 
         // Stage 3: Fetch data from Redis
-        const { redisData, missingInRedis } = await this.fetchDataFromRedis(
-          workspaceId,
-          keysNeedingDataFromRedis,
-        );
+        const { redisData, missingInRedis } =
+          await resolutionObserver.observeAsync('redisFetchMs', () =>
+            this.fetchDataFromRedis(workspaceId, keysNeedingDataFromRedis),
+          );
 
         // Stage 4: Recompute remaining
         const keysToRecompute = [...keysNeedingRecompute, ...missingInRedis];
-        const recomputedData = await this.recomputeDataFromProvider(
-          workspaceId,
-          keysToRecompute,
+        const recomputedData = await resolutionObserver.observeAsync(
+          'recomputeMs',
+          () => this.recomputeDataFromProvider(workspaceId, keysToRecompute),
         );
+
+        if (keysNeedingDataFromRedis.length > 0 || keysToRecompute.length > 0) {
+          resolutionObserver.warnIfSlow({
+            workspaceId,
+            requestedKeys: cacheKeyNames.join(','),
+            redisKeys: keysNeedingDataFromRedis.join(',') || '-',
+            recomputeKeys: keysToRecompute.join(',') || '-',
+          });
+        }
 
         return {
           ...freshData,
@@ -221,7 +245,19 @@ export class WorkspaceCacheService implements OnModuleInit {
       (keyName) => `${this.buildCacheKey(workspaceId, keyName)}:hash`,
     );
 
+    const redisHashLookupStartedAt = performance.now();
     const redisHashes = await this.cacheStorage.mget<string>(hashKeys);
+
+    warnIfSlowDuration({
+      logger: this.logger,
+      message: 'Slow workspace cache hash lookup',
+      thresholdMs: SLOW_WORKSPACE_CACHE_HASH_LOOKUP_MS,
+      durationMs: performance.now() - redisHashLookupStartedAt,
+      context: {
+        workspaceId,
+        keys: cacheKeyNames.join(','),
+      },
+    });
 
     for (const [index, keyName] of cacheKeyNames.entries()) {
       const redisHash = redisHashes[index];
@@ -266,9 +302,21 @@ export class WorkspaceCacheService implements OnModuleInit {
       return [`${baseKey}:data`, `${baseKey}:hash`];
     });
 
+    const redisFetchStartedAt = performance.now();
     const allValues = await this.cacheStorage.mget<CacheDataType | string>(
       allKeys,
     );
+
+    warnIfSlowDuration({
+      logger: this.logger,
+      message: 'Slow workspace cache Redis fetch',
+      thresholdMs: SLOW_WORKSPACE_CACHE_REDIS_FETCH_MS,
+      durationMs: performance.now() - redisFetchStartedAt,
+      context: {
+        workspaceId,
+        keys: cacheKeyNames.join(','),
+      },
+    });
 
     for (const [index, keyName] of cacheKeyNames.entries()) {
       const data = allValues[index * 2] as CacheDataType | undefined;
@@ -297,8 +345,21 @@ export class WorkspaceCacheService implements OnModuleInit {
 
     const computePromises = cacheKeyNames.map(async (keyName) => {
       const provider = this.getProviderOrThrow(keyName);
+      const recomputeStartedAt = performance.now();
       const data = await provider.computeForCache(workspaceId);
       const hash = crypto.randomUUID();
+
+      warnIfSlowDuration({
+        logger: this.logger,
+        message: 'Slow workspace cache recompute',
+        thresholdMs: SLOW_WORKSPACE_CACHE_RECOMPUTE_MS,
+        durationMs: performance.now() - recomputeStartedAt,
+        context: {
+          workspaceId,
+          key: keyName,
+          provider: provider.constructor.name,
+        },
+      });
 
       return { keyName, data, hash };
     });

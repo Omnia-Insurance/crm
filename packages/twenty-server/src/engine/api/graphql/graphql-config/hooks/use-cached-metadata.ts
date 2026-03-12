@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 
 import { type Request } from 'express';
@@ -5,6 +6,7 @@ import { type Plugin } from 'graphql-yoga';
 import { isDefined } from 'twenty-shared/utils';
 
 import { InternalServerError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { warnIfSlowDuration } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 
 export type CacheMetadataPluginConfig = {
   // oxlint-disable-next-line @typescripttypescript/no-explicit-any
@@ -18,6 +20,13 @@ const USER_SCOPED_METADATA_OPERATIONS = new Set([
   'FindAllCoreViews',
   'FindFieldsWidgetCoreViews',
 ]);
+const SLOW_METADATA_CACHE_MISS_MS = 1_000;
+const logger = new Logger('CachedMetadata');
+
+type ObservedMetadataRequest = Request & {
+  metadataCacheMissStartedAt?: number;
+  metadataCacheMissOperationName?: string;
+};
 
 export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
   const computeCacheKey = ({
@@ -54,18 +63,21 @@ export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
   return {
     onRequest: async ({ endResponse, serverContext }) => {
       // TODO: we should probably override the graphql-yoga request type to include the workspace and locale
-      const request = (serverContext as unknown as { req: Request }).req;
+      const request = (
+        serverContext as unknown as { req: ObservedMetadataRequest }
+      ).req;
+      const operationName = getOperationName(serverContext);
 
       if (!request.workspace?.id) {
         return;
       }
 
-      if (!config.operationsToCache.includes(getOperationName(serverContext))) {
+      if (!config.operationsToCache.includes(operationName)) {
         return;
       }
 
       const cacheKey = computeCacheKey({
-        operationName: getOperationName(serverContext),
+        operationName,
         request,
       });
       const cachedResponse = await config.cacheGetter(cacheKey);
@@ -75,34 +87,56 @@ export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
 
         return endResponse(earlyResponse);
       }
+
+      request.metadataCacheMissStartedAt = performance.now();
+      request.metadataCacheMissOperationName = operationName;
     },
     onResponse: async ({ response, serverContext }) => {
-      const request = (serverContext as unknown as { req: Request }).req;
+      const request = (
+        serverContext as unknown as { req: ObservedMetadataRequest }
+      ).req;
+      const operationName = getOperationName(serverContext);
 
       if (!request.workspace?.id) {
         return;
       }
 
-      if (!config.operationsToCache.includes(getOperationName(serverContext))) {
+      if (!config.operationsToCache.includes(operationName)) {
         return;
       }
 
       const cacheKey = computeCacheKey({
-        operationName: getOperationName(serverContext),
+        operationName,
         request,
       });
 
       const cachedResponse = await config.cacheGetter(cacheKey);
+      const responseBody = await response.clone().json();
 
-      if (!cachedResponse) {
-        const responseBody = await response.json();
-
-        if (responseBody.errors) {
-          return;
-        }
-
-        config.cacheSetter(cacheKey, responseBody);
+      if (!cachedResponse && !responseBody.errors) {
+        await config.cacheSetter(cacheKey, responseBody);
       }
+
+      if (
+        isDefined(request.metadataCacheMissStartedAt) &&
+        request.metadataCacheMissOperationName === operationName
+      ) {
+        warnIfSlowDuration({
+          logger,
+          message: 'Slow metadata cache miss',
+          thresholdMs: SLOW_METADATA_CACHE_MISS_MS,
+          durationMs: performance.now() - request.metadataCacheMissStartedAt,
+          context: {
+            operation: operationName,
+            workspaceId: request.workspace.id,
+            userScoped: USER_SCOPED_METADATA_OPERATIONS.has(operationName),
+            hadErrors: Boolean(responseBody.errors),
+          },
+        });
+      }
+
+      delete request.metadataCacheMissStartedAt;
+      delete request.metadataCacheMissOperationName;
     },
   };
 }

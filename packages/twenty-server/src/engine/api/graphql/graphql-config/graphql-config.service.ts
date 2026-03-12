@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { type GqlOptionsFactory } from '@nestjs/graphql';
 
@@ -27,12 +27,15 @@ import { useGraphQLErrorHandlerHook } from 'src/engine/core-modules/graphql/hook
 import { useValidateGraphqlQueryComplexity } from 'src/engine/core-modules/graphql/hooks/use-validate-graphql-query-complexity.hook';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { createSlowPathObserver } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { DataloaderService } from 'src/engine/dataloaders/dataloader.service';
 import { handleExceptionAndConvertToGraphQLError } from 'src/engine/utils/global-exception-handler.util';
 import { renderApolloPlayground } from 'src/engine/utils/render-apollo-playground.util';
+
+const SLOW_CORE_GRAPHQL_SCHEMA_RESOLUTION_MS = 750;
 
 export interface GraphQLContext extends YogaDriverServerContext<'express'> {
   user?: UserEntity;
@@ -43,6 +46,8 @@ export interface GraphQLContext extends YogaDriverServerContext<'express'> {
 export class GraphQLConfigService
   implements GqlOptionsFactory<YogaDriverConfig<'express'>>
 {
+  private readonly logger = new Logger(GraphQLConfigService.name);
+
   constructor(
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly twentyConfigService: TwentyConfigService,
@@ -161,6 +166,11 @@ export class GraphQLConfigService
     workspace: WorkspaceEntity,
     applicationId?: string,
   ): Promise<GraphQLSchemaWithContext<YogaDriverServerContext<'express'>>> {
+    const schemaResolutionObserver = createSlowPathObserver({
+      logger: this.logger,
+      message: 'Slow core GraphQL schema resolution',
+      thresholdMs: SLOW_CORE_GRAPHQL_SCHEMA_RESOLUTION_MS,
+    });
     // Create a new contextId for each request
     const contextId = ContextIdFactory.create();
 
@@ -170,14 +180,23 @@ export class GraphQLConfigService
     }
 
     // Resolve the WorkspaceSchemaFactory for the contextId
-    const workspaceFactory = await this.moduleRef.resolve(
-      WorkspaceSchemaFactory,
-      contextId,
-      {
-        strict: false,
-      },
+    const workspaceFactory = await schemaResolutionObserver.observeAsync(
+      'moduleResolutionMs',
+      () =>
+        this.moduleRef.resolve(WorkspaceSchemaFactory, contextId, {
+          strict: false,
+        }),
+    );
+    const schema = await schemaResolutionObserver.observeAsync(
+      'workspaceSchemaMs',
+      () => workspaceFactory.createGraphQLSchema(workspace, applicationId),
     );
 
-    return await workspaceFactory.createGraphQLSchema(workspace, applicationId);
+    schemaResolutionObserver.warnIfSlow({
+      workspaceId: workspace.id,
+      applicationId: applicationId ?? '-',
+    });
+
+    return schema;
   }
 }

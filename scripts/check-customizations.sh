@@ -226,6 +226,42 @@ check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
   "'FindFieldsWidgetCoreViews'" \
   "Fields-widget core views must stay user-scoped in metadata response cache keys"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
+  "SLOW_METADATA_CACHE_MISS_MS" \
+  "Metadata cache hook must keep slow cache-miss timing warnings"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/observability/utils/slow-path-observer.util.ts" \
+  "createSlowPathObserver" \
+  "Shared slow-path observer utility must remain available for cheap thresholded timing logs"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/observability/utils/slow-path-observer.util.ts" \
+  "warnIfSlowDuration" \
+  "Shared slow-path observer utility must keep the single-duration warning helper"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
+  "warnIfSlowDuration" \
+  "Metadata cache hook must use the shared slow-path helper for slow cache misses"
+check_file_contains \
+  "packages/twenty-server/src/engine/workspace-cache/services/workspace-cache.service.ts" \
+  "SLOW_WORKSPACE_CACHE_RECOMPUTE_MS" \
+  "Workspace cache service must keep slow recompute thresholds"
+check_file_contains \
+  "packages/twenty-server/src/engine/workspace-cache/services/workspace-cache.service.ts" \
+  "createSlowPathObserver" \
+  "Workspace cache service must use the shared slow-path observer for full resolution timing"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/graphql-config/graphql-config.service.ts" \
+  "createSlowPathObserver" \
+  "Core GraphQL config must use the shared slow-path observer for schema resolution timing"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/workspace-schema.factory.ts" \
+  "createSlowPathObserver" \
+  "Workspace schema factory must use the shared slow-path observer for schema build timing"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/workspace-schema.factory.ts" \
+  "'schemaGenerationMs'" \
+  "Workspace schema factory slow observer must include schema generation timing"
 
 echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
