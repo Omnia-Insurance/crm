@@ -24,6 +24,7 @@ import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/appli
 import { ApplicationSyncService } from 'src/engine/core-modules/application/application-manifest/application-sync.service';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ApplicationInput } from 'src/engine/core-modules/application/application-development/dtos/application.input';
+import { CreateApplicationInput } from 'src/engine/core-modules/application/application-development/dtos/create-application.input';
 import { CreateDevelopmentApplicationInput } from 'src/engine/core-modules/application/application-development/dtos/create-development-application.input';
 import { DevelopmentApplicationDTO } from 'src/engine/core-modules/application/application-development/dtos/development-application.dto';
 import { GenerateApplicationTokenInput } from 'src/engine/core-modules/application/application-development/dtos/generate-application-token.input';
@@ -66,36 +67,26 @@ export class ApplicationDevelopmentResolver {
     @Args() { universalIdentifier, name }: CreateDevelopmentApplicationInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
   ): Promise<DevelopmentApplicationDTO> {
-    const applicationRegistrationId = await this.findApplicationRegistrationId(
-      universalIdentifier,
-      workspaceId,
-    );
-
-    const existing = await this.applicationService.findByUniversalIdentifier({
-      universalIdentifier,
-      workspaceId,
-    });
-
-    if (existing) {
-      return {
-        id: existing.id,
-        universalIdentifier: existing.universalIdentifier,
-      };
-    }
-
-    const application = await this.applicationService.create({
+    return this.createOrFindApplication(
       universalIdentifier,
       name,
-      sourcePath: universalIdentifier,
-      sourceType: ApplicationRegistrationSourceType.LOCAL,
-      applicationRegistrationId,
       workspaceId,
-    });
+    );
+  }
 
-    return {
-      id: application.id,
-      universalIdentifier: application.universalIdentifier,
-    };
+  // Backward-compatible alias for twenty-sdk@0.6.3-alpha which sends
+  // createOneApplication(input: CreateApplicationInput!)
+  @Mutation(() => DevelopmentApplicationDTO)
+  @RequireFeatureFlag(FeatureFlagKey.IS_APPLICATION_ENABLED)
+  async createOneApplication(
+    @Args('input') { universalIdentifier, name }: CreateApplicationInput,
+    @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
+  ): Promise<DevelopmentApplicationDTO> {
+    return this.createOrFindApplication(
+      universalIdentifier,
+      name,
+      workspaceId,
+    );
   }
 
   @Mutation(() => ApplicationTokenPairDTO)
@@ -181,6 +172,43 @@ export class ApplicationDevelopmentResolver {
       resourcePath: filePath,
       settings: { isTemporaryFile: false, toDelete: false },
     });
+  }
+
+  private async createOrFindApplication(
+    universalIdentifier: string,
+    name: string,
+    workspaceId: string,
+  ): Promise<DevelopmentApplicationDTO> {
+    const applicationRegistrationId = await this.findApplicationRegistrationId(
+      universalIdentifier,
+      workspaceId,
+    );
+
+    const existing = await this.applicationService.findByUniversalIdentifier({
+      universalIdentifier,
+      workspaceId,
+    });
+
+    if (existing) {
+      return {
+        id: existing.id,
+        universalIdentifier: existing.universalIdentifier,
+      };
+    }
+
+    const application = await this.applicationService.create({
+      universalIdentifier,
+      name,
+      sourcePath: universalIdentifier,
+      sourceType: ApplicationRegistrationSourceType.LOCAL,
+      applicationRegistrationId,
+      workspaceId,
+    });
+
+    return {
+      id: application.id,
+      universalIdentifier: application.universalIdentifier,
+    };
   }
 
   private async findApplicationRegistrationId(
