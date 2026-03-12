@@ -1,0 +1,91 @@
+import { defineObject, FieldType } from 'twenty-sdk';
+
+import {
+  MATCH_OVERRIDE_OBJECT_ID,
+  MO_NAME_FIELD_ID,
+  MO_CARRIER_POLICY_NUMBER_FIELD_ID,
+  MO_CARRIER_NAME_FIELD_ID,
+  MO_CRM_POLICY_ID_FIELD_ID,
+  MO_CRM_POLICY_NUMBER_FIELD_ID,
+  MO_OVERRIDE_REASON_FIELD_ID,
+  MO_CREATED_BY_FIELD_ID,
+  MO_IS_ACTIVE_FIELD_ID,
+} from 'src/constants/universal-identifiers';
+
+export default defineObject({
+  universalIdentifier: MATCH_OVERRIDE_OBJECT_ID,
+  nameSingular: 'payReconMatchOverride',
+  namePlural: 'payReconMatchOverrides',
+  labelSingular: 'Match Override',
+  labelPlural: 'Match Overrides',
+  description:
+    'Human corrections for future auto-matching of carrier policy numbers to CRM policies',
+  icon: 'IconAdjustments',
+  labelIdentifierFieldMetadataUniversalIdentifier: MO_NAME_FIELD_ID,
+  fields: [
+    {
+      universalIdentifier: MO_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'name',
+      label: 'Name',
+      description: 'Label: "{carrierPolicyNumber} → {crmPolicyNumber}"',
+      icon: 'IconAbc',
+    },
+    {
+      universalIdentifier: MO_CARRIER_POLICY_NUMBER_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'carrierPolicyNumber',
+      label: 'Carrier Policy Number',
+      description: "The carrier's policy/member number",
+      icon: 'IconId',
+    },
+    {
+      universalIdentifier: MO_CARRIER_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'carrierName',
+      label: 'Carrier Name',
+      description: 'Carrier name for scoping',
+      icon: 'IconBuilding',
+    },
+    {
+      universalIdentifier: MO_CRM_POLICY_ID_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'crmPolicyId',
+      label: 'CRM Policy ID',
+      description: 'The CRM policy ID this should always match to',
+      icon: 'IconId',
+    },
+    {
+      universalIdentifier: MO_CRM_POLICY_NUMBER_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'crmPolicyNumber',
+      label: 'CRM Policy Number',
+      description: 'Denormalized for display',
+      icon: 'IconId',
+    },
+    {
+      universalIdentifier: MO_OVERRIDE_REASON_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'overrideReason',
+      label: 'Override Reason',
+      description: 'Why the override was created',
+      icon: 'IconNote',
+    },
+    {
+      universalIdentifier: MO_CREATED_BY_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'createdBy',
+      label: 'Created By',
+      description: 'Who created the override',
+      icon: 'IconUser',
+    },
+    {
+      universalIdentifier: MO_IS_ACTIVE_FIELD_ID,
+      type: FieldType.BOOLEAN,
+      name: 'isActive',
+      label: 'Is Active',
+      description: 'Can be deactivated without deleting',
+      icon: 'IconToggleLeft',
+    },
+  ],
+});

@@ -3,6 +3,7 @@ import { agentChatMessagesComponentState } from '@/ai/states/agentChatMessagesCo
 import { createAtomComponentFamilySelector } from '@/ui/utilities/state/jotai/utils/createAtomComponentFamilySelector';
 import { type ExtendedUIMessage } from 'twenty-shared/ai';
 import { type Nullable } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 export const agentChatMessageComponentFamilySelector =
   createAtomComponentFamilySelector<
@@ -11,8 +12,14 @@ export const agentChatMessageComponentFamilySelector =
   >({
     key: 'agentChatMessageComponentFamilySelector',
     get:
-      ({ instanceId, familyKey: { messageId } }) =>
+      ({ instanceId, familyKey }) =>
       ({ get }) => {
+        const messageId = familyKey?.messageId;
+
+        if (!isDefined(messageId)) {
+          return null;
+        }
+
         const messages = get(agentChatMessagesComponentState, { instanceId });
 
         return messages.find((message) => message.id === messageId);

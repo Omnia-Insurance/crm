@@ -9,5 +9,6 @@
   },
   "enabledPlugins": {
     "nx@nx-claude-plugins": true
-  }
+  },
+  "env": { "ENABLE_LSP_TOOL": "1" }
 }
