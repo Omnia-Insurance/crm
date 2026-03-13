@@ -16,6 +16,8 @@ import {
 import { type MessageQueueWorkerOptions } from 'src/engine/core-modules/message-queue/interfaces/message-queue-worker-options.interface';
 
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
+import { MESSAGE_QUEUE_CONCURRENCY } from 'src/engine/core-modules/message-queue/message-queue-concurrency.constant';
+import { type MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueMetadataAccessor } from 'src/engine/core-modules/message-queue/message-queue-metadata.accessor';
 import { type MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
@@ -63,10 +65,13 @@ export class MessageQueueExplorer implements OnModuleInit {
     )) {
       const queueToken = getQueueToken(queueName);
       const messageQueueService = this.getQueueService(queueToken);
+      const concurrency =
+        MESSAGE_QUEUE_CONCURRENCY[queueName as MessageQueue];
 
       this.handleProcessorGroupCollection(
         processorGroupCollection,
         messageQueueService,
+        concurrency ? { concurrency } : undefined,
       );
     }
   }
