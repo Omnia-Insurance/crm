@@ -3,7 +3,6 @@ import { styled } from '@linaria/react';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { useIsFieldEmpty } from '@/object-record/record-field/ui/hooks/useIsFieldEmpty';
 import { useIsFieldInputOnly } from '@/object-record/record-field/ui/hooks/useIsFieldInputOnly';
-import { useIsFieldRequired } from '@/object-record/record-field/ui/hooks/useIsFieldRequired';
 import {
   useRecordInlineCellContext,
   type RecordInlineCellContextProps,
@@ -56,12 +55,13 @@ const StyledRecordInlineCellNormalModeInnerContainer = styled.div`
   white-space: nowrap;
 `;
 
-const StyledEmptyField = styled.div<{ isRequired?: boolean }>`
+// OMNIA-CUSTOM: Removed dynamic isRequired prop — required field indicators
+// belong in the sidebar detail view only, not in table cells. The previous
+// useIsFieldRequired hook created 3 jotai subscriptions per cell (900+ total
+// for a typical table), causing mobile Safari to crash within 6-10 seconds.
+const StyledEmptyField = styled.div`
   align-items: center;
-  color: ${({ isRequired }) =>
-    isRequired
-      ? themeCssVariables.color.red
-      : themeCssVariables.font.color.light};
+  color: ${themeCssVariables.font.color.light};
   display: flex;
   height: 20px;
 `;
@@ -82,7 +82,6 @@ export const RecordInlineCellDisplayMode = ({
   const { isForbidden } = useContext(FieldContext);
 
   const isFieldEmpty = useIsFieldEmpty();
-  const isFieldRequired = useIsFieldRequired();
   const showEditButton =
     buttonIcon &&
     isHovered &&
@@ -109,9 +108,7 @@ export const RecordInlineCellDisplayMode = ({
           {shouldShowValue ? (
             children
           ) : shouldShowEmptyPlaceholder ? (
-            <StyledEmptyField isRequired={isFieldRequired}>
-              {emptyPlaceHolder}
-            </StyledEmptyField>
+            <StyledEmptyField>{emptyPlaceHolder}</StyledEmptyField>
           ) : null}
         </StyledRecordInlineCellNormalModeInnerContainer>
       </StyledRecordInlineCellNormalModeOuterContainer>

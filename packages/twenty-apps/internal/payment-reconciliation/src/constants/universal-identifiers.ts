@@ -11,12 +11,14 @@ export const SOURCE_FILE_OBJECT_ID =
   'a2fa408f-811b-42b0-9d1a-00f9531ebac6';
 export const NORMALIZED_BOOK_ROW_OBJECT_ID =
   '4c9d3a43-47a8-4b10-ae27-062942fc328f';
-export const CRM_POLICY_MIRROR_OBJECT_ID =
-  '2cfdc8fa-497a-4b1d-9f83-8944ce928e8c';
 export const MATCH_RESULT_OBJECT_ID =
   '25a92ec8-ff83-420b-98d6-f24461032018';
 export const MATCH_OVERRIDE_OBJECT_ID =
   '44913963-f8b0-4ab2-9dd5-6c39ee96e0a0';
+export const STATUS_CHANGE_LOG_OBJECT_ID =
+  '7f1eb0de-ca9d-4dad-a29b-c8483c61e088';
+export const RECONCILIATION_RUN_OBJECT_ID =
+  'b03ca297-e5ca-4dca-875a-810613d73d5a';
 
 // CarrierConfig fields
 export const CC_NAME_FIELD_ID = '0b67cf8e-cb9e-4763-801f-5bac4f63f8e3';
@@ -37,6 +39,8 @@ export const CC_AUDIT_CONTACT_FIELD_ID =
 export const CC_AUDIT_CONSTRAINTS_FIELD_ID =
   '5ba4e67c-4586-4c87-93f8-65329c48ad0e';
 export const CC_NOTES_FIELD_ID = 'db8bfff0-3458-464a-9f70-9cff030ea326';
+export const CC_MATCHING_CONFIG_FIELD_ID =
+  '0e2687da-d927-4331-98a9-318a3a5fc0af';
 
 // SourceFile fields
 export const SF_NAME_FIELD_ID = 'b80a2e0b-d699-48b9-8e3e-65f14ca0cc69';
@@ -116,43 +120,6 @@ export const NBR_STATE_FIELD_ID =
 export const NBR_RAW_PAYLOAD_FIELD_ID =
   '723c37c3-353d-45d4-a142-afdff2af558f';
 
-// CrmPolicyMirror fields
-export const CPM_NAME_FIELD_ID = '4ee3f54b-35a2-422b-9e92-854a73471b91';
-export const CPM_CRM_POLICY_ID_FIELD_ID =
-  '6b115f07-0c64-46fb-94c3-8676e4da80d4';
-export const CPM_POLICY_NUMBER_FIELD_ID =
-  '0a7325d7-8f05-4d1a-ab5b-8f0737b9be86';
-export const CPM_APPLICATION_ID_FIELD_ID =
-  '996bbe28-38d0-4cd2-9c91-81a4a30a8e9d';
-export const CPM_EXTERNAL_POLICY_ID_FIELD_ID =
-  '4b61a3f0-c393-4dd1-b149-9f4531eba065';
-export const CPM_CARRIER_NAME_FIELD_ID =
-  '661ac649-ea53-4cf4-9f55-ae466cd218ab';
-export const CPM_CARRIER_CRM_ID_FIELD_ID =
-  '9b3cf435-6a30-487f-b29f-85f2f1bc4845';
-export const CPM_AGENT_NAME_FIELD_ID =
-  'a39aa6c1-2526-4cff-9dfc-ec7feb325367';
-export const CPM_AGENT_CRM_ID_FIELD_ID =
-  'd1b9b8a4-f7c2-4335-a0da-9b5184ca9429';
-export const CPM_AGENT_STATUS_FIELD_ID =
-  '1bb06eea-0b1f-442d-bd9a-a6cf8114ed70';
-export const CPM_LEAD_NAME_FIELD_ID =
-  '9bd31039-853e-4d44-bc2c-99b2051918b9';
-export const CPM_LEAD_CRM_ID_FIELD_ID =
-  '901ac517-d7dc-40a0-a589-44dbfbc0a5b1';
-export const CPM_EFFECTIVE_DATE_FIELD_ID =
-  '883df36f-e536-42a1-88e2-3cef572b02ce';
-export const CPM_EXPIRATION_DATE_FIELD_ID =
-  'b2467b12-7433-49f8-944c-ad3724202aa5';
-export const CPM_CRM_STATUS_FIELD_ID =
-  '715893c2-9f9c-4219-a4d7-8a20628a9289';
-export const CPM_APPLICANT_COUNT_FIELD_ID =
-  '6c228d8c-e23b-48b9-a869-59c5f0a585ad';
-export const CPM_LTV_AMOUNT_MICROS_FIELD_ID =
-  'f0f60510-c0e5-4ed1-8812-34824878ad0c';
-export const CPM_LAST_CRM_SYNC_FIELD_ID =
-  '6725789b-562f-4f41-b4df-673302c4745d';
-
 // MatchResult fields
 export const MR_NAME_FIELD_ID = 'f60a37f1-c429-4368-b5e3-a1e2da6b2bd1';
 export const MR_CONFIDENCE_FIELD_ID =
@@ -165,122 +132,272 @@ export const MR_MATCH_NOTES_FIELD_ID =
   'b8ef7774-fe78-49fc-a5d4-774cd26cb01f';
 export const MR_REVIEWED_AT_FIELD_ID =
   'c567bde8-d669-4596-bb2f-778e5c78b021';
-
-// Generate more UUIDs for remaining fields
 export const MR_REVIEWED_BY_FIELD_ID =
   'e1a2b3c4-5d6e-4f7a-8b9c-0d1e2f3a4b5c';
+export const MR_CRM_POLICY_ID_FIELD_ID =
+  '5546502e-d255-4d50-9231-99bea227fa33';
+export const MR_CRM_POLICY_NUMBER_FIELD_ID =
+  'c91dbb2c-5c61-469b-88d1-17d0acdd1f57';
+export const MR_DERIVED_STATUS_FIELD_ID =
+  'c7ae6b28-3201-4e1c-8768-54f0b729f15c';
+export const MR_CURRENT_CRM_STATUS_FIELD_ID =
+  '6117fa7f-490b-4ec9-a6ee-f04b5810d28d';
+export const MR_DERIVED_EXPIRE_DATE_FIELD_ID =
+  'fdb7925b-1044-431a-b27a-2608e9ddb994';
+export const MR_CURRENT_CRM_EXPIRE_DATE_FIELD_ID =
+  'bc8ee140-e4a0-44d4-9b42-126294ad96f8';
+export const MR_HAS_DISCREPANCY_FIELD_ID =
+  '9bb9ee2a-513b-47c3-a983-41851a088f14';
+export const MR_DISCREPANCY_DETAILS_FIELD_ID =
+  '7154add6-9dd0-4e91-b274-9052bb25ea83';
+export const MR_WRITE_BACK_STATUS_FIELD_ID =
+  '1cd27988-51f2-45fd-8738-8204a8046c9f';
+export const MR_CANCEL_PREVIOUS_POLICY_ID_FIELD_ID =
+  'a9479121-91fb-4ecf-8104-4124d6e0d7dd';
+export const MR_SUGGESTED_POLICY_NUMBER_FIELD_ID =
+  '25be0844-f881-48c6-8442-2ea379d6a31e';
 
 // MatchOverride fields
 export const MO_NAME_FIELD_ID = 'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 export const MO_CARRIER_POLICY_NUMBER_FIELD_ID =
   'b2c3d4e5-6f7a-4b8c-9d0e-1f2a3b4c5d6e';
 export const MO_CARRIER_NAME_FIELD_ID =
-  'c3d4e5f6-7a8b-4c9d-0e1f-2a3b4c5d6e7f';
+  'b020d359-12a7-4f59-b5e8-efb99db56d9b';
 export const MO_CRM_POLICY_ID_FIELD_ID =
-  'd4e5f6a7-8b9c-4d0e-1f2a-3b4c5d6e7f8a';
+  'b6a99855-84b8-4de0-8919-2ddc3dc13d33';
 export const MO_CRM_POLICY_NUMBER_FIELD_ID =
-  'e5f6a7b8-9c0d-4e1f-2a3b-4c5d6e7f8a9b';
+  '4693bc67-bae4-40a1-ae4a-c9a971113010';
 export const MO_OVERRIDE_REASON_FIELD_ID =
-  'f6a7b8c9-0d1e-4f2a-3b4c-5d6e7f8a9b0c';
+  'd7d9c6f4-eb16-48ff-905d-b557851d168d';
 export const MO_CREATED_BY_FIELD_ID =
-  'a7b8c9d0-1e2f-4a3b-4c5d-6e7f8a9b0c1d';
+  'fb550dd0-4a90-4a51-9e55-74d76bad9454';
 export const MO_IS_ACTIVE_FIELD_ID =
-  'b8c9d0e1-2f3a-4b4c-5d6e-7f8a9b0c1d2e';
+  '5eceb9b1-a48d-479c-ba1c-caafa866a757';
+
+// StatusChangeLog fields
+export const SCL_NAME_FIELD_ID =
+  '3204bb9d-5470-476c-8ff6-0980c44cf26d';
+export const SCL_CRM_POLICY_ID_FIELD_ID =
+  '9df7cf79-6e54-4c5a-9f26-1ff018540469';
+export const SCL_CRM_POLICY_NUMBER_FIELD_ID =
+  '40246ec8-c29e-4062-a19f-932e6e1e40d2';
+export const SCL_OLD_STATUS_FIELD_ID =
+  'cae231a4-ec49-4e41-afda-9f957d498653';
+export const SCL_NEW_STATUS_FIELD_ID =
+  '6c545361-4c9b-4236-898f-e4dff9890456';
+export const SCL_OLD_EXPIRE_DATE_FIELD_ID =
+  '663549e1-89f2-4035-9591-a4893a36e10d';
+export const SCL_NEW_EXPIRE_DATE_FIELD_ID =
+  '1977b4ac-995b-42aa-a0da-e01a6e82cea1';
+export const SCL_SOURCE_FIELD_ID =
+  '262566d3-c18d-4ab8-ab9b-804111a91632';
+export const SCL_CARRIER_NAME_FIELD_ID =
+  '50e0cc46-2543-4ed4-9ed8-ed1e14f8f29f';
+export const SCL_MATCH_RESULT_ID_FIELD_ID =
+  '80e25261-4df2-443e-a955-5f170e438bee';
+export const SCL_CONFIDENCE_FIELD_ID =
+  '8937df4a-41c6-4e29-88f3-27f6632fc17c';
+export const SCL_APPLIED_AT_FIELD_ID =
+  'dab8ff1b-1557-41e8-b2b4-3cef2cc7636e';
+export const SCL_REVERTED_FIELD_ID =
+  '4c4f5094-beb1-4241-89bc-5ac2a07c7e46';
+export const SCL_REVERTED_AT_FIELD_ID =
+  '51c62a28-9373-446e-9536-5b059c03a4ce';
+export const SCL_REVERT_REASON_FIELD_ID =
+  '4a909427-92b8-42d3-adf5-4634f9dbc696';
+
+// ReconciliationRun fields
+export const RR_NAME_FIELD_ID =
+  '5bf24fbf-5d8b-42d2-8951-9f8d40f07c0c';
+export const RR_TOTAL_BOB_ROWS_FIELD_ID =
+  '36bbff9c-1d16-403b-b1f7-93c2893d42bb';
+export const RR_AUTO_MATCHED_FIELD_ID =
+  '9f076968-04e8-402c-a320-14b9ae60a340';
+export const RR_NEEDS_REVIEW_FIELD_ID =
+  '9412f3f4-3945-44d0-ba0c-6a79e7a44345';
+export const RR_UNMATCHED_FIELD_ID =
+  '4acd98b1-a687-43a8-ac46-bd00c870bdde';
+export const RR_MISSING_FROM_BOB_FIELD_ID =
+  'c5ba2f48-a912-4c16-ada1-2b663c991af4';
+export const RR_DISCREPANCIES_FOUND_FIELD_ID =
+  '06e36174-59b8-4035-a1df-ece76ef672e6';
+export const RR_STATUS_UPDATES_APPLIED_FIELD_ID =
+  'b24174f3-7350-4e78-a166-da29a24886ce';
+export const RR_RUN_STATUS_FIELD_ID =
+  '5645bc23-8e3a-4e52-9f0e-5fc302f96e2a';
+export const RR_MATCHED_AT_FIELD_ID =
+  '05ac50c5-2c50-43c0-b1f9-22f68af86550';
+export const RR_COMPLETED_AT_FIELD_ID =
+  '60ee8cbd-8464-49b9-b3d1-c34e1ccbe1a9';
 
 // Relation fields
 export const CARRIER_CONFIG_ON_SOURCE_FILE_ID =
-  'c9d0e1f2-3a4b-4c5d-6e7f-8a9b0c1d2e3f';
+  '5894f904-fb6d-4cf6-a4d8-6a9d8424cd7f';
 export const SOURCE_FILES_ON_CARRIER_CONFIG_ID =
-  'd0e1f2a3-4b5c-4d6e-7f8a-9b0c1d2e3f4a';
+  '9d294fb3-5101-4180-a939-dfc5c0ef4445';
 export const SOURCE_FILE_ON_NORMALIZED_BOOK_ROW_ID =
   'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a5b';
 export const NORMALIZED_BOOK_ROWS_ON_SOURCE_FILE_ID =
   'f2a3b4c5-6d7e-4f8a-9b0c-1d2e3f4a5b6c';
 export const NORMALIZED_BOOK_ROW_ON_MATCH_RESULT_ID =
-  'a3b4c5d6-7e8f-4a9b-0c1d-2e3f4a5b6c7d';
+  '6e72a748-49b6-4a4b-9757-191e73918d80';
 export const MATCH_RESULTS_ON_NORMALIZED_BOOK_ROW_ID =
-  'b4c5d6e7-8f9a-4b0c-1d2e-3f4a5b6c7d8e';
-export const CRM_POLICY_MIRROR_ON_MATCH_RESULT_ID =
-  'c5d6e7f8-9a0b-4c1d-2e3f-4a5b6c7d8e9f';
-export const MATCH_RESULTS_ON_CRM_POLICY_MIRROR_ID =
-  'd6e7f8a9-0b1c-4d2e-3f4a-5b6c7d8e9f0a';
+  '1baf179a-b68f-41bd-abf3-b0767b79504d';
 export const SOURCE_FILE_ON_MATCH_RESULT_ID =
-  'e7f8a9b0-1c2d-4e3f-4a5b-6c7d8e9f0a1b';
+  'b49e5466-c761-4606-b2fe-42acee7a0aed';
 export const MATCH_RESULTS_ON_SOURCE_FILE_ID =
-  'f8a9b0c1-2d3e-4f4a-5b6c-7d8e9f0a1b2c';
+  '51a8b803-f95d-40b1-881c-9067989d91ef';
+export const SOURCE_FILE_ON_STATUS_CHANGE_LOG_ID =
+  'ae1f4c60-3a7b-4839-bc02-e46ef9381141';
+export const STATUS_CHANGE_LOGS_ON_SOURCE_FILE_ID =
+  'e0681df4-9fdf-40ad-ae31-30321353be7d';
+export const SOURCE_FILE_ON_RECONCILIATION_RUN_ID =
+  '962070fc-ec84-4b7e-a2a2-02dcba63eb20';
+export const RECONCILIATION_RUNS_ON_SOURCE_FILE_ID =
+  'ee6e6fca-9e57-4fa2-b360-d8ce8f79a774';
 
 // Logic functions
 export const PARSE_BOB_LOGIC_FUNCTION_ID =
-  'a9b0c1d2-3e4f-4a5b-6c7d-8e9f0a1b2c3d';
-export const SYNC_CRM_MIRROR_LOGIC_FUNCTION_ID =
-  'b0c1d2e3-4f5a-4b6c-7d8e-9f0a1b2c3d4e';
+  'ab135ed4-e4d8-4d1d-8004-c109ccf83b50';
 export const MATCH_BOB_LOGIC_FUNCTION_ID =
   'c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f';
+export const APPLY_STATUS_UPDATES_LOGIC_FUNCTION_ID =
+  'cc34e559-1933-4c95-800e-fb793294f999';
+export const REPARSE_BOB_LOGIC_FUNCTION_ID =
+  '7d3e8f2a-4b1c-4a9e-8f5d-6c2b1a0e9d3f';
+export const PARSE_ON_PENDING_LOGIC_FUNCTION_ID =
+  'a8c4e1d6-3b7f-4e2a-9d5c-0f6b8a1e4c3d';
+export const RECOVER_STUCK_PARSING_LOGIC_FUNCTION_ID =
+  '858df703-d78e-4993-803a-c46f4aa02b16';
+
+// Front components
+export const SOURCE_FILE_ACTIONS_FRONT_COMPONENT_ID =
+  'b5a2c8d1-3e7f-4d6a-9b4c-8e1f0a2d5c7b';
+
+// Page layouts
+export const SOURCE_FILE_PAGE_LAYOUT_ID =
+  'e9f4a3b7-6c2d-4e8a-b1d5-3f7c9a0e2b6d';
+export const SOURCE_FILE_PAGE_LAYOUT_SUMMARY_TAB_ID =
+  'f4a8b2c6-1d3e-4f5a-9b7c-8e0d2a1f3c5b';
+export const SOURCE_FILE_PAGE_LAYOUT_SUMMARY_FIELDS_WIDGET_ID =
+  'd2c7a9e3-4b1f-4d8a-8e6c-5f0b3a2d1c4e';
+export const SOURCE_FILE_PAGE_LAYOUT_ACTIONS_TAB_ID =
+  'c1d8e5f2-9a3b-4c7d-8e6f-2b4a1d0c3e5a';
+export const SOURCE_FILE_PAGE_LAYOUT_ACTIONS_WIDGET_ID =
+  'a6b3c9d0-7e2f-4a5b-8d1c-4f6e3b9a0c2d';
+export const SOURCE_FILE_PAGE_LAYOUT_TIMELINE_TAB_ID =
+  'b3e1d7f5-2c4a-4b9e-8d6f-1a0c3e5b7d2f';
+export const SOURCE_FILE_PAGE_LAYOUT_TIMELINE_WIDGET_ID =
+  'e8d4a2f6-7b3c-4e1a-9f5d-0c6b8a3e2d1f';
 
 // Views
 export const SOURCE_FILE_VIEW_ID =
   'd2e3f4a5-6b7c-4d8e-9f0a-1b2c3d4e5f6a';
 export const NORMALIZED_BOOK_ROW_VIEW_ID =
-  'e3f4a5b6-7c8d-4e9f-0a1b-2c3d4e5f6a7b';
+  '85ff1f11-a834-48cb-ab80-5bc8532f743f';
 export const CARRIER_CONFIG_VIEW_ID =
-  'f4a5b6c7-8d9e-4f0a-1b2c-3d4e5f6a7b8c';
-export const CRM_POLICY_MIRROR_VIEW_ID =
-  'a5b6c7d8-9e0f-4a1b-2c3d-4e5f6a7b8c9d';
+  '12e50214-672c-46ea-990e-8bc69a9d8aff';
 export const MATCH_RESULT_VIEW_ID =
-  'b6c7d8e9-0f1a-4b2c-3d4e-5f6a7b8c9d0e';
+  'ac22a8df-692a-4f58-9e11-2a571462f592';
 export const MATCH_OVERRIDE_VIEW_ID =
-  'c7d8e9f0-1a2b-4c3d-4e5f-6a7b8c9d0e1f';
+  '5eb12f2f-4437-4b9b-bca7-39c52d4eefe0';
+export const STATUS_CHANGE_LOG_VIEW_ID =
+  '3e815a05-cc9c-492e-be3f-caf42620a255';
+export const RECONCILIATION_RUN_VIEW_ID =
+  '025f0e9f-c01e-48c3-9eb8-6670729cf44a';
 
 // Navigation menu items
 export const SOURCE_FILES_NAV_ID =
-  'd8e9f0a1-2b3c-4d4e-5f6a-7b8c9d0e1f2a';
+  'a4e08c68-8c36-4df8-9d52-4f6f9614102a';
 export const NORMALIZED_BOOK_ROWS_NAV_ID =
-  'e9f0a1b2-3c4d-4e5f-6a7b-8c9d0e1f2a3b';
+  '7f3b4f71-ad84-49c3-888a-037d06956c91';
 export const CARRIER_CONFIGS_NAV_ID =
-  'f0a1b2c3-4d5e-4f6a-7b8c-9d0e1f2a3b4c';
-export const CRM_POLICY_MIRROR_NAV_ID =
-  'a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5e';
+  'f53a286f-ec27-4d6c-a198-e433016b950b';
 export const MATCH_RESULTS_NAV_ID =
   'b2c3d4e5-6f7a-4b8c-9d0e-1f2a3b4c5d6f';
 export const MATCH_OVERRIDES_NAV_ID =
-  'c3d4e5f6-7a8b-4c9d-0e1f-2a3b4c5d6e70';
+  '514fd6b1-0d22-4f03-afb3-818a926bc757';
+export const STATUS_CHANGE_LOGS_NAV_ID =
+  '502385c9-3334-4279-9e3f-15c646a7f4ce';
+export const RECONCILIATION_RUNS_NAV_ID =
+  'aab7163b-8e89-45fe-95fd-4c6fcca771cf';
 
 // SELECT option IDs
-export const SF_FILE_TYPE_BOB_ID = 'd4e5f6a7-8b9c-4d0e-1f2a-3b4c5d6e7f80';
+export const SF_FILE_TYPE_BOB_ID = '95edc1ca-77e5-4fde-9854-001eb9bbb312';
 export const SF_FILE_TYPE_COMMISSION_ID =
-  'e5f6a7b8-9c0d-4e1f-2a3b-4c5d6e7f8a90';
+  '30df1465-0c3b-4686-b876-0054154ff149';
 export const SF_FILE_TYPE_AUDIT_ID =
-  'f6a7b8c9-0d1e-4f2a-3b4c-5d6e7f8a9b00';
+  '6970b3d5-a6a6-4953-8a13-5cc80cb4f5f3';
 
 export const SF_PARSE_STATUS_PENDING_ID =
-  'a7b8c9d0-1e2f-4a3b-4c5d-6e7f8a9b0c10';
+  '9553001c-5f17-4d01-abe9-6a4dd634db7e';
 export const SF_PARSE_STATUS_PARSING_ID =
-  'b8c9d0e1-2f3a-4b4c-5d6e-7f8a9b0c1d20';
+  'd266e399-6696-49e2-acf2-fdcc5808992e';
 export const SF_PARSE_STATUS_COMPLETED_ID =
-  'c9d0e1f2-3a4b-4c5d-6e7f-8a9b0c1d2e30';
+  '73c1b9ad-2b52-44d5-9925-4578b3e4e1e4';
 export const SF_PARSE_STATUS_FAILED_ID =
-  'd0e1f2a3-4b5c-4d6e-7f8a-9b0c1d2e3f40';
+  '97c7b872-3b3b-4874-b1f5-321523610e36';
 
+// MatchResult matchMethod SELECT options
 export const MR_METHOD_EXACT_POLICY_NUMBER_ID =
   'e1f2a3b4-5c6d-4e7f-8a9b-0c1d2e3f4a50';
 export const MR_METHOD_POLICY_NUMBER_PLUS_EFFECTIVE_DATE_ID =
   'f2a3b4c5-6d7e-4f8a-9b0c-1d2e3f4a5b60';
 export const MR_METHOD_POLICY_NUMBER_PLUS_AGENT_ID =
-  'a3b4c5d6-7e8f-4a9b-0c1d-2e3f4a5b6c70';
+  '1dbf1417-087e-4546-8684-3b21afa01463';
 export const MR_METHOD_FUZZY_NAME_DATE_ID =
-  'b4c5d6e7-8f9a-4b0c-1d2e-3f4a5b6c7d80';
+  'b1a68ab4-560d-475f-b9d9-502ab4c6f395';
 export const MR_METHOD_UNMATCHED_ID =
-  'c5d6e7f8-9a0b-4c1d-2e3f-4a5b6c7d8e90';
+  '652f0df8-d54c-4c54-8794-4e07dd91e622';
 export const MR_METHOD_OVERRIDE_ID =
   '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c50';
+export const MR_METHOD_POLICY_NUMBER_DATE_AGENT_ID =
+  'c81c9907-0ec5-42b5-b711-10058581c6f0';
+export const MR_METHOD_POLICY_NUMBER_SINGLE_ID =
+  '94455b81-c369-496f-b911-94b8351a6d5d';
+export const MR_METHOD_POLICY_NUMBER_MULTI_BEST_ID =
+  '1c86e1f9-b979-4df9-90b7-96237177826c';
+export const MR_METHOD_NPN_DATE_NAME_ID =
+  'c4fa3f20-fafb-4a33-91f0-9b65b65893e6';
+export const MR_METHOD_NAME_DOB_DATE_ID =
+  '8439298d-2f1d-4307-9d09-91558dbe6ae9';
+export const MR_METHOD_MISSING_FROM_BOB_ID =
+  '4579b61e-1786-4096-a0aa-467d2d15f2ee';
+export const MR_METHOD_POLICY_NUMBER_DISCOVERY_ID =
+  'f2a0ab4d-bddd-48ce-85e0-319106adb958';
 
+// MatchResult matchStatus SELECT options
 export const MR_STATUS_AUTO_MATCHED_ID =
-  'd6e7f8a9-0b1c-4d2e-3f4a-5b6c7d8e9f00';
+  '7f02854e-e044-4cad-a520-bc272b095bf7';
 export const MR_STATUS_NEEDS_REVIEW_ID =
-  'e7f8a9b0-1c2d-4e3f-4a5b-6c7d8e9f0a10';
+  'b87bc9eb-4d20-48d6-97f7-511df6efa4b8';
 export const MR_STATUS_UNMATCHED_ID =
-  'f8a9b0c1-2d3e-4f4a-5b6c-7d8e9f0a1b20';
+  'a8d96557-9e9f-4abe-9fc3-29acd533dcab';
 export const MR_STATUS_CONFIRMED_ID =
-  'a9b0c1d2-3e4f-4a5b-6c7d-8e9f0a1b2c30';
+  'ee27d15f-85d4-4314-a6c0-c15742e2aed0';
 export const MR_STATUS_REJECTED_ID =
-  'b0c1d2e3-4f5a-4b6c-7d8e-9f0a1b2c3d40';
+  '4cf34038-d49a-4206-b3a6-26cf4564fac3';
+
+// MatchResult writeBackStatus SELECT options
+export const MR_WB_PENDING_ID =
+  '0ba90845-a6c8-4db5-8217-88562ca8adfa';
+export const MR_WB_APPROVED_ID =
+  '7fb3f1ad-9343-490f-be35-3ffeebd84592';
+export const MR_WB_REJECTED_ID =
+  '1010fbbe-56f4-47dd-83bc-9bab7ac2cfd5';
+export const MR_WB_APPLIED_ID =
+  '282df906-9019-4d88-a70c-a9f049611113';
+export const MR_WB_FAILED_ID =
+  '3bedc3b8-8210-46f9-86e3-45e4bb358231';
+
+// ReconciliationRun runStatus SELECT options
+export const RR_STATUS_MATCHING_ID =
+  'b068bebf-f053-428d-9853-56c7d235b3b8';
+export const RR_STATUS_MATCHED_ID =
+  '4b32af47-82ed-4029-bf04-dfda5bbab5d8';
+export const RR_STATUS_REVIEW_ID =
+  '2ee86959-6ccf-4bc1-ba1c-826fa5fae4c3';
+export const RR_STATUS_APPLYING_ID =
+  'a4149174-c5a0-446e-ac22-d32b11ae5d53';
+export const RR_STATUS_COMPLETED_ID =
+  'efb0a0e6-6541-45ca-ac8f-3be56d45aff0';

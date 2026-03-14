@@ -1,5 +1,6 @@
 ---
-description: React general guidelines for Twenty CRM
+description: "React general guidelines for Twenty CRM"
+globs: []
 alwaysApply: false
 ---
 # React Guidelines

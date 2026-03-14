@@ -1,0 +1,115 @@
+{
+  "note": "Shared instruction docs are the source of truth. Run `yarn sync:ai-instructions` after editing docs/ai/rules or this manifest.",
+  "rules": [
+    {
+      "alwaysApply": true,
+      "description": "Twenty CRM development rules and best practices",
+      "filename": "README.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": true,
+      "description": "Twenty CRM architecture overview - monorepo structure, tech stack, and development principles",
+      "filename": "architecture.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "Process and guidelines for creating release changelogs for Twenty CRM",
+      "filename": "changelog-process.md",
+      "globs": [
+        "**/releases/*.mdx",
+        "**/releases/**"
+      ]
+    },
+    {
+      "alwaysApply": true,
+      "description": "Code style guidelines for Twenty CRM",
+      "filename": "code-style.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "Main guide for creating syncable entities in Twenty's workspace migration system",
+      "filename": "creating-syncable-entity.md",
+      "globs": [
+        "**/metadata-modules/**",
+        "**/workspace-migration/**"
+      ]
+    },
+    {
+      "alwaysApply": true,
+      "description": "Guidelines for incorporating user feedback and improving cursor rules",
+      "filename": "feedback-incorporation.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": true,
+      "description": "File structure guidelines for Twenty CRM",
+      "filename": "file-structure.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "Nx workspace command and project navigation guidance for Twenty CRM",
+      "filename": "nx-guidelines.md",
+      "globs": [
+        "nx.json",
+        "package.json",
+        "**/project.json",
+        "tsconfig.base.json"
+      ]
+    },
+    {
+      "alwaysApply": false,
+      "description": "React general guidelines for Twenty CRM",
+      "filename": "react-general-guidelines.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "React state management guidelines for Twenty CRM",
+      "filename": "react-state-management.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "ESM dependency guidelines for twenty-sdk and create-twenty-app packages",
+      "filename": "sdk-esm-dependencies.md",
+      "globs": [
+        "packages/twenty-sdk/**",
+        "packages/create-twenty-app/**"
+      ]
+    },
+    {
+      "alwaysApply": false,
+      "description": "Guidelines for generating and managing TypeORM migrations in twenty-server",
+      "filename": "server-migrations.md",
+      "globs": [
+        "packages/twenty-server/src/**/*.entity.ts",
+        "packages/twenty-server/src/database/typeorm/**/*.ts"
+      ]
+    },
+    {
+      "alwaysApply": false,
+      "description": "Testing guidelines for Twenty CRM",
+      "filename": "testing-guidelines.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "Translation guidelines for Twenty CRM",
+      "filename": "translations.md",
+      "globs": []
+    },
+    {
+      "alwaysApply": false,
+      "description": "TypeScript best practices and conventions for the Twenty codebase, including strict typing, naming conventions, and type safety guidelines.",
+      "filename": "typescript-guidelines.md",
+      "globs": [
+        "**/*.ts",
+        "**/*.tsx"
+      ]
+    }
+  ]
+}

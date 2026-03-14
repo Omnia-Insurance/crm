@@ -1,6 +1,6 @@
 ---
-description: Process and guidelines for creating release changelogs for Twenty CRM
-globs: ["**/releases/*.mdx", "**/releases/**"]
+description: "Process and guidelines for creating release changelogs for Twenty CRM"
+globs: ["**/releases/*.mdx","**/releases/**"]
 alwaysApply: false
 ---
 # Twenty Release Changelog Process

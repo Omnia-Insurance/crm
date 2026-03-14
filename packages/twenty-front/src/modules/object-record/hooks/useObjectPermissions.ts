@@ -1,5 +1,6 @@
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useMemo } from 'react';
 import { type ObjectPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -10,26 +11,36 @@ type useObjectPermissionsReturnType = {
   >;
 };
 
+const EMPTY_PERMISSIONS: Record<
+  string,
+  ObjectPermissions & { objectMetadataId: string }
+> = {};
+
 export const useObjectPermissions = (): useObjectPermissionsReturnType => {
   const currentUserWorkspace = useAtomStateValue(currentUserWorkspaceState);
   const objectsPermissions = currentUserWorkspace?.objectsPermissions;
 
-  if (!isDefined(objectsPermissions)) {
-    return {
-      objectPermissionsByObjectMetadataId: {},
-    };
-  }
+  // OMNIA-CUSTOM: Memoize the reduce result so callers get a stable reference.
+  // This hook is called 300+ times per record table render (per row + per cell
+  // via useIsRecordReadOnly). Without memoization, each call creates a new
+  // object, causing unnecessary re-renders and cascading style recalculations
+  // that crash mobile Safari.
+  const objectPermissionsByObjectMetadataId = useMemo(() => {
+    if (!isDefined(objectsPermissions)) {
+      return EMPTY_PERMISSIONS;
+    }
 
-  const objectPermissionsByObjectMetadataId = objectsPermissions?.reduce(
-    (
-      acc: Record<string, ObjectPermissions & { objectMetadataId: string }>,
-      objectPermission,
-    ) => {
-      acc[objectPermission.objectMetadataId] = objectPermission;
-      return acc;
-    },
-    {},
-  );
+    return objectsPermissions.reduce(
+      (
+        acc: Record<string, ObjectPermissions & { objectMetadataId: string }>,
+        objectPermission,
+      ) => {
+        acc[objectPermission.objectMetadataId] = objectPermission;
+        return acc;
+      },
+      {},
+    );
+  }, [objectsPermissions]);
 
   return {
     objectPermissionsByObjectMetadataId,

@@ -74,8 +74,8 @@ export default defineObject({
     {
       universalIdentifier: MO_CREATED_BY_FIELD_ID,
       type: FieldType.TEXT,
-      name: 'createdBy',
-      label: 'Created By',
+      name: 'overrideCreator',
+      label: 'Override Creator',
       description: 'Who created the override',
       icon: 'IconUser',
     },

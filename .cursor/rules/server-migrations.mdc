@@ -1,12 +1,8 @@
 ---
-description: Guidelines for generating and managing TypeORM migrations in twenty-server
-globs: [
-  "packages/twenty-server/src/**/*.entity.ts",
-  "packages/twenty-server/src/database/typeorm/**/*.ts"
-]
+description: "Guidelines for generating and managing TypeORM migrations in twenty-server"
+globs: ["packages/twenty-server/src/**/*.entity.ts","packages/twenty-server/src/database/typeorm/**/*.ts"]
 alwaysApply: false
 ---
-
 ## Server Migrations (twenty-server)
 
 - **When changing an entity, always generate a migration**
@@ -26,4 +22,3 @@ alwaysApply: false
 - **Keep migrations consistent and reversible**
   - Ensure the generated migration includes both `up` and `down` logic that correctly applies and reverts the entity change when possible.
   - Do not delete or rewrite existing, committed migrations unless you are explicitly working on a pre-release branch where history rewrites are allowed by team conventions.
-

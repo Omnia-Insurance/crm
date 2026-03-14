@@ -1,9 +1,8 @@
 ---
-description: Main guide for creating syncable entities in Twenty's workspace migration system
-globs: ["**/metadata-modules/**", "**/workspace-migration/**"]
+description: "Main guide for creating syncable entities in Twenty's workspace migration system"
+globs: ["**/metadata-modules/**","**/workspace-migration/**"]
 alwaysApply: false
 ---
-
 # Creating a New Syncable Entity - Main Guide
 
 This is the main guide for creating **syncable entities** in Twenty's workspace migration architecture.

@@ -12,6 +12,7 @@ import {
   CC_AUDIT_CONTACT_FIELD_ID,
   CC_AUDIT_CONSTRAINTS_FIELD_ID,
   CC_NOTES_FIELD_ID,
+  CC_MATCHING_CONFIG_FIELD_ID,
 } from 'src/constants/universal-identifiers';
 
 export default defineObject({
@@ -96,6 +97,15 @@ export default defineObject({
       label: 'Audit Constraints',
       description: 'Audit rules (deadline, format, max per submission)',
       icon: 'IconShieldCheck',
+    },
+    {
+      universalIdentifier: CC_MATCHING_CONFIG_FIELD_ID,
+      type: FieldType.RAW_JSON,
+      name: 'matchingConfig',
+      label: 'Matching Config',
+      description:
+        'Carrier-specific matching cascade configuration (enabled tiers, thresholds)',
+      icon: 'IconAdjustments',
     },
     {
       universalIdentifier: CC_NOTES_FIELD_ID,

@@ -1,9 +1,8 @@
 ---
-description: ESM dependency guidelines for twenty-sdk and create-twenty-app packages
-globs: ["packages/twenty-sdk/**", "packages/create-twenty-app/**"]
+description: "ESM dependency guidelines for twenty-sdk and create-twenty-app packages"
+globs: ["packages/twenty-sdk/**","packages/create-twenty-app/**"]
 alwaysApply: false
 ---
-
 # ESM Dependency Guidelines
 
 ## Context

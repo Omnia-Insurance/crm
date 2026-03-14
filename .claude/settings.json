@@ -10,5 +10,8 @@
   "enabledPlugins": {
     "nx@nx-claude-plugins": true
   },
-  "env": { "ENABLE_LSP_TOOL": "1" }
+  "env": {
+    "ENABLE_LSP_TOOL": "1",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
 }

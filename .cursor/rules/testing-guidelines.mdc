@@ -1,5 +1,6 @@
 ---
-description: Testing guidelines for Twenty CRM
+description: "Testing guidelines for Twenty CRM"
+globs: []
 alwaysApply: false
 ---
 # Testing Guidelines

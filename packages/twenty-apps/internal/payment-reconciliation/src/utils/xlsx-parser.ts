@@ -4,10 +4,11 @@ export type ParsedRow = Record<string, unknown>;
 
 // Parse an XLSX buffer, returning rows from the specified sheet as header-keyed objects.
 export const parseXlsxSheet = (
-  buffer: Buffer,
+  buffer: Buffer | ArrayBuffer,
   sheetName?: string,
 ): ParsedRow[] => {
-  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const type = buffer instanceof ArrayBuffer ? 'array' : 'buffer';
+  const workbook = XLSX.read(buffer, { type, cellDates: true });
 
   const targetSheet = sheetName ?? workbook.SheetNames[0];
 

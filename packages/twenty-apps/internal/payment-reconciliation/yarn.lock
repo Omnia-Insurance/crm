@@ -4905,6 +4905,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jaro-winkler-typescript@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "jaro-winkler-typescript@npm:1.0.1"
+  checksum: 10c0/e85e8b4ca980843805474b2efa09ae1d711f2e0ce6eb828c0f5f662575f825a636d51cb3771d4cceba5837b840b84a1e8bd632c9fb92541744db965749ac9580
+  languageName: node
+  linkType: hard
+
 "js-tokens@npm:^3.0.0 || ^4.0.0, js-tokens@npm:^4.0.0":
   version: 4.0.0
   resolution: "js-tokens@npm:4.0.0"
@@ -5699,6 +5706,7 @@ __metadata:
   dependencies:
     "@types/node": "npm:^24.7.2"
     eslint: "npm:^9.32.0"
+    jaro-winkler-typescript: "npm:^1.0.1"
     twenty-sdk: "npm:0.6.3-alpha"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.50.0"
