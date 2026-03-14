@@ -1,16 +1,24 @@
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { objectMetadataItemsState } from '@/object-metadata/states/objectMetadataItemsState';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { groupObjectRecordSseEventsByObjectMetadataItemNameSingular } from '@/sse-db-event/utils/groupObjectRecordSseEventsByObjectMetadataItemNameSingular';
 import { turnSseObjectRecordEventsToObjectRecordOperationBrowserEvents } from '@/sse-db-event/utils/turnSseObjectRecordEventToObjectRecordOperationBrowserEvent';
 import { useCallback } from 'react';
+import { useStore } from 'jotai';
 import { isDefined } from 'twenty-shared/utils';
 import { type ObjectRecordEventWithQueryIds } from '~/generated-metadata/graphql';
 
+// OMNIA-CUSTOM: Use store.get() snapshot instead of useObjectMetadataItems()
+// reactive hook. The hook made objectMetadataItems a useCallback dependency,
+// causing the dispatch function (and therefore the SSE subscription) to
+// re-create every time metadata changed. store.get() reads the current value
+// inside the callback without creating a reactive subscription.
 export const useDispatchObjectRecordEventsFromSseToBrowserEvents = () => {
-  const { objectMetadataItems } = useObjectMetadataItems();
+  const store = useStore();
 
   const dispatchObjectRecordEventsFromSseToBrowserEvents = useCallback(
     (objectRecordEventsWithQueryIds: ObjectRecordEventWithQueryIds[]) => {
+      const objectMetadataItems = store.get(objectMetadataItemsState.atom);
+
       const objectRecordEvents = objectRecordEventsWithQueryIds.map(
         (item) => item.objectRecordEvent,
       );
@@ -49,7 +57,7 @@ export const useDispatchObjectRecordEventsFromSseToBrowserEvents = () => {
         }
       }
     },
-    [objectMetadataItems],
+    [store],
   );
 
   return { dispatchObjectRecordEventsFromSseToBrowserEvents };

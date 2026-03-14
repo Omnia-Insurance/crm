@@ -804,6 +804,31 @@ else
 fi
 
 # ==========================================================
+# Frontend Performance Fixes
+# ==========================================================
+
+echo ""
+echo "--- Frontend Performance ---"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/apollo/components/ApolloProvider.tsx" \
+  "useApolloClientCachePersist" \
+  "ApolloProvider must NOT use cache persist (render-blocking, no timeout)"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellDisplayMode.tsx" \
+  "useIsFieldRequired" \
+  "RecordInlineCellDisplayMode must NOT call useIsFieldRequired (900+ jotai subs in tables)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/hooks/useObjectPermissions.ts" \
+  "useMemo" \
+  "useObjectPermissions must memoize the reduce result (called 300+ times per table render)"
+check_file_contains \
+  "packages/twenty-front/src/modules/sse-db-event/hooks/useDispatchObjectRecordEventsFromSseToBrowserEvents.ts" \
+  "store.get" \
+  "SSE dispatch must use store.get() snapshot, not useObjectMetadataItems() hook"
+
+echo ""
+
+# ==========================================================
 # Summary
 # ==========================================================
 

@@ -57,7 +57,7 @@ const StyledRecordInlineCellNormalModeInnerContainer = styled.div`
 
 // OMNIA-CUSTOM: Removed dynamic isRequired prop — required field indicators
 // belong in the sidebar detail view only, not in table cells. The previous
-// useIsFieldRequired hook created 3 jotai subscriptions per cell (900+ total
+// required-field hook created 3 jotai subscriptions per cell (900+ total
 // for a typical table), causing mobile Safari to crash within 6-10 seconds.
 const StyledEmptyField = styled.div`
   align-items: center;

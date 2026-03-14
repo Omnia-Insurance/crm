@@ -84,9 +84,13 @@ export const FieldWidget = ({ widget }: FieldWidgetProps) => {
   const isRequiredEmpty =
     isRelationEmpty && requiredCondition?.type === 'always';
 
+  // OMNIA-CUSTOM: Removed setWidgetCardRequiredEmpty from deps — it's a new
+  // function ref every render (useSetAtom semantics), causing the effect to
+  // fire ~20 times per record load instead of only when isRequiredEmpty changes.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setWidgetCardRequiredEmpty(isRequiredEmpty);
-  }, [isRequiredEmpty, setWidgetCardRequiredEmpty]);
+  }, [isRequiredEmpty]);
 
   if (isPrefetchLoading) {
     return (
