@@ -1204,6 +1204,11 @@ msgstr "Змінна середовища CLOUDFLARE_API_KEY має бути в�
 msgid "Error"
 msgstr "Помилка"
 
+#. js-lingui-id: q1bjoq
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Error processing ingestion data."
+msgstr ""
+
 #. js-lingui-id: b3ictS
 #: src/engine/metadata-modules/view-field-group/services/fields-widget-upsert.service.ts
 msgid "Exactly one of \"groups\" or \"fields\" must be provided"
@@ -1348,6 +1353,11 @@ msgstr "Поле не належить до індексованого об'єк
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-object-metadata-validator.service.ts
 msgid "Field label identifier is required"
 msgstr "Необхідно вказати ідентифікатор мітки поля"
+
+#. js-lingui-id: qRLqsZ
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Field mapping not found."
+msgstr ""
 
 #. js-lingui-id: MPt365
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-view-sort-validator.service.ts
@@ -1714,6 +1724,16 @@ msgstr "Індекс з такою самою назвою вже існує"
 msgid "Index with same universal identifier already exists"
 msgstr ""
 
+#. js-lingui-id: OzV98F
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline is disabled."
+msgstr ""
+
+#. js-lingui-id: iTWDAu
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline not found."
+msgstr ""
+
 #. js-lingui-id: 9Lkkre
 #: src/engine/metadata-modules/utils/exceptions/invalid-metadata.exception.ts
 msgid "Input exceeds maximum length."
@@ -2001,6 +2021,11 @@ msgstr "Недійсне значення години. Повинен бути 
 #: src/engine/core-modules/sso/sso.exception.ts
 msgid "Invalid identity provider type."
 msgstr "Недійсний тип постачальника ідентифікації."
+
+#. js-lingui-id: xQd5sM
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid ingestion pipeline input."
+msgstr ""
 
 #. js-lingui-id: xfXYBX
 #: src/engine/core-modules/application/application-registration/application-registration.exception.ts
@@ -2398,6 +2423,11 @@ msgstr ""
 #. js-lingui-id: z68tnU
 #: src/engine/metadata-modules/webhook/webhook.exception.ts
 msgid "Invalid webhook input."
+msgstr ""
+
+#. js-lingui-id: Q9Wge/
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid webhook secret."
 msgstr ""
 
 #. js-lingui-id: c4NCfN
@@ -4322,6 +4352,12 @@ msgstr "Ця операція не підтримується."
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-permission-flag-validator.service.ts
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-permission-flag-validator.service.ts
 msgid "This permission is already set for the role"
+msgstr ""
+
+#. js-lingui-id: 3zbe8Z
+#: src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts
+#: src/modules/policy/query-hooks/policy-update-many.pre-query.hook.ts
+msgid "This policy can no longer be edited. Only administrators can modify policies after {window}."
 msgstr ""
 
 #. js-lingui-id: Y5C3uK

@@ -1199,6 +1199,11 @@ msgstr "Environment variable CLOUDFLARE_API_KEY must be defined to use this feat
 msgid "Error"
 msgstr "Error"
 
+#. js-lingui-id: q1bjoq
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Error processing ingestion data."
+msgstr "Error processing ingestion data."
+
 #. js-lingui-id: b3ictS
 #: src/engine/metadata-modules/view-field-group/services/fields-widget-upsert.service.ts
 msgid "Exactly one of \"groups\" or \"fields\" must be provided"
@@ -1343,6 +1348,11 @@ msgstr "Field does not belong to the indexed object"
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-object-metadata-validator.service.ts
 msgid "Field label identifier is required"
 msgstr "Field label identifier is required"
+
+#. js-lingui-id: qRLqsZ
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Field mapping not found."
+msgstr "Field mapping not found."
 
 #. js-lingui-id: MPt365
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-view-sort-validator.service.ts
@@ -1709,6 +1719,16 @@ msgstr "Index with same name already exists"
 msgid "Index with same universal identifier already exists"
 msgstr "Index with same universal identifier already exists"
 
+#. js-lingui-id: OzV98F
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline is disabled."
+msgstr "Ingestion pipeline is disabled."
+
+#. js-lingui-id: iTWDAu
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline not found."
+msgstr "Ingestion pipeline not found."
+
 #. js-lingui-id: 9Lkkre
 #: src/engine/metadata-modules/utils/exceptions/invalid-metadata.exception.ts
 msgid "Input exceeds maximum length."
@@ -1996,6 +2016,11 @@ msgstr "Invalid hour value. Should be integer greater than 1"
 #: src/engine/core-modules/sso/sso.exception.ts
 msgid "Invalid identity provider type."
 msgstr "Invalid identity provider type."
+
+#. js-lingui-id: xQd5sM
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid ingestion pipeline input."
+msgstr "Invalid ingestion pipeline input."
 
 #. js-lingui-id: xfXYBX
 #: src/engine/core-modules/application/application-registration/application-registration.exception.ts
@@ -2394,6 +2419,11 @@ msgstr "Invalid viewId for fields widget \"{widgetTitle}\". Expected a valid UUI
 #: src/engine/metadata-modules/webhook/webhook.exception.ts
 msgid "Invalid webhook input."
 msgstr "Invalid webhook input."
+
+#. js-lingui-id: Q9Wge/
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid webhook secret."
+msgstr "Invalid webhook secret."
 
 #. js-lingui-id: c4NCfN
 #: src/modules/dashboard/chart-data/exceptions/chart-data.exception.ts
@@ -4318,6 +4348,12 @@ msgstr "This operation is not supported."
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-permission-flag-validator.service.ts
 msgid "This permission is already set for the role"
 msgstr "This permission is already set for the role"
+
+#. js-lingui-id: 3zbe8Z
+#: src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts
+#: src/modules/policy/query-hooks/policy-update-many.pre-query.hook.ts
+msgid "This policy can no longer be edited. Only administrators can modify policies after {window}."
+msgstr "This policy can no longer be edited. Only administrators can modify policies after {window}."
 
 #. js-lingui-id: Y5C3uK
 #: src/modules/connected-account/refresh-tokens-manager/exceptions/connected-account-refresh-tokens.exception.ts
