@@ -80,6 +80,7 @@ export const createStandardRoleFlatMetadata = ({
     permissionFlagUniversalIdentifiers: [],
     objectPermissionUniversalIdentifiers: [],
     fieldPermissionIds: [],
+    fieldPermissionUniversalIdentifiers: [],
     objectPermissionIds: [],
     roleTargetIds: [],
     roleTargetUniversalIdentifiers: [],

@@ -3,6 +3,7 @@ import { lastVisitedObjectMetadataItemIdState } from '@/navigation/states/lastVi
 import { type ObjectPathInfo } from '@/navigation/types/ObjectPathInfo';
 import { navigationMenuItemsSelector } from '@/navigation-menu-item/common/states/navigationMenuItemsSelector';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { filterReadableActiveObjectMetadataItems } from '@/object-metadata/utils/filterReadableActiveObjectMetadataItems';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
@@ -22,28 +23,25 @@ export const useDefaultHomePagePath = () => {
   const permissionFlagMap = usePermissionFlagMap();
   const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
 
-  const { alphaSortedActiveNonSystemObjectMetadataItems } =
-    useFilteredObjectMetadataItems();
+  const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
 
-  const readableAlphaSortedActiveNonSystemObjectMetadataItems = useMemo(() => {
-    return alphaSortedActiveNonSystemObjectMetadataItems.filter((item) => {
-      const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId({
+  const readableNonSystemObjectMetadataItems = useMemo(
+    () =>
+      filterReadableActiveObjectMetadataItems(
+        activeObjectMetadataItems,
         objectPermissionsByObjectMetadataId,
-        objectMetadataId: item.id,
-      });
-      return objectPermissions?.canReadObjectRecords;
-    });
-  }, [
-    alphaSortedActiveNonSystemObjectMetadataItems,
-    objectPermissionsByObjectMetadataId,
-  ]);
+      )
+        .filter((item) => !item.isSystem)
+        .sort((a, b) => a.nameSingular.localeCompare(b.nameSingular)),
+    [activeObjectMetadataItems, objectPermissionsByObjectMetadataId],
+  );
 
   // For non-layout users, filter to only objects visible in sidebar,
   // sorted to match sidebar display order (ORDERED_FIRST_STANDARD_OBJECTS).
   const sidebarVisibleObjectMetadataItems = useMemo(() => {
-    if (isAdmin) return readableAlphaSortedActiveNonSystemObjectMetadataItems;
+    if (isAdmin) return readableNonSystemObjectMetadataItems;
     const SIDEBAR_ORDER = ['person', 'policy', 'company', 'opportunity', 'note', 'task'];
-    return readableAlphaSortedActiveNonSystemObjectMetadataItems
+    return readableNonSystemObjectMetadataItems
       .filter((item) => {
         const objectPermissions =
           getObjectPermissionsFromMapByObjectMetadataId({
@@ -62,17 +60,17 @@ export const useDefaultHomePagePath = () => {
       });
   }, [
     isAdmin,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
     objectPermissionsByObjectMetadataId,
   ]);
 
   const getActiveObjectMetadataItemMatchingId = useCallback(
     (objectMetadataId: string) => {
-      return readableAlphaSortedActiveNonSystemObjectMetadataItems.find(
+      return readableNonSystemObjectMetadataItems.find(
         (item) => item.id === objectMetadataId,
       );
     },
-    [readableAlphaSortedActiveNonSystemObjectMetadataItems],
+    [readableNonSystemObjectMetadataItems],
   );
 
   const views = useAtomStateValue(viewsSelector);
@@ -155,8 +153,7 @@ export const useDefaultHomePagePath = () => {
     }
 
     // Ultimate fallback
-    const fallbackItem =
-      readableAlphaSortedActiveNonSystemObjectMetadataItems[0];
+    const fallbackItem = readableNonSystemObjectMetadataItems[0];
 
     return fallbackItem
       ? {
@@ -170,7 +167,7 @@ export const useDefaultHomePagePath = () => {
     views,
     getActiveObjectMetadataItemMatchingId,
     getFirstView,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
     sidebarVisibleObjectMetadataItems,
   ]);
 
@@ -214,7 +211,7 @@ export const useDefaultHomePagePath = () => {
       return AppPath.SignInUp;
     }
 
-    if (isEmpty(readableAlphaSortedActiveNonSystemObjectMetadataItems)) {
+    if (isEmpty(readableNonSystemObjectMetadataItems)) {
       return getSettingsPath(SettingsPath.ProfilePage);
     }
 
@@ -235,7 +232,7 @@ export const useDefaultHomePagePath = () => {
   }, [
     currentUser,
     getDefaultObjectPathInfo,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
   ]);
 
   return { defaultHomePagePath };

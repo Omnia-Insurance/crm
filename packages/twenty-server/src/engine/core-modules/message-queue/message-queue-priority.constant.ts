@@ -17,6 +17,7 @@ export const MESSAGE_QUEUE_PRIORITY = {
   [MessageQueue.deleteCascadeQueue]: 6,
   [MessageQueue.cronQueue]: 7,
   [MessageQueue.aiQueue]: 5,
+  [MessageQueue.aiStreamQueue]: 2,
   [MessageQueue.ingestionQueue]: 3,
   [MessageQueue.importQueue]: 3,
   [MessageQueue.exportQueue]: 3,

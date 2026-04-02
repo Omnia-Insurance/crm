@@ -31,6 +31,8 @@ const COMPANY_GQL_FIELDS_WITHOUT_EMPLOYEES = `
       name
 `;
 const expectPermissionDeniedError = (response: any) => {
+  expect(response.body.errors).toBeDefined();
+  expect(response.body.errors.length).toBeGreaterThan(0);
   expect(response.body.errors[0].message).toBe(
     PermissionsExceptionMessage.PERMISSION_DENIED,
   );
@@ -294,7 +296,7 @@ describe('Field update permissions restrictions', () => {
   //   });
   // });
 
-  describe('should throw an error if creating with restricted fields', () => {
+  describe('should block creating with update-restricted field in data', () => {
     beforeEach(async () => {
       await restrictUpdateAccessToCompanyEmployee(
         customRoleId,
@@ -333,7 +335,7 @@ describe('Field update permissions restrictions', () => {
       expectPermissionDeniedError(response);
     });
   });
-  describe('should throw an error if reading restricted fields in update operations', () => {
+  describe('should block read-restricted field in update operation responses', () => {
     beforeEach(async () => {
       await restrictReadAccessToCompanyEmployee(
         customRoleId,
@@ -348,6 +350,7 @@ describe('Field update permissions restrictions', () => {
         objectMetadataPluralName: 'companies',
         gqlFields: COMPANY_GQL_FIELDS_WITH_EMPLOYEES,
         data: { name: 'UpdatedCompany' },
+        filter: { id: { eq: companyId } },
       });
 
       const response =

@@ -7,35 +7,40 @@ import {
 } from 'twenty-shared/testing';
 import { type Repository } from 'typeorm';
 
-import { UpgradeCommandRunner } from 'src/database/commands/command-runners/upgrade.command-runner';
+import {
+  UpgradeCommandRunner,
+  type AllCommands,
+} from 'src/database/commands/command-runners/upgrade.command-runner';
+import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import { CoreMigrationRunnerService } from 'src/database/commands/core-migration-runner/services/core-migration-runner.service';
+import { UPGRADE_COMMAND_SUPPORTED_VERSIONS } from 'src/engine/constants/upgrade-command-supported-versions.constant';
+import { CoreEngineVersionService } from 'src/engine/core-engine-version/services/core-engine-version.service';
 import { type ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
+
+const CURRENT_VERSION =
+  UPGRADE_COMMAND_SUPPORTED_VERSIONS[
+    UPGRADE_COMMAND_SUPPORTED_VERSIONS.length - 1
+  ];
+const PREVIOUS_VERSION =
+  UPGRADE_COMMAND_SUPPORTED_VERSIONS[
+    UPGRADE_COMMAND_SUPPORTED_VERSIONS.length - 2
+  ];
 
 class BasicUpgradeCommandRunner extends UpgradeCommandRunner {
-  allCommands = {
-    '1.0.0': [],
-    '2.0.0': [],
-  };
+  allCommands = Object.fromEntries(
+    UPGRADE_COMMAND_SUPPORTED_VERSIONS.map((version) => [version, []]),
+  ) as unknown as AllCommands;
 }
 
-class InvalidUpgradeCommandRunner extends UpgradeCommandRunner {
-  allCommands = {
-    invalid: [],
-    '2.0.0': [],
-  };
-}
-
-type CommandRunnerValues =
-  | typeof BasicUpgradeCommandRunner
-  | typeof InvalidUpgradeCommandRunner;
+type CommandRunnerValues = typeof BasicUpgradeCommandRunner;
 
 const generateMockWorkspace = (overrides?: Partial<WorkspaceEntity>) =>
   ({
     id: 'workspace-id',
-    version: '1.0.0',
+    version: PREVIOUS_VERSION,
     createdAt: new Date(),
     updatedAt: new Date(),
     allowImpersonation: false,
@@ -60,32 +65,31 @@ const buildUpgradeCommandModule = async ({
   appVersion,
   commandRunner,
 }: BuildUpgradeCommandModuleArgs) => {
-  const mockDataSourceService = {
-    getLastDataSourceMetadataFromWorkspaceId: jest.fn(),
-  };
-
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       {
         provide: commandRunner,
         useFactory: (
           workspaceRepository: Repository<WorkspaceEntity>,
-          twentyConfigService: TwentyConfigService,
-          globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-          dataSourceService: DataSourceService,
+          coreEngineVersionService: CoreEngineVersionService,
+          workspaceVersionService: WorkspaceVersionService,
+          coreMigrationRunnerService: CoreMigrationRunnerService,
+          workspaceIteratorService: WorkspaceIteratorService,
         ) => {
           return new commandRunner(
             workspaceRepository,
-            twentyConfigService,
-            globalWorkspaceOrmManager,
-            dataSourceService,
+            coreEngineVersionService,
+            workspaceVersionService,
+            coreMigrationRunnerService,
+            workspaceIteratorService,
           );
         },
         inject: [
           getRepositoryToken(WorkspaceEntity),
-          TwentyConfigService,
-          GlobalWorkspaceOrmManager,
-          DataSourceService,
+          CoreEngineVersionService,
+          WorkspaceVersionService,
+          CoreMigrationRunnerService,
+          WorkspaceIteratorService,
         ],
       },
       {
@@ -98,6 +102,7 @@ const buildUpgradeCommandModule = async ({
             ),
           update: jest.fn(),
           find: jest.fn().mockResolvedValue(workspaces),
+          exists: jest.fn().mockResolvedValue(workspaces.length > 0),
         },
       },
       {
@@ -115,20 +120,42 @@ const buildUpgradeCommandModule = async ({
           }),
         },
       },
+      CoreEngineVersionService,
+      WorkspaceVersionService,
       {
-        provide: GlobalWorkspaceOrmManager,
-        useValue: {
-          connect: jest.fn(),
-          destroyDataSourceForWorkspace: jest.fn(),
-          getDataSourceForWorkspace: jest.fn(),
-          executeInWorkspaceContext: jest
-            .fn()
-            .mockImplementation((fn: () => any, _authContext?: any) => fn()),
-        },
+        provide: CoreMigrationRunnerService,
+        useValue: { run: jest.fn().mockResolvedValue(undefined) },
       },
       {
-        provide: DataSourceService,
-        useValue: mockDataSourceService,
+        provide: WorkspaceIteratorService,
+        useValue: {
+          iterate: jest.fn().mockImplementation(async (args: any) => {
+            const { callback, ...options } = args;
+            const workspaceIds =
+              options.workspaceIds ??
+              workspaces.map((workspace) => workspace.id);
+
+            const report = {
+              fail: [] as any[],
+              success: [] as any[],
+            };
+
+            for (const [index, workspaceId] of workspaceIds.entries()) {
+              try {
+                await callback({
+                  workspaceId,
+                  index,
+                  total: workspaceIds.length,
+                });
+                report.success.push({ workspaceId });
+              } catch (error) {
+                report.fail.push({ error, workspaceId });
+              }
+            }
+
+            return report;
+          }),
+        },
       },
     ],
   }).compile();
@@ -139,7 +166,6 @@ const buildUpgradeCommandModule = async ({
 describe('UpgradeCommandRunner', () => {
   let upgradeCommandRunner: BasicUpgradeCommandRunner;
   let workspaceRepository: Repository<WorkspaceEntity>;
-  let runCoreMigrationsSpy: jest.SpyInstance;
 
   type BuildModuleAndSetupSpiesArgs = {
     numberOfWorkspace?: number;
@@ -153,7 +179,7 @@ describe('UpgradeCommandRunner', () => {
     workspaceOverride,
     workspaces,
     commandRunner = BasicUpgradeCommandRunner,
-    appVersion = '2.0.0',
+    appVersion = CURRENT_VERSION,
   }: BuildModuleAndSetupSpiesArgs) => {
     const generatedWorkspaces = Array.from(
       { length: numberOfWorkspace },
@@ -175,11 +201,6 @@ describe('UpgradeCommandRunner', () => {
     jest.spyOn(upgradeCommandRunner['logger'], 'error').mockImplementation();
     jest.spyOn(upgradeCommandRunner['logger'], 'warn').mockImplementation();
 
-    jest.spyOn(upgradeCommandRunner, 'runOnWorkspace');
-    runCoreMigrationsSpy = jest
-      .spyOn(upgradeCommandRunner, 'runCoreMigrations')
-      .mockImplementation(() => Promise.resolve());
-
     workspaceRepository = module.get<Repository<WorkspaceEntity>>(
       getRepositoryToken(WorkspaceEntity),
     );
@@ -190,12 +211,10 @@ describe('UpgradeCommandRunner', () => {
       id: 'higher_version_workspace',
       version: '42.42.42',
     });
-    const appVersion = '2.0.0';
 
     await buildModuleAndSetupSpies({
       numberOfWorkspace: 0,
       workspaces: [higherVersionWorkspace],
-      appVersion,
     });
     // @ts-expect-error legacy noImplicitAny
     const passedParams = [];
@@ -203,16 +222,6 @@ describe('UpgradeCommandRunner', () => {
 
     // @ts-expect-error legacy noImplicitAny
     await upgradeCommandRunner.run(passedParams, options);
-
-    const { fail: failReport, success: successReport } =
-      upgradeCommandRunner.migrationReport;
-
-    expect(successReport.length).toBe(1);
-    expect(failReport.length).toBe(0);
-
-    [upgradeCommandRunner.runOnWorkspace].forEach((fn) =>
-      expect(fn).toHaveBeenCalledTimes(1),
-    );
 
     [workspaceRepository.update].forEach((fn) =>
       expect(fn).not.toHaveBeenCalled(),
@@ -221,11 +230,9 @@ describe('UpgradeCommandRunner', () => {
 
   it('should run upgrade over several workspaces', async () => {
     const numberOfWorkspace = 42;
-    const appVersion = '2.0.0';
 
     await buildModuleAndSetupSpies({
       numberOfWorkspace,
-      appVersion,
     });
     // @ts-expect-error legacy noImplicitAny
     const passedParams = [];
@@ -234,16 +241,12 @@ describe('UpgradeCommandRunner', () => {
     // @ts-expect-error legacy noImplicitAny
     await upgradeCommandRunner.run(passedParams, options);
 
-    [upgradeCommandRunner.runOnWorkspace].forEach((fn) =>
-      expect(fn).toHaveBeenCalledTimes(numberOfWorkspace),
-    );
     expect(workspaceRepository.update).toHaveBeenNthCalledWith(
       numberOfWorkspace,
       { id: expect.any(String) },
-      { version: appVersion },
+      { version: CURRENT_VERSION },
     );
-    expect(upgradeCommandRunner.migrationReport.success.length).toBe(42);
-    expect(upgradeCommandRunner.migrationReport.fail.length).toBe(0);
+    expect(workspaceRepository.update).toHaveBeenCalledTimes(numberOfWorkspace);
   });
 
   describe('Workspace upgrade should succeed ', () => {
@@ -254,9 +257,9 @@ describe('UpgradeCommandRunner', () => {
         title: 'even if workspace version and app version differ in patch',
         context: {
           input: {
-            appVersion: 'v2.0.0',
+            appVersion: `v${CURRENT_VERSION}`,
             workspaceOverride: {
-              version: 'v1.0.12',
+              version: `v${PREVIOUS_VERSION.replace('.0', '.12')}`,
             },
           },
         },
@@ -266,9 +269,9 @@ describe('UpgradeCommandRunner', () => {
           'even if workspace version and app version differ in patch and semantic',
         context: {
           input: {
-            appVersion: 'v2.0.0',
+            appVersion: `v${CURRENT_VERSION}`,
             workspaceOverride: {
-              version: '1.0.12',
+              version: PREVIOUS_VERSION.replace('.0', '.12'),
             },
           },
         },
@@ -277,9 +280,9 @@ describe('UpgradeCommandRunner', () => {
         title: 'even if app version contains a patch value',
         context: {
           input: {
-            appVersion: '2.0.24',
+            appVersion: CURRENT_VERSION.replace('.0', '.24'),
             workspaceOverride: {
-              version: '1.0.12',
+              version: PREVIOUS_VERSION.replace('.0', '.12'),
             },
           },
         },
@@ -298,15 +301,10 @@ describe('UpgradeCommandRunner', () => {
         // @ts-expect-error legacy noImplicitAny
         await upgradeCommandRunner.run(passedParams, options);
 
-        const { fail: failReport, success: successReport } =
-          upgradeCommandRunner.migrationReport;
-
-        expect(failReport.length).toBe(0);
-        expect(successReport.length).toBe(1);
-        expect(runCoreMigrationsSpy).toHaveBeenCalledTimes(1);
-        const { workspaceId } = successReport[0];
-
-        expect(workspaceId).toBe('workspace_0');
+        expect(workspaceRepository.update).toHaveBeenCalledWith(
+          { id: 'workspace_0' },
+          { version: expect.any(String) },
+        );
       },
     );
   });
@@ -314,22 +312,18 @@ describe('UpgradeCommandRunner', () => {
   describe('Workspace upgrade should fail', () => {
     const failingTestUseCases: EachTestingContext<{
       input: Omit<BuildModuleAndSetupSpiesArgs, 'numberOfWorkspace'>;
-      output?: {
-        failReportWorkspaceId: string;
-      };
+      expectedErrorMessage: string;
     }>[] = [
       {
         title: 'when workspace version is not equal to fromVersion',
         context: {
           input: {
-            appVersion: '2.0.0',
             workspaceOverride: {
               version: '0.1.0',
             },
           },
-          output: {
-            failReportWorkspaceId: 'workspace_0',
-          },
+          expectedErrorMessage:
+            'Unable to run the upgrade command. Aborting the upgrade process.',
         },
       },
       {
@@ -340,9 +334,8 @@ describe('UpgradeCommandRunner', () => {
               version: null,
             },
           },
-          output: {
-            failReportWorkspaceId: 'workspace_0',
-          },
+          expectedErrorMessage:
+            'Unable to run the upgrade command. Aborting the upgrade process.',
         },
       },
       {
@@ -351,9 +344,8 @@ describe('UpgradeCommandRunner', () => {
           input: {
             appVersion: null,
           },
-          output: {
-            failReportWorkspaceId: 'global',
-          },
+          expectedErrorMessage:
+            'APP_VERSION is not defined, please double check your env variables',
         },
       },
       {
@@ -362,48 +354,32 @@ describe('UpgradeCommandRunner', () => {
           input: {
             appVersion: '42.0.0',
           },
-          output: {
-            failReportWorkspaceId: 'global',
-          },
+          expectedErrorMessage:
+            'No command found for version 42.0.0. Please check the commands record.',
         },
       },
       {
         title: 'when previous version is not found',
         context: {
           input: {
-            appVersion: '1.0.0',
+            appVersion: UPGRADE_COMMAND_SUPPORTED_VERSIONS[0],
           },
-        },
-      },
-      {
-        title: 'when all commands contains invalid semver keys',
-        context: {
-          input: {
-            commandRunner: InvalidUpgradeCommandRunner,
-          },
+          expectedErrorMessage: `No previous version found for version ${UPGRADE_COMMAND_SUPPORTED_VERSIONS[0]}`,
         },
       },
     ];
 
     it.each(eachTestingContextFilter(failingTestUseCases))(
       '$title',
-      async ({ context: { input, output } }) => {
+      async ({ context: { input, expectedErrorMessage } }) => {
         await buildModuleAndSetupSpies(input);
 
         const passedParams: string[] = [];
         const options = {};
 
-        await upgradeCommandRunner.run(passedParams, options);
-
-        const { fail: failReport, success: successReport } =
-          upgradeCommandRunner.migrationReport;
-
-        expect(successReport.length).toBe(0);
-        expect(failReport.length).toBe(1);
-        const { workspaceId, error } = failReport[0];
-
-        expect(workspaceId).toBe(output?.failReportWorkspaceId ?? 'global');
-        expect(error).toMatchSnapshot();
+        await expect(
+          upgradeCommandRunner.run(passedParams, options),
+        ).rejects.toThrow(expectedErrorMessage);
       },
     );
   });

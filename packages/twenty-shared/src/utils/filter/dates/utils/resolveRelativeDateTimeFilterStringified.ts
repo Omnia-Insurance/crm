@@ -20,7 +20,7 @@ export const resolveRelativeDateTimeFilterStringified = (
     const relativeDateFilter = relativeDateFilterParseResult.data;
 
     const referenceTodayZonedDateTime = isDefined(relativeDateFilter.timezone)
-      ? Temporal.Now.zonedDateTimeISO(relativeDateFilter.timezone)
+      ? Temporal.Now.zonedDateTimeISO(relativeDateFilter.timezone!)
       : Temporal.Now.zonedDateTimeISO();
 
     const relativeDateFilterWithDateRange = resolveRelativeDateTimeFilter(

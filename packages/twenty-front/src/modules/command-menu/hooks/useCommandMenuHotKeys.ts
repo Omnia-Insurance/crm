@@ -6,6 +6,7 @@ import { SIDE_PANEL_COMPONENT_INSTANCE_ID } from '@/side-panel/constants/SidePan
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useOpenAskAIPageInSidePanel } from '@/side-panel/hooks/useOpenAskAIPageInSidePanel';
 import { useOpenRecordsSearchPageInSidePanel } from '@/side-panel/hooks/useOpenRecordsSearchPageInSidePanel';
+import { useSidePanelHistory } from '@/side-panel/hooks/useSidePanelHistory';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
@@ -26,7 +27,10 @@ export const useCommandMenuHotKeys = () => {
 
   const { openAskAIPage } = useOpenAskAIPageInSidePanel();
 
+  // OMNIA-CUSTOM: wrap goBack with required-fields validation
   const { goBackWithValidation } = useCommandMenuCloseWithValidation();
+
+  const { goBackOneSubPageOrMainPage } = useSidePanelHistory();
 
   const { setGlobalCommandMenuContext } = useSetGlobalCommandMenuContext();
 
@@ -82,6 +86,7 @@ export const useCommandMenuHotKeys = () => {
   useHotkeysOnFocusedElement({
     keys: [Key.Escape],
     callback: () => {
+      // OMNIA-CUSTOM: validate required fields before navigating back
       goBackWithValidation();
     },
     focusId: SIDE_PANEL_FOCUS_ID,
@@ -99,7 +104,7 @@ export const useCommandMenuHotKeys = () => {
       }
 
       if (
-        sidePanelPage === SidePanelPages.Root &&
+        sidePanelPage === SidePanelPages.CommandMenuDisplay &&
         !(
           contextStoreTargetedRecordsRule.mode === 'selection' &&
           contextStoreTargetedRecordsRule.selectedRecordIds.length === 0
@@ -107,8 +112,8 @@ export const useCommandMenuHotKeys = () => {
       ) {
         setGlobalCommandMenuContext();
       }
-      if (sidePanelPage !== SidePanelPages.Root) {
-        goBackWithValidation();
+      if (sidePanelPage !== SidePanelPages.CommandMenuDisplay) {
+        goBackOneSubPageOrMainPage();
       }
     },
     focusId: SIDE_PANEL_FOCUS_ID,
@@ -116,7 +121,7 @@ export const useCommandMenuHotKeys = () => {
       sidePanelPage,
       sidePanelSearch,
       contextStoreTargetedRecordsRule,
-      goBackWithValidation,
+      goBackOneSubPageOrMainPage,
       setGlobalCommandMenuContext,
     ],
     options: {

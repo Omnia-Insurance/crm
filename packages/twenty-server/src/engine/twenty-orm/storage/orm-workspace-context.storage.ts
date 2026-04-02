@@ -26,6 +26,7 @@ export type ORMWorkspaceContext = {
   permissionsPerRoleId: ObjectsPermissionsByRoleId;
   entityMetadatas: EntityMetadata[];
   userWorkspaceRoleMap: UserWorkspaceRoleMap;
+  apiKeyRoleMap: Record<string, string>;
   flatRowLevelPermissionPredicateMaps: FlatRowLevelPermissionPredicateMaps;
   flatRowLevelPermissionPredicateGroupMaps: FlatRowLevelPermissionPredicateGroupMaps;
   rlsComputationCache?: WorkspaceRlsComputationCache;

@@ -21,10 +21,12 @@ jobs:
       files: |
         packages/create-twenty-app/**
         packages/twenty-sdk/**
+        packages/twenty-client-sdk/**
         packages/twenty-shared/**
         packages/twenty-server/**
         !packages/create-twenty-app/package.json
         !packages/twenty-sdk/package.json
+        !packages/twenty-client-sdk/package.json
         !packages/twenty-shared/package.json
         !packages/twenty-server/package.json
   create-app-e2e:
@@ -34,12 +36,10 @@ jobs:
     runs-on: ubuntu-latest-4-cores
     services:
       postgres:
-        image: twentycrm/twenty-postgres-spilo
+        image: postgres:18
         env:
-          PGUSER_SUPERUSER: postgres
-          PGPASSWORD_SUPERUSER: postgres
-          ALLOW_NOSSL: 'true'
-          SPILO_PROVIDER: 'local'
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
@@ -51,6 +51,8 @@ jobs:
         image: redis
         ports:
           - 6379:6379
+    env:
+      PUBLISHABLE_PACKAGES: twenty-client-sdk twenty-sdk create-twenty-app
     steps:
       - name: Fetch custom Github Actions and base branch history
         uses: actions/checkout@v4
@@ -64,12 +66,13 @@ jobs:
         run: |
           CI_VERSION="0.0.0-ci.$(date +%s)"
           echo "CI_VERSION=$CI_VERSION" >> $GITHUB_ENV
-          npx nx run-many -t set-local-version -p twenty-sdk create-twenty-app --releaseVersion=$CI_VERSION
+          npx nx run-many -t set-local-version -p $PUBLISHABLE_PACKAGES --releaseVersion=$CI_VERSION
 
       - name: Build packages
         run: |
-          npx nx build twenty-sdk
-          npx nx build create-twenty-app
+          for pkg in $PUBLISHABLE_PACKAGES; do
+            npx nx build $pkg
+          done
 
       - name: Install and start Verdaccio
         run: |
@@ -86,11 +89,13 @@ jobs:
 
       - name: Publish packages to local registry
         run: |
-          npm set //localhost:4873/:_authToken "ci-auth-token"
+          yarn config set npmRegistryServer http://localhost:4873
+          yarn config set unsafeHttpWhitelist --json '["localhost"]'
+          yarn config set npmAuthToken ci-auth-token
 
-          for pkg in twenty-sdk create-twenty-app; do
+          for pkg in $PUBLISHABLE_PACKAGES; do
             cd packages/$pkg
-            npm publish --registry http://localhost:4873 --tag ci
+            yarn npm publish --tag ci
             cd ../..
           done
 
@@ -151,13 +156,17 @@ jobs:
           SEED_API_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ1c2VySWQiOiIyMDIwMjAyMC1lNmI1LTQ2ODAtOGEzMi1iODIwOTczNzE1NmIiLCJ3b3Jrc3BhY2VJZCI6IjIwMjAyMDIwLTFjMjUtNGQwMi1iZjI1LTZhZWNjZjdlYTQxOSIsIndvcmtzcGFjZU1lbWJlcklkIjoiMjAyMDIwMjAtNDYzZi00MzViLTgyOGMtMTA3ZTAwN2EyNzExIiwidXNlcldvcmtzcGFjZUlkIjoiMjAyMDIwMjAtMWU3Yy00M2Q5LWE1ZGItNjg1YjUwNjlkODE2IiwidHlwZSI6IkFDQ0VTUyIsImF1dGhQcm92aWRlciI6InBhc3N3b3JkIiwiaWF0IjoxNzUxMjgxNzA0LCJleHAiOjIwNjY4NTc3MDR9.HMGqCsVlOAPVUBhKSGlD1X86VoHKt4LIUtET3CGIdik'
         run: |
           cd /tmp/e2e-test-workspace/test-app
-          npx --no-install twenty remote add --token $SEED_API_KEY --url http://localhost:3000
+          npx --no-install twenty remote add --api-key $SEED_API_KEY --api-url http://localhost:3000
 
-      - name: Build scaffolded app
+      - name: Deploy scaffolded app
         run: |
           cd /tmp/e2e-test-workspace/test-app
-          npx --no-install twenty build
-          test -d .twenty/output
+          npx --no-install twenty deploy
+
+      - name: Install scaffolded app
+        run: |
+          cd /tmp/e2e-test-workspace/test-app
+          npx --no-install twenty install
 
       - name: Execute hello-world logic function
         run: |
@@ -165,6 +174,13 @@ jobs:
           EXEC_OUTPUT=$(npx --no-install twenty exec --functionName hello-world-logic-function)
           echo "$EXEC_OUTPUT"
           echo "$EXEC_OUTPUT" | grep -q "Hello, World!"
+
+      - name: Execute create-hello-world-company logic function
+        run: |
+          cd /tmp/e2e-test-workspace/test-app
+          EXEC_OUTPUT=$(npx --no-install twenty exec --functionName create-hello-world-company)
+          echo "$EXEC_OUTPUT"
+          echo "$EXEC_OUTPUT" | grep -q 'Created company.*Hello World.*with id'
 
       - name: Run scaffolded app integration test
         env:

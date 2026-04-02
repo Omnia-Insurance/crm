@@ -35,7 +35,7 @@ export const resolveRelativeDateFilter = (
         const endOfNextPeriod = addUnitToZonedDateTime(
           startOfNextPeriod,
           'QUARTER',
-          amount,
+          amount!,
         );
 
         const start = startOfNextPeriod.toPlainDate().toString();
@@ -55,7 +55,7 @@ export const resolveRelativeDateFilter = (
       const startOfNextPeriod = addUnitToZonedDateTime(
         startOfNextDay,
         unit,
-        amount,
+        amount!,
       );
 
       const start = startOfNextDay.toPlainDate().toString();
@@ -82,7 +82,7 @@ export const resolveRelativeDateFilter = (
         const startOfPastPeriod = subUnitFromZonedDateTime(
           startOfCurrentQuarter,
           'QUARTER',
-          amount,
+          amount!,
         );
 
         const start = startOfPastPeriod.toPlainDate().toString();
@@ -100,7 +100,7 @@ export const resolveRelativeDateFilter = (
       const startOfNextPeriod = subUnitFromZonedDateTime(
         startOfDay,
         unit,
-        amount,
+        amount!,
       );
 
       const start = startOfNextPeriod?.toPlainDate().toString();

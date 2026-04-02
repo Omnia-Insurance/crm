@@ -1,4 +1,4 @@
-import { FeatureFlagKey, type ObjectsPermissions } from 'twenty-shared/types';
+import { type ObjectsPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
   type EntityTarget,
@@ -242,7 +242,9 @@ export class WorkspaceInsertQueryBuilder<
         result.identifiers.map((identifier) => identifier.id),
       );
 
-      const afterResult = await eventSelectQueryBuilder.getMany();
+      const afterResult = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       const formattedResultForEvent = formatResult<T[]>(
         afterResult,
@@ -334,14 +336,6 @@ export class WorkspaceInsertQueryBuilder<
   }
 
   private async validateRLSPredicatesForInsert(): Promise<void> {
-    if (
-      this.featureFlagMap[
-        FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-      ] !== true
-    ) {
-      return;
-    }
-
     const mainAliasTarget = this.getMainAliasTarget();
     const objectMetadata = getObjectMetadataFromEntityTarget(
       mainAliasTarget,

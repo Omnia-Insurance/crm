@@ -13,7 +13,6 @@ import {
   ObjectRecordOrderBy,
 } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
-import { WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { CommonBaseQueryRunnerService } from 'src/engine/api/common/common-query-runners/common-base-query-runner.service';
 import {
   CommonQueryRunnerException,
@@ -44,6 +43,7 @@ import {
   filterRestrictedFieldsFromRelations,
   filterRestrictedFieldsFromSelect,
 } from 'src/engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util';
+import { WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
@@ -265,6 +265,9 @@ export class CommonFindManyQueryRunnerService extends CommonBaseQueryRunnerServi
 
     return {
       ...args,
+      orderBy: this.orderByArgProcessor.process({
+        orderBy: args.orderBy,
+      }),
       filter: this.filterArgProcessor.process({
         filter: args.filter,
         flatObjectMetadata,

@@ -1,9 +1,6 @@
 /* @license Enterprise */
 
-import {
-  FeatureFlagKey,
-  RowLevelPermissionPredicateScope,
-} from 'twenty-shared/types';
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 import {
   Brackets,
   NotBrackets,
@@ -39,14 +36,6 @@ export const applyRowLevelPermissionPredicates = async <
   authContext,
   featureFlagMap,
 }: ApplyRowLevelPermissionPredicatesArgs<T>): Promise<void> => {
-  if (
-    featureFlagMap[
-      FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-    ] !== true
-  ) {
-    return;
-  }
-
   const userWorkspaceId = isUserAuthContext(authContext)
     ? authContext.userWorkspaceId
     : undefined;

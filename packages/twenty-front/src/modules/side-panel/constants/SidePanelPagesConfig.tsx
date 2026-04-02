@@ -1,13 +1,17 @@
+import { SidePanelCommandMenuItemDisplayPage } from '@/command-menu-item/server-items/display/components/SidePanelCommandMenuItemDisplayPage';
+import { SidePanelCommandMenuItemEditPage } from '@/command-menu-item/server-items/edit/components/SidePanelCommandMenuItemEditPage';
+import { SidePanelNavigationMenuItemEditPage } from '@/navigation-menu-item/edit/side-panel/components/SidePanelNavigationMenuItemEditPage';
+import { SidePanelNewSidebarItemPage } from '@/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemPage';
 import { SidePanelAIChatThreadsPage } from '@/side-panel/pages/ai-chat-threads/components/SidePanelAIChatThreadsPage';
 import { SidePanelAskAIPage } from '@/side-panel/pages/ask-ai/components/SidePanelAskAIPage';
 import { SidePanelCalendarEventPage } from '@/side-panel/pages/calendar-event/components/SidePanelCalendarEventPage';
 import { SidePanelFrontComponentPage } from '@/side-panel/pages/front-component/components/SidePanelFrontComponentPage';
 import { SidePanelMessageThreadPage } from '@/side-panel/pages/message-thread/components/SidePanelMessageThreadPage';
-import { SidePanelNavigationMenuItemEditPage } from '@/navigation-menu-item/edit/side-panel/components/SidePanelNavigationMenuItemEditPage';
-import { SidePanelNewSidebarItemPage } from '@/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemPage';
 import { SidePanelPageLayoutChartSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutChartSettings';
+import { SidePanelPageLayoutFieldSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutFieldSettings';
 import { SidePanelPageLayoutFieldsSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutFieldsSettings';
 import { SidePanelPageLayoutIframeSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutIframeSettings';
+import { SidePanelPageLayoutRecordTableSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutRecordTableSettings';
 import { SidePanelPageLayoutTabSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettings';
 import { SidePanelPageLayoutWidgetTypeSelect } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutWidgetTypeSelect';
 import { SidePanelMergeRecordPage } from '@/side-panel/pages/record-page/components/SidePanelMergeRecordPage';
@@ -26,7 +30,10 @@ import { SidePanelPages } from 'twenty-shared/types';
 
 export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
   [
-    [SidePanelPages.Root, <SidePanelRootPage />],
+    [
+      SidePanelPages.CommandMenuDisplay,
+      <SidePanelCommandMenuItemDisplayPage />,
+    ],
     [SidePanelPages.ViewRecord, <SidePanelRecordPage />],
     [SidePanelPages.MergeRecords, <SidePanelMergeRecordPage />],
     [SidePanelPages.UpdateRecords, <SidePanelUpdateMultipleRecords />],
@@ -62,11 +69,20 @@ export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
       SidePanelPages.PageLayoutFieldsSettings,
       <SidePanelPageLayoutFieldsSettings />,
     ],
+    [
+      SidePanelPages.PageLayoutFieldSettings,
+      <SidePanelPageLayoutFieldSettings />,
+    ],
+    [
+      SidePanelPages.PageLayoutRecordTableSettings,
+      <SidePanelPageLayoutRecordTableSettings />,
+    ],
     [SidePanelPages.ViewFrontComponent, <SidePanelFrontComponentPage />],
     [
       SidePanelPages.NavigationMenuItemEdit,
       <SidePanelNavigationMenuItemEditPage />,
     ],
     [SidePanelPages.NavigationMenuAddItem, <SidePanelNewSidebarItemPage />],
+    [SidePanelPages.CommandMenuEdit, <SidePanelCommandMenuItemEditPage />],
   ],
 );

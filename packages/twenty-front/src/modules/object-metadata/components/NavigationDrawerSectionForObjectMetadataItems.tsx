@@ -24,7 +24,6 @@ const ORDERED_LAST_STANDARD_OBJECTS: string[] = [
 
 type NavigationDrawerSectionForObjectMetadataItemsProps = {
   sectionTitle: string;
-  isRemote: boolean;
   objectMetadataItems: EnrichedObjectMetadataItem[];
   rightIcon?: React.ReactNode;
   respectProvidedOrder?: boolean;
@@ -40,7 +39,6 @@ type NavigationDrawerSectionForObjectMetadataItemsProps = {
 
 export const NavigationDrawerSectionForObjectMetadataItems = ({
   sectionTitle,
-  isRemote,
   objectMetadataItems,
   rightIcon,
   respectProvidedOrder = false,
@@ -49,7 +47,7 @@ export const NavigationDrawerSectionForObjectMetadataItems = ({
   onObjectMetadataItemClick,
   onActiveObjectMetadataItemClick,
 }: NavigationDrawerSectionForObjectMetadataItemsProps) => {
-  const navigationSectionId = 'Objects' + (isRemote ? 'Remote' : 'Workspace');
+  const navigationSectionId = 'ObjectsWorkspace';
   const { toggleNavigationSection } = useNavigationSection(navigationSectionId);
   const isNavigationSectionOpen = useAtomFamilyStateValue(
     isNavigationSectionOpenFamilyState,

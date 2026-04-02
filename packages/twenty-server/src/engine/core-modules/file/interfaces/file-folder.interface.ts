@@ -60,6 +60,9 @@ export const fileFolderConfigs: Record<FileFolder, FileFolderConfig> = {
   [FileFolder.Export]: {
     ignoreExpirationToken: false,
   },
+  [FileFolder.GeneratedSdkClient]: {
+    ignoreExpirationToken: false,
+  },
 };
 
 export type AllowedFolders = KebabCase<keyof typeof FileFolder>;

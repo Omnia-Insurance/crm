@@ -1,7 +1,3 @@
-import { styled } from '@linaria/react';
-import { Link } from 'react-router-dom';
-
-import { SettingsOptionCardContentButton } from '@/settings/components/SettingsOptions/SettingsOptionCardContentButton';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
 import { TabList } from '@/ui/layout/tab-list/components/TabList';
@@ -10,33 +6,31 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 
+import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import { FeatureFlagKey } from '~/generated-metadata/graphql';
 import { t } from '@lingui/core/macro';
 import {
-  H2Title,
+  IconChartBar,
   IconCpu,
-  IconFileText,
   IconSettingsBolt,
   IconSparkles,
   IconTool,
 } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { Card, Section } from 'twenty-ui/layout';
-import { SettingsAIMCP } from './components/SettingsAIMCP';
+import { SettingsAIMoreTab } from '~/pages/settings/ai/components/SettingsAIMoreTab';
 import { SettingsAIModelsTab } from './components/SettingsAIModelsTab';
-import { SettingsSkillsTable } from './components/SettingsSkillsTable';
+import { SettingsAIUsageTab } from './components/SettingsAIUsageTab';
+import { SettingsAgentSkills } from './components/SettingsAgentSkills';
 import { SettingsToolsTable } from './components/SettingsToolsTable';
 import { SETTINGS_AI_TABS } from './constants/SettingsAiTabs';
-
-const StyledLinkContainer = styled.div`
-  > a {
-    text-decoration: none;
-  }
-`;
 
 export const SettingsAI = () => {
   const activeTabId = useAtomComponentStateValue(
     activeTabIdComponentState,
     SETTINGS_AI_TABS.COMPONENT_INSTANCE_ID,
+  );
+
+  const isUsageAnalyticsEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_USAGE_ANALYTICS_ENABLED,
   );
 
   const tabs = [
@@ -55,6 +49,15 @@ export const SettingsAI = () => {
       title: t`Tools`,
       Icon: IconTool,
     },
+    ...(isUsageAnalyticsEnabled
+      ? [
+          {
+            id: SETTINGS_AI_TABS.TABS_IDS.USAGE,
+            title: t`Usage`,
+            Icon: IconChartBar,
+          },
+        ]
+      : []),
     {
       id: SETTINGS_AI_TABS.TABS_IDS.MORE,
       title: t`More`,
@@ -65,6 +68,7 @@ export const SettingsAI = () => {
   const isModelsTab = activeTabId === SETTINGS_AI_TABS.TABS_IDS.MODELS;
   const isSkillsTab = activeTabId === SETTINGS_AI_TABS.TABS_IDS.SKILLS;
   const isToolsTab = activeTabId === SETTINGS_AI_TABS.TABS_IDS.TOOLS;
+  const isUsageTab = activeTabId === SETTINGS_AI_TABS.TABS_IDS.USAGE;
   const isMoreTab = activeTabId === SETTINGS_AI_TABS.TABS_IDS.MORE;
 
   return (
@@ -84,37 +88,10 @@ export const SettingsAI = () => {
           componentInstanceId={SETTINGS_AI_TABS.COMPONENT_INSTANCE_ID}
         />
         {isModelsTab && <SettingsAIModelsTab />}
-        {isSkillsTab && <SettingsSkillsTable />}
+        {isSkillsTab && <SettingsAgentSkills />}
         {isToolsTab && <SettingsToolsTable />}
-        {isMoreTab && (
-          <>
-            <Section>
-              <H2Title
-                title={t`System Prompt`}
-                description={t`View and customize AI instructions`}
-              />
-              <Card rounded>
-                <SettingsOptionCardContentButton
-                  Icon={IconFileText}
-                  title={t`System Prompt`}
-                  description={t`View the AI system prompt and add custom instructions`}
-                  Button={
-                    <StyledLinkContainer>
-                      <Link to={getSettingsPath(SettingsPath.AIPrompts)}>
-                        <Button
-                          title={t`Configure`}
-                          variant="secondary"
-                          size="small"
-                        />
-                      </Link>
-                    </StyledLinkContainer>
-                  }
-                />
-              </Card>
-            </Section>
-            <SettingsAIMCP />
-          </>
-        )}
+        {isUsageTab && <SettingsAIUsageTab />}
+        {isMoreTab && <SettingsAIMoreTab />}
       </SettingsPageContainer>
     </SubMenuTopBarContainer>
   );

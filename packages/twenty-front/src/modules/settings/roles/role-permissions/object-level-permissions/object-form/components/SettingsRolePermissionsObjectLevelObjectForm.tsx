@@ -7,7 +7,6 @@ import { SettingsRolePermissionsObjectLevelRecordLevelSection } from '@/settings
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
-import { useFeatureFlagsMap } from '@/workspace/hooks/useFeatureFlagsMap';
 import { t } from '@lingui/core/macro';
 import { useSearchParams } from 'react-router-dom';
 import { SettingsPath, type ViewFilterOperand } from 'twenty-shared/types';
@@ -18,10 +17,7 @@ import {
 } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
 import { useQuery } from '@apollo/client/react';
-import {
-  FeatureFlagKey,
-  FindOneAgentDocument,
-} from '~/generated-metadata/graphql';
+import { FindOneAgentDocument } from '~/generated-metadata/graphql';
 
 type SettingsRolePermissionsObjectLevelObjectFormProps = {
   roleId: string;
@@ -48,11 +44,6 @@ export const SettingsRolePermissionsObjectLevelObjectForm = ({
   const objectMetadata = useObjectMetadataItemById({
     objectId: objectMetadataId,
   });
-
-  const featureFlagsMap = useFeatureFlagsMap();
-
-  const isRowLevelPermissionPredicatesEnabled =
-    featureFlagsMap[FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED];
 
   const objectMetadataItem = objectMetadata.objectMetadataItem;
 
@@ -149,13 +140,11 @@ export const SettingsRolePermissionsObjectLevelObjectForm = ({
           objectMetadataItem={objectMetadataItem}
           roleId={roleId}
         />
-        {isRowLevelPermissionPredicatesEnabled && (
-          <SettingsRolePermissionsObjectLevelRecordLevelSection
-            objectMetadataItem={objectMetadataItem}
-            roleId={roleId}
-            hasOrganizationPlan={true}
-          />
-        )}
+        <SettingsRolePermissionsObjectLevelRecordLevelSection
+          objectMetadataItem={objectMetadataItem}
+          roleId={roleId}
+          hasOrganizationPlan={true}
+        />
       </SettingsPageContainer>
     </SubMenuTopBarContainer>
   );

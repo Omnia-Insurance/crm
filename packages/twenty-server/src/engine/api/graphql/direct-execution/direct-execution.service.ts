@@ -4,6 +4,8 @@ import { type MessageDescriptor } from '@lingui/core';
 import { type Request } from 'express';
 import {
   GraphQLError,
+  buildSchema,
+  execute,
   type DocumentNode,
   type FieldNode,
   type GraphQLFormattedError,
@@ -36,10 +38,12 @@ import { assertUpdateOneArgs } from 'src/engine/api/graphql/direct-execution/uti
 import { type ResolverNameMapEntry } from 'src/engine/api/graphql/direct-execution/utils/build-resolver-name-map.util';
 import { buildWorkspaceSchemaBuilderContext } from 'src/engine/api/graphql/direct-execution/utils/build-workspace-schema-builder-context.util';
 import { extractArgumentsFromAst } from 'src/engine/api/graphql/direct-execution/utils/extract-arguments-from-ast.util';
-import { graphQLBackfillNullsFromSelectedFields } from 'src/engine/api/graphql/direct-execution/utils/graphql-backfill-nulls-from-selected-fields.util';
 import { graphQLBuildFragmentMap } from 'src/engine/api/graphql/direct-execution/utils/graphql-build-fragment-map.util';
 import { graphQLBuildPartialResolveInfo } from 'src/engine/api/graphql/direct-execution/utils/graphql-build-partial-resolve-info.util';
 import { graphQLExtractTopLevelFields } from 'src/engine/api/graphql/direct-execution/utils/graphql-extract-top-level-fields.util';
+import { graphQLFormatResultFromSelectedFields } from 'src/engine/api/graphql/direct-execution/utils/graphql-format-result-from-selected-fields.util';
+import { WorkspaceGraphqlSchemaSDLService } from 'src/engine/api/graphql/workspace-graphql-schema-sdl/workspace-graphql-schema-sdl.service';
+import { ResolverOutput } from 'src/engine/api/graphql/workspace-query-runner/interfaces/resolver-output';
 import { workspaceQueryRunnerGraphqlApiExceptionHandler } from 'src/engine/api/graphql/workspace-query-runner/utils/workspace-query-runner-graphql-api-exception-handler.util';
 import { RESOLVER_METHOD_NAMES } from 'src/engine/api/graphql/workspace-resolver-builder/constants/resolver-method-names';
 import { CreateManyResolverFactory } from 'src/engine/api/graphql/workspace-resolver-builder/factories/create-many-resolver.factory';
@@ -61,13 +65,15 @@ import { type WorkspaceResolverBuilderFactoryInterface } from 'src/engine/api/gr
 import { type WorkspaceSchemaBuilderContext } from 'src/engine/api/graphql/workspace-schema-builder/interfaces/workspace-schema-builder-context.interface';
 import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { buildObjectIdByNameMaps } from 'src/engine/metadata-modules/flat-object-metadata/utils/build-object-id-by-name-maps.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 type DirectExecutionResult = {
-  data: Record<string, unknown> | null;
+  data?: Record<string, unknown>;
   errors?: GraphQLFormattedError[];
 };
 
@@ -83,8 +89,10 @@ export class DirectExecutionService {
   constructor(
     private readonly workspaceFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly workspaceGraphqlSchemaSDLService: WorkspaceGraphqlSchemaSDLService,
     private readonly twentyConfigService: TwentyConfigService,
     private readonly i18nService: I18nService,
+    private readonly metricsService: MetricsService,
     private readonly findManyResolverFactory: FindManyResolverFactory,
     private readonly findOneResolverFactory: FindOneResolverFactory,
     private readonly findDuplicatesResolverFactory: FindDuplicatesResolverFactory,
@@ -143,7 +151,7 @@ export class DirectExecutionService {
     ]);
   }
 
-  async getGeneratedWorkspaceResolverNames(
+  async getWorkspaceResolverNames(
     workspaceId: string,
   ): Promise<Set<string> | null> {
     const { graphQLResolverNameMap } =
@@ -155,6 +163,25 @@ export class DirectExecutionService {
   }
 
   async execute(
+    req: Request,
+    document: DocumentNode,
+    hasIntrospectionFields: boolean,
+    hasWorkspaceFields: boolean,
+  ): Promise<DirectExecutionResult | null> {
+    const [introspectionResult, workspaceResult] = await Promise.all([
+      hasIntrospectionFields
+        ? this.executeIntrospectionQuery(req, document)
+        : null,
+      hasWorkspaceFields ? this.executeWorkspaceQuery(req, document) : null,
+    ]);
+
+    return this.mergeDirectExecutionResults(
+      introspectionResult,
+      workspaceResult,
+    );
+  }
+
+  private async executeWorkspaceQuery(
     req: Request,
     document: DocumentNode,
   ): Promise<DirectExecutionResult | null> {
@@ -207,19 +234,30 @@ export class DirectExecutionService {
               objectIdByNameSingular,
             );
 
-          const result = await this.executeField({
+          const result = (await this.executeField({
             entry,
             args,
             graphqlPartialResolveInfo,
             workspaceSchemaBuilderContext,
-          });
+          })) as ResolverOutput;
 
-          graphQLBackfillNullsFromSelectedFields(
+          const formattedResult = graphQLFormatResultFromSelectedFields(
             result,
-            graphqlFields(graphqlPartialResolveInfo as GraphQLResolveInfo),
+            graphqlFields(
+              graphqlPartialResolveInfo as GraphQLResolveInfo,
+              {},
+              { excludedFields: [] },
+            ),
+            workspaceSchemaBuilderContext.flatObjectMetadata.nameSingular,
+            {
+              flatObjectMetadataMaps,
+              flatFieldMetadataMaps,
+              objectIdByNameSingular,
+              method: entry.method,
+            },
           );
 
-          return { responseKey, result };
+          return { responseKey, result: formattedResult };
         }),
       );
 
@@ -239,8 +277,71 @@ export class DirectExecutionService {
 
       return { data };
     } catch (error) {
-      return { data: null, errors: [this.formatError(error, req)] };
+      return { errors: [this.formatError(error, req)] };
     }
+  }
+
+  private async executeIntrospectionQuery(
+    req: Request,
+    document: DocumentNode,
+  ): Promise<DirectExecutionResult | null> {
+    try {
+      if (!isDefined(req.workspace)) {
+        return null;
+      }
+
+      const schemaSDLResult =
+        await this.workspaceGraphqlSchemaSDLService.getOrComputeSchemaSDL(
+          req.workspace,
+          req.application?.id ?? undefined,
+        );
+
+      if (!isDefined(schemaSDLResult)) {
+        return null;
+      }
+
+      const schema = buildSchema(schemaSDLResult.sdl);
+      const result = await execute({
+        schema,
+        document,
+        operationName: req.body?.operationName as string | undefined,
+        variableValues: (req.body?.variables as Record<string, unknown>) ?? {},
+      });
+
+      await this.metricsService.incrementCounter({
+        key: MetricsKeys.GraphqlIntrospectionDirectExecution,
+        shouldStoreInCache: false,
+      });
+
+      return {
+        data: result.data as Record<string, unknown> | undefined,
+        errors: result.errors?.map((error) => error.toJSON()),
+      };
+    } catch (error) {
+      return { errors: [this.formatError(error, req)] };
+    }
+  }
+
+  private mergeDirectExecutionResults(
+    introspectionResult: DirectExecutionResult | null,
+    workspaceResult: DirectExecutionResult | null,
+  ): DirectExecutionResult | null {
+    if (!introspectionResult && !workspaceResult) {
+      return null;
+    }
+
+    const errors = [
+      ...(introspectionResult?.errors ?? []),
+      ...(workspaceResult?.errors ?? []),
+    ];
+
+    return {
+      data: {
+        ...introspectionResult?.data,
+        ...workspaceResult?.data,
+      },
+      ...(errors.length > 0 ? { errors } : {}),
+    };
   }
 
   private async executeField({
@@ -280,7 +381,14 @@ export class DirectExecutionService {
     );
   }
 
-  private formatError(error: any, req: Request): GraphQLFormattedError {
+  private formatError(error: unknown, req: Request): GraphQLFormattedError {
+    if (!(error instanceof Error)) {
+      return {
+        message: 'Internal server error',
+        extensions: { code: 'INTERNAL_SERVER_ERROR' },
+      };
+    }
+
     try {
       workspaceQueryRunnerGraphqlApiExceptionHandler(error);
     } catch (graphqlError) {
@@ -301,9 +409,7 @@ export class DirectExecutionService {
     }
 
     return {
-      message: isDefined(error.message)
-        ? error.message
-        : 'Internal server error',
+      message: error.message,
       extensions: { code: 'INTERNAL_SERVER_ERROR' },
     };
   }

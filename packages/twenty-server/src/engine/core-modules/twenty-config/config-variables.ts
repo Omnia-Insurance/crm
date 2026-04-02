@@ -82,6 +82,16 @@ export class ConfigVariables {
   OUTBOUND_HTTP_SAFE_MODE_ENABLED = true;
 
   @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'Lock workspace schema DDL changes (for hot upgrades). Blocks sign-up, workspace deletion, and all metadata schema changes.',
+    isEnvOnly: true,
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  WORKSPACE_SCHEMA_DDL_LOCKED = false;
+
+  @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.TOKENS_DURATION,
     description: 'Duration for which the email verification token is valid',
     type: ConfigVariableType.STRING,
@@ -430,7 +440,7 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.STORAGE_CONFIG,
-    description: 'S3 region for storage when using S3 storage type',
+    description: 'AWS region of the S3 bucket (e.g. eu-west-3). Required.',
     type: ConfigVariableType.STRING,
   })
   @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
@@ -439,7 +449,7 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.STORAGE_CONFIG,
-    description: 'S3 bucket name for storage when using S3 storage type',
+    description: 'Name of the S3 bucket used for file storage. Required.',
     type: ConfigVariableType.STRING,
   })
   @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
@@ -447,7 +457,8 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.STORAGE_CONFIG,
-    description: 'S3 endpoint for storage when using S3 storage type',
+    description:
+      'Custom S3 endpoint URL. Optional — only needed for S3-compatible services like MinIO (e.g. http://minio:9000). Omit for native AWS S3, where the SDK resolves the endpoint from the region automatically.',
     type: ConfigVariableType.STRING,
   })
   @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
@@ -458,7 +469,7 @@ export class ConfigVariables {
     group: ConfigVariablesGroup.STORAGE_CONFIG,
     isSensitive: true,
     description:
-      'S3 access key ID for authentication when using S3 storage type',
+      'S3 access key ID. Optional — omit to use the default AWS credential chain (IAM role, instance profile, etc.).',
     type: ConfigVariableType.STRING,
   })
   @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
@@ -469,12 +480,43 @@ export class ConfigVariables {
     group: ConfigVariablesGroup.STORAGE_CONFIG,
     isSensitive: true,
     description:
-      'S3 secret access key for authentication when using S3 storage type',
+      'S3 secret access key. Required when STORAGE_S3_ACCESS_KEY_ID is set, ignored otherwise.',
     type: ConfigVariableType.STRING,
   })
   @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
   @IsOptional()
   STORAGE_S3_SECRET_ACCESS_KEY: string;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.STORAGE_CONFIG,
+    description:
+      'When enabled, file downloads are 302-redirected to S3 presigned URLs instead of being proxied through the server. Reduces server load and bandwidth.',
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
+  @IsOptional()
+  // TODO: default to true once validated in production
+  STORAGE_S3_PRESIGNED_URL_ENABLED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.STORAGE_CONFIG,
+    description:
+      'Public S3 endpoint used for generating presigned URLs. Optional — only needed when STORAGE_S3_ENDPOINT is an internal address not reachable by browsers (e.g. http://minio:9000 in Docker). Set this to the publicly accessible equivalent (e.g. https://storage.example.com).',
+    type: ConfigVariableType.STRING,
+  })
+  @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
+  @IsOptional()
+  STORAGE_S3_PRESIGNED_URL_BASE: string;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.STORAGE_CONFIG,
+    description: 'TTL in seconds for S3 presigned URLs.',
+    type: ConfigVariableType.NUMBER,
+  })
+  @ValidateIf((env) => env.STORAGE_TYPE === StorageDriverType.S_3)
+  @CastToPositiveNumber()
+  @IsOptional()
+  STORAGE_S3_PRESIGNED_URL_EXPIRES_IN: number = 900;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.LOGIC_FUNCTION_CONFIG,
@@ -1579,6 +1621,16 @@ export class ConfigVariables {
   @IsUrl({ require_tld: false })
   @IsOptional()
   APP_REGISTRY_URL: string = 'https://registry.npmjs.org';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.ADVANCED_SETTINGS,
+    description:
+      'CDN base URL for serving files from registry (e.g. https://unpkg.com)',
+    type: ConfigVariableType.STRING,
+  })
+  @IsUrl({ require_tld: false })
+  @IsOptional()
+  APP_REGISTRY_CDN_URL: string = 'https://unpkg.com';
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.ADVANCED_SETTINGS,

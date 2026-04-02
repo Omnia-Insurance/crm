@@ -1,8 +1,7 @@
-import { activeCustomizationPageLayoutIdsState } from '@/layout-customization/states/activeCustomizationPageLayoutIdsState';
+import { commandMenuItemsDraftState } from '@/command-menu-item/server-items/edit/states/commandMenuItemsDraftState';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { navigationMenuItemsDraftState } from '@/navigation-menu-item/common/states/navigationMenuItemsDraftState';
-import { selectedNavigationMenuItemInEditModeState } from '@/navigation-menu-item/common/states/selectedNavigationMenuItemInEditModeState';
-import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
+import { selectedNavigationMenuItemIdInEditModeState } from '@/navigation-menu-item/common/states/selectedNavigationMenuItemIdInEditModeState';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useStore } from 'jotai';
@@ -10,13 +9,14 @@ import { useCallback } from 'react';
 
 export const useExitLayoutCustomizationMode = () => {
   const store = useStore();
+
   const { closeSidePanelMenu } = useSidePanelMenu();
 
   const setNavigationMenuItemsDraft = useSetAtomState(
     navigationMenuItemsDraftState,
   );
-  const setSelectedNavigationMenuItemInEditMode = useSetAtomState(
-    selectedNavigationMenuItemInEditModeState,
+  const setSelectedNavigationMenuItemIdInEditMode = useSetAtomState(
+    selectedNavigationMenuItemIdInEditModeState,
   );
   const setIsLayoutCustomizationModeEnabled = useSetAtomState(
     isLayoutCustomizationModeEnabledState,
@@ -24,15 +24,13 @@ export const useExitLayoutCustomizationMode = () => {
 
   const exitLayoutCustomizationMode = useCallback(() => {
     setNavigationMenuItemsDraft(null);
-    setSelectedNavigationMenuItemInEditMode(null);
-
-    store.set(currentPageLayoutIdState.atom, null);
-    store.set(activeCustomizationPageLayoutIdsState.atom, []);
+    setSelectedNavigationMenuItemIdInEditMode(null);
+    store.set(commandMenuItemsDraftState.atom, null);
     setIsLayoutCustomizationModeEnabled(false);
     closeSidePanelMenu();
   }, [
     setNavigationMenuItemsDraft,
-    setSelectedNavigationMenuItemInEditMode,
+    setSelectedNavigationMenuItemIdInEditMode,
     setIsLayoutCustomizationModeEnabled,
     closeSidePanelMenu,
     store,
