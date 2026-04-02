@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command } from 'nest-commander';
@@ -6,10 +5,9 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
-import { ActiveOrSuspendedWorkspacesMigrationCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspaces-migration.command-runner';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspaces-migration.command-runner';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
+import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -20,22 +18,16 @@ import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-membe
   description:
     'Link Agent records to Workspace Members by matching email addresses.',
 })
-export class SyncAgentWorkspaceMembersCommand extends ActiveOrSuspendedWorkspacesMigrationCommandRunner {
-  protected override readonly logger = new Logger(
-    SyncAgentWorkspaceMembersCommand.name,
-  );
-
+export class SyncAgentWorkspaceMembersCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
-    @InjectRepository(WorkspaceEntity)
-    protected readonly workspaceRepository: Repository<WorkspaceEntity>,
-    protected readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    protected readonly dataSourceService: DataSourceService,
+    protected readonly workspaceIteratorService: WorkspaceIteratorService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     @InjectRepository(ObjectMetadataEntity)
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
     @InjectRepository(FieldMetadataEntity)
     private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
   ) {
-    super(workspaceRepository, globalWorkspaceOrmManager, dataSourceService);
+    super(workspaceIteratorService);
   }
 
   override async runOnWorkspace({

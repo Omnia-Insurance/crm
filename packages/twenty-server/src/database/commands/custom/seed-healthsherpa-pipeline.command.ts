@@ -1,17 +1,14 @@
-import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command, Option } from 'nest-commander';
 import { Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 
-import { ActiveOrSuspendedWorkspacesMigrationCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspaces-migration.command-runner';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspaces-migration.command-runner';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
+import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 
 // Health Sherpa policy status → CRM status mapping
 const POLICY_STATUS_MAPPING = {
@@ -26,11 +23,7 @@ const POLICY_STATUS_MAPPING = {
   name: 'workspace:seed-healthsherpa-pipeline',
   description: 'Seed Health Sherpa policy ingestion pipeline',
 })
-export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspacesMigrationCommandRunner {
-  protected override readonly logger = new Logger(
-    SeedHealthSherpaPipelineCommand.name,
-  );
-
+export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   @Option({
     flags: '-f, --force',
     description: 'Delete and recreate the pipeline if it already exists.',
@@ -41,16 +34,13 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaces
   }
 
   constructor(
-    @InjectRepository(WorkspaceEntity)
-    protected readonly workspaceRepository: Repository<WorkspaceEntity>,
-    protected readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    protected readonly dataSourceService: DataSourceService,
+    protected readonly workspaceIteratorService: WorkspaceIteratorService,
     @InjectRepository(IngestionPipelineEntity)
     private readonly pipelineRepository: Repository<IngestionPipelineEntity>,
     @InjectRepository(IngestionFieldMappingEntity)
     private readonly fieldMappingRepository: Repository<IngestionFieldMappingEntity>,
   ) {
-    super(workspaceRepository, globalWorkspaceOrmManager, dataSourceService);
+    super(workspaceIteratorService);
   }
 
   override async runOnWorkspace({

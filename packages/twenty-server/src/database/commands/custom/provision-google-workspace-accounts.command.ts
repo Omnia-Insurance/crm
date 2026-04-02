@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { Command } from 'nest-commander';
@@ -10,12 +9,11 @@ import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 import { v4 } from 'uuid';
 
-import { ActiveOrSuspendedWorkspacesMigrationCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspaces-migration.command-runner';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspaces-migration.command-runner';
+import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { getGoogleApisOauthScopes } from 'src/engine/core-modules/auth/utils/get-google-apis-oauth-scopes';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
@@ -35,23 +33,17 @@ import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-membe
   description:
     'Provision Google Workspace connected accounts for agents using domain-wide delegation service account.',
 })
-export class ProvisionGoogleWorkspaceAccountsCommand extends ActiveOrSuspendedWorkspacesMigrationCommandRunner {
-  protected override readonly logger = new Logger(
-    ProvisionGoogleWorkspaceAccountsCommand.name,
-  );
-
+export class ProvisionGoogleWorkspaceAccountsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   constructor(
-    @InjectRepository(WorkspaceEntity)
-    protected readonly workspaceRepository: Repository<WorkspaceEntity>,
+    protected readonly workspaceIteratorService: WorkspaceIteratorService,
     protected readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    protected readonly dataSourceService: DataSourceService,
     @InjectRepository(ObjectMetadataEntity)
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
     @InjectRepository(FieldMetadataEntity)
     private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
     private readonly twentyConfigService: TwentyConfigService,
   ) {
-    super(workspaceRepository, globalWorkspaceOrmManager, dataSourceService);
+    super(workspaceIteratorService);
   }
 
   override async runOnWorkspace({

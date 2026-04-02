@@ -174,15 +174,15 @@ check_file_contains \
   "resolveCreateRecordActionLabels" \
   "Registered command menu items must apply object-aware create CTA labels"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
   "EngineComponentKey.CREATE_NEW_RECORD" \
   "Server-side command menu items must override CREATE_NEW_RECORD label with object-specific Create CTA"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
   "createRecordLabel" \
   "Server-side command menu items must apply object-specific label and blue primary styling"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
   "GO_TO_ENGINE_KEY_OBJECT_MAP" \
   "Server-side command menu items must resolve Go To labels from object metadata and filter deactivated objects"
 check_file_contains \
@@ -721,12 +721,8 @@ check_file_not_contains \
   "Composite fields should be kept as objects, not flattened"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Export view must open the related-fields modal instead of exporting directly when relation fields are available"
-check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Engine-command export path must open the related-fields modal when relation fields are available"
+  "useExportableRelationFields" \
+  "Export view must auto-expand relation fields at depth 1 when relation fields are available"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportableRelationFields.ts" \
   "buildExportableRelationFieldPaths" \
@@ -798,10 +794,6 @@ check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
   "START_EXPORT_JOB" \
   "Export command must call server-side startExportJob mutation"
-check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "START_EXPORT_JOB" \
-  "Engine-command export must call server-side startExportJob mutation"
 check_file_contains \
   "packages/twenty-front/src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx" \
   "AUTO_DISMISS_MS" \

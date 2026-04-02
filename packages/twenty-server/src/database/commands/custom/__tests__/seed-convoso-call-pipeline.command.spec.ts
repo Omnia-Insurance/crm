@@ -6,8 +6,6 @@ describe('SeedConvosoCallPipelineCommand', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
-      {} as any,
     );
 
     const mappings = command['buildFieldMappings']('pipeline-123');

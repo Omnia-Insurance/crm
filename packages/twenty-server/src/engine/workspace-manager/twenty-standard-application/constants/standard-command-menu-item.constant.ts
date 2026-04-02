@@ -50,6 +50,22 @@ export const STANDARD_COMMAND_MENU_ITEMS = {
     engineComponentKey: EngineComponentKey.CREATE_NEW_RECORD,
     hotKeys: null,
   },
+  // OMNIA-CUSTOM: keep single-record delete pinned as a header button
+  deleteSingleRecord: {
+    universalIdentifier: '6652773f-b9a9-4fa3-a52c-e2f2e259e430',
+    label: 'Delete',
+    shortLabel: 'Delete',
+    icon: 'IconTrash',
+    isPinned: true,
+    position: 3,
+    availabilityType: CommandMenuItemAvailabilityType.RECORD_SELECTION,
+    conditionalAvailabilityExpression:
+      'numberOfSelectedRecords == 1 and not hasAnySoftDeleteFilterOnView and objectPermissions.canSoftDeleteObjectRecords and noneDefined(selectedRecords, "deletedAt")',
+    availabilityObjectMetadataUniversalIdentifier: null,
+    frontComponentUniversalIdentifier: null,
+    engineComponentKey: EngineComponentKey.DELETE_SINGLE_RECORD,
+    hotKeys: null,
+  },
   deleteRecords: {
     universalIdentifier: 'd5a55d57-ed1d-4791-89b8-53b7e121d69d',
     label: 'Delete ${capitalize(objectMetadataLabel)}',
