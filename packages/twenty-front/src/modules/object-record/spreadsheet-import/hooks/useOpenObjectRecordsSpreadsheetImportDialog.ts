@@ -19,7 +19,7 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 200;
 
 export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
