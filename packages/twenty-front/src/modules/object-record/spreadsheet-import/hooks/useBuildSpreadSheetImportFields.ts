@@ -299,6 +299,7 @@ export const useBuildSpreadsheetImportFields = () => {
           key: `__relationLabel:${fieldMetadataItem.name}`,
           isNestedField: false,
           isCompositeSubField: false,
+          fieldValidationDefinitions: [],
         }),
       );
       const uniqueConstraintFields = getUniqueConstraintsFields<
@@ -386,6 +387,7 @@ export const useBuildSpreadsheetImportFields = () => {
                   compositeSubFieldKey: sf.subFieldName as string,
                   isReadOnly: true,
                   description: 'Read-only — exported for reference',
+                  fieldValidationDefinitions: [],
                 }),
               );
             }
@@ -416,6 +418,7 @@ export const useBuildSpreadsheetImportFields = () => {
               key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
               isReadOnly: true,
               description: 'Read-only — exported for reference',
+              fieldValidationDefinitions: [],
             }),
           );
           continue;
@@ -489,6 +492,7 @@ export const useBuildSpreadsheetImportFields = () => {
             isNestedField: true,
             isReadOnly: true,
             description: 'Read-only — exported for reference',
+            fieldValidationDefinitions: [],
           }),
         );
       }
@@ -518,6 +522,7 @@ export const useBuildSpreadsheetImportFields = () => {
               isCompositeSubField: true,
               isReadOnly: true,
               description: 'Read-only — exported for reference',
+              fieldValidationDefinitions: [],
             }),
           );
         }

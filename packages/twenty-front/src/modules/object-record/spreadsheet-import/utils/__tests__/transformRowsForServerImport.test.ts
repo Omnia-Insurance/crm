@@ -117,6 +117,29 @@ describe('transformRowsForServerImport', () => {
       expect(transformedRows[0]).not.toHaveProperty('__relationLabel:carrier');
     });
 
+    it('should convert pre-normalized connect field keys to dot notation', () => {
+      // Connect keys are pre-converted to update: format by the dialog hook
+      const { transformedRows } = transformRowsForServerImport([
+        { 'update:primaryPhoneNumber-phones (lead)': '5551234567' },
+      ]);
+
+      expect(transformedRows[0]).toHaveProperty(
+        ['lead.phones.primaryPhoneNumber'],
+        '5551234567',
+      );
+    });
+
+    it('should pass through composite field keys unchanged (not treat as relations)', () => {
+      const { transformedRows, relationBehaviors } = transformRowsForServerImport([
+        { 'Amount (premium)': '55.00', 'Currency (premium)': 'USD' },
+      ]);
+
+      // These should pass through as direct fields, NOT be parsed as relations
+      expect(transformedRows[0]).toHaveProperty('Amount (premium)', '55.00');
+      expect(transformedRows[0]).toHaveProperty('Currency (premium)', 'USD');
+      expect(relationBehaviors).toHaveLength(0);
+    });
+
     it('should pass through direct field keys unchanged', () => {
       const { transformedRows } = transformRowsForServerImport([
         { id: 'abc-123', name: 'Test', status: 'SUBMITTED' },
@@ -198,6 +221,22 @@ describe('transformRowsForServerImport', () => {
       expect(carrierBehavior).toBeDefined();
       expect(carrierBehavior?.behavior).toBe('LOOKUP_ASSIGN');
       expect(carrierBehavior?.onNotFound).toBe('ERROR');
+    });
+
+    it('should detect SMART_UPDATE when pre-normalized connect fields present', () => {
+      // Connect keys pre-converted to update: format by dialog
+      const { relationBehaviors } = transformRowsForServerImport([
+        {
+          'update:primaryPhoneNumber-phones (lead)': '5551234567',
+          'update:dateOfBirth (lead)': '1990-01-01',
+        },
+      ]);
+
+      const leadBehavior = relationBehaviors.find(
+        (rb) => rb.relationFieldName === 'lead',
+      );
+
+      expect(leadBehavior?.behavior).toBe('SMART_UPDATE');
     });
 
     it('should detect multiple relation behaviors from a full row', () => {

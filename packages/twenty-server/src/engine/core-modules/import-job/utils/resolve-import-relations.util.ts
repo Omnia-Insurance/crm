@@ -182,24 +182,18 @@ function parseRows(
         }
       }
 
-      if (
-        relationNames.has(key) &&
-        typeof value === 'string' &&
-        value.length > 0
-      ) {
+      if (relationNames.has(key)) {
         // Relation label: "carrier" = "Ambetter"
-        relationLabels.set(key, value);
+        // Always skip relation-name keys from directFields — non-string
+        // values (e.g., leftover connect objects from frontend) are noise.
+        if (typeof value === 'string' && value.length > 0) {
+          relationLabels.set(key, value);
+        }
         continue;
       }
 
-      // Skip join columns for relations we're handling (e.g., carrierId)
-      if (
-        key.endsWith('Id') &&
-        relationNames.has(key.slice(0, -2))
-      ) {
-        continue;
-      }
-
+      // Preserve join columns (e.g., carrierId) — unchanged FKs keep
+      // their original value; reassignments overwrite only changed ones.
       directFields[key] = value;
     }
 
@@ -251,11 +245,27 @@ async function resolveLookupAssign(
   errors: RelationResolutionError[],
   reassignments: RelationReassignment[],
 ): Promise<void> {
-  // Collect unique label values
+  // Collect unique label values from both relation labels and sub-field data.
+  // Product uses connect fields (product.name), carrier uses relation labels.
+  const searchField = labelFieldName ?? 'name';
   const labelsToRowIndices = new Map<string, number[]>();
 
   for (const parsed of parsedRows) {
-    const label = parsed.relationLabels.get(rb.relationFieldName);
+    let label = parsed.relationLabels.get(rb.relationFieldName);
+
+    // Fallback: extract label identifier from sub-field data
+    // (e.g., product.name from a connect field key)
+    if (!label) {
+      const subFields = parsed.relationData.get(rb.relationFieldName);
+
+      if (subFields) {
+        const subFieldValue = subFields[searchField];
+
+        if (typeof subFieldValue === 'string' && subFieldValue.length > 0) {
+          label = subFieldValue;
+        }
+      }
+    }
 
     if (!label) continue;
 
@@ -268,7 +278,6 @@ async function resolveLookupAssign(
   if (labelsToRowIndices.size === 0) return;
 
   // Batch lookup by label identifier field
-  const searchField = labelFieldName ?? 'name';
   const labelValues = [...labelsToRowIndices.keys()];
   const labelToId = new Map<string, string>();
 
@@ -404,31 +413,15 @@ async function resolveSmartUpdate(
         );
 
         if (constraintConflict) {
-          // The changed value belongs to another record → REASSIGN to that record
+          // Same person but the changed unique field belongs to another
+          // record → REASSIGN only. The other sub-fields in this row are
+          // stale export data from the original person, not intended edits
+          // to the reassignment target.
           reassignments.push({
             mainRecordId: mainId,
             joinColumnName,
             newRelatedRecordId: constraintConflict.conflictRecordId,
           });
-
-          // Apply remaining (non-conflicting) sub-field edits to the NEW record
-          const nonConflictingUpdates = buildSubFieldUpdates(
-            subFields ?? {},
-            constraintConflict.conflictRecord,
-            [constraintConflict.conflictFieldName],
-          );
-
-          if (
-            nonConflictingUpdates &&
-            Object.keys(nonConflictingUpdates).length > 0
-          ) {
-            relatedRecordUpdates.push({
-              recordId: constraintConflict.conflictRecordId,
-              objectNameSingular: targetObjectName,
-              fields: nonConflictingUpdates,
-              sourceRowIndices: [parsed.rowIndex],
-            });
-          }
         } else {
           // No conflicts — update the existing related record
           const updates = buildSubFieldUpdates(
@@ -460,10 +453,12 @@ async function resolveSmartUpdate(
             newRelatedRecordId: match.recordId,
           });
 
-          // Apply sub-field edits to the matched record
+          // Apply sub-field edits to the matched record, excluding
+          // unique constraint fields to avoid DB violations
           const updates = buildSubFieldUpdates(
             subFields ?? {},
             match.record,
+            rb.uniqueConstraintFields,
           );
 
           if (updates && Object.keys(updates).length > 0) {
@@ -573,8 +568,11 @@ async function checkUniqueConstraints(
           conflictFieldName: constraintField,
         };
       }
-    } catch {
-      // Column might not exist — skip this check
+    } catch (error) {
+      console.error(
+        `[checkUniqueConstraints] Query failed for field "${constraintField}", column "${searchColumn.column}":`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -815,8 +813,11 @@ async function searchForRecord(
 
         return { recordId: record.id as string, record };
       }
-    } catch {
-      // Column might not exist
+    } catch (error) {
+      console.error(
+        `[resolveImportRelations] Query failed:`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -839,8 +840,11 @@ async function searchForRecord(
 
         return { recordId: record.id as string, record };
       }
-    } catch {
-      // Column might not exist
+    } catch (error) {
+      console.error(
+        `[resolveImportRelations] Query failed:`,
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -1060,12 +1064,35 @@ export async function resolveImportRelations(
   detectConflicts(relatedRecordUpdates, errors);
 
   // Build processed rows (direct fields only, with resolved FKs)
+  // Precompute join column names for each relation behavior
+  const joinColumnsByRelation = new Map<string, string>();
+
+  for (const rb of relationBehaviors) {
+    joinColumnsByRelation.set(
+      rb.relationFieldName,
+      getJoinColumnName(mainObjectName, rb.relationFieldName, objectMaps, fieldMaps),
+    );
+  }
+
   const processedRows = parsedRows.map((parsed) => {
     const row = { ...parsed.directFields };
+    const mainId = row.id as string;
+    const existingMain = existingMainRecords.get(mainId);
 
-    // Apply reassignments to the row's FK columns
+    // Preserve FK columns from existing records for relations where no
+    // reassignment occurred. Without this, TypeORM's upsert sets missing
+    // FK columns to NULL.
+    if (existingMain) {
+      for (const [, joinCol] of joinColumnsByRelation) {
+        if (!(joinCol in row) && existingMain[joinCol] != null) {
+          row[joinCol] = existingMain[joinCol];
+        }
+      }
+    }
+
+    // Apply reassignments to the row's FK columns (overrides preserved FKs)
     for (const reassignment of reassignments) {
-      if (reassignment.mainRecordId === row.id) {
+      if (reassignment.mainRecordId === mainId) {
         row[reassignment.joinColumnName] = reassignment.newRelatedRecordId;
       }
     }

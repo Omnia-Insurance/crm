@@ -62,6 +62,7 @@ export class ImportJobProcessor {
     let failureCount = 0;
     const allWarnings: Record<string, unknown>[] = [];
     const allErrors: Record<string, unknown>[] = [];
+    let relationResolutionHandledStatus = false;
 
     try {
       const authContext = buildSystemAuthContext(workspaceId);
@@ -111,8 +112,10 @@ export class ImportJobProcessor {
             // All-or-nothing: if any resolution errors, fail the job
             if (plan.errors.length > 0) {
               this.logger.warn(
-                `Relation resolution failed with ${plan.errors.length} errors`,
+                `Relation resolution failed with ${plan.errors.length} errors: ${JSON.stringify(plan.errors)}`,
               );
+
+              relationResolutionHandledStatus = true;
 
               await this.importJobService.updateProgress(importJobId, {
                 status: ImportJobStatus.FAILED,
@@ -251,6 +254,11 @@ export class ImportJobProcessor {
         },
         authContext,
       );
+
+      // If relation resolution already set the final status, don't overwrite
+      if (relationResolutionHandledStatus) {
+        return;
+      }
 
       // Determine final status
       const finalJob = await this.importJobService.getImportJob(
