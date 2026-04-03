@@ -13,7 +13,6 @@ export const COMPOSITE_FIELD_SUB_FIELD_LABELS: Partial<
   },
   [FieldMetadataType.EMAILS]: {
     primaryEmail: 'Primary Email',
-    additionalEmails: 'Additional Emails',
   },
   [FieldMetadataType.LINKS]: {
     primaryLinkLabel: 'Link Label',
@@ -22,9 +21,6 @@ export const COMPOSITE_FIELD_SUB_FIELD_LABELS: Partial<
   },
   [FieldMetadataType.PHONES]: {
     primaryPhoneNumber: 'Primary Phone Number',
-    primaryPhoneCountryCode: 'Primary Phone Country Code',
-    primaryPhoneCallingCode: 'Primary Phone Calling Code',
-    additionalPhones: 'Additional Phones',
   },
   [FieldMetadataType.FULL_NAME]: {
     firstName: 'First Name',
@@ -37,8 +33,6 @@ export const COMPOSITE_FIELD_SUB_FIELD_LABELS: Partial<
     addressState: 'State',
     addressCountry: 'Country',
     addressPostcode: 'Post Code',
-    addressLat: 'Latitude',
-    addressLng: 'Longitude',
   },
 };
 
