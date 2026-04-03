@@ -31,7 +31,6 @@ export const COMPOSITE_FIELD_SUB_FIELD_LABELS: Partial<
     addressStreet2: 'Address 2',
     addressCity: 'City',
     addressState: 'State',
-    addressCountry: 'Country',
     addressPostcode: 'Post Code',
   },
 };
