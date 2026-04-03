@@ -645,12 +645,8 @@ check_file_contains \
   "packages/twenty-front/src/modules/spreadsheet-import/types/SpreadsheetImportField.ts" \
   "isRelationUpdateField" \
   "Relation update field support for CSV import"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/spreadsheet-import/utils/extractRelationUpdatesFromImportedRows.ts" \
-  "Extract relation updates utility"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/spreadsheet-import/utils/executeRelationUpdatesViaMutation.ts" \
-  "Execute relation updates utility"
+# extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
+# removed — server-side relation resolution replaces frontend post-processing
 
 echo ""
 echo "--- Server: Upsert Relation Connect Tolerance ---"

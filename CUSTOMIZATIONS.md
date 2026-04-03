@@ -194,8 +194,6 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 
 | File                                                                                        | Purpose                                                 |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `object-record/spreadsheet-import/utils/executeRelationUpdatesViaMutation.ts`               | Execute batched createMany upserts for relation updates |
-| `object-record/spreadsheet-import/utils/extractRelationUpdatesFromImportedRows.ts`          | Extract relation update data from imported rows         |
 | `object-record/spreadsheet-import/utils/spreadsheetImportGetRelationUpdateSubFieldKey.ts`   | Key format for update fields                            |
 | `object-record/spreadsheet-import/utils/spreadsheetImportGetRelationUpdateSubFieldLabel.ts` | Label format for update fields                          |
 | `spreadsheet-import/components/ImportResultsSummary.tsx`                                    | Post-import summary dialog with issue list and CSV download |
