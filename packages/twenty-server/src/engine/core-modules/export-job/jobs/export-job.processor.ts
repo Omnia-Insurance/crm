@@ -142,6 +142,54 @@ function resolveFieldPathMetadata(
 }
 
 /**
+ * Get the label identifier field name for an object (e.g. "name" for most
+ * objects, "name" for Lead which is FULL_NAME type, etc.).
+ */
+function getLabelIdentifierFieldName(
+  objectNameSingular: string,
+  flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+): string | undefined {
+  const objectMeta = Object.values(
+    flatObjectMetadataMaps.byUniversalIdentifier,
+  ).find((m) => m?.nameSingular === objectNameSingular);
+
+  if (!objectMeta?.labelIdentifierFieldMetadataId) return undefined;
+
+  const labelField = Object.values(
+    flatFieldMetadataMaps.byUniversalIdentifier,
+  ).find((f) => f?.id === objectMeta.labelIdentifierFieldMetadataId);
+
+  return labelField?.name;
+}
+
+/**
+ * Build the auto-expanded selectedFieldPaths for a relation config:
+ * always include 'id' and the label identifier field (e.g. 'name').
+ */
+function buildExpandedSelectedPaths(
+  rc: RelationConfig,
+  flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+): string[] {
+  const paths = [...rc.selectedFieldPaths];
+
+  // Auto-include the label identifier (e.g. "name") so the relation's
+  // display name appears in the export, matching what the view shows.
+  const labelField = getLabelIdentifierFieldName(
+    rc.targetObjectNameSingular,
+    flatObjectMetadataMaps,
+    flatFieldMetadataMaps,
+  );
+
+  if (labelField && !paths.includes(labelField)) {
+    paths.unshift(labelField);
+  }
+
+  return paths;
+}
+
+/**
  * Traverse a record to get a deeply nested value by dot-separated path.
  */
 function getNestedValue(
@@ -160,6 +208,79 @@ function getNestedValue(
   }
 
   return current;
+}
+
+/**
+ * Extract a human-readable label from a related record object.
+ * Tries 'name' (string or FULL_NAME composite), then common fallbacks.
+ */
+function extractRecordLabel(obj: Record<string, unknown>): string {
+  // String name field (most common label identifier)
+  if (typeof obj.name === 'string' && obj.name) return obj.name;
+
+  // FULL_NAME composite: { firstName, lastName }
+  if (typeof obj.name === 'object' && obj.name !== null) {
+    const nameObj = obj.name as Record<string, unknown>;
+
+    return [nameObj.firstName, nameObj.lastName].filter(Boolean).join(' ');
+  }
+
+  for (const key of ['title', 'label', 'displayName']) {
+    if (typeof obj[key] === 'string' && obj[key]) return obj[key] as string;
+  }
+
+  return typeof obj.id === 'string' ? obj.id : '';
+}
+
+/**
+ * Format a ONE_TO_MANY child record for CSV export.
+ * For FamilyMember-like records: "Name • Type • MM/DD/YY"
+ * For generic records: label identifier
+ */
+function formatOneToManyItem(item: Record<string, unknown>): string {
+  // FamilyMember format
+  if ('memberType' in item || 'dateOfBirth' in item) {
+    const parts: string[] = [];
+
+    const name = extractRecordLabel(item);
+
+    // Skip if name is just a UUID (no real data)
+    if (name && !isUuidLike(name)) parts.push(name);
+
+    if (typeof item.memberType === 'string' && item.memberType) {
+      parts.push(
+        item.memberType.charAt(0).toUpperCase() +
+          item.memberType.slice(1).toLowerCase(),
+      );
+    }
+
+    if (typeof item.dateOfBirth === 'string' && item.dateOfBirth) {
+      const date = new Date(item.dateOfBirth);
+
+      if (!isNaN(date.getTime())) {
+        const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(date.getUTCDate()).padStart(2, '0');
+        const yy = String(date.getUTCFullYear()).slice(-2);
+
+        parts.push(`${mm}/${dd}/${yy}`);
+      }
+    }
+
+    // Skip empty stub records (no name, no type, no DOB)
+    if (parts.length === 0) return '';
+
+    return parts.join(' \u2022 ');
+  }
+
+  const label = extractRecordLabel(item);
+
+  return isUuidLike(label) ? '' : label;
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 /**
@@ -315,6 +436,108 @@ export class ExportJobProcessor {
             await this.exportJobService.updateProgress(exportJobId, {
               processedRecords: Math.min(offset, totalRecords),
             });
+          }
+
+          // Resolve direct MANY_TO_ONE relation columns (e.g. carrier)
+          // that aren't covered by sub-field relation configs. Replace the
+          // raw FK with the related record's label identifier.
+          if (allRecords.length > 0) {
+            const relationConfigFieldNames = new Set(
+              relationConfigs.map((rc) => rc.relationFieldName),
+            );
+
+            for (const col of columns) {
+              if (relationConfigFieldNames.has(col.fieldName)) continue;
+
+              const colFieldMeta = findFieldMetadata(
+                exportJob.objectNameSingular,
+                col.fieldName,
+                flatObjectMetadataMaps,
+                flatFieldMetadataMaps,
+              );
+
+              if (
+                !colFieldMeta ||
+                colFieldMeta.type !== FieldMetadataType.RELATION ||
+                colFieldMeta.settings?.relationType === 'ONE_TO_MANY'
+              ) {
+                continue;
+              }
+
+              const targetObjId =
+                colFieldMeta.relationTargetObjectMetadataId;
+              const targetObj = targetObjId
+                ? Object.values(
+                    flatObjectMetadataMaps.byUniversalIdentifier,
+                  ).find((m) => m?.id === targetObjId)
+                : undefined;
+
+              if (!targetObj) continue;
+
+              const joinCol =
+                colFieldMeta.settings?.joinColumnName ??
+                `${col.fieldName}Id`;
+
+              const relatedIds = [
+                ...new Set(
+                  allRecords
+                    .map((r) => r[joinCol])
+                    .filter(
+                      (id): id is string =>
+                        typeof id === 'string' && id.length > 0,
+                    ),
+                ),
+              ];
+
+              if (relatedIds.length === 0) continue;
+
+              try {
+                const repo =
+                  await this.globalWorkspaceOrmManager.getRepository(
+                    workspaceId,
+                    targetObj.nameSingular,
+                    { shouldBypassPermissionChecks: true },
+                  );
+
+                const lookup = new Map<string, string>();
+
+                for (
+                  let i = 0;
+                  i < relatedIds.length;
+                  i += RELATION_BATCH_SIZE
+                ) {
+                  const batchIds = relatedIds.slice(
+                    i,
+                    i + RELATION_BATCH_SIZE,
+                  );
+                  const related = await repo
+                    .createQueryBuilder(targetObj.nameSingular)
+                    .where(
+                      `"${targetObj.nameSingular}"."id" IN (:...ids)`,
+                      { ids: batchIds },
+                    )
+                    .getMany();
+
+                  for (const r of related as Record<string, unknown>[]) {
+                    if (typeof r.id === 'string') {
+                      lookup.set(r.id, extractRecordLabel(r));
+                    }
+                  }
+                }
+
+                for (const record of allRecords) {
+                  const fkVal = record[joinCol];
+
+                  if (typeof fkVal === 'string' && lookup.has(fkVal)) {
+                    record[col.fieldName] = lookup.get(fkVal);
+                  }
+                }
+              } catch (error) {
+                this.logger.warn(
+                  `Failed to resolve ${col.fieldName} relation: ${error}`,
+                );
+              }
+            }
           }
 
           // Fetch relation data if configured
@@ -534,9 +757,11 @@ export class ExportJobProcessor {
             ? lookup.lookupMap.get(relatedId)
             : undefined;
 
-        const selectedPaths = rc.selectedFieldPaths.includes('id')
-          ? rc.selectedFieldPaths
-          : ['id', ...rc.selectedFieldPaths];
+        const selectedPaths = buildExpandedSelectedPaths(
+          rc,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        );
 
         for (const fieldPath of selectedPaths) {
           const rawValue = relatedRecord
@@ -555,6 +780,7 @@ export class ExportJobProcessor {
             rawValue !== null &&
             rawValue !== undefined &&
             typeof rawValue === 'object' &&
+            !Array.isArray(rawValue) &&
             fieldMeta &&
             isCompositeFieldType(fieldMeta.fieldType)
           ) {
@@ -570,6 +796,32 @@ export class ExportJobProcessor {
                 expanded[flatKey] = obj[compositeKey] ?? '';
               }
             }
+          } else if (
+            rawValue !== null &&
+            rawValue !== undefined &&
+            typeof rawValue === 'object' &&
+            !Array.isArray(rawValue) &&
+            fieldMeta?.fieldType === FieldMetadataType.RELATION
+          ) {
+            // MANY_TO_ONE nested relation — extract label identifier
+            const flatKey = getRelationFieldFlatKey(
+              rc.relationFieldName,
+              fieldPath,
+            );
+            const obj = rawValue as Record<string, unknown>;
+
+            expanded[flatKey] = extractRecordLabel(obj);
+          } else if (Array.isArray(rawValue)) {
+            // ONE_TO_MANY nested relation — format as pipe-separated list
+            const flatKey = getRelationFieldFlatKey(
+              rc.relationFieldName,
+              fieldPath,
+            );
+
+            expanded[flatKey] = (rawValue as Record<string, unknown>[])
+              .map((item) => formatOneToManyItem(item))
+              .filter(Boolean)
+              .join(' | ');
           } else {
             const flatKey = getRelationFieldFlatKey(
               rc.relationFieldName,
@@ -597,19 +849,28 @@ export class ExportJobProcessor {
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
   ): Promise<void> {
-    // Group selectedFieldPaths by their first segment when it's a relation
+    // Group selectedFieldPaths by their first segment when it's a relation.
+    // Handles both dotted paths ("leadSource.name") and bare relation names
+    // ("leadSource", "familyMembers") which need to be resolved and attached.
     const nestedRelationGroups = new Map<
       string,
-      { targetObjectName: string; subPaths: string[] }
+      { targetObjectName: string; subPaths: string[]; isBareRelation: boolean }
     >();
 
     for (const fieldPath of rc.selectedFieldPaths) {
       const dotIndex = fieldPath.indexOf('.');
 
-      if (dotIndex === -1) continue;
+      let firstSegment: string;
+      let restOfPath: string | undefined;
 
-      const firstSegment = fieldPath.substring(0, dotIndex);
-      const restOfPath = fieldPath.substring(dotIndex + 1);
+      if (dotIndex === -1) {
+        // Bare field name — check if it's a relation that needs resolving
+        firstSegment = fieldPath;
+        restOfPath = undefined;
+      } else {
+        firstSegment = fieldPath.substring(0, dotIndex);
+        restOfPath = fieldPath.substring(dotIndex + 1);
+      }
 
       // Check if firstSegment is a RELATION field on the target object
       const fieldMeta = findFieldMetadata(
@@ -636,11 +897,14 @@ export class ExportJobProcessor {
       const existing = nestedRelationGroups.get(firstSegment);
 
       if (existing) {
-        existing.subPaths.push(restOfPath);
+        if (restOfPath) {
+          existing.subPaths.push(restOfPath);
+        }
       } else {
         nestedRelationGroups.set(firstSegment, {
           targetObjectName: targetObject.nameSingular,
-          subPaths: [restOfPath],
+          subPaths: restOfPath ? [restOfPath] : [],
+          isBareRelation: dotIndex === -1,
         });
       }
     }
@@ -649,23 +913,22 @@ export class ExportJobProcessor {
 
     for (const [
       relationFieldName,
-      { targetObjectName, subPaths },
+      { targetObjectName, subPaths, isBareRelation },
     ] of nestedRelationGroups) {
-      const joinColumnName = `${relationFieldName}Id`;
+      // Determine if this is a MANY_TO_ONE or ONE_TO_MANY relation
+      const fieldMeta = findFieldMetadata(
+        rc.targetObjectNameSingular,
+        relationFieldName,
+        flatObjectMetadataMaps,
+        flatFieldMetadataMaps,
+      );
 
-      // Collect unique FK IDs from all records in the lookup map
-      const nestedIds = [
-        ...new Set(
-          [...lookupMap.values()]
-            .map((r) => r[joinColumnName])
-            .filter(
-              (id): id is string =>
-                typeof id === 'string' && id.length > 0,
-            ),
-        ),
-      ];
+      const relationType =
+        fieldMeta?.settings?.relationType ??
+        fieldMeta?.relation?.type ??
+        'MANY_TO_ONE';
 
-      if (nestedIds.length === 0) continue;
+      const isOneToMany = relationType === 'ONE_TO_MANY';
 
       try {
         const nestedRepository =
@@ -675,50 +938,147 @@ export class ExportJobProcessor {
             { shouldBypassPermissionChecks: true },
           );
 
-        const nestedLookup = new Map<string, Record<string, unknown>>();
+        if (isOneToMany) {
+          // ONE_TO_MANY (e.g., familyMembers): fetch child records by
+          // parent FK and attach as array.
+          // Find the FK column on the child object by looking for the
+          // MANY_TO_ONE field that points back to the parent object.
+          const parentObjectMeta = Object.values(
+            flatObjectMetadataMaps.byUniversalIdentifier,
+          ).find((m) => m?.nameSingular === rc.targetObjectNameSingular);
 
-        for (let i = 0; i < nestedIds.length; i += RELATION_BATCH_SIZE) {
-          const batchIds = nestedIds.slice(i, i + RELATION_BATCH_SIZE);
+          const childFkField = parentObjectMeta
+            ? Object.values(
+                flatFieldMetadataMaps.byUniversalIdentifier,
+              ).find(
+                (f) =>
+                  f?.objectMetadataId ===
+                    Object.values(
+                      flatObjectMetadataMaps.byUniversalIdentifier,
+                    ).find((m) => m?.nameSingular === targetObjectName)
+                      ?.id &&
+                  f?.type === FieldMetadataType.RELATION &&
+                  f?.relationTargetObjectMetadataId === parentObjectMeta.id,
+              )
+            : undefined;
 
-          const nestedRecords = await nestedRepository
-            .createQueryBuilder(targetObjectName)
-            .where(`"${targetObjectName}"."id" IN (:...ids)`, {
-              ids: batchIds,
-            })
-            .getMany();
+          const parentFk =
+            childFkField?.settings?.joinColumnName ??
+            `${rc.targetObjectNameSingular}Id`;
 
-          for (const nested of nestedRecords as Record<string, unknown>[]) {
-            if (typeof nested.id === 'string') {
-              nestedLookup.set(nested.id, nested);
+          const parentIds = [...lookupMap.keys()];
+
+          if (parentIds.length === 0) continue;
+
+          const childRecordsByParent = new Map<
+            string,
+            Record<string, unknown>[]
+          >();
+
+          for (
+            let i = 0;
+            i < parentIds.length;
+            i += RELATION_BATCH_SIZE
+          ) {
+            const batchIds = parentIds.slice(i, i + RELATION_BATCH_SIZE);
+
+            const childRecords = await nestedRepository
+              .createQueryBuilder(targetObjectName)
+              .where(
+                `"${targetObjectName}"."${parentFk}" IN (:...ids)`,
+                { ids: batchIds },
+              )
+              .getMany();
+
+            for (const child of childRecords as Record<string, unknown>[]) {
+              const pid = child[parentFk] as string;
+
+              if (!pid) continue;
+
+              const existing = childRecordsByParent.get(pid) ?? [];
+
+              existing.push(child);
+              childRecordsByParent.set(pid, existing);
             }
           }
-        }
 
-        // Recursively resolve deeper nested relations
-        const nestedRelationConfig: RelationConfig = {
-          relationFieldName,
-          relationFieldLabel: '',
-          targetObjectNameSingular: targetObjectName,
-          selectedFieldPaths: subPaths,
-        };
+          // Attach child arrays to parent records
+          for (const [parentId, parentRecord] of lookupMap) {
+            parentRecord[relationFieldName] =
+              childRecordsByParent.get(parentId) ?? [];
+          }
+        } else {
+          // MANY_TO_ONE (e.g., leadSource): fetch by FK IDs
+          const joinColumnName = `${relationFieldName}Id`;
 
-        await this.resolveNestedRelations(
-          nestedLookup,
-          nestedRelationConfig,
-          workspaceId,
-          flatObjectMetadataMaps,
-          flatFieldMetadataMaps,
-        );
+          const nestedIds = [
+            ...new Set(
+              [...lookupMap.values()]
+                .map((r) => r[joinColumnName])
+                .filter(
+                  (id): id is string =>
+                    typeof id === 'string' && id.length > 0,
+                ),
+            ),
+          ];
 
-        // Attach nested records to parent records
-        for (const parentRecord of lookupMap.values()) {
-          const nestedId = parentRecord[joinColumnName];
+          if (nestedIds.length === 0) continue;
 
-          if (typeof nestedId === 'string') {
-            const nestedRecord = nestedLookup.get(nestedId);
+          const nestedLookup = new Map<string, Record<string, unknown>>();
 
-            if (nestedRecord) {
-              parentRecord[relationFieldName] = nestedRecord;
+          for (
+            let i = 0;
+            i < nestedIds.length;
+            i += RELATION_BATCH_SIZE
+          ) {
+            const batchIds = nestedIds.slice(i, i + RELATION_BATCH_SIZE);
+
+            const nestedRecords = await nestedRepository
+              .createQueryBuilder(targetObjectName)
+              .where(`"${targetObjectName}"."id" IN (:...ids)`, {
+                ids: batchIds,
+              })
+              .getMany();
+
+            for (const nested of nestedRecords as Record<
+              string,
+              unknown
+            >[]) {
+              if (typeof nested.id === 'string') {
+                nestedLookup.set(nested.id, nested);
+              }
+            }
+          }
+
+          // Recursively resolve deeper nested relations if there are
+          // dotted sub-paths
+          if (subPaths.length > 0) {
+            const nestedRelationConfig: RelationConfig = {
+              relationFieldName,
+              relationFieldLabel: '',
+              targetObjectNameSingular: targetObjectName,
+              selectedFieldPaths: subPaths,
+            };
+
+            await this.resolveNestedRelations(
+              nestedLookup,
+              nestedRelationConfig,
+              workspaceId,
+              flatObjectMetadataMaps,
+              flatFieldMetadataMaps,
+            );
+          }
+
+          // Attach nested records to parent records
+          for (const parentRecord of lookupMap.values()) {
+            const nestedId = parentRecord[joinColumnName];
+
+            if (typeof nestedId === 'string') {
+              const nestedRecord = nestedLookup.get(nestedId);
+
+              if (nestedRecord) {
+                parentRecord[relationFieldName] = nestedRecord;
+              }
             }
           }
         }
@@ -769,9 +1129,11 @@ export class ExportJobProcessor {
           continue;
         }
 
-        const selectedPaths = rc.selectedFieldPaths.includes('id')
-          ? rc.selectedFieldPaths
-          : ['id', ...rc.selectedFieldPaths];
+        const selectedPaths = buildExpandedSelectedPaths(
+          rc,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        );
 
         for (const fieldPath of selectedPaths) {
           const resolved = resolveFieldPathMetadata(
