@@ -17,6 +17,7 @@ export type BackgroundJobData = {
   successCount: number;
   warningCount: number;
   failureCount: number;
+  errorMessages?: string[];
   onCancel?: () => void;
   downloadUrl?: string;
 };

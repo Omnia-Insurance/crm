@@ -79,6 +79,12 @@ msgstr ": Ma{timeZoneAbbreviationSuffix}"
 msgid ". The change will be applied the {beautifiedRenewDate}."
 msgstr ". A változás ekkor kerül alkalmazásra: {beautifiedRenewDate}."
 
+#. js-lingui-id: q3GraM
+#. placeholder {0}: job.errorMessages.length - 3
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "...and {0} more"
+msgstr ""
+
 #. js-lingui-id: YdOjT+
 #. placeholder {0}: issueCount - MAX_DISPLAYED_ISSUES
 #: src/modules/spreadsheet-import/components/ImportResultsSummary.tsx

@@ -42,6 +42,9 @@ type ImportJobData = {
   successCount: number;
   warningCount: number;
   failureCount: number;
+  result?: {
+    errors?: Array<{ message?: string; error?: string; errorType?: string; column?: string; rowIndex?: number }>;
+  };
 };
 
 type ImportJobQueryResponse = {
@@ -190,6 +193,17 @@ export const useImportJobPoller = () => {
           normalizedStatus === 'failed' ||
           normalizedStatus === 'cancelled';
 
+        // Extract error messages from result when job is terminal
+        const errorMessages: string[] = [];
+
+        if (isTerminal && job.result?.errors) {
+          for (const err of job.result.errors) {
+            errorMessages.push(
+              err.message ?? err.error ?? 'Unknown error',
+            );
+          }
+        }
+
         upsertJob({
           id: job.id,
           label: `Importing ${current.objectNameSingular} records`,
@@ -199,6 +213,7 @@ export const useImportJobPoller = () => {
           successCount: job.successCount,
           warningCount: job.warningCount,
           failureCount: job.failureCount,
+          ...(errorMessages.length > 0 ? { errorMessages } : {}),
         });
 
         if (isTerminal) {
