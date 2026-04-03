@@ -91,6 +91,11 @@ export function transformRowsForServerImport(
     const transformed: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(row)) {
+      // Strip read-only keys (exported for reference only, not imported)
+      if (key.startsWith('__readOnly:')) {
+        continue;
+      }
+
       // Try parsing as update field key
       const updateParsed = parseUpdateKey(key);
 

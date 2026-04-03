@@ -350,10 +350,31 @@ export const useBuildSpreadsheetImportFields = () => {
 
       for (const targetField of availableTargetFields) {
         if (connectFieldIds.has(targetField.id)) continue;
-        if (
-          targetField.type === FieldMetadataType.RELATION ||
-          targetField.type === FieldMetadataType.ACTOR
-        ) {
+        if (targetField.type === FieldMetadataType.ACTOR) {
+          continue;
+        }
+
+        // OMNIA-CUSTOM: Add RELATION fields on the target object as
+        // read-only fields. They auto-match export CSV headers (e.g.,
+        // "Lead / Lead Source", "Lead / Family Members") so users don't
+        // see unmatched-column warnings, but data is stripped on import.
+        if (targetField.type === FieldMetadataType.RELATION) {
+          spreadsheetImportFields.push(
+            createBaseField(fieldMetadataItem, {
+              Icon: getIcon(fieldMetadataItem.icon),
+              isNestedField: true,
+              isCompositeSubField: false,
+              fieldMetadataItemId: fieldMetadataItem.id,
+              fieldMetadataType: FieldMetadataType.RELATION,
+              label: getRelationUpdateSubFieldLabel(
+                fieldMetadataItem,
+                targetField,
+              ),
+              key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
+              isReadOnly: true,
+              description: 'Read-only — exported for reference',
+            }),
+          );
           continue;
         }
 

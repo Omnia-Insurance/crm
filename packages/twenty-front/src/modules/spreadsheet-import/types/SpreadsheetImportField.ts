@@ -35,4 +35,7 @@ export type SpreadsheetImportField = {
   isRelationUpdateField?: boolean;
   // the target object's field metadata item (for relation update fields)
   targetFieldMetadataItem?: FieldMetadataItem;
+  // OMNIA-CUSTOM: true for columns exported for reference only (not imported).
+  // These fields auto-match export headers but their data is stripped before import.
+  isReadOnly?: boolean;
 };
