@@ -290,6 +290,17 @@ export const useBuildSpreadsheetImportFields = () => {
     );
 
     if (isManyToOneRelation && isDefined(targetObjectMetadataItem)) {
+      // OMNIA-CUSTOM: Add a relation label field that matches export headers.
+      // When re-importing an exported CSV, the header says "Carrier" (not
+      // "Carrier - Name"). This field allows auto-matching for LOOKUP_ASSIGN.
+      spreadsheetImportFields.push(
+        createBaseField(fieldMetadataItem, {
+          label: fieldMetadataItem.label,
+          key: `__relationLabel:${fieldMetadataItem.name}`,
+          isNestedField: false,
+          isCompositeSubField: false,
+        }),
+      );
       const uniqueConstraintFields = getUniqueConstraintsFields<
         FieldMetadataItem,
         EnrichedObjectMetadataItem

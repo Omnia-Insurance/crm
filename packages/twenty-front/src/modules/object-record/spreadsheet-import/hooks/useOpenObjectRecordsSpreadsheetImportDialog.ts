@@ -5,6 +5,7 @@ import { useBuildSpreadsheetImportFields } from '@/object-record/spreadsheet-imp
 import { buildRecordFromImportedStructuredRow } from '@/object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow';
 import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
 import { spreadsheetImportGetUnicityTableHook } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetUnicityTableHook';
+import { transformRowsForServerImport } from '@/object-record/spreadsheet-import/utils/transformRowsForServerImport';
 import { APPEND_IMPORT_JOB_ROWS } from '@/spreadsheet-import/graphql/mutations/appendImportJobRows';
 import { CREATE_IMPORT_JOB } from '@/spreadsheet-import/graphql/mutations/createImportJob';
 import { FINALIZE_IMPORT_JOB } from '@/spreadsheet-import/graphql/mutations/finalizeImportJob';
@@ -55,6 +56,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
     openSpreadsheetImportDialog({
       ...options,
       onSubmit: async (data) => {
+        // Build main record objects from the structured rows
         const createInputs = data.validStructuredRows.map((record) =>
           buildRecordFromImportedStructuredRow({
             importedStructuredRow: record,
@@ -63,19 +65,49 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
           }),
         );
 
+        // OMNIA-CUSTOM: Extract relation update/label data from the RAW
+        // structured rows (buildRecordFromImportedStructuredRow strips
+        // these keys) and merge with the built records as dot-notation keys.
+        const rawRows = data.validStructuredRows.map(
+          (row) => row as Record<string, unknown>,
+        );
+        const { transformedRows: relationData, relationBehaviors } =
+          transformRowsForServerImport(rawRows);
+
+        // Merge: built record (direct fields + composites) + relation
+        // sub-field data (dot notation keys from the raw structured row)
+        const mergedRows = createInputs.map((builtRecord, index) => {
+          const extraRelationKeys = relationData[index];
+          const merged = { ...builtRecord };
+
+          for (const [key, value] of Object.entries(extraRelationKeys)) {
+            // Only add keys that aren't already in the built record
+            // (dot-notation keys and relation labels)
+            if (!(key in merged) && value !== undefined && value !== '') {
+              merged[key] = value;
+            }
+          }
+
+          return merged;
+        });
+
+        const enrichedMappings = {
+          columns: columnMappings,
+          ...(relationBehaviors.length > 0
+            ? { relationBehaviors }
+            : {}),
+        };
+
         try {
-          if (createInputs.length <= CHUNK_SIZE) {
-            // Small import: single mutation
-            await submitSingleBatch(createInputs, columnMappings);
+          if (mergedRows.length <= CHUNK_SIZE) {
+            await submitSingleBatch(mergedRows, enrichedMappings);
           } else {
-            // Large import: chunked upload
-            await submitChunked(createInputs, columnMappings);
+            await submitChunked(mergedRows, enrichedMappings);
           }
         } catch (error) {
           if (error instanceof Error) {
             enqueueErrorSnackBar({ apolloError: error });
           }
-
         }
       },
       spreadsheetImportFields,
@@ -86,7 +118,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
   const submitSingleBatch = async (
     rows: Record<string, unknown>[],
-    mappings: Record<string, unknown>[],
+    mappings: Record<string, unknown>,
   ) => {
     const { data: result } = await apolloMetadataClient.mutate({
       mutation: START_IMPORT_JOB,
@@ -112,7 +144,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
   const submitChunked = async (
     rows: Record<string, unknown>[],
-    mappings: Record<string, unknown>[],
+    mappings: Record<string, unknown>,
   ) => {
     // 1. Create the job shell (no rows)
     const { data: createResult } = await apolloMetadataClient.mutate({
