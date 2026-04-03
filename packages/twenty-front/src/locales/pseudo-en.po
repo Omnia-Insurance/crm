@@ -11572,6 +11572,12 @@ msgstr ""
 msgid "Preview Not Available"
 msgstr ""
 
+#. js-lingui-id: sHpdV8
+#. placeholder {1}: data.length
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Previewing {PREVIEW_ROW_LIMIT} of {1} rows. All rows will be imported on confirm."
+msgstr ""
+
 #. js-lingui-id: DHhJ7s
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Previous"
