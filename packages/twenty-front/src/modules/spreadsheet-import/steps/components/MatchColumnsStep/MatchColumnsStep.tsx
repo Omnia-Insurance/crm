@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { StepNavigationButton } from '@/spreadsheet-import/components/StepNavigationButton';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
@@ -85,6 +85,54 @@ export const MatchColumnsStep = ({
   const { matchColumnsStepHook } = useSpreadsheetImportInternal();
 
   const { t } = useLingui();
+
+  // OMNIA-CUSTOM: Auto-match columns by comparing CSV headers to field labels.
+  // This enables seamless round-trip: export CSV → edit → re-import.
+  useEffect(() => {
+    const hasAnyMatched = columns.some((col) => 'value' in col);
+
+    // Only auto-match on first render (when all columns are empty)
+    if (hasAnyMatched || columns.length === 0) return;
+
+    const usedFieldKeys = new Set<string>();
+    const autoMatched = columns.map<SpreadsheetColumn>((column) => {
+      if (!('header' in column) || column.type !== SpreadsheetColumnType.empty) {
+        return column;
+      }
+
+      const header = column.header.trim().toLowerCase();
+
+      if (!header) return column;
+
+      // Find a field with a matching label (case-insensitive)
+      const matchedField = fields.find(
+        (field) =>
+          field.label.trim().toLowerCase() === header &&
+          !usedFieldKeys.has(field.key),
+      );
+
+      if (matchedField) {
+        usedFieldKeys.add(matchedField.key);
+
+        return setColumn(
+          column,
+          matchedField as unknown as SpreadsheetImportField,
+          data,
+        );
+      }
+
+      return column;
+    });
+
+    const matchedCount = autoMatched.filter(
+      (col) => col.type !== SpreadsheetColumnType.empty,
+    ).length;
+
+    if (matchedCount > 0) {
+      setColumns(autoMatched);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onIgnore = useCallback(
     (columnIndex: number) => {
