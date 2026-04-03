@@ -56,6 +56,7 @@ export const buildRelationSubFieldColumnDefinition = ({
     metadata: {
       fieldName: relationFieldName,
       objectMetadataNameSingular,
+      relationObjectMetadataNameSingular: targetObjectNameSingular,
       isUIReadOnly: true,
       subFieldName,
     } as FieldMetadata,

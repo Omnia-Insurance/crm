@@ -184,13 +184,9 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts` | Execute relation updates after parent upsert; show import results summary dialog      |
 | `object-record/hooks/useBatchCreateManyRecords.ts`                                      | Handle IMPORT_PARTIAL_SUCCESS per-batch, collect warnings, continue remaining batches |
 | `object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow.ts`        | Explicit `isRelationConnectField` filter                                              |
-| `object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts`          | Keep composite fields as objects for proper sub-field export                          |
-| `command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Restore the related-fields modal before export when visible relations exist           |
-| `command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Restore the related-fields modal in the engine-command export path             |
-| `object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx`       | Select relation export leaves by field path so nested relational fields can be chosen |
-| `object-record/record-index/export/hooks/useExportableRelationFields.ts`                | Recursively enumerate exportable `MANY_TO_ONE` relation leaves                        |
-| `object-record/record-index/export/hooks/useRecordIndexExportRecords.ts`                | Split composite relation sub-fields into separate CSV columns; auto-include relation IDs |
-| `object-record/record-index/export/utils/relationExportFieldPaths.ts`                   | Allow `id` field in relation exports (removed from EXCLUDED_FIELD_NAMES)              |
+| `object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts`          | Added `skipRelationFieldNames` param for sub-field export                             |
+| `command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Derives relation export configs from view sub-field columns                           |
+| `command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Derives relation export configs from view sub-field columns              |
 | `spreadsheet-import/utils/dataMutations.ts`                                             | Trim whitespace before validation                                                     |
 | `spreadsheet-import/utils/normalizeTableData.ts`                                        | Trim whitespace on matched column values                                              |
 
@@ -208,12 +204,6 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `spreadsheet-import/utils/findLeadCandidates.ts`                                            | Search for candidate Leads by email/name via GraphQL ILIKE |
 | `spreadsheet-import/utils/applyLeadResolutions.ts`                                          | Execute fuzzy match decisions: update/reassign/create Lead |
 
-### New Export Utilities
-
-| File                                                                  | Purpose                                                                                    |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `object-record/record-index/export/utils/relationExportFieldPaths.ts` | Builds recursive relation export field paths, nested GraphQL selections, and flat CSV keys |
-| `object-record/record-index/export/types/ExportConfig.ts`             | Stores selected related export fields as dotted field paths (`selectedFieldPaths`)         |
 
 ### Server-Side Export Worker
 

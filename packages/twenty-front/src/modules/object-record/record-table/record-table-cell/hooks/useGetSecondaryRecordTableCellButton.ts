@@ -19,9 +19,60 @@ export const useGetSecondaryRecordTableCellButton = () => {
   const { fieldDefinition, recordId } = useContext(FieldContext);
   const { copyToClipboard } = useCopyToClipboard();
 
+  const metadata = fieldDefinition.metadata as Record<string, unknown>;
+  const isSubField = !!metadata.subFieldName;
+  const relationFieldName = fieldDefinition.metadata.fieldName;
+
+  // For sub-field columns, read the value from the related object
+  const relatedObject = useRecordFieldValue<Record<string, unknown> | null>(
+    recordId,
+    relationFieldName,
+    fieldDefinition,
+  );
+
+  const subFieldValue = isSubField
+    ? relatedObject?.[metadata.subFieldName as string]
+    : undefined;
+
+  // For sub-fields, check the column's type (which is the sub-field's actual type)
+  const isSubFieldPhones =
+    isSubField && fieldDefinition.type === 'PHONES';
+  const isSubFieldEmails =
+    isSubField && fieldDefinition.type === 'EMAILS';
+
   const fieldValue = useRecordFieldValue<
     FieldPhonesValue | FieldEmailsValue | FieldLinksValue | undefined
   >(recordId, fieldDefinition.metadata.fieldName, fieldDefinition);
+
+  // OMNIA-CUSTOM: Handle sub-field phone/email actions
+  if (isSubFieldPhones && isDefined(subFieldValue)) {
+    const phonesValue = subFieldValue as FieldPhonesValue;
+    const phoneNumber = `${phonesValue.primaryPhoneCallingCode ?? ''}${phonesValue.primaryPhoneNumber ?? ''}`;
+
+    return [
+      {
+        onClick: () =>
+          copyToClipboard(phoneNumber, t`Phone number copied to clipboard`),
+        Icon: IconCopy,
+      },
+    ];
+  }
+
+  if (isSubFieldEmails && isDefined(subFieldValue)) {
+    const email = (subFieldValue as FieldEmailsValue).primaryEmail ?? '';
+
+    return [
+      {
+        onClick: () =>
+          copyToClipboard(email, t`Email copied to clipboard`),
+        Icon: IconCopy,
+      },
+    ];
+  }
+
+  if (isSubField) {
+    return [];
+  }
 
   if (
     (!isFieldPhones(fieldDefinition) &&

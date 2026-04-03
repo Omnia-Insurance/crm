@@ -703,53 +703,15 @@ check_file_exists \
   "Lead resolution executor utility"
 
 echo ""
-echo "--- CSV Export: Relation ID Embedding ---"
-check_file_not_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "'id',$" \
-  "id must not be in EXCLUDED_FIELD_NAMES so relation IDs are exportable"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "augmentedConfig" \
-  "Export must auto-include relation id in selected field paths"
-
-echo ""
-echo "--- CSV Export: Composite Field Splitting ---"
-check_file_not_contains \
-  "packages/twenty-front/src/modules/object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts" \
-  "formatPhoneNumber" \
-  "Composite fields should be kept as objects, not flattened"
+echo "--- CSV Export: View-Driven Relation Configs ---"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Export view must open the related-fields modal instead of exporting directly when relation fields are available"
+  "subFieldRecordFields" \
+  "Export command must derive relation configs from sub-field columns in the view"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Engine-command export path must open the related-fields modal when relation fields are available"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportableRelationFields.ts" \
-  "buildExportableRelationFieldPaths" \
-  "Related export fields must recurse through nested MANY_TO_ONE relations"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "Nested relation export utility"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "visitedObjectMetadataKeys" \
-  "Nested relation export utility must guard against cyclical relation traversal"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/types/ExportConfig.ts" \
-  "selectedFieldPaths" \
-  "Export config must preserve nested relation field paths"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "buildRecordGqlFieldsFromSelectedFieldPaths" \
-  "Related export query builder must support nested relation field paths"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "getRelationFieldValueFromPath" \
-  "Related export row flattening must resolve nested relation values by path"
+  "subFieldRecordFields" \
+  "Engine-command export must derive relation configs from sub-field columns in the view"
 
 echo ""
 echo "--- Server-Side Export Worker ---"

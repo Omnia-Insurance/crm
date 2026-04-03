@@ -49,8 +49,10 @@ export const useResizeTableHeader = () => {
   const [resizedFieldMetadataId, setResizedFieldMetadataId] =
     useAtomComponentState(resizedFieldMetadataIdComponentState);
 
+  // OMNIA-CUSTOM: Match by record field id (unique per column) to correctly
+  // handle sub-field columns that share the same fieldMetadataItemId.
   const recordField = visibleRecordFields.find(
-    findByProperty('fieldMetadataItemId', resizedFieldMetadataId),
+    findByProperty('id', resizedFieldMetadataId),
   );
 
   const { resetTableRowSelection } = useResetTableRowSelection();
@@ -160,7 +162,7 @@ export const useResizeTableHeader = () => {
     setResizedFieldMetadataId(null);
 
     if (nextWidth !== recordField.size) {
-      const updatedRecordField = updateRecordField(resizedFieldMetadataId, {
+      const updatedRecordField = updateRecordField(recordField.id, {
         size: nextWidth,
       });
 

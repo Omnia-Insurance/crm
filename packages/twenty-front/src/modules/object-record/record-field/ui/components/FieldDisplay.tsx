@@ -73,7 +73,9 @@ export const FieldDisplay = () => {
     return <ForbiddenFieldDisplay />;
   }
 
-  // OMNIA-CUSTOM: Relation sub-field columns render the sub-field value
+  // OMNIA-CUSTOM: Relation sub-field columns delegate to
+  // RelationSubFieldDisplay which re-provides FieldContext pointing at the
+  // related record so native display components render correctly.
   const subFieldName = (
     fieldDefinition.metadata as Record<string, unknown>
   ).subFieldName as string | undefined;

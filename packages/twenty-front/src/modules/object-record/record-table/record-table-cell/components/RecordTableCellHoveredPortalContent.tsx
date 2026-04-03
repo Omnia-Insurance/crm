@@ -57,16 +57,23 @@ export const RecordTableCellHoveredPortalContent = () => {
 
   const isFirstColumn = recordTableHoverPosition?.column === 0;
 
-  const { isRecordFieldReadOnly: isReadOnly } = useContext(FieldContext);
+  const { isRecordFieldReadOnly: isReadOnly, fieldDefinition } =
+    useContext(FieldContext);
 
   const isFieldInputOnly = useIsFieldInputOnly();
 
+  // OMNIA-CUSTOM: Sub-field columns are read-only but should still show
+  // cell action buttons (open related record, copy phone/email, etc.)
+  const isSubField = !!(fieldDefinition.metadata as Record<string, unknown>)
+    .subFieldName;
+
   const showButton =
     !isFieldInputOnly &&
-    (!isReadOnly || isFirstColumn) &&
+    (!isReadOnly || isFirstColumn || isSubField) &&
     !(isMobile && isFirstColumn);
 
-  const showInteractiveStyle = !isReadOnly || (isFirstColumn && showButton);
+  const showInteractiveStyle =
+    !isReadOnly || (isFirstColumn && showButton) || isSubField;
 
   const { rowIndex } = useRecordTableRowContextOrThrow();
 
