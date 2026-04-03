@@ -26,6 +26,7 @@ import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
 import { json2csv } from 'json-2-csv';
 
 const BATCH_SIZE = 500;
@@ -281,6 +282,21 @@ function isUuidLike(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+/**
+ * Normalize composite field values before export.
+ * Currently normalizes US state names to 2-letter codes.
+ */
+function normalizeCompositeValue(
+  compositeKey: string,
+  value: unknown,
+): unknown {
+  if (compositeKey === 'addressState' && typeof value === 'string') {
+    return normalizeUsState(value);
+  }
+
+  return value;
 }
 
 /**
@@ -793,7 +809,8 @@ export class ExportJobProcessor {
               for (const compositeKey of Object.keys(subFieldLabels)) {
                 const flatKey = `${getRelationFieldFlatKey(rc.relationFieldName, fieldPath)}__${compositeKey}`;
 
-                expanded[flatKey] = obj[compositeKey] ?? '';
+                expanded[flatKey] =
+                  normalizeCompositeValue(compositeKey, obj[compositeKey]) ?? '';
               }
             }
           } else if (
@@ -1242,7 +1259,10 @@ export class ExportJobProcessor {
             parentValue !== undefined &&
             typeof parentValue === 'object'
           ) {
-            let subValue = (parentValue as Record<string, unknown>)[subKey];
+            let subValue = normalizeCompositeValue(
+              subKey,
+              (parentValue as Record<string, unknown>)[subKey],
+            );
 
             // Convert amountMicros to human-readable amount
             if (subKey === 'amountMicros' && typeof subValue === 'number') {
