@@ -290,6 +290,18 @@ export const useBuildSpreadsheetImportFields = () => {
     );
 
     if (isManyToOneRelation && isDefined(targetObjectMetadataItem)) {
+      // OMNIA-CUSTOM: Add a relation label field that matches export headers.
+      // When re-importing an exported CSV, the header says "Carrier" (not
+      // "Carrier - Name"). This field allows auto-matching for LOOKUP_ASSIGN.
+      spreadsheetImportFields.push(
+        createBaseField(fieldMetadataItem, {
+          label: fieldMetadataItem.label,
+          key: `__relationLabel:${fieldMetadataItem.name}`,
+          isNestedField: false,
+          isCompositeSubField: false,
+          fieldValidationDefinitions: [],
+        }),
+      );
       const uniqueConstraintFields = getUniqueConstraintsFields<
         FieldMetadataItem,
         EnrichedObjectMetadataItem
@@ -338,11 +350,77 @@ export const useBuildSpreadsheetImportFields = () => {
         );
 
       for (const targetField of availableTargetFields) {
-        if (connectFieldIds.has(targetField.id)) continue;
-        if (
-          targetField.type === FieldMetadataType.RELATION ||
-          targetField.type === FieldMetadataType.ACTOR
-        ) {
+        if (connectFieldIds.has(targetField.id)) {
+          // OMNIA-CUSTOM: For composite connect fields (e.g., phones), the
+          // connect handler only generates sub-fields in the unique constraint
+          // (primaryPhoneNumber). Add the remaining sub-fields as read-only
+          // so they auto-match export CSV headers on re-import.
+          if (isCompositeFieldType(targetField.type)) {
+            const connectSubFieldNames = new Set(
+              SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
+                targetField.type
+              ].subFields
+                .filter((sf) => sf.isIncludedInUniqueConstraint)
+                .map((sf) => sf.subFieldName as string),
+            );
+
+            for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
+              targetField.type
+            ].subFields) {
+              if (
+                !sf.isImportable ||
+                connectSubFieldNames.has(sf.subFieldName as string)
+              ) {
+                continue;
+              }
+
+              spreadsheetImportFields.push(
+                createBaseField(fieldMetadataItem, {
+                  label: getRelationUpdateSubFieldLabel(
+                    fieldMetadataItem,
+                    targetField,
+                    sf.subFieldName as string,
+                  ),
+                  key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}.${sf.subFieldName as string}`,
+                  isNestedField: true,
+                  isCompositeSubField: true,
+                  compositeSubFieldKey: sf.subFieldName as string,
+                  isReadOnly: true,
+                  description: 'Read-only — exported for reference',
+                  fieldValidationDefinitions: [],
+                }),
+              );
+            }
+          }
+
+          continue;
+        }
+        if (targetField.type === FieldMetadataType.ACTOR) {
+          continue;
+        }
+
+        // OMNIA-CUSTOM: Add RELATION fields on the target object as
+        // read-only fields. They auto-match export CSV headers (e.g.,
+        // "Lead / Lead Source", "Lead / Family Members") so users don't
+        // see unmatched-column warnings, but data is stripped on import.
+        if (targetField.type === FieldMetadataType.RELATION) {
+          spreadsheetImportFields.push(
+            createBaseField(fieldMetadataItem, {
+              Icon: getIcon(fieldMetadataItem.icon),
+              isNestedField: true,
+              isCompositeSubField: false,
+              fieldMetadataItemId: fieldMetadataItem.id,
+              fieldMetadataType: FieldMetadataType.RELATION,
+              label: getRelationUpdateSubFieldLabel(
+                fieldMetadataItem,
+                targetField,
+              ),
+              key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
+              isReadOnly: true,
+              description: 'Read-only — exported for reference',
+              fieldValidationDefinitions: [],
+            }),
+          );
           continue;
         }
 
@@ -377,6 +455,74 @@ export const useBuildSpreadsheetImportFields = () => {
                 targetField,
               ),
               key: getRelationUpdateSubFieldKey(fieldMetadataItem, targetField),
+            }),
+          );
+        }
+      }
+
+      // OMNIA-CUSTOM: Add read-only fields for data the export includes but
+      // the import can't modify: ONE_TO_MANY relations (familyMembers),
+      // non-importable composite sub-fields (addressLat, addressLng).
+      // These ensure export CSV headers auto-match without warnings.
+      const generatedKeys = new Set(
+        spreadsheetImportFields.map((f) => f.label.toLowerCase()),
+      );
+
+      // ONE_TO_MANY relations on the target object
+      for (const targetField of targetObjectMetadataItem.fields) {
+        if (!targetField.isActive) continue;
+        if (
+          targetField.type !== FieldMetadataType.RELATION ||
+          targetField.relation?.type !== RelationType.ONE_TO_MANY
+        ) {
+          continue;
+        }
+
+        const label = getRelationUpdateSubFieldLabel(
+          fieldMetadataItem,
+          targetField,
+        );
+
+        if (generatedKeys.has(label.toLowerCase())) continue;
+
+        spreadsheetImportFields.push(
+          createBaseField(fieldMetadataItem, {
+            label,
+            key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
+            isNestedField: true,
+            isReadOnly: true,
+            description: 'Read-only — exported for reference',
+            fieldValidationDefinitions: [],
+          }),
+        );
+      }
+
+      // Non-importable composite sub-fields (addressLat, addressLng, etc.)
+      for (const targetField of availableTargetFields) {
+        if (!isCompositeFieldType(targetField.type)) continue;
+
+        for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
+          targetField.type
+        ].subFields) {
+          if (sf.isImportable) continue;
+
+          const label = getRelationUpdateSubFieldLabel(
+            fieldMetadataItem,
+            targetField,
+            sf.subFieldName as string,
+          );
+
+          if (generatedKeys.has(label.toLowerCase())) continue;
+
+          spreadsheetImportFields.push(
+            createBaseField(fieldMetadataItem, {
+              label,
+              key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}.${sf.subFieldName as string}`,
+              isNestedField: true,
+              isCompositeSubField: true,
+              isReadOnly: true,
+              description: 'Read-only — exported for reference',
+              fieldValidationDefinitions: [],
             }),
           );
         }

@@ -16,6 +16,7 @@ import {
 } from 'twenty-shared/utils';
 import { z } from 'zod';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
+import { normalizeUsState } from '@/object-record/spreadsheet-import/utils/normalizeUsState';
 import { castToString } from '~/utils/castToString';
 import { convertCurrencyAmountToCurrencyMicros } from '~/utils/convertCurrencyToCurrencyMicros';
 import { stripSimpleQuotesFromString } from '~/utils/string/stripSimpleQuotesFromString';
@@ -224,7 +225,7 @@ export const buildRecordFromImportedStructuredRow = ({
       addressStreet2: castToString,
       addressCity: castToString,
       addressPostcode: castToString,
-      addressState: castToString,
+      addressState: normalizeUsState,
       addressCountry: castToString,
     },
     [FieldMetadataType.LINKS]: {

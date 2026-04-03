@@ -16,30 +16,37 @@ export const useUpdateRecordField = (
 
   const updateRecordField = useCallback(
     (
-      fieldMetadataItemId: string,
+      fieldMetadataItemIdOrRecordFieldId: string,
       partialRecordField: Partial<
         Pick<RecordField, 'isVisible' | 'size' | 'position'>
       >,
     ) => {
       const existingRecordFields = store.get(currentRecordFields);
 
-      const foundRecordFieldInCurrentRecordFields = existingRecordFields.find(
-        (existingRecordField) =>
-          existingRecordField.fieldMetadataItemId === fieldMetadataItemId,
-      );
+      // OMNIA-CUSTOM: Match by record field id first (unique per column),
+      // then fall back to fieldMetadataItemId for backwards compatibility.
+      const foundRecordFieldInCurrentRecordFields =
+        existingRecordFields.find(
+          (rf) => rf.id === fieldMetadataItemIdOrRecordFieldId,
+        ) ??
+        existingRecordFields.find(
+          (rf) =>
+            rf.fieldMetadataItemId === fieldMetadataItemIdOrRecordFieldId,
+        );
 
       if (!isDefined(foundRecordFieldInCurrentRecordFields)) {
         throw new Error(
-          `Cannot find record field to update with field metadata item id : ${fieldMetadataItemId}`,
+          `Cannot find record field to update with id : ${fieldMetadataItemIdOrRecordFieldId}`,
         );
       }
+
+      const matchId = foundRecordFieldInCurrentRecordFields.id;
 
       store.set(currentRecordFields, (previousRecordFields) => {
         const newCurrentRecordFields = [...previousRecordFields];
 
         const indexOfRecordFieldToUpdate = newCurrentRecordFields.findIndex(
-          (existingRecordField) =>
-            existingRecordField.fieldMetadataItemId === fieldMetadataItemId,
+          (rf) => rf.id === matchId,
         );
 
         newCurrentRecordFields[indexOfRecordFieldToUpdate] = {

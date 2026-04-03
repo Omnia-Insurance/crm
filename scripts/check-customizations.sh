@@ -645,12 +645,8 @@ check_file_contains \
   "packages/twenty-front/src/modules/spreadsheet-import/types/SpreadsheetImportField.ts" \
   "isRelationUpdateField" \
   "Relation update field support for CSV import"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/spreadsheet-import/utils/extractRelationUpdatesFromImportedRows.ts" \
-  "Extract relation updates utility"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/spreadsheet-import/utils/executeRelationUpdatesViaMutation.ts" \
-  "Execute relation updates utility"
+# extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
+# removed — server-side relation resolution replaces frontend post-processing
 
 echo ""
 echo "--- Server: Upsert Relation Connect Tolerance ---"
@@ -703,53 +699,15 @@ check_file_exists \
   "Lead resolution executor utility"
 
 echo ""
-echo "--- CSV Export: Relation ID Embedding ---"
-check_file_not_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "'id',$" \
-  "id must not be in EXCLUDED_FIELD_NAMES so relation IDs are exportable"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "augmentedConfig" \
-  "Export must auto-include relation id in selected field paths"
-
-echo ""
-echo "--- CSV Export: Composite Field Splitting ---"
-check_file_not_contains \
-  "packages/twenty-front/src/modules/object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts" \
-  "formatPhoneNumber" \
-  "Composite fields should be kept as objects, not flattened"
+echo "--- CSV Export: View-Driven Relation Configs ---"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Export view must open the related-fields modal instead of exporting directly when relation fields are available"
+  "subFieldRecordFields" \
+  "Export command must derive relation configs from sub-field columns in the view"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx" \
-  "ExportRelationFieldConfigModal" \
-  "Engine-command export path must open the related-fields modal when relation fields are available"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportableRelationFields.ts" \
-  "buildExportableRelationFieldPaths" \
-  "Related export fields must recurse through nested MANY_TO_ONE relations"
-check_file_exists \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "Nested relation export utility"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/utils/relationExportFieldPaths.ts" \
-  "visitedObjectMetadataKeys" \
-  "Nested relation export utility must guard against cyclical relation traversal"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/types/ExportConfig.ts" \
-  "selectedFieldPaths" \
-  "Export config must preserve nested relation field paths"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "buildRecordGqlFieldsFromSelectedFieldPaths" \
-  "Related export query builder must support nested relation field paths"
-check_file_contains \
-  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useRecordIndexExportRecords.ts" \
-  "getRelationFieldValueFromPath" \
-  "Related export row flattening must resolve nested relation values by path"
+  "subFieldRecordFields" \
+  "Engine-command export must derive relation configs from sub-field columns in the view"
 
 echo ""
 echo "--- Server-Side Export Worker ---"
@@ -1140,6 +1098,64 @@ check_file_contains \
 check_file_exists \
   "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiffRelationValue.tsx" \
   "Relation diff value component must exist"
+
+# ==========================================================
+# Draft Record Creation (side panel draft instead of instant empty record)
+# ==========================================================
+
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-side-panel/states/draftRecordIdsState.ts" \
+  "Draft record IDs state must exist"
+check_file_exists \
+  "packages/twenty-front/src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx" \
+  "Side panel Create button must exist"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts" \
+  "openDraftInSidePanel" \
+  "Index record creation must use draft approach"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/hooks/usePersistField.ts" \
+  "draftRecordIdsState" \
+  "usePersistField must have draft guard"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-show/components/RecordShowEffect.tsx" \
+  "draftRecordIdsState" \
+  "RecordShowEffect must skip fetch for drafts"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-show/components/PageLayoutRecordPageRenderer.tsx" \
+  "RecordShowSidePanelCreateRecordButton" \
+  "Side panel footer must conditionally show Create button for drafts"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu/hooks/useCommandMenuCloseWithValidation.ts" \
+  "draftRecordIdsState" \
+  "Close validation must handle draft discard"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
+  "draftRecordIdsState" \
+  "Relation create must use draft approach"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/record/single-record/components/CreateRelatedRecordCommand.tsx" \
+  "draftRecordIdsState" \
+  "Command palette create related must use draft approach"
+
+echo ""
+echo "--- Relation Sub-Field Table Columns ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/view-field/entities/view-field.entity.ts" \
+  "subFieldName" \
+  "ViewFieldEntity must have subFieldName column for relation sub-field columns"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/utils/mapViewFieldsToColumnDefinitions.ts" \
+  "buildRelationSubFieldColumnDefinition" \
+  "mapViewFieldsToColumnDefinitions must handle sub-field ViewFields"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/components/FieldDisplay.tsx" \
+  "RelationSubFieldDisplay" \
+  "FieldDisplay must route sub-field columns to RelationSubFieldDisplay"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
+  "expandedRelationFieldId" \
+  "Column picker must support relation sub-field expansion"
 
 echo ""
 

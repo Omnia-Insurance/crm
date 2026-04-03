@@ -53,15 +53,13 @@ export const RecordTableColumnHeadDropdownMenu = ({
   const secondVisibleRecordField = visibleRecordFields[1];
   const canMove = isLabelIdentifier !== true;
   const canMoveLeft =
-    recordField.fieldMetadataItemId !==
-      secondVisibleRecordField?.fieldMetadataItemId && canMove;
+    recordField.id !== secondVisibleRecordField?.id && canMove;
 
   const lastVisibleRecordField =
     visibleRecordFields[visibleRecordFields.length - 1];
 
   const canMoveRight =
-    recordField.fieldMetadataItemId !==
-      lastVisibleRecordField?.fieldMetadataItemId && canMove;
+    recordField.id !== lastVisibleRecordField?.id && canMove;
 
   const { recordTableId } = useRecordTableContextOrThrow();
 
@@ -72,7 +70,7 @@ export const RecordTableColumnHeadDropdownMenu = ({
   const { changeRecordFieldVisibility } =
     useChangeRecordFieldVisibility(recordTableId);
 
-  const dropdownId = recordField.fieldMetadataItemId + '-header';
+  const dropdownId = recordField.id + '-header';
 
   const { closeDropdown } = useCloseDropdown();
 
@@ -103,6 +101,7 @@ export const RecordTableColumnHeadDropdownMenu = ({
     await changeRecordFieldVisibility({
       fieldMetadataId: recordField.fieldMetadataItemId,
       isVisible: false,
+      subFieldName: recordField.subFieldName ?? undefined,
     });
   };
 
@@ -125,10 +124,17 @@ export const RecordTableColumnHeadDropdownMenu = ({
     openRecordFilterChipFromTableHeader(recordField.fieldMetadataItemId);
   };
 
-  const { isFilterable, isSortable } = useAtomFamilySelectorValue(
-    isFieldMetadataItemFilterableAndSortableSelector,
-    { fieldMetadataItemId: recordField.fieldMetadataItemId },
-  );
+  const { isFilterable: rawFilterable, isSortable: rawSortable } =
+    useAtomFamilySelectorValue(
+      isFieldMetadataItemFilterableAndSortableSelector,
+      { fieldMetadataItemId: recordField.fieldMetadataItemId },
+    );
+
+  // OMNIA-CUSTOM: Sub-field columns (e.g. "Lead / Date of Birth") can't be
+  // independently filtered or sorted — disable these options.
+  const isSubField = !!recordField.subFieldName;
+  const isFilterable = rawFilterable && !isSubField;
+  const isSortable = rawSortable && !isSubField;
 
   const showSeparator =
     (isFilterable || isSortable) && isLabelIdentifier !== true;

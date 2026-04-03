@@ -186,6 +186,16 @@ const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
       {!isRunning && job.failureCount > 0 && (
         <StyledDetails>{t`${job.failureCount} failures`}</StyledDetails>
       )}
+
+      {!isRunning && job.errorMessages && job.errorMessages.length > 0 && (
+        <StyledDetails>
+          {job.errorMessages.slice(0, 3).map((msg, i) => (
+            <div key={i}>{msg}</div>
+          ))}
+          {job.errorMessages.length > 3 &&
+            t`...and ${job.errorMessages.length - 3} more`}
+        </StyledDetails>
+      )}
     </StyledCard>
   );
 };

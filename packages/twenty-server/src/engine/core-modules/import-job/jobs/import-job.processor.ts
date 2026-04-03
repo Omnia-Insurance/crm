@@ -9,8 +9,11 @@ import {
   type ImportJobData,
 } from 'src/engine/core-modules/import-job/import-job.service';
 import { ImportJobStatus } from 'src/engine/core-modules/import-job/enums/import-job-status.enum';
+import { type RelationBehavior } from 'src/engine/core-modules/import-job/utils/relation-resolution.types';
+import { resolveImportRelations } from 'src/engine/core-modules/import-job/utils/resolve-import-relations.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const BATCH_SIZE = 200;
 
@@ -21,6 +24,7 @@ export class ImportJobProcessor {
   constructor(
     private readonly importJobService: ImportJobService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
 
   @Process(IMPORT_JOB_PROCESSOR_NAME)
@@ -50,7 +54,7 @@ export class ImportJobProcessor {
       status: ImportJobStatus.PROCESSING,
     });
 
-    const validatedRows = importJob.validatedRows ?? [];
+    let validatedRows = importJob.validatedRows ?? [];
     const totalRecords = validatedRows.length;
     let processedRecords = 0;
     let successCount = 0;
@@ -58,12 +62,113 @@ export class ImportJobProcessor {
     let failureCount = 0;
     const allWarnings: Record<string, unknown>[] = [];
     const allErrors: Record<string, unknown>[] = [];
+    let relationResolutionHandledStatus = false;
 
     try {
       const authContext = buildSystemAuthContext(workspaceId);
 
+      // Check if this import includes relation sub-field data
+      const columnMappings = importJob.columnMappings as Record<
+        string,
+        unknown
+      > | null;
+      const relationBehaviors = (
+        columnMappings?.relationBehaviors ?? []
+      ) as RelationBehavior[];
+      const hasRelationResolution =
+        relationBehaviors.length > 0 &&
+        relationBehaviors.some((rb) => rb.behavior !== 'SKIP');
+
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
+          // ── Relation Resolution (pre-processing) ──────────────
+          if (hasRelationResolution) {
+            this.logger.log(
+              `Resolving ${relationBehaviors.length} relation behaviors for ${totalRecords} rows`,
+            );
+
+            const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
+              await this.workspaceCacheService.getOrRecompute(workspaceId, [
+                'flatObjectMetadataMaps',
+                'flatFieldMetadataMaps',
+              ]);
+
+            const getRepository = async (objectName: string) =>
+              this.globalWorkspaceOrmManager.getRepository(
+                workspaceId,
+                objectName,
+                { shouldBypassPermissionChecks: true },
+              );
+
+            const plan = await resolveImportRelations(
+              validatedRows,
+              relationBehaviors,
+              importJob.objectNameSingular,
+              flatObjectMetadataMaps,
+              flatFieldMetadataMaps,
+              getRepository,
+            );
+
+            // All-or-nothing: if any resolution errors, fail the job
+            if (plan.errors.length > 0) {
+              this.logger.warn(
+                `Relation resolution failed with ${plan.errors.length} errors: ${JSON.stringify(plan.errors)}`,
+              );
+
+              relationResolutionHandledStatus = true;
+
+              await this.importJobService.updateProgress(importJobId, {
+                status: ImportJobStatus.FAILED,
+                processedRecords: totalRecords,
+                failureCount: plan.errors.length,
+                result: { errors: plan.errors },
+              });
+
+              return;
+            }
+
+            // Apply relation changes before main record upsert
+
+            // 1. Create new related records (and capture their IDs)
+            for (const newRecord of plan.newRecords) {
+              const repo = await getRepository(
+                newRecord.objectNameSingular,
+              );
+              const created = (await repo.save(
+                newRecord.data,
+              )) as Record<string, unknown>;
+
+              if (typeof created.id === 'string') {
+                // Apply the pending reassignment to the processed rows
+                for (const row of plan.processedRows) {
+                  if (
+                    row.id === newRecord.reassignment.mainRecordId
+                  ) {
+                    row[newRecord.reassignment.joinColumnName] =
+                      created.id;
+                  }
+                }
+              }
+            }
+
+            // 2. Update existing related records
+            for (const update of plan.relatedRecordUpdates) {
+              const repo = await getRepository(
+                update.objectNameSingular,
+              );
+
+              await repo.update(update.recordId, update.fields);
+            }
+
+            this.logger.log(
+              `Relation resolution complete: ${plan.relatedRecordUpdates.length} updates, ${plan.reassignments.length} reassignments, ${plan.newRecords.length} new records`,
+            );
+
+            // Use the processed rows (direct fields only, FKs resolved)
+            validatedRows = plan.processedRows;
+          }
+
+          // ── Batch Upsert ──────────────────────────────────────
           const repository =
             await this.globalWorkspaceOrmManager.getRepository(
               workspaceId,
@@ -71,7 +176,9 @@ export class ImportJobProcessor {
               { shouldBypassPermissionChecks: true },
             );
 
-          const numberOfBatches = Math.ceil(totalRecords / BATCH_SIZE);
+          const numberOfBatches = Math.ceil(
+            validatedRows.length / BATCH_SIZE,
+          );
 
           for (
             let batchIndex = 0;
@@ -98,25 +205,29 @@ export class ImportJobProcessor {
             );
 
             try {
-              // The validated rows are already in record input format.
-              // Use upsert with 'id' as the conflict key so existing records
-              // are updated and new records are inserted.
               await repository.upsert(batchRows, ['id']);
-
               successCount += batchRows.length;
             } catch (error: unknown) {
-              // Check if this is a partial success (some records had connect warnings)
-              const errorAny = error as any;
-
-              if (errorAny?.code === 'IMPORT_PARTIAL_SUCCESS') {
-                const savedCount = errorAny.savedRecordCount ?? batchRows.length;
-                const warnings = errorAny.importWarnings ?? [];
+              if (
+                error instanceof Error &&
+                'code' in error &&
+                (error as Record<string, unknown>).code ===
+                  'IMPORT_PARTIAL_SUCCESS'
+              ) {
+                const errorObj = error as Record<string, unknown>;
+                const savedCount =
+                  (errorObj.savedRecordCount as number) ??
+                  batchRows.length;
+                const warnings =
+                  (errorObj.importWarnings as Record<
+                    string,
+                    unknown
+                  >[]) ?? [];
 
                 successCount += savedCount;
                 warningCount += warnings.length;
                 allWarnings.push(...warnings);
               } else {
-                // Full batch failure
                 failureCount += batchRows.length;
                 allErrors.push({
                   batchIndex,
@@ -133,7 +244,6 @@ export class ImportJobProcessor {
               totalRecords,
             );
 
-            // Publish progress every batch
             await this.importJobService.updateProgress(importJobId, {
               processedRecords,
               successCount,
@@ -144,6 +254,11 @@ export class ImportJobProcessor {
         },
         authContext,
       );
+
+      // If relation resolution already set the final status, don't overwrite
+      if (relationResolutionHandledStatus) {
+        return;
+      }
 
       // Determine final status
       const finalJob = await this.importJobService.getImportJob(

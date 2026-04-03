@@ -1,10 +1,13 @@
 import { useApolloClient } from '@apollo/client/react';
 
+import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useBuildSpreadsheetImportFields } from '@/object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields';
 import { buildRecordFromImportedStructuredRow } from '@/object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow';
 import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
 import { spreadsheetImportGetUnicityTableHook } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetUnicityTableHook';
+import { transformRowsForServerImport } from '@/object-record/spreadsheet-import/utils/transformRowsForServerImport';
+import { type RelationBehavior } from '@/object-record/spreadsheet-import/utils/relationImportTypes';
 import { APPEND_IMPORT_JOB_ROWS } from '@/spreadsheet-import/graphql/mutations/appendImportJobRows';
 import { CREATE_IMPORT_JOB } from '@/spreadsheet-import/graphql/mutations/createImportJob';
 import { FINALIZE_IMPORT_JOB } from '@/spreadsheet-import/graphql/mutations/finalizeImportJob';
@@ -13,8 +16,10 @@ import { useOpenSpreadsheetImportDialog } from '@/spreadsheet-import/hooks/useOp
 import { useImportJobProgress } from '@/spreadsheet-import/hooks/useImportJobProgress';
 import { type SpreadsheetImportDialogOptions } from '@/spreadsheet-import/types';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
-const CHUNK_SIZE = 500;
+const CHUNK_SIZE = 200;
 
 export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
@@ -24,6 +29,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
   const { enqueueErrorSnackBar } = useSnackBar();
   const { startTracking } = useImportJobProgress();
+  const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -52,9 +58,58 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
       isRelationUpdateField: field.isRelationUpdateField ?? false,
     }));
 
+    // OMNIA-CUSTOM: Build a set of connect field keys so we can normalize
+    // them to update: format. This prevents composite keys like
+    // "Amount (premium)" from being confused with relation connect keys.
+    const connectFieldKeys = new Set(
+      spreadsheetImportFields
+        .filter((f) => f.isRelationConnectField)
+        .map((f) => f.key),
+    );
+
+    // OMNIA-CUSTOM: Build explicit relation behaviors from field metadata.
+    // Person-like targets (have phones/emails) → SMART_UPDATE.
+    // Reference targets (name only) → LOOKUP_ASSIGN.
+    const configuredBehaviors: RelationBehavior[] = [];
+
+    for (const field of availableFieldMetadataItemsToImport) {
+      if (field.type !== FieldMetadataType.RELATION) continue;
+      if (field.relation?.type !== RelationType.MANY_TO_ONE) continue;
+
+      const targetObject = objectMetadataItems?.find(
+        (obj) => obj.id === field.relation?.targetObjectMetadata.id,
+      );
+
+      if (!targetObject) continue;
+
+      const targetFieldNames = new Set(
+        targetObject.fields
+          .filter((f) => f.isActive)
+          .map((f) => f.name),
+      );
+
+      if (targetFieldNames.has('phones') || targetFieldNames.has('emails')) {
+        configuredBehaviors.push({
+          relationFieldName: field.name,
+          behavior: 'SMART_UPDATE',
+          onNotFound: 'CREATE',
+          uniqueConstraintFields: targetFieldNames.has('phones')
+            ? ['phones']
+            : ['emails'],
+        });
+      } else {
+        configuredBehaviors.push({
+          relationFieldName: field.name,
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        });
+      }
+    }
+
     openSpreadsheetImportDialog({
       ...options,
       onSubmit: async (data) => {
+        // Build main record objects from the structured rows
         const createInputs = data.validStructuredRows.map((record) =>
           buildRecordFromImportedStructuredRow({
             importedStructuredRow: record,
@@ -63,19 +118,86 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
           }),
         );
 
+        // OMNIA-CUSTOM: Extract relation update/label data from the RAW
+        // structured rows (buildRecordFromImportedStructuredRow strips
+        // these keys) and merge with the built records as dot-notation keys.
+        // Normalize connect field keys to update: format so they're handled
+        // uniformly by the transform function.
+        const rawRows = data.validStructuredRows.map((row) => {
+          const normalized: Record<string, unknown> = {};
+
+          for (const [key, value] of Object.entries(
+            row as Record<string, unknown>,
+          )) {
+            if (connectFieldKeys.has(key)) {
+              normalized[`update:${key}`] = value;
+            } else {
+              normalized[key] = value;
+            }
+          }
+
+          return normalized;
+        });
+
+        const { transformedRows: relationData, relationBehaviors } =
+          transformRowsForServerImport(rawRows, configuredBehaviors);
+
+        // Merge: built record (direct fields + composites) + relation
+        // sub-field data (dot notation keys from the raw structured row)
+        const relationFieldNames = new Set(
+          relationBehaviors.map((rb) => rb.relationFieldName),
+        );
+
+        const mergedRows = createInputs.map((builtRecord, index) => {
+          const extraRelationKeys = relationData[index];
+          const merged = { ...builtRecord };
+
+          // When server-side relation resolution is active, remove connect
+          // objects (e.g., { lead: { connect: {...} } }) from built records.
+          // The server uses dot-notation keys and relation labels instead.
+          for (const name of relationFieldNames) {
+            if (name in merged) {
+              delete merged[name];
+            }
+          }
+
+          for (const [key, value] of Object.entries(extraRelationKeys)) {
+            // Only add relation data keys (dot-notation or relation labels).
+            // Skip composite sub-field keys like "Amount (premium)" — these
+            // are already handled by buildRecordFromImportedStructuredRow.
+            if (!(key in merged) && value !== undefined && value !== '') {
+              // Dot-notation keys (lead.name.firstName) or relation labels
+              // (carrier) are relation data. Keys with parentheses but no
+              // dot are composite sub-field keys — skip them.
+              const isRelationDotKey = key.includes('.');
+              const isRelationLabel = relationFieldNames.has(key);
+
+              if (isRelationDotKey || isRelationLabel) {
+                merged[key] = value;
+              }
+            }
+          }
+
+          return merged;
+        });
+
+        const enrichedMappings = {
+          columns: columnMappings,
+          ...(relationBehaviors.length > 0
+            ? { relationBehaviors }
+            : {}),
+        };
+
         try {
-          if (createInputs.length <= CHUNK_SIZE) {
-            // Small import: single mutation
-            await submitSingleBatch(createInputs, columnMappings);
+          if (mergedRows.length <= CHUNK_SIZE) {
+            await submitSingleBatch(mergedRows, enrichedMappings);
           } else {
-            // Large import: chunked upload
-            await submitChunked(createInputs, columnMappings);
+            await submitChunked(mergedRows, enrichedMappings);
           }
         } catch (error) {
           if (error instanceof Error) {
             enqueueErrorSnackBar({ apolloError: error });
           }
-
         }
       },
       spreadsheetImportFields,
@@ -86,7 +208,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
   const submitSingleBatch = async (
     rows: Record<string, unknown>[],
-    mappings: Record<string, unknown>[],
+    mappings: Record<string, unknown>,
   ) => {
     const { data: result } = await apolloMetadataClient.mutate({
       mutation: START_IMPORT_JOB,
@@ -112,7 +234,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
   const submitChunked = async (
     rows: Record<string, unknown>[],
-    mappings: Record<string, unknown>[],
+    mappings: Record<string, unknown>,
   ) => {
     // 1. Create the job shell (no rows)
     const { data: createResult } = await apolloMetadataClient.mutate({

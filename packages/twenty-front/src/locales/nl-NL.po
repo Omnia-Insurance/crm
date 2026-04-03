@@ -79,6 +79,12 @@ msgstr ": Vandaag{timeZoneAbbreviationSuffix}"
 msgid ". The change will be applied the {beautifiedRenewDate}."
 msgstr ". De wijziging zal worden toegepast op {beautifiedRenewDate}."
 
+#. js-lingui-id: q3GraM
+#. placeholder {0}: job.errorMessages.length - 3
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "...and {0} more"
+msgstr ""
+
 #. js-lingui-id: YdOjT+
 #. placeholder {0}: issueCount - MAX_DISPLAYED_ISSUES
 #: src/modules/spreadsheet-import/components/ImportResultsSummary.tsx
@@ -2805,7 +2811,6 @@ msgstr "Kan je niet scannen? Kopieer de"
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
 #: src/modules/command-menu-item/record/constants/DashboardCommandMenuItemsConfig.tsx
 msgid "Cancel"
 msgstr "Annuleren"
@@ -3852,6 +3857,7 @@ msgstr ""
 #. js-lingui-id: hYgDIe
 #: src/modules/views/view-picker/components/ViewPickerEditButton.tsx
 #: src/modules/views/view-picker/components/ViewPickerCreateButton.tsx
+#: src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx
 msgid "Create"
 msgstr "Creëren"
 
@@ -5549,6 +5555,7 @@ msgstr "E-mail mag niet leeg zijn"
 
 #. js-lingui-id: UZQ5eW
 #: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
+#: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
 #: src/modules/object-record/record-field/ui/meta-types/input/components/EmailsFieldInput.tsx
 #: src/modules/object-record/record-field/ui/meta-types/display/components/EmailsFieldDisplay.tsx
 msgid "Email copied to clipboard"
@@ -6369,11 +6376,6 @@ msgstr "Niet-professionele e-mails uitsluiten"
 msgid "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 msgstr "Sluit de volgende mensen en domeinen uit van mijn e-mailsynchronisatie. Interne gesprekken worden niet geïmporteerd"
 
-#. js-lingui-id: u73wth
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "excluded"
-msgstr ""
-
 #. js-lingui-id: YzI8cc
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsSelect.tsx
 msgid "Existing Field"
@@ -6504,11 +6506,6 @@ msgstr "Exporteren ({exportedCount})"
 msgid "Export ({percentageValue}%)"
 msgstr "Exporteren ({percentageValue}%)"
 
-#. js-lingui-id: 5P9szN
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Export ({totalSelected} extra fields)"
-msgstr ""
-
 #. js-lingui-id: 2KAI4N
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Export CSV"
@@ -6569,11 +6566,6 @@ msgstr "Versies exporteren"
 #: src/modules/command-menu-item/record/constants/DefaultRecordCommandMenuItemsConfig.tsx
 msgid "Export view"
 msgstr "Weergave exporteren"
-
-#. js-lingui-id: i0hGgC
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Export with Related Fields"
-msgstr ""
 
 #. js-lingui-id: +FMXdE
 #: src/modules/command-menu-item/record/constants/WorkflowCommandMenuItemsConfig.tsx
@@ -11351,6 +11343,7 @@ msgstr "Telefoonnummer"
 
 #. js-lingui-id: qlqT9z
 #: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
+#: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
 #: src/modules/object-record/record-field/ui/meta-types/display/components/PhonesFieldDisplay.tsx
 msgid "Phone number copied to clipboard"
 msgstr "Telefoonnummer gekopieerd naar klembord"
@@ -11583,6 +11576,12 @@ msgstr "Voorbeeld"
 #: src/modules/activities/files/components/DocumentViewer.tsx
 msgid "Preview Not Available"
 msgstr "Voorbeeldweergave niet beschikbaar"
+
+#. js-lingui-id: sHpdV8
+#. placeholder {1}: data.length
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Previewing {PREVIEW_ROW_LIMIT} of {1} rows. All rows will be imported on confirm."
+msgstr ""
 
 #. js-lingui-id: DHhJ7s
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
@@ -15269,11 +15268,6 @@ msgstr ""
 #: src/modules/client-config/components/ClientConfigProvider.tsx
 msgid "Unable to Reach Back-end"
 msgstr "Kan de back-end niet bereiken"
-
-#. js-lingui-id: 0rIkys
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Uncheck any related fields you don't need in the export."
-msgstr ""
 
 #. js-lingui-id: EUHN7i
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx

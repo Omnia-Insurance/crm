@@ -243,6 +243,8 @@ export const ValidationStep = ({
     [importedColumns],
   );
 
+  const PREVIEW_ROW_LIMIT = 100;
+
   const tableData = useMemo(() => {
     if (filterByErrors) {
       return data.filter((value) => {
@@ -255,6 +257,9 @@ export const ValidationStep = ({
         }
         return false;
       });
+    }
+    if (data.length > PREVIEW_ROW_LIMIT) {
+      return data.slice(0, PREVIEW_ROW_LIMIT);
     }
     return data;
   }, [data, filterByErrors]);
@@ -341,6 +346,16 @@ export const ValidationStep = ({
                 <StyledSkippedColumns>
                   {skippedColumnHeaders.join(', ')}
                 </StyledSkippedColumns>
+              </StyledSkippedText>
+            </StyledSkippedBanner>
+          )}
+          {!filterByErrors && data.length > PREVIEW_ROW_LIMIT && (
+            <StyledSkippedBanner>
+              <StyledSkippedIcon>
+                <IconInfoCircle size={16} />
+              </StyledSkippedIcon>
+              <StyledSkippedText>
+                {t`Previewing ${PREVIEW_ROW_LIMIT} of ${data.length} rows. All rows will be imported on confirm.`}
               </StyledSkippedText>
             </StyledSkippedBanner>
           )}

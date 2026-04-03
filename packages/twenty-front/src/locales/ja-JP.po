@@ -79,6 +79,12 @@ msgstr ": 今日{timeZoneAbbreviationSuffix}"
 msgid ". The change will be applied the {beautifiedRenewDate}."
 msgstr "変更は、{beautifiedRenewDate}に適用されます。"
 
+#. js-lingui-id: q3GraM
+#. placeholder {0}: job.errorMessages.length - 3
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "...and {0} more"
+msgstr ""
+
 #. js-lingui-id: YdOjT+
 #. placeholder {0}: issueCount - MAX_DISPLAYED_ISSUES
 #: src/modules/spreadsheet-import/components/ImportResultsSummary.tsx
@@ -2805,7 +2811,6 @@ msgstr "スキャンできませんか？ コピーしてください"
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/settings/components/SaveAndCancelButtons/CancelButton.tsx
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
 #: src/modules/command-menu-item/record/constants/DashboardCommandMenuItemsConfig.tsx
 msgid "Cancel"
 msgstr "キャンセル"
@@ -3852,6 +3857,7 @@ msgstr ""
 #. js-lingui-id: hYgDIe
 #: src/modules/views/view-picker/components/ViewPickerEditButton.tsx
 #: src/modules/views/view-picker/components/ViewPickerCreateButton.tsx
+#: src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx
 msgid "Create"
 msgstr "作成"
 
@@ -5549,6 +5555,7 @@ msgstr "メールアドレスは空にできません"
 
 #. js-lingui-id: UZQ5eW
 #: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
+#: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
 #: src/modules/object-record/record-field/ui/meta-types/input/components/EmailsFieldInput.tsx
 #: src/modules/object-record/record-field/ui/meta-types/display/components/EmailsFieldDisplay.tsx
 msgid "Email copied to clipboard"
@@ -6369,11 +6376,6 @@ msgstr "非プロのメールを除外する"
 msgid "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 msgstr "以下の人物とドメインをメール同期から除外します。内部の会話はインポートされません"
 
-#. js-lingui-id: u73wth
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "excluded"
-msgstr ""
-
 #. js-lingui-id: YzI8cc
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsSelect.tsx
 msgid "Existing Field"
@@ -6504,11 +6506,6 @@ msgstr "エクスポート（{exportedCount}）"
 msgid "Export ({percentageValue}%)"
 msgstr "エクスポート（{percentageValue}%）"
 
-#. js-lingui-id: 5P9szN
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Export ({totalSelected} extra fields)"
-msgstr ""
-
 #. js-lingui-id: 2KAI4N
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useActionRolePermissionFlagConfig.ts
 msgid "Export CSV"
@@ -6569,11 +6566,6 @@ msgstr "バージョンをエクスポート"
 #: src/modules/command-menu-item/record/constants/DefaultRecordCommandMenuItemsConfig.tsx
 msgid "Export view"
 msgstr "ビューをエクスポート"
-
-#. js-lingui-id: i0hGgC
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Export with Related Fields"
-msgstr ""
 
 #. js-lingui-id: +FMXdE
 #: src/modules/command-menu-item/record/constants/WorkflowCommandMenuItemsConfig.tsx
@@ -11351,6 +11343,7 @@ msgstr "電話番号"
 
 #. js-lingui-id: qlqT9z
 #: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
+#: src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts
 #: src/modules/object-record/record-field/ui/meta-types/display/components/PhonesFieldDisplay.tsx
 msgid "Phone number copied to clipboard"
 msgstr "電話番号がクリップボードにコピーされました"
@@ -11583,6 +11576,12 @@ msgstr "プレビュー"
 #: src/modules/activities/files/components/DocumentViewer.tsx
 msgid "Preview Not Available"
 msgstr "プレビューは利用できません"
+
+#. js-lingui-id: sHpdV8
+#. placeholder {1}: data.length
+#: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+msgid "Previewing {PREVIEW_ROW_LIMIT} of {1} rows. All rows will be imported on confirm."
+msgstr ""
 
 #. js-lingui-id: DHhJ7s
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
@@ -15267,11 +15266,6 @@ msgstr ""
 #: src/modules/client-config/components/ClientConfigProvider.tsx
 msgid "Unable to Reach Back-end"
 msgstr "バックエンドに接続できません"
-
-#. js-lingui-id: 0rIkys
-#: src/modules/object-record/record-index/export/components/ExportRelationFieldConfigModal.tsx
-msgid "Uncheck any related fields you don't need in the export."
-msgstr ""
 
 #. js-lingui-id: EUHN7i
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableValueInput.tsx

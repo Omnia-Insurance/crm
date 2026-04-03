@@ -31,7 +31,7 @@ export const RecordTableColumnHeadWithDropdown = ({
     <Dropdown
       onOpen={handleDropdownOpen}
       onClose={handleDropdownClose}
-      dropdownId={recordField.fieldMetadataItemId + '-header'}
+      dropdownId={recordField.id + '-header'}
       clickableComponent={<RecordTableColumnHead recordField={recordField} />}
       dropdownComponents={
         <RecordTableColumnHeadDropdownMenu
