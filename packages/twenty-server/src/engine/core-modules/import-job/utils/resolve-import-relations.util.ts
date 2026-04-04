@@ -347,6 +347,186 @@ async function resolveLookupAssign(
 
 // ─── SMART_UPDATE Resolution ──────────────────────────────────────────
 
+/**
+ * Pre-load phone and email indices for all records of the target object.
+ * This replaces per-row DB queries with O(1) in-memory Map lookups.
+ */
+async function buildLookupIndices(
+  targetRepo: Repository<ObjectLiteral>,
+  targetObjectName: string,
+): Promise<{
+  phoneIndex: Map<string, string>;
+  emailIndex: Map<string, string>;
+}> {
+  const phoneIndex = new Map<string, string>();
+  const emailIndex = new Map<string, string>();
+
+  try {
+    const phoneRecords = await targetRepo
+      .createQueryBuilder(targetObjectName)
+      .select([
+        `"${targetObjectName}"."id"`,
+        `"${targetObjectName}"."phonesPrimaryPhoneNumber"`,
+      ])
+      .where(`"${targetObjectName}"."deletedAt" IS NULL`)
+      .andWhere(
+        `"${targetObjectName}"."phonesPrimaryPhoneNumber" IS NOT NULL`,
+      )
+      .andWhere(`"${targetObjectName}"."phonesPrimaryPhoneNumber" != ''`)
+      .getRawMany();
+
+    for (const r of phoneRecords as Record<string, unknown>[]) {
+      const phone = String(r.phonesPrimaryPhoneNumber).replace(/[^0-9]/g, '');
+
+      if (phone) {
+        phoneIndex.set(phone, r.id as string);
+      }
+    }
+  } catch (error) {
+    console.error(
+      '[buildLookupIndices] Phone index query failed:',
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  try {
+    const emailRecords = await targetRepo
+      .createQueryBuilder(targetObjectName)
+      .select([
+        `"${targetObjectName}"."id"`,
+        `"${targetObjectName}"."emailsPrimaryEmail"`,
+      ])
+      .where(`"${targetObjectName}"."deletedAt" IS NULL`)
+      .andWhere(`"${targetObjectName}"."emailsPrimaryEmail" IS NOT NULL`)
+      .andWhere(`"${targetObjectName}"."emailsPrimaryEmail" != ''`)
+      .getRawMany();
+
+    for (const r of emailRecords as Record<string, unknown>[]) {
+      const email = String(r.emailsPrimaryEmail).toLowerCase();
+
+      if (email) {
+        emailIndex.set(email, r.id as string);
+      }
+    }
+  } catch (error) {
+    console.error(
+      '[buildLookupIndices] Email index query failed:',
+      error instanceof Error ? error.message : error,
+    );
+  }
+
+  return { phoneIndex, emailIndex };
+}
+
+/**
+ * Check unique constraints using pre-loaded indices instead of per-row DB queries.
+ * Returns the conflicting record ID if found, or null.
+ */
+function checkUniqueConstraintsFromIndex(
+  rb: RelationBehavior,
+  csvSubFields: Record<string, unknown>,
+  currentRelated: Record<string, unknown>,
+  currentRelatedId: string,
+  phoneIndex: Map<string, string>,
+): string | null {
+  for (const constraintField of rb.uniqueConstraintFields ?? []) {
+    const csvValue = getCompositeOrScalar(csvSubFields, constraintField);
+    const existingValue = currentRelated[constraintField];
+
+    if (csvValue === undefined || csvValue === null) continue;
+    if (valuesEqual(csvValue, existingValue)) continue;
+
+    // Extract phone number from composite value
+    if (typeof csvValue === 'object' && csvValue !== null) {
+      const obj = csvValue as Record<string, unknown>;
+
+      if ('primaryPhoneNumber' in obj && obj.primaryPhoneNumber) {
+        const normalized = String(obj.primaryPhoneNumber).replace(
+          /[^0-9]/g,
+          '',
+        );
+        const ownerId = phoneIndex.get(normalized);
+
+        if (ownerId && ownerId !== currentRelatedId) {
+          return ownerId;
+        }
+      }
+    } else if (typeof csvValue === 'string' && csvValue.length > 0) {
+      const ownerId = phoneIndex.get(csvValue);
+
+      if (ownerId && ownerId !== currentRelatedId) {
+        return ownerId;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Search for a matching record using pre-loaded indices.
+ * Falls back to a DB query only for name-based search (can't pre-index efficiently).
+ */
+async function searchForRecordFromIndex(
+  matchData: RecordMatchData,
+  phoneIndex: Map<string, string>,
+  emailIndex: Map<string, string>,
+  targetRepo: Repository<ObjectLiteral>,
+  targetObjectName: string,
+): Promise<string | null> {
+  // Search by email (strongest signal)
+  if (matchData.email) {
+    const matchId = emailIndex.get(matchData.email.toLowerCase());
+
+    if (matchId) return matchId;
+  }
+
+  // Search by phone
+  if (matchData.phone) {
+    const normalized = matchData.phone.replace(/[^0-9]/g, '');
+    const matchId = phoneIndex.get(normalized);
+
+    if (matchId) return matchId;
+  }
+
+  // Search by exact name match — requires DB query (rare fallback)
+  if (matchData.firstName && matchData.lastName) {
+    try {
+      const byName = await targetRepo
+        .createQueryBuilder(targetObjectName)
+        .where(
+          `"${targetObjectName}"."nameFirstName" ILIKE :firstName`,
+          { firstName: matchData.firstName },
+        )
+        .andWhere(
+          `"${targetObjectName}"."nameLastName" ILIKE :lastName`,
+          { lastName: matchData.lastName },
+        )
+        .andWhere(`"${targetObjectName}"."deletedAt" IS NULL`)
+        .limit(2)
+        .getMany();
+
+      if (byName.length === 1) {
+        return (byName[0] as Record<string, unknown>).id as string;
+      }
+    } catch (error) {
+      console.error(
+        '[resolveImportRelations] Name search query failed:',
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  return null;
+}
+
+type DeferredReassignUpdate = {
+  parsed: ParsedRow;
+  matchId: string;
+  subFields: Record<string, unknown>;
+  mainId: string;
+};
+
 async function resolveSmartUpdate(
   rb: RelationBehavior,
   parsedRows: ParsedRow[],
@@ -364,7 +544,7 @@ async function resolveSmartUpdate(
 ): Promise<void> {
   const targetRepo = await getRepository(targetObjectName);
 
-  // Load all existing related records
+  // Load all existing related records referenced by the main records
   const relatedIds = [
     ...new Set(
       parsedRows
@@ -384,6 +564,18 @@ async function resolveSmartUpdate(
     relatedIds,
   );
 
+  // Pre-load phone and email indices for O(1) constraint checks and searches.
+  // This replaces thousands of per-row DB queries with 2 bulk queries.
+  const { phoneIndex, emailIndex } = await buildLookupIndices(
+    targetRepo,
+    targetObjectName,
+  );
+
+  // Pass 1: Process all rows using in-memory lookups.
+  // Collect IDs of records we need to fetch for sub-field updates.
+  const recordIdsToFetch = new Set<string>();
+  const deferredUpdates: DeferredReassignUpdate[] = [];
+
   for (const parsed of parsedRows) {
     const subFields = parsed.relationData.get(rb.relationFieldName);
     const csvLabel = parsed.relationLabels.get(rb.relationFieldName);
@@ -399,37 +591,31 @@ async function resolveSmartUpdate(
       ? existingRelated.get(currentRelatedId)
       : undefined;
 
-    // Build match data from CSV
     const csvMatchData = buildMatchDataFromSubFields(
       subFields ?? {},
       csvLabel,
     );
 
     if (currentRelated) {
-      // Compare CSV data against existing related record
       const existingMatchData = extractMatchDataFromRecord(currentRelated);
-      const { same, score } = isSamePerson(existingMatchData, csvMatchData);
+      const { same } = isSamePerson(existingMatchData, csvMatchData);
 
       if (same) {
-        // SAME PERSON — check unique constraints then update
-        const constraintConflict = await checkUniqueConstraints(
+        // SAME PERSON — check unique constraints via pre-loaded index
+        const conflictId = checkUniqueConstraintsFromIndex(
           rb,
           subFields ?? {},
           currentRelated,
           currentRelatedId!,
-          targetRepo,
-          targetObjectName,
+          phoneIndex,
         );
 
-        if (constraintConflict) {
-          // Same person but the changed unique field belongs to another
-          // record → REASSIGN only. The other sub-fields in this row are
-          // stale export data from the original person, not intended edits
-          // to the reassignment target.
+        if (conflictId) {
+          // Constraint conflict → REASSIGN only (no sub-field edits)
           reassignments.push({
             mainRecordId: mainId,
             joinColumnName,
-            newRelatedRecordId: constraintConflict.conflictRecordId,
+            newRelatedRecordId: conflictId,
           });
         } else {
           // No conflicts — update the existing related record
@@ -448,36 +634,30 @@ async function resolveSmartUpdate(
           }
         }
       } else {
-        // DIFFERENT PERSON — search for matching record
-        const match = await searchForRecord(
+        // DIFFERENT PERSON — search via pre-loaded indices
+        const matchId = await searchForRecordFromIndex(
+          csvMatchData,
+          phoneIndex,
+          emailIndex,
           targetRepo,
           targetObjectName,
-          csvMatchData,
         );
 
-        if (match) {
+        if (matchId) {
           reassignments.push({
             mainRecordId: mainId,
             joinColumnName,
-            newRelatedRecordId: match.recordId,
+            newRelatedRecordId: matchId,
           });
 
-          // Apply sub-field edits to the matched record, excluding
-          // unique constraint fields to avoid DB violations
-          const updates = buildSubFieldUpdates(
-            subFields ?? {},
-            match.record,
-            rb.uniqueConstraintFields,
-          );
-
-          if (updates && Object.keys(updates).length > 0) {
-            relatedRecordUpdates.push({
-              recordId: match.recordId,
-              objectNameSingular: targetObjectName,
-              fields: updates,
-              sourceRowIndices: [parsed.rowIndex],
-            });
-          }
+          // Defer sub-field updates — need full record (fetched in pass 2)
+          recordIdsToFetch.add(matchId);
+          deferredUpdates.push({
+            parsed,
+            matchId,
+            subFields: subFields ?? {},
+            mainId,
+          });
         } else if (rb.onNotFound === 'CREATE') {
           const newData = buildNewRecordData(subFields ?? {}, csvLabel);
 
@@ -498,19 +678,25 @@ async function resolveSmartUpdate(
           });
         }
       }
-    } else if (csvMatchData.email ?? csvMatchData.phone ?? csvMatchData.firstName) {
+    } else if (
+      csvMatchData.email ??
+      csvMatchData.phone ??
+      csvMatchData.firstName
+    ) {
       // No current related record — search or create
-      const match = await searchForRecord(
+      const matchId = await searchForRecordFromIndex(
+        csvMatchData,
+        phoneIndex,
+        emailIndex,
         targetRepo,
         targetObjectName,
-        csvMatchData,
       );
 
-      if (match) {
+      if (matchId) {
         reassignments.push({
           mainRecordId: mainId,
           joinColumnName,
-          newRelatedRecordId: match.recordId,
+          newRelatedRecordId: matchId,
         });
       } else if (rb.onNotFound === 'CREATE') {
         const newData = buildNewRecordData(subFields ?? {}, csvLabel);
@@ -522,6 +708,46 @@ async function resolveSmartUpdate(
             mainRecordId: mainId,
             joinColumnName,
           },
+        });
+      }
+    }
+  }
+
+  // Pass 2: Batch-fetch full records for deferred sub-field updates
+  if (deferredUpdates.length > 0) {
+    // Exclude records we already have from existingRelated
+    const idsToFetch = [...recordIdsToFetch].filter(
+      (id) => !existingRelated.has(id),
+    );
+
+    const additionalRecords = await batchLoadRecords(
+      targetRepo,
+      targetObjectName,
+      idsToFetch,
+    );
+
+    // Merge with existing
+    for (const [id, record] of additionalRecords) {
+      existingRelated.set(id, record);
+    }
+
+    for (const deferred of deferredUpdates) {
+      const matchRecord = existingRelated.get(deferred.matchId);
+
+      if (!matchRecord) continue;
+
+      const updates = buildSubFieldUpdates(
+        deferred.subFields,
+        matchRecord,
+        rb.uniqueConstraintFields,
+      );
+
+      if (updates && Object.keys(updates).length > 0) {
+        relatedRecordUpdates.push({
+          recordId: deferred.matchId,
+          objectNameSingular: targetObjectName,
+          fields: updates,
+          sourceRowIndices: [deferred.parsed.rowIndex],
         });
       }
     }
