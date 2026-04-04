@@ -77,6 +77,10 @@ export class GlobalWorkspaceOrmManager {
       ? await this.loadLiteWorkspaceContext(resolvedAuthContext)
       : await this.loadWorkspaceContext(resolvedAuthContext);
 
+    if (options?.eventEmissionPolicy) {
+      context.eventEmissionPolicy = options.eventEmissionPolicy;
+    }
+
     return withWorkspaceContext(context, fn);
   }
 

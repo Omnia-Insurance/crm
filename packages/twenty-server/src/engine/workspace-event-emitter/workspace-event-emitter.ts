@@ -13,6 +13,7 @@ import {
 
 import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import type { FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { type EventOrigin } from 'src/engine/twenty-orm/types/event-emission-policy.type';
 import { type CustomEventName } from 'src/engine/workspace-event-emitter/types/custom-event-name.type';
 import { CustomWorkspaceEventBatch } from 'src/engine/workspace-event-emitter/types/custom-workspace-batch-event.type';
 import { WorkspaceEventBatch } from 'src/engine/workspace-event-emitter/types/workspace-event-batch.type';
@@ -33,6 +34,7 @@ export type DatabaseBatchEventInput<T, A extends keyof ActionEventMap<T>> = {
   events: ActionEventMap<T>[A][];
   objectMetadata: FlatObjectMetadata;
   workspaceId: string;
+  origin?: EventOrigin;
 };
 
 @Injectable()
@@ -52,6 +54,7 @@ export class WorkspaceEventEmitter {
       events,
       objectMetadata,
       workspaceId,
+      origin,
     } = databaseBatchEventInput;
 
     if (!events.length) {
@@ -65,6 +68,7 @@ export class WorkspaceEventEmitter {
       workspaceId,
       objectMetadata,
       events,
+      ...(origin ? { origin } : {}),
     };
 
     this.eventEmitter.emit(eventName, workspaceEventBatch);

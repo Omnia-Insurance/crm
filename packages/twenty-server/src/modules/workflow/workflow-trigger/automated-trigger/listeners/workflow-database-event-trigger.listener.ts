@@ -310,6 +310,12 @@ export class WorkflowDatabaseEventTriggerListener {
   private async shouldIgnoreEvent(
     payload: WorkspaceEventBatch<ObjectRecordEvent>,
   ) {
+    // Skip workflow triggers for import-origin events to prevent
+    // cascading job storms (3k records → 6k+ WorkflowTriggerJobs)
+    if (payload.origin === 'import') {
+      return true;
+    }
+
     const workspaceId = payload.workspaceId;
     const databaseEventName = payload.name;
 

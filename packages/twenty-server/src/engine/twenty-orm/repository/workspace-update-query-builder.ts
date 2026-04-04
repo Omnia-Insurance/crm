@@ -37,6 +37,7 @@ import { computeEventSelectQueryBuilder } from 'src/engine/twenty-orm/utils/comp
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
+import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { validateRLSPredicatesForRecords } from 'src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util';
 import { computeTableName } from 'src/engine/utils/compute-table-name.util';
@@ -246,29 +247,38 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPDATED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
-          authContext: this.authContext,
-        }),
-      );
+      const policy = this.internalContext.eventEmissionPolicy;
+      const origin = policy?.origin;
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPSERTED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
-          authContext: this.authContext,
-        }),
-      );
+      if (shouldEmitEvent(policy, DatabaseEventAction.UPDATED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPDATED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedAfter,
+            recordsBefore: formattedBefore,
+            authContext: this.authContext,
+            origin,
+          }),
+        );
+      }
+
+      if (shouldEmitEvent(policy, DatabaseEventAction.UPSERTED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPSERTED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedAfter,
+            recordsBefore: formattedBefore,
+            authContext: this.authContext,
+            origin,
+          }),
+        );
+      }
 
       const formattedResult = formatResult<T[]>(
         result.raw,
@@ -474,29 +484,38 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPDATED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
-          authContext: this.authContext,
-        }),
-      );
+      const policy2 = this.internalContext.eventEmissionPolicy;
+      const origin2 = policy2?.origin;
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPSERTED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedAfter,
-          recordsBefore: formattedBefore,
-          authContext: this.authContext,
-        }),
-      );
+      if (shouldEmitEvent(policy2, DatabaseEventAction.UPDATED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPDATED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedAfter,
+            recordsBefore: formattedBefore,
+            authContext: this.authContext,
+            origin: origin2,
+          }),
+        );
+      }
+
+      if (shouldEmitEvent(policy2, DatabaseEventAction.UPSERTED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPSERTED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedAfter,
+            recordsBefore: formattedBefore,
+            authContext: this.authContext,
+            origin: origin2,
+          }),
+        );
+      }
 
       const formattedResults = formatResult<T[]>(
         results.flatMap((result) => result.raw),

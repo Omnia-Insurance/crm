@@ -1,5 +1,6 @@
 import { Logger, Scope } from '@nestjs/common';
 
+import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -16,6 +17,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const BATCH_SIZE = 200;
+const INTER_BATCH_DELAY_MS = 2_000;
 
 @Processor({ queueName: MessageQueue.importQueue, scope: Scope.REQUEST })
 export class ImportJobProcessor {
@@ -81,6 +83,10 @@ export class ImportJobProcessor {
 
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
+          // Event emission policy: only emit CREATED (skip duplicate
+          // UPSERTED), and tag events with 'import' origin so downstream
+          // listeners can skip webhook/trigger orchestrator jobs that
+          // would otherwise create 200k+ jobs for large imports.
           // ── Relation Resolution (pre-processing) ──────────────
           if (hasRelationResolution) {
             this.logger.log(
@@ -258,9 +264,23 @@ export class ImportJobProcessor {
               warningCount,
               failureCount,
             });
+
+            // Space out batches so workers can process the event cascade
+            // from each batch before the next wave arrives
+            if (batchIndex < numberOfBatches - 1) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, INTER_BATCH_DELAY_MS),
+              );
+            }
           }
         },
         authContext,
+        {
+          eventEmissionPolicy: {
+            allowedActions: [DatabaseEventAction.CREATED],
+            origin: 'import',
+          },
+        },
       );
 
       // If relation resolution already set the final status, don't overwrite
