@@ -87,6 +87,10 @@ export class ImportJobProcessor {
               `Resolving ${relationBehaviors.length} relation behaviors for ${totalRecords} rows`,
             );
 
+            await this.importJobService.updateProgress(importJobId, {
+              result: { phase: 'Resolving relations...' },
+            });
+
             const { flatObjectMetadataMaps, flatFieldMetadataMaps } =
               await this.workspaceCacheService.getOrRecompute(workspaceId, [
                 'flatObjectMetadataMaps',
@@ -169,6 +173,10 @@ export class ImportJobProcessor {
           }
 
           // ── Batch Upsert ──────────────────────────────────────
+          await this.importJobService.updateProgress(importJobId, {
+            result: { phase: 'Importing records...' },
+          });
+
           const repository =
             await this.globalWorkspaceOrmManager.getRepository(
               workspaceId,

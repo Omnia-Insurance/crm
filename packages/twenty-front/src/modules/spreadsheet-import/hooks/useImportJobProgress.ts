@@ -204,9 +204,16 @@ export const useImportJobPoller = () => {
           }
         }
 
+        // Use phase from server if available (e.g., "Resolving relations...")
+        const phase = job.result?.phase as string | undefined;
+        const label =
+          !isTerminal && phase
+            ? phase
+            : `Importing ${current.objectNameSingular} records`;
+
         upsertJob({
           id: job.id,
-          label: `Importing ${current.objectNameSingular} records`,
+          label,
           status: normalizedStatus,
           totalItems: job.totalRecords,
           processedItems: job.processedRecords,
