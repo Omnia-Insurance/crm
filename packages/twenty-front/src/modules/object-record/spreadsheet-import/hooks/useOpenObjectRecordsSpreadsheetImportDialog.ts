@@ -251,14 +251,25 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
     if (!jobId) throw new Error('Failed to create import job');
 
-    // 2. Send rows in chunks
-    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-      const chunk = rows.slice(i, i + CHUNK_SIZE);
+    // 2. Send rows in parallel chunks (up to 3 concurrent)
+    const CONCURRENT_UPLOADS = 3;
+    const chunks: Record<string, unknown>[][] = [];
 
-      await apolloMetadataClient.mutate({
-        mutation: APPEND_IMPORT_JOB_ROWS,
-        variables: { importJobId: jobId, rows: chunk },
-      });
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      chunks.push(rows.slice(i, i + CHUNK_SIZE));
+    }
+
+    for (let i = 0; i < chunks.length; i += CONCURRENT_UPLOADS) {
+      const batch = chunks.slice(i, i + CONCURRENT_UPLOADS);
+
+      await Promise.all(
+        batch.map((chunk) =>
+          apolloMetadataClient.mutate({
+            mutation: APPEND_IMPORT_JOB_ROWS,
+            variables: { importJobId: jobId, rows: chunk },
+          }),
+        ),
+      );
     }
 
     // 3. Finalize — queues the job for processing
