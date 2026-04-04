@@ -68,6 +68,8 @@ export type NewRelatedRecord = {
 export type RelationResolutionPlan = {
   /** Errors that prevent the import (all-or-nothing) */
   errors: RelationResolutionError[];
+  /** Warnings that don't block import (e.g., conflicting values resolved by last-row-wins) */
+  warnings: RelationResolutionError[];
   /** Updates to apply to existing related records */
   relatedRecordUpdates: RelatedRecordUpdate[];
   /** FK reassignments on main records */
