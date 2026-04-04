@@ -66,6 +66,7 @@ import { computePermissionIntersection } from 'src/engine/twenty-orm/utils/compu
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
+import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { type WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
@@ -117,6 +118,7 @@ export class WorkspaceEntityManager extends EntityManager {
       eventEmitterService: this.eventEmitterService,
       coreDataSource: this.connection.coreDataSource,
       rlsComputationCache,
+      eventEmissionPolicy: context.eventEmissionPolicy,
     };
   }
 
@@ -1306,28 +1308,34 @@ export class WorkspaceEntityManager extends EntityManager {
         (entity) => !beforeUpdateMapById[entity.id],
       );
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPDATED,
-          objectMetadataItem,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: updatedEntities,
-          recordsBefore: updatedEntities.map(
-            (entity) => beforeUpdateMapById[entity.id],
-          ),
-        }),
-      );
+      const emissionPolicy = this.internalContext.eventEmissionPolicy;
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.CREATED,
-          objectMetadataItem,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: createdEntities,
-        }),
-      );
+      if (shouldEmitEvent(emissionPolicy, DatabaseEventAction.UPDATED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPDATED,
+            objectMetadataItem,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: updatedEntities,
+            recordsBefore: updatedEntities.map(
+              (entity) => beforeUpdateMapById[entity.id],
+            ),
+          }),
+        );
+      }
+
+      if (shouldEmitEvent(emissionPolicy, DatabaseEventAction.CREATED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.CREATED,
+            objectMetadataItem,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: createdEntities,
+          }),
+        );
+      }
 
       const permissionCheckApplies =
         permissionOptionsFromArgs?.shouldBypassPermissionChecks !== true &&
@@ -1517,15 +1525,22 @@ export class WorkspaceEntityManager extends EntityManager {
       ? formattedResult
       : [formattedResult];
 
-    this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-      formatTwentyOrmEventToDatabaseBatchEvent({
-        action: DatabaseEventAction.DESTROYED,
-        objectMetadataItem,
-        flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-        workspaceId: this.internalContext.workspaceId,
-        recordsBefore,
-      }),
-    );
+    if (
+      shouldEmitEvent(
+        this.internalContext.eventEmissionPolicy,
+        DatabaseEventAction.DESTROYED,
+      )
+    ) {
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.DESTROYED,
+          objectMetadataItem,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsBefore,
+        }),
+      );
+    }
 
     return isEntityArray ? formattedResult : formattedResult[0];
   }
@@ -1669,16 +1684,23 @@ export class WorkspaceEntityManager extends EntityManager {
       (record) => beforeUpdateMapById[record.id] as unknown as Entity,
     );
 
-    this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-      formatTwentyOrmEventToDatabaseBatchEvent({
-        action: DatabaseEventAction.DELETED,
-        objectMetadataItem,
-        flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-        workspaceId: this.internalContext.workspaceId,
-        recordsAfter,
-        recordsBefore,
-      }),
-    );
+    if (
+      shouldEmitEvent(
+        this.internalContext.eventEmissionPolicy,
+        DatabaseEventAction.DELETED,
+      )
+    ) {
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.DELETED,
+          objectMetadataItem,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter,
+          recordsBefore,
+        }),
+      );
+    }
 
     return isEntityArray ? formattedResult : formattedResult[0];
   }
@@ -1818,16 +1840,23 @@ export class WorkspaceEntityManager extends EntityManager {
       (record) => beforeUpdateMapById[record.id] as unknown as Entity,
     );
 
-    this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-      formatTwentyOrmEventToDatabaseBatchEvent({
-        action: DatabaseEventAction.RESTORED,
-        objectMetadataItem,
-        flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-        workspaceId: this.internalContext.workspaceId,
-        recordsAfter,
-        recordsBefore,
-      }),
-    );
+    if (
+      shouldEmitEvent(
+        this.internalContext.eventEmissionPolicy,
+        DatabaseEventAction.RESTORED,
+      )
+    ) {
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.RESTORED,
+          objectMetadataItem,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter,
+          recordsBefore,
+        }),
+      );
+    }
 
     return isEntityArray ? formattedResult : formattedResult[0];
   }

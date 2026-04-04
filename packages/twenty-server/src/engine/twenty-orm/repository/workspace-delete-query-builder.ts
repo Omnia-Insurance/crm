@@ -29,6 +29,7 @@ import { applyTableAliasOnWhereCondition } from 'src/engine/twenty-orm/utils/app
 import { computeEventSelectQueryBuilder } from 'src/engine/twenty-orm/utils/compute-event-select-query-builder.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
+import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { computeTableName } from 'src/engine/utils/compute-table-name.util';
 
@@ -134,16 +135,23 @@ export class WorkspaceDeleteQueryBuilder<
           : [formattedBefore]
         : [];
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.DESTROYED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsBefore,
-          authContext: this.authContext,
-        }),
-      );
+      if (
+        shouldEmitEvent(
+          this.internalContext.eventEmissionPolicy,
+          DatabaseEventAction.DESTROYED,
+        )
+      ) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.DESTROYED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsBefore,
+            authContext: this.authContext,
+          }),
+        );
+      }
 
       return {
         raw: result.raw,

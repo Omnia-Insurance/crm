@@ -26,6 +26,7 @@ import {
   TwentyORMException,
   TwentyORMExceptionCode,
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { type EventOrigin } from 'src/engine/twenty-orm/types/event-emission-policy.type';
 import { type DatabaseBatchEventInput } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 
 export const formatTwentyOrmEventToDatabaseBatchEvent = <
@@ -38,6 +39,7 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
   authContext,
   recordsAfter,
   recordsBefore,
+  origin,
 }: {
   action: DatabaseEventAction;
   objectMetadataItem: FlatObjectMetadata;
@@ -46,6 +48,7 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
   authContext?: RawAuthContext;
   recordsAfter?: T[];
   recordsBefore?: T[];
+  origin?: EventOrigin;
 }): DatabaseBatchEventInput<T, DatabaseEventAction> | undefined => {
   if (
     objectMetadataItem.universalIdentifier ===
@@ -264,5 +267,6 @@ export const formatTwentyOrmEventToDatabaseBatchEvent = <
     events,
     objectMetadata: objectMetadataItem,
     workspaceId,
+    ...(origin ? { origin } : {}),
   };
 };

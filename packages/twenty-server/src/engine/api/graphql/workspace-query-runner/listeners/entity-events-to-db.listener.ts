@@ -78,24 +78,32 @@ export class EntityEventsToDbListener {
       },
     };
 
+    const isImport = batchEvent.origin === 'import';
+
     const promises = [
       this.objectRecordEventPublisher.publish(batchEvent),
-      this.webhookQueueService.add<WorkspaceEventBatchForWebhook<T>>(
-        CallWebhookJobsJob.name,
-        batchEventForWebhook,
-        {
-          retryLimit: 3,
-        },
-      ),
     ];
 
-    promises.push(
-      this.triggerQueueService.add<WorkspaceEventBatch<T>>(
-        CallDatabaseEventTriggerJobsJob.name,
-        batchEvent,
-        { retryLimit: 3 },
-      ),
-    );
+    // Skip webhook and trigger orchestrator jobs for import-origin events.
+    // These create O(n) jobs per batch that either no-op (no matching
+    // webhooks/triggers) or amplify into cascading work that saturates
+    // Redis and competes with schema cache lookups.
+    if (!isImport) {
+      promises.push(
+        this.webhookQueueService.add<WorkspaceEventBatchForWebhook<T>>(
+          CallWebhookJobsJob.name,
+          batchEventForWebhook,
+          {
+            retryLimit: 3,
+          },
+        ),
+        this.triggerQueueService.add<WorkspaceEventBatch<T>>(
+          CallDatabaseEventTriggerJobsJob.name,
+          batchEvent,
+          { retryLimit: 3 },
+        ),
+      );
+    }
 
     if (isAuditLogBatchEvent) {
       promises.push(

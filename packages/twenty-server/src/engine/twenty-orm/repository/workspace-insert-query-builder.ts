@@ -31,6 +31,7 @@ import { type WorkspaceUpdateQueryBuilder } from 'src/engine/twenty-orm/reposito
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
+import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { validateRLSPredicatesForRecords } from 'src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util';
 
@@ -251,27 +252,36 @@ export class WorkspaceInsertQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.CREATED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedResultForEvent,
-          authContext: this.authContext,
-        }),
-      );
+      const policy = this.internalContext.eventEmissionPolicy;
+      const origin = policy?.origin;
 
-      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-        formatTwentyOrmEventToDatabaseBatchEvent({
-          action: DatabaseEventAction.UPSERTED,
-          objectMetadataItem: objectMetadata,
-          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-          workspaceId: this.internalContext.workspaceId,
-          recordsAfter: formattedResultForEvent,
-          authContext: this.authContext,
-        }),
-      );
+      if (shouldEmitEvent(policy, DatabaseEventAction.CREATED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.CREATED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedResultForEvent,
+            authContext: this.authContext,
+            origin,
+          }),
+        );
+      }
+
+      if (shouldEmitEvent(policy, DatabaseEventAction.UPSERTED)) {
+        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+          formatTwentyOrmEventToDatabaseBatchEvent({
+            action: DatabaseEventAction.UPSERTED,
+            objectMetadataItem: objectMetadata,
+            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+            workspaceId: this.internalContext.workspaceId,
+            recordsAfter: formattedResultForEvent,
+            authContext: this.authContext,
+            origin,
+          }),
+        );
+      }
 
       // TypeORM returns all entity columns for insertions
       const resultWithoutInsertionExtraColumns = !isDefined(result.raw)
