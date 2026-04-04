@@ -11,6 +11,8 @@
 
 import { type ObjectLiteral, type Repository } from 'typeorm';
 
+import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
+
 import { FieldMetadataType } from 'twenty-shared/types';
 
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
@@ -176,7 +178,14 @@ function parseRows(
         if (relationNames.has(relationName)) {
           const existing = relationData.get(relationName) ?? {};
 
-          existing[subFieldPath] = value;
+          // Normalize US state names to 2-letter codes
+          const normalizedValue =
+            subFieldPath.endsWith('.addressState') &&
+            typeof value === 'string'
+              ? normalizeUsState(value)
+              : value;
+
+          existing[subFieldPath] = normalizedValue;
           relationData.set(relationName, existing);
           continue;
         }
@@ -883,7 +892,7 @@ async function searchForRecord(
 
 function detectConflicts(
   updates: RelatedRecordUpdate[],
-  errors: RelationResolutionError[],
+  warnings: RelationResolutionError[],
 ): void {
   // Group by target record
   const grouped = new Map<string, RelatedRecordUpdate[]>();
@@ -899,7 +908,7 @@ function detectConflicts(
   for (const [, groupUpdates] of grouped) {
     if (groupUpdates.length <= 1) continue;
 
-    // Check each field for conflicting values
+    // Check each field for conflicting values — last row wins, log warning
     const fieldValues = new Map<
       string,
       { value: unknown; rows: number[] }
@@ -915,14 +924,17 @@ function detectConflicts(
             rows: [...update.sourceRowIndices],
           });
         } else if (!valuesEqual(existing.value, value)) {
-          errors.push({
+          // Last row wins — update the tracked value
+          existing.value = value;
+          existing.rows.push(...update.sourceRowIndices);
+
+          warnings.push({
             rowIndex: update.sourceRowIndices[0],
             column: fieldName,
             errorType: 'CONFLICT',
-            message: `Conflicting values for ${fieldName} on the same related record`,
+            message: `Conflicting values for ${fieldName} on the same related record (last row wins)`,
             conflictingRows: [
               ...existing.rows,
-              ...update.sourceRowIndices,
             ],
           });
         }
@@ -1061,7 +1073,10 @@ export async function resolveImportRelations(
   }
 
   // Detect conflicts (multiple rows updating same related record differently)
-  detectConflicts(relatedRecordUpdates, errors);
+  // Conflicts are warnings (last-row-wins), not errors
+  const warnings: RelationResolutionError[] = [];
+
+  detectConflicts(relatedRecordUpdates, warnings);
 
   // Build processed rows (direct fields only, with resolved FKs)
   // Precompute join column names for each relation behavior
@@ -1102,6 +1117,7 @@ export async function resolveImportRelations(
 
   return {
     errors,
+    warnings,
     relatedRecordUpdates: deduplicateUpdates(relatedRecordUpdates),
     reassignments,
     newRecords,
