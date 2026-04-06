@@ -634,6 +634,16 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/database/typeorm/core/migrations/common/1773069763255-add-field-metadata-required.ts" \
   "Required fields migration"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1775300000000-dedup-calls-and-add-unique-index.ts" \
+  "Call dedup migration + unique index on convosoCallId"
+
+echo ""
+echo "--- Ingestion Record Processor: Atomic Dedup ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service.ts" \
+  "PG_UNIQUE_VIOLATION" \
+  "Record processor must catch unique_violation for atomic dedup (prevents race-condition duplicates)"
 
 # ==========================================================
 # Modified Upstream Frontend Files
@@ -1156,6 +1166,35 @@ check_file_contains \
   "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
   "expandedRelationFieldId" \
   "Column picker must support relation sub-field expansion"
+
+# ==========================================================
+# Payment Reconciliation Review UI
+# ==========================================================
+
+echo ""
+echo "--- Payment Reconciliation Review UI ---"
+
+check_file_contains \
+  "packages/twenty-shared/src/types/AppPath.ts" \
+  "ReconciliationReview" \
+  "AppPath must include ReconciliationReview route"
+check_file_contains \
+  "packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx" \
+  "ReconciliationReviewPage" \
+  "Router must include ReconciliationReview route"
+check_file_contains \
+  "packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts" \
+  "reconciliation/review" \
+  "Fullscreen hook must include reconciliation review path"
+check_file_exists \
+  "packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx" \
+  "Reconciliation review page component"
+check_file_exists \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx" \
+  "Reconciliation review main component"
+check_file_exists \
+  "packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx" \
+  "Policy conflict card component"
 
 echo ""
 

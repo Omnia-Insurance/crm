@@ -11,6 +11,9 @@ import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeli
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
+// PostgreSQL unique_violation error code
+const PG_UNIQUE_VIOLATION = '23505';
+
 type ProcessingResult = {
   recordsCreated: number;
   recordsUpdated: number;
@@ -73,7 +76,6 @@ export class IngestionRecordProcessorService {
                 relationCache,
               );
 
-            // Check for dedup match
             if (isDefined(pipeline.dedupFieldName)) {
               const dedupValue = getDedupValue(
                 resolvedRecord,
@@ -81,31 +83,21 @@ export class IngestionRecordProcessorService {
               );
 
               if (isDefined(dedupValue)) {
-                const [field, subField] =
-                  pipeline.dedupFieldName.includes('.')
-                    ? pipeline.dedupFieldName.split('.')
-                    : [pipeline.dedupFieldName, null];
+                const saved = await this.saveWithDedup(
+                  repository,
+                  resolvedRecord,
+                  pipeline.dedupFieldName,
+                  dedupValue,
+                  result,
+                );
 
-                const whereClause = isDefined(subField)
-                  ? { [field]: { [subField]: dedupValue } }
-                  : { [field]: dedupValue };
-
-                const existing = await repository.findOne({
-                  where: whereClause,
-                });
-
-                if (isDefined(existing)) {
-                  const existingId = (existing as Record<string, unknown>)
-                    .id as string;
-
-                  await repository.update(existingId, resolvedRecord);
-                  result.recordsUpdated++;
+                if (saved) {
                   continue;
                 }
               }
             }
 
-            // Create new record
+            // No dedup field or no dedup value — create new record
             await repository.save(resolvedRecord);
             result.recordsCreated++;
           } catch (error) {
@@ -128,6 +120,71 @@ export class IngestionRecordProcessorService {
       authContext,
     );
   }
+
+  /**
+   * Atomically insert-or-update a record using the dedup field's unique index.
+   *
+   * Strategy: try INSERT first. If a unique constraint violation fires
+   * (concurrent insert won the race), fall back to UPDATE by dedup field.
+   * This eliminates the TOCTOU race in the old findOne + save pattern.
+   */
+  private async saveWithDedup(
+    repository: Awaited<
+      ReturnType<GlobalWorkspaceOrmManager['getRepository']>
+    >,
+    resolvedRecord: Record<string, unknown>,
+    dedupFieldName: string,
+    dedupValue: unknown,
+    result: ProcessingResult,
+  ): Promise<boolean> {
+    const [field, subField] = dedupFieldName.includes('.')
+      ? dedupFieldName.split('.')
+      : [dedupFieldName, null];
+
+    const whereClause = isDefined(subField)
+      ? { [field]: { [subField]: dedupValue } }
+      : { [field]: dedupValue };
+
+    // Check for existing record first (fast path for updates)
+    const existing = await repository.findOne({ where: whereClause });
+
+    if (isDefined(existing)) {
+      const existingId = (existing as Record<string, unknown>).id as string;
+
+      await repository.update(existingId, resolvedRecord);
+      result.recordsUpdated++;
+
+      return true;
+    }
+
+    // No existing record — try to insert. The unique index on the dedup field
+    // guarantees that only one concurrent insert wins; losers get a
+    // unique_violation which we catch and convert to an update.
+    try {
+      await repository.save(resolvedRecord);
+      result.recordsCreated++;
+
+      return true;
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        // Another concurrent job inserted first — update instead
+        const nowExisting = await repository.findOne({ where: whereClause });
+
+        if (isDefined(nowExisting)) {
+          const existingId = (nowExisting as Record<string, unknown>)
+            .id as string;
+
+          await repository.update(existingId, resolvedRecord);
+          result.recordsUpdated++;
+
+          return true;
+        }
+      }
+
+      // Not a unique violation — let the outer catch handle it
+      throw error;
+    }
+  }
 }
 
 const getDedupValue = (
@@ -139,4 +196,20 @@ const getDedupValue = (
   }
 
   return record[dedupFieldName];
+};
+
+const isUniqueViolation = (error: unknown): boolean => {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return (error as { code: string }).code === PG_UNIQUE_VIOLATION;
+  }
+
+  // TypeORM sometimes wraps the underlying PG error
+  if (error instanceof Error && 'driverError' in error) {
+    const driverError = (error as unknown as { driverError: { code: string } })
+      .driverError;
+
+    return driverError?.code === PG_UNIQUE_VIOLATION;
+  }
+
+  return false;
 };

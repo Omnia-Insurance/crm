@@ -143,7 +143,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - `entities/ingestion-log.entity.ts` — Ingestion run log (status, counts, errors, incoming payload)
 - `services/ingestion-pipeline.service.ts` — CRUD + test execution for pipelines
 - `services/ingestion-pull-scheduler.service.ts` — Cron-based pull scheduling on server startup
-- `services/ingestion-record-processor.service.ts` — Processes ingested rows: maps fields, resolves relations, upserts records
+- `services/ingestion-record-processor.service.ts` — Processes ingested rows: maps fields, resolves relations, upserts records (atomic dedup via unique index + unique_violation catch)
 - `services/ingestion-relation-resolver.service.ts` — Resolves relation fields by lookup during ingestion
 - `services/ingestion-field-mapping.service.ts` — CRUD for field mappings
 - `services/ingestion-log.service.ts` — Log queries and creation
@@ -164,6 +164,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - `utils/extract-value-by-path.util.ts` — Dot-path value extraction from nested objects
 - `database/typeorm/core/migrations/common/1771284860000-add-ingestion-pipeline-entities.ts` — **Migration** creating `ingestionPipeline`, `ingestionFieldMapping`, `ingestionLog` tables
 - `database/typeorm/core/migrations/common/1771400000000-add-ingestion-log-incoming-payload.ts` — **Migration** adding `incomingPayload` column to `ingestionLog`
+- `database/typeorm/core/migrations/common/1775300000000-dedup-calls-and-add-unique-index.ts` — **Migration** deduplicates existing call records by `convosoCallId` and adds a unique partial index
 
 ### `packages/twenty-server/src/modules/lead/`
 
@@ -619,3 +620,37 @@ After every upstream merge:
 15. **Run lint**: `npx nx lint:diff-with-main twenty-front`
 16. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
 17. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
+
+## Payment Reconciliation Review UI
+
+Full-page merge conflict review UI for BOB reconciliation. Per-field Accept Current / Accept Incoming resolution with bulk actions.
+
+| File | What We Changed | Why |
+| --- | --- | --- |
+| `packages/twenty-shared/src/types/AppPath.ts` | Added `ReconciliationReview` path | Route for the review page |
+| `packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx` | Added route for `/reconciliation/review/:runId` | Registers the review page in the router |
+| `packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts` | Added `reconciliation/review/*` to fullscreen paths | Hides sidebar on the review page |
+
+### Custom Frontend (Reconciliation Review)
+
+| File | Purpose |
+| --- | --- |
+| `packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx` | Page component (lazy-loaded) |
+| `packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx` | Main review orchestrator: fetches run + results, manages resolution state |
+| `packages/twenty-front/src/modules/reconciliation/components/ReviewSummaryHeader.tsx` | Stats bar with run summary and Accept All button |
+| `packages/twenty-front/src/modules/reconciliation/components/ReviewSectionGroup.tsx` | Collapsible section groups (Status Updates, Needs Review, etc.) |
+| `packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx` | Per-policy card with field-level Accept Current / Accept Incoming |
+| `packages/twenty-front/src/modules/reconciliation/hooks/useConflictResolution.ts` | Resolution state management hook |
+| `packages/twenty-front/src/modules/reconciliation/utils/serializeFieldDiffs.ts` | Converts fieldDiffs to merge conflict text |
+| `packages/twenty-front/src/modules/reconciliation/utils/groupMatchResults.ts` | Groups results by section |
+| `packages/twenty-front/src/modules/reconciliation/types/reconciliation.types.ts` | TypeScript types |
+
+### Payment Reconciliation App Backend Fixes
+
+| File | What We Changed | Why |
+| --- | --- | --- |
+| `packages/twenty-apps/internal/payment-reconciliation/src/utils/apply-updates.ts` | Changed approval filter from `CONFIRMED` to `CONFIRMED \| AUTO_MATCHED` | Unblocks write-back pipeline (nothing was ever applied) |
+| `packages/twenty-apps/internal/payment-reconciliation/src/utils/matching-engine.ts` | Removed 0.55 multiplier in Tier 6 scoring; externalized thresholds to MatchingConfig | Multi-match scoring was unreachable; thresholds are now configurable |
+| `packages/twenty-apps/internal/payment-reconciliation/src/utils/status-engine.ts` | Added StatusEngineConfig for placed/payment-error thresholds | 30d/10d thresholds now configurable per carrier |
+| `packages/twenty-apps/internal/payment-reconciliation/src/utils/run-matching.ts` | Replaced OMNIA_START_DATE with config; passes StatusEngineConfig; externalized discovery thresholds | All hardcoded values now in CarrierConfig |
+| `packages/twenty-apps/internal/payment-reconciliation/src/logic-functions/recover-stuck-jobs.ts` | Consolidated 3 recovery crons into 1 | Reduces maintenance; single file checks all stuck states |
