@@ -29,6 +29,7 @@ const DISPLAYABLE_SUB_FIELD_TYPES = new Set([
   FieldMetadataType.CURRENCY,
   FieldMetadataType.LINKS,
   FieldMetadataType.UUID,
+  FieldMetadataType.RELATION,
 ]);
 
 export const ViewFieldsHiddenDropdownSection = () => {
