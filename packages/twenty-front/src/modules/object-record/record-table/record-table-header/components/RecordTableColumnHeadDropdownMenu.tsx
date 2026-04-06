@@ -85,7 +85,7 @@ export const RecordTableColumnHeadDropdownMenu = ({
 
     if (!canMoveLeft) return;
 
-    moveTableColumn('left', recordField.fieldMetadataItemId);
+    moveTableColumn('left', recordField.id);
   };
 
   const handleColumnMoveRight = () => {
@@ -93,7 +93,7 @@ export const RecordTableColumnHeadDropdownMenu = ({
 
     if (!canMoveRight) return;
 
-    moveTableColumn('right', recordField.fieldMetadataItemId);
+    moveTableColumn('right', recordField.id);
   };
 
   const handleColumnVisibility = async () => {

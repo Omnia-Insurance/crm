@@ -21,18 +21,17 @@ export const useMoveRecordField = (recordTableId?: string) => {
   const moveRecordField = useCallback(
     async ({
       direction,
-      fieldMetadataItemIdToMove,
+      recordFieldIdToMove,
     }: {
       direction: 'before' | 'after';
-      fieldMetadataItemIdToMove: string;
+      recordFieldIdToMove: string;
     }) => {
       const sortedRecordFields = store
         .get(currentRecordFields)
         .toSorted(sortByProperty('position'));
 
       const indexOfRecordFieldToMove = sortedRecordFields.findIndex(
-        (recordField) =>
-          recordField.fieldMetadataItemId === fieldMetadataItemIdToMove,
+        (recordField) => recordField.id === recordFieldIdToMove,
       );
 
       if (indexOfRecordFieldToMove === -1) {
@@ -60,11 +59,11 @@ export const useMoveRecordField = (recordTableId?: string) => {
         const targetRecordFieldNewPosition = currentRecordField.position;
         const currentRecordFieldNewPosition = targetRecordField.position;
 
-        updateRecordField(targetRecordField.fieldMetadataItemId, {
+        updateRecordField(targetRecordField.id, {
           position: targetRecordFieldNewPosition,
         });
 
-        updateRecordField(currentRecordField.fieldMetadataItemId, {
+        updateRecordField(currentRecordField.id, {
           position: currentRecordFieldNewPosition,
         });
 
