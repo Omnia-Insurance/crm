@@ -9,8 +9,8 @@ import { RecordTableHeaderFirstCell } from '@/object-record/record-table/record-
 import { RecordTableHeaderFirstScrollableCell } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderFirstScrollableCell';
 import { RecordTableHeaderLastEmptyColumn } from '@/object-record/record-table/record-table-header/components/RecordTableHeaderLastEmptyColumn';
 import { useResizeTableHeader } from '@/object-record/record-table/record-table-header/hooks/useResizeTableHeader';
+import { getVisibleFieldWithLowestPosition } from '@/object-record/record-table/record-table-header/utils/getVisibleFieldWithLowestPosition';
 import { styled } from '@linaria/react';
-import { filterOutByProperty } from 'twenty-shared/utils';
 
 const StyledHeaderContainer = styled.div`
   display: flex;
@@ -24,13 +24,18 @@ export const RecordTableHeader = () => {
   const { visibleRecordFields } = useRecordTableContextOrThrow();
   const { labelIdentifierFieldMetadataItem } = useRecordIndexContextOrThrow();
 
+  // Exclude the label identifier AND the lowest-position field (shown by
+  // RecordTableHeaderFirstCell) to avoid duplicate columns when the label
+  // identifier is absent from the view. Then .slice(1) removes the field
+  // rendered by RecordTableHeaderFirstScrollableCell.
+  const firstCellField = getVisibleFieldWithLowestPosition(visibleRecordFields);
+
   const recordFieldsWithoutLabelIdentifierAndFirstOne = visibleRecordFields
-    .filter(
-      filterOutByProperty(
-        'fieldMetadataItemId',
-        labelIdentifierFieldMetadataItem?.id,
-      ),
-    )
+    .filter((rf) => {
+      if (rf.fieldMetadataItemId === labelIdentifierFieldMetadataItem?.id) return false;
+      if (firstCellField && rf.id === firstCellField.id) return false;
+      return true;
+    })
     .slice(1);
 
   useResizeTableHeader();

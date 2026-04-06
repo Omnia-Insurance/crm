@@ -140,6 +140,8 @@ export const ViewFieldsVisibleDropdownSection = () => {
                                   fieldMetadataId:
                                     recordField.fieldMetadataItemId,
                                   isVisible: false,
+                                  subFieldName:
+                                    recordField.subFieldName ?? undefined,
                                 });
                               },
                             },

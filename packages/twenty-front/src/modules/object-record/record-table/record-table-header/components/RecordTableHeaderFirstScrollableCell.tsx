@@ -18,7 +18,8 @@ import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hoo
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { cx } from '@linaria/core';
-import { filterOutByProperty, isDefined } from 'twenty-shared/utils';
+import { isDefined } from 'twenty-shared/utils';
+import { getVisibleFieldWithLowestPosition } from '@/object-record/record-table/record-table-header/utils/getVisibleFieldWithLowestPosition';
 
 export const RecordTableHeaderFirstScrollableCell = () => {
   const { objectMetadataItem, visibleRecordFields } =
@@ -36,11 +37,17 @@ export const RecordTableHeaderFirstScrollableCell = () => {
 
   const { labelIdentifierFieldMetadataItem } = useRecordIndexContextOrThrow();
 
+  // Exclude both the label identifier field AND the field already shown by
+  // RecordTableHeaderFirstCell (lowest-position visible field) to prevent
+  // duplicate columns when the label identifier is absent from the view.
+  const firstCellField = getVisibleFieldWithLowestPosition(visibleRecordFields);
+
   const recordField = visibleRecordFields.filter(
-    filterOutByProperty(
-      'fieldMetadataItemId',
-      labelIdentifierFieldMetadataItem?.id,
-    ),
+    (rf) => {
+      if (rf.fieldMetadataItemId === labelIdentifierFieldMetadataItem?.id) return false;
+      if (firstCellField && rf.id === firstCellField.id) return false;
+      return true;
+    },
   )[0] as RecordField | undefined;
 
   const isRecordTableRowFocusActive = useAtomComponentStateValue(

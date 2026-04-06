@@ -165,6 +165,7 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
           size: viewField.size,
           aggregateOperation: viewField.aggregateOperation,
           viewFieldGroupId: viewField.viewFieldGroupId,
+          subFieldName: viewField.subFieldName ?? null,
           viewId: newViewId,
         })),
       });
