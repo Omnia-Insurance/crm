@@ -17,7 +17,8 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 const BATCH_SIZE = 200;
-const INTER_BATCH_DELAY_MS = 2_000;
+const INTER_BATCH_DELAY_MS = 500;
+const RELATION_UPDATE_BATCH_SIZE = 200;
 
 @Processor({ queueName: MessageQueue.importQueue, scope: Scope.REQUEST })
 export class ImportJobProcessor {
@@ -161,13 +162,40 @@ export class ImportJobProcessor {
               }
             }
 
-            // 2. Update existing related records
-            for (const update of plan.relatedRecordUpdates) {
-              const repo = await getRepository(
-                update.objectNameSingular,
-              );
+            // 2. Update existing related records — batched by object type
+            const updatesByObject = new Map<
+              string,
+              typeof plan.relatedRecordUpdates
+            >();
 
-              await repo.update(update.recordId, update.fields);
+            for (const update of plan.relatedRecordUpdates) {
+              const group =
+                updatesByObject.get(update.objectNameSingular) ?? [];
+
+              group.push(update);
+              updatesByObject.set(update.objectNameSingular, group);
+            }
+
+            for (const [
+              objectName,
+              updates,
+            ] of updatesByObject.entries()) {
+              const repo = await getRepository(objectName);
+
+              for (
+                let i = 0;
+                i < updates.length;
+                i += RELATION_UPDATE_BATCH_SIZE
+              ) {
+                const chunk = updates.slice(
+                  i,
+                  i + RELATION_UPDATE_BATCH_SIZE,
+                );
+
+                await Promise.all(
+                  chunk.map((u) => repo.update(u.recordId, u.fields)),
+                );
+              }
             }
 
             this.logger.log(
