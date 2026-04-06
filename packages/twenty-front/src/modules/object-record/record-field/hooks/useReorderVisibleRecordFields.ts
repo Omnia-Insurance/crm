@@ -41,7 +41,7 @@ export const useReorderVisibleRecordFields = (recordTableId: string) => {
         isDroppedAfterList,
       });
 
-      updateRecordField(recordToMove.fieldMetadataItemId, {
+      updateRecordField(recordToMove.id, {
         position: newPositionOfTargetRecord,
       });
 
