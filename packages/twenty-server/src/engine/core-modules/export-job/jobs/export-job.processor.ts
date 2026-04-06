@@ -31,6 +31,7 @@ import { json2csv } from 'json-2-csv';
 
 const BATCH_SIZE = 500;
 const RELATION_BATCH_SIZE = 200;
+const RELATION_FETCH_CONCURRENCY = 5;
 
 type RelationConfig = {
   relationFieldName: string;
@@ -457,10 +458,19 @@ export class ExportJobProcessor {
           // Resolve direct MANY_TO_ONE relation columns (e.g. carrier)
           // that aren't covered by sub-field relation configs. Replace the
           // raw FK with the related record's label identifier.
+          // Relations are resolved in parallel (concurrency-limited).
           if (allRecords.length > 0) {
             const relationConfigFieldNames = new Set(
               relationConfigs.map((rc) => rc.relationFieldName),
             );
+
+            // Collect all resolvable relation columns (sync, no I/O)
+            const relationCols: {
+              col: ExportColumn;
+              targetObj: FlatObjectMetadata;
+              joinCol: string;
+              relatedIds: string[];
+            }[] = [];
 
             for (const col of columns) {
               if (relationConfigFieldNames.has(col.fieldName)) continue;
@@ -483,9 +493,11 @@ export class ExportJobProcessor {
               const targetObjId =
                 colFieldMeta.relationTargetObjectMetadataId;
               const targetObj = targetObjId
-                ? Object.values(
+                ? (Object.values(
                     flatObjectMetadataMaps.byUniversalIdentifier,
-                  ).find((m) => m?.id === targetObjId)
+                  ).find(
+                    (m) => m?.id === targetObjId,
+                  ) as FlatObjectMetadata | undefined)
                 : undefined;
 
               if (!targetObj) continue;
@@ -507,6 +519,16 @@ export class ExportJobProcessor {
 
               if (relatedIds.length === 0) continue;
 
+              relationCols.push({ col, targetObj, joinCol, relatedIds });
+            }
+
+            // Resolve all relation columns in parallel
+            const resolveRelationCol = async ({
+              col,
+              targetObj,
+              joinCol,
+              relatedIds,
+            }: (typeof relationCols)[number]) => {
               try {
                 const repo =
                   await this.globalWorkspaceOrmManager.getRepository(
@@ -553,6 +575,18 @@ export class ExportJobProcessor {
                   `Failed to resolve ${col.fieldName} relation: ${error}`,
                 );
               }
+            };
+
+            for (
+              let i = 0;
+              i < relationCols.length;
+              i += RELATION_FETCH_CONCURRENCY
+            ) {
+              await Promise.all(
+                relationCols
+                  .slice(i, i + RELATION_FETCH_CONCURRENCY)
+                  .map(resolveRelationCol),
+              );
             }
           }
 
@@ -675,7 +709,7 @@ export class ExportJobProcessor {
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
   ): Promise<Record<string, unknown>[]> {
-    // Build lookup maps per relation
+    // Build lookup maps per relation — fetch all relations in parallel
     const relationLookups = new Map<
       string,
       {
@@ -684,7 +718,7 @@ export class ExportJobProcessor {
       }
     >();
 
-    for (const rc of relationConfigs) {
+    const fetchRelationLookup = async (rc: RelationConfig) => {
       const joinColumnName = `${rc.relationFieldName}Id`;
 
       // Collect unique related IDs
@@ -700,11 +734,11 @@ export class ExportJobProcessor {
       ];
 
       if (relatedIds.length === 0) {
-        relationLookups.set(rc.relationFieldName, {
+        return {
+          fieldName: rc.relationFieldName,
           joinColumnName,
-          lookupMap: new Map(),
-        });
-        continue;
+          lookupMap: new Map<string, Record<string, unknown>>(),
+        };
       }
 
       const lookupMap = new Map<string, Record<string, unknown>>();
@@ -755,7 +789,24 @@ export class ExportJobProcessor {
         );
       }
 
-      relationLookups.set(rc.relationFieldName, { joinColumnName, lookupMap });
+      return { fieldName: rc.relationFieldName, joinColumnName, lookupMap };
+    };
+
+    // Run relation fetches with controlled concurrency
+    for (
+      let i = 0;
+      i < relationConfigs.length;
+      i += RELATION_FETCH_CONCURRENCY
+    ) {
+      const chunk = relationConfigs.slice(i, i + RELATION_FETCH_CONCURRENCY);
+      const results = await Promise.all(chunk.map(fetchRelationLookup));
+
+      for (const result of results) {
+        relationLookups.set(result.fieldName, {
+          joinColumnName: result.joinColumnName,
+          lookupMap: result.lookupMap,
+        });
+      }
     }
 
     // Flatten relation fields onto each record
@@ -928,10 +979,13 @@ export class ExportJobProcessor {
 
     if (nestedRelationGroups.size === 0) return;
 
-    for (const [
-      relationFieldName,
-      { targetObjectName, subPaths, isBareRelation },
-    ] of nestedRelationGroups) {
+    const resolveNestedGroup = async (
+      relationFieldName: string,
+      {
+        targetObjectName,
+        subPaths,
+      }: { targetObjectName: string; subPaths: string[]; isBareRelation: boolean },
+    ) => {
       // Determine if this is a MANY_TO_ONE or ONE_TO_MANY relation
       const fieldMeta = findFieldMetadata(
         rc.targetObjectNameSingular,
@@ -958,8 +1012,6 @@ export class ExportJobProcessor {
         if (isOneToMany) {
           // ONE_TO_MANY (e.g., familyMembers): fetch child records by
           // parent FK and attach as array.
-          // Find the FK column on the child object by looking for the
-          // MANY_TO_ONE field that points back to the parent object.
           const parentObjectMeta = Object.values(
             flatObjectMetadataMaps.byUniversalIdentifier,
           ).find((m) => m?.nameSingular === rc.targetObjectNameSingular);
@@ -985,7 +1037,7 @@ export class ExportJobProcessor {
 
           const parentIds = [...lookupMap.keys()];
 
-          if (parentIds.length === 0) continue;
+          if (parentIds.length === 0) return;
 
           const childRecordsByParent = new Map<
             string,
@@ -1039,7 +1091,7 @@ export class ExportJobProcessor {
             ),
           ];
 
-          if (nestedIds.length === 0) continue;
+          if (nestedIds.length === 0) return;
 
           const nestedLookup = new Map<string, Record<string, unknown>>();
 
@@ -1104,6 +1156,23 @@ export class ExportJobProcessor {
           `Failed to fetch nested ${targetObjectName} records: ${error}`,
         );
       }
+    };
+
+    // Resolve all nested relation groups in parallel
+    const groupEntries = [...nestedRelationGroups.entries()];
+
+    for (
+      let i = 0;
+      i < groupEntries.length;
+      i += RELATION_FETCH_CONCURRENCY
+    ) {
+      const chunk = groupEntries.slice(i, i + RELATION_FETCH_CONCURRENCY);
+
+      await Promise.all(
+        chunk.map(([fieldName, group]) =>
+          resolveNestedGroup(fieldName, group),
+        ),
+      );
     }
   }
 
