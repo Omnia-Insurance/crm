@@ -18,7 +18,6 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 
 const BATCH_SIZE = 200;
 const INTER_BATCH_DELAY_MS = 500;
-const RELATION_UPDATE_BATCH_SIZE = 200;
 
 @Processor({ queueName: MessageQueue.importQueue, scope: Scope.REQUEST })
 export class ImportJobProcessor {
@@ -162,40 +161,13 @@ export class ImportJobProcessor {
               }
             }
 
-            // 2. Update existing related records — batched by object type
-            const updatesByObject = new Map<
-              string,
-              typeof plan.relatedRecordUpdates
-            >();
-
+            // 2. Update existing related records
             for (const update of plan.relatedRecordUpdates) {
-              const group =
-                updatesByObject.get(update.objectNameSingular) ?? [];
+              const repo = await getRepository(
+                update.objectNameSingular,
+              );
 
-              group.push(update);
-              updatesByObject.set(update.objectNameSingular, group);
-            }
-
-            for (const [
-              objectName,
-              updates,
-            ] of updatesByObject.entries()) {
-              const repo = await getRepository(objectName);
-
-              for (
-                let i = 0;
-                i < updates.length;
-                i += RELATION_UPDATE_BATCH_SIZE
-              ) {
-                const chunk = updates.slice(
-                  i,
-                  i + RELATION_UPDATE_BATCH_SIZE,
-                );
-
-                await Promise.all(
-                  chunk.map((u) => repo.update(u.recordId, u.fields)),
-                );
-              }
+              await repo.update(update.recordId, update.fields);
             }
 
             this.logger.log(
