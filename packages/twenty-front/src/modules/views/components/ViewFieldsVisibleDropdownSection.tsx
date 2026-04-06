@@ -1,12 +1,14 @@
 import { type DropResult, type ResponderProvided } from '@hello-pangea/dnd';
 
 import { useGetFieldMetadataItemByIdOrThrow } from '@/object-metadata/hooks/useGetFieldMetadataItemById';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
 import { useObjectOptionsForBoard } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsForBoard';
 import { useProcessOptionDropdownDragEnd } from '@/object-record/object-options-dropdown/hooks/useProcessOptionDropdownDragEnd';
 import { ObjectOptionsDropdownContext } from '@/object-record/object-options-dropdown/states/contexts/ObjectOptionsDropdownContext';
 import { useChangeRecordFieldVisibility } from '@/object-record/record-field/hooks/useChangeRecordFieldVisibility';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
+import { getFieldLabelWithSubField } from '@/side-panel/pages/page-layout/utils/getFieldLabelWithSubField';
 import { DraggableItem } from '@/ui/layout/draggable-list/components/DraggableItem';
 import { DraggableList } from '@/ui/layout/draggable-list/components/DraggableList';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
@@ -56,6 +58,7 @@ export const ViewFieldsVisibleDropdownSection = () => {
   };
 
   const { getIcon } = useIcons();
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const fieldMetadataItemLabelIdentifier =
     getLabelIdentifierFieldMetadataItem(objectMetadataItem);
@@ -108,16 +111,26 @@ export const ViewFieldsVisibleDropdownSection = () => {
                     recordField.fieldMetadataItemId,
                   );
 
+                  const draggableKey = recordField.subFieldName
+                    ? `${recordField.fieldMetadataItemId}-${recordField.subFieldName}`
+                    : recordField.fieldMetadataItemId;
+
+                  const fieldLabel = getFieldLabelWithSubField({
+                    field: fieldMetadataItem,
+                    subFieldName: recordField.subFieldName ?? undefined,
+                    objectMetadataItems,
+                  });
+
                   return (
                     <DraggableItem
-                      key={recordField.fieldMetadataItemId}
-                      draggableId={recordField.fieldMetadataItemId}
+                      key={draggableKey}
+                      draggableId={draggableKey}
                       index={fieldIndex + 1}
                       isInsideScrollableContainer
                       containerOffsetY={dropdownYPosition}
                       itemComponent={
                         <MenuItemDraggable
-                          key={recordField.fieldMetadataItemId}
+                          key={draggableKey}
                           LeftIcon={getIcon(fieldMetadataItem.icon)}
                           iconButtons={[
                             {
@@ -131,7 +144,7 @@ export const ViewFieldsVisibleDropdownSection = () => {
                               },
                             },
                           ]}
-                          text={fieldMetadataItem.label}
+                          text={fieldLabel}
                           gripMode="always"
                         />
                       }
