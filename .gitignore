@@ -56,3 +56,4 @@ plans
 
 .nx/polygraph
 .playwright-cli/
+backfill-progress.json
