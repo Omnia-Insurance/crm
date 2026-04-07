@@ -1,6 +1,7 @@
 /**/**/.env
 .DS_Store
 /.idea
+.claude/settings.json
 **/**/node_modules/
 .cache
 
@@ -54,3 +55,4 @@ TRANSLATION_QA_REPORT.md
 plans
 
 .nx/polygraph
+.playwright-cli/

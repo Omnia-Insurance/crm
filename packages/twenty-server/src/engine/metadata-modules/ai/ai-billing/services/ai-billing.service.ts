@@ -7,6 +7,7 @@ import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-op
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
 import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { type UsageEvent } from 'src/engine/core-modules/usage/types/usage-event.type';
+import { NATIVE_WEB_SEARCH_COST_PER_CALL_DOLLARS } from 'src/engine/metadata-modules/ai/ai-billing/constants/native-web-search-cost-per-call-dollars';
 import { computeCostBreakdown } from 'src/engine/metadata-modules/ai/ai-billing/utils/compute-cost-breakdown.util';
 import { convertDollarsToBillingCredits } from 'src/engine/metadata-modules/ai/ai-billing/utils/convert-dollars-to-billing-credits.util';
 import { type ModelId } from 'src/engine/metadata-modules/ai/ai-models/types/model-id.type';
@@ -55,6 +56,7 @@ export class AiBillingService {
     modelId: ModelId,
     billingInput: BillingUsageInput,
     workspaceId: string,
+    operationType: UsageOperationType,
     agentId?: string | null,
     userWorkspaceId?: string | null,
   ): void {
@@ -73,8 +75,44 @@ export class AiBillingService {
       creditsUsedMicro,
       totalTokens,
       modelId,
+      operationType,
       agentId,
       userWorkspaceId,
+    );
+  }
+
+  billNativeWebSearchUsage(
+    nativeWebSearchCallCount: number,
+    workspaceId: string,
+    userWorkspaceId?: string | null,
+  ): void {
+    if (nativeWebSearchCallCount <= 0) {
+      return;
+    }
+
+    const costInDollars =
+      nativeWebSearchCallCount * NATIVE_WEB_SEARCH_COST_PER_CALL_DOLLARS;
+    const creditsUsedMicro = Math.round(
+      convertDollarsToBillingCredits(costInDollars),
+    );
+
+    this.logger.log(
+      `Native web search billing: ${nativeWebSearchCallCount} calls, $${costInDollars.toFixed(4)}`,
+    );
+
+    this.workspaceEventEmitter.emitCustomBatchEvent<UsageEvent>(
+      USAGE_RECORDED,
+      [
+        {
+          resourceType: UsageResourceType.AI,
+          operationType: UsageOperationType.WEB_SEARCH,
+          creditsUsedMicro,
+          quantity: nativeWebSearchCallCount,
+          unit: UsageUnit.INVOCATION,
+          userWorkspaceId: userWorkspaceId || null,
+        },
+      ],
+      workspaceId,
     );
   }
 
@@ -83,6 +121,7 @@ export class AiBillingService {
     creditsUsedMicro: number,
     totalTokens: number,
     modelId: ModelId,
+    operationType: UsageOperationType,
     agentId?: string | null,
     userWorkspaceId?: string | null,
   ): void {
@@ -91,7 +130,7 @@ export class AiBillingService {
       [
         {
           resourceType: UsageResourceType.AI,
-          operationType: UsageOperationType.AI_TOKEN,
+          operationType,
           creditsUsedMicro,
           quantity: totalTokens,
           unit: UsageUnit.TOKEN,

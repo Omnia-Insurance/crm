@@ -14,5 +14,5 @@ export enum FileFolder {
   Dependencies = 'dependencies',
   Workflow = 'workflow',
   AppTarball = 'app-tarball',
-  Export = 'export',
+  GeneratedSdkClient = 'generated-sdk-client',
 }

@@ -151,9 +151,27 @@ export const validateOperationIsPermittedOrThrow = ({
         selectedColumns,
         columnNameToFieldMetadataIdMap,
       });
-      // Skip field-level edit checks on INSERT — pre-query hooks may set
-      // fields (e.g. agentId) that the user cannot manually edit. RLS at
-      // the database level enforces row-level constraints.
+
+      if (updatedColumns.length > 0) {
+        const rlsFieldMetadataIds = new Set(
+          permissionsForEntity.rowLevelPermissionPredicates.map(
+            (predicate) => predicate.fieldMetadataId,
+          ),
+        );
+
+        const updatedColumnsWithoutRlsFields = updatedColumns.filter(
+          (column) =>
+            !rlsFieldMetadataIds.has(columnNameToFieldMetadataIdMap[column]),
+        );
+
+        if (updatedColumnsWithoutRlsFields.length > 0) {
+          validateUpdateFieldPermissionOrThrow({
+            restrictedFields: permissionsForEntity.restrictedFields,
+            updatedColumns: updatedColumnsWithoutRlsFields,
+            columnNameToFieldMetadataIdMap,
+          });
+        }
+      }
       break;
     case 'update':
       if (!permissionsForEntity?.canUpdateObjectRecords) {

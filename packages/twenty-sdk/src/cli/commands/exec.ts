@@ -7,12 +7,14 @@ import { isDefined } from 'twenty-shared/utils';
 export class LogicFunctionExecuteCommand {
   async execute({
     appPath = CURRENT_EXECUTION_DIRECTORY,
+    preInstall = false,
     postInstall = false,
     functionUniversalIdentifier,
     functionName,
     payload = '{}',
   }: {
     appPath?: string;
+    preInstall?: boolean;
     postInstall?: boolean;
     functionUniversalIdentifier?: string;
     functionName?: string;
@@ -28,19 +30,22 @@ export class LogicFunctionExecuteCommand {
       process.exit(1);
     }
 
-    const identifier = postInstall
-      ? 'post install'
-      : (functionUniversalIdentifier ?? functionName);
+    const identifier = preInstall
+      ? 'pre install'
+      : postInstall
+        ? 'post install'
+        : (functionUniversalIdentifier ?? functionName);
 
     console.log(chalk.blue(`🚀 Executing function "${identifier}"...`));
-    console.log(chalk.gray(`   Payload: ${JSON.stringify(parsedPayload)}`));
-    console.log('');
+    console.log(chalk.gray(`   Payload: ${JSON.stringify(parsedPayload)}\n`));
 
-    const executeOptions = postInstall
-      ? { appPath, postInstall: true as const, payload: parsedPayload }
-      : functionUniversalIdentifier
-        ? { appPath, functionUniversalIdentifier, payload: parsedPayload }
-        : { appPath, functionName: functionName!, payload: parsedPayload };
+    const executeOptions = preInstall
+      ? { appPath, preInstall: true as const, payload: parsedPayload }
+      : postInstall
+        ? { appPath, postInstall: true as const, payload: parsedPayload }
+        : functionUniversalIdentifier
+          ? { appPath, functionUniversalIdentifier, payload: parsedPayload }
+          : { appPath, functionName: functionName!, payload: parsedPayload };
 
     const result = await functionExecute(executeOptions);
 
@@ -58,8 +63,7 @@ export class LogicFunctionExecuteCommand {
           break;
         }
         case FUNCTION_ERROR_CODES.FUNCTION_NOT_FOUND: {
-          console.error(chalk.red(result.error.message));
-          console.log('');
+          console.error(chalk.red(result.error.message), '\n');
 
           const availableFunctions = (result.error.details
             ?.availableFunctions ?? []) as Array<{
@@ -106,30 +110,26 @@ export class LogicFunctionExecuteCommand {
       `${chalk.bold('Status:')} ${statusColor(executionResult.status)}`,
     );
 
-    console.log(`${chalk.bold('Duration:')} ${executionResult.duration}ms`);
+    console.log(`${chalk.bold('Duration:')} ${executionResult.duration}ms\n`);
 
     if (isDefined(executionResult.data)) {
-      console.log('');
       console.log(chalk.bold('Data:'));
       console.log(chalk.white(JSON.stringify(executionResult.data, null, 2)));
     }
 
     if (executionResult.error) {
-      console.log('');
       console.log(chalk.bold.red('Error:'));
       console.log(chalk.red(`  Type: ${executionResult.error.errorType}`));
       console.log(
-        chalk.red(`  Message: ${executionResult.error.errorMessage}`),
+        chalk.red(`  Message: ${executionResult.error.errorMessage}\n`),
       );
       if (executionResult.error.stackTrace) {
-        console.log('');
         console.log(chalk.gray('Stack trace:'));
         console.log(chalk.gray(executionResult.error.stackTrace));
       }
     }
 
     if (executionResult.logs) {
-      console.log('');
       console.log(chalk.bold('Logs:'));
       console.log(chalk.gray(executionResult.logs));
     }

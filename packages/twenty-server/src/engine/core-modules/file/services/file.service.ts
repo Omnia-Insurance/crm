@@ -3,21 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { type Readable } from 'stream';
 
-import { isNonEmptyString } from '@sniptt/guards';
 import { FileFolder } from 'twenty-shared/types';
-import {
-  buildSignedPath,
-  extractFolderPathFilenameAndTypeOrThrow,
-} from 'twenty-shared/utils';
 import { Like, Repository } from 'typeorm';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
-import {
-  type FileTokenJwtPayloadLegacy,
-  JwtTokenTypeEnum,
-} from 'src/engine/core-modules/auth/types/auth-context.type';
 import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
+import { type FileResponse } from 'src/engine/core-modules/file/types/file-response.type';
+import { getContentDisposition } from 'src/engine/core-modules/file/utils/get-content-disposition.utils';
 import { removeFileFolderFromFileEntityPath } from 'src/engine/core-modules/file/utils/remove-file-folder-from-file-entity-path.utils';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -111,6 +104,52 @@ export class FileService {
     };
   }
 
+  async getFileResponseById(params: {
+    fileId: string;
+    workspaceId: string;
+    fileFolder: FileFolder;
+  }): Promise<FileResponse> {
+    const file = await this.fileRepository.findOneOrFail({
+      where: {
+        id: params.fileId,
+        workspaceId: params.workspaceId,
+        path: Like(`${params.fileFolder}/%`),
+      },
+    });
+
+    const application = await this.applicationRepository.findOneOrFail({
+      where: {
+        id: file.applicationId,
+        workspaceId: params.workspaceId,
+      },
+    });
+
+    const mimeType = file.mimeType ?? 'application/octet-stream';
+    const resourceIdentifier = {
+      resourcePath: removeFileFolderFromFileEntityPath(file.path),
+      fileFolder: params.fileFolder,
+      applicationUniversalIdentifier: application.universalIdentifier,
+      workspaceId: params.workspaceId,
+    };
+
+    const presignedUrl = await this.fileStorageService.getPresignedUrl({
+      ...resourceIdentifier,
+      expiresInSeconds: this.twentyConfigService.get(
+        'STORAGE_S3_PRESIGNED_URL_EXPIRES_IN',
+      ),
+      responseContentType: mimeType,
+      responseContentDisposition: getContentDisposition(mimeType),
+    });
+
+    if (presignedUrl) {
+      return { type: 'redirect', presignedUrl };
+    }
+
+    const stream = await this.fileStorageService.readFile(resourceIdentifier);
+
+    return { type: 'stream', stream, mimeType };
+  }
+
   async getFileContentById({
     fileId,
     workspaceId,
@@ -150,44 +189,7 @@ export class FileService {
     };
   }
 
-  signFileUrl({ url, workspaceId }: { url: string; workspaceId: string }) {
-    if (!isNonEmptyString(url)) {
-      return url;
-    }
-
-    return buildSignedPath({
-      path: url,
-      token: this.encodeFileToken({
-        filename: extractFolderPathFilenameAndTypeOrThrow(url).filename,
-        workspaceId,
-      }),
-    });
-  }
-
-  encodeFileToken(
-    payloadToEncode: Omit<FileTokenJwtPayloadLegacy, 'type' | 'sub'>,
-  ) {
-    const fileTokenExpiresIn = this.twentyConfigService.get(
-      'FILE_TOKEN_EXPIRES_IN',
-    );
-
-    const payload: FileTokenJwtPayloadLegacy = {
-      ...payloadToEncode,
-      sub: payloadToEncode.workspaceId,
-      type: JwtTokenTypeEnum.FILE,
-    };
-
-    const secret = this.jwtWrapperService.generateAppSecret(
-      payload.type,
-      payloadToEncode.workspaceId,
-    );
-
-    return this.jwtWrapperService.sign(payload, {
-      secret,
-      expiresIn: fileTokenExpiresIn,
-    });
-  }
-
+  /** @deprecated Use FileStorageService.deleteByFileId instead */
   async deleteFile({
     folderPath,
     filename,
@@ -205,6 +207,7 @@ export class FileService {
     });
   }
 
+  /** @deprecated */
   async deleteWorkspaceFolder(workspaceId: string) {
     const workspaceFolderPath = `workspace-${workspaceId}`;
 

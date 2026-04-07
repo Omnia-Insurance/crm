@@ -1,6 +1,5 @@
 import { styled } from '@linaria/react';
 import { EditorContent } from '@tiptap/react';
-import { LightButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { AIChatEmptyState } from '@/ai/components/AIChatEmptyState';
@@ -12,10 +11,13 @@ import { AIChatEditorFocusEffect } from '@/ai/components/internal/AIChatEditorFo
 import { AIChatSkeletonLoader } from '@/ai/components/internal/AIChatSkeletonLoader';
 import { SendMessageButton } from '@/ai/components/internal/SendMessageButton';
 import { useAIChatEditor } from '@/ai/hooks/useAIChatEditor';
-import { useAiModelLabel } from '@/ai/hooks/useAiModelOptions';
-import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useAiModelOptions } from '@/ai/hooks/useAiModelOptions';
+import { useAgentChatModelId } from '@/ai/hooks/useAgentChatModelId';
+import { agentChatUserSelectedModelState } from '@/ai/states/agentChatUserSelectedModelState';
+import { Select } from '@/ui/input/components/Select';
 import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { type SelectOption } from 'twenty-ui/input';
 
 const StyledInputArea = styled.div<{ isMobile: boolean }>`
   align-items: flex-end;
@@ -102,21 +104,24 @@ const StyledRightButtonsContainer = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledReadOnlyModelButtonContainer = styled.div`
-  > * {
-    cursor: default;
-
-    &:hover,
-    &:active {
-      background: transparent;
-    }
-  }
-`;
-
 export const AIChatEditorSection = () => {
   const isMobile = useIsMobile();
-  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
-  const smartModelLabel = useAiModelLabel(currentWorkspace?.smartModel, false);
+  const { options, pinnedOption } = useAiModelOptions({
+    variant: 'pinned-default',
+  });
+
+  const smartModelOptions: SelectOption<string | null>[] = options;
+  const defaultPinnedOption: SelectOption<string | null> | undefined =
+    pinnedOption
+      ? {
+          ...pinnedOption,
+          value: null,
+        }
+      : undefined;
+  const setAgentChatUserSelectedModel = useSetAtomState(
+    agentChatUserSelectedModelState,
+  );
+  const { selectedModelId } = useAgentChatModelId();
 
   const { editor, handleSendAndClear } = useAIChatEditor();
 
@@ -139,9 +144,17 @@ export const AIChatEditorSection = () => {
               <AIChatContextUsageButton />
             </StyledLeftButtonsContainer>
             <StyledRightButtonsContainer>
-              <StyledReadOnlyModelButtonContainer>
-                <LightButton accent="tertiary" title={smartModelLabel} />
-              </StyledReadOnlyModelButtonContainer>
+              <Select
+                dropdownId="ai-chat-smart-model-select"
+                value={selectedModelId}
+                onChange={setAgentChatUserSelectedModel}
+                options={smartModelOptions}
+                pinnedOption={defaultPinnedOption}
+                selectSizeVariant="small"
+                showContextualTextInControl={false}
+                withSearchInput
+                dropdownOffset={{ x: 0, y: 8 }}
+              />
               <SendMessageButton onSend={handleSendAndClear} />
             </StyledRightButtonsContainer>
           </StyledButtonsContainer>

@@ -4,6 +4,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { DataSource, Repository } from 'typeorm';
 
+import { MessageChannelSyncStage } from 'twenty-shared/types';
 import { SentryCronMonitor } from 'src/engine/core-modules/cron/sentry-cron-monitor.decorator';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -16,8 +17,6 @@ import {
   DataSourceException,
   DataSourceExceptionCode,
 } from 'src/engine/metadata-modules/data-source/data-source.exception';
-import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
-import { MessageChannelSyncStage } from 'src/modules/messaging/common/standard-objects/message-channel.workspace-entity';
 import {
   MessagingMessagesImportJob,
   type MessagingMessagesImportJobData,
@@ -51,13 +50,11 @@ export class MessagingMessagesImportCronJob {
 
     for (const activeWorkspace of activeWorkspaces) {
       try {
-        const schemaName = getWorkspaceSchemaName(activeWorkspace.id);
-
         const now = new Date().toISOString();
 
         const [messageChannels] = await this.coreDataSource.query(
-          `UPDATE ${schemaName}."messageChannel" SET "syncStage" = '${MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED}', "syncStageStartedAt" = COALESCE("syncStageStartedAt", '${now}')
-          WHERE "isSyncEnabled" = true AND "syncStage" = '${MessageChannelSyncStage.MESSAGES_IMPORT_PENDING}' RETURNING *`,
+          `UPDATE core."messageChannel" SET "syncStage" = '${MessageChannelSyncStage.MESSAGES_IMPORT_SCHEDULED}', "syncStageStartedAt" = COALESCE("syncStageStartedAt", '${now}')
+           WHERE "workspaceId" = '${activeWorkspace.id}' AND "isSyncEnabled" = true AND "syncStage" = '${MessageChannelSyncStage.MESSAGES_IMPORT_PENDING}' RETURNING *`,
         );
 
         for (const messageChannel of messageChannels) {
@@ -70,9 +67,6 @@ export class MessagingMessagesImportCronJob {
           );
         }
       } catch (error) {
-        // We had issues with the workspace schema not being found, due
-        // to users deleting their workspaces in the middle of the cron job
-        // We only throw an error when the workspace is found & schema not found
         if (
           error.code === '42P01' &&
           error.message.includes('messageChannel" does not exist')

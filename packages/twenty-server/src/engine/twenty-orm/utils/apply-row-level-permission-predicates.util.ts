@@ -1,10 +1,6 @@
 /* @license Enterprise */
 
 import {
-  FeatureFlagKey,
-  RowLevelPermissionPredicateScope,
-} from 'twenty-shared/types';
-import {
   Brackets,
   NotBrackets,
   type ObjectLiteral,
@@ -20,7 +16,6 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/workspace-select-query-builder';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
-import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   queryBuilder: WorkspaceSelectQueryBuilder<T>;
@@ -30,23 +25,13 @@ type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   featureFlagMap: FeatureFlagMap;
 };
 
-export const applyRowLevelPermissionPredicates = async <
-  T extends ObjectLiteral,
->({
+export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
   queryBuilder,
   objectMetadata,
   internalContext,
   authContext,
-  featureFlagMap,
-}: ApplyRowLevelPermissionPredicatesArgs<T>): Promise<void> => {
-  if (
-    featureFlagMap[
-      FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-    ] !== true
-  ) {
-    return;
-  }
-
+  featureFlagMap: _featureFlagMap,
+}: ApplyRowLevelPermissionPredicatesArgs<T>): void => {
   const userWorkspaceId = isUserAuthContext(authContext)
     ? authContext.userWorkspaceId
     : undefined;
@@ -54,30 +39,17 @@ export const applyRowLevelPermissionPredicates = async <
     ? internalContext.userWorkspaceRoleMap[userWorkspaceId]
     : undefined;
 
-  const recordFilter = await buildRowLevelPermissionRecordFilter({
+  const recordFilter = buildRowLevelPermissionRecordFilter({
     flatRowLevelPermissionPredicateMaps:
       internalContext.flatRowLevelPermissionPredicateMaps,
     flatRowLevelPermissionPredicateGroupMaps:
       internalContext.flatRowLevelPermissionPredicateGroupMaps,
     flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
-    targetScope:
-      queryBuilder.expressionMap.queryType === 'update' ||
-      queryBuilder.expressionMap.queryType === 'soft-delete' ||
-      queryBuilder.expressionMap.queryType === 'delete' ||
-      queryBuilder.expressionMap.queryType === 'restore'
-        ? RowLevelPermissionPredicateScope.WRITE
-        : RowLevelPermissionPredicateScope.READ,
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
       : undefined,
-    flatObjectMetadataMaps: internalContext.flatObjectMetadataMaps,
-    objectIdByNameSingular: internalContext.objectIdByNameSingular,
-    workspaceDataSource: internalContext.coreDataSource,
-    workspaceSchemaName: getWorkspaceSchemaName(internalContext.workspaceId),
-    workspaceId: internalContext.workspaceId,
-    rlsComputationCache: internalContext.rlsComputationCache,
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {
@@ -87,8 +59,7 @@ export const applyRowLevelPermissionPredicates = async <
   const isUpdateOrDeleteQuery =
     queryBuilder.expressionMap.queryType === 'update' ||
     queryBuilder.expressionMap.queryType === 'soft-delete' ||
-    queryBuilder.expressionMap.queryType === 'delete' ||
-    queryBuilder.expressionMap.queryType === 'restore';
+    queryBuilder.expressionMap.queryType === 'delete';
 
   applyObjectRecordFilterToQueryBuilder({
     queryBuilder,
@@ -97,7 +68,6 @@ export const applyRowLevelPermissionPredicates = async <
     fieldParser: new GraphqlQueryFilterFieldParser(
       objectMetadata,
       internalContext.flatFieldMetadataMaps,
-      internalContext.flatObjectMetadataMaps,
     ),
     useDirectTableReference: isUpdateOrDeleteQuery,
   });

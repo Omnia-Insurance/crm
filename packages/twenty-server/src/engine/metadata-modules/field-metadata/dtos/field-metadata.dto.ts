@@ -153,6 +153,7 @@ export class FieldMetadataDTO<T extends FieldMetadataType = FieldMetadataType> {
   @HideField()
   workspaceId: string;
 
+  @FilterableField(() => UUIDScalarType)
   objectMetadataId: string;
 
   @IsBoolean()

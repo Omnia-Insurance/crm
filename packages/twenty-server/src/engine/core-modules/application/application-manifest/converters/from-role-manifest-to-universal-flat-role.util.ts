@@ -33,6 +33,7 @@ export const fromRoleManifestToUniversalFlatRole = ({
     editWindowMinutes: null,
     roleTargetUniversalIdentifiers: [],
     objectPermissionUniversalIdentifiers: [],
+    fieldPermissionUniversalIdentifiers: [],
     permissionFlagUniversalIdentifiers: [],
     rowLevelPermissionPredicateUniversalIdentifiers: [],
     rowLevelPermissionPredicateGroupUniversalIdentifiers: [],

@@ -108,15 +108,19 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
     isPageLayoutInEditMode &&
     (!isRecordPageLayout ||
       (isRecordPageLayout && isRecordPageGlobalEditionEnabled) ||
-      widget.type === WidgetType.FIELDS);
+      widget.type === WidgetType.FIELDS ||
+      widget.type === WidgetType.FIELD);
 
   // TODO: when we have more widgets without headers, we should use a more generic approach to hide the header
   // each widget type could have metadata (e.g., hasHeader: boolean or headerMode: 'always' | 'editOnly' | 'never')
-  const isRichTextWidget = widget.type === WidgetType.STANDALONE_RICH_TEXT;
-  const hideRichTextHeader = isRichTextWidget && !isPageLayoutInEditMode;
+  const isHeaderHiddenInViewMode =
+    widget.type === WidgetType.STANDALONE_RICH_TEXT ||
+    widget.type === WidgetType.EMAIL_THREAD;
+  const hideHeaderInViewMode =
+    isHeaderHiddenInViewMode && !isPageLayoutInEditMode;
 
   const showHeader =
-    layoutMode !== PageLayoutTabLayoutMode.CANVAS && !hideRichTextHeader;
+    layoutMode !== PageLayoutTabLayoutMode.CANVAS && !hideHeaderInViewMode;
 
   const handleClick = () => {
     handleEditWidget({
@@ -207,6 +211,7 @@ export const WidgetRenderer = ({ widget }: WidgetRendererProps) => {
         variant={variant}
         hasHeader={showHeader}
         isEditable={isWidgetEditable}
+        hasInteractiveContent={widget.type === WidgetType.RECORD_TABLE}
       >
         {hasAccess ? (
           <ErrorBoundary

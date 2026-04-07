@@ -1,4 +1,4 @@
-import { FeatureFlagKey, type ObjectsPermissions } from 'twenty-shared/types';
+import { type ObjectsPermissions } from 'twenty-shared/types';
 import {
   type EntityTarget,
   type ObjectLiteral,
@@ -74,7 +74,7 @@ export class WorkspaceSelectQueryBuilder<
   // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   override async execute(): Promise<any> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -102,9 +102,15 @@ export class WorkspaceSelectQueryBuilder<
     }
   }
 
-  override async getMany(): Promise<T[]> {
+  override async getMany(options?: { noFormatting?: boolean }): Promise<T[]> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
+
+      const result = await super.getMany();
+
+      if (options?.noFormatting === true) {
+        return result;
+      }
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -112,8 +118,6 @@ export class WorkspaceSelectQueryBuilder<
         mainAliasTarget,
         this.internalContext,
       );
-
-      const result = await super.getMany();
 
       const formattedResult = formatResult<T[]>(
         result,
@@ -131,7 +135,7 @@ export class WorkspaceSelectQueryBuilder<
   // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   override async getRawOne<U = any>(): Promise<U | undefined> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       return super.getRawOne();
     } catch (error) {
@@ -142,7 +146,7 @@ export class WorkspaceSelectQueryBuilder<
   // oxlint-disable-next-line @typescripttypescript/no-explicit-any
   override async getRawMany<U = any>(): Promise<U[]> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       return super.getRawMany();
     } catch (error) {
@@ -150,9 +154,19 @@ export class WorkspaceSelectQueryBuilder<
     }
   }
 
-  override async getOne(): Promise<T | null> {
+  override async getOne(options?: {
+    noFormatting?: boolean;
+  }): Promise<T | null> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
+
+      this.take(1);
+
+      const result = await super.getOne();
+
+      if (options?.noFormatting === true) {
+        return result;
+      }
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -160,10 +174,6 @@ export class WorkspaceSelectQueryBuilder<
         mainAliasTarget,
         this.internalContext,
       );
-
-      this.take(1);
-
-      const result = await super.getOne();
 
       const formattedResult = formatResult<T>(
         result,
@@ -180,7 +190,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getOneOrFail(): Promise<T> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -206,7 +216,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getCount(): Promise<number> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       return super.getCount();
     } catch (error) {
@@ -223,7 +233,7 @@ export class WorkspaceSelectQueryBuilder<
 
   override async getManyAndCount(): Promise<[T[], number]> {
     try {
-      await this.validatePermissions();
+      this.validatePermissions();
 
       const mainAliasTarget = this.getMainAliasTarget();
 
@@ -329,8 +339,8 @@ export class WorkspaceSelectQueryBuilder<
     );
   }
 
-  private async validatePermissions(): Promise<void> {
-    await this.applyRowLevelPermissionPredicates();
+  private validatePermissions(): void {
+    this.applyRowLevelPermissionPredicates();
     validateQueryIsPermittedOrThrow({
       expressionMap: this.expressionMap,
       objectsPermissions: this.objectRecordsPermissions,
@@ -356,15 +366,7 @@ export class WorkspaceSelectQueryBuilder<
     return mainAliasTarget;
   }
 
-  private async applyRowLevelPermissionPredicates(): Promise<void> {
-    if (
-      this.featureFlagMap[
-        FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-      ] !== true
-    ) {
-      return;
-    }
-
+  private applyRowLevelPermissionPredicates(): void {
     if (this.shouldBypassPermissionChecks) {
       return;
     }
@@ -382,7 +384,7 @@ export class WorkspaceSelectQueryBuilder<
       this.internalContext,
     );
 
-    await applyRowLevelPermissionPredicates({
+    applyRowLevelPermissionPredicates({
       queryBuilder: this,
       objectMetadata,
       internalContext: this.internalContext,

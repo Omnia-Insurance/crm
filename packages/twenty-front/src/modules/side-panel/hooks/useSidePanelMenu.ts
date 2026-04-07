@@ -1,10 +1,13 @@
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { addToNavPayloadRegistryState } from '@/navigation-menu-item/common/states/addToNavPayloadRegistryState';
-import { selectedNavigationMenuItemInEditModeState } from '@/navigation-menu-item/common/states/selectedNavigationMenuItemInEditModeState';
+import { useResetRecordIndexSelection } from '@/object-record/record-index/hooks/useResetRecordIndexSelection';
+import { selectedNavigationMenuItemIdInEditModeState } from '@/navigation-menu-item/common/states/selectedNavigationMenuItemIdInEditModeState';
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useNavigateSidePanel } from '@/side-panel/hooks/useNavigateSidePanel';
 import { isSidePanelClosingState } from '@/side-panel/states/isSidePanelClosingState';
+import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
+import { sidePanelSearchObjectFilterState } from '@/side-panel/states/sidePanelSearchObjectFilterState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { useCloseAnyOpenDropdown } from '@/ui/layout/dropdown/hooks/useCloseAnyOpenDropdown';
 import { emitSidePanelOpenEvent } from '@/ui/layout/side-panel/utils/emitSidePanelOpenEvent';
@@ -20,6 +23,9 @@ export const useSidePanelMenu = () => {
   const store = useStore();
   const { navigateSidePanel } = useNavigateSidePanel();
   const { closeAnyOpenDropdown } = useCloseAnyOpenDropdown();
+  const { resetRecordIndexSelection } = useResetRecordIndexSelection(
+    MAIN_CONTEXT_STORE_INSTANCE_ID,
+  );
 
   const { removeFocusItemFromFocusStackById } =
     useRemoveFocusItemFromFocusStackById();
@@ -28,7 +34,15 @@ export const useSidePanelMenu = () => {
     const isSidePanelOpened = store.get(isSidePanelOpenedState.atom);
 
     if (isSidePanelOpened) {
-      store.set(addToNavPayloadRegistryState.atom, new Map());
+      const isLayoutCustomizationModeEnabled = store.get(
+        isLayoutCustomizationModeEnabledState.atom,
+      );
+
+      if (isLayoutCustomizationModeEnabled) {
+        resetRecordIndexSelection();
+      }
+
+      store.set(sidePanelNavigationStackState.atom, []);
       store.set(isSidePanelOpenedState.atom, false);
       store.set(isSidePanelClosingState.atom, true);
       closeAnyOpenDropdown();
@@ -36,7 +50,12 @@ export const useSidePanelMenu = () => {
         focusId: SIDE_PANEL_FOCUS_ID,
       });
     }
-  }, [closeAnyOpenDropdown, removeFocusItemFromFocusStackById, store]);
+  }, [
+    closeAnyOpenDropdown,
+    removeFocusItemFromFocusStackById,
+    store,
+    resetRecordIndexSelection,
+  ]);
 
   const openSidePanelMenu = useCallback(() => {
     emitSidePanelOpenEvent();
@@ -44,8 +63,9 @@ export const useSidePanelMenu = () => {
     const isLayoutCustomizationModeEnabled = store.get(
       isLayoutCustomizationModeEnabledState.atom,
     );
+
     const selectedNavigationItemId = store.get(
-      selectedNavigationMenuItemInEditModeState.atom,
+      selectedNavigationMenuItemIdInEditModeState.atom,
     );
     if (
       isLayoutCustomizationModeEnabled &&
@@ -66,7 +86,7 @@ export const useSidePanelMenu = () => {
       });
     } else {
       navigateSidePanel({
-        page: SidePanelPages.Root,
+        page: SidePanelPages.CommandMenuDisplay,
         pageTitle: t`Command Menu`,
         pageIcon: IconDotsVertical,
         resetNavigationStack: true,
@@ -80,6 +100,7 @@ export const useSidePanelMenu = () => {
     const isSidePanelOpened = store.get(isSidePanelOpenedState.atom);
 
     store.set(sidePanelSearchState.atom, '');
+    store.set(sidePanelSearchObjectFilterState.atom, null);
 
     if (isSidePanelOpened) {
       closeSidePanelMenu();

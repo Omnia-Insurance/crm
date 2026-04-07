@@ -3,6 +3,7 @@ import { FIND_MANY_FRONT_COMPONENTS } from '@/front-components/graphql/queries/f
 import { useCreatePageLayoutFrontComponentWidget } from '@/page-layout/hooks/useCreatePageLayoutFrontComponentWidget';
 import { useCreatePageLayoutGraphWidget } from '@/page-layout/hooks/useCreatePageLayoutGraphWidget';
 import { useCreatePageLayoutIframeWidget } from '@/page-layout/hooks/useCreatePageLayoutIframeWidget';
+import { useCreatePageLayoutRecordTableWidget } from '@/page-layout/hooks/useCreatePageLayoutRecordTableWidget';
 import { useCreatePageLayoutStandaloneRichTextWidget } from '@/page-layout/hooks/useCreatePageLayoutStandaloneRichTextWidget';
 import { useOpportunityDefaultChartConfig } from '@/page-layout/hooks/useOpportunityDefaultChartConfig';
 import { useRemovePageLayoutWidgetAndPreservePosition } from '@/page-layout/hooks/useRemovePageLayoutWidgetAndPreservePosition';
@@ -29,6 +30,7 @@ import {
   IconApps,
   IconChartPie,
   IconFrame,
+  IconTable,
 } from 'twenty-ui/display';
 import {
   FeatureFlagKey,
@@ -78,18 +80,19 @@ export const SidePanelPageLayoutWidgetTypeSelect = () => {
       tabListInstanceId,
     });
 
+  const { createPageLayoutRecordTableWidget } =
+    useCreatePageLayoutRecordTableWidget(pageLayoutId);
+
   const { removePageLayoutWidgetAndPreservePosition } =
     useRemovePageLayoutWidgetAndPreservePosition(pageLayoutId);
 
-  const isApplicationEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_APPLICATION_ENABLED,
+  const isRecordTableWidgetEnabled = useIsFeatureEnabled(
+    FeatureFlagKey.IS_RECORD_TABLE_WIDGET_ENABLED,
   );
 
   const { data: frontComponentsData } = useQuery<{
     frontComponents: FrontComponent[];
-  }>(FIND_MANY_FRONT_COMPONENTS, {
-    skip: !isApplicationEnabled,
-  });
+  }>(FIND_MANY_FRONT_COMPONENTS);
 
   const frontComponents = frontComponentsData?.frontComponents ?? [];
 
@@ -176,6 +179,28 @@ export const SidePanelPageLayoutWidgetTypeSelect = () => {
     closeSidePanelMenu();
   };
 
+  const handleNavigateToRecordTableSettings = () => {
+    if (
+      isExistingWidgetMissingOrDifferentType(
+        existingWidget?.type,
+        WidgetType.RECORD_TABLE,
+      )
+    ) {
+      if (isDefined(pageLayoutEditingWidgetId)) {
+        removePageLayoutWidgetAndPreservePosition(pageLayoutEditingWidgetId);
+      }
+
+      const newRecordTableWidget = createPageLayoutRecordTableWidget();
+
+      setPageLayoutEditingWidgetId(newRecordTableWidget.id);
+    }
+
+    navigatePageLayoutSidePanel({
+      sidePanelPage: SidePanelPages.PageLayoutRecordTableSettings,
+      focusTitleInput: false,
+    });
+  };
+
   const handleCreateFrontComponentWidget = (frontComponent: FrontComponent) => {
     if (
       isExistingWidgetMissingOrDifferentType(
@@ -199,6 +224,7 @@ export const SidePanelPageLayoutWidgetTypeSelect = () => {
 
   const selectableItemIds = [
     'chart',
+    ...(isRecordTableWidgetEnabled ? ['record-table'] : []),
     'iframe',
     'rich-text',
     ...frontComponentsWithSelectItemId.map(({ selectItemId }) => selectItemId),
@@ -218,6 +244,19 @@ export const SidePanelPageLayoutWidgetTypeSelect = () => {
             onClick={handleNavigateToGraphTypeSelect}
           />
         </SelectableListItem>
+        {isRecordTableWidgetEnabled && (
+          <SelectableListItem
+            itemId="record-table"
+            onEnter={handleNavigateToRecordTableSettings}
+          >
+            <CommandMenuItem
+              Icon={IconTable}
+              label={t`Record Table`}
+              id="record-table"
+              onClick={handleNavigateToRecordTableSettings}
+            />
+          </SelectableListItem>
+        )}
         <SelectableListItem
           itemId="iframe"
           onEnter={handleNavigateToIframeSettings}
@@ -243,7 +282,7 @@ export const SidePanelPageLayoutWidgetTypeSelect = () => {
         </SelectableListItem>
       </SidePanelGroup>
 
-      {isApplicationEnabled && frontComponentsWithSelectItemId.length > 0 && (
+      {frontComponentsWithSelectItemId.length > 0 && (
         <SidePanelGroup heading={t`Front Components`}>
           {frontComponentsWithSelectItemId.map(
             ({ frontComponent, selectItemId }) => (

@@ -1,9 +1,7 @@
 import { SidePanelRouter } from '@/side-panel/components/SidePanelRouter';
 import { SidePanelWidthEffect } from '@/side-panel/components/SidePanelWidthEffect';
-import { RequiredFieldsValidationModal } from '@/command-menu/components/RequiredFieldsValidationModal';
-import { useBeforeUnloadRequiredFieldsCheck } from '@/command-menu/hooks/useBeforeUnloadRequiredFieldsCheck';
-import { useCleanupNewlyCreatedRecordIds } from '@/command-menu/hooks/useCleanupNewlyCreatedRecordIds';
-import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
+import { SIDE_PANEL_CLICK_OUTSIDE_ID } from '@/side-panel/constants/SidePanelClickOutsideId';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useSidePanelCloseAnimationCompleteCleanup } from '@/side-panel/hooks/useSidePanelCloseAnimationCompleteCleanup';
 import {
   SIDE_PANEL_WIDTH_VAR,
@@ -13,6 +11,7 @@ import { isSidePanelClosingState } from '@/side-panel/states/isSidePanelClosingS
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
 import { tableWidthResizeIsActiveState } from '@/object-record/record-table/states/tableWidthResizeIsActivedState';
 import { ModalContainerContext } from '@/ui/layout/modal/contexts/ModalContainerContext';
+import { ParentClickOutsideIdContext } from '@/ui/utilities/pointer-event/contexts/ParentClickOutsideIdContext';
 import { ResizablePanelGap } from '@/ui/layout/resizable-panel/components/ResizablePanelGap';
 import { SIDE_PANEL_CONSTRAINTS } from '@/side-panel/constants/SidePanelConstraints';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
@@ -65,9 +64,7 @@ export const SidePanelForDesktop = () => {
   const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
   const isSidePanelClosing = useAtomStateValue(isSidePanelClosingState);
   const [sidePanelWidth, setSidePanelWidth] = useAtomState(sidePanelWidthState);
-  const { closeWithValidation } = useCommandMenuCloseWithValidation();
-  useBeforeUnloadRequiredFieldsCheck();
-  useCleanupNewlyCreatedRecordIds();
+  const { closeSidePanelMenu } = useSidePanelMenu();
   const { sidePanelCloseAnimationCompleteCleanup } =
     useSidePanelCloseAnimationCompleteCleanup();
 
@@ -119,10 +116,10 @@ export const SidePanelForDesktop = () => {
   }, [setTableWidthResizeIsActive]);
 
   const handleCollapse = useCallback(() => {
-    closeWithValidation();
+    closeSidePanelMenu();
     setIsResizing(false);
     setTableWidthResizeIsActive(true);
-  }, [closeWithValidation, setTableWidthResizeIsActive]);
+  }, [closeSidePanelMenu, setTableWidthResizeIsActive]);
 
   return (
     <>
@@ -143,12 +140,16 @@ export const SidePanelForDesktop = () => {
         isResizing={isResizing}
         onTransitionEnd={handleTransitionEnd}
         data-side-panel=""
+        data-click-outside-id={SIDE_PANEL_CLICK_OUTSIDE_ID}
       >
         <StyledSidePanel>
           <StyledModalContainer ref={handleModalContainerRef} />
           <ModalContainerContext.Provider value={{ container: modalContainer }}>
-            {shouldShowContent && <SidePanelRouter />}
-            <RequiredFieldsValidationModal />
+            <ParentClickOutsideIdContext.Provider
+              value={SIDE_PANEL_CLICK_OUTSIDE_ID}
+            >
+              {shouldShowContent && <SidePanelRouter />}
+            </ParentClickOutsideIdContext.Provider>
           </ModalContainerContext.Provider>
         </StyledSidePanel>
       </StyledSidePanelWrapper>

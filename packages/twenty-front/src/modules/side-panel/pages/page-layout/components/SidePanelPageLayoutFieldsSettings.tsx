@@ -1,5 +1,7 @@
 import { CommandMenuItem } from '@/command-menu/components/CommandMenuItem';
 import { CommandMenuItemToggle } from '@/command-menu/components/CommandMenuItemToggle';
+import { useDeletePageLayoutWidget } from '@/page-layout/hooks/useDeletePageLayoutWidget';
+import { useResetPageLayoutWidgetToDefault } from '@/page-layout/hooks/useResetPageLayoutWidgetToDefault';
 import { useFieldsWidgetGroups } from '@/page-layout/widgets/fields/hooks/useFieldsWidgetGroups';
 import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { SidePanelList } from '@/side-panel/components/SidePanelList';
@@ -10,12 +12,21 @@ import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/
 import { useUpdateCurrentWidgetConfig } from '@/side-panel/pages/page-layout/hooks/useUpdateCurrentWidgetConfig';
 import { useWidgetInEditMode } from '@/side-panel/pages/page-layout/hooks/useWidgetInEditMode';
 import { SidePanelSubPages } from '@/side-panel/types/SidePanelSubPages';
+import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
+import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { IconChevronDown, IconLayoutSidebarRight } from 'twenty-ui/display';
+import {
+  IconChevronDown,
+  IconLayoutSidebarRight,
+  IconRefreshDot,
+  IconTrash,
+} from 'twenty-ui/display';
 import { type FieldsConfiguration } from '~/generated-metadata/graphql';
+
+const RESET_WIDGET_TO_DEFAULT_MODAL_ID = 'reset-widget-to-default-modal';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -38,6 +49,13 @@ export const SidePanelPageLayoutFieldsSettings = () => {
 
   const { updateCurrentWidgetConfig } =
     useUpdateCurrentWidgetConfig(pageLayoutId);
+
+  const { deletePageLayoutWidget } = useDeletePageLayoutWidget(pageLayoutId);
+
+  const { resetPageLayoutWidgetToDefault } =
+    useResetPageLayoutWidgetToDefault(pageLayoutId);
+
+  const { openModal } = useModal();
 
   const { widgetInEditMode } = useWidgetInEditMode(pageLayoutId);
 
@@ -75,6 +93,18 @@ export const SidePanelPageLayoutFieldsSettings = () => {
     });
   };
 
+  const handleResetToDefault = () => {
+    openModal(RESET_WIDGET_TO_DEFAULT_MODAL_ID);
+  };
+
+  const handleConfirmReset = () => {
+    resetPageLayoutWidgetToDefault(widgetInEditMode.id);
+  };
+
+  const handleDelete = () => {
+    deletePageLayoutWidget(widgetInEditMode.id);
+  };
+
   const selectableItemIds = [
     'layout',
     'new-field-default-visibility',
@@ -85,6 +115,7 @@ export const SidePanelPageLayoutFieldsSettings = () => {
     'move-to-tab',
     'add-widget-above',
     'add-widget-below',
+    'reset-to-default',
     'delete',
   ];
 
@@ -124,9 +155,38 @@ export const SidePanelPageLayoutFieldsSettings = () => {
               widgetId={widgetInEditMode.id}
             />
           </SidePanelGroup>
+          <SidePanelGroup heading={t`Manage`}>
+            <SelectableListItem
+              itemId="reset-to-default"
+              onEnter={handleResetToDefault}
+            >
+              <CommandMenuItem
+                id="reset-to-default"
+                Icon={IconRefreshDot}
+                label={t`Reset to default`}
+                onClick={handleResetToDefault}
+              />
+            </SelectableListItem>
+            <SelectableListItem itemId="delete" onEnter={handleDelete}>
+              <CommandMenuItem
+                id="delete"
+                Icon={IconTrash}
+                label={t`Delete widget`}
+                onClick={handleDelete}
+              />
+            </SelectableListItem>
+          </SidePanelGroup>
         </SidePanelList>
       </StyledSidePanelContainer>
       <WidgetSettingsFooter pageLayoutId={pageLayoutId} />
+      <ConfirmationModal
+        modalInstanceId={RESET_WIDGET_TO_DEFAULT_MODAL_ID}
+        title={t`Reset to default`}
+        subtitle={t`This will cancel all modifications done on the widget. This action cannot be undone.`}
+        onConfirmClick={handleConfirmReset}
+        confirmButtonText={t`Reset`}
+        confirmButtonAccent="danger"
+      />
     </StyledContainer>
   );
 };
