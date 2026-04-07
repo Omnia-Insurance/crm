@@ -6,9 +6,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 export const useSingleRecordPickerRecords = ({
   objectNameSingulars,
   excludedRecordIds = [],
-  // additionalFilter is accepted for API compatibility but not currently
-  // forwarded to useSingleRecordPickerPerformSearch (upstream removed it).
-  additionalFilter: _additionalFilter,
+  additionalFilter,
 }: {
   objectNameSingulars: string[];
   excludedRecordIds?: string[];
@@ -28,6 +26,7 @@ export const useSingleRecordPickerRecords = ({
       : [],
     excludedRecordIds: excludedRecordIds,
     objectNameSingulars,
+    additionalFilter,
   });
 
   return { pickableMorphItems, loading };

@@ -5,6 +5,7 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { DEFAULT_SEARCH_REQUEST_LIMIT } from '@/object-record/constants/DefaultSearchRequestLimit';
 import { useObjectRecordSearchRecords } from '@/object-record/hooks/useObjectRecordSearchRecords';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
+import { combineFilters } from '@/object-record/record-picker/multiple-record-picker/utils/combineFilters';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
 import { singleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchableObjectMetadataItemsComponentState';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
@@ -17,12 +18,14 @@ export const useSingleRecordPickerPerformSearch = ({
   excludedRecordIds = [],
   objectNameSingulars,
   searchFilter,
+  additionalFilter,
 }: {
   selectedIds: string[];
   limit?: number;
   excludedRecordIds?: string[];
   objectNameSingulars: string[];
   searchFilter?: string;
+  additionalFilter?: Record<string, unknown>;
 }): {
   pickableMorphItems: RecordPickerPickableMorphItem[];
   loading: boolean;
@@ -64,7 +67,7 @@ export const useSingleRecordPickerPerformSearch = ({
   const { loading: recordsToSelectLoading, searchRecords: recordsToSelect } =
     useObjectRecordSearchRecords({
       objectNameSingulars,
-      filter: notFilter,
+      filter: combineFilters([notFilter, additionalFilter]),
       limit: limit ?? DEFAULT_SEARCH_REQUEST_LIMIT,
       searchInput: searchFilter,
       fetchPolicy: 'cache-and-network',
