@@ -22,4 +22,5 @@ export enum MessageQueue {
   aiStreamQueue = 'ai-stream-queue',
   exportQueue = 'export-queue',
   importQueue = 'import-queue',
+  ingestionQueue = 'ingestion-queue',
 }
