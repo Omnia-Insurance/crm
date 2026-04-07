@@ -1,5 +1,6 @@
 /* @license Enterprise */
 
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 import {
   Brackets,
   NotBrackets,
@@ -16,6 +17,7 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/workspace-select-query-builder';
 import { buildRowLevelPermissionRecordFilter } from 'src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 
 type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   queryBuilder: WorkspaceSelectQueryBuilder<T>;
@@ -25,13 +27,18 @@ type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   featureFlagMap: FeatureFlagMap;
 };
 
-export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
+// OMNIA-CUSTOM: async because buildRowLevelPermissionRecordFilter does
+// DB queries for linked-record resolution in Me predicates.
+// Action-scoped: routes reads through READ scope and writes through WRITE scope.
+export const applyRowLevelPermissionPredicates = async <
+  T extends ObjectLiteral,
+>({
   queryBuilder,
   objectMetadata,
   internalContext,
   authContext,
   featureFlagMap: _featureFlagMap,
-}: ApplyRowLevelPermissionPredicatesArgs<T>): void => {
+}: ApplyRowLevelPermissionPredicatesArgs<T>): Promise<void> => {
   const userWorkspaceId = isUserAuthContext(authContext)
     ? authContext.userWorkspaceId
     : undefined;
@@ -39,27 +46,39 @@ export const applyRowLevelPermissionPredicates = <T extends ObjectLiteral>({
     ? internalContext.userWorkspaceRoleMap[userWorkspaceId]
     : undefined;
 
-  const recordFilter = buildRowLevelPermissionRecordFilter({
+  const isUpdateOrDeleteQuery =
+    queryBuilder.expressionMap.queryType === 'update' ||
+    queryBuilder.expressionMap.queryType === 'soft-delete' ||
+    queryBuilder.expressionMap.queryType === 'delete' ||
+    queryBuilder.expressionMap.queryType === 'restore';
+
+  // OMNIA-CUSTOM: action-scoped predicates — writes use WRITE scope, reads use READ scope.
+  // This allows policies to be globally visible (READ) while write-restricted for non-owners (WRITE).
+  const recordFilter = await buildRowLevelPermissionRecordFilter({
     flatRowLevelPermissionPredicateMaps:
       internalContext.flatRowLevelPermissionPredicateMaps,
     flatRowLevelPermissionPredicateGroupMaps:
       internalContext.flatRowLevelPermissionPredicateGroupMaps,
     flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
+    targetScope: isUpdateOrDeleteQuery
+      ? RowLevelPermissionPredicateScope.WRITE
+      : RowLevelPermissionPredicateScope.READ,
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
       : undefined,
+    flatObjectMetadataMaps: internalContext.flatObjectMetadataMaps,
+    objectIdByNameSingular: internalContext.objectIdByNameSingular,
+    workspaceDataSource: internalContext.coreDataSource,
+    workspaceSchemaName: getWorkspaceSchemaName(internalContext.workspaceId),
+    workspaceId: internalContext.workspaceId,
+    rlsComputationCache: internalContext.rlsComputationCache,
   });
 
   if (!recordFilter || Object.keys(recordFilter).length === 0) {
     return;
   }
-
-  const isUpdateOrDeleteQuery =
-    queryBuilder.expressionMap.queryType === 'update' ||
-    queryBuilder.expressionMap.queryType === 'soft-delete' ||
-    queryBuilder.expressionMap.queryType === 'delete';
 
   applyObjectRecordFilterToQueryBuilder({
     queryBuilder,

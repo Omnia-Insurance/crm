@@ -209,13 +209,15 @@ export class WorkspaceUpdateQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: updates always treat relations as upsert
+            isUpsert: true,
           });
 
         this.expressionMap.valuesSet =
           updatedValues.length === 1 ? updatedValues[0] : updatedValues;
       }
 
-      this.applyRowLevelPermissionPredicates();
+      await this.applyRowLevelPermissionPredicates();
 
       const valuesSet = this.expressionMap.valuesSet ?? {};
       const updatedRecords: T[] = before.map(
@@ -408,6 +410,8 @@ export class WorkspaceUpdateQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: updates always treat relations as upsert
+            isUpsert: true,
           });
 
         this.manyInputs = updatedValues.map((updatedValue, index) => ({
@@ -428,7 +432,7 @@ export class WorkspaceUpdateQueryBuilder<
         this.expressionMap.valuesSet = input.partialEntity;
         this.where({ id: input.criteria });
 
-        this.applyRowLevelPermissionPredicates();
+        await this.applyRowLevelPermissionPredicates();
 
         const beforeRecord = beforeRecordById.get(input.criteria);
         const updatedRecords = beforeRecord
@@ -622,7 +626,7 @@ export class WorkspaceUpdateQueryBuilder<
     return this;
   }
 
-  private applyRowLevelPermissionPredicates(): void {
+  private async applyRowLevelPermissionPredicates(): Promise<void> {
     if (this.shouldBypassPermissionChecks) {
       return;
     }
@@ -634,7 +638,7 @@ export class WorkspaceUpdateQueryBuilder<
       this.internalContext,
     );
 
-    applyRowLevelPermissionPredicates({
+    await applyRowLevelPermissionPredicates({
       queryBuilder: this as unknown as WorkspaceSelectQueryBuilder<T>,
       objectMetadata,
       internalContext: this.internalContext,

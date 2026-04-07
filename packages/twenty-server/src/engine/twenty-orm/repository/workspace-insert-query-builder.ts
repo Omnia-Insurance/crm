@@ -214,6 +214,9 @@ export class WorkspaceInsertQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: pass isUpsert so relation nested queries can
+            // auto-create missing related records during upsert imports
+            isUpsert: isDefined(this.expressionMap.onUpdate),
           });
 
         this.expressionMap.valuesSet = updatedValues;
