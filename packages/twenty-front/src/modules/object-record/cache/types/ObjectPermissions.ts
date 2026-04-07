@@ -1,8 +1,8 @@
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 
 export type ObjectPermissions = {
   [K in keyof Omit<
-    ObjectPermission,
+    OmniaObjectPermission,
     'objectMetadataId' | '__typename' | 'editWindowMinutes' | 'showInSidebar' | 'restrictedFields' | 'rowLevelPermissionPredicates' | 'rowLevelPermissionPredicateGroups'
   >]-?: boolean;
 };

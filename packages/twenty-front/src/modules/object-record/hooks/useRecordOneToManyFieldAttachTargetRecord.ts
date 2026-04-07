@@ -2,7 +2,7 @@ import { type Reference } from '@apollo/client';
 
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { getEdgeTypename } from '@/object-record/cache/utils/getEdgeTypename';
+import { getEdgeTypename } from 'twenty-shared/utils';
 import { getRecordFromCache } from '@/object-record/cache/utils/getRecordFromCache';
 import { getRefName } from '@/object-record/cache/utils/getRefName';
 import { modifyRecordFromCache } from '@/object-record/cache/utils/modifyRecordFromCache';

@@ -55,6 +55,8 @@ const getCommandMenuContextApi = (
     canUpdateObjectRecords: true,
     canSoftDeleteObjectRecords: true,
     canDestroyObjectRecords: true,
+    showInSidebar: true,
+    editWindowMinutes: null,
     restrictedFields: {},
     rowLevelPermissionPredicates: [],
     rowLevelPermissionPredicateGroups: [],

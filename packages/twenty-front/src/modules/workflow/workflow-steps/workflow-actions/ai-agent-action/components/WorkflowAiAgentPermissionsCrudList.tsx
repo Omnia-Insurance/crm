@@ -1,7 +1,7 @@
 import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { type SettingsRoleObjectPermissionKey } from '@/settings/roles/role-permissions/objects-permissions/constants/SettingsRoleObjectPermissionIconConfig';
 import { t } from '@lingui/core/macro';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 import { WorkflowAiAgentPermissionsPermissionRow } from './WorkflowAiAgentPermissionsPermissionRow';
 
 type WorkflowAiAgentPermissionsCrudListProps = {
@@ -9,7 +9,7 @@ type WorkflowAiAgentPermissionsCrudListProps = {
     key: SettingsRoleObjectPermissionKey;
     label: string;
   }>;
-  objectPermissions?: ObjectPermission;
+  objectPermissions?: OmniaObjectPermission;
   readonly: boolean;
   onAddPermission: (
     objectMetadataId: string,

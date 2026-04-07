@@ -13,7 +13,7 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { SettingsPath } from 'twenty-shared/types';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
+import { RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 const StyledContent = styled.div`

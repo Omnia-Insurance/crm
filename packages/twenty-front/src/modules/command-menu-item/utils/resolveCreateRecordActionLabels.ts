@@ -1,4 +1,4 @@
-import { NoSelectionRecordCommandKeys } from '@/command-menu-item/record/no-selection/types/NoSelectionRecordCommandKeys';
+import { EngineComponentKey } from '~/generated-metadata/graphql';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type MessageDescriptor } from '@lingui/core';
 import { type Nullable } from 'twenty-shared/types';
@@ -24,7 +24,7 @@ export const resolveCreateRecordActionLabels = <
   const createRecordLabel = `Create ${objectMetadataItem.labelSingular}`;
 
   return actions.map((action) => {
-    if (action.key !== NoSelectionRecordCommandKeys.CREATE_NEW_RECORD) {
+    if (action.key !== EngineComponentKey.CREATE_NEW_RECORD) {
       return action;
     }
 

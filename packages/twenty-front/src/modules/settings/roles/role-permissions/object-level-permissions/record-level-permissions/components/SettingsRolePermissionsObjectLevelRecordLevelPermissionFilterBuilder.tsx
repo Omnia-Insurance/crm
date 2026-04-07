@@ -4,7 +4,7 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { RecordFilterGroupsComponentInstanceContext } from '@/object-record/record-filter-group/states/context/RecordFilterGroupsComponentInstanceContext';
 import { RecordFiltersComponentInstanceContext } from '@/object-record/record-filter/states/context/RecordFiltersComponentInstanceContext';
 import { SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent';
-import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
+import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 
 type SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderProps =
   {

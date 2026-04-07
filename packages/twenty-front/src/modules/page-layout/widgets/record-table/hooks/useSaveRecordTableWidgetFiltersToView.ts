@@ -3,6 +3,7 @@ import { currentRecordFiltersComponentState } from '@/object-record/record-filte
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { usePerformViewFilterAPIPersist } from '@/views/hooks/internal/usePerformViewFilterAPIPersist';
 import { usePerformViewFilterGroupAPIPersist } from '@/views/hooks/internal/usePerformViewFilterGroupAPIPersist';
+import { type ViewFilterOperand as GqlViewFilterOperand } from '~/generated-metadata/graphql';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { getViewFilterGroupsToCreate } from '@/views/utils/getViewFilterGroupsToCreate';
 import { getViewFilterGroupsToDelete } from '@/views/utils/getViewFilterGroupsToDelete';
@@ -118,7 +119,7 @@ export const useSaveRecordTableWidgetFiltersToView = (
           id: viewFilter.id,
           update: {
             value: viewFilter.value,
-            operand: viewFilter.operand,
+            operand: viewFilter.operand as GqlViewFilterOperand,
             positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
             viewFilterGroupId: viewFilter.viewFilterGroupId,
             subFieldName: viewFilter.subFieldName ?? null,
@@ -134,7 +135,7 @@ export const useSaveRecordTableWidgetFiltersToView = (
           fieldMetadataId: viewFilter.fieldMetadataId,
           viewId: currentView.id,
           value: viewFilter.value,
-          operand: viewFilter.operand,
+          operand: viewFilter.operand as GqlViewFilterOperand,
           viewFilterGroupId: viewFilter.viewFilterGroupId,
           positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
           subFieldName: viewFilter.subFieldName ?? null,

@@ -1,4 +1,5 @@
-import { type Role, type WorkspaceMember } from '~/generated-metadata/graphql';
+import { type WorkspaceMember } from '~/generated-metadata/graphql';
+import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
 
 export type PartialWorkspaceMember = Omit<
   WorkspaceMember,
@@ -12,6 +13,6 @@ export type PartialWorkspaceMember = Omit<
   | 'updatedAt'
 >;
 
-export type RoleWithPartialMembers = Omit<Role, 'workspaceMembers'> & {
+export type RoleWithPartialMembers = Omit<OmniaRole, 'workspaceMembers'> & {
   workspaceMembers: PartialWorkspaceMember[];
 };

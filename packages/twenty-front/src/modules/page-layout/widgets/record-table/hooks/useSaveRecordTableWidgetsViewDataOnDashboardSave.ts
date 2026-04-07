@@ -9,6 +9,7 @@ import { useMapRecordFieldToViewFieldWithCurrentAggregateOperation } from '@/pag
 import { computeViewFieldsToCreateAndUpdate } from '@/page-layout/widgets/record-table/utils/computeViewFieldsToCreateAndUpdate';
 import { usePerformViewFieldAPIPersist } from '@/views/hooks/internal/usePerformViewFieldAPIPersist';
 import { usePerformViewFilterAPIPersist } from '@/views/hooks/internal/usePerformViewFilterAPIPersist';
+import { type ViewFilterOperand as GqlViewFilterOperand } from '~/generated-metadata/graphql';
 import { usePerformViewFilterGroupAPIPersist } from '@/views/hooks/internal/usePerformViewFilterGroupAPIPersist';
 import { usePerformViewSortAPIPersist } from '@/views/hooks/internal/usePerformViewSortAPIPersist';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
@@ -227,7 +228,7 @@ export const useSaveRecordTableWidgetsViewDataOnDashboardSave = () => {
               id: viewFilter.id,
               update: {
                 value: viewFilter.value,
-                operand: viewFilter.operand,
+                operand: viewFilter.operand as GqlViewFilterOperand,
                 positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
                 viewFilterGroupId: viewFilter.viewFilterGroupId,
                 subFieldName: viewFilter.subFieldName ?? null,
@@ -242,7 +243,7 @@ export const useSaveRecordTableWidgetsViewDataOnDashboardSave = () => {
               fieldMetadataId: viewFilter.fieldMetadataId,
               viewId: currentView.id,
               value: viewFilter.value,
-              operand: viewFilter.operand,
+              operand: viewFilter.operand as GqlViewFilterOperand,
               viewFilterGroupId: viewFilter.viewFilterGroupId,
               positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
               subFieldName: viewFilter.subFieldName ?? null,

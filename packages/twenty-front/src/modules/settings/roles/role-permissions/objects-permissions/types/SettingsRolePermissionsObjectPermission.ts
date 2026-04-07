@@ -1,9 +1,9 @@
 import { type ReactNode } from 'react';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 
 export type SettingsRolePermissionsObjectPermission = {
   key: keyof Pick<
-    ObjectPermission,
+    OmniaObjectPermission,
     | 'canDestroyObjectRecords'
     | 'canReadObjectRecords'
     | 'canSoftDeleteObjectRecords'
@@ -18,7 +18,7 @@ export type SettingsRolePermissionsObjectPermission = {
 
 export type SettingsRolePermissionsObjectLevelPermission = {
   key: keyof Pick<
-    ObjectPermission,
+    OmniaObjectPermission,
     | 'canDestroyObjectRecords'
     | 'canReadObjectRecords'
     | 'canSoftDeleteObjectRecords'

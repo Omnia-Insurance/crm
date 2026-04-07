@@ -27,7 +27,7 @@ import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
+import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 
 const StyledContainer = styled.div`
   align-items: start;

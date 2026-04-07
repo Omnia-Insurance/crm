@@ -3,7 +3,7 @@ import { type SettingsRoleObjectPermissionKey } from '@/settings/roles/role-perm
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { isDefined } from 'twenty-shared/utils';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 
 export const useUpsertObjectPermission = ({ roleId }: { roleId: string }) => {
   const settingsDraftRole = useAtomFamilyStateValue(
@@ -45,7 +45,7 @@ export const useUpsertObjectPermission = ({ roleId }: { roleId: string }) => {
       const newObjectPermission = {
         objectMetadataId: objectMetadataItemId,
         ...newPermissions,
-      } satisfies ObjectPermission;
+      } satisfies OmniaObjectPermission;
 
       upsertObjectPermissionInDraftRole(newObjectPermission);
     } else {

@@ -205,7 +205,8 @@ export const useImportJobPoller = () => {
         }
 
         // Use phase from server if available (e.g., "Resolving relations...")
-        const phase = job.result?.phase as string | undefined;
+        const phase = (job.result as Record<string, unknown> | undefined)
+          ?.phase as string | undefined;
         const label =
           !isTerminal && phase
             ? phase

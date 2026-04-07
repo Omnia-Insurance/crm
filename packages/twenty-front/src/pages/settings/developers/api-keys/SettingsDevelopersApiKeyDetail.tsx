@@ -100,7 +100,8 @@ export const SettingsDevelopersApiKeyDetail = () => {
 
   const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
 
-  const roles = rolesData?.getRoles ?? [];
+  // getRoles returns the upstream Role type; cast to our extended type
+  const roles = (rolesData?.getRoles ?? []) as unknown as import('@/settings/roles/types/RoleWithPartialMembers').RoleWithPartialMembers[];
 
   const apiKey = apiKeyData?.apiKey;
   const [apiKeyName, setApiKeyName] = useState('');

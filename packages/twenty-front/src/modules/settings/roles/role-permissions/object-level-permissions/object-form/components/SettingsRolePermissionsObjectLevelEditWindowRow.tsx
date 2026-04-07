@@ -11,7 +11,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { IconClockHour8 } from 'twenty-ui/display';
 import { type SelectOption } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 
 const StyledTableRow = styled(TableRow)`
   align-items: center;
@@ -72,7 +72,7 @@ type SettingsRolePermissionsObjectLevelEditWindowRowProps = {
   roleId: string;
   objectMetadataItemId: string;
   isEditable: boolean;
-  settingsDraftRoleObjectPermissions: ObjectPermission | undefined;
+  settingsDraftRoleObjectPermissions: OmniaObjectPermission | undefined;
 };
 
 export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
@@ -117,7 +117,7 @@ export const SettingsRolePermissionsObjectLevelEditWindowRow = ({
   );
 
   const handleChange = (value: number | null) => {
-    const updatedPermission: ObjectPermission = {
+    const updatedPermission: OmniaObjectPermission = {
       ...settingsDraftRoleObjectPermissions,
       objectMetadataId: objectMetadataItemId,
       editWindowMinutes: value,

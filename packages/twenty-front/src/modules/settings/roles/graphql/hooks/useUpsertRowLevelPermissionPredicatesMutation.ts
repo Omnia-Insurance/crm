@@ -4,12 +4,14 @@ import { useMutation } from '@apollo/client/react';
 
 import { UPSERT_ROW_LEVEL_PERMISSION_PREDICATES } from '@/settings/roles/graphql/mutations/upsertRowLevelPermissionPredicatesMutation';
 import {
-  type RowLevelPermissionPredicate,
-  type RowLevelPermissionPredicateGroup,
   type RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
-  type RowLevelPermissionPredicateScope,
 } from '~/generated-metadata/graphql';
+import {
+  type OmniaRowLevelPermissionPredicate,
+  type OmniaRowLevelPermissionPredicateGroup,
+  type RowLevelPermissionPredicateScope,
+} from '@/settings/roles/types/OmniaRoleExtensions';
 
 export type UpsertRowLevelPermissionPredicatesInput = {
   roleId: string;
@@ -38,8 +40,8 @@ export type UpsertRowLevelPermissionPredicatesInput = {
 
 type UpsertRowLevelPermissionPredicatesResult = {
   upsertRowLevelPermissionPredicates: {
-    predicates: RowLevelPermissionPredicate[];
-    predicateGroups: RowLevelPermissionPredicateGroup[];
+    predicates: OmniaRowLevelPermissionPredicate[];
+    predicateGroups: OmniaRowLevelPermissionPredicateGroup[];
   };
 };
 

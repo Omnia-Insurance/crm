@@ -1,22 +1,18 @@
-import { NoSelectionRecordCommandKeys } from '@/command-menu-item/record/no-selection/types/NoSelectionRecordCommandKeys';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { EngineComponentKey } from '~/generated-metadata/graphql';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type MessageDescriptor } from '@lingui/core';
 import { type Nullable } from 'twenty-shared/types';
 
 // Maps "Go to" action keys to the object they navigate to
 const GO_TO_ACTION_OBJECT_MAP: Record<string, CoreObjectNameSingular> = {
-  [NoSelectionRecordCommandKeys.GO_TO_PEOPLE]: CoreObjectNameSingular.Person,
-  [NoSelectionRecordCommandKeys.GO_TO_COMPANIES]:
-    CoreObjectNameSingular.Company,
-  [NoSelectionRecordCommandKeys.GO_TO_OPPORTUNITIES]:
-    CoreObjectNameSingular.Opportunity,
-  [NoSelectionRecordCommandKeys.GO_TO_TASKS]: CoreObjectNameSingular.Task,
-  [NoSelectionRecordCommandKeys.GO_TO_NOTES]: CoreObjectNameSingular.Note,
-  [NoSelectionRecordCommandKeys.GO_TO_WORKFLOWS]:
-    CoreObjectNameSingular.Workflow,
-  [NoSelectionRecordCommandKeys.GO_TO_DASHBOARDS]:
-    CoreObjectNameSingular.Dashboard,
+  [EngineComponentKey.GO_TO_PEOPLE]: CoreObjectNameSingular.Person,
+  [EngineComponentKey.GO_TO_COMPANIES]: CoreObjectNameSingular.Company,
+  [EngineComponentKey.GO_TO_OPPORTUNITIES]: CoreObjectNameSingular.Opportunity,
+  [EngineComponentKey.GO_TO_TASKS]: CoreObjectNameSingular.Task,
+  [EngineComponentKey.GO_TO_NOTES]: CoreObjectNameSingular.Note,
+  [EngineComponentKey.GO_TO_WORKFLOWS]: CoreObjectNameSingular.Workflow,
+  [EngineComponentKey.GO_TO_DASHBOARDS]: CoreObjectNameSingular.Dashboard,
 };
 
 // OMNIA-CUSTOM: resolves "Go to" labels from object metadata and filters deactivated objects
