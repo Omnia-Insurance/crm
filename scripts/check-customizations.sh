@@ -158,10 +158,6 @@ check_file_contains \
   "command.buttonVariant ?? 'secondary'" \
   "Pinned command buttons must honor explicit buttonVariant overrides"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/record/constants/DefaultRecordCommandMenuItemsConfig.tsx" \
-  "buttonVariant: 'primary'" \
-  "Create-record action must remain a filled primary CTA"
-check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/utils/resolveCreateRecordActionLabels.ts" \
   'Create ${objectMetadataItem.labelSingular}' \
   "Create-record button label must stay object-specific (Create Policy, Create Lead, etc.)"
@@ -170,37 +166,25 @@ check_file_contains \
   "buttonVariant: 'primary'" \
   "Create-record label resolver must preserve filled primary CTA styling"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/hooks/useRegisteredCommandMenuItems.ts" \
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
   "resolveCreateRecordActionLabels" \
-  "Registered command menu items must apply object-aware create CTA labels"
+  "Server-driven command menu items must apply object-aware create CTA labels"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
-  "EngineComponentKey.CREATE_NEW_RECORD" \
-  "Server-side command menu items must override CREATE_NEW_RECORD label with object-specific Create CTA"
-check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
-  "createRecordLabel" \
-  "Server-side command menu items must apply object-specific label and blue primary styling"
-check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/hooks/useCommandMenuItemFrontComponentCommands.tsx" \
-  "GO_TO_ENGINE_KEY_OBJECT_MAP" \
-  "Server-side command menu items must resolve Go To labels from object metadata and filter deactivated objects"
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
+  "resolveGoToActionLabels" \
+  "Server-driven command menu items must apply object-aware Go To labels and filter deactivated objects"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/utils/resolveGoToActionLabels.ts" \
   "isActive" \
   "Go To label resolver must filter deactivated objects"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/hooks/useRegisteredCommandMenuItems.ts" \
-  "resolveGoToActionLabels" \
-  "Legacy command menu items must apply object-aware Go To labels"
-check_file_contains \
   "packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-command-menu-item.constant.ts" \
   "deleteSingleRecord" \
   "Delete single record action must be pinned as a header button"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/record-agnostic/constants/RecordAgnosticCommandMenuItemsConfig.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
   "PermissionFlagType.LAYOUTS" \
-  "Edit navigation sidebar must be gated behind LAYOUTS permission"
+  "Edit Record Page Layout must be gated behind LAYOUTS permission"
 
 echo ""
 echo "--- Critical: Member Workspace Sidebar ---"

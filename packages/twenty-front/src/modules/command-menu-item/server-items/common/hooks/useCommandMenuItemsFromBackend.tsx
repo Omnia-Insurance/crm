@@ -5,6 +5,11 @@ import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/se
 import { type CommandMenuItemConfig } from '@/command-menu-item/types/CommandMenuItemConfig';
 import { CommandMenuItemScope } from '@/command-menu-item/types/CommandMenuItemScope';
 import { CommandMenuItemType } from '@/command-menu-item/types/CommandMenuItemType';
+// OMNIA-CUSTOM: import resolvers for object-aware labels and permission gate
+import { resolveCreateRecordActionLabels } from '@/command-menu-item/utils/resolveCreateRecordActionLabels';
+import { resolveGoToActionLabels } from '@/command-menu-item/utils/resolveGoToActionLabels';
+import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
+import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 
 import { type CommandMenuContextApi } from 'twenty-shared/types';
 import {
@@ -19,6 +24,8 @@ import { COMMAND_MENU_DEFAULT_ICON } from '@/workflow/workflow-trigger/constants
 import {
   CommandMenuItemAvailabilityType,
   type CommandMenuItemFieldsFragment,
+  EngineComponentKey,
+  PermissionFlagType,
 } from '~/generated-metadata/graphql';
 
 type CommandMenuItemWithFrontComponent = CommandMenuItemFieldsFragment & {
@@ -110,7 +117,8 @@ const buildCommandItemFromEngineKey = ({
 
   return {
     type,
-    key: `command-menu-item-engine-${item.id}`,
+    // OMNIA-CUSTOM: use engineComponentKey as key so resolvers can match on it
+    key: item.engineComponentKey ?? `command-menu-item-engine-${item.id}`,
     id: item.id,
     scope,
     label: interpolateCommandMenuItemTemplate({
@@ -139,6 +147,13 @@ export const useCommandMenuItemsFromBackend = (
   const hasRecordSelection = commandMenuContextApi.numberOfSelectedRecords >= 1;
 
   const commandMenuItems = useAtomStateValue(commandMenuItemsSelector);
+
+  // OMNIA-CUSTOM: object metadata for label resolution and permission gating
+  const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
+  const currentObjectMetadataItem = objectMetadataItems.find(
+    (item) => item.id === currentObjectMetadataItemId,
+  );
+  const permissionMap = usePermissionFlagMap();
 
   const itemsWithObjectMatches = commandMenuItems.filter(
     doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
@@ -234,9 +249,33 @@ export const useCommandMenuItemsFromBackend = (
     )
     .filter(isDefined);
 
-  return [
+  const allItems = [
     ...globalCommandMenuItems,
     ...recordScopedCommandMenuItems,
     ...fallbackCommandMenuItems,
   ].sort((a, b) => a.position - b.position);
+
+  // OMNIA-CUSTOM: apply object-aware label resolution and permission gating
+  // 1. "Create Policy" instead of generic "Create Record", with blue accent CTA
+  const withCreateLabels = resolveCreateRecordActionLabels(
+    allItems,
+    currentObjectMetadataItem,
+  );
+
+  // 2. "Go to Policies" with deactivated objects filtered out
+  const withGoToLabels = resolveGoToActionLabels(
+    withCreateLabels,
+    objectMetadataItems,
+  );
+
+  // 3. Gate "Edit Record Page Layout" behind LAYOUTS permission
+  return withGoToLabels.filter((item) => {
+    if (
+      item.key === EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT &&
+      !permissionMap[PermissionFlagType.LAYOUTS]
+    ) {
+      return false;
+    }
+    return true;
+  });
 };
