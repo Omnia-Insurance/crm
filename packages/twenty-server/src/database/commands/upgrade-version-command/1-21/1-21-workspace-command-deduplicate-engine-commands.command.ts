@@ -23,9 +23,13 @@ const OLD_UNIVERSAL_IDENTIFIERS_TO_DELETE = new Set([
 ]);
 
 const NEW_UNIVERSAL_IDENTIFIERS = new Set<string>([
-  STANDARD_COMMAND_MENU_ITEMS.deleteRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroyRecords.universalIdentifier,
+  // OMNIA-CUSTOM: we split delete/restore/destroy into single/multiple variants
+  STANDARD_COMMAND_MENU_ITEMS.deleteSingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.deleteMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreSingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroySingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroyMultipleRecords.universalIdentifier,
   STANDARD_COMMAND_MENU_ITEMS.exportRecords.universalIdentifier,
 ]);
 

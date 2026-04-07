@@ -10,10 +10,14 @@ import { STANDARD_COMMAND_MENU_ITEMS } from 'src/engine/workspace-manager/twenty
 import { computeTwentyStandardApplicationAllFlatEntityMaps } from 'src/engine/workspace-manager/twenty-standard-application/utils/twenty-standard-application-all-flat-entity-maps.constant';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
+// OMNIA-CUSTOM: we split delete/restore/destroy into single/multiple variants
 const UNIVERSAL_IDENTIFIERS_TO_FIX = new Set<string>([
-  STANDARD_COMMAND_MENU_ITEMS.deleteRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.restoreRecords.universalIdentifier,
-  STANDARD_COMMAND_MENU_ITEMS.destroyRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.deleteSingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.deleteMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreSingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.restoreMultipleRecords.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroySingleRecord.universalIdentifier,
+  STANDARD_COMMAND_MENU_ITEMS.destroyMultipleRecords.universalIdentifier,
 ]);
 
 @Command({
