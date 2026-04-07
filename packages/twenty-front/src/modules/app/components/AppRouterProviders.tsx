@@ -20,7 +20,10 @@ import { ApolloCoreProvider } from '@/object-metadata/components/ApolloCoreProvi
 import { PreComputedChipGeneratorsProvider } from '@/object-metadata/components/PreComputedChipGeneratorsProvider';
 
 import { CommandRunner } from '@/command-menu-item/engine-command/components/CommandRunner';
+import { ExportJobRecoveryEffect } from '@/object-record/record-index/export/components/ExportJobRecoveryEffect';
+import { ImportJobRecoveryEffect } from '@/spreadsheet-import/components/ImportJobRecoveryEffect';
 import { SSEProvider } from '@/sse-db-event/components/SSEProvider';
+import { BackgroundJobIndicator } from '@/ui/feedback/background-job-indicator/components/BackgroundJobIndicator';
 import { SupportChatEffect } from '@/support/components/SupportChatEffect';
 import { DialogManager } from '@/ui/feedback/dialog-manager/components/DialogManager';
 import { DialogComponentInstanceContext } from '@/ui/feedback/dialog-manager/contexts/DialogComponentInstanceContext';
@@ -71,6 +74,9 @@ export const AppRouterProviders = () => {
                                 <GlobalFilePreviewModal />
                                 <CommandMenuConfirmationModalManager />
                                 <CommandRunner />
+                                <ImportJobRecoveryEffect />
+                                <ExportJobRecoveryEffect />
+                                <BackgroundJobIndicator />
                               </StrictMode>
                             </DialogManager>
                           </DialogComponentInstanceContext.Provider>
