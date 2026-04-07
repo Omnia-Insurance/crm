@@ -1,9 +1,5 @@
 import { type FieldMetadataType } from 'twenty-shared/types';
-import {
-  findOrThrow,
-  isDefined,
-  type SearchableFieldType,
-} from 'twenty-shared/utils';
+import { findOrThrow, isDefined } from 'twenty-shared/utils';
 
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
@@ -15,7 +11,7 @@ import {
   ObjectMetadataExceptionCode,
 } from 'src/engine/metadata-modules/object-metadata/object-metadata.exception';
 import { SEARCH_VECTOR_FIELD } from 'src/engine/metadata-modules/search-field-metadata/constants/search-vector-field.constants';
-import { getTsVectorColumnExpressionFromFields } from 'src/engine/workspace-manager/utils/get-ts-vector-column-expression.util';
+import { buildCustomObjectSearchVectorFieldSettings } from 'src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util';
 
 type RecomputeSearchVectorFieldAfterLabelIdentifierUpdateArgs = {
   existingFlatObjectMetadata: FlatObjectMetadata;
@@ -53,19 +49,11 @@ export const recomputeSearchVectorFieldAfterLabelIdentifierUpdate = ({
   }
 
   try {
-    const newAsExpression = getTsVectorColumnExpressionFromFields([
-      {
-        name: newLabelIdentifierField.name,
-        type: newLabelIdentifierField.type as SearchableFieldType,
-      },
-    ]);
-
     return {
       ...searchVectorField,
       universalSettings: {
         ...searchVectorField.universalSettings,
-        asExpression: newAsExpression,
-        generatedType: 'STORED',
+        ...buildCustomObjectSearchVectorFieldSettings(objectFlatFieldMetadatas),
       },
     };
   } catch {

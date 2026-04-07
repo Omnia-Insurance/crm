@@ -36,7 +36,7 @@ export class WorkspaceSchemaFactory {
     });
 
     const schemaSDLResult = await schemaBuildObserver.observeAsync(
-      'schemaSDLMs',
+      'schemaGenerationMs',
       () =>
         this.workspaceGraphqlSchemaSDLService.getOrComputeSchemaSDL(
           workspace,
