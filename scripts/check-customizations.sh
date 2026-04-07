@@ -1182,6 +1182,16 @@ echo ""
 
 echo ""
 echo "============================================"
+echo ""
+echo "--- Ingestion Pipeline Settings ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/app/components/SettingsRoutes.tsx" \
+  "SettingsIngestionPipelines" \
+  "Settings routes must include Ingestion Pipeline pages"
+check_file_exists \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.module.ts" \
+  "Ingestion pipeline server module"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."
