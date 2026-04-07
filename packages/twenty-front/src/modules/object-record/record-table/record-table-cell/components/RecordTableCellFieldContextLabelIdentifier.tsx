@@ -9,7 +9,7 @@ import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/co
 import { RecordTableUpdateContext } from '@/object-record/record-table/contexts/RecordTableUpdateContext';
 import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useContext, type ReactNode } from 'react';
+import { useCallback, useContext, useMemo, type ReactNode } from 'react';
 
 type RecordTableCellFieldContextLabelIdentifierProps = {
   children: ReactNode;
@@ -49,38 +49,64 @@ export const RecordTableCellFieldContextLabelIdentifier = ({
   const fieldDefinition =
     fieldDefinitionByFieldMetadataItemId[recordField.fieldMetadataItemId];
 
-  const handleChipClick = () => {
+  // OMNIA-CUSTOM: Memoize callback and context value — this component renders
+  // per label-identifier cell. Without memoization, every parent re-render
+  // creates new object/function refs, cascading re-renders to all consumers.
+  const handleChipClick = useCallback(() => {
     onRecordIdentifierClick?.(rowIndex, recordId);
-  };
+  }, [onRecordIdentifierClick, rowIndex, recordId]);
+
+  const useUpdateRecordHook = useMemo(
+    () =>
+      updateRecord
+        ? (): [(params: any) => void, any] => [updateRecord, {}]
+        : undefined,
+    [updateRecord],
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      recordId,
+      fieldDefinition,
+      useUpdateRecord: useUpdateRecordHook,
+      isLabelIdentifier: true,
+      isLabelIdentifierCompact: shouldCompactRecordIndexLabelIdentifier,
+      displayedMaxRows: 1,
+      isRecordFieldReadOnly:
+        isRecordTableCellsNonEditable ||
+        isRecordFieldReadOnly({
+          isRecordReadOnly: isRecordReadOnly ?? false,
+          isSystemObject: objectMetadataItem.isSystem,
+          objectPermissions,
+          fieldMetadataItem: {
+            id: recordField.fieldMetadataItemId,
+            isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
+            isCustom: fieldDefinition.metadata.isCustom ?? false,
+          },
+        }),
+      maxWidth: recordField.size,
+      onRecordChipClick: handleChipClick,
+      isForbidden: !hasObjectReadPermissions,
+      triggerEvent,
+    }),
+    [
+      recordId,
+      fieldDefinition,
+      useUpdateRecordHook,
+      shouldCompactRecordIndexLabelIdentifier,
+      isRecordTableCellsNonEditable,
+      isRecordReadOnly,
+      objectMetadataItem,
+      objectPermissions,
+      recordField.fieldMetadataItemId,
+      recordField.size,
+      handleChipClick,
+      hasObjectReadPermissions,
+      triggerEvent,
+    ],
+  );
 
   return (
-    <FieldContext.Provider
-      value={{
-        recordId,
-        fieldDefinition,
-        useUpdateRecord: updateRecord ? () => [updateRecord, {}] : undefined,
-        isLabelIdentifier: true,
-        isLabelIdentifierCompact: shouldCompactRecordIndexLabelIdentifier,
-        displayedMaxRows: 1,
-        isRecordFieldReadOnly:
-          isRecordTableCellsNonEditable ||
-          isRecordFieldReadOnly({
-            isRecordReadOnly: isRecordReadOnly ?? false,
-            isSystemObject: objectMetadataItem.isSystem,
-            objectPermissions,
-            fieldMetadataItem: {
-              id: recordField.fieldMetadataItemId,
-              isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
-              isCustom: fieldDefinition.metadata.isCustom ?? false,
-            },
-          }),
-        maxWidth: recordField.size,
-        onRecordChipClick: handleChipClick,
-        isForbidden: !hasObjectReadPermissions,
-        triggerEvent,
-      }}
-    >
-      {children}
-    </FieldContext.Provider>
+    <FieldContext.Provider value={contextValue}>{children}</FieldContext.Provider>
   );
 };

@@ -14,7 +14,7 @@ import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/co
 import { RecordTableUpdateContext } from '@/object-record/record-table/contexts/RecordTableUpdateContext';
 import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useContext, type ReactNode } from 'react';
+import { useContext, useMemo, type ReactNode } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 type RecordTableCellFieldContextGenericProps = {
   recordField: RecordField;
@@ -90,37 +90,59 @@ export const RecordTableCellFieldContextGeneric = ({
     }
   }
 
-  return (
-    <FieldContext.Provider
-      value={{
-        fieldMetadataItemId: recordField.fieldMetadataItemId,
-        recordId,
-        fieldDefinition: fieldDefinition,
-        useUpdateRecord: updateRecord ? () => [updateRecord, {}] : undefined,
-        isLabelIdentifier: isLabelIdentifierField({
+  // OMNIA-CUSTOM: Memoize context value — this component renders per cell
+  // (O(rows × fields)). Without memoization, every parent re-render creates
+  // a new object reference, forcing all FieldContext consumers to re-render.
+  const useUpdateRecordHook = useMemo(
+    () =>
+      updateRecord
+        ? (): [(params: any) => void, any] => [updateRecord, {}]
+        : undefined,
+    [updateRecord],
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      fieldMetadataItemId: recordField.fieldMetadataItemId,
+      recordId,
+      fieldDefinition: fieldDefinition,
+      useUpdateRecord: useUpdateRecordHook,
+      isLabelIdentifier: isLabelIdentifierField({
+        fieldMetadataItem: {
+          id: fieldDefinition.fieldMetadataId,
+          name: fieldDefinition.metadata.fieldName,
+        },
+        objectMetadataItem,
+      }),
+      displayedMaxRows: 1,
+      isRecordFieldReadOnly:
+        isRecordTableCellsNonEditable ||
+        isRecordFieldReadOnly({
+          isRecordReadOnly: isRecordReadOnly ?? false,
+          isSystemObject: objectMetadataItem.isSystem,
+          objectPermissions,
           fieldMetadataItem: {
             id: fieldDefinition.fieldMetadataId,
-            name: fieldDefinition.metadata.fieldName,
+            isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
+            isCustom: fieldDefinition.metadata.isCustom ?? false,
           },
-          objectMetadataItem,
         }),
-        displayedMaxRows: 1,
-        isRecordFieldReadOnly:
-          isRecordTableCellsNonEditable ||
-          isRecordFieldReadOnly({
-            isRecordReadOnly: isRecordReadOnly ?? false,
-            isSystemObject: objectMetadataItem.isSystem,
-            objectPermissions,
-            fieldMetadataItem: {
-              id: fieldDefinition.fieldMetadataId,
-              isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
-              isCustom: fieldDefinition.metadata.isCustom ?? false,
-            },
-          }),
-        isForbidden: !hasObjectReadPermissions,
-      }}
-    >
-      {children}
-    </FieldContext.Provider>
+      isForbidden: !hasObjectReadPermissions,
+    }),
+    [
+      recordField.fieldMetadataItemId,
+      recordId,
+      fieldDefinition,
+      useUpdateRecordHook,
+      objectMetadataItem,
+      isRecordTableCellsNonEditable,
+      isRecordReadOnly,
+      objectPermissions,
+      hasObjectReadPermissions,
+    ],
+  );
+
+  return (
+    <FieldContext.Provider value={contextValue}>{children}</FieldContext.Provider>
   );
 };
