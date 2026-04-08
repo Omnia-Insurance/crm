@@ -84,7 +84,7 @@ spec:
             - sh
             - -c
             - >-
-              npx -y typeorm migration:run -d dist/database/typeorm/core/core.datasource
+              node node_modules/typeorm/cli.js migration:run -d dist/database/typeorm/core/core.datasource
           env:
             {{- if .Values.db.enabled }}
             - name: PGPASSWORD
