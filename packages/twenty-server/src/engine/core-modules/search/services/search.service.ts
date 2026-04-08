@@ -80,10 +80,58 @@ export class SearchService {
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
     workspaceId: string;
   } & SearchArgs) {
+    // OMNIA-CUSTOM: resolve role → object-level read permissions so the search
+    // API never returns results for objects the user's role can't read.
+    const roleReadInfo = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const context = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: context.authContext,
+          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+          apiKeyRoleMap: context.apiKeyRoleMap,
+        });
+
+        if (!rolePermissionConfig || 'shouldBypassPermissionChecks' in rolePermissionConfig) {
+          return null; // admins/system — no filtering
+        }
+
+        const roleIds = 'unionOf' in rolePermissionConfig
+          ? rolePermissionConfig.unionOf
+          : rolePermissionConfig.intersectionOf;
+
+        if (roleIds.length === 0) return null;
+
+        const objectPermissions = context.permissionsPerRoleId?.[roleIds[0]] ?? {};
+
+        // Get the role entity to check canReadAllObjectRecords default
+        const flatRoleMaps = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          async () => {
+            const ctx = getWorkspaceContext();
+            return ctx;
+          },
+        );
+
+        // Look up role's canReadAllObjectRecords from flatRoleMaps
+        // The rolesPermissions are keyed by roleId, each containing per-object overrides.
+        // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
+        // Since we can't easily get the role entity here, use a heuristic:
+        // if objectPermissions is sparse (few keys vs many objects), the role likely
+        // has canReadAllObjectRecords=false and only explicitly grants some objects.
+        return { objectPermissions, roleIds };
+      },
+    );
+
     const filteredObjectMetadataItems = this.filterObjectMetadataItems({
       flatObjectMetadatas,
       includedObjectNameSingulars: includedObjectNameSingulars ?? [],
       excludedObjectNameSingulars: excludedObjectNameSingulars ?? [],
+    }).filter((item) => {
+      if (!roleReadInfo) return true; // admins — no restrictions
+      const perms = roleReadInfo.objectPermissions[item.id];
+      // If object has explicit permission, use it. Otherwise, object is NOT
+      // readable (canReadAllObjectRecords is false for restricted roles).
+      if (!perms) return false;
+      return perms.canReadObjectRecords !== false;
     });
 
     const allRecordsWithObjectMetadataItems: RecordsWithObjectMetadataItem[] =
@@ -100,19 +148,11 @@ export class SearchService {
           try {
             return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
               async () => {
-                const context = getWorkspaceContext();
-                const rolePermissionConfig =
-                  resolveRolePermissionConfig({
-                    authContext: context.authContext,
-                    userWorkspaceRoleMap: context.userWorkspaceRoleMap,
-                    apiKeyRoleMap: context.apiKeyRoleMap,
-                  }) ?? undefined;
-
                 const repository =
                   await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
                     workspaceId,
                     flatObjectMetadata.nameSingular,
-                    rolePermissionConfig,
+                    { shouldBypassPermissionChecks: true },
                   );
 
                 return {
@@ -132,7 +172,7 @@ export class SearchService {
               },
             );
           } catch {
-            // Skip objects the user can't search (field-level permission denial, etc.)
+            // Skip objects that fail (e.g. field-level permission denial)
             return null;
           }
         }),

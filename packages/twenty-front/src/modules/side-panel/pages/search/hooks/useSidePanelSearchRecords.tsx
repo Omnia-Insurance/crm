@@ -4,12 +4,15 @@ import { CommandMenuItemScope } from '@/command-menu-item/types/CommandMenuItemS
 import { CommandMenuItemType } from '@/command-menu-item/types/CommandMenuItemType';
 import { MAX_SEARCH_RESULTS } from '@/command-menu/constants/MaxSearchResults';
 import { useReadableObjectMetadataItems } from '@/object-metadata/hooks/useReadableObjectMetadataItems';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
 import { sidePanelSearchObjectFilterState } from '@/side-panel/states/sidePanelSearchObjectFilterState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
 import { sidePanelShowHiddenObjectsState } from '@/side-panel/states/sidePanelShowHiddenObjectsState';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { CoreObjectNameSingular, AppPath } from 'twenty-shared/types';
+import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { t } from '@lingui/core/macro';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useMemo } from 'react';
@@ -18,6 +21,7 @@ import { Avatar } from 'twenty-ui/display';
 import { useDebounce } from 'use-debounce';
 import { useQuery } from '@apollo/client/react';
 import { SearchDocument } from '~/generated/graphql';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 export const useSidePanelSearchRecords = () => {
   const sidePanelSearch = useAtomStateValue(sidePanelSearchState);
@@ -31,6 +35,8 @@ export const useSidePanelSearchRecords = () => {
 
   const [deferredSidePanelSearch] = useDebounce(sidePanelSearch, 300);
   const { readableObjectMetadataItems } = useReadableObjectMetadataItems();
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const isAdmin = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
 
   const includedObjectNameSingulars = useMemo(() => {
     if (isDefined(sidePanelSearchObjectFilter)) {
@@ -38,12 +44,27 @@ export const useSidePanelSearchRecords = () => {
     }
 
     return readableObjectMetadataItems
-      .filter((item) => sidePanelShowHiddenObjects || item.isSearchable)
+      .filter((item) => {
+        if (!(sidePanelShowHiddenObjects || item.isSearchable)) return false;
+        // OMNIA-CUSTOM: non-admin users only search objects in their sidebar
+        // (excludes system objects like workspaceMember that get default perms)
+        if (!isAdmin) {
+          if (item.isSystem) return false;
+          const perms = getObjectPermissionsFromMapByObjectMetadataId({
+            objectPermissionsByObjectMetadataId,
+            objectMetadataId: item.id,
+          });
+          if (!perms?.showInSidebar) return false;
+        }
+        return true;
+      })
       .map((item) => item.nameSingular);
   }, [
     readableObjectMetadataItems,
     sidePanelSearchObjectFilter,
     sidePanelShowHiddenObjects,
+    isAdmin,
+    objectPermissionsByObjectMetadataId,
   ]);
 
   const { data: searchData, loading } = useQuery(SearchDocument, {
