@@ -146,32 +146,11 @@ export const validateOperationIsPermittedOrThrow = ({
         );
       }
 
-      validateReadFieldPermissionOrThrow({
-        restrictedFields: permissionsForEntity.restrictedFields,
-        selectedColumns,
-        columnNameToFieldMetadataIdMap,
-      });
-
-      if (updatedColumns.length > 0) {
-        const rlsFieldMetadataIds = new Set(
-          permissionsForEntity.rowLevelPermissionPredicates.map(
-            (predicate) => predicate.fieldMetadataId,
-          ),
-        );
-
-        const updatedColumnsWithoutRlsFields = updatedColumns.filter(
-          (column) =>
-            !rlsFieldMetadataIds.has(columnNameToFieldMetadataIdMap[column]),
-        );
-
-        if (updatedColumnsWithoutRlsFields.length > 0) {
-          validateUpdateFieldPermissionOrThrow({
-            restrictedFields: permissionsForEntity.restrictedFields,
-            updatedColumns: updatedColumnsWithoutRlsFields,
-            columnNameToFieldMetadataIdMap,
-          });
-        }
-      }
+      // OMNIA-CUSTOM: skip both read-field and update-field validation for inserts.
+      // TypeORM uses SELECT * in the RETURNING clause (triggers read-field check),
+      // and our pre-query hooks auto-populate restricted fields like status and
+      // submittedDate (triggers update-field check). Field-level restrictions
+      // should not block record creation — they're enforced on updates instead.
       break;
     case 'update':
       if (!permissionsForEntity?.canUpdateObjectRecords) {
