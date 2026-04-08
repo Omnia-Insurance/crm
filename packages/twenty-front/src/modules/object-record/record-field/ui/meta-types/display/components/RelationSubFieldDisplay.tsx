@@ -75,7 +75,7 @@ export const RelationSubFieldDisplay = () => {
 
     // Also hydrate nested relation objects (e.g., lead.leadSource)
     // so native relation chip displays can find them in the store.
-    for (const value of Object.values(relatedObject)) {
+    for (const value of Object.values(relatedObject as Record<string, unknown>)) {
       if (
         isDefined(value) &&
         typeof value === 'object' &&
@@ -101,7 +101,7 @@ export const RelationSubFieldDisplay = () => {
     (): FieldDefinition<FieldMetadata> => ({
       ...fieldDefinition,
       metadata: {
-        ...fieldDefinition.metadata,
+        ...(fieldDefinition.metadata as Record<string, unknown>),
         fieldName: subFieldName ?? '',
         subFieldName: undefined,
         // Merge type-specific metadata from the actual field metadata item

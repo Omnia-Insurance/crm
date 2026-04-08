@@ -1,7 +1,7 @@
+import { NavigationMenuItemType } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
-
-import { isDefined } from 'twenty-shared/utils';
 import { useNavigationMenuItemsData } from './useNavigationMenuItemsData';
 
 export const useWorkspaceNavigationMenuItems = (): {
@@ -9,22 +9,37 @@ export const useWorkspaceNavigationMenuItems = (): {
 } => {
   const { workspaceNavigationMenuItems: rawWorkspaceNavigationMenuItems } =
     useNavigationMenuItemsData();
+
   const views = useAtomStateValue(viewsSelector);
 
-  const workspaceNavViewIds = new Set(
-    rawWorkspaceNavigationMenuItems
-      .map((item) => item.viewId)
-      .filter((viewId) => isDefined(viewId)),
+  // Build a viewId → objectMetadataId lookup so we can resolve VIEW nav items
+  const objectMetadataIdByViewId = new Map(
+    views
+      .filter((view) => isDefined(view.objectMetadataId))
+      .map((view) => [view.id, view.objectMetadataId]),
   );
 
-  const objectMetadataIdsInWorkspaceNav = new Set([
-    ...views
-      .filter((view) => workspaceNavViewIds.has(view.id))
-      .map((view) => view.objectMetadataId),
-    ...rawWorkspaceNavigationMenuItems
-      .map((item) => item.targetObjectMetadataId)
-      .filter((objectMetadataId) => isDefined(objectMetadataId)),
-  ]);
+  // Collect object metadata IDs from OBJECT items (via targetObjectMetadataId)
+  // and VIEW items (via viewId → view.objectMetadataId).
+  const objectMetadataIdsInWorkspaceNav = new Set<string>();
+
+  for (const item of rawWorkspaceNavigationMenuItems) {
+    if (
+      item.type === NavigationMenuItemType.OBJECT &&
+      isDefined(item.targetObjectMetadataId)
+    ) {
+      objectMetadataIdsInWorkspaceNav.add(item.targetObjectMetadataId);
+    } else if (
+      item.type === NavigationMenuItemType.VIEW &&
+      isDefined(item.viewId)
+    ) {
+      const objectMetadataId = objectMetadataIdByViewId.get(item.viewId);
+
+      if (isDefined(objectMetadataId)) {
+        objectMetadataIdsInWorkspaceNav.add(objectMetadataId);
+      }
+    }
+  }
 
   return {
     objectMetadataIdsInWorkspaceNav,

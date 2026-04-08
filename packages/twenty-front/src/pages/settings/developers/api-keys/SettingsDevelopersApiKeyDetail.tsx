@@ -100,7 +100,8 @@ export const SettingsDevelopersApiKeyDetail = () => {
 
   const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
 
-  const roles = rolesData?.getRoles ?? [];
+  // getRoles returns the upstream Role type; cast to our extended type
+  const roles = (rolesData?.getRoles ?? []) as unknown as import('@/settings/roles/types/RoleWithPartialMembers').RoleWithPartialMembers[];
 
   const apiKey = apiKeyData?.apiKey;
   const [apiKeyName, setApiKeyName] = useState('');
@@ -201,12 +202,18 @@ export const SettingsDevelopersApiKeyDetail = () => {
   const regenerateApiKey = async () => {
     setIsLoading(true);
     try {
-      if (isNonEmptyString(apiKey?.name)) {
+      if (isDefined(apiKey)) {
+        if (!isNonEmptyString(apiKeyName)) {
+          enqueueErrorSnackBar({
+            message: t`API key name cannot be empty`,
+          });
+          return;
+        }
         const newExpiresAt = computeNewExpirationDate(
-          apiKey?.expiresAt,
-          apiKey?.createdAt,
+          apiKey.expiresAt,
+          apiKey.createdAt,
         );
-        const newApiKey = await createIntegration(apiKey?.name, newExpiresAt);
+        const newApiKey = await createIntegration(apiKeyName, newExpiresAt);
         await deleteIntegration(false);
 
         if (isNonEmptyString(newApiKey?.token)) {
@@ -233,9 +240,9 @@ export const SettingsDevelopersApiKeyDetail = () => {
 
   return (
     <>
-      {apiKey?.name && (
+      {isDefined(apiKey) && (
         <SubMenuTopBarContainer
-          title={apiKey?.name}
+          title={apiKey.name || t`Unnamed API Key`}
           links={[
             {
               children: t`Workspace`,
@@ -245,7 +252,7 @@ export const SettingsDevelopersApiKeyDetail = () => {
               children: t`APIs & Webhooks`,
               href: getSettingsPath(SettingsPath.ApiWebhooks),
             },
-            { children: apiKey?.name },
+            { children: apiKey.name || t`Unnamed API Key` },
           ]}
         >
           <SettingsPageContainer>

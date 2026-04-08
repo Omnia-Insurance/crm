@@ -1,4 +1,5 @@
-import { type FieldPermission, type Role } from '~/generated-metadata/graphql';
+import { type FieldPermission } from '~/generated-metadata/graphql';
+import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
 import { getRoleWithRemovedFieldPermission } from '@/settings/roles/role-permissions/object-level-permissions/field-permissions/utils/getRoleWithRemovedFieldPermission';
 
 const BASE_FIELD_PERMISSION: FieldPermission = {
@@ -10,7 +11,7 @@ const BASE_FIELD_PERMISSION: FieldPermission = {
   canUpdateFieldValue: false,
 };
 
-const BASE_ROLE_MOCK: Role = {
+const BASE_ROLE_MOCK: OmniaRole = {
   canAccessAllTools: false,
   showAllObjectsInSidebar: true,
   canDestroyAllObjectRecords: true,
@@ -32,7 +33,7 @@ const BASE_ROLE_MOCK: Role = {
 
 describe('getRoleWithRemovedFieldPermission', () => {
   it('should remove field permission with given fieldMetadataId', () => {
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
     };
 
@@ -48,7 +49,7 @@ describe('getRoleWithRemovedFieldPermission', () => {
   });
 
   it('should not remove not found fieldPermission', () => {
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
     };
 
@@ -60,7 +61,7 @@ describe('getRoleWithRemovedFieldPermission', () => {
   });
 
   it('should not remove if no fieldPermission property', () => {
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
       fieldPermissions: undefined,
     };

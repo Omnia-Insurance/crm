@@ -57,6 +57,9 @@ export const fileFolderConfigs: Record<FileFolder, FileFolderConfig> = {
   [FileFolder.AppTarball]: {
     ignoreExpirationToken: false,
   },
+  [FileFolder.GeneratedSdkClient]: {
+    ignoreExpirationToken: false,
+  },
   [FileFolder.Export]: {
     ignoreExpirationToken: false,
   },

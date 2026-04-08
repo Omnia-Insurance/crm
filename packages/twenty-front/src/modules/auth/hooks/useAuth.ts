@@ -23,6 +23,8 @@ import {
 } from '~/generated-metadata/graphql';
 
 import { tokenPairState } from '@/auth/states/tokenPairState';
+import { clearSessionLocalStorageKeys } from '@/auth/utils/clearSessionLocalStorageKeys';
+import { broadcastSignOutToOtherTabs } from '@/auth/utils/crossTabSignOut';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 
@@ -34,7 +36,8 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useSignUpInNewWorkspace } from '@/auth/sign-in-up/hooks/useSignUpInNewWorkspace';
-import { useLoadMockedMinimalMetadata } from '@/metadata-store/hooks/useLoadMockedMinimalMetadata';
+import { useLoadMockedMetadata } from '@/metadata-store/hooks/useLoadMockedMetadata';
+import { preloadMockedMetadata } from '@/metadata-store/utils/preloadMockedMetadata';
 import { lastAuthenticatedMethodState } from '@/auth/states/lastAuthenticatedMethodState';
 import { loginTokenState } from '@/auth/states/loginTokenState';
 import {
@@ -86,7 +89,7 @@ export const useAuth = () => {
   const { loadCurrentUser } = useLoadCurrentUser();
   const { clearSseClient } = useClearSseClient();
 
-  const { loadMockedMinimalMetadata } = useLoadMockedMinimalMetadata();
+  const { applyMockedMetadata } = useLoadMockedMetadata();
   const { createWorkspace } = useSignUpInNewWorkspace();
 
   const setSignInUpStep = useSetAtomState(signInUpStepState);
@@ -126,6 +129,9 @@ export const useAuth = () => {
 
   const clearSession = useCallback(async () => {
     clearSseClient();
+    store.set(isAppEffectRedirectEnabledState.atom, false);
+
+    const mockedData = await preloadMockedMetadata();
 
     const authProvidersValue = store.get(workspaceAuthProvidersState.atom);
     const domainConfigurationValue = store.get(domainConfigurationState.atom);
@@ -138,7 +144,7 @@ export const useAuth = () => {
     );
 
     sessionStorage.clear();
-    localStorage.clear();
+    clearSessionLocalStorageKeys();
 
     store.set(workspaceAuthProvidersState.atom, authProvidersValue);
     store.set(workspacePublicDataState.atom, workspacePublicDataValue);
@@ -159,25 +165,18 @@ export const useAuth = () => {
     store.set(loginTokenState.atom, null);
     store.set(signInUpStepState.atom, SignInUpStep.Init);
 
-    try {
-      await client.clearStore();
-      setLastAuthenticateWorkspaceDomain(null);
-      await loadMockedMinimalMetadata();
-    } catch (error) {
-      // oxlint-disable-next-line no-console
-      console.error('Error during session cleanup:', error);
-    }
+    applyMockedMetadata(mockedData);
 
-    // Use hard navigation instead of React Router's navigate because
-    // clearing currentUserState above triggers an AppRouter re-render that
-    // recreates the BrowserRouter (useCreateAppRouter is not memoized),
-    // which makes the navigate function from the old router instance stale.
-    window.location.href = AppPath.SignInUp;
+    await client.clearStore();
+    setLastAuthenticateWorkspaceDomain(null);
+    navigate(AppPath.SignInUp);
+    store.set(isAppEffectRedirectEnabledState.atom, true);
   }, [
     clearSseClient,
     client,
     setLastAuthenticateWorkspaceDomain,
-    loadMockedMinimalMetadata,
+    applyMockedMetadata,
+    navigate,
     store,
   ]);
 
@@ -482,6 +481,7 @@ export const useAuth = () => {
   );
 
   const handleSignOut = useCallback(async () => {
+    broadcastSignOutToOtherTabs();
     await clearSession();
     if (isCaptchaScriptLoaded) await requestFreshCaptchaToken();
   }, [clearSession, isCaptchaScriptLoaded, requestFreshCaptchaToken]);

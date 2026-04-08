@@ -17,7 +17,8 @@ const SettingsRoleSettingsWrapper = (
   const role = mockedRoles.find((role) => role.id === args.roleId);
 
   if (isDefined(role)) {
-    setSettingsDraftRole(role);
+    // Mock roles don't include Omnia-custom fields; safe to cast in tests
+    setSettingsDraftRole(role as never);
   }
 
   return (

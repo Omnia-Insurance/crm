@@ -11,7 +11,7 @@ import {
 } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
-import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
+import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 
 type UseRecordLevelPermissionSyncToDraftRoleProps = {
   roleId: string;

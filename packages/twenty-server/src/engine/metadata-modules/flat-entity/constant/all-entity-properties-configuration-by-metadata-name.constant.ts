@@ -232,7 +232,7 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       universalProperty: undefined,
     },
     isSearchable: {
-      toCompare: false,
+      toCompare: true,
       toStringify: false,
       universalProperty: undefined,
     },
@@ -378,6 +378,12 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toCompare: true,
       isOverridable: true,
     },
+    isActive: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+      isOverridable: false,
+    },
     deletedAt: {
       toStringify: false,
       universalProperty: undefined,
@@ -465,6 +471,12 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toCompare: false,
       toStringify: false,
       universalProperty: 'viewUniversalIdentifier',
+    },
+    isActive: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+      isOverridable: false,
     },
     overrides: {
       toCompare: true,
@@ -937,6 +949,12 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       universalProperty: undefined,
       isOverridable: true,
     },
+    isActive: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+      isOverridable: false,
+    },
     overrides: {
       toCompare: true,
       toStringify: true,
@@ -986,6 +1004,12 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toCompare: false,
       toStringify: false,
       universalProperty: undefined,
+    },
+    isActive: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+      isOverridable: false,
     },
     overrides: {
       toCompare: true,
@@ -1165,6 +1189,43 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toCompare: true,
       toStringify: false,
       universalProperty: 'roleUniversalIdentifier',
+    },
+    createdAt: {
+      toCompare: false,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    updatedAt: {
+      toCompare: false,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+  },
+  fieldPermission: {
+    roleId: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: 'roleUniversalIdentifier',
+    },
+    objectMetadataId: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: 'objectMetadataUniversalIdentifier',
+    },
+    fieldMetadataId: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: 'fieldMetadataUniversalIdentifier',
+    },
+    canReadFieldValue: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    canUpdateFieldValue: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
     },
     createdAt: {
       toCompare: false,
@@ -1442,6 +1503,11 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       universalProperty: undefined,
     },
     isHeadless: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    usesSdkClient: {
       toCompare: true,
       toStringify: false,
       universalProperty: undefined,

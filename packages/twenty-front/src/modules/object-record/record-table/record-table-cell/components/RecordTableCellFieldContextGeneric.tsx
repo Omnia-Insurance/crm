@@ -9,9 +9,11 @@ import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junctio
 import { getTargetObjectMetadataIdsFromField } from '@/object-record/record-field/ui/utils/junction/getTargetObjectMetadataIdsFromField';
 import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
-import { RecordUpdateContext } from '@/object-record/record-table/contexts/EntityUpdateMutationHookContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowContext';
+import { RecordTableUpdateContext } from '@/object-record/record-table/contexts/RecordTableUpdateContext';
+import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useContext, useMemo, type ReactNode } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 type RecordTableCellFieldContextGenericProps = {
@@ -24,6 +26,10 @@ export const RecordTableCellFieldContextGeneric = ({
   children,
 }: RecordTableCellFieldContextGenericProps) => {
   const { recordId, isRecordReadOnly } = useRecordTableRowContextOrThrow();
+
+  const isRecordTableCellsNonEditable = useAtomComponentStateValue(
+    isRecordTableCellsNonEditableComponentState,
+  );
 
   const { objectMetadataItem, objectMetadataItems, objectPermissions } =
     useRecordTableContextOrThrow();
@@ -68,7 +74,7 @@ export const RecordTableCellFieldContextGeneric = ({
     };
   }
 
-  const updateRecord = useContext(RecordUpdateContext);
+  const updateRecord = useContext(RecordTableUpdateContext);
 
   let hasObjectReadPermissions = objectPermissions.canReadObjectRecords;
 
@@ -120,7 +126,10 @@ export const RecordTableCellFieldContextGeneric = ({
   // (O(rows × fields)). Without memoization, every parent re-render creates
   // a new object reference, forcing all FieldContext consumers to re-render.
   const useUpdateRecordHook = useMemo(
-    () => (): [(params: any) => void, any] => [updateRecord, {}],
+    () =>
+      updateRecord
+        ? (): [(params: any) => void, any] => [updateRecord, {}]
+        : undefined,
     [updateRecord],
   );
 
@@ -138,16 +147,18 @@ export const RecordTableCellFieldContextGeneric = ({
         objectMetadataItem,
       }),
       displayedMaxRows: 1,
-      isRecordFieldReadOnly: isRecordFieldReadOnly({
-        isRecordReadOnly: isRecordReadOnly ?? false,
-        isSystemObject: objectMetadataItem.isSystem,
-        objectPermissions,
-        fieldMetadataItem: {
-          id: fieldDefinition.fieldMetadataId,
-          isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
-          isCustom: fieldDefinition.metadata.isCustom ?? false,
-        },
-      }),
+      isRecordFieldReadOnly:
+        isRecordTableCellsNonEditable ||
+        isRecordFieldReadOnly({
+          isRecordReadOnly: isRecordReadOnly ?? false,
+          isSystemObject: objectMetadataItem.isSystem,
+          objectPermissions,
+          fieldMetadataItem: {
+            id: fieldDefinition.fieldMetadataId,
+            isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
+            isCustom: fieldDefinition.metadata.isCustom ?? false,
+          },
+        }),
       isForbidden: !hasObjectReadPermissions,
     }),
     [
@@ -156,6 +167,7 @@ export const RecordTableCellFieldContextGeneric = ({
       fieldDefinition,
       useUpdateRecordHook,
       objectMetadataItem,
+      isRecordTableCellsNonEditable,
       isRecordReadOnly,
       objectPermissions,
       hasObjectReadPermissions,

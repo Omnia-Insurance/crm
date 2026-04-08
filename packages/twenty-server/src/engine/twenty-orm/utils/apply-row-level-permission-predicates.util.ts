@@ -1,9 +1,6 @@
 /* @license Enterprise */
 
-import {
-  FeatureFlagKey,
-  RowLevelPermissionPredicateScope,
-} from 'twenty-shared/types';
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 import {
   Brackets,
   NotBrackets,
@@ -30,6 +27,9 @@ type ApplyRowLevelPermissionPredicatesArgs<T extends ObjectLiteral> = {
   featureFlagMap: FeatureFlagMap;
 };
 
+// OMNIA-CUSTOM: async because buildRowLevelPermissionRecordFilter does
+// DB queries for linked-record resolution in Me predicates.
+// Action-scoped: routes reads through READ scope and writes through WRITE scope.
 export const applyRowLevelPermissionPredicates = async <
   T extends ObjectLiteral,
 >({
@@ -37,16 +37,8 @@ export const applyRowLevelPermissionPredicates = async <
   objectMetadata,
   internalContext,
   authContext,
-  featureFlagMap,
+  featureFlagMap: _featureFlagMap,
 }: ApplyRowLevelPermissionPredicatesArgs<T>): Promise<void> => {
-  if (
-    featureFlagMap[
-      FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-    ] !== true
-  ) {
-    return;
-  }
-
   const userWorkspaceId = isUserAuthContext(authContext)
     ? authContext.userWorkspaceId
     : undefined;
@@ -54,6 +46,14 @@ export const applyRowLevelPermissionPredicates = async <
     ? internalContext.userWorkspaceRoleMap[userWorkspaceId]
     : undefined;
 
+  const isUpdateOrDeleteQuery =
+    queryBuilder.expressionMap.queryType === 'update' ||
+    queryBuilder.expressionMap.queryType === 'soft-delete' ||
+    queryBuilder.expressionMap.queryType === 'delete' ||
+    queryBuilder.expressionMap.queryType === 'restore';
+
+  // OMNIA-CUSTOM: action-scoped predicates — writes use WRITE scope, reads use READ scope.
+  // This allows policies to be globally visible (READ) while write-restricted for non-owners (WRITE).
   const recordFilter = await buildRowLevelPermissionRecordFilter({
     flatRowLevelPermissionPredicateMaps:
       internalContext.flatRowLevelPermissionPredicateMaps,
@@ -61,13 +61,9 @@ export const applyRowLevelPermissionPredicates = async <
       internalContext.flatRowLevelPermissionPredicateGroupMaps,
     flatFieldMetadataMaps: internalContext.flatFieldMetadataMaps,
     objectMetadata,
-    targetScope:
-      queryBuilder.expressionMap.queryType === 'update' ||
-      queryBuilder.expressionMap.queryType === 'soft-delete' ||
-      queryBuilder.expressionMap.queryType === 'delete' ||
-      queryBuilder.expressionMap.queryType === 'restore'
-        ? RowLevelPermissionPredicateScope.WRITE
-        : RowLevelPermissionPredicateScope.READ,
+    targetScope: isUpdateOrDeleteQuery
+      ? RowLevelPermissionPredicateScope.WRITE
+      : RowLevelPermissionPredicateScope.READ,
     roleId,
     workspaceMember: isUserAuthContext(authContext)
       ? authContext.workspaceMember
@@ -83,12 +79,6 @@ export const applyRowLevelPermissionPredicates = async <
   if (!recordFilter || Object.keys(recordFilter).length === 0) {
     return;
   }
-
-  const isUpdateOrDeleteQuery =
-    queryBuilder.expressionMap.queryType === 'update' ||
-    queryBuilder.expressionMap.queryType === 'soft-delete' ||
-    queryBuilder.expressionMap.queryType === 'delete' ||
-    queryBuilder.expressionMap.queryType === 'restore';
 
   applyObjectRecordFilterToQueryBuilder({
     queryBuilder,

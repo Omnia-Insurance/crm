@@ -60,7 +60,7 @@ export const RecordTableCellHoveredPortalContent = () => {
   const { isRecordFieldReadOnly: isReadOnly, fieldDefinition } =
     useContext(FieldContext);
 
-  const isFieldInputOnly = useIsFieldInputOnly();
+  const isFieldInputOnly = useIsFieldInputOnly() && !isReadOnly;
 
   // OMNIA-CUSTOM: Sub-field columns are read-only but should still show
   // cell action buttons (open related record, copy phone/email, etc.)

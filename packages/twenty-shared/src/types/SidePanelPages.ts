@@ -1,9 +1,8 @@
 export enum SidePanelPages {
-  Root = 'root',
+  CommandMenuDisplay = 'command-menu-display',
   ViewRecord = 'view-record',
   MergeRecords = 'merge-records',
   UpdateRecords = 'update-records',
-  ViewEmailThread = 'view-email-thread',
   ViewCalendarEvent = 'view-calendar-event',
   EditRichText = 'edit-rich-text',
   Copilot = 'copilot',
@@ -21,7 +20,11 @@ export enum SidePanelPages {
   PageLayoutIframeSettings = 'page-layout-iframe-settings',
   PageLayoutTabSettings = 'page-layout-tab-settings',
   PageLayoutFieldsSettings = 'page-layout-fields-settings',
+  PageLayoutRecordTableSettings = 'page-layout-record-table-settings',
+  PageLayoutFieldSettings = 'page-layout-field-settings',
   ViewFrontComponent = 'view-front-component',
   NavigationMenuItemEdit = 'navigation-menu-item-edit',
   NavigationMenuAddItem = 'navigation-menu-add-item',
+  CommandMenuEdit = 'command-menu-edit',
+  ComposeEmail = 'compose-email',
 }

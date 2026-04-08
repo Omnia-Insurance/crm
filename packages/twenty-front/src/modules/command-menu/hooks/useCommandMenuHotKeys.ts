@@ -1,4 +1,3 @@
-import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { useSetGlobalCommandMenuContext } from '@/command-menu/hooks/useSetGlobalCommandMenuContext';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { useKeyboardShortcutMenu } from '@/keyboard-shortcut-menu/hooks/useKeyboardShortcutMenu';
@@ -6,6 +5,7 @@ import { SIDE_PANEL_COMPONENT_INSTANCE_ID } from '@/side-panel/constants/SidePan
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useOpenAskAIPageInSidePanel } from '@/side-panel/hooks/useOpenAskAIPageInSidePanel';
 import { useOpenRecordsSearchPageInSidePanel } from '@/side-panel/hooks/useOpenRecordsSearchPageInSidePanel';
+import { useSidePanelHistory } from '@/side-panel/hooks/useSidePanelHistory';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
@@ -26,7 +26,8 @@ export const useCommandMenuHotKeys = () => {
 
   const { openAskAIPage } = useOpenAskAIPageInSidePanel();
 
-  const { goBackWithValidation } = useCommandMenuCloseWithValidation();
+  const { goBackFromSidePanel, goBackOneSubPageOrMainPage } =
+    useSidePanelHistory();
 
   const { setGlobalCommandMenuContext } = useSetGlobalCommandMenuContext();
 
@@ -82,10 +83,10 @@ export const useCommandMenuHotKeys = () => {
   useHotkeysOnFocusedElement({
     keys: [Key.Escape],
     callback: () => {
-      goBackWithValidation();
+      goBackFromSidePanel();
     },
     focusId: SIDE_PANEL_FOCUS_ID,
-    dependencies: [goBackWithValidation],
+    dependencies: [goBackFromSidePanel],
     options: {
       enableOnFormTags: false,
     },
@@ -99,7 +100,7 @@ export const useCommandMenuHotKeys = () => {
       }
 
       if (
-        sidePanelPage === SidePanelPages.Root &&
+        sidePanelPage === SidePanelPages.CommandMenuDisplay &&
         !(
           contextStoreTargetedRecordsRule.mode === 'selection' &&
           contextStoreTargetedRecordsRule.selectedRecordIds.length === 0
@@ -107,8 +108,8 @@ export const useCommandMenuHotKeys = () => {
       ) {
         setGlobalCommandMenuContext();
       }
-      if (sidePanelPage !== SidePanelPages.Root) {
-        goBackWithValidation();
+      if (sidePanelPage !== SidePanelPages.CommandMenuDisplay) {
+        goBackOneSubPageOrMainPage();
       }
     },
     focusId: SIDE_PANEL_FOCUS_ID,
@@ -116,7 +117,7 @@ export const useCommandMenuHotKeys = () => {
       sidePanelPage,
       sidePanelSearch,
       contextStoreTargetedRecordsRule,
-      goBackWithValidation,
+      goBackOneSubPageOrMainPage,
       setGlobalCommandMenuContext,
     ],
     options: {

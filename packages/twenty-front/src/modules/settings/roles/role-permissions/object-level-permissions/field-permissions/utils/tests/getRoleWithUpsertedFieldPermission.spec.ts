@@ -1,7 +1,8 @@
-import { type FieldPermission, type Role } from '~/generated-metadata/graphql';
+import { type FieldPermission } from '~/generated-metadata/graphql';
+import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
 import { getRoleWithUpsertedFieldPermission } from '@/settings/roles/role-permissions/object-level-permissions/field-permissions/utils/getRoleWithUpsertedFieldPermission';
 
-const BASE_ROLE_MOCK: Role = {
+const BASE_ROLE_MOCK: OmniaRole = {
   canAccessAllTools: false,
   showAllObjectsInSidebar: true,
   canDestroyAllObjectRecords: true,
@@ -31,7 +32,7 @@ const BASE_FIELD_PERMISSION_TO_UPSERT: FieldPermission = {
 
 describe('getRoleWithUpsertedFieldPermission', () => {
   it('should work with undefined fieldPermission property on role', () => {
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
     };
 
@@ -55,7 +56,7 @@ describe('getRoleWithUpsertedFieldPermission', () => {
       ...BASE_FIELD_PERMISSION_TO_UPSERT,
     };
 
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
       fieldPermissions: [baseFieldPermission],
     };
@@ -84,7 +85,7 @@ describe('getRoleWithUpsertedFieldPermission', () => {
   });
 
   it('should push fieldPermission in existing array', () => {
-    const role: Role = {
+    const role: OmniaRole = {
       ...BASE_ROLE_MOCK,
       fieldPermissions: [BASE_FIELD_PERMISSION_TO_UPSERT],
     };

@@ -1,16 +1,11 @@
-import { Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-
 import * as fs from 'fs';
 
 import chalk from 'chalk';
 import { Command, Option } from 'nest-commander';
-import { Repository } from 'typeorm';
 
-import { ActiveOrSuspendedWorkspacesMigrationCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspaces-migration.command-runner';
-import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspaces-migration.command-runner';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
+import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 
 // Self-contained map covering every known CSV variant
@@ -59,20 +54,14 @@ type SyncReport = {
   description:
     'Sync policy statuses from an old CRM CSV export. Supports --dry-run.',
 })
-export class SyncPolicyStatusFromCsvCommand extends ActiveOrSuspendedWorkspacesMigrationCommandRunner {
-  protected override readonly logger = new Logger(
-    SyncPolicyStatusFromCsvCommand.name,
-  );
-
+export class SyncPolicyStatusFromCsvCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
   private csvPath: string;
 
   constructor(
-    @InjectRepository(WorkspaceEntity)
-    protected readonly workspaceRepository: Repository<WorkspaceEntity>,
-    protected readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    protected readonly dataSourceService: DataSourceService,
+    protected readonly workspaceIteratorService: WorkspaceIteratorService,
+    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {
-    super(workspaceRepository, globalWorkspaceOrmManager, dataSourceService);
+    super(workspaceIteratorService);
   }
 
   @Option({

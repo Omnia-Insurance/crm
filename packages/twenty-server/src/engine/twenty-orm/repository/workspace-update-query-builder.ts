@@ -1,6 +1,6 @@
 import { msg } from '@lingui/core/macro';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
-import { FeatureFlagKey, type ObjectsPermissions } from 'twenty-shared/types';
+import { type ObjectsPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
   UpdateQueryBuilder,
@@ -37,7 +37,6 @@ import { computeEventSelectQueryBuilder } from 'src/engine/twenty-orm/utils/comp
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
-import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { validateRLSPredicatesForRecords } from 'src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util';
 import { computeTableName } from 'src/engine/utils/compute-table-name.util';
@@ -137,7 +136,9 @@ export class WorkspaceUpdateQueryBuilder<
         objectMetadata.isCustom,
       );
 
-      const before = await eventSelectQueryBuilder.getMany();
+      const before = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       if (before.length > QUERY_MAX_RECORDS) {
         throw new TwentyORMException(
@@ -208,6 +209,7 @@ export class WorkspaceUpdateQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: updates always treat relations as upsert
             isUpsert: true,
           });
 
@@ -228,7 +230,7 @@ export class WorkspaceUpdateQueryBuilder<
           }) as T,
       );
 
-      await this.validateRLSPredicatesForUpdate({
+      this.validateRLSPredicatesForUpdate({
         updatedRecords,
       });
 
@@ -238,7 +240,9 @@ export class WorkspaceUpdateQueryBuilder<
         await this.filesFieldSync.updateFileEntityRecords(filesFieldFileIds);
       }
 
-      const after = await eventSelectQueryBuilder.getMany();
+      const after = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       const formattedAfter = formatResult<T[]>(
         after,
@@ -247,38 +251,29 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      const policy = this.internalContext.eventEmissionPolicy;
-      const origin = policy?.origin;
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPDATED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedAfter,
+          recordsBefore: formattedBefore,
+          authContext: this.authContext,
+        }),
+      );
 
-      if (shouldEmitEvent(policy, DatabaseEventAction.UPDATED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.UPDATED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedAfter,
-            recordsBefore: formattedBefore,
-            authContext: this.authContext,
-            origin,
-          }),
-        );
-      }
-
-      if (shouldEmitEvent(policy, DatabaseEventAction.UPSERTED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.UPSERTED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedAfter,
-            recordsBefore: formattedBefore,
-            authContext: this.authContext,
-            origin,
-          }),
-        );
-      }
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPSERTED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedAfter,
+          recordsBefore: formattedBefore,
+          authContext: this.authContext,
+        }),
+      );
 
       const formattedResult = formatResult<T[]>(
         result.raw,
@@ -286,22 +281,6 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatObjectMetadataMaps,
         this.internalContext.flatFieldMetadataMaps,
       );
-
-      // After data is committed, surface any relation connect warnings
-      const importWarnings =
-        this._relationNestedQueries?.getImportWarnings() ?? [];
-
-      if (importWarnings.length > 0) {
-        const exception = new TwentyORMException(
-          `Import completed with ${importWarnings.length} warning(s)`,
-          TwentyORMExceptionCode.IMPORT_PARTIAL_SUCCESS,
-        );
-
-        (exception as any).importWarnings = importWarnings;
-        (exception as any).savedRecordCount = 1;
-
-        throw exception;
-      }
 
       return {
         raw: result.raw,
@@ -365,7 +344,9 @@ export class WorkspaceUpdateQueryBuilder<
         this.manyInputs.map((input) => input.criteria),
       );
 
-      const beforeRecords = await eventSelectQueryBuilder.getMany();
+      const beforeRecords = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       const formattedBefore = formatResult<T[]>(
         beforeRecords,
@@ -429,6 +410,7 @@ export class WorkspaceUpdateQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: updates always treat relations as upsert
             isUpsert: true,
           });
 
@@ -462,7 +444,7 @@ export class WorkspaceUpdateQueryBuilder<
             ]
           : [];
 
-        await this.validateRLSPredicatesForUpdate({
+        this.validateRLSPredicatesForUpdate({
           updatedRecords,
         });
 
@@ -475,7 +457,9 @@ export class WorkspaceUpdateQueryBuilder<
         await this.filesFieldSync.updateFileEntityRecords(filesFieldFileIds);
       }
 
-      const afterRecords = await eventSelectQueryBuilder.getMany();
+      const afterRecords = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       const formattedAfter = formatResult<T[]>(
         afterRecords,
@@ -484,38 +468,29 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      const policy2 = this.internalContext.eventEmissionPolicy;
-      const origin2 = policy2?.origin;
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPDATED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedAfter,
+          recordsBefore: formattedBefore,
+          authContext: this.authContext,
+        }),
+      );
 
-      if (shouldEmitEvent(policy2, DatabaseEventAction.UPDATED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.UPDATED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedAfter,
-            recordsBefore: formattedBefore,
-            authContext: this.authContext,
-            origin: origin2,
-          }),
-        );
-      }
-
-      if (shouldEmitEvent(policy2, DatabaseEventAction.UPSERTED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.UPSERTED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedAfter,
-            recordsBefore: formattedBefore,
-            authContext: this.authContext,
-            origin: origin2,
-          }),
-        );
-      }
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPSERTED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedAfter,
+          recordsBefore: formattedBefore,
+          authContext: this.authContext,
+        }),
+      );
 
       const formattedResults = formatResult<T[]>(
         results.flatMap((result) => result.raw),
@@ -523,22 +498,6 @@ export class WorkspaceUpdateQueryBuilder<
         this.internalContext.flatObjectMetadataMaps,
         this.internalContext.flatFieldMetadataMaps,
       );
-
-      // After data is committed, surface any relation connect warnings
-      const importWarnings =
-        this._relationNestedQueries?.getImportWarnings() ?? [];
-
-      if (importWarnings.length > 0) {
-        const exception = new TwentyORMException(
-          `Import completed with ${importWarnings.length} warning(s)`,
-          TwentyORMExceptionCode.IMPORT_PARTIAL_SUCCESS,
-        );
-
-        (exception as any).importWarnings = importWarnings;
-        (exception as any).savedRecordCount = results.length;
-
-        throw exception;
-      }
 
       return {
         raw: results.flatMap((result) => result.raw),
@@ -668,14 +627,6 @@ export class WorkspaceUpdateQueryBuilder<
   }
 
   private async applyRowLevelPermissionPredicates(): Promise<void> {
-    if (
-      this.featureFlagMap[
-        FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-      ] !== true
-    ) {
-      return;
-    }
-
     if (this.shouldBypassPermissionChecks) {
       return;
     }
@@ -696,19 +647,11 @@ export class WorkspaceUpdateQueryBuilder<
     });
   }
 
-  private async validateRLSPredicatesForUpdate({
+  private validateRLSPredicatesForUpdate({
     updatedRecords,
   }: {
     updatedRecords: T[];
-  }): Promise<void> {
-    if (
-      this.featureFlagMap[
-        FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-      ] !== true
-    ) {
-      return;
-    }
-
+  }): void {
     const mainAliasTarget = this.getMainAliasTarget();
     const objectMetadata = getObjectMetadataFromEntityTarget(
       mainAliasTarget,
@@ -722,7 +665,7 @@ export class WorkspaceUpdateQueryBuilder<
       this.internalContext.flatFieldMetadataMaps,
     );
 
-    await validateRLSPredicatesForRecords({
+    validateRLSPredicatesForRecords({
       records: updatedRecordsFormatted,
       objectMetadata,
       internalContext: this.internalContext,

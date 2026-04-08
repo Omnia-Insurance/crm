@@ -149,9 +149,46 @@ const SettingsApiWebhooks = lazy(() =>
   })),
 );
 
+// OMNIA-CUSTOM: Ingestion Pipeline settings pages
+const SettingsIngestionPipelines = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelines'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelines,
+  })),
+);
+
+const SettingsIngestionPipelineNew = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelineNew,
+  })),
+);
+
+const SettingsIngestionPipelineDetail = lazy(() =>
+  import(
+    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail'
+  ).then((module) => ({
+    default: module.SettingsIngestionPipelineDetail,
+  })),
+);
+
 const SettingsAI = lazy(() =>
   import('~/pages/settings/ai/SettingsAI').then((module) => ({
     default: module.SettingsAI,
+  })),
+);
+
+const SettingsAIUsageUserDetail = lazy(() =>
+  import('~/pages/settings/ai/SettingsAIUsageUserDetail').then((module) => ({
+    default: module.SettingsAIUsageUserDetail,
+  })),
+);
+
+const SettingsToolDetail = lazy(() =>
+  import('~/pages/settings/ai/SettingsToolDetail').then((module) => ({
+    default: module.SettingsToolDetail,
   })),
 );
 
@@ -290,30 +327,6 @@ const SettingsDevelopersWebhookDetail = lazy(() =>
     '~/pages/settings/developers/webhooks/components/SettingsDevelopersWebhookDetail'
   ).then((module) => ({
     default: module.SettingsDevelopersWebhookDetail,
-  })),
-);
-
-const SettingsIngestionPipelines = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelines'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelines,
-  })),
-);
-
-const SettingsIngestionPipelineNew = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelineNew,
-  })),
-);
-
-const SettingsIngestionPipelineDetail = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelineDetail,
   })),
 );
 
@@ -538,6 +551,18 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           path={SettingsPath.ApiWebhooks}
           element={<SettingsApiWebhooks />}
         />
+        <Route
+          path={SettingsPath.IngestionPipelines}
+          element={<SettingsIngestionPipelines />}
+        />
+        <Route
+          path={SettingsPath.NewIngestionPipeline}
+          element={<SettingsIngestionPipelineNew />}
+        />
+        <Route
+          path={SettingsPath.IngestionPipelineDetail}
+          element={<SettingsIngestionPipelineDetail />}
+        />
         <Route path={SettingsPath.AI} element={<SettingsAI />} />
         <Route path={SettingsPath.AIPrompts} element={<SettingsAIPrompts />} />
         <Route
@@ -559,6 +584,14 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
         <Route
           path={SettingsPath.AISkillDetail}
           element={<SettingsSkillForm mode="edit" />}
+        />
+        <Route
+          path={SettingsPath.AIUsageUserDetail}
+          element={<SettingsAIUsageUserDetail />}
+        />
+        <Route
+          path={SettingsPath.AIToolDetail}
+          element={<SettingsToolDetail />}
         />
         <Route
           path={SettingsPath.LogicFunctionDetail}
@@ -703,28 +736,7 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
       <Route
         element={
           <SettingsProtectedRouteWrapper
-            settingsPermission={PermissionFlagType.API_KEYS_AND_WEBHOOKS}
-          />
-        }
-      >
-        <Route
-          path={SettingsPath.IngestionPipelines}
-          element={<SettingsIngestionPipelines />}
-        />
-        <Route
-          path={SettingsPath.NewIngestionPipeline}
-          element={<SettingsIngestionPipelineNew />}
-        />
-        <Route
-          path={SettingsPath.IngestionPipelineDetail}
-          element={<SettingsIngestionPipelineDetail />}
-        />
-      </Route>
-
-      <Route
-        element={
-          <SettingsProtectedRouteWrapper
-            requiredFeatureFlag={FeatureFlagKey.IS_APPLICATION_ENABLED}
+            settingsPermission={PermissionFlagType.APPLICATIONS}
           />
         }
       >

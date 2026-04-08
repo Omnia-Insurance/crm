@@ -1,14 +1,15 @@
+import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { type SettingsRoleObjectPermissionKey } from '@/settings/roles/role-permissions/objects-permissions/constants/SettingsRoleObjectPermissionIconConfig';
 import { t } from '@lingui/core/macro';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
+import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
 import { WorkflowAiAgentPermissionsPermissionRow } from './WorkflowAiAgentPermissionsPermissionRow';
-import { StyledLabel, StyledList } from './WorkflowAiAgentPermissionsStyles';
+
 type WorkflowAiAgentPermissionsCrudListProps = {
   permissions: Array<{
     key: SettingsRoleObjectPermissionKey;
     label: string;
   }>;
-  objectPermissions?: ObjectPermission;
+  objectPermissions?: OmniaObjectPermission;
   readonly: boolean;
   onAddPermission: (
     objectMetadataId: string,
@@ -25,25 +26,22 @@ export const WorkflowAiAgentPermissionsCrudList = ({
   objectMetadataId,
 }: WorkflowAiAgentPermissionsCrudListProps) => {
   return (
-    <div>
-      <StyledLabel>{t`CRUD`}</StyledLabel>
-      <StyledList>
-        {permissions.map((permission) => {
-          const isEnabled = Boolean(objectPermissions?.[permission.key]);
+    <SidePanelGroup heading={t`CRUD`}>
+      {permissions.map((permission) => {
+        const isEnabled = Boolean(objectPermissions?.[permission.key]);
 
-          return (
-            <WorkflowAiAgentPermissionsPermissionRow
-              key={permission.key}
-              permission={permission}
-              isEnabled={isEnabled}
-              readonly={readonly}
-              showDeleteButton={false}
-              alwaysShowGranted={true}
-              onAdd={() => onAddPermission(objectMetadataId, permission.key)}
-            />
-          );
-        })}
-      </StyledList>
-    </div>
+        return (
+          <WorkflowAiAgentPermissionsPermissionRow
+            key={permission.key}
+            permission={permission}
+            isEnabled={isEnabled}
+            readonly={readonly}
+            showDeleteButton={false}
+            alwaysShowGranted={true}
+            onAdd={() => onAddPermission(objectMetadataId, permission.key)}
+          />
+        );
+      })}
+    </SidePanelGroup>
   );
 };

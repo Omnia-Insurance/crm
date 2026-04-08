@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { isNonEmptyString } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
 import { type AiSdkPackage } from 'twenty-shared/ai';
 
 import {
@@ -11,6 +12,7 @@ import {
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 import { SupportDriver } from 'src/engine/core-modules/twenty-config/interfaces/support.interface';
 
+import { MaintenanceModeService } from 'src/engine/core-modules/admin-panel/maintenance-mode.service';
 import {
   type ClientAIModelConfig,
   type ClientConfig,
@@ -20,8 +22,10 @@ import { DomainServerConfigService } from 'src/engine/core-modules/domain/domain
 import { PUBLIC_FEATURE_FLAGS } from 'src/engine/core-modules/feature-flag/constants/public-feature-flag.const';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { convertDollarsToBillingCredits } from 'src/engine/metadata-modules/ai/ai-billing/utils/convert-dollars-to-billing-credits.util';
-import { DEFAULT_FAST_MODEL } from 'src/engine/metadata-modules/ai/ai-models/types/default-fast-model.const';
-import { DEFAULT_SMART_MODEL } from 'src/engine/metadata-modules/ai/ai-models/types/default-smart-model.const';
+import {
+  AUTO_SELECT_FAST_MODEL_ID,
+  AUTO_SELECT_SMART_MODEL_ID,
+} from 'twenty-shared/constants';
 import { MODEL_FAMILY_LABELS } from 'src/engine/metadata-modules/ai/ai-models/constants/model-family-labels.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 
@@ -31,6 +35,7 @@ export class ClientConfigService {
     private twentyConfigService: TwentyConfigService,
     private domainServerConfigService: DomainServerConfigService,
     private aiModelRegistryService: AiModelRegistryService,
+    private maintenanceModeService: MaintenanceModeService,
   ) {}
 
   private deriveNativeCapabilities(
@@ -107,10 +112,6 @@ export class ClientConfigService {
         this.aiModelRegistryService.getDefaultSpeedModel();
       const defaultSpeedModelConfig =
         this.aiModelRegistryService.getModelConfig(defaultSpeedModel?.modelId);
-      const defaultSpeedModelLabel =
-        defaultSpeedModelConfig?.label ||
-        defaultSpeedModel?.modelId ||
-        'Default';
 
       const defaultPerformanceModel =
         this.aiModelRegistryService.getDefaultPerformanceModel();
@@ -118,23 +119,29 @@ export class ClientConfigService {
         this.aiModelRegistryService.getModelConfig(
           defaultPerformanceModel?.modelId,
         );
-      const defaultPerformanceModelLabel =
-        defaultPerformanceModelConfig?.label ||
-        defaultPerformanceModel?.modelId ||
-        'Default';
 
       aiModels.unshift(
         {
-          modelId: DEFAULT_SMART_MODEL,
-          label: `Best (${defaultPerformanceModelLabel})`,
-          sdkPackage: null,
+          modelId: AUTO_SELECT_SMART_MODEL_ID,
+          label:
+            defaultPerformanceModelConfig?.label ||
+            defaultPerformanceModel?.modelId ||
+            'Default',
+          modelFamily: defaultPerformanceModelConfig?.modelFamily,
+          providerName: defaultPerformanceModel?.providerName,
+          sdkPackage: defaultPerformanceModel?.sdkPackage ?? null,
           inputCostPerMillionTokensInCredits: 0,
           outputCostPerMillionTokensInCredits: 0,
         },
         {
-          modelId: DEFAULT_FAST_MODEL,
-          label: `Best (${defaultSpeedModelLabel})`,
-          sdkPackage: null,
+          modelId: AUTO_SELECT_FAST_MODEL_ID,
+          label:
+            defaultSpeedModelConfig?.label ||
+            defaultSpeedModel?.modelId ||
+            'Default',
+          modelFamily: defaultSpeedModelConfig?.modelFamily,
+          providerName: defaultSpeedModel?.providerName,
+          sdkPackage: defaultSpeedModel?.sdkPackage ?? null,
           inputCostPerMillionTokensInCredits: 0,
           outputCostPerMillionTokensInCredits: 0,
         },
@@ -233,7 +240,21 @@ export class ClientConfigService {
         : undefined,
       isCloudflareIntegrationEnabled: this.isCloudflareIntegrationEnabled(),
       isClickHouseConfigured: !!this.twentyConfigService.get('CLICKHOUSE_URL'),
+      isWorkspaceSchemaDDLLocked: this.twentyConfigService.get(
+        'WORKSPACE_SCHEMA_DDL_LOCKED',
+      ),
     };
+
+    const maintenanceMode =
+      await this.maintenanceModeService.getMaintenanceMode();
+
+    if (isDefined(maintenanceMode)) {
+      clientConfig.maintenance = {
+        startAt: new Date(maintenanceMode.startAt),
+        endAt: new Date(maintenanceMode.endAt),
+        link: maintenanceMode.link,
+      };
+    }
 
     return clientConfig;
   }

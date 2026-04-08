@@ -3,6 +3,7 @@ import { lastVisitedObjectMetadataItemIdState } from '@/navigation/states/lastVi
 import { type ObjectPathInfo } from '@/navigation/types/ObjectPathInfo';
 import { navigationMenuItemsSelector } from '@/navigation-menu-item/common/states/navigationMenuItemsSelector';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { filterReadableActiveObjectMetadataItems } from '@/object-metadata/utils/filterReadableActiveObjectMetadataItems';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
@@ -15,6 +16,9 @@ import { getAppPath, getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { useStore } from 'jotai';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 
+// OMNIA-CUSTOM: member sidebar display order — person (Leads) first
+const SIDEBAR_ORDER = ['person', 'policy', 'note', 'task'];
+
 export const useDefaultHomePagePath = () => {
   const store = useStore();
   const currentUser = useAtomStateValue(currentUserState);
@@ -22,28 +26,24 @@ export const useDefaultHomePagePath = () => {
   const permissionFlagMap = usePermissionFlagMap();
   const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
 
-  const { alphaSortedActiveNonSystemObjectMetadataItems } =
-    useFilteredObjectMetadataItems();
+  const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
 
-  const readableAlphaSortedActiveNonSystemObjectMetadataItems = useMemo(() => {
-    return alphaSortedActiveNonSystemObjectMetadataItems.filter((item) => {
-      const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId({
+  const readableNonSystemObjectMetadataItems = useMemo(
+    () =>
+      filterReadableActiveObjectMetadataItems(
+        activeObjectMetadataItems,
         objectPermissionsByObjectMetadataId,
-        objectMetadataId: item.id,
-      });
-      return objectPermissions?.canReadObjectRecords;
-    });
-  }, [
-    alphaSortedActiveNonSystemObjectMetadataItems,
-    objectPermissionsByObjectMetadataId,
-  ]);
+      )
+        .filter((item) => !item.isSystem)
+        .sort((a, b) => a.nameSingular.localeCompare(b.nameSingular)),
+    [activeObjectMetadataItems, objectPermissionsByObjectMetadataId],
+  );
 
   // For non-layout users, filter to only objects visible in sidebar,
   // sorted to match sidebar display order (ORDERED_FIRST_STANDARD_OBJECTS).
   const sidebarVisibleObjectMetadataItems = useMemo(() => {
-    if (isAdmin) return readableAlphaSortedActiveNonSystemObjectMetadataItems;
-    const SIDEBAR_ORDER = ['person', 'policy', 'company', 'opportunity', 'note', 'task'];
-    return readableAlphaSortedActiveNonSystemObjectMetadataItems
+    if (isAdmin) return readableNonSystemObjectMetadataItems;
+    return readableNonSystemObjectMetadataItems
       .filter((item) => {
         const objectPermissions =
           getObjectPermissionsFromMapByObjectMetadataId({
@@ -62,17 +62,17 @@ export const useDefaultHomePagePath = () => {
       });
   }, [
     isAdmin,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
     objectPermissionsByObjectMetadataId,
   ]);
 
   const getActiveObjectMetadataItemMatchingId = useCallback(
     (objectMetadataId: string) => {
-      return readableAlphaSortedActiveNonSystemObjectMetadataItems.find(
+      return readableNonSystemObjectMetadataItems.find(
         (item) => item.id === objectMetadataId,
       );
     },
-    [readableAlphaSortedActiveNonSystemObjectMetadataItems],
+    [readableNonSystemObjectMetadataItems],
   );
 
   const views = useAtomStateValue(viewsSelector);
@@ -115,17 +115,20 @@ export const useDefaultHomePagePath = () => {
   // Admins: first root-level workspace nav item (sorted by position).
   // Non-layout users: first sidebar-visible object (sorted by ORDERED_FIRST_STANDARD_OBJECTS).
   const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    // Non-layout users: always use sidebar-visible objects, never nav menu items.
-    // Return null if permissions haven't loaded yet (empty list) — the caller
-    // will show the settings page until permissions resolve.
+    // OMNIA-CUSTOM: for non-admin roles, use sidebarVisibleObjectMetadataItems
+    // which filters by showInSidebar permission. If permissions haven't loaded
+    // yet (empty), return null to show settings briefly while loading.
     if (!isAdmin) {
-      if (sidebarVisibleObjectMetadataItems.length === 0) return null;
+      if (sidebarVisibleObjectMetadataItems.length === 0) {
+        // Permissions not loaded yet — check if nav items are loaded.
+        // If nav items ARE loaded but sidebar items aren't, permissions
+        // are still resolving. Return null briefly.
+        return null;
+      }
       const firstItem = sidebarVisibleObjectMetadataItems[0];
-
-      return {
-        objectMetadataItem: firstItem,
-        view: getFirstView(firstItem.id),
-      };
+      return firstItem
+        ? { objectMetadataItem: firstItem, view: getFirstView(firstItem.id) }
+        : null;
     }
 
     // Admins: use workspace navigation menu items
@@ -155,8 +158,7 @@ export const useDefaultHomePagePath = () => {
     }
 
     // Ultimate fallback
-    const fallbackItem =
-      readableAlphaSortedActiveNonSystemObjectMetadataItems[0];
+    const fallbackItem = readableNonSystemObjectMetadataItems[0];
 
     return fallbackItem
       ? {
@@ -170,7 +172,7 @@ export const useDefaultHomePagePath = () => {
     views,
     getActiveObjectMetadataItemMatchingId,
     getFirstView,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
     sidebarVisibleObjectMetadataItems,
   ]);
 
@@ -214,14 +216,16 @@ export const useDefaultHomePagePath = () => {
       return AppPath.SignInUp;
     }
 
-    if (isEmpty(readableAlphaSortedActiveNonSystemObjectMetadataItems)) {
+    if (isEmpty(readableNonSystemObjectMetadataItems)) {
       return getSettingsPath(SettingsPath.ProfilePage);
     }
 
     const defaultObjectPathInfo = getDefaultObjectPathInfo();
 
     if (!isDefined(defaultObjectPathInfo)) {
-      return AppPath.NotFound;
+      // Permissions may still be loading — return undefined to prevent
+      // premature redirect. The page change effect will wait.
+      return undefined;
     }
 
     const namePlural = defaultObjectPathInfo.objectMetadataItem?.namePlural;
@@ -235,7 +239,7 @@ export const useDefaultHomePagePath = () => {
   }, [
     currentUser,
     getDefaultObjectPathInfo,
-    readableAlphaSortedActiveNonSystemObjectMetadataItems,
+    readableNonSystemObjectMetadataItems,
   ]);
 
   return { defaultHomePagePath };

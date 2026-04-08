@@ -14,16 +14,16 @@ import { useMutation } from '@apollo/client/react';
 import {
   type RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
-  type Role,
   CreateOneRoleDocument,
   UpdateOneRoleDocument,
   UpsertFieldPermissionsDocument,
   UpsertObjectPermissionsDocument,
   UpsertPermissionFlagsDocument,
 } from '~/generated-metadata/graphql';
+import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
 import { getDirtyFields } from '~/utils/getDirtyFields';
 
-const ROLE_BASIC_KEYS: Array<keyof Role> = [
+const ROLE_BASIC_KEYS: Array<keyof OmniaRole> = [
   'label',
   'description',
   'icon',
@@ -146,10 +146,11 @@ export const useSaveDraftRoleToDB = ({
           canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
           canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
           canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
-          editWindowMinutes: settingsDraftRole.editWindowMinutes,
+          // Omnia-custom fields not in generated CreateRoleInput type
+          ...({ editWindowMinutes: settingsDraftRole.editWindowMinutes,
           showAllObjectsInSidebar:
-            settingsDraftRole.showAllObjectsInSidebar,
-        } satisfies Partial<Role>,
+            settingsDraftRole.showAllObjectsInSidebar } as Record<string, unknown>),
+        },
       },
       refetchQueries: [getOperationName(GET_ROLES) ?? ''],
     });
@@ -206,7 +207,8 @@ export const useSaveDraftRoleToDB = ({
               canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
               canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
               canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
-              editWindowMinutes: settingsDraftRole.editWindowMinutes,
+              // Omnia-custom fields not in generated UpdateRolePayload type
+              ...({ editWindowMinutes: settingsDraftRole.editWindowMinutes } as Record<string, unknown>),
             },
           },
         },

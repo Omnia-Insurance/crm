@@ -117,6 +117,9 @@ export const generateCsv: GenerateExport = ({
   return json2csv(sanitizedRows, {
     keys,
     emptyFieldValue: '',
+    excelBOM: true,
+    // Note: We handle CSV injection prevention manually with ZWJ approach above
+    // This preserves original which the csvSecurity option does not do
   });
 };
 
@@ -169,10 +172,6 @@ export const useRecordIndexExportRecords = ({
   const { processRecordsForCSVExport } = useExportProcessRecordsForCSV(
     objectMetadataItem.nameSingular,
   );
-
-  const apolloCoreClient = useApolloCoreClient();
-  const { objectMetadataItems } = useObjectMetadataItems();
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
   const downloadCsv = useMemo(
     () =>

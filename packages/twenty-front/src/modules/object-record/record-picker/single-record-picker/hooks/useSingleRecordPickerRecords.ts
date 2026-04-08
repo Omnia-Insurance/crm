@@ -2,7 +2,6 @@ import { useSingleRecordPickerPerformSearch } from '@/object-record/record-picke
 import { singleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchFilterComponentState';
 import { singleRecordPickerSelectedIdComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSelectedIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
 
 export const useSingleRecordPickerRecords = ({
   objectNameSingulars,
@@ -11,7 +10,7 @@ export const useSingleRecordPickerRecords = ({
 }: {
   objectNameSingulars: string[];
   excludedRecordIds?: string[];
-  additionalFilter?: ObjectRecordFilterInput;
+  additionalFilter?: Record<string, unknown>;
 }) => {
   const singleRecordPickerSearchFilter = useAtomComponentStateValue(
     singleRecordPickerSearchFilterComponentState,

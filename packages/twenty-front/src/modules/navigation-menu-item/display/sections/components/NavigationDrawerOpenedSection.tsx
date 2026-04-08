@@ -7,14 +7,14 @@ import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObject
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useLingui } from '@lingui/react/macro';
+import { isDefined } from 'twenty-shared/utils';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
+import { AnimatedExpandableContainer } from 'twenty-ui/layout';
 
 export const NavigationDrawerOpenedSection = () => {
   const { t } = useLingui();
 
   const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
-  const filteredActiveNonSystemObjectMetadataItems =
-    activeObjectMetadataItems.filter((item) => !item.isRemote);
 
   const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
 
@@ -26,42 +26,35 @@ export const NavigationDrawerOpenedSection = () => {
     objectNameSingular: currentObjectNameSingular,
   } = useParams();
 
-  if (!currentObjectNamePlural && !currentObjectNameSingular) {
-    return;
-  }
-
-  const objectMetadataItem = filteredActiveNonSystemObjectMetadataItems.find(
+  const objectMetadataItem = activeObjectMetadataItems.find(
     (item) =>
       item.namePlural === currentObjectNamePlural ||
       item.nameSingular === currentObjectNameSingular,
   );
 
-  if (!objectMetadataItem) {
-    return;
-  }
-
-  // For admins, upstream's objectMetadataIdsInWorkspaceNav handles exclusion.
-  // For non-layout users, exclude objects already shown in the workspace
-  // section via showInSidebar permission.
-  const isObjectAlreadyInNavbar = objectMetadataIdsInWorkspaceNav.has(
-    objectMetadataItem.id,
-  );
-
+  // Omnia: also suppress the "Opened" section when the object is already
+  // visible in the workspace sidebar via showInSidebar permission.
   const isAlreadyShownInWorkspaceSection =
+    isDefined(objectMetadataItem) &&
     !hasLayoutsPermission &&
     getObjectPermissionsForObject(
       objectPermissionsByObjectMetadataId,
       objectMetadataItem.id,
     ).showInSidebar;
 
+  const shouldShowOpenedSection = isDefined(objectMetadataItem)
+    ? !objectMetadataIdsInWorkspaceNav.has(objectMetadataItem.id) &&
+      !isAlreadyShownInWorkspaceSection
+    : false;
+
   return (
-    !isObjectAlreadyInNavbar &&
-    !isAlreadyShownInWorkspaceSection && (
+    <AnimatedExpandableContainer isExpanded={shouldShowOpenedSection}>
       <NavigationDrawerSectionForObjectMetadataItems
         sectionTitle={t`Opened`}
-        objectMetadataItems={[objectMetadataItem]}
-        isRemote={false}
+        objectMetadataItems={
+          isDefined(objectMetadataItem) ? [objectMetadataItem] : []
+        }
       />
-    )
+    </AnimatedExpandableContainer>
   );
 };

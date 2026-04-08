@@ -21,7 +21,6 @@ export const OmniaMemberWorkspaceNavigationMenuItems = () => {
     <NavigationDrawerSectionForObjectMetadataItems
       sectionTitle={t`Workspace`}
       objectMetadataItems={activeNonSystemObjectMetadataItems}
-      isRemote={false}
     />
   );
 };

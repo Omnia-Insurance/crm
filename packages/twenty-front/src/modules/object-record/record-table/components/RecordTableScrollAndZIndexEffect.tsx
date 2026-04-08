@@ -1,6 +1,7 @@
 import { shouldCompactRecordIndexLabelIdentifierComponentState } from '@/object-record/record-index/states/shouldCompactRecordIndexLabelIdentifierComponentState';
 import { RECORD_TABLE_HORIZONTAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME } from '@/object-record/record-table/constants/RecordTableHorizontalScrollShadowVisibilityCssVariableName';
 import { RECORD_TABLE_VERTICAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME } from '@/object-record/record-table/constants/RecordTableVerticalScrollShadowVisibilityCssVariableName';
+import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { isRecordTableScrolledHorizontallyComponentState } from '@/object-record/record-table/states/isRecordTableScrolledHorizontallyComponentState';
 import { isRecordTableScrolledVerticallyComponentState } from '@/object-record/record-table/states/isRecordTableScrolledVerticallyComponentState';
 import { shouldCompactRecordTableFirstColumnComponentState } from '@/object-record/record-table/states/shouldCompactRecordTableFirstColumnComponentState';
@@ -22,6 +23,7 @@ import { useIsMobile } from 'twenty-ui/utilities';
 // the browser. Using store.get() reads the current value without subscribing, keeping
 // the handler reference stable and the useEffect deps minimal.
 export const RecordTableScrollAndZIndexEffect = () => {
+  const { recordTableId } = useRecordTableContextOrThrow();
   const { scrollWrapperHTMLElement } = useScrollWrapperHTMLElement();
   const isMobile = useIsMobile();
   const store = useStore();
@@ -59,6 +61,7 @@ export const RecordTableScrollAndZIndexEffect = () => {
         store.set(isScrolledVerticallyCallbackState, newIsScrolledVertically);
 
         updateRecordTableCSSVariable(
+          recordTableId,
           RECORD_TABLE_VERTICAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME,
           newIsScrolledVertically ? 'visible' : 'hidden',
         );
@@ -76,6 +79,7 @@ export const RecordTableScrollAndZIndexEffect = () => {
         );
 
         updateRecordTableCSSVariable(
+          recordTableId,
           RECORD_TABLE_HORIZONTAL_SCROLL_SHADOW_VISIBILITY_CSS_VARIABLE_NAME,
           newIsScrolledHorizontally ? 'visible' : 'hidden',
         );
@@ -94,6 +98,7 @@ export const RecordTableScrollAndZIndexEffect = () => {
     },
     [
       store,
+      recordTableId,
       isScrolledVerticallyCallbackState,
       isScrolledHorizontallyCallbackState,
       shouldCompactFirstColumnCallbackState,

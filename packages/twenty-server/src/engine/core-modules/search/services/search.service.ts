@@ -2,18 +2,25 @@ import { Injectable } from '@nestjs/common';
 
 import { isNonEmptyString } from '@sniptt/guards';
 import chunk from 'lodash.chunk';
-import { FieldMetadataType, ObjectRecord } from 'twenty-shared/types';
+import { OBJECTS_WITH_CHANNEL_VISIBILITY_CONSTRAINTS } from 'twenty-shared/constants';
+import {
+  FieldMetadataType,
+  FileFolder,
+  ObjectRecord,
+} from 'twenty-shared/types';
 import { getLogoUrlFromDomainName, isDefined } from 'twenty-shared/utils';
 import { Brackets, type ObjectLiteral } from 'typeorm';
 
 import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
+import { FileOutput } from 'src/engine/api/common/common-args-processors/data-arg-processor/types/file-item.type';
 import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
 import {
   decodeCursor,
   encodeCursorData,
 } from 'src/engine/api/graphql/graphql-query-runner/utils/cursors.util';
-import { FileService } from 'src/engine/core-modules/file/services/file.service';
+import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
+import { extractFileIdFromUrl } from 'src/engine/core-modules/file/files-field/utils/extract-file-id-from-url.util';
 import { STANDARD_OBJECTS_BY_PRIORITY_RANK } from 'src/engine/core-modules/search/constants/standard-objects-by-priority-rank';
 import { type ObjectRecordFilterInput } from 'src/engine/core-modules/search/dtos/object-record-filter-input';
 import { type SearchArgs } from 'src/engine/core-modules/search/dtos/search-args';
@@ -37,7 +44,8 @@ import { SEARCH_VECTOR_FIELD } from 'src/engine/metadata-modules/search-field-me
 import { getCustomObjectSearchVectorFields } from 'src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
-import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { getSearchableColumnExpressionsFromField } from 'src/engine/workspace-manager/utils/get-ts-vector-column-expression.util';
 
 type LastRanks = { tsRankCD: number; tsRank: number };
@@ -53,7 +61,7 @@ const OBJECT_METADATA_ITEMS_CHUNK_SIZE = 5;
 export class SearchService {
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly fileService: FileService,
+    private readonly fileUrlService: FileUrlService,
     private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
@@ -67,17 +75,63 @@ export class SearchService {
     filter,
     after,
     workspaceId,
-    rolePermissionConfig,
   }: {
     flatObjectMetadatas: FlatObjectMetadata[];
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
     workspaceId: string;
-    rolePermissionConfig?: RolePermissionConfig;
   } & SearchArgs) {
+    // OMNIA-CUSTOM: resolve role → object-level read permissions so the search
+    // API never returns results for objects the user's role can't read.
+    const roleReadInfo = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const context = getWorkspaceContext();
+        const rolePermissionConfig = resolveRolePermissionConfig({
+          authContext: context.authContext,
+          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+          apiKeyRoleMap: context.apiKeyRoleMap,
+        });
+
+        if (!rolePermissionConfig || 'shouldBypassPermissionChecks' in rolePermissionConfig) {
+          return null; // admins/system — no filtering
+        }
+
+        const roleIds = 'unionOf' in rolePermissionConfig
+          ? rolePermissionConfig.unionOf
+          : rolePermissionConfig.intersectionOf;
+
+        if (roleIds.length === 0) return null;
+
+        const objectPermissions = context.permissionsPerRoleId?.[roleIds[0]] ?? {};
+
+        // Get the role entity to check canReadAllObjectRecords default
+        const flatRoleMaps = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+          async () => {
+            const ctx = getWorkspaceContext();
+            return ctx;
+          },
+        );
+
+        // Look up role's canReadAllObjectRecords from flatRoleMaps
+        // The rolesPermissions are keyed by roleId, each containing per-object overrides.
+        // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
+        // Since we can't easily get the role entity here, use a heuristic:
+        // if objectPermissions is sparse (few keys vs many objects), the role likely
+        // has canReadAllObjectRecords=false and only explicitly grants some objects.
+        return { objectPermissions, roleIds };
+      },
+    );
+
     const filteredObjectMetadataItems = this.filterObjectMetadataItems({
       flatObjectMetadatas,
       includedObjectNameSingulars: includedObjectNameSingulars ?? [],
       excludedObjectNameSingulars: excludedObjectNameSingulars ?? [],
+    }).filter((item) => {
+      if (!roleReadInfo) return true; // admins — no restrictions
+      const perms = roleReadInfo.objectPermissions[item.id];
+      // If object has explicit permission, use it. Otherwise, object is NOT
+      // readable (canReadAllObjectRecords is false for restricted roles).
+      if (!perms) return false;
+      return perms.canReadObjectRecords !== false;
     });
 
     const allRecordsWithObjectMetadataItems: RecordsWithObjectMetadataItem[] =
@@ -89,35 +143,42 @@ export class SearchService {
     );
 
     for (const objectMetadataItemChunk of filteredObjectMetadataItemsChunks) {
-      const recordsWithObjectMetadataItems = await Promise.all(
+      const results = await Promise.all(
         objectMetadataItemChunk.map(async (flatObjectMetadata) => {
-          return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-            async () => {
-              const repository =
-                await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
-                  workspaceId,
-                  flatObjectMetadata.nameSingular,
-                  rolePermissionConfig,
-                );
+          try {
+            return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+              async () => {
+                const repository =
+                  await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+                    workspaceId,
+                    flatObjectMetadata.nameSingular,
+                    { shouldBypassPermissionChecks: true },
+                  );
 
-              return {
-                objectMetadataItem: flatObjectMetadata,
-                records: await this.buildSearchQueryAndGetRecordsWithFallback({
-                  entityManager: repository,
-                  flatObjectMetadata,
-                  flatFieldMetadataMaps,
-                  searchInput,
-                  searchTerms: formatSearchTerms(searchInput, 'and'),
-                  searchTermsOr: formatSearchTerms(searchInput, 'or'),
-                  limit: limit as number,
-                  filter: filter ?? ({} as ObjectRecordFilter),
-                  after,
-                }),
-              };
-            },
-          );
+                return {
+                  objectMetadataItem: flatObjectMetadata,
+                  records: await this.buildSearchQueryAndGetRecordsWithFallback({
+                    entityManager: repository,
+                    flatObjectMetadata,
+                    flatFieldMetadataMaps,
+                    searchInput,
+                    searchTerms: formatSearchTerms(searchInput, 'and'),
+                    searchTermsOr: formatSearchTerms(searchInput, 'or'),
+                    limit: limit as number,
+                    filter: filter ?? ({} as ObjectRecordFilter),
+                    after,
+                  }),
+                };
+              },
+            );
+          } catch {
+            // Skip objects that fail (e.g. field-level permission denial)
+            return null;
+          }
         }),
       );
+
+      const recordsWithObjectMetadataItems = results.filter(isDefined);
 
       allRecordsWithObjectMetadataItems.push(...recordsWithObjectMetadataItems);
     }
@@ -134,19 +195,35 @@ export class SearchService {
     includedObjectNameSingulars: string[];
     excludedObjectNameSingulars: string[];
   }) {
+    const hasExplicitInclusion = includedObjectNameSingulars.length > 0;
+
     return flatObjectMetadatas.filter(
       ({ nameSingular, isSearchable, isActive }) => {
-        if (!isSearchable) {
-          return false;
-        }
         if (!isActive) {
           return false;
         }
-        if (excludedObjectNameSingulars.includes(nameSingular)) {
+
+        if (hasExplicitInclusion) {
+          if (
+            OBJECTS_WITH_CHANNEL_VISIBILITY_CONSTRAINTS.includes(
+              nameSingular as (typeof OBJECTS_WITH_CHANNEL_VISIBILITY_CONSTRAINTS)[number],
+            )
+          ) {
+            return false;
+          }
+
+          return (
+            includedObjectNameSingulars.includes(nameSingular) &&
+            !excludedObjectNameSingulars.includes(nameSingular)
+          );
+        }
+
+        if (!isSearchable) {
           return false;
         }
-        if (includedObjectNameSingulars.length > 0) {
-          return includedObjectNameSingulars.includes(nameSingular);
+
+        if (excludedObjectNameSingulars.includes(nameSingular)) {
+          return false;
         }
 
         return true;
@@ -660,6 +737,16 @@ export class SearchService {
       return 'domainNamePrimaryLinkUrl';
     }
 
+    //TODO: Temporary solution before imageIdentifier refactor
+    // OMNIA-CUSTOM: use avatarUrl until avatarFile column is added via workspace sync
+    if (flatObjectMetadata.nameSingular === 'person') {
+      return 'avatarUrl';
+    }
+
+    if (flatObjectMetadata.nameSingular === 'workspaceMember') {
+      return 'avatarUrl';
+    }
+
     if (!flatObjectMetadata.imageIdentifierFieldMetadataId) {
       return null;
     }
@@ -676,10 +763,15 @@ export class SearchService {
     return imageIdentifierField.name;
   }
 
-  private getImageUrlWithToken(avatarUrl: string, workspaceId: string): string {
-    return this.fileService.signFileUrl({
-      url: avatarUrl,
+  private getImageUrlWithToken(
+    avatarFileId: string,
+    fileFolder: FileFolder,
+    workspaceId: string,
+  ): string {
+    return this.fileUrlService.signFileByIdUrl({
+      fileId: avatarFileId,
       workspaceId,
+      fileFolder,
     });
   }
 
@@ -701,9 +793,45 @@ export class SearchService {
       return getLogoUrlFromDomainName(record.domainNamePrimaryLinkUrl) || '';
     }
 
+    // OMNIA-CUSTOM: use avatarUrl (same as workspaceMember) until avatarFile
+    // column is added via workspace sync
+    if (flatObjectMetadata.nameSingular === 'person') {
+      const avatarFileId = extractFileIdFromUrl(
+        record.avatarUrl,
+        FileFolder.CorePicture,
+      );
+      if (!isDefined(avatarFileId)) {
+        return '';
+      }
+      return this.getImageUrlWithToken(
+        avatarFileId,
+        FileFolder.CorePicture,
+        workspaceId,
+      );
+    }
+
+    if (flatObjectMetadata.nameSingular === 'workspaceMember') {
+      const avatarFileId = extractFileIdFromUrl(
+        record.avatarUrl,
+        FileFolder.CorePicture,
+      );
+      if (!isDefined(avatarFileId)) {
+        return '';
+      }
+      return this.getImageUrlWithToken(
+        avatarFileId,
+        FileFolder.CorePicture,
+        workspaceId,
+      );
+    }
+
     return imageIdentifierField &&
       isNonEmptyString(record[imageIdentifierField])
-      ? this.getImageUrlWithToken(record[imageIdentifierField], workspaceId)
+      ? this.getImageUrlWithToken(
+          record[imageIdentifierField],
+          FileFolder.FilesField,
+          workspaceId,
+        )
       : '';
   }
 

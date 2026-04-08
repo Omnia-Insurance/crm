@@ -995,9 +995,7 @@ export class ExportJobProcessor {
       );
 
       const relationType =
-        fieldMeta?.settings?.relationType ??
-        fieldMeta?.relation?.type ??
-        'MANY_TO_ONE';
+        fieldMeta?.settings?.relationType ?? 'MANY_TO_ONE';
 
       const isOneToMany = relationType === 'ONE_TO_MANY';
 

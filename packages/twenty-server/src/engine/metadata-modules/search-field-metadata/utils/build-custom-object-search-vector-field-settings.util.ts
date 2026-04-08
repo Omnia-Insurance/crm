@@ -5,7 +5,7 @@ import { getTsVectorColumnExpressionFromFields } from 'src/engine/workspace-mana
 import {
   isSearchableFieldType,
   type SearchableFieldType,
-} from 'src/engine/workspace-manager/utils/is-searchable-field.util';
+} from 'twenty-shared/utils';
 import { type UniversalFlatFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-field-metadata.type';
 
 type SearchVectorSourceField = {

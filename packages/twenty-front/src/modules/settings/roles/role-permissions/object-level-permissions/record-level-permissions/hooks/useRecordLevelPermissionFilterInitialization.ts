@@ -12,7 +12,7 @@ import {
   convertPredicateToRecordFilter,
 } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion';
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
-import { type RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
+import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 
 type UseRecordLevelPermissionFilterInitializationProps = {
   roleId: string;

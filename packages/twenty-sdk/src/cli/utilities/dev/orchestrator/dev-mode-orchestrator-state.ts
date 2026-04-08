@@ -54,6 +54,7 @@ export type OrchestratorStateBuiltFileInfo = {
   builtPath: string;
   sourcePath: string;
   fileFolder: FileFolder;
+  usesSdkClient?: boolean;
 };
 
 export type OrchestratorStatePipeline = {
@@ -268,6 +269,17 @@ export class OrchestratorState {
         ...entity,
         type: entityTypeMap.get(filePath),
       });
+    }
+
+    for (const [filePath, syncableEntity] of entityTypeMap) {
+      if (!entities.has(filePath)) {
+        entities.set(filePath, {
+          name: filePath,
+          path: filePath,
+          type: syncableEntity,
+          status: 'pending',
+        });
+      }
     }
 
     this.entities = entities;

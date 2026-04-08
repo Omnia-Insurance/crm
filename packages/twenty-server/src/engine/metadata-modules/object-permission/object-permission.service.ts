@@ -135,8 +135,6 @@ export class ObjectPermissionService {
               canUpdateObjectRecords: desired.canUpdateObjectRecords,
               canSoftDeleteObjectRecords: desired.canSoftDeleteObjectRecords,
               canDestroyObjectRecords: desired.canDestroyObjectRecords,
-              showInSidebar: desired.showInSidebar,
-              editWindowMinutes: desired.editWindowMinutes,
             },
             flatApplication,
             flatRoleMaps,
@@ -145,30 +143,29 @@ export class ObjectPermissionService {
         );
       } else {
         const effectiveCanRead =
-          desired.canReadObjectRecords ?? current.canReadObjectRecords;
+          desired.canReadObjectRecords !== undefined
+            ? desired.canReadObjectRecords
+            : current.canReadObjectRecords;
         const effectiveCanUpdate =
-          desired.canUpdateObjectRecords ?? current.canUpdateObjectRecords;
+          desired.canUpdateObjectRecords !== undefined
+            ? desired.canUpdateObjectRecords
+            : current.canUpdateObjectRecords;
         const effectiveCanSoftDelete =
-          desired.canSoftDeleteObjectRecords ??
-          current.canSoftDeleteObjectRecords;
+          desired.canSoftDeleteObjectRecords !== undefined
+            ? desired.canSoftDeleteObjectRecords
+            : current.canSoftDeleteObjectRecords;
         const effectiveCanDestroy =
-          desired.canDestroyObjectRecords ?? current.canDestroyObjectRecords;
-        const effectiveShowInSidebar =
-          desired.showInSidebar ?? current.showInSidebar;
-        const effectiveEditWindowMinutes =
-          desired.editWindowMinutes !== undefined
-            ? desired.editWindowMinutes
-            : current.editWindowMinutes;
+          desired.canDestroyObjectRecords !== undefined
+            ? desired.canDestroyObjectRecords
+            : current.canDestroyObjectRecords;
 
-        const hasChanged =
+        const canChanged =
           effectiveCanRead !== current.canReadObjectRecords ||
           effectiveCanUpdate !== current.canUpdateObjectRecords ||
           effectiveCanSoftDelete !== current.canSoftDeleteObjectRecords ||
-          effectiveCanDestroy !== current.canDestroyObjectRecords ||
-          effectiveShowInSidebar !== current.showInSidebar ||
-          effectiveEditWindowMinutes !== current.editWindowMinutes;
+          effectiveCanDestroy !== current.canDestroyObjectRecords;
 
-        if (hasChanged) {
+        if (canChanged) {
           const now = new Date().toISOString();
           flatEntityToUpdate.push({
             universalIdentifier: current.universalIdentifier,
@@ -181,8 +178,6 @@ export class ObjectPermissionService {
             canUpdateObjectRecords: effectiveCanUpdate,
             canSoftDeleteObjectRecords: effectiveCanSoftDelete,
             canDestroyObjectRecords: effectiveCanDestroy,
-            showInSidebar: effectiveShowInSidebar,
-            editWindowMinutes: effectiveEditWindowMinutes,
             createdAt: current.createdAt,
             updatedAt: now,
           });
@@ -291,26 +286,34 @@ export class ObjectPermissionService {
             newObjectPermission.objectMetadataId,
         );
 
+      const resolvedCanRead =
+        newObjectPermission.canReadObjectRecords !== undefined
+          ? newObjectPermission.canReadObjectRecords
+          : existingObjectRecordPermission?.canReadObjectRecords;
       const hasReadPermissionAfterUpdate =
-        newObjectPermission.canReadObjectRecords ??
-        existingObjectRecordPermission?.canReadObjectRecords ??
-        flatRole.canReadAllObjectRecords;
+        resolvedCanRead ?? flatRole.canReadAllObjectRecords;
 
       if (hasReadPermissionAfterUpdate === false) {
+        const resolvedCanUpdate =
+          newObjectPermission.canUpdateObjectRecords !== undefined
+            ? newObjectPermission.canUpdateObjectRecords
+            : existingObjectRecordPermission?.canUpdateObjectRecords;
         const hasUpdatePermissionAfterUpdate =
-          newObjectPermission.canUpdateObjectRecords ??
-          existingObjectRecordPermission?.canUpdateObjectRecords ??
-          flatRole.canUpdateAllObjectRecords;
+          resolvedCanUpdate ?? flatRole.canUpdateAllObjectRecords;
 
+        const resolvedCanSoftDelete =
+          newObjectPermission.canSoftDeleteObjectRecords !== undefined
+            ? newObjectPermission.canSoftDeleteObjectRecords
+            : existingObjectRecordPermission?.canSoftDeleteObjectRecords;
         const hasSoftDeletePermissionAfterUpdate =
-          newObjectPermission.canSoftDeleteObjectRecords ??
-          existingObjectRecordPermission?.canSoftDeleteObjectRecords ??
-          flatRole.canSoftDeleteAllObjectRecords;
+          resolvedCanSoftDelete ?? flatRole.canSoftDeleteAllObjectRecords;
 
+        const resolvedCanDestroy =
+          newObjectPermission.canDestroyObjectRecords !== undefined
+            ? newObjectPermission.canDestroyObjectRecords
+            : existingObjectRecordPermission?.canDestroyObjectRecords;
         const hasDestroyPermissionAfterUpdate =
-          newObjectPermission.canDestroyObjectRecords ??
-          existingObjectRecordPermission?.canDestroyObjectRecords ??
-          flatRole.canDestroyAllObjectRecords;
+          resolvedCanDestroy ?? flatRole.canDestroyAllObjectRecords;
 
         if (
           hasUpdatePermissionAfterUpdate ||

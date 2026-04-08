@@ -6,6 +6,7 @@ import { IsMinimalMetadataReadyEffect } from '@/metadata-store/effect-components
 
 import { GotoHotkeysEffectsProvider } from '@/app/effect-components/GotoHotkeysEffectsProvider';
 import { PageChangeEffect } from '@/app/effect-components/PageChangeEffect';
+import { SignOutOnOtherTabSignOutEffect } from '@/auth/effect-components/SignOutOnOtherTabSignOutEffect';
 import { AuthProvider } from '@/auth/components/AuthProvider';
 import { CaptchaProvider } from '@/captcha/components/CaptchaProvider';
 import { ClientConfigProvider } from '@/client-config/components/ClientConfigProvider';
@@ -18,12 +19,11 @@ import { UserMetadataProviderInitialEffect } from '@/metadata-store/effect-compo
 import { ApolloCoreProvider } from '@/object-metadata/components/ApolloCoreProvider';
 import { PreComputedChipGeneratorsProvider } from '@/object-metadata/components/PreComputedChipGeneratorsProvider';
 
-import { HeadlessEngineCommandMountRoot } from '@/command-menu-item/engine-command/components/HeadlessEngineCommandMountRoot';
-import { HeadlessFrontComponentMountRoot } from '@/front-components/components/HeadlessFrontComponentMountRoot';
+import { CommandRunner } from '@/command-menu-item/engine-command/components/CommandRunner';
 import { ExportJobRecoveryEffect } from '@/object-record/record-index/export/components/ExportJobRecoveryEffect';
 import { ImportJobRecoveryEffect } from '@/spreadsheet-import/components/ImportJobRecoveryEffect';
-import { BackgroundJobIndicator } from '@/ui/feedback/background-job-indicator/components/BackgroundJobIndicator';
 import { SSEProvider } from '@/sse-db-event/components/SSEProvider';
+import { BackgroundJobIndicator } from '@/ui/feedback/background-job-indicator/components/BackgroundJobIndicator';
 import { SupportChatEffect } from '@/support/components/SupportChatEffect';
 import { DialogManager } from '@/ui/feedback/dialog-manager/components/DialogManager';
 import { DialogComponentInstanceContext } from '@/ui/feedback/dialog-manager/contexts/DialogComponentInstanceContext';
@@ -73,8 +73,7 @@ export const AppRouterProviders = () => {
                                 <Outlet />
                                 <GlobalFilePreviewModal />
                                 <CommandMenuConfirmationModalManager />
-                                <HeadlessFrontComponentMountRoot />
-                                <HeadlessEngineCommandMountRoot />
+                                <CommandRunner />
                                 <ImportJobRecoveryEffect />
                                 <ExportJobRecoveryEffect />
                                 <BackgroundJobIndicator />
@@ -86,6 +85,7 @@ export const AppRouterProviders = () => {
                       <MainContextStoreProvider />
                       <SupportChatEffect />
                       <PageChangeEffect />
+                      <SignOutOnOtherTabSignOutEffect />
                     </PreComputedChipGeneratorsProvider>
                   </SSEProvider>
                 </ApolloCoreProvider>

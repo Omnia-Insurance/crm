@@ -10,16 +10,16 @@ import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataIte
 import { type RecordFilterGroup } from '@/object-record/record-filter-group/types/RecordFilterGroup';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
+import { RowLevelPermissionPredicateGroupLogicalOperator } from '~/generated-metadata/graphql';
 import {
-  type RowLevelPermissionPredicate,
-  type RowLevelPermissionPredicateGroup,
-  RowLevelPermissionPredicateGroupLogicalOperator,
-  type RowLevelPermissionPredicateOperand,
+  type OmniaRowLevelPermissionPredicate,
+  type OmniaRowLevelPermissionPredicateGroup,
   type RowLevelPermissionPredicateScope,
-} from '~/generated-metadata/graphql';
+} from '@/settings/roles/types/OmniaRoleExtensions';
+import { type RowLevelPermissionPredicateOperand } from '~/generated-metadata/graphql';
 
 export const convertPredicateToRecordFilter = (
-  predicate: RowLevelPermissionPredicate,
+  predicate: OmniaRowLevelPermissionPredicate,
   fieldMetadataItem: FieldMetadataItem | undefined,
 ): RecordFilter | null => {
   if (!isDefined(fieldMetadataItem)) {
@@ -67,7 +67,7 @@ export const convertRecordFilterToPredicate = (
   roleId: string,
   objectMetadataId: string,
   scope: RowLevelPermissionPredicateScope,
-): RowLevelPermissionPredicate => {
+): OmniaRowLevelPermissionPredicate => {
   if (isDefined(filter.rlsDynamicValue)) {
     return {
       __typename: 'RowLevelPermissionPredicate',
@@ -108,7 +108,7 @@ export const convertRecordFilterToPredicate = (
 };
 
 export const convertPredicateGroupToRecordFilterGroup = (
-  predicateGroup: RowLevelPermissionPredicateGroup,
+  predicateGroup: OmniaRowLevelPermissionPredicateGroup,
 ): RecordFilterGroup => {
   return {
     id: predicateGroup.id,
@@ -129,7 +129,7 @@ export const convertRecordFilterGroupToPredicateGroup = (
   roleId: string,
   objectMetadataId: string,
   scope: RowLevelPermissionPredicateScope,
-): RowLevelPermissionPredicateGroup => {
+): OmniaRowLevelPermissionPredicateGroup => {
   return {
     __typename: 'RowLevelPermissionPredicateGroup',
     id: filterGroup.id,

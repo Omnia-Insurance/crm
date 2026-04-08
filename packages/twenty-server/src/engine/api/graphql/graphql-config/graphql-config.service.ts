@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ContextIdFactory, ModuleRef } from '@nestjs/core';
 import { type GqlOptionsFactory } from '@nestjs/graphql';
 
@@ -7,42 +7,39 @@ import {
   type YogaDriverServerContext,
 } from '@graphql-yoga/nestjs';
 import * as Sentry from '@sentry/node';
-import { GraphQLError, GraphQLSchema } from 'graphql';
 import GraphQLJSON from 'graphql-type-json';
 import {
   type GraphQLSchemaWithContext,
   type YogaInitialContext,
 } from 'graphql-yoga';
-import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
-import { isDefined } from 'twenty-shared/utils';
 
 import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
 
 import { DirectExecutionService } from 'src/engine/api/graphql/direct-execution/direct-execution.service';
 import { useDirectExecution } from 'src/engine/api/graphql/direct-execution/hooks/use-direct-execution.hook';
 import { WorkspaceSchemaFactory } from 'src/engine/api/graphql/workspace-schema.factory';
+import { type FlatAuthContextUser } from 'src/engine/core-modules/auth/types/flat-auth-context-user.type';
 import { CoreEngineModule } from 'src/engine/core-modules/core-engine.module';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
-import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { useSentryTracing } from 'src/engine/core-modules/exception-handler/hooks/use-sentry-tracing';
+import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { useDisableIntrospectionAndSuggestionsForUnauthenticatedUsers } from 'src/engine/core-modules/graphql/hooks/use-disable-introspection-and-suggestions-for-unauthenticated-users.hook';
 import { useGraphQLErrorHandlerHook } from 'src/engine/core-modules/graphql/hooks/use-graphql-error-handler.hook';
 import { useValidateGraphqlQueryComplexity } from 'src/engine/core-modules/graphql/hooks/use-validate-graphql-query-complexity.hook';
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { createSlowPathObserver } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { UserEntity } from 'src/engine/core-modules/user/user.entity';
-import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { DataloaderService } from 'src/engine/dataloaders/dataloader.service';
-import { handleExceptionAndConvertToGraphQLError } from 'src/engine/utils/global-exception-handler.util';
 import { renderApolloPlayground } from 'src/engine/utils/render-apollo-playground.util';
 
 const SLOW_CORE_GRAPHQL_SCHEMA_RESOLUTION_MS = 750;
 
 export interface GraphQLContext extends YogaDriverServerContext<'express'> {
-  user?: UserEntity;
-  workspace?: WorkspaceEntity;
+  user?: FlatAuthContextUser;
+  workspace?: FlatWorkspace;
 }
 
 @Injectable()
@@ -98,63 +95,6 @@ export class GraphQLConfigService
       include: [CoreEngineModule],
       resolverSchemaScope: 'core',
       buildSchemaOptions: {},
-      conditionalSchema: async (context) => {
-        const { workspace, user, application, skipWorkspaceSchemaCreation } =
-          context.req;
-
-        try {
-          if (!isDefined(workspace) || skipWorkspaceSchemaCreation) {
-            return new GraphQLSchema({});
-          }
-
-          return await this.createSchema(context, workspace, application?.id);
-        } catch (error) {
-          if (error instanceof UnauthorizedException) {
-            throw new GraphQLError('Unauthenticated', {
-              extensions: {
-                code: 'UNAUTHENTICATED',
-              },
-            });
-          }
-
-          if (error instanceof JsonWebTokenError) {
-            //mockedUserJWT
-            throw new GraphQLError('Unauthenticated', {
-              extensions: {
-                code: 'UNAUTHENTICATED',
-              },
-            });
-          }
-
-          if (error instanceof TokenExpiredError) {
-            throw new GraphQLError('Unauthenticated', {
-              extensions: {
-                code: 'UNAUTHENTICATED',
-              },
-            });
-          }
-
-          throw handleExceptionAndConvertToGraphQLError(
-            error,
-            this.exceptionHandlerService,
-            isDefined(user)
-              ? {
-                  id: user.id,
-                  email: user.email,
-                  firstName: user.firstName,
-                  lastName: user.lastName,
-                }
-              : undefined,
-            isDefined(workspace)
-              ? {
-                  id: workspace.id,
-                  displayName: workspace.displayName,
-                  activationStatus: workspace.activationStatus,
-                }
-              : undefined,
-          );
-        }
-      },
       resolvers: { JSON: GraphQLJSON },
       plugins: plugins,
       context: () => ({
@@ -173,7 +113,7 @@ export class GraphQLConfigService
 
   async createSchema(
     context: YogaDriverServerContext<'express'> & YogaInitialContext,
-    workspace: WorkspaceEntity,
+    workspace: FlatWorkspace,
     applicationId?: string,
   ): Promise<GraphQLSchemaWithContext<YogaDriverServerContext<'express'>>> {
     const schemaResolutionObserver = createSlowPathObserver({
@@ -205,6 +145,11 @@ export class GraphQLConfigService
     schemaResolutionObserver.warnIfSlow({
       workspaceId: workspace.id,
       applicationId: applicationId ?? '-',
+    });
+
+    await this.metricsService.incrementCounter({
+      key: MetricsKeys.GraphqlSchemaBuild,
+      shouldStoreInCache: false,
     });
 
     return schema;

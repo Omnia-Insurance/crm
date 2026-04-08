@@ -20,7 +20,7 @@ import {
   compareHash,
   hashPassword,
 } from 'src/engine/core-modules/auth/auth.util';
-import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY } from 'src/engine/core-modules/auth/constants/max-workspaces-without-enterprise-key.constants';
 import {
   type AuthProviderWithPasswordType,
   type ExistingUserOrPartialUserWithPicture,
@@ -29,6 +29,7 @@ import {
   type SignInUpNewUserPayload,
 } from 'src/engine/core-modules/auth/types/signInUp.type';
 import { SubdomainManagerService } from 'src/engine/core-modules/domain/subdomain-manager/services/subdomain-manager.service';
+import { EnterprisePlanService } from 'src/engine/core-modules/enterprise/services/enterprise-plan.service';
 import { FileCorePictureService } from 'src/engine/core-modules/file/file-core-picture/services/file-core-picture.service';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
@@ -65,6 +66,7 @@ export class SignInUpService {
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly applicationService: ApplicationService,
     private readonly fileCorePictureService: FileCorePictureService,
+    private readonly enterprisePlanService: EnterprisePlanService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -311,7 +313,7 @@ export class SignInUpService {
       workspace,
       shouldShowConnectAccountStep,
     }: {
-      user: AuthContextUser;
+      user: Pick<UserEntity, 'id' | 'firstName' | 'lastName'>;
       workspace: WorkspaceEntity;
       shouldShowConnectAccountStep: boolean;
     },
@@ -424,6 +426,8 @@ export class SignInUpService {
       return;
     }
 
+    await this.assertWorkspaceCountWithinLimit(workspaceCount);
+
     if (
       !this.twentyConfigService.get(
         'IS_WORKSPACE_CREATION_LIMITED_TO_SERVER_ADMINS',
@@ -445,6 +449,26 @@ export class SignInUpService {
       AuthExceptionCode.FORBIDDEN_EXCEPTION,
       {
         userFriendlyMessage: msg`Workspace creation is restricted to admins`,
+      },
+    );
+  }
+
+  private async assertWorkspaceCountWithinLimit(
+    workspaceCount: number,
+  ): Promise<void> {
+    if (this.enterprisePlanService.isValid()) {
+      return;
+    }
+
+    if (workspaceCount < MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY) {
+      return;
+    }
+
+    throw new AuthException(
+      `Cannot create more than ${MAX_WORKSPACES_WITHOUT_ENTERPRISE_KEY} workspaces without a valid enterprise key`,
+      AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      {
+        userFriendlyMessage: msg`Workspace limit reached. A valid enterprise key is required to create more workspaces.`,
       },
     );
   }
@@ -552,7 +576,11 @@ export class SignInUpService {
       );
 
       await this.activateOnboardingForUser(
-        { user, workspace, shouldShowConnectAccountStep: true },
+        {
+          user,
+          workspace,
+          shouldShowConnectAccountStep: true,
+        },
         queryRunner,
       );
 
@@ -565,16 +593,18 @@ export class SignInUpService {
       );
 
       await queryRunner.commitTransaction();
-      await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
-        'flatApplicationMaps',
-      ]);
 
       return { user, workspace };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       throw error;
     } finally {
       await queryRunner.release();
+      await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+        'flatApplicationMaps',
+      ]);
     }
   }
 

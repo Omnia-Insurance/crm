@@ -1,15 +1,21 @@
 import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
 import { Args, Int, Mutation, Query } from '@nestjs/graphql';
+import { InjectRepository } from '@nestjs/typeorm';
 
 import GraphQLJSON from 'graphql-type-json';
+import { In, type Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
 import { PermissionFlagType } from 'twenty-shared/constants';
 
 import { AdminPanelHealthService } from 'src/engine/core-modules/admin-panel/admin-panel-health.service';
 import { AdminPanelQueueService } from 'src/engine/core-modules/admin-panel/admin-panel-queue.service';
 import { AdminPanelService } from 'src/engine/core-modules/admin-panel/admin-panel.service';
+import { MaintenanceModeService } from 'src/engine/core-modules/admin-panel/maintenance-mode.service';
 import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
 import { ApplicationRegistrationService } from 'src/engine/core-modules/application/application-registration/application-registration.service';
 import { AdminAIModelsDTO } from 'src/engine/core-modules/client-config/client-config.entity';
+import { UsageBreakdownItemDTO } from 'src/engine/core-modules/usage/dtos/usage-breakdown-item.dto';
+import { UsageAnalyticsService } from 'src/engine/core-modules/usage/services/usage-analytics.service';
 import { AiModelRole } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-role.enum';
 import { ConfigVariableDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variable.dto';
 import { ConfigVariablesDTO } from 'src/engine/core-modules/admin-panel/dtos/config-variables.dto';
@@ -41,6 +47,7 @@ import { type AiProviderConfig } from 'src/engine/metadata-modules/ai/ai-models/
 import { type AiProviderModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-provider-model-config.type';
 import { extractConfigVariableName } from 'src/engine/metadata-modules/ai/ai-models/utils/extract-config-variable-name.util';
 import { loadDefaultAiProviders } from 'src/engine/metadata-modules/ai/ai-models/utils/load-default-ai-providers.util';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { AdminPanelGuard } from 'src/engine/guards/admin-panel-guard';
 import { ServerLevelImpersonateGuard } from 'src/engine/guards/server-level-impersonate.guard';
@@ -49,9 +56,11 @@ import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 
 import { AdminPanelHealthServiceDataDTO } from './dtos/admin-panel-health-service-data.dto';
+import { MaintenanceModeDTO } from './dtos/maintenance-mode.dto';
 import { ModelsDevModelSuggestionDTO } from './dtos/models-dev-model-suggestion.dto';
 import { ModelsDevProviderSuggestionDTO } from './dtos/models-dev-provider-suggestion.dto';
 import { QueueMetricsDataDTO } from './dtos/queue-metrics-data.dto';
+import { SetMaintenanceModeInput } from './dtos/set-maintenance-mode.input';
 
 @UsePipes(ResolverValidationPipe)
 @MetadataResolver()
@@ -75,6 +84,10 @@ export class AdminPanelResolver {
     private readonly twentyConfigService: TwentyConfigService,
     private readonly aiModelRegistryService: AiModelRegistryService,
     private readonly modelsDevCatalogService: ModelsDevCatalogService,
+    private readonly usageAnalyticsService: UsageAnalyticsService,
+    private readonly maintenanceModeService: MaintenanceModeService,
+    @InjectRepository(WorkspaceEntity)
+    private readonly workspaceRepository: Repository<WorkspaceEntity>,
   ) {}
 
   @UseGuards(ServerLevelImpersonateGuard)
@@ -357,6 +370,7 @@ export class AdminPanelResolver {
         npm: config.npm,
         label: config.label ?? key,
         source: isCatalog ? 'catalog' : 'custom',
+        ...(config.authType && { authType: config.authType }),
         ...(config.name && { name: config.name }),
         ...(config.baseUrl && { baseUrl: config.baseUrl }),
         ...(config.region && { region: config.region }),
@@ -495,6 +509,87 @@ export class AdminPanelResolver {
 
     await this.twentyConfigService.set('AI_PROVIDERS', customProviders);
     this.aiModelRegistryService.refreshRegistry();
+
+    return true;
+  }
+
+  @UseGuards(AdminPanelGuard)
+  @Query(() => [UsageBreakdownItemDTO])
+  async getAdminAiUsageByWorkspace(
+    @Args('periodStart', { type: () => Date, nullable: true })
+    periodStart?: Date,
+    @Args('periodEnd', { type: () => Date, nullable: true })
+    periodEnd?: Date,
+  ): Promise<UsageBreakdownItemDTO[]> {
+    const defaultEnd = new Date();
+    const defaultStart = new Date();
+
+    defaultStart.setDate(defaultStart.getDate() - 30);
+
+    const useDollarMode = !this.twentyConfigService.get('IS_BILLING_ENABLED');
+
+    const items = await this.usageAnalyticsService.getAdminAiUsageByWorkspace({
+      periodStart: periodStart ?? defaultStart,
+      periodEnd: periodEnd ?? defaultEnd,
+      useDollarMode,
+    });
+
+    if (items.length === 0) {
+      return items;
+    }
+
+    const workspaceIds = items.map((item) => item.key);
+    const workspaces = await this.workspaceRepository.find({
+      where: { id: In(workspaceIds) },
+      select: { id: true, displayName: true },
+    });
+
+    const nameMap = new Map(
+      workspaces
+        .filter((workspace) => isDefined(workspace.displayName))
+        .map((workspace) => [workspace.id, workspace.displayName!]),
+    );
+
+    return items.map((item) => ({
+      ...item,
+      label: nameMap.get(item.key),
+    }));
+  }
+
+  @UseGuards(AdminPanelGuard)
+  @Query(() => MaintenanceModeDTO, { nullable: true })
+  async getMaintenanceMode(): Promise<MaintenanceModeDTO | null> {
+    const value = await this.maintenanceModeService.getMaintenanceMode();
+
+    if (!isDefined(value)) {
+      return null;
+    }
+
+    return {
+      startAt: new Date(value.startAt),
+      endAt: new Date(value.endAt),
+      link: value.link,
+    };
+  }
+
+  @UseGuards(AdminPanelGuard)
+  @Mutation(() => Boolean)
+  async setMaintenanceMode(
+    @Args() { startAt, endAt, link }: SetMaintenanceModeInput,
+  ): Promise<boolean> {
+    await this.maintenanceModeService.setMaintenanceMode({
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      link,
+    });
+
+    return true;
+  }
+
+  @UseGuards(AdminPanelGuard)
+  @Mutation(() => Boolean)
+  async clearMaintenanceMode(): Promise<boolean> {
+    await this.maintenanceModeService.clearMaintenanceMode();
 
     return true;
   }

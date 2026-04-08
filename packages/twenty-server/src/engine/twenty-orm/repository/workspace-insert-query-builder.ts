@@ -1,4 +1,4 @@
-import { FeatureFlagKey, type ObjectsPermissions } from 'twenty-shared/types';
+import { type ObjectsPermissions } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
   type EntityTarget,
@@ -31,7 +31,6 @@ import { type WorkspaceUpdateQueryBuilder } from 'src/engine/twenty-orm/reposito
 import { formatData } from 'src/engine/twenty-orm/utils/format-data.util';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
-import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
 import { validateRLSPredicatesForRecords } from 'src/engine/twenty-orm/utils/validate-rls-predicates-for-records.util';
 
@@ -215,13 +214,15 @@ export class WorkspaceInsertQueryBuilder<
               | QueryDeepPartialEntityWithNestedRelationFields<T>[],
             relationNestedConfig: this.relationNestedConfig,
             queryBuilder: nestedRelationQueryBuilder,
+            // OMNIA-CUSTOM: pass isUpsert so relation nested queries can
+            // auto-create missing related records during upsert imports
             isUpsert: isDefined(this.expressionMap.onUpdate),
           });
 
         this.expressionMap.valuesSet = updatedValues;
       }
 
-      await this.validateRLSPredicatesForInsert();
+      this.validateRLSPredicatesForInsert();
 
       const result = await super.execute();
 
@@ -243,7 +244,9 @@ export class WorkspaceInsertQueryBuilder<
         result.identifiers.map((identifier) => identifier.id),
       );
 
-      const afterResult = await eventSelectQueryBuilder.getMany();
+      const afterResult = await eventSelectQueryBuilder.getMany({
+        noFormatting: true,
+      });
 
       const formattedResultForEvent = formatResult<T[]>(
         afterResult,
@@ -252,36 +255,27 @@ export class WorkspaceInsertQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      const policy = this.internalContext.eventEmissionPolicy;
-      const origin = policy?.origin;
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.CREATED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedResultForEvent,
+          authContext: this.authContext,
+        }),
+      );
 
-      if (shouldEmitEvent(policy, DatabaseEventAction.CREATED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.CREATED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedResultForEvent,
-            authContext: this.authContext,
-            origin,
-          }),
-        );
-      }
-
-      if (shouldEmitEvent(policy, DatabaseEventAction.UPSERTED)) {
-        this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
-          formatTwentyOrmEventToDatabaseBatchEvent({
-            action: DatabaseEventAction.UPSERTED,
-            objectMetadataItem: objectMetadata,
-            flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
-            workspaceId: this.internalContext.workspaceId,
-            recordsAfter: formattedResultForEvent,
-            authContext: this.authContext,
-            origin,
-          }),
-        );
-      }
+      this.internalContext.eventEmitterService.emitDatabaseBatchEvent(
+        formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPSERTED,
+          objectMetadataItem: objectMetadata,
+          flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+          workspaceId: this.internalContext.workspaceId,
+          recordsAfter: formattedResultForEvent,
+          authContext: this.authContext,
+        }),
+      );
 
       // TypeORM returns all entity columns for insertions
       const resultWithoutInsertionExtraColumns = !isDefined(result.raw)
@@ -307,22 +301,6 @@ export class WorkspaceInsertQueryBuilder<
         this.internalContext.flatFieldMetadataMaps,
       );
 
-      // After data is committed, surface any relation connect warnings
-      const importWarnings =
-        this._relationNestedQueries?.getImportWarnings() ?? [];
-
-      if (importWarnings.length > 0) {
-        const exception = new TwentyORMException(
-          `Import completed with ${importWarnings.length} warning(s)`,
-          TwentyORMExceptionCode.IMPORT_PARTIAL_SUCCESS,
-        );
-
-        (exception as any).importWarnings = importWarnings;
-        (exception as any).savedRecordCount = result.identifiers.length;
-
-        throw exception;
-      }
-
       return {
         raw: resultWithoutInsertionExtraColumns,
         generatedMaps: formattedResult,
@@ -343,15 +321,7 @@ export class WorkspaceInsertQueryBuilder<
     }
   }
 
-  private async validateRLSPredicatesForInsert(): Promise<void> {
-    if (
-      this.featureFlagMap[
-        FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_PREDICATES_ENABLED
-      ] !== true
-    ) {
-      return;
-    }
-
+  private validateRLSPredicatesForInsert(): void {
     const mainAliasTarget = this.getMainAliasTarget();
     const objectMetadata = getObjectMetadataFromEntityTarget(
       mainAliasTarget,
@@ -369,7 +339,7 @@ export class WorkspaceInsertQueryBuilder<
       this.internalContext.flatFieldMetadataMaps,
     );
 
-    await validateRLSPredicatesForRecords({
+    validateRLSPredicatesForRecords({
       records: valuesToInsertFormatted,
       objectMetadata,
       internalContext: this.internalContext,

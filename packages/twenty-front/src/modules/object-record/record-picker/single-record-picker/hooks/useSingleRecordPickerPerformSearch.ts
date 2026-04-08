@@ -5,12 +5,12 @@ import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadat
 import { DEFAULT_SEARCH_REQUEST_LIMIT } from '@/object-record/constants/DefaultSearchRequestLimit';
 import { useObjectRecordSearchRecords } from '@/object-record/hooks/useObjectRecordSearchRecords';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
+import { combineFilters } from '@/object-record/record-picker/multiple-record-picker/utils/combineFilters';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
 import { singleRecordPickerSearchableObjectMetadataItemsComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchableObjectMetadataItemsComponentState';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { CustomError, isDefined } from 'twenty-shared/utils';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
 
 export const useSingleRecordPickerPerformSearch = ({
   selectedIds,
@@ -25,7 +25,7 @@ export const useSingleRecordPickerPerformSearch = ({
   excludedRecordIds?: string[];
   objectNameSingulars: string[];
   searchFilter?: string;
-  additionalFilter?: ObjectRecordFilterInput;
+  additionalFilter?: Record<string, unknown>;
 }): {
   pickableMorphItems: RecordPickerPickableMorphItem[];
   loading: boolean;
@@ -37,40 +37,26 @@ export const useSingleRecordPickerPerformSearch = ({
 
   const { objectMetadataItems } = useObjectMetadataItems();
 
-  const selectedIdsFilter = { id: { in: selectedIds } };
+  const hasSelectedIds = selectedIds.length > 0;
+  const selectedIdsFilter = hasSelectedIds
+    ? { id: { in: selectedIds } }
+    : undefined;
 
   const { loading: selectedRecordsLoading, searchRecords: selectedRecords } =
     useObjectRecordSearchRecords({
       objectNameSingulars,
       filter: selectedIdsFilter,
-      skip: !selectedIds.length,
+      skip: !hasSelectedIds,
       searchInput: '',
     });
 
-  const combineFilters = (
-    filters: (ObjectRecordFilterInput | undefined)[],
-  ): ObjectRecordFilterInput | undefined => {
-    const defined = filters.filter((f): f is ObjectRecordFilterInput =>
-      isDefined(f),
-    );
-
-    if (defined.length === 0) return undefined;
-    if (defined.length === 1) return defined[0];
-
-    return { and: defined };
-  };
-
-  const filteredSelectedIdsFilter = combineFilters([
-    selectedIdsFilter,
-    additionalFilter,
-  ]);
   const {
     loading: filteredSelectedRecordsLoading,
     searchRecords: filteredSelectedRecords,
   } = useObjectRecordSearchRecords({
     objectNameSingulars,
-    filter: filteredSelectedIdsFilter,
-    skip: !selectedIds.length,
+    filter: selectedIdsFilter,
+    skip: !hasSelectedIds,
     searchInput: searchFilter,
   });
 
@@ -78,11 +64,10 @@ export const useSingleRecordPickerPerformSearch = ({
   const notFilter = notFilterIds.length
     ? { not: { id: { in: notFilterIds } } }
     : undefined;
-  const combinedFilter = combineFilters([notFilter, additionalFilter]);
   const { loading: recordsToSelectLoading, searchRecords: recordsToSelect } =
     useObjectRecordSearchRecords({
       objectNameSingulars,
-      filter: combinedFilter,
+      filter: combineFilters([notFilter, additionalFilter]),
       limit: limit ?? DEFAULT_SEARCH_REQUEST_LIMIT,
       searchInput: searchFilter,
       fetchPolicy: 'cache-and-network',
