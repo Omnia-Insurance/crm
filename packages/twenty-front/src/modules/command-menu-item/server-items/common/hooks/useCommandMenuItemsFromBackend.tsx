@@ -13,7 +13,9 @@ import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 
-import { type CommandMenuContextApi } from 'twenty-shared/types';
+import { CommandLink } from '@/command-menu-item/display/components/CommandLink';
+import { useMemo } from 'react';
+import { AppPath, type CommandMenuContextApi } from 'twenty-shared/types';
 import {
   evaluateConditionalAvailabilityExpression,
   interpolateCommandMenuItemTemplate,
@@ -158,13 +160,22 @@ export const useCommandMenuItemsFromBackend = (
   const permissionMap = usePermissionFlagMap();
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  // Map GO_TO engine keys to object nameSingular for permission checks
-  const goToObjectMap: Record<string, string> = {};
-  for (const item of objectMetadataItems) {
-    // Standard objects have GO_TO_<PLURAL_UPPER> keys
-    const goToKey = `GO_TO_${item.namePlural.toUpperCase().replace(/ /g, '_')}`;
-    goToObjectMap[goToKey] = item.id;
-  }
+  // Build a set of object label plurals the user can read, for filtering Go To items.
+  // This avoids hardcoding GO_TO keys — we just match the label text instead.
+  const readableObjectLabelPlurals = useMemo(() => {
+    const labels = new Set<string>();
+    for (const item of objectMetadataItems) {
+      if (!item.isActive) continue;
+      const perms = getObjectPermissionsFromMapByObjectMetadataId({
+        objectPermissionsByObjectMetadataId,
+        objectMetadataId: item.id,
+      });
+      if (perms?.canReadObjectRecords !== false) {
+        labels.add(item.labelPlural.toLowerCase());
+      }
+    }
+    return labels;
+  }, [objectMetadataItems, objectPermissionsByObjectMetadataId]);
 
   const itemsWithObjectMatches = commandMenuItems.filter(
     doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
@@ -266,10 +277,74 @@ export const useCommandMenuItemsFromBackend = (
     ...fallbackCommandMenuItems,
   ].sort((a, b) => a.position - b.position);
 
+  // OMNIA-CUSTOM: add synthetic "Go to" items for objects that don't have
+  // server-generated Go To entries (custom objects like Policy, Lead Source, etc.)
+  // Collect existing Go To items by both raw label AND resolved label.
+  // "Go to People" gets resolved to "Go to Leads" by resolveGoToActionLabels,
+  // so we need to check both to avoid duplicates.
+  const existingGoToObjectNames = new Set<string>();
+  for (const item of allItems) {
+    if (typeof item.label !== 'string' || !item.label.startsWith('Go to ')) continue;
+    existingGoToObjectNames.add(item.label.replace('Go to ', '').toLowerCase());
+  }
+  // Also add the resolved labels (e.g., People → Leads)
+  for (const meta of objectMetadataItems) {
+    if (existingGoToObjectNames.has(meta.labelPlural.toLowerCase()) ||
+        existingGoToObjectNames.has(meta.namePlural.toLowerCase())) {
+      existingGoToObjectNames.add(meta.labelPlural.toLowerCase());
+    }
+  }
+
+  // Place synthetic Go To items right after existing ones
+  const maxGoToPosition = allItems
+    .filter((item) => typeof item.label === 'string' && item.label.startsWith('Go to '))
+    .reduce((max, item) => Math.max(max, item.position), 0);
+
+  const SIDEBAR_ORDER = ['person', 'policy', 'note', 'task'];
+
+  const syntheticGoToItems: CommandMenuItemConfig[] = objectMetadataItems
+    .filter((meta) => {
+      if (!meta.isActive || meta.isSystem) return false;
+      const perms = getObjectPermissionsFromMapByObjectMetadataId({
+        objectPermissionsByObjectMetadataId,
+        objectMetadataId: meta.id,
+      });
+      if (!perms?.showInSidebar) return false;
+      return !existingGoToObjectNames.has(meta.labelPlural.toLowerCase());
+    })
+    .sort((a, b) => {
+      const idxA = SIDEBAR_ORDER.indexOf(a.nameSingular);
+      const idxB = SIDEBAR_ORDER.indexOf(b.nameSingular);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.labelPlural.localeCompare(b.labelPlural);
+    })
+    .map((meta, index) => ({
+      type: CommandMenuItemType.Standard,
+      key: `go-to-custom-${meta.nameSingular}`,
+      id: `go-to-custom-${meta.nameSingular}`,
+      scope: CommandMenuItemScope.Global,
+      label: `Go to ${meta.labelPlural}`,
+      shortLabel: meta.labelPlural,
+      position: maxGoToPosition + 1 + index,
+      isPinned: false,
+      Icon: getIcon(meta.icon ?? 'IconList'),
+      hotKeys: null,
+      component: (
+        <CommandLink
+          to={AppPath.RecordIndexPage}
+          params={{ objectNamePlural: meta.namePlural }}
+        />
+      ),
+    }));
+
+  const allItemsWithGoTo = [...allItems, ...syntheticGoToItems];
+
   // OMNIA-CUSTOM: apply object-aware label resolution and permission gating
   // 1. "Create Policy" instead of generic "Create Record", with blue accent CTA
   const withCreateLabels = resolveCreateRecordActionLabels(
-    allItems,
+    allItemsWithGoTo,
     currentObjectMetadataItem,
   );
 
@@ -277,6 +352,46 @@ export const useCommandMenuItemsFromBackend = (
   const withGoToLabels = resolveGoToActionLabels(
     withCreateLabels,
     objectMetadataItems,
+  );
+
+  // 2b. Re-sort Go To items by sidebar order so they're grouped correctly.
+  // Build labelPlural → sidebar index from object metadata.
+  const labelToSidebarIndex = new Map<string, number>();
+  for (const name of SIDEBAR_ORDER) {
+    const meta = objectMetadataItems.find((m) => m.nameSingular === name);
+    if (meta) {
+      labelToSidebarIndex.set(meta.labelPlural.toLowerCase(), SIDEBAR_ORDER.indexOf(name));
+    }
+  }
+
+  // Find the position range of existing Go To items
+  const goToItems = withGoToLabels.filter(
+    (item) => typeof item.label === 'string' && item.label.startsWith('Go to ') && item.label !== 'Go to Settings',
+  );
+  const nonGoToItems = withGoToLabels.filter(
+    (item) => !(typeof item.label === 'string' && item.label.startsWith('Go to ')) || item.label === 'Go to Settings',
+  );
+
+  // Sort Go To items by sidebar order, then alphabetically for unlisted ones
+  const sortedGoToItems = goToItems.sort((a, b) => {
+    const labelA = (typeof a.label === 'string' ? a.label.replace('Go to ', '') : '').toLowerCase();
+    const labelB = (typeof b.label === 'string' ? b.label.replace('Go to ', '') : '').toLowerCase();
+    const idxA = labelToSidebarIndex.get(labelA) ?? 999;
+    const idxB = labelToSidebarIndex.get(labelB) ?? 999;
+    if (idxA !== idxB) return idxA - idxB;
+    return labelA.localeCompare(labelB);
+  });
+
+  // Reassign positions so Go To items are contiguous
+  const minGoToPosition = goToItems.length > 0
+    ? Math.min(...goToItems.map((item) => item.position))
+    : 0;
+  sortedGoToItems.forEach((item, idx) => {
+    item.position = minGoToPosition + idx;
+  });
+
+  const withSortedGoTo = [...nonGoToItems, ...sortedGoToItems].sort(
+    (a, b) => a.position - b.position,
   );
 
   // 3. Gate command menu items behind role permissions
@@ -290,21 +405,18 @@ export const useCommandMenuItemsFromBackend = (
     [EngineComponentKey.VIEW_PREVIOUS_AI_CHATS]: PermissionFlagType.AI,
   };
 
-  return withGoToLabels.filter((item) => {
+  return withSortedGoTo.filter((item) => {
     // Permission flag gate (import, export, AI, layouts)
     const requiredPermission = permissionGatedKeys[item.key];
     if (requiredPermission && !permissionMap[requiredPermission]) {
       return false;
     }
 
-    // Go To items: hide if the user can't read the target object
-    const goToObjectMetadataId = goToObjectMap[item.key];
-    if (goToObjectMetadataId) {
-      const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId({
-        objectPermissionsByObjectMetadataId,
-        objectMetadataId: goToObjectMetadataId,
-      });
-      if (objectPermissions?.canReadObjectRecords === false) {
+    // Go To items: hide if the target object isn't readable by the user.
+    // Match by extracting the object name from the label ("Go to Workflows" → "workflows")
+    if (typeof item.label === 'string' && item.label.startsWith('Go to ')) {
+      const targetLabelPlural = item.label.replace('Go to ', '').toLowerCase();
+      if (!readableObjectLabelPlurals.has(targetLabelPlural)) {
         return false;
       }
     }

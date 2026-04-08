@@ -95,43 +95,50 @@ export class SearchService {
     );
 
     for (const objectMetadataItemChunk of filteredObjectMetadataItemsChunks) {
-      const recordsWithObjectMetadataItems = await Promise.all(
+      const results = await Promise.all(
         objectMetadataItemChunk.map(async (flatObjectMetadata) => {
-          return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-            async () => {
-              const context = getWorkspaceContext();
-              const rolePermissionConfig =
-                resolveRolePermissionConfig({
-                  authContext: context.authContext,
-                  userWorkspaceRoleMap: context.userWorkspaceRoleMap,
-                  apiKeyRoleMap: context.apiKeyRoleMap,
-                }) ?? undefined;
+          try {
+            return await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+              async () => {
+                const context = getWorkspaceContext();
+                const rolePermissionConfig =
+                  resolveRolePermissionConfig({
+                    authContext: context.authContext,
+                    userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+                    apiKeyRoleMap: context.apiKeyRoleMap,
+                  }) ?? undefined;
 
-              const repository =
-                await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
-                  workspaceId,
-                  flatObjectMetadata.nameSingular,
-                  rolePermissionConfig,
-                );
+                const repository =
+                  await this.globalWorkspaceOrmManager.getRepository<ObjectRecord>(
+                    workspaceId,
+                    flatObjectMetadata.nameSingular,
+                    rolePermissionConfig,
+                  );
 
-              return {
-                objectMetadataItem: flatObjectMetadata,
-                records: await this.buildSearchQueryAndGetRecordsWithFallback({
-                  entityManager: repository,
-                  flatObjectMetadata,
-                  flatFieldMetadataMaps,
-                  searchInput,
-                  searchTerms: formatSearchTerms(searchInput, 'and'),
-                  searchTermsOr: formatSearchTerms(searchInput, 'or'),
-                  limit: limit as number,
-                  filter: filter ?? ({} as ObjectRecordFilter),
-                  after,
-                }),
-              };
-            },
-          );
+                return {
+                  objectMetadataItem: flatObjectMetadata,
+                  records: await this.buildSearchQueryAndGetRecordsWithFallback({
+                    entityManager: repository,
+                    flatObjectMetadata,
+                    flatFieldMetadataMaps,
+                    searchInput,
+                    searchTerms: formatSearchTerms(searchInput, 'and'),
+                    searchTermsOr: formatSearchTerms(searchInput, 'or'),
+                    limit: limit as number,
+                    filter: filter ?? ({} as ObjectRecordFilter),
+                    after,
+                  }),
+                };
+              },
+            );
+          } catch {
+            // Skip objects the user can't search (field-level permission denial, etc.)
+            return null;
+          }
         }),
       );
+
+      const recordsWithObjectMetadataItems = results.filter(isDefined);
 
       allRecordsWithObjectMetadataItems.push(...recordsWithObjectMetadataItems);
     }
@@ -691,8 +698,9 @@ export class SearchService {
     }
 
     //TODO: Temporary solution before imageIdentifier refactor
+    // OMNIA-CUSTOM: use avatarUrl until avatarFile column is added via workspace sync
     if (flatObjectMetadata.nameSingular === 'person') {
-      return 'avatarFile';
+      return 'avatarUrl';
     }
 
     if (flatObjectMetadata.nameSingular === 'workspaceMember') {
@@ -745,15 +753,19 @@ export class SearchService {
       return getLogoUrlFromDomainName(record.domainNamePrimaryLinkUrl) || '';
     }
 
-    //TODO: Temporary solution before imageIdentifier refactor
+    // OMNIA-CUSTOM: use avatarUrl (same as workspaceMember) until avatarFile
+    // column is added via workspace sync
     if (flatObjectMetadata.nameSingular === 'person') {
-      const avatarFileId = (record.avatarFile as FileOutput[])?.[0]?.fileId;
+      const avatarFileId = extractFileIdFromUrl(
+        record.avatarUrl,
+        FileFolder.CorePicture,
+      );
       if (!isDefined(avatarFileId)) {
         return '';
       }
       return this.getImageUrlWithToken(
         avatarFileId,
-        FileFolder.FilesField,
+        FileFolder.CorePicture,
         workspaceId,
       );
     }
