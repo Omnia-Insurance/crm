@@ -22,8 +22,9 @@ import {
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
-import { FeatureFlagKey } from '~/generated-metadata/graphql';
+import { FeatureFlagKey, PermissionFlagType } from '~/generated-metadata/graphql';
 
 const StyledRow = styled.div<{ isExpanded: boolean }>`
   align-items: center;
@@ -141,12 +142,13 @@ export const MainNavigationDrawerTabsRow = () => {
   const [navigationDrawerActiveTab, setNavigationDrawerActiveTab] =
     useAtomState(navigationDrawerActiveTabState);
   const { switchToNewChat } = useSwitchToNewAIChat();
-  const isAiEnabled = useIsFeatureEnabled(FeatureFlagKey.IS_AI_ENABLED);
+  const isAiFeatureEnabled = useIsFeatureEnabled(FeatureFlagKey.IS_AI_ENABLED);
+  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.AI);
   const setIsNavigationDrawerExpanded = useSetAtomState(
     isNavigationDrawerExpandedState,
   );
 
-  if (!isAiEnabled) {
+  if (!isAiFeatureEnabled || !hasAiPermission) {
     return null;
   }
 

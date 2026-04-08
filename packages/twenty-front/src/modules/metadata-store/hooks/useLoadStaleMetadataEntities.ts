@@ -58,7 +58,7 @@ export const useLoadStaleMetadataEntities = () => {
   const client = useApolloClient();
   const { replaceDraft, applyChanges } = useUpdateMetadataStoreDraft();
   const isAiFeatureEnabled = useIsFeatureEnabled(FeatureFlagKey.IS_AI_ENABLED);
-  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.ASK_AI);
+  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.AI);
   const isAiEnabled = isAiFeatureEnabled && hasAiPermission;
 
   const loadStaleMetadataEntities = useCallback(
@@ -230,6 +230,9 @@ export const useLoadStaleMetadataEntities = () => {
               );
 
               replaceDraft('agentChatThreads', threads);
+            })
+            .catch(() => {
+              // Silently ignore — permission check may race with auth context
             }),
         );
       }
