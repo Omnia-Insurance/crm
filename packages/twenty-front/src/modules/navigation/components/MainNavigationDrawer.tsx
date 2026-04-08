@@ -68,7 +68,9 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
           Icon={IconSettings}
           onClick={handleSettingsClick}
         />
-        <MainNavigationDrawerTabsRow />
+        <div style={{ marginTop: 4 }}>
+          <MainNavigationDrawerTabsRow />
+        </div>
       </NavigationDrawerFixedContent>
 
       <NavigationDrawerScrollableContent>
