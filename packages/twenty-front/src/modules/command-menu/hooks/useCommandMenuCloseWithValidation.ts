@@ -6,9 +6,11 @@ import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavi
 import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { requiredFieldsValidationState } from '@/command-menu/states/requiredFieldsValidationState';
 import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
-import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
-import { type FieldViolation } from '@/object-record/record-field/ui/hooks/useRecordRequiredFieldViolations';
-import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
+import {
+  type FieldViolation,
+  getRecordRequiredFieldViolations,
+} from '@/object-record/record-field/ui/utils/getRecordRequiredFieldViolations';
+import { getRelatedRecordViolations } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
 import {
   newlyCreatedRecordIdsState,
   persistNewlyCreatedRecordIds,
@@ -72,82 +74,33 @@ export const useCommandMenuCloseWithValidation = () => {
       // bypass required-fields validation instead of reopening the delete modal.
       if (!record || record.deletedAt) return [];
 
-      const violations: FieldViolation[] = [];
+      const ownViolations = getRecordRequiredFieldViolations(
+        record,
+        objectMetadataItem,
+      );
 
-      for (const field of objectMetadataItem.fields) {
-        const requiredCondition = field.requiredCondition as
-          | { type: string; fieldId?: string }
-          | null
-          | undefined;
+      // Also check required fields on related records (MANY_TO_ONE relations)
+      const relatedViolations = getRelatedRecordViolations(
+        record,
+        objectMetadataItem,
+        (name: string) =>
+          store.get(
+            objectMetadataItemFamilySelector.selectorFamily({
+              objectName: name,
+              objectNameType: 'singular',
+            }),
+          ),
+        (id: string) => store.get(recordStoreFamilyState.atomFamily(id)),
+      );
 
-        if (!requiredCondition) continue;
+      const flatRelatedViolations = relatedViolations.flatMap((rv) =>
+        rv.violations.map((v) => ({
+          ...v,
+          fieldLabel: `${rv.relationLabel}: ${v.fieldLabel}`,
+        })),
+      );
 
-        const fieldDefinition = formatFieldMetadataItemAsFieldDefinition({
-          field,
-          objectMetadataItem,
-        });
-
-        const fieldValue = record[field.name];
-
-        let fieldEmpty: boolean;
-        try {
-          fieldEmpty = isFieldValueEmpty({
-            fieldDefinition,
-            fieldValue,
-          });
-        } catch {
-          fieldEmpty = true;
-        }
-
-        if (!fieldEmpty) continue;
-
-        if (requiredCondition.type === 'always') {
-          violations.push({
-            fieldMetadataId: field.id,
-            fieldLabel: field.label,
-          });
-          continue;
-        }
-
-        if (requiredCondition.fieldId) {
-          const conditionField = objectMetadataItem.fields.find(
-            (f) => f.id === requiredCondition.fieldId,
-          );
-
-          if (!conditionField) continue;
-
-          const conditionFieldDefinition =
-            formatFieldMetadataItemAsFieldDefinition({
-              field: conditionField,
-              objectMetadataItem,
-            });
-
-          const conditionValue = record[conditionField.name];
-
-          let conditionEmpty: boolean;
-          try {
-            conditionEmpty = isFieldValueEmpty({
-              fieldDefinition: conditionFieldDefinition,
-              fieldValue: conditionValue,
-            });
-          } catch {
-            conditionEmpty = true;
-          }
-
-          const isRequired =
-            (requiredCondition.type === 'fieldEmpty' && conditionEmpty) ||
-            (requiredCondition.type === 'fieldNotEmpty' && !conditionEmpty);
-
-          if (isRequired) {
-            violations.push({
-              fieldMetadataId: field.id,
-              fieldLabel: field.label,
-            });
-          }
-        }
-      }
-
-      return violations;
+      return [...ownViolations, ...flatRelatedViolations];
     },
     [store],
   );

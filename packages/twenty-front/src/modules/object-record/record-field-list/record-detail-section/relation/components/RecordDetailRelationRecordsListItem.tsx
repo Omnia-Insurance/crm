@@ -68,6 +68,7 @@ type RecordDetailRelationRecordsListItemProps = {
   relationRecord: ObjectRecord;
   relationObjectMetadataNameSingular: string;
   relationFieldMetadataId: string;
+  showRequiredIndicator?: boolean;
 };
 
 export const RecordDetailRelationRecordsListItem = ({
@@ -76,6 +77,7 @@ export const RecordDetailRelationRecordsListItem = ({
   relationRecord,
   relationObjectMetadataNameSingular,
   relationFieldMetadataId,
+  showRequiredIndicator = false,
 }: RecordDetailRelationRecordsListItemProps) => {
   const { scopeInstanceId } = useRecordFieldsScopeContextOrThrow();
   const {
@@ -274,6 +276,7 @@ export const RecordDetailRelationRecordsListItem = ({
           showRelationSections={false}
           excludeCreatedAtAndUpdatedAt={true}
           excludeFieldMetadataIds={[relationFieldMetadataId]}
+          showRequiredIndicator={showRequiredIndicator}
         />
       </AnimatedEaseInOut>
       {createPortal(

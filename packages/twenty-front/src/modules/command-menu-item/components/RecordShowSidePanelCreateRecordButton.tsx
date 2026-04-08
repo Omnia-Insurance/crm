@@ -1,28 +1,22 @@
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
-import {
-  type FieldViolation,
-} from '@/object-record/record-field/ui/hooks/useRecordRequiredFieldViolations';
-import {
-  draftRecordIdsState,
-  type DraftRecordMeta,
-} from '@/object-record/record-side-panel/states/draftRecordIdsState';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import {
   newlyCreatedRecordIdsState,
   persistNewlyCreatedRecordIds,
 } from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { formatFieldMetadataItemAsFieldDefinition } from '@/object-metadata/utils/formatFieldMetadataItemAsFieldDefinition';
-import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
+import {
+  useDraftCombinedViolations,
+  clearDraftViolationsAtom,
+} from '@/object-record/record-field/ui/hooks/useDraftCombinedViolations';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
-import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { IconPlus } from 'twenty-ui/display';
 import { Button } from 'twenty-ui/input';
@@ -31,79 +25,6 @@ import { getOsControlSymbol } from 'twenty-ui/utilities';
 type RecordShowSidePanelCreateRecordButtonProps = {
   objectNameSingular: string;
   recordId: string;
-};
-
-const getViolationsForDraft = (
-  record: ObjectRecord | null | undefined,
-  draftMeta: DraftRecordMeta,
-): FieldViolation[] => {
-  if (!record) return [];
-
-  const violations: FieldViolation[] = [];
-  const { objectMetadataItem } = draftMeta;
-
-  for (const field of objectMetadataItem.fields) {
-    const requiredCondition = field.requiredCondition as
-      | { type: string; fieldId?: string }
-      | null
-      | undefined;
-
-    if (!requiredCondition) continue;
-
-    const fieldDefinition = formatFieldMetadataItemAsFieldDefinition({
-      field,
-      objectMetadataItem,
-    });
-
-    const fieldValue = record[field.name];
-
-    let fieldEmpty: boolean;
-    try {
-      fieldEmpty = isFieldValueEmpty({ fieldDefinition, fieldValue });
-    } catch {
-      fieldEmpty = true;
-    }
-
-    if (!fieldEmpty) continue;
-
-    if (requiredCondition.type === 'always') {
-      violations.push({ fieldMetadataId: field.id, fieldLabel: field.label });
-      continue;
-    }
-
-    if (requiredCondition.fieldId) {
-      const conditionField = objectMetadataItem.fields.find(
-        (f) => f.id === requiredCondition.fieldId,
-      );
-      if (!conditionField) continue;
-
-      const conditionFieldDefinition = formatFieldMetadataItemAsFieldDefinition({
-        field: conditionField,
-        objectMetadataItem,
-      });
-
-      const conditionValue = record[conditionField.name];
-      let conditionEmpty: boolean;
-      try {
-        conditionEmpty = isFieldValueEmpty({
-          fieldDefinition: conditionFieldDefinition,
-          fieldValue: conditionValue,
-        });
-      } catch {
-        conditionEmpty = true;
-      }
-
-      const isRequired =
-        (requiredCondition.type === 'fieldEmpty' && conditionEmpty) ||
-        (requiredCondition.type === 'fieldNotEmpty' && !conditionEmpty);
-
-      if (isRequired) {
-        violations.push({ fieldMetadataId: field.id, fieldLabel: field.label });
-      }
-    }
-  }
-
-  return violations;
 };
 
 export const RecordShowSidePanelCreateRecordButton = ({
@@ -116,10 +37,7 @@ export const RecordShowSidePanelCreateRecordButton = ({
   const draftRecordIds = useAtomStateValue(draftRecordIdsState);
   const draftMeta = draftRecordIds.get(recordId);
 
-  const record = useAtomFamilyStateValue(recordStoreFamilyState, recordId) as
-    | ObjectRecord
-    | null
-    | undefined;
+  const combinedViolations = useDraftCombinedViolations(recordId, draftMeta);
 
   const { createOneRecord } = useCreateOneRecord({
     objectNameSingular,
@@ -129,12 +47,8 @@ export const RecordShowSidePanelCreateRecordButton = ({
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
   const { closeSidePanelMenu } = useSidePanelMenu();
 
-  const violations = useMemo(
-    () => (draftMeta ? getViolationsForDraft(record, draftMeta) : []),
-    [record, draftMeta],
-  );
-
-  const isDisabled = violations.length > 0 || isCreating;
+  const isDisabled =
+    (combinedViolations?.allViolationsCount ?? 0) > 0 || isCreating;
 
   const handleCreateRecord = useCallback(async () => {
     if (!draftMeta || isCreating) return;
@@ -190,6 +104,9 @@ export const RecordShowSidePanelCreateRecordButton = ({
       const updatedDraftMap = new Map(store.get(draftRecordIdsState.atom));
       updatedDraftMap.delete(recordId);
       store.set(draftRecordIdsState.atom, updatedDraftMap);
+
+      // Clean up cached violations atom
+      clearDraftViolationsAtom(recordId);
 
       // Add to newly created tracking (for navigate-away validation)
       const createdMap = new Map(store.get(newlyCreatedRecordIdsState.atom));

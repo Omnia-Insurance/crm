@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 
 import { RecordDetailRecordsListContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListContainer';
 import { RecordDetailRelationRecordsListItem } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem';
 import { RecordDetailRelationRecordsListItemEffect } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItemEffect';
+import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 
 type RecordDetailRelationRecordsListProps = {
@@ -17,9 +18,46 @@ export const RecordDetailRelationRecordsList = ({
   recordsWithObjectNameSingular: RecordDetailRelationRecordsListProps[];
 }) => {
   const [expandedItem, setExpandedItem] = useState('');
+  const userCollapsedRef = useRef<string | null>(null);
 
-  const handleItemClick = (recordId: string) =>
+  const relatedViolations = useContext(DraftRelatedViolationsContext);
+
+  // Auto-expand when a related record has required field violations
+  useEffect(() => {
+    const violatedRecordId = recordsWithObjectNameSingular.find((r) =>
+      relatedViolations.some(
+        (rv) =>
+          rv.relatedRecordId === r.value.id && rv.violations.length > 0,
+      ),
+    )?.value.id;
+
+    if (
+      violatedRecordId &&
+      expandedItem !== violatedRecordId &&
+      userCollapsedRef.current !== violatedRecordId
+    ) {
+      setExpandedItem(violatedRecordId);
+    }
+    // Clear user-collapsed ref when violations are resolved
+    if (
+      userCollapsedRef.current &&
+      !relatedViolations.some(
+        (rv) =>
+          rv.relatedRecordId === userCollapsedRef.current &&
+          rv.violations.length > 0,
+      )
+    ) {
+      userCollapsedRef.current = null;
+    }
+  }, [relatedViolations, recordsWithObjectNameSingular, expandedItem]);
+
+  const handleItemClick = (recordId: string) => {
+    if (expandedItem === recordId) {
+      // User is collapsing — track it so we don't fight them
+      userCollapsedRef.current = recordId;
+    }
     setExpandedItem(recordId === expandedItem ? '' : recordId);
+  };
 
   return (
     <RecordDetailRecordsListContainer>

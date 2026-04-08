@@ -2,6 +2,8 @@ import { RecordPageSidePanelCommandMenu } from '@/command-menu-item/components/R
 import { RecordShowSidePanelCreateRecordButton } from '@/command-menu-item/components/RecordShowSidePanelCreateRecordButton';
 import { RecordShowSidePanelOpenRecordButton } from '@/command-menu-item/components/RecordShowSidePanelOpenRecordButton';
 import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
+import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
+import { useDraftCombinedViolations } from '@/object-record/record-field/ui/hooks/useDraftCombinedViolations';
 import { InformationBannerDeletedRecord } from '@/information-banner/components/deleted-record/InformationBannerDeletedRecord';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { RecordShowContainerContextStoreTargetedRecordsEffect } from '@/object-record/record-show/components/RecordShowContainerContextStoreTargetedRecordsEffect';
@@ -20,6 +22,10 @@ import { isDefined } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { PageLayoutType } from '~/generated-metadata/graphql';
+
+import { type RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
+
+const EMPTY_RELATED_VIOLATIONS: RelatedRecordViolation[] = [];
 
 const StyledShowPageBannerContainer = styled.div`
   z-index: 1;
@@ -49,6 +55,13 @@ export const PageLayoutRecordPageRenderer = ({
 }) => {
   const draftRecordIds = useAtomStateValue(draftRecordIdsState);
   const isDraft = draftRecordIds.has(targetRecordIdentifier.id);
+  const draftMeta = draftRecordIds.get(targetRecordIdentifier.id);
+
+  const combinedViolations = useDraftCombinedViolations(
+    targetRecordIdentifier.id,
+    draftMeta,
+  );
+  const relatedViolations = combinedViolations?.relatedViolations ?? EMPTY_RELATED_VIOLATIONS;
 
   const recordDeletedAt = useAtomFamilySelectorValue(
     recordStoreFamilySelector,
@@ -93,6 +106,7 @@ export const PageLayoutRecordPageRenderer = ({
         </StyledShowPageBannerContainer>
       )}
 
+      <DraftRelatedViolationsContext.Provider value={relatedViolations}>
       <StyledShowPageRightContainer>
         <StyledContentContainer isInSidePanel={isInSidePanel}>
           <LayoutRenderingProvider
@@ -158,6 +172,7 @@ export const PageLayoutRecordPageRenderer = ({
           />
         )}
       </StyledShowPageRightContainer>
+      </DraftRelatedViolationsContext.Provider>
     </>
   );
 };

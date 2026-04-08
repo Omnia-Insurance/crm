@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { Fragment, useState } from 'react';
+import { Fragment, useContext, useEffect, useRef, useState } from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
@@ -8,6 +8,7 @@ import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-l
 import { RecordDetailRelationRecordsListItem } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem';
 import { RecordDetailRelationRecordsListItemEffect } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItemEffect';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
+import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
 import {
   FieldInputEventContext,
   type FieldInputEvent,
@@ -46,7 +47,10 @@ export const FieldWidgetRelationCard = ({
   const [visibleItemsCount, setVisibleItemsCount] = useState(
     FIELD_WIDGET_RELATION_CARD_INITIAL_VISIBLE_ITEMS,
   );
+  const userCollapsedRef = useRef<string | null>(null);
   const targetRecord = useTargetRecord();
+
+  const relatedViolations = useContext(DraftRelatedViolationsContext);
 
   const instanceId = generateFieldWidgetInstanceId({
     widgetId: widget.id,
@@ -55,8 +59,51 @@ export const FieldWidgetRelationCard = ({
     isInSidePanel,
   });
 
-  const handleItemClick = (recordId: string) =>
+  // Auto-expand when a related record has required field violations
+  const records = Array.isArray(relationValue)
+    ? relationValue
+    : isDefined(relationValue)
+      ? [relationValue]
+      : [];
+
+  useEffect(() => {
+    const violatedRecordId = records.find((r: { id: string }) =>
+      relatedViolations.some(
+        (rv) => rv.relatedRecordId === r.id && rv.violations.length > 0,
+      ),
+    )?.id;
+
+    if (
+      violatedRecordId &&
+      expandedItem !== violatedRecordId &&
+      userCollapsedRef.current !== violatedRecordId
+    ) {
+      setExpandedItem(violatedRecordId);
+    }
+    // Clear user-collapsed ref when violations are resolved
+    if (
+      userCollapsedRef.current &&
+      !relatedViolations.some(
+        (rv) =>
+          rv.relatedRecordId === userCollapsedRef.current &&
+          rv.violations.length > 0,
+      )
+    ) {
+      userCollapsedRef.current = null;
+    }
+  }, [relatedViolations, records, expandedItem]);
+
+  const handleItemClick = (recordId: string) => {
+    if (expandedItem === recordId) {
+      // Block collapse if the related record still has required field violations
+      const hasViolations = relatedViolations.some(
+        (rv) => rv.relatedRecordId === recordId && rv.violations.length > 0,
+      );
+      if (hasViolations) return;
+      userCollapsedRef.current = recordId;
+    }
     setExpandedItem(recordId === expandedItem ? '' : recordId);
+  };
 
   const handleShowMore = () => {
     setVisibleItemsCount(
@@ -114,12 +161,6 @@ export const FieldWidgetRelationCard = ({
     });
   };
 
-  const records = Array.isArray(relationValue)
-    ? relationValue
-    : isDefined(relationValue)
-      ? [relationValue]
-      : [];
-
   if (records.length === 0) {
     return null;
   }
@@ -157,6 +198,11 @@ export const FieldWidgetRelationCard = ({
                     relationObjectNameSingular
                   }
                   relationFieldMetadataId={relationFieldMetadataId}
+                  showRequiredIndicator={relatedViolations.some(
+                    (rv) =>
+                      rv.relatedRecordId === record.id &&
+                      rv.violations.length > 0,
+                  )}
                 />
               </Fragment>
             ))}

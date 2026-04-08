@@ -36,6 +36,7 @@ type RecordFieldListProps = {
   showRelationSections?: boolean;
   excludeFieldMetadataIds?: string[];
   excludeCreatedAtAndUpdatedAt?: boolean;
+  showRequiredIndicator?: boolean;
 };
 
 export const RecordFieldList = ({
@@ -46,6 +47,7 @@ export const RecordFieldList = ({
   showRelationSections = true,
   excludeFieldMetadataIds = [],
   excludeCreatedAtAndUpdatedAt = true,
+  showRequiredIndicator = false,
 }: RecordFieldListProps) => {
   const { recordLoading } = useRecordShowContainerData({
     objectRecordId,
@@ -210,6 +212,7 @@ export const RecordFieldList = ({
               <RecordInlineCell
                 loading={recordLoading}
                 instanceIdPrefix={instanceId}
+                showRequiredIndicator={showRequiredIndicator}
               />
             </RecordFieldComponentInstanceContext.Provider>
           </FieldContext.Provider>
