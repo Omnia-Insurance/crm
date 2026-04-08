@@ -268,12 +268,20 @@ export const useCommandMenuItemsFromBackend = (
     objectMetadataItems,
   );
 
-  // 3. Gate "Edit Record Page Layout" behind LAYOUTS permission
+  // 3. Gate command menu items behind role permissions
+  // Maps engine component keys to required permission flags.
+  const permissionGatedKeys: Record<string, PermissionFlagType> = {
+    [EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT]: PermissionFlagType.LAYOUTS,
+    [EngineComponentKey.IMPORT_RECORDS]: PermissionFlagType.IMPORT_CSV,
+    [EngineComponentKey.EXPORT_RECORDS]: PermissionFlagType.EXPORT_CSV,
+    [EngineComponentKey.EXPORT_VIEW]: PermissionFlagType.EXPORT_CSV,
+    [EngineComponentKey.ASK_AI]: PermissionFlagType.AI,
+    [EngineComponentKey.VIEW_PREVIOUS_AI_CHATS]: PermissionFlagType.AI,
+  };
+
   return withGoToLabels.filter((item) => {
-    if (
-      item.key === EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT &&
-      !permissionMap[PermissionFlagType.LAYOUTS]
-    ) {
+    const requiredPermission = permissionGatedKeys[item.key];
+    if (requiredPermission && !permissionMap[requiredPermission]) {
       return false;
     }
     return true;
