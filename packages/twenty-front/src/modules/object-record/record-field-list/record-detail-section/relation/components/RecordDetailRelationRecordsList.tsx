@@ -18,7 +18,7 @@ export const RecordDetailRelationRecordsList = ({
   recordsWithObjectNameSingular: RecordDetailRelationRecordsListProps[];
 }) => {
   const [expandedItem, setExpandedItem] = useState('');
-  const userCollapsedRef = useRef<string | null>(null);
+  const expandedByViolationsRef = useRef<string | null>(null);
 
   const relatedViolations = useContext(DraftRelatedViolationsContext);
 
@@ -31,33 +31,28 @@ export const RecordDetailRelationRecordsList = ({
       ),
     )?.value.id;
 
-    if (
-      violatedRecordId &&
-      expandedItem !== violatedRecordId &&
-      userCollapsedRef.current !== violatedRecordId
-    ) {
+    if (violatedRecordId && expandedItem !== violatedRecordId) {
       setExpandedItem(violatedRecordId);
+      expandedByViolationsRef.current = violatedRecordId;
     }
-    // Clear user-collapsed ref when violations are resolved
+
+    // Auto-collapse if we expanded it for violations and they're now resolved
     if (
-      userCollapsedRef.current &&
+      expandedByViolationsRef.current &&
+      expandedItem === expandedByViolationsRef.current &&
       !relatedViolations.some(
         (rv) =>
-          rv.relatedRecordId === userCollapsedRef.current &&
+          rv.relatedRecordId === expandedByViolationsRef.current &&
           rv.violations.length > 0,
       )
     ) {
-      userCollapsedRef.current = null;
+      setExpandedItem('');
+      expandedByViolationsRef.current = null;
     }
   }, [relatedViolations, recordsWithObjectNameSingular, expandedItem]);
 
-  const handleItemClick = (recordId: string) => {
-    if (expandedItem === recordId) {
-      // User is collapsing — track it so we don't fight them
-      userCollapsedRef.current = recordId;
-    }
+  const handleItemClick = (recordId: string) =>
     setExpandedItem(recordId === expandedItem ? '' : recordId);
-  };
 
   return (
     <RecordDetailRecordsListContainer>

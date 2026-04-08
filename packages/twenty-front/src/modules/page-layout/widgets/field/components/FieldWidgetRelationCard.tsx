@@ -47,7 +47,8 @@ export const FieldWidgetRelationCard = ({
   const [visibleItemsCount, setVisibleItemsCount] = useState(
     FIELD_WIDGET_RELATION_CARD_INITIAL_VISIBLE_ITEMS,
   );
-  const userCollapsedRef = useRef<string | null>(null);
+  // Tracks whether the current expansion was triggered by violations (vs user click)
+  const expandedByViolationsRef = useRef<string | null>(null);
   const targetRecord = useTargetRecord();
 
   const relatedViolations = useContext(DraftRelatedViolationsContext);
@@ -73,23 +74,23 @@ export const FieldWidgetRelationCard = ({
       ),
     )?.id;
 
-    if (
-      violatedRecordId &&
-      expandedItem !== violatedRecordId &&
-      userCollapsedRef.current !== violatedRecordId
-    ) {
+    if (violatedRecordId && expandedItem !== violatedRecordId) {
       setExpandedItem(violatedRecordId);
+      expandedByViolationsRef.current = violatedRecordId;
     }
-    // Clear user-collapsed ref when violations are resolved
+
+    // Auto-collapse if we expanded it for violations and they're now resolved
     if (
-      userCollapsedRef.current &&
+      expandedByViolationsRef.current &&
+      expandedItem === expandedByViolationsRef.current &&
       !relatedViolations.some(
         (rv) =>
-          rv.relatedRecordId === userCollapsedRef.current &&
+          rv.relatedRecordId === expandedByViolationsRef.current &&
           rv.violations.length > 0,
       )
     ) {
-      userCollapsedRef.current = null;
+      setExpandedItem('');
+      expandedByViolationsRef.current = null;
     }
   }, [relatedViolations, records, expandedItem]);
 
@@ -100,7 +101,6 @@ export const FieldWidgetRelationCard = ({
         (rv) => rv.relatedRecordId === recordId && rv.violations.length > 0,
       );
       if (hasViolations) return;
-      userCollapsedRef.current = recordId;
     }
     setExpandedItem(recordId === expandedItem ? '' : recordId);
   };
