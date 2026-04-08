@@ -13,6 +13,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 const ORDERED_FIRST_STANDARD_OBJECTS: string[] = [
   CoreObjectNameSingular.Person,
+  'call',
   'policy',
   CoreObjectNameSingular.Note,
   CoreObjectNameSingular.Task,

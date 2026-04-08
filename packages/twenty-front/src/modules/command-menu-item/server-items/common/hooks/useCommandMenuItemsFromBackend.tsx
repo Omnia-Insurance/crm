@@ -160,7 +160,7 @@ export const useCommandMenuItemsFromBackend = (
   const permissionMap = usePermissionFlagMap();
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  // Build a set of object label plurals the user can read, for filtering Go To items.
+  // Build a set of object label plurals visible in the sidebar, for filtering Go To items.
   // This avoids hardcoding GO_TO keys — we just match the label text instead.
   const readableObjectLabelPlurals = useMemo(() => {
     const labels = new Set<string>();
@@ -170,7 +170,7 @@ export const useCommandMenuItemsFromBackend = (
         objectPermissionsByObjectMetadataId,
         objectMetadataId: item.id,
       });
-      if (perms?.canReadObjectRecords !== false) {
+      if (perms?.canReadObjectRecords !== false && perms?.showInSidebar !== false) {
         labels.add(item.labelPlural.toLowerCase());
       }
     }
