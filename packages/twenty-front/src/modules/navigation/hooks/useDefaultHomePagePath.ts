@@ -16,6 +16,9 @@ import { getAppPath, getSettingsPath, isDefined } from 'twenty-shared/utils';
 import { useStore } from 'jotai';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
 
+// OMNIA-CUSTOM: member sidebar display order — person (Leads) first
+const SIDEBAR_ORDER = ['person', 'policy', 'note', 'task'];
+
 export const useDefaultHomePagePath = () => {
   const store = useStore();
   const currentUser = useAtomStateValue(currentUserState);
@@ -40,7 +43,6 @@ export const useDefaultHomePagePath = () => {
   // sorted to match sidebar display order (ORDERED_FIRST_STANDARD_OBJECTS).
   const sidebarVisibleObjectMetadataItems = useMemo(() => {
     if (isAdmin) return readableNonSystemObjectMetadataItems;
-    const SIDEBAR_ORDER = ['person', 'policy', 'company', 'opportunity', 'note', 'task'];
     return readableNonSystemObjectMetadataItems
       .filter((item) => {
         const objectPermissions =
@@ -113,12 +115,21 @@ export const useDefaultHomePagePath = () => {
   // Admins: first root-level workspace nav item (sorted by position).
   // Non-layout users: first sidebar-visible object (sorted by ORDERED_FIRST_STANDARD_OBJECTS).
   const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    // Non-layout users: always use sidebar-visible objects, never nav menu items.
-    // Return null if permissions haven't loaded yet (empty list) — the caller
-    // will show the settings page until permissions resolve.
+    // Non-layout users: use sidebar-visible objects when permissions are loaded,
+    // otherwise fall back to SIDEBAR_ORDER from metadata (person = Leads first).
     if (!isAdmin) {
-      if (sidebarVisibleObjectMetadataItems.length === 0) return null;
-      const firstItem = sidebarVisibleObjectMetadataItems[0];
+      const items = sidebarVisibleObjectMetadataItems.length > 0
+        ? sidebarVisibleObjectMetadataItems
+        : readableNonSystemObjectMetadataItems
+            .filter((item) => SIDEBAR_ORDER.includes(item.nameSingular))
+            .sort((a, b) => {
+              const indexA = SIDEBAR_ORDER.indexOf(a.nameSingular);
+              const indexB = SIDEBAR_ORDER.indexOf(b.nameSingular);
+              return indexA - indexB;
+            });
+
+      const firstItem = items[0];
+      if (!firstItem) return null;
 
       return {
         objectMetadataItem: firstItem,
@@ -218,7 +229,7 @@ export const useDefaultHomePagePath = () => {
     const defaultObjectPathInfo = getDefaultObjectPathInfo();
 
     if (!isDefined(defaultObjectPathInfo)) {
-      return AppPath.NotFound;
+      return getSettingsPath(SettingsPath.ProfilePage);
     }
 
     const namePlural = defaultObjectPathInfo.objectMetadataItem?.namePlural;
