@@ -1192,6 +1192,13 @@ check_file_exists \
   "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.module.ts" \
   "Ingestion pipeline server module"
 
+echo ""
+echo "--- Insert Field Permission Skip ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/twenty-orm/repository/permissions.utils.ts" \
+  "Field-level restrictions are for updates, not creates" \
+  "INSERT case must skip field-level permission checks (pre-query hooks set restricted fields)"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."
