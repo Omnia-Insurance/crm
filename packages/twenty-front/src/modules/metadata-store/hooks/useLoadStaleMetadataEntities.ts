@@ -5,6 +5,7 @@ import { splitPageLayoutWithRelated } from '@/metadata-store/utils/splitPageLayo
 import { splitViewWithRelated } from '@/metadata-store/utils/splitViewWithRelated';
 import { FIND_MANY_OBJECT_METADATA_ITEMS } from '@/object-metadata/graphql/queries';
 import { transformPageLayout } from '@/page-layout/utils/transformPageLayout';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
 import { useApolloClient } from '@apollo/client/react';
 import { useCallback } from 'react';
@@ -19,6 +20,7 @@ import {
   FindManyNavigationMenuItemsDocument,
   GetChatThreadsDocument,
   type ObjectMetadataItemsQuery,
+  PermissionFlagType,
   ViewType,
 } from '~/generated-metadata/graphql';
 
@@ -55,7 +57,9 @@ const hasOverlap = (
 export const useLoadStaleMetadataEntities = () => {
   const client = useApolloClient();
   const { replaceDraft, applyChanges } = useUpdateMetadataStoreDraft();
-  const isAiEnabled = useIsFeatureEnabled(FeatureFlagKey.IS_AI_ENABLED);
+  const isAiFeatureEnabled = useIsFeatureEnabled(FeatureFlagKey.IS_AI_ENABLED);
+  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.ASK_AI);
+  const isAiEnabled = isAiFeatureEnabled && hasAiPermission;
 
   const loadStaleMetadataEntities = useCallback(
     async (staleEntityKeys: MetadataEntityKey[]) => {
