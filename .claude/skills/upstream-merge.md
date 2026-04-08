@@ -203,19 +203,70 @@ When delegating conflict resolution to subagents, you MUST provide:
 >
 > Do NOT blindly take either side. Do NOT paste old code into new structures without adapting it. If upstream renamed a function our code calls, use the new name. If upstream added a parameter our code should pass, pass it. If upstream refactored the architecture, rewrite our customization for the new architecture.
 
+## PR Merge Strategy (CRITICAL)
+
+**Always use "Create a merge commit"** — never "Squash and merge" — when merging the upstream PR to main.
+
+Squash merge creates a single commit that GitHub can't trace back to upstream's commit SHAs. This breaks the fork divergence counter (shows 400+ behind when we're actually caught up). A merge commit preserves both parents, letting GitHub track what's already incorporated.
+
+If a squash merge was accidentally used, fix with a grafted merge:
+```bash
+# Find the upstream commit that was merged (check the merge branch)
+UPSTREAM_COMMIT=$(git log merge/upstream-YYYY-MM-DD --merges -1 --format="%P" | awk '{print $2}')
+# Create a no-op merge that records the upstream parent
+git merge $UPSTREAM_COMMIT --strategy=ours --no-edit -m "Record upstream merge point"
+git push origin main
+```
+
+## Docker Build Target (CRITICAL)
+
+Our CI workflow (`.github/workflows/deploy-eks.yaml`) MUST specify `target: twenty` in the Docker build step. The Dockerfile has multiple stages — without an explicit target, Docker builds the LAST stage which may be `twenty-app-dev` (all-in-one with PostgreSQL/Redis/s6-overlay). Our Helm deployment needs the `twenty` stage (server-only, uses external RDS/Redis).
+
+If upstream adds new stages after `twenty` in the Dockerfile, the build will silently produce the wrong image. The pod logs will show `Initializing PostgreSQL data directory... su-exec: setgroups: Operation not permitted`.
+
 ## Known Customization Areas (Quick Reference)
 
 These are the areas most frequently affected by upstream merges. When upstream touches any of these systems, extra care is needed:
 
 | Area | What We Changed | Watch For |
 |------|----------------|-----------|
-| Command menu | CTA styling, object-aware labels, draft creation, LAYOUTS permission gate, pinned Delete | Upstream frequently restructures the item/config system |
-| RLS/permissions | Action-scoped predicates (READ/WRITE/ALL), edit window, showInSidebar, OmniaRoleExtensions | Upstream changes permission types, filter builders |
-| Export/Import | Server-side jobs, sub-field column configs, ExportJobRecoveryEffect | Upstream changes export flow, adds BOM, changes column logic |
-| Search | Custom-object fallback searching all searchable fields, search vector construction | Upstream may rewrite search service, change field metadata shape |
-| Record table | FieldContext memoization, non-reactive scroll handlers | Upstream changes cell rendering, scroll handling |
-| Query builders | isUpsert flag passthrough in insert/update builders | Upstream refactors ORM layer |
-| Navigation | Sidebar order, Documentation removed, member section, default home page | Upstream adds new nav items, changes sidebar structure |
-| Draft creation | openDraftInSidePanel at all creation entry points | Upstream adds new entry points or refactors existing ones |
-| Workspace schema | Slow-path observer timing instrumentation | Upstream refactors schema building |
-| App module | SPA fallback exclusions, cache headers | Upstream changes middleware, routing |
+| Command menu | CTA styling, object-aware labels, Go To for custom objects, permission-gated actions (import/export/AI), pinned Delete, SIDEBAR_ORDER sorting | Upstream frequently restructures the item/config system. They moved from static configs to server-driven engine commands in 1.21. |
+| RLS/permissions | Action-scoped predicates (READ/WRITE/ALL), edit window, showInSidebar, OmniaRoleExtensions, async filter building with DB queries | Upstream changes permission types, filter builders. Our `buildRowLevelPermissionRecordFilter` is async (theirs is sync) because Me predicates resolve through linked records. |
+| INSERT permissions | Skip field-level read AND update checks for inserts in `permissions.utils.ts` | Upstream adds `validateUpdateFieldPermissionOrThrow` and `allFieldsSelected` guards to the insert case. We skip both because pre-query hooks set restricted fields (status, submittedDate) and TypeORM uses SELECT * in RETURNING. |
+| Export/Import | Server-side jobs, sub-field column configs, ExportJobRecoveryEffect, view-filter-based export | Upstream moved to context-store-based export. Our export must use `findManyRecordsParams.filter` for view exports, not `computeContextStoreFilters`. |
+| Search | Custom-object fallback (all-field ILIKE), bypassed field permissions, member-scoped (sidebar-visible non-system objects only) | Upstream may rewrite search service. Watch for new field references (like `avatarFile`) that don't exist in our schema yet. |
+| Record table | FieldContext memoization, non-reactive scroll handlers, sub-field column override in RecordTableCellFieldContextGeneric | Upstream changes cell rendering. The sub-field override block has been wiped twice. |
+| Query builders | isUpsert flag in insert/update builders, async RLS in select/update builders | Our select/update builders must be async because `applyRowLevelPermissionPredicates` is async. |
+| Navigation | Settings at top, no Documentation/Other section, member fixed section, default home page from sidebarVisibleObjectMetadataItems, "Opened" dedup via viewId→objectMetadataId | Upstream adds new nav components. Watch for `NavigationDrawerOtherSection` being re-added. |
+| AI features | AI tabs/chat hidden for roles without `PermissionFlagType.AI` (NOT `ASK_AI`), metadata load catches AI permission errors | Upstream gates by feature flag only. We add role-level checks. |
+| Draft creation | openDraftInSidePanel at all creation entry points | `CreateRelatedRecordCommand` was deleted in 1.21 — needs re-implementation. |
+| Default home page | Non-admin: uses sidebarVisibleObjectMetadataItems, returns `undefined` while loading | Upstream may change `useDefaultHomePagePath`. |
+| Workspace schema | Slow-path observer timing | Upstream refactors schema building |
+| App module | SPA fallback exclusions, cache headers, ExportJobRecoveryEffect/ImportJobRecoveryEffect/BackgroundJobIndicator | Upstream changes app root |
+| Settings routes | Ingestion Pipeline pages | Upstream rewrites SettingsRoutes.tsx frequently |
+| Generated types | `subFieldName` on ViewField, `editWindowMinutes`, `showInSidebar` | MUST regenerate against our server, not upstream's |
+| Address fields | `addressLat`/`addressLng` accept string or number in zod schema | Upstream may tighten the schema back to number-only |
+
+## Lessons Learned (2026-04-07/08 merge)
+
+1. **Never squash-merge the upstream PR.** Use "Create a merge commit" so GitHub tracks fork divergence correctly.
+
+2. **Check the Docker build target.** Upstream adds Dockerfile stages — without `target: twenty`, the CI builds the wrong image.
+
+3. **Generated types are a silent killer.** `generated-metadata/graphql.ts` from upstream's codegen is missing our custom columns. Sub-field columns, edit windows, and sidebar permissions all silently fail at runtime.
+
+4. **Enum values differ between `twenty-shared` and generated types.** `PermissionFlagType.ASK_AI` doesn't exist — the correct flag is `PermissionFlagType.AI`. Always verify enum values exist at runtime.
+
+5. **Permission system grants defaults to system objects.** `workspaceMember` gets `canReadObjectRecords: true` for all roles. Filter by `isSystem` to exclude from member-scoped features.
+
+6. **INSERT field permission skip is a critical customization.** Our pre-query hooks set restricted fields (status, submittedDate). Upstream's `validateUpdateFieldPermissionOrThrow` on inserts blocks this. We skip all field-level checks for inserts — this was already solved pre-merge but got wiped.
+
+7. **Export architecture changed.** Use `findManyRecordsParams.filter` for view exports, not `computeContextStoreFilters`.
+
+8. **Async vs sync RLS.** Our `buildRowLevelPermissionRecordFilter` is async. Callers must await.
+
+9. **Redis cache can hold stale permissions.** Flush after role changes or deploys.
+
+10. **Workspace schema sync doesn't run in dev on startup.** Needs successful upgrade command completion. If upgrade fails, mark the failing step as completed and re-run.
+
+11. **Migration job paths.** Helm job containers don't inherit Docker WORKDIR when `command` is overridden. Use absolute paths in `job-migration.yaml`.
