@@ -2,6 +2,7 @@ import { v4 } from 'uuid';
 
 import { SEARCH_QUERY } from '@/command-menu/graphql/queries/search';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
@@ -13,6 +14,7 @@ import { viewableRecordNameSingularState } from '@/object-record/record-side-pan
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { buildDraftFieldDefaults } from '@/object-record/utils/buildDraftFieldDefaults';
 import { buildRecordLabelPayload } from '@/object-record/utils/buildRecordLabelPayload';
 import { getOperationName } from '~/utils/getOperationName';
 import { computeMorphRelationFieldName, isDefined } from 'twenty-shared/utils';
@@ -71,8 +73,16 @@ export const useAddNewRecordAndOpenSidePanel = ({
         objectMetadataItem: relationObjectMetadataItem,
       });
 
+      // Build field defaults (SELECT defaults, system fields, etc.)
+      const currentMember = store.get(currentWorkspaceMemberState.atom);
+      const fieldDefaults = buildDraftFieldDefaults({
+        objectMetadataItem: relationObjectMetadataItem,
+        currentMember,
+      });
+
       const seedValues: Record<string, unknown> = {
         id: newRecordId,
+        ...fieldDefaults,
         ...labelPayload,
       };
 

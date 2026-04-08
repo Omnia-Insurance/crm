@@ -7,13 +7,12 @@ import { draftRecordIdsState } from '@/object-record/record-side-panel/states/dr
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useBuildRecordInputFromFilters } from '@/object-record/record-table/hooks/useBuildRecordInputFromFilters';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { buildDraftFieldDefaults } from '@/object-record/utils/buildDraftFieldDefaults';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
-import { stripSimpleQuotesFromString } from '~/utils/string/stripSimpleQuotesFromString';
 
 type UseCreateNewIndexRecordProps = {
   objectMetadataItem: EnrichedObjectMetadataItem;
@@ -72,67 +71,12 @@ export const useCreateNewIndexRecord = ({
 
       const { position, ...restRecordInput } = recordInput ?? {};
 
-      // Build default values from field metadata
-      const fieldDefaults: Record<string, unknown> = {};
-      const now = new Date().toISOString();
-
-      for (const field of objectMetadataItem.fields) {
-        if (!isDefined(field.defaultValue) || field.defaultValue === null) {
-          continue;
-        }
-
-        if (
-          field.type === FieldMetadataType.SELECT &&
-          typeof field.defaultValue === 'string'
-        ) {
-          fieldDefaults[field.name] = stripSimpleQuotesFromString(
-            field.defaultValue,
-          );
-        } else if (
-          field.type === FieldMetadataType.TEXT &&
-          typeof field.defaultValue === 'string'
-        ) {
-          const stripped = stripSimpleQuotesFromString(field.defaultValue);
-          if (stripped !== '') {
-            fieldDefaults[field.name] = stripped;
-          }
-        } else if (
-          field.type === FieldMetadataType.BOOLEAN &&
-          typeof field.defaultValue === 'boolean'
-        ) {
-          fieldDefaults[field.name] = field.defaultValue;
-        } else if (
-          field.type === FieldMetadataType.NUMBER &&
-          typeof field.defaultValue === 'number'
-        ) {
-          fieldDefaults[field.name] = field.defaultValue;
-        }
-      }
-
-      // Set system fields
+      // Build default values from field metadata + system fields
       const currentMember = store.get(currentWorkspaceMemberState.atom);
-      if (isDefined(currentMember)) {
-        const memberName =
-          `${currentMember.name?.firstName ?? ''} ${currentMember.name?.lastName ?? ''}`.trim();
-        const actorValue = {
-          source: 'MANUAL',
-          workspaceMemberId: currentMember.id,
-          name: memberName,
-          context: null,
-        };
-        fieldDefaults.createdBy = actorValue;
-        fieldDefaults.updatedBy = actorValue;
-      }
-      fieldDefaults.createdAt = now;
-      fieldDefaults.updatedAt = now;
-
-      // Set submittedDate for objects that have it (e.g., Policy)
-      const submittedDateField = objectMetadataItem.fields.find(
-        (f) => f.name === 'submittedDate' && f.isActive,
-      );
-      if (isDefined(submittedDateField)) {
-        fieldDefaults.submittedDate = now;
-      }
+      const fieldDefaults = buildDraftFieldDefaults({
+        objectMetadataItem,
+        currentMember,
+      });
 
       // Prefill agent from workspace member's agent profile
       if (
