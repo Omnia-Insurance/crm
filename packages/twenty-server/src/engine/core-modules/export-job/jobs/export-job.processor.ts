@@ -32,6 +32,7 @@ import { json2csv } from 'json-2-csv';
 const BATCH_SIZE = 500;
 const RELATION_BATCH_SIZE = 200;
 const RELATION_FETCH_CONCURRENCY = 5;
+const CANCELLATION_CHECK_INTERVAL = 5; // Check every N batches
 
 type RelationConfig = {
   relationFieldName: string;
@@ -52,22 +53,78 @@ type CsvColumn = {
 };
 
 /**
+ * Pre-built index for fast field metadata lookups.
+ * Avoids O(n) scans over flat metadata maps on every call.
+ */
+type MetadataIndex = {
+  fieldByObjectAndName: Map<string, FlatFieldMetadata>;
+  objectByName: Map<string, FlatObjectMetadata>;
+  objectById: Map<string, FlatObjectMetadata>;
+  fieldsByObjectId: Map<string, FlatFieldMetadata[]>;
+};
+
+function buildMetadataIndex(
+  flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
+  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+): MetadataIndex {
+  const fieldByObjectAndName = new Map<string, FlatFieldMetadata>();
+  const objectByName = new Map<string, FlatObjectMetadata>();
+  const objectById = new Map<string, FlatObjectMetadata>();
+  const fieldsByObjectId = new Map<string, FlatFieldMetadata[]>();
+
+  for (const obj of Object.values(
+    flatObjectMetadataMaps.byUniversalIdentifier,
+  ) as (FlatObjectMetadata | undefined)[]) {
+    if (!obj) continue;
+    objectByName.set(obj.nameSingular, obj);
+    objectById.set(obj.id, obj);
+  }
+
+  for (const field of Object.values(
+    flatFieldMetadataMaps.byUniversalIdentifier,
+  ) as (FlatFieldMetadata | undefined)[]) {
+    if (!field) continue;
+
+    const obj = objectById.get(field.objectMetadataId);
+
+    if (obj) {
+      fieldByObjectAndName.set(`${obj.nameSingular}.${field.name}`, field);
+    }
+
+    const existing = fieldsByObjectId.get(field.objectMetadataId) ?? [];
+
+    existing.push(field);
+    fieldsByObjectId.set(field.objectMetadataId, existing);
+  }
+
+  return { fieldByObjectAndName, objectByName, objectById, fieldsByObjectId };
+}
+
+/**
  * Resolve a FlatFieldMetadata by object name + field name using
- * the flat metadata maps from the workspace cache.
+ * the pre-built metadata index (O(1) lookup).
  */
 function findFieldMetadata(
   objectNameSingular: string,
   fieldName: string,
-  flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  _flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
+  _flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  metadataIndex?: MetadataIndex,
 ): FlatFieldMetadata | undefined {
+  if (metadataIndex) {
+    return metadataIndex.fieldByObjectAndName.get(
+      `${objectNameSingular}.${fieldName}`,
+    );
+  }
+
+  // Fallback for callers without index (should not happen in practice)
   const objectMetadata = Object.values(
-    flatObjectMetadataMaps.byUniversalIdentifier,
+    _flatObjectMetadataMaps.byUniversalIdentifier,
   ).find((m) => m?.nameSingular === objectNameSingular);
 
   if (!objectMetadata) return undefined;
 
-  return Object.values(flatFieldMetadataMaps.byUniversalIdentifier).find(
+  return Object.values(_flatFieldMetadataMaps.byUniversalIdentifier).find(
     (f) => f?.objectMetadataId === objectMetadata.id && f?.name === fieldName,
   );
 }
@@ -86,6 +143,7 @@ function resolveFieldPathMetadata(
   fieldPath: string,
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  metadataIndex?: MetadataIndex,
 ): { label: string; fieldType: FieldMetadataType } | undefined {
   const segments = fieldPath.split('.');
   const labels: string[] = [];
@@ -100,10 +158,10 @@ function resolveFieldPathMetadata(
       segment,
       flatObjectMetadataMaps,
       flatFieldMetadataMaps,
+      metadataIndex,
     );
 
     if (!fieldMeta) {
-      // Field metadata not found; use raw name as fallback
       labels.push(segment);
 
       if (!isLeaf) {
@@ -122,7 +180,6 @@ function resolveFieldPathMetadata(
       };
     }
 
-    // Not a leaf — must be a relation. Find the target object.
     if (fieldMeta.type !== FieldMetadataType.RELATION) {
       return undefined;
     }
@@ -131,9 +188,11 @@ function resolveFieldPathMetadata(
 
     if (!targetObjectId) return undefined;
 
-    const targetObject = Object.values(
-      flatObjectMetadataMaps.byUniversalIdentifier,
-    ).find((m) => m?.id === targetObjectId);
+    const targetObject = metadataIndex
+      ? metadataIndex.objectById.get(targetObjectId)
+      : Object.values(flatObjectMetadataMaps.byUniversalIdentifier).find(
+          (m) => m?.id === targetObjectId,
+        );
 
     if (!targetObject) return undefined;
 
@@ -151,12 +210,24 @@ function getLabelIdentifierFieldName(
   objectNameSingular: string,
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  metadataIndex?: MetadataIndex,
 ): string | undefined {
-  const objectMeta = Object.values(
-    flatObjectMetadataMaps.byUniversalIdentifier,
-  ).find((m) => m?.nameSingular === objectNameSingular);
+  const objectMeta = metadataIndex
+    ? metadataIndex.objectByName.get(objectNameSingular)
+    : Object.values(flatObjectMetadataMaps.byUniversalIdentifier).find(
+        (m) => m?.nameSingular === objectNameSingular,
+      );
 
   if (!objectMeta?.labelIdentifierFieldMetadataId) return undefined;
+
+  if (metadataIndex) {
+    const fields =
+      metadataIndex.fieldsByObjectId.get(objectMeta.id) ?? [];
+
+    return fields.find(
+      (f) => f.id === objectMeta.labelIdentifierFieldMetadataId,
+    )?.name;
+  }
 
   const labelField = Object.values(
     flatFieldMetadataMaps.byUniversalIdentifier,
@@ -173,15 +244,15 @@ function buildExpandedSelectedPaths(
   rc: RelationConfig,
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+  metadataIndex?: MetadataIndex,
 ): string[] {
   const paths = [...rc.selectedFieldPaths];
 
-  // Auto-include the label identifier (e.g. "name") so the relation's
-  // display name appears in the export, matching what the view shows.
   const labelField = getLabelIdentifierFieldName(
     rc.targetObjectNameSingular,
     flatObjectMetadataMaps,
     flatFieldMetadataMaps,
+    metadataIndex,
   );
 
   if (labelField && !paths.includes(labelField)) {
@@ -377,6 +448,12 @@ export class ExportJobProcessor {
           'flatFieldMetadataMaps',
         ]);
 
+      // Build pre-indexed metadata maps for O(1) lookups
+      const metadataIndex = buildMetadataIndex(
+        flatObjectMetadataMaps,
+        flatFieldMetadataMaps,
+      );
+
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
           const repository =
@@ -422,18 +499,22 @@ export class ExportJobProcessor {
 
           // Fetch records in batches
           let offset = 0;
+          let batchCount = 0;
 
           while (offset < totalRecords) {
-            const currentJob = await this.exportJobService.getExportJob(
-              exportJobId,
-              workspaceId,
-            );
-
-            if (currentJob?.status === ExportJobStatus.CANCELLED) {
-              this.logger.log(
-                `Export job ${exportJobId} cancelled at offset ${offset}`,
+            // Check for cancellation every N batches instead of every batch
+            if (batchCount % CANCELLATION_CHECK_INTERVAL === 0) {
+              const currentJob = await this.exportJobService.getExportJob(
+                exportJobId,
+                workspaceId,
               );
-              break;
+
+              if (currentJob?.status === ExportJobStatus.CANCELLED) {
+                this.logger.log(
+                  `Export job ${exportJobId} cancelled at offset ${offset}`,
+                );
+                break;
+              }
             }
 
             const qb = buildFilteredQb();
@@ -449,6 +530,7 @@ export class ExportJobProcessor {
 
             allRecords.push(...(batch as Record<string, unknown>[]));
             offset += BATCH_SIZE;
+            batchCount++;
 
             await this.exportJobService.updateProgress(exportJobId, {
               processedRecords: Math.min(offset, totalRecords),
@@ -460,6 +542,10 @@ export class ExportJobProcessor {
           // raw FK with the related record's label identifier.
           // Relations are resolved in parallel (concurrency-limited).
           if (allRecords.length > 0) {
+            await this.exportJobService.updateProgress(exportJobId, {
+              result: { phase: 'Resolving relations' },
+            });
+
             const relationConfigFieldNames = new Set(
               relationConfigs.map((rc) => rc.relationFieldName),
             );
@@ -480,6 +566,7 @@ export class ExportJobProcessor {
                 col.fieldName,
                 flatObjectMetadataMaps,
                 flatFieldMetadataMaps,
+                metadataIndex,
               );
 
               if (
@@ -493,11 +580,7 @@ export class ExportJobProcessor {
               const targetObjId =
                 colFieldMeta.relationTargetObjectMetadataId;
               const targetObj = targetObjId
-                ? (Object.values(
-                    flatObjectMetadataMaps.byUniversalIdentifier,
-                  ).find(
-                    (m) => m?.id === targetObjId,
-                  ) as FlatObjectMetadata | undefined)
+                ? metadataIndex.objectById.get(targetObjId)
                 : undefined;
 
               if (!targetObj) continue;
@@ -595,12 +678,16 @@ export class ExportJobProcessor {
             this.logger.log(
               `Expanding ${relationConfigs.length} relation fields for ${allRecords.length} records`,
             );
+            await this.exportJobService.updateProgress(exportJobId, {
+              result: { phase: 'Expanding relation fields' },
+            });
             allRecords = await this.expandRelationFields(
               allRecords,
               relationConfigs,
               workspaceId,
               flatObjectMetadataMaps,
               flatFieldMetadataMaps,
+              metadataIndex,
             );
           }
         },
@@ -631,12 +718,17 @@ export class ExportJobProcessor {
       }
 
       // Build CSV columns and generate CSV
+      await this.exportJobService.updateProgress(exportJobId, {
+        result: { phase: 'Generating file' },
+      });
+
       const csvColumns = this.buildCsvColumns(
         columns,
         relationConfigs,
         exportJob.objectNameSingular,
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
+        metadataIndex,
       );
 
       const csvContent = this.generateCSV(allRecords, csvColumns);
@@ -708,6 +800,7 @@ export class ExportJobProcessor {
     workspaceId: string,
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+    metadataIndex?: MetadataIndex,
   ): Promise<Record<string, unknown>[]> {
     // Build lookup maps per relation — fetch all relations in parallel
     const relationLookups = new Map<
@@ -782,6 +875,7 @@ export class ExportJobProcessor {
           workspaceId,
           flatObjectMetadataMaps,
           flatFieldMetadataMaps,
+          metadataIndex,
         );
       } catch (error) {
         this.logger.warn(
@@ -828,6 +922,7 @@ export class ExportJobProcessor {
           rc,
           flatObjectMetadataMaps,
           flatFieldMetadataMaps,
+          metadataIndex,
         );
 
         for (const fieldPath of selectedPaths) {
@@ -841,6 +936,7 @@ export class ExportJobProcessor {
             fieldPath,
             flatObjectMetadataMaps,
             flatFieldMetadataMaps,
+            metadataIndex,
           );
 
           if (
@@ -916,6 +1012,7 @@ export class ExportJobProcessor {
     workspaceId: string,
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+    metadataIndex?: MetadataIndex,
   ): Promise<void> {
     // Group selectedFieldPaths by their first segment when it's a relation.
     // Handles both dotted paths ("leadSource.name") and bare relation names
@@ -946,6 +1043,7 @@ export class ExportJobProcessor {
         firstSegment,
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
+        metadataIndex,
       );
 
       if (!fieldMeta || fieldMeta.type !== FieldMetadataType.RELATION) {
@@ -956,9 +1054,11 @@ export class ExportJobProcessor {
 
       if (!targetObjectId) continue;
 
-      const targetObject = Object.values(
-        flatObjectMetadataMaps.byUniversalIdentifier,
-      ).find((m) => m?.id === targetObjectId);
+      const targetObject = metadataIndex
+        ? metadataIndex.objectById.get(targetObjectId)
+        : Object.values(flatObjectMetadataMaps.byUniversalIdentifier).find(
+            (m) => m?.id === targetObjectId,
+          );
 
       if (!targetObject) continue;
 
@@ -992,6 +1092,7 @@ export class ExportJobProcessor {
         relationFieldName,
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
+        metadataIndex,
       );
 
       const relationType =
@@ -1010,24 +1111,33 @@ export class ExportJobProcessor {
         if (isOneToMany) {
           // ONE_TO_MANY (e.g., familyMembers): fetch child records by
           // parent FK and attach as array.
-          const parentObjectMeta = Object.values(
-            flatObjectMetadataMaps.byUniversalIdentifier,
-          ).find((m) => m?.nameSingular === rc.targetObjectNameSingular);
+          const parentObjectMeta = metadataIndex
+            ? metadataIndex.objectByName.get(rc.targetObjectNameSingular)
+            : Object.values(
+                flatObjectMetadataMaps.byUniversalIdentifier,
+              ).find((m) => m?.nameSingular === rc.targetObjectNameSingular);
 
-          const childFkField = parentObjectMeta
-            ? Object.values(
-                flatFieldMetadataMaps.byUniversalIdentifier,
-              ).find(
-                (f) =>
-                  f?.objectMetadataId ===
-                    Object.values(
-                      flatObjectMetadataMaps.byUniversalIdentifier,
-                    ).find((m) => m?.nameSingular === targetObjectName)
-                      ?.id &&
-                  f?.type === FieldMetadataType.RELATION &&
-                  f?.relationTargetObjectMetadataId === parentObjectMeta.id,
-              )
-            : undefined;
+          const targetObjMeta = metadataIndex
+            ? metadataIndex.objectByName.get(targetObjectName)
+            : Object.values(
+                flatObjectMetadataMaps.byUniversalIdentifier,
+              ).find((m) => m?.nameSingular === targetObjectName);
+
+          const childFkField =
+            parentObjectMeta && targetObjMeta
+              ? (
+                  metadataIndex
+                    ? metadataIndex.fieldsByObjectId.get(targetObjMeta.id) ?? []
+                    : Object.values(
+                        flatFieldMetadataMaps.byUniversalIdentifier,
+                      )
+                ).find(
+                  (f) =>
+                    f?.objectMetadataId === targetObjMeta.id &&
+                    f?.type === FieldMetadataType.RELATION &&
+                    f?.relationTargetObjectMetadataId === parentObjectMeta.id,
+                )
+              : undefined;
 
           const parentFk =
             childFkField?.settings?.joinColumnName ??
@@ -1133,6 +1243,7 @@ export class ExportJobProcessor {
               workspaceId,
               flatObjectMetadataMaps,
               flatFieldMetadataMaps,
+              metadataIndex,
             );
           }
 
@@ -1189,6 +1300,7 @@ export class ExportJobProcessor {
     objectNameSingular: string,
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
+    metadataIndex?: MetadataIndex,
   ): CsvColumn[] {
     const relationFieldNames = new Set(
       relationConfigs.map((rc) => rc.relationFieldName),
@@ -1217,6 +1329,7 @@ export class ExportJobProcessor {
           rc,
           flatObjectMetadataMaps,
           flatFieldMetadataMaps,
+          metadataIndex,
         );
 
         for (const fieldPath of selectedPaths) {
@@ -1225,6 +1338,7 @@ export class ExportJobProcessor {
             fieldPath,
             flatObjectMetadataMaps,
             flatFieldMetadataMaps,
+            metadataIndex,
           );
 
           if (resolved && isCompositeFieldType(resolved.fieldType)) {
@@ -1262,6 +1376,7 @@ export class ExportJobProcessor {
         col.fieldName,
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
+        metadataIndex,
       );
 
       const fieldType = fieldMeta
