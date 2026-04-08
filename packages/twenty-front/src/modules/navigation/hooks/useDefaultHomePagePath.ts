@@ -115,26 +115,20 @@ export const useDefaultHomePagePath = () => {
   // Admins: first root-level workspace nav item (sorted by position).
   // Non-layout users: first sidebar-visible object (sorted by ORDERED_FIRST_STANDARD_OBJECTS).
   const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
-    // Non-layout users: use sidebar-visible objects when permissions are loaded,
-    // otherwise fall back to SIDEBAR_ORDER from metadata (person = Leads first).
+    // OMNIA-CUSTOM: for non-admin roles, use sidebarVisibleObjectMetadataItems
+    // which filters by showInSidebar permission. If permissions haven't loaded
+    // yet (empty), return null to show settings briefly while loading.
     if (!isAdmin) {
-      const items = sidebarVisibleObjectMetadataItems.length > 0
-        ? sidebarVisibleObjectMetadataItems
-        : readableNonSystemObjectMetadataItems
-            .filter((item) => SIDEBAR_ORDER.includes(item.nameSingular))
-            .sort((a, b) => {
-              const indexA = SIDEBAR_ORDER.indexOf(a.nameSingular);
-              const indexB = SIDEBAR_ORDER.indexOf(b.nameSingular);
-              return indexA - indexB;
-            });
-
-      const firstItem = items[0];
-      if (!firstItem) return null;
-
-      return {
-        objectMetadataItem: firstItem,
-        view: getFirstView(firstItem.id),
-      };
+      if (sidebarVisibleObjectMetadataItems.length === 0) {
+        // Permissions not loaded yet — check if nav items are loaded.
+        // If nav items ARE loaded but sidebar items aren't, permissions
+        // are still resolving. Return null briefly.
+        return null;
+      }
+      const firstItem = sidebarVisibleObjectMetadataItems[0];
+      return firstItem
+        ? { objectMetadataItem: firstItem, view: getFirstView(firstItem.id) }
+        : null;
     }
 
     // Admins: use workspace navigation menu items
@@ -229,7 +223,9 @@ export const useDefaultHomePagePath = () => {
     const defaultObjectPathInfo = getDefaultObjectPathInfo();
 
     if (!isDefined(defaultObjectPathInfo)) {
-      return getSettingsPath(SettingsPath.ProfilePage);
+      // Permissions may still be loading — return undefined to prevent
+      // premature redirect. The page change effect will wait.
+      return undefined;
     }
 
     const namePlural = defaultObjectPathInfo.objectMetadataItem?.namePlural;
