@@ -176,10 +176,12 @@ export class ConvosoCallPreprocessor {
       ? parseInt(payload.call_length.toString(), 10) || 0
       : 0;
     const billingLabel = queueName || sourceName || null;
+    const status = (payload.status || '').toUpperCase();
     const billing = await this.computeBillingByQueueName(
       billingLabel,
       direction,
       duration,
+      status,
       workspaceId,
     );
 
@@ -862,6 +864,7 @@ export class ConvosoCallPreprocessor {
     billingLabel: string | null,
     direction: string,
     duration: number,
+    status: string,
     workspaceId: string,
   ): Promise<{
     billable: boolean;
@@ -873,6 +876,11 @@ export class ConvosoCallPreprocessor {
       costAmountMicros: 0,
       costCurrencyCode: 'USD',
     };
+
+    // Calls abandoned in queue (XDROP) never reached an agent — not billable
+    if (status === 'XDROP') {
+      return noBill;
+    }
 
     if (direction !== 'INBOUND' || !billingLabel) {
       return noBill;
