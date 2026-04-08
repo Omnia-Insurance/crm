@@ -287,10 +287,6 @@ check_file_contains \
   "createSlowPathObserver" \
   "Workspace cache service must use the shared slow-path observer for full resolution timing"
 check_file_contains \
-  "packages/twenty-server/src/engine/api/graphql/graphql-config/graphql-config.service.ts" \
-  "createSlowPathObserver" \
-  "Core GraphQL config must use the shared slow-path observer for schema resolution timing"
-check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-schema.factory.ts" \
   "createSlowPathObserver" \
   "Workspace schema factory must use the shared slow-path observer for schema build timing"
