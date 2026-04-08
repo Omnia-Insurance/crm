@@ -185,9 +185,14 @@ export const useExportJobPoller = () => {
             ? (job.result?.downloadUrl as string | undefined)
             : undefined;
 
+        const phase = job.result?.phase as string | undefined;
+        const label = phase
+          ? `Exporting ${current.objectNameSingular} records — ${phase}`
+          : `Exporting ${current.objectNameSingular} records`;
+
         upsertJob({
           id: job.id,
-          label: `Exporting ${current.objectNameSingular} records`,
+          label,
           status: normalizedStatus,
           totalItems: job.totalRecords,
           processedItems: job.processedRecords,
