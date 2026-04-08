@@ -9,6 +9,8 @@ import { CommandMenuItemType } from '@/command-menu-item/types/CommandMenuItemTy
 import { resolveCreateRecordActionLabels } from '@/command-menu-item/utils/resolveCreateRecordActionLabels';
 import { resolveGoToActionLabels } from '@/command-menu-item/utils/resolveGoToActionLabels';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
+import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
 
 import { type CommandMenuContextApi } from 'twenty-shared/types';
@@ -154,6 +156,15 @@ export const useCommandMenuItemsFromBackend = (
     (item) => item.id === currentObjectMetadataItemId,
   );
   const permissionMap = usePermissionFlagMap();
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+
+  // Map GO_TO engine keys to object nameSingular for permission checks
+  const goToObjectMap: Record<string, string> = {};
+  for (const item of objectMetadataItems) {
+    // Standard objects have GO_TO_<PLURAL_UPPER> keys
+    const goToKey = `GO_TO_${item.namePlural.toUpperCase().replace(/ /g, '_')}`;
+    goToObjectMap[goToKey] = item.id;
+  }
 
   const itemsWithObjectMatches = commandMenuItems.filter(
     doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
@@ -280,10 +291,24 @@ export const useCommandMenuItemsFromBackend = (
   };
 
   return withGoToLabels.filter((item) => {
+    // Permission flag gate (import, export, AI, layouts)
     const requiredPermission = permissionGatedKeys[item.key];
     if (requiredPermission && !permissionMap[requiredPermission]) {
       return false;
     }
+
+    // Go To items: hide if the user can't read the target object
+    const goToObjectMetadataId = goToObjectMap[item.key];
+    if (goToObjectMetadataId) {
+      const objectPermissions = getObjectPermissionsFromMapByObjectMetadataId({
+        objectPermissionsByObjectMetadataId,
+        objectMetadataId: goToObjectMetadataId,
+      });
+      if (objectPermissions?.canReadObjectRecords === false) {
+        return false;
+      }
+    }
+
     return true;
   });
 };
