@@ -116,6 +116,24 @@ const ExportIndexRecordsContent = ({
     if (startedRef.current) return;
     startedRef.current = true;
 
+    // Use the view's filter (from useFindManyRecordIndexTableParams) as the base,
+    // which includes the active view's filters/sorts. If specific records are
+    // selected, use the context store filter instead (which has the id IN list).
+    // Guard against empty selection filter ({ id: { in: [] } }).
+    const isEmptySelection =
+      queryFilter &&
+      'id' in queryFilter &&
+      Array.isArray((queryFilter as any).id?.in) &&
+      (queryFilter as any).id.in.length === 0;
+
+    const hasSpecificSelection =
+      contextStoreTargetedRecordsRule.mode === 'selection' &&
+      contextStoreTargetedRecordsRule.selectedRecordIds.length > 0;
+
+    const effectiveFilter = hasSpecificSelection
+      ? queryFilter
+      : findManyRecordsParams.filter;
+
     // OMNIA-CUSTOM: Build relation configs from sub-field columns in the view
     const relationConfigMap = new Map<
       string,
@@ -162,7 +180,7 @@ const ExportIndexRecordsContent = ({
       variables: {
         objectNameSingular: objectMetadataItem.nameSingular,
         columns,
-        filter: queryFilter,
+        filter: effectiveFilter,
         orderBy: findManyRecordsParams.orderBy,
         relationConfigs:
           relationConfigs.length > 0 ? relationConfigs : undefined,
