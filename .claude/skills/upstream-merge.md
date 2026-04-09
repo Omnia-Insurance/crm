@@ -198,6 +198,17 @@ git checkout --theirs <files> && git add <files>
 
 Every file that doesn't fit A/B/C gets a deep merge. This is the majority of real work.
 
+#### Special case: signed-out auth shell customizations
+
+When merging files under `packages/twenty-front/src/modules/sign-in-background-mock/` and related auth/context-store files, do **not** reduce them back to a decorative mock. Omnia's signed-out auth modal intentionally renders the real app shell primitives (`ViewBar`, `RecordTableWithWrappers`, shared metadata/context-store wiring) with lead-shaped mock metadata.
+
+Preserve these invariants during merges:
+
+- The auth background must keep using the real table/view-bar path, not a bespoke mock table component.
+- Signed-out lead metadata/config must stay centralized in the shared sign-in mock config/records/metadata helpers.
+- The main context-store provider must remain the single owner of signed-out global view type; auth-background effects should only seed their local table/view-bar atoms.
+- Logout must leave protected routes before mocked signed-out metadata is swapped in.
+
 For each file:
 
 1. **Read the full conflict** — both sides, including context above and below markers.

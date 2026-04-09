@@ -11,6 +11,7 @@ import { type FlatViewFilter } from '@/metadata-store/types/FlatViewFilter';
 import { type FlatViewFilterGroup } from '@/metadata-store/types/FlatViewFilterGroup';
 import { type FlatViewGroup } from '@/metadata-store/types/FlatViewGroup';
 import { type FlatViewSort } from '@/metadata-store/types/FlatViewSort';
+import { extendSignInBackgroundMockedMetadata } from '@/sign-in-background-mock/utils/signInBackgroundMockMetadata';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
 export type PreloadedMockedMetadata = {
@@ -56,11 +57,17 @@ export const preloadMockedMetadata =
       flatViewFieldGroups,
     } = splitViewWithRelated(mockedViews);
 
-    return {
+    const signInBackgroundMockMetadata = extendSignInBackgroundMockedMetadata({
       flatObjects,
       flatFields,
-      flatIndexes,
       flatViews,
+    });
+
+    return {
+      flatObjects: signInBackgroundMockMetadata.flatObjects,
+      flatFields: signInBackgroundMockMetadata.flatFields,
+      flatIndexes,
+      flatViews: signInBackgroundMockMetadata.flatViews,
       flatViewFields,
       flatViewFilters,
       flatViewSorts,

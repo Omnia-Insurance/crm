@@ -1,4 +1,5 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { workspacePublicDataState } from '@/auth/states/workspacePublicDataState';
 import {
   StyledContainer,
   StyledIconChevronDown,
@@ -7,6 +8,7 @@ import {
 } from '@/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspacesDropdownStyles';
 import { NavigationDrawerAnimatedCollapseWrapper } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerAnimatedCollapseWrapper';
 import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceLogo';
+import { DEFAULT_WORKSPACE_NAME } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceName';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useContext } from 'react';
@@ -22,23 +24,32 @@ export const MultiWorkspaceDropdownClickableComponent = ({
 }: MultiWorkspaceDropdownClickableComponentProps) => {
   const { theme } = useContext(ThemeContext);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const workspacePublicData = useAtomStateValue(workspacePublicDataState);
 
   const isNavigationDrawerExpanded = useAtomStateValue(
     isNavigationDrawerExpandedState,
   );
+
+  const workspaceDisplayName =
+    currentWorkspace?.displayName ??
+    workspacePublicData?.displayName ??
+    DEFAULT_WORKSPACE_NAME;
+
+  const workspaceLogo =
+    currentWorkspace?.logo ??
+    workspacePublicData?.logo ??
+    DEFAULT_WORKSPACE_LOGO;
+
   return (
     <StyledContainer
       data-testid="workspace-dropdown"
       isNavigationDrawerExpanded={isNavigationDrawerExpanded}
       disabled={disabled}
     >
-      <Avatar
-        placeholder={currentWorkspace?.displayName || ''}
-        avatarUrl={currentWorkspace?.logo ?? DEFAULT_WORKSPACE_LOGO}
-      />
+      <Avatar placeholder={workspaceDisplayName} avatarUrl={workspaceLogo} />
       <StyledLabelWrapper>
         <NavigationDrawerAnimatedCollapseWrapper>
-          <StyledLabel>{currentWorkspace?.displayName ?? ''}</StyledLabel>
+          <StyledLabel>{workspaceDisplayName}</StyledLabel>
         </NavigationDrawerAnimatedCollapseWrapper>
       </StyledLabelWrapper>
       <NavigationDrawerAnimatedCollapseWrapper>

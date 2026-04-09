@@ -1,86 +1,65 @@
 import { useEffect } from 'react';
 
-import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
-import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
-import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
-
 import { currentRecordFieldsComponentState } from '@/object-record/record-field/states/currentRecordFieldsComponentState';
-import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { SIGN_IN_BACKGROUND_MOCK_COLUMN_DEFINITIONS } from '@/sign-in-background-mock/constants/SignInBackgroundMockColumnDefinitions';
+import { SIGN_IN_BACKGROUND_MOCK_TABLE } from '@/sign-in-background-mock/constants/SignInBackgroundMockColumnDefinitions';
+import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
-import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { isDefined } from 'twenty-shared/utils';
-import { useInitViewBar } from '@/views/hooks/useInitViewBar';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { availableFieldDefinitionsComponentState } from '@/views/states/availableFieldDefinitionsComponentState';
+import { viewObjectMetadataIdComponentState } from '@/views/states/viewObjectMetadataIdComponentState';
 
 type SignInBackgroundMockContainerEffectProps = {
-  objectNamePlural: string;
+  objectMetadataItemId: string;
   recordTableId: string;
-  viewId: string;
+  viewBarId: string;
 };
 
 export const SignInBackgroundMockContainerEffect = ({
-  objectNamePlural,
+  objectMetadataItemId,
   recordTableId,
-  viewId,
+  viewBarId,
 }: SignInBackgroundMockContainerEffectProps) => {
-  const [
-    contextStoreCurrentObjectMetadataItemId,
-    setContextStoreCurrentObjectMetadataItemId,
-  ] = useAtomComponentState(
-    contextStoreCurrentObjectMetadataItemIdComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
-  );
-
-  const setCurrentRecordFields = useSetAtomComponentState(
+  const [currentRecordFields, setCurrentRecordFields] = useAtomComponentState(
     currentRecordFieldsComponentState,
     recordTableId,
   );
-
-  const objectMetadataItem = useAtomFamilySelectorValue(
-    objectMetadataItemFamilySelector,
-    { objectName: objectNamePlural, objectNameType: 'plural' },
+  const [availableFieldDefinitions, setAvailableFieldDefinitions] =
+    useAtomComponentState(availableFieldDefinitionsComponentState, viewBarId);
+  const [viewObjectMetadataId, setViewObjectMetadataId] = useAtomComponentState(
+    viewObjectMetadataIdComponentState,
+    viewBarId,
   );
 
-  const { setAvailableFieldDefinitions, setViewObjectMetadataId } =
-    useInitViewBar(viewId);
+  const setIsNavigationDrawerExpanded = useSetAtomState(
+    isNavigationDrawerExpandedState,
+  );
 
   useEffect(() => {
-    if (!isDefined(objectMetadataItem)) {
-      return;
+    setIsNavigationDrawerExpanded(true);
+  }, [setIsNavigationDrawerExpanded]);
+
+  useEffect(() => {
+    if (viewObjectMetadataId !== objectMetadataItemId) {
+      setViewObjectMetadataId(objectMetadataItemId);
     }
+  }, [objectMetadataItemId, setViewObjectMetadataId, viewObjectMetadataId]);
 
-    setViewObjectMetadataId?.(objectMetadataItem.id);
-
-    setAvailableFieldDefinitions?.(SIGN_IN_BACKGROUND_MOCK_COLUMN_DEFINITIONS);
-
-    const recordFields = SIGN_IN_BACKGROUND_MOCK_COLUMN_DEFINITIONS.filter(
-      (fieldDefinition) => fieldDefinition.fieldMetadataId !== '',
-    ).map(
-      (columnDefinitionMock) =>
-        ({
-          fieldMetadataItemId: columnDefinitionMock.fieldMetadataId,
-          id: columnDefinitionMock.fieldMetadataId,
-          isVisible: columnDefinitionMock.isVisible,
-          position: columnDefinitionMock.position,
-          size: columnDefinitionMock.size,
-        }) satisfies RecordField as RecordField,
-    );
-
-    setCurrentRecordFields(recordFields);
-
-    if (contextStoreCurrentObjectMetadataItemId !== objectMetadataItem.id) {
-      setContextStoreCurrentObjectMetadataItemId(objectMetadataItem.id);
+  useEffect(() => {
+    if (
+      availableFieldDefinitions !==
+      SIGN_IN_BACKGROUND_MOCK_TABLE.columnDefinitions
+    ) {
+      setAvailableFieldDefinitions(
+        SIGN_IN_BACKGROUND_MOCK_TABLE.columnDefinitions,
+      );
     }
-  }, [
-    setViewObjectMetadataId,
-    setAvailableFieldDefinitions,
-    objectMetadataItem,
-    recordTableId,
-    setContextStoreCurrentObjectMetadataItemId,
-    contextStoreCurrentObjectMetadataItemId,
-    setCurrentRecordFields,
-  ]);
+  }, [availableFieldDefinitions, setAvailableFieldDefinitions]);
+
+  useEffect(() => {
+    if (currentRecordFields !== SIGN_IN_BACKGROUND_MOCK_TABLE.recordFields) {
+      setCurrentRecordFields(SIGN_IN_BACKGROUND_MOCK_TABLE.recordFields);
+    }
+  }, [currentRecordFields, setCurrentRecordFields]);
 
   return <></>;
 };

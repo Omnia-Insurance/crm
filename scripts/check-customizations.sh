@@ -214,6 +214,103 @@ check_file_contains \
   "NavigationDrawerSection must support bypassing showInSidebar for curated sections"
 
 echo ""
+echo "--- Critical: Signed-Out Lead Mock ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainer.tsx" \
+  "RecordTableWithWrappers" \
+  "Signed-out background should keep using the real record table"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainer.tsx" \
+  "SignInBackgroundMockLeadTable" \
+  "Signed-out background should not use a decorative lead table"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx" \
+  't`Policies`' \
+  "Signed-out sidebar should pin the curated workspace labels"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx" \
+  "objectMetadataItem?.labelPlural ?? t\`Leads\`" \
+  "Signed-out background page should read the Leads header label from auth metadata"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockConfig.ts" \
+  "objectNameSingular: 'person'" \
+  "Signed-out background should target people/leads mock data"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockConfig.ts" \
+  "objectNamePlural: 'people'" \
+  "Signed-out background should target the people collection"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockConfig.ts" \
+  "viewBarId: 'sign-up-mock-record-table-id'" \
+  "Signed-out background should align the view bar instance with the auth record index"
+check_file_exists \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockRecords.ts" \
+  "Typed sign-in mock people/leads records should exist"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainer.tsx" \
+  "isViewBarReady" \
+  "Signed-out background should wait for auth view state before mounting the toolbar"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockColumnDefinitions.ts" \
+  "getColumnDefinitionFromFieldMetadataItem('status'" \
+  "Signed-out mock table should use the lead status column set"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockRecords.ts" \
+  "createMockPolicy" \
+  "Signed-out mock records should include lightweight lead policies"
+check_file_exists \
+  "packages/twenty-front/src/modules/sign-in-background-mock/utils/signInBackgroundMockMetadata.ts" \
+  "Auth-only lead metadata helpers should exist for the signed-out shell"
+check_file_contains \
+  "packages/twenty-front/src/modules/metadata-store/utils/preloadMockedMetadata.ts" \
+  "extendSignInBackgroundMockedMetadata" \
+  "Signed-out mocked metadata should be extended for the lead auth shell"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
+  "OMNIA-CUSTOM: leave protected routes before swapping to mocked metadata." \
+  "Logout should navigate away from protected routes before swapping to signed-out metadata"
+check_file_contains \
+  "packages/twenty-front/src/modules/context-store/components/MainContextStoreProvider.tsx" \
+  "SIGN_IN_BACKGROUND_MOCK_CONFIG.objectNamePlural" \
+  "Main context store should follow the shared auth-background object"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/context-store/components/MainContextStoreProvider.tsx" \
+  "const SIGN_IN_BACKGROUND_OBJECT_NAME_PLURAL = 'companies';" \
+  "Main context store should not hardcode companies for the auth background"
+check_file_contains \
+  "packages/twenty-front/src/modules/context-store/components/MainContextStoreProvider.tsx" \
+  "forceTableViewType={showAuthModal}" \
+  "Signed-out main context store should force the auth background into table mode"
+check_file_contains \
+  "packages/twenty-front/src/modules/context-store/components/MainContextStoreProviderEffect.tsx" \
+  "if (forceTableViewType)" \
+  "Main context store effect should own the auth-background table view type"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/hooks/useRecordIndexTableQuery.ts" \
+  "recordTableId === SIGN_IN_BACKGROUND_MOCK_CONFIG.recordIndexId" \
+  "Mock people records should be scoped to the sign-in record table"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-table/virtualization/hooks/useTriggerInitialRecordTableDataLoad.ts" \
+  "recordTableId === SIGN_IN_BACKGROUND_MOCK_CONFIG.recordIndexId" \
+  "Initial data load should only inject sign-in mock records for the auth background table"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/hooks/internal/useGetRecordIndexTotalCount.ts" \
+  "SIGN_IN_BACKGROUND_MOCK_RECORDS.length" \
+  "Signed-out view picker should use local mock counts instead of aggregate GraphQL requests"
+check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainerEffect.tsx" \
+  "availableFieldDefinitionsComponentState" \
+  "Signed-out background should seed only auth view-bar atoms before rendering the toolbar"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainerEffect.tsx" \
+  "contextStoreCurrentViewIdComponentState" \
+  "Signed-out background should not fight the main context store for the current view id"
+check_file_contains \
+  "packages/twenty-front/src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownClickableComponent.tsx" \
+  "workspacePublicDataState" \
+  "Signed-out drawer header should fall back to public workspace data"
+
+echo ""
 echo "--- Critical: Cloudflare Stale Asset Fix ---"
 check_file_contains \
   "packages/twenty-server/src/app.module.ts" \

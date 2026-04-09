@@ -2,6 +2,7 @@ import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainCo
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
 import { contextStoreCurrentViewIdComponentState } from '@/context-store/states/contextStoreCurrentViewIdComponentState';
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
+import { ContextStoreViewType } from '@/context-store/types/ContextStoreViewType';
 import { getViewType } from '@/context-store/utils/getViewType';
 import { useSetLastVisitedObjectMetadataId } from '@/navigation/hooks/useSetLastVisitedObjectMetadataId';
 import { useSetLastVisitedViewForObjectMetadataNamePlural } from '@/navigation/hooks/useSetLastVisitedViewForObjectMetadataNamePlural';
@@ -14,6 +15,7 @@ import { useEffect } from 'react';
 type MainContextStoreProviderEffectProps = {
   viewId?: string;
   objectMetadataItem?: EnrichedObjectMetadataItem;
+  forceTableViewType: boolean;
   isRecordIndexPage: boolean;
   isRecordShowPage: boolean;
   isSettingsPage: boolean;
@@ -22,6 +24,7 @@ type MainContextStoreProviderEffectProps = {
 export const MainContextStoreProviderEffect = ({
   viewId,
   objectMetadataItem,
+  forceTableViewType,
   isRecordIndexPage,
   isRecordShowPage,
   isSettingsPage,
@@ -99,6 +102,15 @@ export const MainContextStoreProviderEffect = ({
   ]);
 
   useEffect(() => {
+    if (forceTableViewType) {
+      // The signed-out auth shell renders a read-only record table on non-index routes.
+      if (contextStoreCurrentViewType !== ContextStoreViewType.Table) {
+        setContextStoreCurrentViewType(ContextStoreViewType.Table);
+      }
+
+      return;
+    }
+
     const viewType = getViewType({
       isSettingsPage,
       isRecordShowPage,
@@ -111,6 +123,7 @@ export const MainContextStoreProviderEffect = ({
     }
   }, [
     contextStoreCurrentViewType,
+    forceTableViewType,
     setContextStoreCurrentViewType,
     view,
     isSettingsPage,

@@ -2,11 +2,18 @@ import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadata
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useRelevantRecordsGqlFields } from '@/object-record/record-field/hooks/useRelevantRecordsGqlFields';
 import { useFindManyRecordIndexTableParams } from '@/object-record/record-index/hooks/useFindManyRecordIndexTableParams';
-import { SIGN_IN_BACKGROUND_MOCK_COMPANIES } from '@/sign-in-background-mock/constants/SignInBackgroundMockCompanies';
+import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
+import { SIGN_IN_BACKGROUND_MOCK_CONFIG } from '@/sign-in-background-mock/constants/SignInBackgroundMockConfig';
+import { SIGN_IN_BACKGROUND_MOCK_RECORDS } from '@/sign-in-background-mock/constants/SignInBackgroundMockRecords';
 import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 
 export const useRecordIndexTableQuery = (objectNameSingular: string) => {
   const showAuthModal = useShowAuthModal();
+  const { recordTableId } = useRecordTableContextOrThrow();
+  const isSignInBackgroundMock =
+    showAuthModal &&
+    recordTableId === SIGN_IN_BACKGROUND_MOCK_CONFIG.recordIndexId &&
+    objectNameSingular === SIGN_IN_BACKGROUND_MOCK_CONFIG.objectNameSingular;
 
   const params = useFindManyRecordIndexTableParams(objectNameSingular);
 
@@ -28,15 +35,19 @@ export const useRecordIndexTableQuery = (objectNameSingular: string) => {
   } = useFindManyRecords({
     ...params,
     recordGqlFields,
-    skip: showAuthModal,
+    skip: isSignInBackgroundMock,
   });
 
   return {
-    records: showAuthModal ? SIGN_IN_BACKGROUND_MOCK_COMPANIES : records,
-    loading: showAuthModal ? false : loading,
-    hasNextPage,
+    records: isSignInBackgroundMock ? SIGN_IN_BACKGROUND_MOCK_RECORDS : records,
+    loading: isSignInBackgroundMock ? false : loading,
+    hasNextPage: isSignInBackgroundMock ? false : hasNextPage,
     queryIdentifier,
-    totalCount,
-    fetchMoreRecords,
+    totalCount: isSignInBackgroundMock
+      ? SIGN_IN_BACKGROUND_MOCK_RECORDS.length
+      : totalCount,
+    fetchMoreRecords: isSignInBackgroundMock
+      ? async () => undefined
+      : fetchMoreRecords,
   };
 };

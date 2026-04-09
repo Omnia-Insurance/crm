@@ -24,7 +24,8 @@ import { lastScrollPositionComponentState } from '@/object-record/record-table/v
 import { scrollAtRealIndexComponentState } from '@/object-record/record-table/virtualization/states/scrollAtRealIndexComponentState';
 import { totalNumberOfRecordsToVirtualizeComponentState } from '@/object-record/record-table/virtualization/states/totalNumberOfRecordsToVirtualizeComponentState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
-import { SIGN_IN_BACKGROUND_MOCK_COMPANIES } from '@/sign-in-background-mock/constants/SignInBackgroundMockCompanies';
+import { SIGN_IN_BACKGROUND_MOCK_CONFIG } from '@/sign-in-background-mock/constants/SignInBackgroundMockConfig';
+import { SIGN_IN_BACKGROUND_MOCK_RECORDS } from '@/sign-in-background-mock/constants/SignInBackgroundMockRecords';
 import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { dataLoadingStatusByRealIndexComponentState } from '@/object-record/record-table/virtualization/states/dataLoadingStatusByRealIndexComponentState';
@@ -35,8 +36,11 @@ import { isDefined } from 'twenty-shared/utils';
 
 export const useTriggerInitialRecordTableDataLoad = () => {
   const { recordTableId, objectNameSingular } = useRecordTableContextOrThrow();
-
   const showAuthModal = useShowAuthModal();
+  const isSignInBackgroundMock =
+    showAuthModal &&
+    recordTableId === SIGN_IN_BACKGROUND_MOCK_CONFIG.recordIndexId &&
+    objectNameSingular === SIGN_IN_BACKGROUND_MOCK_CONFIG.objectNameSingular;
 
   const { findManyRecordsLazy } =
     useRecordIndexTableLazyQuery(objectNameSingular);
@@ -143,9 +147,9 @@ export const useTriggerInitialRecordTableDataLoad = () => {
         let records: ObjectRecord[] | null = null;
         let totalCount = 0;
 
-        if (showAuthModal) {
-          records = SIGN_IN_BACKGROUND_MOCK_COMPANIES;
-          totalCount = SIGN_IN_BACKGROUND_MOCK_COMPANIES.length;
+        if (isSignInBackgroundMock) {
+          records = SIGN_IN_BACKGROUND_MOCK_RECORDS;
+          totalCount = SIGN_IN_BACKGROUND_MOCK_RECORDS.length;
         } else {
           const newRecordIdByRealIndex = new Map(
             store.get(recordIdByRealIndexCallbackState),
@@ -212,7 +216,7 @@ export const useTriggerInitialRecordTableDataLoad = () => {
       resetVirtualizedRowTreadmill,
       recordIndexAllRecordIds,
       store,
-      showAuthModal,
+      isSignInBackgroundMock,
       dataPagesLoadedCallbackState,
       isRecordTableInitialLoading,
       lastScrollPositionCallbackState,
