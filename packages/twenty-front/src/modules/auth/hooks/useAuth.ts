@@ -165,11 +165,12 @@ export const useAuth = () => {
     store.set(loginTokenState.atom, null);
     store.set(signInUpStepState.atom, SignInUpStep.Init);
 
+    // OMNIA-CUSTOM: leave protected routes before swapping to mocked metadata.
+    navigate(AppPath.SignInUp, { replace: true });
     applyMockedMetadata(mockedData);
 
     await client.clearStore();
     setLastAuthenticateWorkspaceDomain(null);
-    navigate(AppPath.SignInUp);
     store.set(isAppEffectRedirectEnabledState.atom, true);
   }, [
     clearSseClient,

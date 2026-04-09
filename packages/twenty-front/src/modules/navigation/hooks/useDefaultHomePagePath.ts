@@ -116,13 +116,13 @@ export const useDefaultHomePagePath = () => {
   // Non-layout users: first sidebar-visible object (sorted by ORDERED_FIRST_STANDARD_OBJECTS).
   const firstObjectPathInfo = useMemo<ObjectPathInfo | null>(() => {
     // OMNIA-CUSTOM: for non-admin roles, use sidebarVisibleObjectMetadataItems
-    // which filters by showInSidebar permission. If permissions haven't loaded
-    // yet (empty), return null to show settings briefly while loading.
+    // which filters by showInSidebar permission.
     if (!isAdmin) {
       if (sidebarVisibleObjectMetadataItems.length === 0) {
-        // Permissions not loaded yet — check if nav items are loaded.
-        // If nav items ARE loaded but sidebar items aren't, permissions
-        // are still resolving. Return null briefly.
+        // Permissions not loaded yet — return null so the redirect waits.
+        // Once objectsPermissions (with showInSidebar) resolve from the
+        // currentUser query, sidebarVisibleObjectMetadataItems will
+        // populate and this hook will re-render with the correct path.
         return null;
       }
       const firstItem = sidebarVisibleObjectMetadataItems[0];

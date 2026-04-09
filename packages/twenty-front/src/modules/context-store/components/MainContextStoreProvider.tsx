@@ -3,6 +3,7 @@ import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { useIsSettingsPage } from '@/navigation/hooks/useIsSettingsPage';
 import { useLastVisitedView } from '@/navigation/hooks/useLastVisitedView';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
+import { SIGN_IN_BACKGROUND_MOCK_CONFIG } from '@/sign-in-background-mock/constants/SignInBackgroundMockConfig';
 import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -37,9 +38,6 @@ const getViewId = (
 
   return undefined;
 };
-
-const SIGN_IN_BACKGROUND_OBJECT_NAME_PLURAL = 'companies';
-
 export const MainContextStoreProvider = () => {
   const location = useLocation();
   const isRecordIndexPage = isMatchingLocation(
@@ -51,11 +49,14 @@ export const MainContextStoreProvider = () => {
   const showAuthModal = useShowAuthModal();
 
   const objectNamePluralFromParams = useParams().objectNamePlural ?? '';
-  const objectNameSingular = useParams().objectNameSingular ?? '';
+  const objectNameSingularFromParams = useParams().objectNameSingular ?? '';
 
   const objectNamePlural = showAuthModal
-    ? SIGN_IN_BACKGROUND_OBJECT_NAME_PLURAL
+    ? SIGN_IN_BACKGROUND_MOCK_CONFIG.objectNamePlural
     : objectNamePluralFromParams;
+  const objectNameSingular = showAuthModal
+    ? SIGN_IN_BACKGROUND_MOCK_CONFIG.objectNameSingular
+    : objectNameSingularFromParams;
 
   const [searchParams] = useSearchParams();
   const viewIdQueryParamRaw = searchParams.get('viewId');
@@ -130,6 +131,7 @@ export const MainContextStoreProvider = () => {
     <MainContextStoreProviderEffect
       viewId={viewId}
       objectMetadataItem={objectMetadataItem}
+      forceTableViewType={showAuthModal}
       isRecordIndexPage={isRecordIndexPage}
       isRecordShowPage={isRecordShowPage}
       isSettingsPage={isSettingsPage}

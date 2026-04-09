@@ -219,6 +219,16 @@ msgstr "{0} failures"
 msgid "{0} of {1} ({percent}%)"
 msgstr "{0} of {1} ({percent}%)"
 
+#. js-lingui-id: peiknr
+#. placeholder {0}: activeVisibleFieldLabels.length
+#. placeholder {0}: activeFilterLabels.length
+#. placeholder {0}: activeSortLabels.length
+#: src/modules/side-panel/pages/page-layout/hooks/useRecordTableSettingsDescriptions.ts
+#: src/modules/side-panel/pages/page-layout/hooks/useRecordTableSettingsDescriptions.ts
+#: src/modules/side-panel/pages/page-layout/hooks/useRecordTableSettingsDescriptions.ts
+msgid "{0} shown"
+msgstr "{0} shown"
+
 #. js-lingui-id: r4l/MK
 #. placeholder {0}: formatUsageValue(totalCredits)
 #: src/pages/settings/SettingsUsageUserDetail.tsx
@@ -1877,6 +1887,7 @@ msgstr "An error occurred while uploading the picture."
 #: src/modules/ui/feedback/snack-bar-manager/hooks/useSnackBar.ts
 #: src/modules/page-layout/hooks/useUpdatePageLayoutWithTabsAndWidgets.ts
 #: src/modules/page-layout/hooks/useResetPageLayoutWidgetToDefault.ts
+#: src/modules/page-layout/hooks/useResetPageLayoutTabToDefault.ts
 #: src/modules/object-metadata/hooks/useUpdateOneObjectMetadataItem.ts
 #: src/modules/object-metadata/hooks/useUpdateOneFieldMetadataItem.ts
 #: src/modules/object-metadata/hooks/useDeleteOneObjectMetadataItem.ts
@@ -2104,6 +2115,11 @@ msgstr "Application details"
 #: src/modules/marketplace/hooks/useInstallApp.ts
 msgid "Application installed successfully."
 msgstr "Application installed successfully."
+
+#. js-lingui-id: LllWIc
+#: src/pages/settings/security/event-logs/components/EventLogTableSelector.tsx
+msgid "Application Logs"
+msgstr "Application Logs"
 
 #. js-lingui-id: +tE2x9
 #: src/pages/settings/applications/tabs/SettingsApplicationDetailAboutTab.tsx
@@ -3418,11 +3434,6 @@ msgstr "Comment"
 msgid "Compact view"
 msgstr "Compact view"
 
-#. js-lingui-id: s2QZS6
-#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
-msgid "Companies"
-msgstr "Companies"
-
 #. js-lingui-id: 3WrMP5
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Complete setup"
@@ -3506,11 +3517,6 @@ msgstr "Configure data ingestion pipelines to sync external data into your CRM"
 msgid "Configure date, time, number, timezone, and calendar start day"
 msgstr "Configure date, time, number, timezone, and calendar start day"
 
-#. js-lingui-id: +SQwHr
-#: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
-msgid "Configure default AI models and availability"
-msgstr "Configure default AI models and availability"
-
 #. js-lingui-id: utsXG8
 #: src/pages/settings/security/SettingsSecurity.tsx
 msgid "Configure fallback login methods for users with SSO bypass permissions"
@@ -3555,6 +3561,11 @@ msgstr "Configure this widget to display fields"
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTriggersTab.tsx
 msgid "Configure when this function should be executed"
 msgstr "Configure when this function should be executed"
+
+#. js-lingui-id: hzDiM0
+#: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
+msgid "Configure your default AI model"
+msgstr "Configure your default AI model"
 
 #. js-lingui-id: Bh4GBD
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
@@ -3684,7 +3695,7 @@ msgstr "Content"
 
 #. js-lingui-id: M73whl
 #: src/modules/side-panel/pages/root/components/SidePanelRootPage.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
 #: src/modules/command-menu-item/server-items/display/components/SidePanelCommandMenuItemDisplayPage.tsx
 #: src/modules/ai/components/RoutingDebugDisplay.tsx
 msgid "Context"
@@ -3887,20 +3898,15 @@ msgstr "Core Objects"
 msgid "Cost"
 msgstr "Cost"
 
-#. js-lingui-id: Iw/ard
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
-msgid "Cost / 1M"
-msgstr "Cost / 1M"
-
-#. js-lingui-id: 3kzLg2
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelsTable.tsx
-msgid "Cost / 1M tokens"
-msgstr "Cost / 1M tokens"
-
 #. js-lingui-id: iX2opZ
 #: src/modules/settings/billing/components/SettingsBillingCreditsSection.tsx
 msgid "Cost per 1k Extra Credits"
 msgstr "Cost per 1k Extra Credits"
+
+#. js-lingui-id: Z9Z9PX
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
+msgid "Cost per 1M tokens"
+msgstr "Cost per 1M tokens"
 
 #. js-lingui-id: 3X5ngu
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
@@ -4455,7 +4461,6 @@ msgstr "Dashboard duplicated successfully"
 #: src/modules/side-panel/pages/workflow/trigger-type/components/SidePanelWorkflowSelectTriggerTypeContent.tsx
 #: src/modules/side-panel/pages/workflow/action/components/SidePanelWorkflowSelectAction.tsx
 #: src/modules/side-panel/pages/page-layout/constants/ChartSettingsHeadings.ts
-#: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemMainMenu.tsx
 msgid "Data"
 msgstr "Data"
@@ -4508,7 +4513,7 @@ msgid "Data on display"
 msgstr "Data on display"
 
 #. js-lingui-id: Ix/CMz
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
 msgid "Data residency"
 msgstr "Data residency"
 
@@ -4676,6 +4681,7 @@ msgid "default"
 msgstr "default"
 
 #. js-lingui-id: ovBPCi
+#: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
 #: src/modules/settings/data-model/fields/forms/date/utils/getDisplayFormatLabel.ts
 #: src/modules/settings/data-model/fields/forms/address/components/MultiSelectAddressFields.tsx
 msgid "Default"
@@ -5024,6 +5030,11 @@ msgstr "Deleted record"
 msgid "Deleting this method will remove it permanently from your account."
 msgstr "Deleting this method will remove it permanently from your account."
 
+#. js-lingui-id: Ssdrw4
+#: src/modules/settings/ai/components/SettingsAiModelsTable.tsx
+msgid "Deprecated"
+msgstr "Deprecated"
+
 #. js-lingui-id: O3LJh6
 #: src/modules/side-panel/pages/page-layout/utils/getSortLabelSuffixForFieldType.ts
 #: src/modules/side-panel/pages/page-layout/utils/getSortLabelSuffixForFieldType.ts
@@ -5082,7 +5093,7 @@ msgid "Detach"
 msgstr "Detach"
 
 #. js-lingui-id: URmyfc
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 #: src/modules/ai/components/RoutingDebugDisplay.tsx
 msgid "Details"
 msgstr "Details"
@@ -5565,6 +5576,8 @@ msgstr "Editable Profile Fields"
 
 #. js-lingui-id: uBAxNB
 #: src/pages/settings/logic-functions/SettingsLogicFunctionDetail.tsx
+#: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldSettings.tsx
+#: src/modules/side-panel/pages/page-layout/components/dropdown-content/FieldWidgetLayoutDropdownContent.tsx
 msgid "Editor"
 msgstr "Editor"
 
@@ -6333,8 +6346,8 @@ msgid "Evaluations"
 msgstr "Evaluations"
 
 #. js-lingui-id: 0pC/y6
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 #: src/modules/activities/calendar/components/CalendarEventDetails.tsx
 msgid "Event"
 msgstr "Event"
@@ -6452,6 +6465,11 @@ msgstr "Exclude non-professional emails"
 #: src/modules/settings/accounts/components/SettingsAccountsBlocklistSection.tsx
 msgid "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
 msgstr "Exclude the following people and domains from my email sync. Internal conversations will not be imported"
+
+#. js-lingui-id: B0clc7
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+msgid "Execution ID"
+msgstr "Execution ID"
 
 #. js-lingui-id: YzI8cc
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsSelect.tsx
@@ -6788,6 +6806,8 @@ msgstr "Failed to update model"
 
 #. js-lingui-id: W7Ff/4
 #: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
+#: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
+#: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
 msgid "Failed to update model availability"
 msgstr "Failed to update model availability"
@@ -6796,6 +6816,11 @@ msgstr "Failed to update model availability"
 #: src/modules/settings/admin-panel/ai/components/SettingsAdminAI.tsx
 msgid "Failed to update model recommendation"
 msgstr "Failed to update model recommendation"
+
+#. js-lingui-id: q1MtjM
+#: src/modules/settings/admin-panel/ai/components/SettingsAdminAI.tsx
+msgid "Failed to update model recommendations"
+msgstr "Failed to update model recommendations"
 
 #. js-lingui-id: rCUG3c
 #: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
@@ -7296,6 +7321,11 @@ msgstr "Front Components"
 #: src/pages/onboarding/internal/ChooseYourPlanContent.tsx
 msgid "Full access"
 msgstr "Full access"
+
+#. js-lingui-id: YMZBxa
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+msgid "Function"
+msgstr "Function"
 
 #. js-lingui-id: AHOl4W
 #: src/modules/settings/logic-functions/components/SettingsLogicFunctionLabelContainer.tsx
@@ -8704,6 +8734,7 @@ msgstr "Launch manually"
 #: src/modules/side-panel/utils/getSidePanelSubPageTitle.ts
 #: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldsSettings.tsx
 #: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldSettings.tsx
+#: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 msgid "Layout"
@@ -8718,6 +8749,12 @@ msgstr "Layout customization"
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
 msgid "Layouts"
 msgstr "Layouts"
+
+#. js-lingui-id: LhgWCf
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Leads"
+msgstr "Leads"
 
 #. js-lingui-id: zwWKhA
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
@@ -8776,6 +8813,11 @@ msgstr "Legend"
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid "Less than or equal"
 msgstr "Less than or equal"
+
+#. js-lingui-id: oCHfGC
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+msgid "Level"
+msgstr "Level"
 
 #. js-lingui-id: 3qg5Ro
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
@@ -9222,7 +9264,7 @@ msgstr "Max import capacity: {formatSpreadsheetMaxRecordImportCapacity} records.
 
 #. js-lingui-id: S8w4XA
 #: src/pages/settings/admin-panel/SettingsAdminNewAiModel.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
 msgid "Max output"
 msgstr "Max output"
 
@@ -9331,6 +9373,11 @@ msgstr "Merge records"
 #: src/modules/object-record/record-merge/components/MergeRecordsFooter.tsx
 msgid "Merging..."
 msgstr "Merging..."
+
+#. js-lingui-id: xDAtGP
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+msgid "Message"
+msgstr "Message"
 
 #. js-lingui-id: U15XwX
 #: src/modules/activities/timeline-activities/rows/message/components/EventCardMessage.tsx
@@ -9469,7 +9516,6 @@ msgstr "Model ID is required"
 
 #. js-lingui-id: //nm2/
 #: src/pages/settings/ai/SettingsAI.tsx
-#: src/pages/settings/ai/components/SettingsAIModelsTab.tsx
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
 msgid "Models"
 msgstr "Models"
@@ -9696,12 +9742,12 @@ msgstr "mySkill"
 #: src/modules/settings/data-model/object-details/components/SettingsObjectRelationsTable.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectSearchSection.tsx
 #: src/modules/settings/data-model/new-object/components/SettingsAvailableStandardObjectsSection.tsx
+#: src/modules/settings/ai/components/SettingsAiModelsTable.tsx
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariablesTable.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminGeneral.tsx
 #: src/modules/settings/admin-panel/apps/components/SettingsAdminApps.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelsTable.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
 msgid "Name"
 msgstr "Name"
 
@@ -10393,6 +10439,12 @@ msgstr "No permissions have been set for individual objects."
 msgid "No pipelines configured yet. Create one to start ingesting data."
 msgstr "No pipelines configured yet. Create one to start ingesting data."
 
+#. js-lingui-id: V/+aTW
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
+#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordFieldChip.tsx
+msgid "No record"
+msgstr "No record"
+
 #. js-lingui-id: ePgApM
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
 msgid "No record is required to trigger this workflow"
@@ -10403,11 +10455,6 @@ msgstr "No record is required to trigger this workflow"
 #: src/modules/command-menu-item/server-items/edit/components/CommandMenuItemEditRecordSelectionDropdown.tsx
 msgid "No record selected"
 msgstr "No record selected"
-
-#. js-lingui-id: X8wJTR
-#: src/modules/object-record/record-field/ui/form-types/components/FormSingleRecordPicker.tsx
-msgid "No records"
-msgstr "No records"
 
 #. js-lingui-id: EqGTpW
 #: src/modules/object-record/record-table/empty-state/components/RecordTableEmptyStateReadOnly.tsx
@@ -10610,6 +10657,7 @@ msgid "Note"
 msgstr "Note"
 
 #. js-lingui-id: 1DBGsz
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Notes"
 msgstr "Notes"
@@ -10727,7 +10775,7 @@ msgid "Object Events"
 msgstr "Object Events"
 
 #. js-lingui-id: 79D4Az
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 msgid "Object ID"
 msgstr "Object ID"
 
@@ -11568,6 +11616,11 @@ msgstr "Plum"
 msgid "Plural"
 msgstr "Plural"
 
+#. js-lingui-id: KF60Xw
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Policies"
+msgstr "Policies"
+
 #. js-lingui-id: trnWaw
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
 msgid "Polish"
@@ -11737,8 +11790,8 @@ msgid "Prompt"
 msgstr "Prompt"
 
 #. js-lingui-id: l/UFPv
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 msgid "Properties"
 msgstr "Properties"
 
@@ -11761,8 +11814,8 @@ msgstr "Provide your OIDC provider details"
 
 #. js-lingui-id: aemBRq
 #: src/pages/settings/admin-panel/SettingsAdminNewAiProvider.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelsTable.tsx
-#: src/modules/settings/admin-panel/ai/components/SettingsAdminAiModelHoverCard.tsx
+#: src/modules/settings/ai/components/SettingsAiModelsTable.tsx
+#: src/modules/settings/ai/components/SettingsAiModelHoverCard.tsx
 msgid "Provider"
 msgstr "Provider"
 
@@ -12009,7 +12062,7 @@ msgid "Record filter rule options"
 msgstr "Record filter rule options"
 
 #. js-lingui-id: xSAYIn
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 #: src/pages/settings/security/event-logs/components/EventLogFilters.tsx
 msgid "Record ID"
 msgstr "Record ID"
@@ -12036,12 +12089,6 @@ msgstr "Record Page"
 #: src/modules/side-panel/pages/root/components/SidePanelRootPage.tsx
 msgid "Record Selection"
 msgstr "Record Selection"
-
-#. js-lingui-id: J9Cfll
-#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect.tsx
-#: src/modules/side-panel/components/hooks/usePageLayoutHeaderInfo.ts
-msgid "Record Table"
-msgstr "Record Table"
 
 #. js-lingui-id: NxW0+c
 #: src/modules/side-panel/pages/page-layout/utils/getPageLayoutPageTitle.ts
@@ -12367,6 +12414,7 @@ msgstr "Resend email"
 #: src/pages/settings/admin-panel/SettingsAdminConfigVariableDetails.tsx
 #: src/modules/views/components/ViewBarDetails.tsx
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
+#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettingsContent.tsx
 msgid "Reset"
 msgstr "Reset"
 
@@ -12389,6 +12437,8 @@ msgstr "Reset to"
 #. js-lingui-id: L+rMC9
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
+#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettingsContent.tsx
+#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettingsContent.tsx
 #: src/modules/settings/data-model/fields/forms/address/components/SettingsDataModelFieldAddressForm.tsx
 #: src/modules/command-menu-item/server-items/edit/components/SidePanelCommandMenuItemEditPage.tsx
 msgid "Reset to default"
@@ -12410,7 +12460,7 @@ msgid "Reset variable"
 msgstr "Reset variable"
 
 #. js-lingui-id: esl+Tv
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 msgid "Resource Type"
 msgstr "Resource Type"
 
@@ -13481,6 +13531,7 @@ msgstr "Setting up your database..."
 #: src/modules/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx
 #: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettingsContent.tsx
+#: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/settings/roles/role-permissions/permission-flags/components/SettingsRolePermissionsSettingsSection.tsx
 #: src/modules/settings/roles/role/components/SettingsRole.tsx
 #: src/modules/settings/accounts/components/SettingsAccountsSettingsSection.tsx
@@ -14370,6 +14421,7 @@ msgstr "Tab Settings"
 #. js-lingui-id: 4hJhzz
 #: src/pages/settings/security/event-logs/components/EventLogTableSelector.tsx
 #: src/modules/views/view-picker/constants/ViewPickerTypeSelectOptions.ts
+#: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 #: src/modules/keyboard-shortcut-menu/components/KeyboardShortcutMenuOpenContent.tsx
 msgid "Table"
@@ -14413,6 +14465,7 @@ msgid "Task Title"
 msgstr "Task Title"
 
 #. js-lingui-id: GtycJ/
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Tasks"
 msgstr "Tasks"
@@ -14834,6 +14887,11 @@ msgstr "This view uses {usageLabel} on object \"{0}\" which is not accessible."
 msgid "This week"
 msgstr "This week"
 
+#. js-lingui-id: DF2voz
+#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettingsContent.tsx
+msgid "This will cancel all modifications done on the tab and its widgets. Edit mode will be canceled and the page will refresh. This action cannot be undone."
+msgstr "This will cancel all modifications done on the tab and its widgets. Edit mode will be canceled and the page will refresh. This action cannot be undone."
+
 #. js-lingui-id: VbVocX
 #: src/modules/side-panel/pages/page-layout/components/WidgetSettingsManageSection.tsx
 msgid "This will cancel all modifications done on the widget. This action cannot be undone."
@@ -14925,9 +14983,10 @@ msgid "Timeout"
 msgstr "Timeout"
 
 #. js-lingui-id: 8TMaZI
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "Timestamp"
 msgstr "Timestamp"
@@ -15774,9 +15833,9 @@ msgstr "Useful for pivot/junction tables"
 #. js-lingui-id: 7PzzBU
 #: src/pages/settings/SettingsTwoFactorAuthenticationMethod.tsx
 #: src/pages/settings/SettingsProfile.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
-#: src/pages/settings/security/event-logs/components/EventLogResultsTable.tsx
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
+#: src/pages/settings/security/event-logs/utils/getColumnsForEventLogTable.ts
 #: src/pages/settings/profile/appearance/components/SettingsExperience.tsx
 #: src/pages/settings/ai/SettingsAgentTurnDetail.tsx
 #: src/pages/settings/ai/SettingsAIPrompts.tsx
@@ -15959,7 +16018,9 @@ msgid "view"
 msgstr "view"
 
 #. js-lingui-id: jpctdh
+#: src/modules/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect.tsx
 #: src/modules/side-panel/components/SidePanelObjectViewRecordInfo.tsx
+#: src/modules/side-panel/components/hooks/usePageLayoutHeaderInfo.ts
 #: src/modules/settings/developers/components/WebhookEntitySelect.tsx
 #: src/modules/settings/data-model/object-details/components/SettingsObjectFieldDisabledActionDropdown.tsx
 #: src/modules/navigation-menu-item/edit/side-panel/components/SidePanelNewSidebarItemMainMenu.tsx

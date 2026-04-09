@@ -130,16 +130,19 @@ export class ConvosoCallPreprocessor {
     // Assign calls to the System agent profile when no human agent handled them:
     // - Calls from known Convoso system user IDs (e.g. "System DID User")
     // - Calls with an "After Hours" status (queue was closed, no agent available)
+    const isInboundCall = callType.includes('IN');
     const statusName = (payload.status_name || '').toLowerCase();
     const isSystemUser = userId ? SYSTEM_USER_IDS.has(userId) : false;
     const isAfterHours = statusName.includes('after hours');
+    const isSystemHandledInbound =
+      isInboundCall && (isSystemUser || isAfterHours);
 
-    if ((isSystemUser || isAfterHours) && callType.includes('IN')) {
+    if (isSystemHandledInbound) {
       payload.user_id = '666666';
     }
 
     // Derive direction from call_type
-    const direction = callType.includes('IN') ? 'INBOUND' : 'OUTBOUND';
+    const direction = isInboundCall ? 'INBOUND' : 'OUTBOUND';
     const directionLabel = direction === 'INBOUND' ? 'Inbound' : 'Outbound';
 
     // Resolve source_name: prefer payload value, fall back to list_id lookup
@@ -176,12 +179,11 @@ export class ConvosoCallPreprocessor {
       ? parseInt(payload.call_length.toString(), 10) || 0
       : 0;
     const billingLabel = queueName || sourceName || null;
-    const status = (payload.status || '').toUpperCase();
     const billing = await this.computeBillingByQueueName(
       billingLabel,
       direction,
       duration,
-      status,
+      isSystemHandledInbound,
       workspaceId,
     );
 
@@ -864,7 +866,7 @@ export class ConvosoCallPreprocessor {
     billingLabel: string | null,
     direction: string,
     duration: number,
-    status: string,
+    isSystemHandledInbound: boolean,
     workspaceId: string,
   ): Promise<{
     billable: boolean;
@@ -877,8 +879,9 @@ export class ConvosoCallPreprocessor {
       costCurrencyCode: 'USD',
     };
 
-    // Calls abandoned in queue (XDROP) never reached an agent — not billable
-    if (status === 'XDROP') {
+    // OMNIA-CUSTOM: inbound calls assigned to the System agent never reached
+    // a human agent and must never be billed.
+    if (isSystemHandledInbound) {
       return noBill;
     }
 
