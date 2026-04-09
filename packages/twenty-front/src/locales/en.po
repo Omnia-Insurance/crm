@@ -965,6 +965,11 @@ msgstr "Active API keys created by you or your team."
 msgid "Active installs"
 msgstr "Active installs"
 
+#. js-lingui-id: ogRvO6
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "active leads"
+msgstr "active leads"
+
 #. js-lingui-id: QHjErc
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminHealthAccountSyncCountersTable.tsx
 msgid "Active Sync"
@@ -1672,6 +1677,11 @@ msgstr "All fields"
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariables.tsx
 msgid "All Groups"
 msgstr "All Groups"
+
+#. js-lingui-id: u5jNnq
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "All leads"
+msgstr "All leads"
 
 #. js-lingui-id: 623MHa
 #: src/modules/settings/data-model/fields/forms/components/text/constants/TextDataModelSelectOptions.ts
@@ -3429,11 +3439,6 @@ msgstr "Comment"
 msgid "Compact view"
 msgstr "Compact view"
 
-#. js-lingui-id: s2QZS6
-#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
-msgid "Companies"
-msgstr "Companies"
-
 #. js-lingui-id: 3WrMP5
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Complete setup"
@@ -3669,6 +3674,11 @@ msgstr "Consider adding a filter or changing the date granularity to display mor
 #: src/modules/side-panel/pages/page-layout/components/ChartLimitInfoBanner.tsx
 msgid "Consider adding a filter to display more data."
 msgstr "Consider adding a filter to display more data."
+
+#. js-lingui-id: jfC/xh
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Contact"
+msgstr "Contact"
 
 #. js-lingui-id: Y2y0mC
 #: src/modules/settings/accounts/components/SettingsAccountsMessageChannelDetails.tsx
@@ -8644,6 +8654,11 @@ msgstr "Last 7 Days (oldest → newest)"
 msgid "Last 90 days"
 msgstr "Last 90 days"
 
+#. js-lingui-id: 4AKv0+
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Last activity"
+msgstr "Last activity"
+
 #. js-lingui-id: c5zxSg
 #: src/modules/ai/components/internal/AIChatContextUsageButton.tsx
 msgid "Last message"
@@ -8729,6 +8744,17 @@ msgstr "Layout customization"
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
 msgid "Layouts"
 msgstr "Layouts"
+
+#. js-lingui-id: IITbPp
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Lead"
+msgstr "Lead"
+
+#. js-lingui-id: LhgWCf
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Leads"
+msgstr "Leads"
 
 #. js-lingui-id: zwWKhA
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowEditActionFormBuilder.tsx
@@ -9006,6 +9032,11 @@ msgstr "Local development"
 #: src/pages/settings/ai/SettingsAIPrompts.tsx
 msgid "Locale"
 msgstr "Locale"
+
+#. js-lingui-id: wJijgU
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Location"
+msgstr "Location"
 
 #. js-lingui-id: B6ANJW
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
@@ -10621,6 +10652,7 @@ msgid "Note"
 msgstr "Note"
 
 #. js-lingui-id: 1DBGsz
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Notes"
 msgstr "Notes"
@@ -11578,6 +11610,11 @@ msgstr "Plum"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Plural"
 msgstr "Plural"
+
+#. js-lingui-id: KF60Xw
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Policies"
+msgstr "Policies"
 
 #. js-lingui-id: trnWaw
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
@@ -13869,6 +13906,7 @@ msgstr "Sorts"
 #. js-lingui-id: wdxz7K
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationGeneralTab.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationGeneralTab.tsx
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 #: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableOptionsDropdownContent.tsx
@@ -14005,6 +14043,7 @@ msgstr "State"
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/admin-panel/SettingsAdminIndicatorHealthStatus.tsx
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
 #: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
@@ -14423,6 +14462,7 @@ msgid "Task Title"
 msgstr "Task Title"
 
 #. js-lingui-id: GtycJ/
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Tasks"
 msgstr "Tasks"

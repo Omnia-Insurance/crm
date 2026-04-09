@@ -965,6 +965,11 @@ msgstr ""
 msgid "Active installs"
 msgstr ""
 
+#. js-lingui-id: ogRvO6
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "active leads"
+msgstr ""
+
 #. js-lingui-id: QHjErc
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminHealthAccountSyncCountersTable.tsx
 msgid "Active Sync"
@@ -1671,6 +1676,11 @@ msgstr ""
 #. js-lingui-id: BKoJRa
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariables.tsx
 msgid "All Groups"
+msgstr ""
+
+#. js-lingui-id: u5jNnq
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "All leads"
 msgstr ""
 
 #. js-lingui-id: 623MHa
@@ -3429,11 +3439,6 @@ msgstr ""
 msgid "Compact view"
 msgstr ""
 
-#. js-lingui-id: s2QZS6
-#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
-msgid "Companies"
-msgstr ""
-
 #. js-lingui-id: 3WrMP5
 #: src/modules/settings/accounts/components/SettingsAccountsRowDropdownMenu.tsx
 msgid "Complete setup"
@@ -3668,6 +3673,11 @@ msgstr ""
 #. js-lingui-id: G++HwN
 #: src/modules/side-panel/pages/page-layout/components/ChartLimitInfoBanner.tsx
 msgid "Consider adding a filter to display more data."
+msgstr ""
+
+#. js-lingui-id: jfC/xh
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Contact"
 msgstr ""
 
 #. js-lingui-id: Y2y0mC
@@ -8644,6 +8654,11 @@ msgstr ""
 msgid "Last 90 days"
 msgstr ""
 
+#. js-lingui-id: 4AKv0+
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Last activity"
+msgstr ""
+
 #. js-lingui-id: c5zxSg
 #: src/modules/ai/components/internal/AIChatContextUsageButton.tsx
 msgid "Last message"
@@ -8728,6 +8743,17 @@ msgstr ""
 #. js-lingui-id: yU0QVO
 #: src/modules/settings/roles/role-permissions/permission-flags/hooks/useSettingsRolePermissionFlagConfig.ts
 msgid "Layouts"
+msgstr ""
+
+#. js-lingui-id: IITbPp
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Lead"
+msgstr ""
+
+#. js-lingui-id: LhgWCf
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Leads"
 msgstr ""
 
 #. js-lingui-id: zwWKhA
@@ -9005,6 +9031,11 @@ msgstr ""
 #. js-lingui-id: 8NbHF7
 #: src/pages/settings/ai/SettingsAIPrompts.tsx
 msgid "Locale"
+msgstr ""
+
+#. js-lingui-id: wJijgU
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
+msgid "Location"
 msgstr ""
 
 #. js-lingui-id: B6ANJW
@@ -10621,6 +10652,7 @@ msgid "Note"
 msgstr ""
 
 #. js-lingui-id: 1DBGsz
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Notes"
 msgstr ""
@@ -11577,6 +11609,11 @@ msgstr ""
 #. js-lingui-id: BPig2P
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Plural"
+msgstr ""
+
+#. js-lingui-id: KF60Xw
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Policies"
 msgstr ""
 
 #. js-lingui-id: trnWaw
@@ -13869,6 +13906,7 @@ msgstr ""
 #. js-lingui-id: wdxz7K
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationGeneralTab.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationGeneralTab.tsx
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
 #: src/modules/side-panel/pages/page-layout/constants/settings/ChartConfigurationSettingLabels.ts
 #: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 #: src/modules/settings/admin-panel/config-variables/components/ConfigVariableOptionsDropdownContent.tsx
@@ -14005,6 +14043,7 @@ msgstr ""
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/admin-panel/SettingsAdminIndicatorHealthStatus.tsx
+#: src/modules/sign-in-background-mock/components/SignInBackgroundMockLeadTable.tsx
 #: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
@@ -14423,6 +14462,7 @@ msgid "Task Title"
 msgstr ""
 
 #. js-lingui-id: GtycJ/
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Tasks"
 msgstr ""
