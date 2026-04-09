@@ -157,7 +157,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - `preprocessors/ingestion-preprocessor.registry.ts` — Registry for pipeline-specific preprocessors
 - `preprocessors/old-crm-policy.preprocessor.ts` — Old CRM policy ingestion: person resolution, carrier/product creation, `parseDateTimeAsEastern()` for `submittedDate` (Eastern → UTC)
 - `preprocessors/healthsherpa-policy.preprocessor.ts` — HealthSherpa policy ingestion preprocessor
-- `preprocessors/convoso-call.preprocessor.ts` — Convoso call ingestion preprocessor
+- `preprocessors/convoso-call.preprocessor.ts` — Convoso call ingestion preprocessor; inbound calls routed to the System agent (no human handled them) are forced non-billable
 - `preprocessors/convoso-lead.preprocessor.ts` — Convoso lead ingestion preprocessor
 - `utils/build-record-from-mappings.util.ts` — Builds record from field mappings + source data
 - `utils/apply-field-transform.util.ts` — Field value transforms (date, number, etc.)

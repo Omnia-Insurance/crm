@@ -40,6 +40,20 @@ describe('ConvosoCallPreprocessor', () => {
         : null,
     }) as IngestionPipelineEntity;
 
+  const mockMatchingBillableLeadSource = () => {
+    mockLeadSourceRepo.findOne.mockResolvedValue({ id: 'lead-source-123' });
+    mockLeadSourceRepo.find.mockResolvedValue([
+      {
+        id: 'lead-source-123',
+        name: 'Google ACA National',
+        costPerCall: {
+          amountMicros: 13_000_000,
+        },
+        minimumCallDuration: 0,
+      },
+    ]);
+  };
+
   beforeEach(async () => {
     process.env.CONVOSO_API_TOKEN = 'test-convoso-token';
     mockFetch = jest.fn();
@@ -141,6 +155,72 @@ describe('ConvosoCallPreprocessor', () => {
     );
 
     expect(result?._callDate).toBe('2026-03-10T13:37:00.000Z');
+  });
+
+  it('marks system-handled inbound WAITTO calls as non-billable', async () => {
+    mockMatchingBillableLeadSource();
+
+    const result = await preprocessor.preProcess(
+      {
+        uniqueid: 'call-system-waitto',
+        call_type: 'Inbound',
+        queue_name: 'Google ACA National',
+        source_name: 'Google ACA National',
+        status: 'WAITTO',
+        user_id: '666667',
+        call_length: '45',
+      },
+      buildPipeline(),
+      workspaceId,
+    );
+
+    expect(result?.user_id).toBe('666666');
+    expect(result?._billable).toBe(false);
+    expect(result?._costAmountMicros).toBe(0);
+  });
+
+  it('marks after-hours inbound calls assigned to System as non-billable', async () => {
+    mockMatchingBillableLeadSource();
+
+    const result = await preprocessor.preProcess(
+      {
+        uniqueid: 'call-after-hours',
+        call_type: 'Inbound',
+        queue_name: 'Google ACA National',
+        source_name: 'Google ACA National',
+        status: 'WAITTO',
+        status_name: 'After Hours Queue Closed',
+        call_length: '45',
+      },
+      buildPipeline(),
+      workspaceId,
+    );
+
+    expect(result?.user_id).toBe('666666');
+    expect(result?._billable).toBe(false);
+    expect(result?._costAmountMicros).toBe(0);
+  });
+
+  it('keeps human-handled inbound calls billable when the queue matches a lead source', async () => {
+    mockMatchingBillableLeadSource();
+
+    const result = await preprocessor.preProcess(
+      {
+        uniqueid: 'call-human',
+        call_type: 'Inbound',
+        queue_name: 'Google ACA National',
+        source_name: 'Google ACA National',
+        status: 'SALE',
+        user_id: '12345',
+        call_length: '45',
+      },
+      buildPipeline(),
+      workspaceId,
+    );
+
+    expect(result?.user_id).toBe('12345');
+    expect(result?._billable).toBe(true);
+    expect(result?._costAmountMicros).toBe(13_000_000);
   });
 
   it('enriches a newly created person from Convoso lead details when lead_id is present', async () => {

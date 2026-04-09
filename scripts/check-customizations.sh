@@ -625,6 +625,17 @@ check_file_contains \
   "PG_UNIQUE_VIOLATION" \
   "Record processor must catch unique_violation for atomic dedup (prevents race-condition duplicates)"
 
+echo ""
+echo "--- Convoso Call Billing ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor.ts" \
+  "OMNIA-CUSTOM: inbound calls assigned to the System agent never reached" \
+  "Convoso call billing must keep System-handled inbound calls non-billable"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor.ts" \
+  "isSystemHandledInbound" \
+  "Convoso call preprocessor must reuse the System-handled inbound signal for agent assignment and billing"
+
 # ==========================================================
 # Modified Upstream Frontend Files
 # ==========================================================

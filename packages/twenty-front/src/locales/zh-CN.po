@@ -8757,6 +8757,7 @@ msgstr "布局"
 
 #. js-lingui-id: LhgWCf
 #: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 msgid "Leads"
 msgstr ""
 
@@ -10661,6 +10662,7 @@ msgid "Note"
 msgstr "备注"
 
 #. js-lingui-id: 1DBGsz
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Notes"
 msgstr "备注"
@@ -11618,6 +11620,11 @@ msgstr "梅子色"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Plural"
 msgstr "复数"
+
+#. js-lingui-id: KF60Xw
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Policies"
+msgstr ""
 
 #. js-lingui-id: trnWaw
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
@@ -14463,6 +14470,7 @@ msgid "Task Title"
 msgstr "任务标题"
 
 #. js-lingui-id: GtycJ/
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Tasks"
 msgstr "任务"

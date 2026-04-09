@@ -8757,6 +8757,7 @@ msgstr "Oppsett"
 
 #. js-lingui-id: LhgWCf
 #: src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 msgid "Leads"
 msgstr ""
 
@@ -10661,6 +10662,7 @@ msgid "Note"
 msgstr "Notat"
 
 #. js-lingui-id: 1DBGsz
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Notes"
 msgstr "Notater"
@@ -11618,6 +11620,11 @@ msgstr "Plomme"
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 msgid "Plural"
 msgstr "Flertall"
+
+#. js-lingui-id: KF60Xw
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
+msgid "Policies"
+msgstr ""
 
 #. js-lingui-id: trnWaw
 #: src/pages/settings/profile/appearance/components/LocalePicker.tsx
@@ -14463,6 +14470,7 @@ msgid "Task Title"
 msgstr "Oppgavetittel"
 
 #. js-lingui-id: GtycJ/
+#: src/modules/sign-in-background-mock/components/SignInAppNavigationDrawerMock.tsx
 #: src/modules/page-layout/constants/StandardPageLayoutTabTitleTranslations.ts
 msgid "Tasks"
 msgstr "Oppgaver"
