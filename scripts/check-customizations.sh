@@ -1223,6 +1223,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
   "draftRecordIdsState" \
   "Relation create must use draft approach"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
+  "agentProfile" \
+  "Relation create must prefill Agent from workspace member's agent profile"
 # TODO: CreateRelatedRecordCommand was deleted by upstream's engine-command refactor.
 # Draft creation for related records needs to be re-implemented in the new system.
 # check_file_contains \

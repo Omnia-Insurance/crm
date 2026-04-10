@@ -7,6 +7,7 @@ import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 
+import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { viewableRecordIdState } from '@/object-record/record-side-panel/states/viewableRecordIdState';
@@ -16,6 +17,7 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { buildDraftFieldDefaults } from '@/object-record/utils/buildDraftFieldDefaults';
 import { buildRecordLabelPayload } from '@/object-record/utils/buildRecordLabelPayload';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { getOperationName } from '~/utils/getOperationName';
 import { computeMorphRelationFieldName, isDefined } from 'twenty-shared/utils';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
@@ -51,6 +53,31 @@ export const useAddNewRecordAndOpenSidePanel = ({
 
   const store = useStore();
 
+  // Pre-fetch agent profile for the current workspace member on the TARGET
+  // object (the one being created). Mirrors useCreateNewIndexRecord so that
+  // creating a record through a relation (e.g., new Policy from a Lead)
+  // prefills the Agent field the same way as creating from the index page.
+  const agentRelationField = relationObjectMetadataItem.fields.find(
+    (f) =>
+      f.type === FieldMetadataType.RELATION &&
+      f.relation?.targetObjectMetadata.nameSingular === 'agentProfile',
+  );
+  const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
+  const shouldSkipAgentLookup =
+    !isDefined(agentRelationField) || !isDefined(currentWorkspaceMember?.id);
+  const { records: agentProfiles } = useFindManyRecords({
+    // Use the target object as a safe fallback when agentProfile doesn't exist
+    // in metadata — the query is skipped anyway via the skip parameter.
+    objectNameSingular: isDefined(agentRelationField)
+      ? 'agentProfile'
+      : relationObjectMetadataNameSingular,
+    filter: isDefined(currentWorkspaceMember?.id)
+      ? { workspaceMemberId: { eq: currentWorkspaceMember.id } }
+      : undefined,
+    skip: shouldSkipAgentLookup,
+    limit: 1,
+  });
+
   if (
     relationObjectMetadataNameSingular === 'workspaceMember' ||
     !isDefined(objectMetadataItem.nameSingular)
@@ -79,6 +106,12 @@ export const useAddNewRecordAndOpenSidePanel = ({
         objectMetadataItem: relationObjectMetadataItem,
         currentMember,
       });
+
+      // Prefill agent from workspace member's agent profile
+      if (isDefined(agentRelationField) && agentProfiles.length > 0) {
+        fieldDefaults[`${agentRelationField.name}Id`] = agentProfiles[0].id;
+        fieldDefaults[agentRelationField.name] = agentProfiles[0];
+      }
 
       const seedValues: Record<string, unknown> = {
         id: newRecordId,
