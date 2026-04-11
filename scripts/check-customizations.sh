@@ -1204,6 +1204,21 @@ check_file_contains \
   "openDraftInSidePanel" \
   "Index record creation must use draft approach"
 check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-table/hooks/useCreateNewIndexRecord.ts" \
+  "useDraftRecordDefaults" \
+  "Index record creation must use the shared draft defaults hook (includes Agent prefill)"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/hooks/useDraftRecordDefaults.ts" \
+  "Shared draft defaults hook must exist"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/hooks/useDraftRecordDefaults.ts" \
+  "agentProfile" \
+  "Shared draft defaults hook must include direct Agent prefill fallback"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/hooks/useDraftRecordDefaults.ts" \
+  "buildRecordInputFromRLSPredicates" \
+  "Shared draft defaults hook must resolve RLS predicate values"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/hooks/usePersistField.ts" \
   "draftRecordIdsState" \
   "usePersistField must have draft guard"
@@ -1225,8 +1240,8 @@ check_file_contains \
   "Relation create must use draft approach"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
-  "agentProfile" \
-  "Relation create must prefill Agent from workspace member's agent profile"
+  "useDraftRecordDefaults" \
+  "Relation create must use the shared draft defaults hook (includes Agent prefill + RLS)"
 # TODO: CreateRelatedRecordCommand was deleted by upstream's engine-command refactor.
 # Draft creation for related records needs to be re-implemented in the new system.
 # check_file_contains \
