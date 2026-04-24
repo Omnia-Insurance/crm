@@ -1,7 +1,11 @@
 import { Logger, Scope } from '@nestjs/common';
 import { In } from 'typeorm';
 
-import { FieldMetadataType, FileFolder } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  type FieldMetadataSettingsMapping,
+  FileFolder,
+} from 'twenty-shared/types';
 
 import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
@@ -571,9 +575,15 @@ export class ExportJobProcessor {
 
               if (
                 !colFieldMeta ||
-                colFieldMeta.type !== FieldMetadataType.RELATION ||
-                colFieldMeta.settings?.relationType === 'ONE_TO_MANY'
+                colFieldMeta.type !== FieldMetadataType.RELATION
               ) {
+                continue;
+              }
+
+              const colRelSettings =
+                colFieldMeta.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null;
+
+              if (colRelSettings?.relationType === 'ONE_TO_MANY') {
                 continue;
               }
 
@@ -586,7 +596,7 @@ export class ExportJobProcessor {
               if (!targetObj) continue;
 
               const joinCol =
-                colFieldMeta.settings?.joinColumnName ??
+                colRelSettings?.joinColumnName ??
                 `${col.fieldName}Id`;
 
               const relatedIds = [
@@ -1095,8 +1105,11 @@ export class ExportJobProcessor {
         metadataIndex,
       );
 
+      const fieldRelSettings =
+        fieldMeta?.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null | undefined;
+
       const relationType =
-        fieldMeta?.settings?.relationType ?? 'MANY_TO_ONE';
+        fieldRelSettings?.relationType ?? 'MANY_TO_ONE';
 
       const isOneToMany = relationType === 'ONE_TO_MANY';
 
@@ -1139,8 +1152,11 @@ export class ExportJobProcessor {
                 )
               : undefined;
 
+          const childFkRelSettings =
+            childFkField?.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null | undefined;
+
           const parentFk =
-            childFkField?.settings?.joinColumnName ??
+            childFkRelSettings?.joinColumnName ??
             `${rc.targetObjectNameSingular}Id`;
 
           const parentIds = [...lookupMap.keys()];

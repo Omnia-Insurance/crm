@@ -1,6 +1,6 @@
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 
-export const MESSAGE_QUEUE_PRIORITY = {
+export const MESSAGE_QUEUE_PRIORITY: Record<MessageQueue, number> = {
   [MessageQueue.billingQueue]: 1,
   [MessageQueue.entityEventsToDbQueue]: 1,
   [MessageQueue.emailQueue]: 1,
@@ -18,4 +18,7 @@ export const MESSAGE_QUEUE_PRIORITY = {
   [MessageQueue.cronQueue]: 7,
   [MessageQueue.aiQueue]: 5,
   [MessageQueue.aiStreamQueue]: 2,
+  [MessageQueue.exportQueue]: 4,
+  [MessageQueue.importQueue]: 4,
+  [MessageQueue.ingestionQueue]: 3,
 };
