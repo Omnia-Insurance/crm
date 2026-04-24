@@ -18,6 +18,7 @@ import { mapRecordFilterToViewFilter } from '@/views/utils/mapRecordFilterToView
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { ViewFilterOperand as GqlViewFilterOperand } from '~/generated-metadata/graphql';
 
 export const useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters =
   () => {
@@ -140,7 +141,8 @@ export const useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters =
               fieldMetadataId: viewFilter.fieldMetadataId,
               viewId: currentView.id,
               value: viewFilter.value,
-              operand: viewFilter.operand,
+              operand:
+                viewFilter.operand as unknown as GqlViewFilterOperand | null,
               viewFilterGroupId: viewFilter.viewFilterGroupId,
               positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
               subFieldName: viewFilter.subFieldName ?? null,
@@ -154,7 +156,8 @@ export const useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters =
               id: viewFilter.id,
               update: {
                 value: viewFilter.value,
-                operand: viewFilter.operand,
+                operand:
+                  viewFilter.operand as unknown as GqlViewFilterOperand | null,
                 positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
                 viewFilterGroupId: viewFilter.viewFilterGroupId,
                 subFieldName: viewFilter.subFieldName ?? null,

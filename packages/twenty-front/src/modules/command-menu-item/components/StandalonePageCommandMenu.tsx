@@ -75,6 +75,8 @@ export const StandalonePageCommandMenu = () => {
         canUpdateObjectRecords: false,
         canSoftDeleteObjectRecords: false,
         canDestroyObjectRecords: false,
+        editWindowMinutes: null,
+        showInSidebar: true,
         restrictedFields: {},
         objectMetadataId: '',
         rowLevelPermissionPredicates: [],

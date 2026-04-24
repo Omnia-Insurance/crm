@@ -8,6 +8,7 @@ import { transformPageLayout } from '@/page-layout/utils/transformPageLayout';
 import { useApolloClient } from '@apollo/client/react';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { type ViewWithRelations } from '@/views/types/ViewWithRelations';
 import {
   FindAllViewsDocument,
   FindManyCommandMenuItemsDocument,
@@ -110,7 +111,7 @@ export const useLoadStaleMetadataEntities = () => {
                 ...(indexViewsResult.data?.getViews ?? []),
                 ...(fieldsWidgetViewsResult.data?.getViews ?? []),
                 ...(tableWidgetViewsResult.data?.getViews ?? []),
-              ];
+              ] as unknown as ViewWithRelations[];
 
               const {
                 flatViews,

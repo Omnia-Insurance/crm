@@ -14,6 +14,7 @@ const buildViewField = (
   isVisible: true,
   size: 100,
   aggregateOperation: null,
+  isOverridden: false,
   ...overrides,
 });
 
@@ -25,6 +26,7 @@ const buildExistingViewField = (overrides: Partial<ViewField>): ViewField => ({
   isVisible: true,
   size: 100,
   aggregateOperation: null,
+  isOverridden: false,
   ...overrides,
 });
 

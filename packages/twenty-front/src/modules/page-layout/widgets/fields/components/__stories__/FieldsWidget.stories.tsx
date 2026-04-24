@@ -219,6 +219,7 @@ const createViewField = (
   isActive: true,
   size: 200,
   aggregateOperation: null,
+  isOverridden: false,
   viewId: FIELDS_VIEW_ID,
   ...(viewFieldGroupId !== undefined && { viewFieldGroupId }),
 });

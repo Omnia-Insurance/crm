@@ -64,7 +64,7 @@ export const MobileNavigationBar = () => {
         );
         setCurrentMobileNavigationDrawer('main');
 
-        if (isSettingsPage) {
+        if (isSettingsPage && defaultHomePagePath) {
           navigate(defaultHomePagePath);
         }
       },
