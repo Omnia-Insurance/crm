@@ -13,8 +13,7 @@ export type PlaceAutocompleteResult = {
 };
 
 export type PlaceDetailsResult = {
-  street1?: string;
-  street2?: string;
+  street?: string;
   state?: string;
   postcode?: string;
   city?: string;

@@ -18,6 +18,7 @@ import { MinimalMetadataLoadEffect } from '@/metadata-store/effect-components/Mi
 import { UserMetadataProviderInitialEffect } from '@/metadata-store/effect-components/UserMetadataProviderInitialEffect';
 import { ApolloCoreProvider } from '@/object-metadata/components/ApolloCoreProvider';
 import { PreComputedChipGeneratorsProvider } from '@/object-metadata/components/PreComputedChipGeneratorsProvider';
+import { ApolloAdminProvider } from '@/settings/admin-panel/apollo/components/ApolloAdminProvider';
 
 import { CommandRunner } from '@/command-menu-item/engine-command/components/CommandRunner';
 import { ExportJobRecoveryEffect } from '@/object-record/record-index/export/components/ExportJobRecoveryEffect';
@@ -55,39 +56,41 @@ export const AppRouterProviders = () => {
             <MinimalMetadataGater>
               <AuthProvider>
                 <ApolloCoreProvider>
-                  <SSEProvider>
-                    <PreComputedChipGeneratorsProvider>
-                      <UserThemeProviderEffect />
-                      <SnackBarProvider>
-                        <ErrorMessageEffect />
-                        <AgentChatProvider>
-                          <DialogComponentInstanceContext.Provider
-                            value={{ instanceId: 'dialog-manager' }}
-                          >
-                            <DialogManager>
-                              <StrictMode>
-                                <PromiseRejectionEffect />
-                                <GotoHotkeysEffectsProvider />
-                                <PageTitle title={pageTitle} />
-                                <PageFavicon />
-                                <Outlet />
-                                <GlobalFilePreviewModal />
-                                <CommandMenuConfirmationModalManager />
-                                <CommandRunner />
-                                <ImportJobRecoveryEffect />
-                                <ExportJobRecoveryEffect />
-                                <BackgroundJobIndicator />
-                              </StrictMode>
-                            </DialogManager>
-                          </DialogComponentInstanceContext.Provider>
-                        </AgentChatProvider>
-                      </SnackBarProvider>
-                      <MainContextStoreProvider />
-                      <SupportChatEffect />
-                      <PageChangeEffect />
-                      <SignOutOnOtherTabSignOutEffect />
-                    </PreComputedChipGeneratorsProvider>
-                  </SSEProvider>
+                  <ApolloAdminProvider>
+                    <SSEProvider>
+                      <PreComputedChipGeneratorsProvider>
+                        <UserThemeProviderEffect />
+                        <SnackBarProvider>
+                          <ErrorMessageEffect />
+                          <AgentChatProvider>
+                            <DialogComponentInstanceContext.Provider
+                              value={{ instanceId: 'dialog-manager' }}
+                            >
+                              <DialogManager>
+                                <StrictMode>
+                                  <PromiseRejectionEffect />
+                                  <GotoHotkeysEffectsProvider />
+                                  <PageTitle title={pageTitle} />
+                                  <PageFavicon />
+                                  <Outlet />
+                                  <GlobalFilePreviewModal />
+                                  <CommandMenuConfirmationModalManager />
+                                  <CommandRunner />
+                                  <ImportJobRecoveryEffect />
+                                  <ExportJobRecoveryEffect />
+                                  <BackgroundJobIndicator />
+                                </StrictMode>
+                              </DialogManager>
+                            </DialogComponentInstanceContext.Provider>
+                          </AgentChatProvider>
+                        </SnackBarProvider>
+                        <MainContextStoreProvider />
+                        <SupportChatEffect />
+                        <PageChangeEffect />
+                        <SignOutOnOtherTabSignOutEffect />
+                      </PreComputedChipGeneratorsProvider>
+                    </SSEProvider>
+                  </ApolloAdminProvider>
                 </ApolloCoreProvider>
               </AuthProvider>
             </MinimalMetadataGater>

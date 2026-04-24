@@ -1,12 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { render, toPlainText } from '@react-email/render';
+import { toPlainText } from '@react-email/render';
 import DOMPurify from 'dompurify';
-import { reactMarkupFromJSON } from 'twenty-emails';
-import { FileFolder } from 'twenty-shared/types';
+import { MAX_EMAIL_RECIPIENTS } from 'twenty-shared/constants';
+import {
+  ConnectedAccountProvider,
+  type EmailAttachment,
+  FileFolder,
+} from 'twenty-shared/types';
 import { isDefined, isValidUuid } from 'twenty-shared/utils';
-import { WorkflowAttachment } from 'twenty-shared/workflow';
 import { In, type Repository } from 'typeorm';
 import { z } from 'zod';
 
@@ -17,7 +20,7 @@ import {
   EmailToolExceptionCode,
 } from 'src/engine/core-modules/tool/tools/email-tool/exceptions/email-tool.exception';
 import { EmailComposerResult } from 'src/engine/core-modules/tool/tools/email-tool/types/email-composer-result.type';
-import { EmailToolInput } from 'src/engine/core-modules/tool/tools/email-tool/types/email-tool-input.type';
+import { type ComposeEmailParams } from 'src/engine/core-modules/tool/tools/email-tool/types/compose-email-params.type';
 import { parseCommaSeparatedEmails } from 'src/engine/core-modules/tool/tools/email-tool/utils/parse-comma-separated-emails.util';
 import { type ToolExecutionContext } from 'src/engine/core-modules/tool/types/tool-execution-context.type';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
@@ -27,7 +30,6 @@ import { MessagingAccountAuthenticationService } from 'src/modules/messaging/mes
 import { type MessageChannelMessageAssociationWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message-channel-message-association.workspace-entity';
 import { type MessageWorkspaceEntity } from 'src/modules/messaging/common/standard-objects/message.workspace-entity';
 import { type MessageAttachment } from 'src/modules/messaging/message-import-manager/types/message';
-import { parseEmailBody } from 'src/utils/parse-email-body';
 import { streamToBuffer } from 'src/utils/stream-to-buffer';
 @Injectable()
 export class EmailComposerService {
@@ -104,7 +106,7 @@ export class EmailComposerService {
     );
   }
 
-  private normalizeRecipients(parameters: EmailToolInput): {
+  private normalizeRecipients(parameters: ComposeEmailParams): {
     to: string[];
     cc: string[];
     bcc: string[];
@@ -157,9 +159,26 @@ export class EmailComposerService {
     return invalidEmails;
   }
 
+  private assertRecipientCountWithinLimit(recipients: {
+    to: string[];
+    cc: string[];
+    bcc: string[];
+  }): void {
+    const total =
+      recipients.to.length + recipients.cc.length + recipients.bcc.length;
+
+    if (total > MAX_EMAIL_RECIPIENTS) {
+      throw new EmailToolException(
+        `Too many recipients: ${total}. Maximum allowed is ${MAX_EMAIL_RECIPIENTS}.`,
+        EmailToolExceptionCode.TOO_MANY_RECIPIENTS,
+      );
+    }
+  }
+
   private async getAttachments(
-    files: Array<WorkflowAttachment>,
+    files: Array<EmailAttachment>,
     workspaceId: string,
+    fileFolder: FileFolder,
   ): Promise<MessageAttachment[]> {
     if (files.length === 0) {
       return [];
@@ -168,7 +187,7 @@ export class EmailComposerService {
     const fileIds = files.map((file) => file.id);
 
     const fileEntities = await this.fileRepository.find({
-      where: { id: In(fileIds) },
+      where: { id: In(fileIds), workspaceId },
     });
 
     const fileEntityMap = new Map(
@@ -193,10 +212,12 @@ export class EmailComposerService {
     const attachments: MessageAttachment[] = [];
 
     for (const fileMetadata of files) {
+      const fileEntity = fileEntityMap.get(fileMetadata.id);
+
       const { stream } = await this.fileService.getFileStreamById({
         fileId: fileMetadata.id,
         workspaceId,
-        fileFolder: FileFolder.Workflow,
+        fileFolder,
       });
 
       const buffer = await streamToBuffer(stream);
@@ -204,7 +225,7 @@ export class EmailComposerService {
       attachments.push({
         filename: fileMetadata.name,
         content: buffer,
-        contentType: fileMetadata.type,
+        contentType: fileEntity?.mimeType ?? 'application/octet-stream',
       });
     }
 
@@ -255,9 +276,31 @@ export class EmailComposerService {
     );
   }
 
+  private async refreshConnectedAccountTokens(
+    connectedAccount: ConnectedAccountEntity,
+    workspaceId: string,
+    messageChannelId: string,
+  ): Promise<ConnectedAccountEntity> {
+    const { accessToken, refreshToken } =
+      await this.messagingAccountAuthenticationService.validateAndRefreshConnectedAccountAuthentication(
+        {
+          connectedAccount,
+          workspaceId,
+          messageChannelId,
+        },
+      );
+
+    return {
+      ...connectedAccount,
+      accessToken,
+      refreshToken,
+    };
+  }
+
   async composeEmail(
-    parameters: EmailToolInput,
+    parameters: ComposeEmailParams,
     context: ToolExecutionContext,
+    options: { attachmentsFileFolder: FileFolder },
   ): Promise<EmailComposerResult> {
     const { workspaceId } = context;
     const { subject, body, files, inReplyTo } = parameters;
@@ -267,6 +310,7 @@ export class EmailComposerService {
 
     try {
       recipients = this.normalizeRecipients(parameters);
+      this.assertRecipientCountWithinLimit(recipients);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Invalid recipients';
@@ -310,46 +354,52 @@ export class EmailComposerService {
       (channel) => channel.handle === connectedAccount.handle,
     );
 
-    if (!isDefined(messageChannel)) {
+    const isSmtpOnlyAccount =
+      connectedAccount.provider === ConnectedAccountProvider.IMAP_SMTP_CALDAV &&
+      !isDefined(connectedAccount.connectionParameters?.IMAP);
+
+    if (
+      isSmtpOnlyAccount &&
+      !isDefined(connectedAccount.connectionParameters?.SMTP)
+    ) {
+      throw new EmailToolException(
+        `SMTP is not configured for connected account '${connectedAccountId}'`,
+        EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
+      );
+    }
+
+    if (!isSmtpOnlyAccount && !isDefined(messageChannel)) {
       throw new EmailToolException(
         `No message channel found for connected account '${connectedAccountId}'`,
         EmailToolExceptionCode.CONNECTED_ACCOUNT_NOT_FOUND,
       );
     }
 
-    const connectedAccountAsWorkspaceEntity = connectedAccount;
-
-    const { accessToken, refreshToken } =
-      await this.messagingAccountAuthenticationService.validateAndRefreshConnectedAccountAuthentication(
-        {
-          connectedAccount: connectedAccountAsWorkspaceEntity,
+    const connectedAccountWithFreshTokens = isDefined(messageChannel)
+      ? await this.refreshConnectedAccountTokens(
+          connectedAccount,
           workspaceId,
-          messageChannelId: messageChannel.id,
-        },
-      );
+          messageChannel.id,
+        )
+      : connectedAccount;
 
-    const connectedAccountWithFreshTokens = {
-      ...connectedAccountAsWorkspaceEntity,
-      accessToken,
-      refreshToken,
-    };
-
-    const attachments = await this.getAttachments(files || [], workspaceId);
-
-    const parsedBody = parseEmailBody(body);
-    const reactMarkup = reactMarkupFromJSON(parsedBody);
-    const htmlBody = await render(reactMarkup);
-    const plainTextBody = toPlainText(htmlBody);
+    const attachments = await this.getAttachments(
+      files || [],
+      workspaceId,
+      options.attachmentsFileFolder,
+    );
 
     const { JSDOM } = await import('jsdom');
     const window = new JSDOM('').window;
     const purify = DOMPurify(window);
-    const sanitizedHtmlBody = purify.sanitize(htmlBody || '');
+
+    const sanitizedHtmlBody = purify.sanitize(body || '');
+    const plainTextBody = toPlainText(sanitizedHtmlBody);
     const sanitizedSubject = purify.sanitize(subject || '');
 
     let threadExternalId: string | undefined;
 
-    if (inReplyTo) {
+    if (inReplyTo && isDefined(messageChannel)) {
       threadExternalId = await this.getThreadExternalId(
         workspaceId,
         inReplyTo,
@@ -367,7 +417,8 @@ export class EmailComposerService {
         sanitizedHtmlBody,
         attachments,
         connectedAccount: connectedAccountWithFreshTokens,
-        messageChannelId: messageChannel.id,
+        messageChannelId: messageChannel?.id,
+        shouldPersistMessage: isDefined(messageChannel),
         inReplyTo,
         threadExternalId,
       },

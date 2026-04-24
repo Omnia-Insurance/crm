@@ -47,28 +47,22 @@ export const useAddressAutocomplete = (
       country?: string,
       isFieldCity?: boolean,
     ) => {
-      try {
-        const placeAutocompleteData = await getPlaceAutocompleteData(
-          address,
-          token,
-          country,
-          isFieldCity,
-        );
+      const placeAutocompleteData = await getPlaceAutocompleteData(
+        address,
+        token,
+        country,
+        isFieldCity,
+      );
 
-        const newData = placeAutocompleteData?.map((data) => ({
-          text: data.text,
-          placeId: data.placeId,
-        }));
+      const newData = placeAutocompleteData?.map((data) => ({
+        text: data.text,
+        placeId: data.placeId,
+      }));
 
-        if (isDefined(newData) && newData?.length > 0) {
-          openDropdownOfAutocomplete();
-          setPlaceAutocompleteData(newData);
-        } else {
-          closeDropdownOfAutocomplete();
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Address autocomplete query failed:', error);
+      if (isDefined(newData) && newData?.length > 0) {
+        openDropdownOfAutocomplete();
+        setPlaceAutocompleteData(newData);
+      } else {
         closeDropdownOfAutocomplete();
       }
     },
@@ -87,11 +81,10 @@ export const useAddressAutocomplete = (
 
       const updatedAddress = {
         addressStreet1:
-          placeData?.street1 ||
+          placeData?.street ||
           addressStreet1 ||
           (internalValue?.addressStreet1 ?? ''),
-        addressStreet2:
-          placeData?.street2 || (internalValue?.addressStreet2 ?? null),
+        addressStreet2: internalValue?.addressStreet2 ?? null,
         addressCity: placeData?.city || (internalValue?.addressCity ?? null),
         addressState: placeData?.state || (internalValue?.addressState ?? null),
         addressCountry: countryName || (internalValue?.addressCountry ?? null),

@@ -1,10 +1,9 @@
 import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { EngineComponentKey } from '~/generated-metadata/graphql';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { type MessageDescriptor } from '@lingui/core';
 import { type Nullable } from 'twenty-shared/types';
 
-// Maps "Go to" action keys to the object they navigate to
+// Maps "Go to" action engine keys to the object they navigate to
 const GO_TO_ACTION_OBJECT_MAP: Record<string, CoreObjectNameSingular> = {
   [EngineComponentKey.GO_TO_PEOPLE]: CoreObjectNameSingular.Person,
   [EngineComponentKey.GO_TO_COMPANIES]: CoreObjectNameSingular.Company,
@@ -18,9 +17,9 @@ const GO_TO_ACTION_OBJECT_MAP: Record<string, CoreObjectNameSingular> = {
 // OMNIA-CUSTOM: resolves "Go to" labels from object metadata and filters deactivated objects
 export const resolveGoToActionLabels = <
   TAction extends {
-    key: string;
-    label: Nullable<string | MessageDescriptor>;
-    shortLabel?: Nullable<string | MessageDescriptor>;
+    engineComponentKey: string;
+    label: Nullable<string>;
+    shortLabel?: Nullable<string>;
   },
 >(
   actions: TAction[],
@@ -31,7 +30,8 @@ export const resolveGoToActionLabels = <
 ): TAction[] => {
   return actions
     .filter((action) => {
-      const targetObjectNameSingular = GO_TO_ACTION_OBJECT_MAP[action.key];
+      const targetObjectNameSingular =
+        GO_TO_ACTION_OBJECT_MAP[action.engineComponentKey];
 
       if (!targetObjectNameSingular) {
         return true;
@@ -45,7 +45,8 @@ export const resolveGoToActionLabels = <
       return !targetObjectMetadata || targetObjectMetadata.isActive;
     })
     .map((action) => {
-      const targetObjectNameSingular = GO_TO_ACTION_OBJECT_MAP[action.key];
+      const targetObjectNameSingular =
+        GO_TO_ACTION_OBJECT_MAP[action.engineComponentKey];
 
       if (!targetObjectNameSingular) {
         return action;

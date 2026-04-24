@@ -2,9 +2,11 @@ import { type SyncableEntityOptions } from '@/application/syncableEntityOptionsT
 import {
   type ViewKey,
   type AggregateOperations,
+  type ViewCalendarLayout,
   type ViewFilterGroupLogicalOperator,
   type ViewFilterOperand,
   type ViewOpenRecordIn,
+  type ViewSortDirection,
   type ViewType,
   type ViewVisibility,
 } from '@/types';
@@ -52,6 +54,11 @@ export type ViewFieldGroupManifest = SyncableEntityOptions & {
   isVisible?: boolean;
 };
 
+export type ViewSortManifest = SyncableEntityOptions & {
+  fieldMetadataUniversalIdentifier: string;
+  direction: ViewSortDirection;
+};
+
 export type ViewManifest = SyncableEntityOptions & {
   name: string;
   objectUniversalIdentifier: string;
@@ -66,9 +73,12 @@ export type ViewManifest = SyncableEntityOptions & {
   kanbanAggregateOperation?: AggregateOperations;
   kanbanAggregateOperationFieldMetadataUniversalIdentifier?: string;
   shouldHideEmptyGroups?: boolean;
+  calendarLayout?: ViewCalendarLayout;
+  calendarFieldMetadataUniversalIdentifier?: string;
   fields?: ViewFieldManifest[];
   filters?: ViewFilterManifest[];
   filterGroups?: ViewFilterGroupManifest[];
   groups?: ViewGroupManifest[];
   fieldGroups?: ViewFieldGroupManifest[];
+  sorts?: ViewSortManifest[];
 };

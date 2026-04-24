@@ -40,7 +40,7 @@ export const useSaveRecordTableWidgetsViewDataOnDashboardSave = () => {
   const {
     performViewFilterGroupAPICreate,
     performViewFilterGroupAPIUpdate,
-    performViewFilterGroupAPIDelete,
+    performViewFilterGroupAPIDestroy,
   } = usePerformViewFilterGroupAPIPersist();
 
   const {
@@ -252,7 +252,7 @@ export const useSaveRecordTableWidgetsViewDataOnDashboardSave = () => {
             },
           })),
         );
-        await performViewFilterGroupAPIDelete(
+        await performViewFilterGroupAPIDestroy(
           viewFilterGroupsToDelete.map((viewFilterGroup) => viewFilterGroup.id),
         );
 
@@ -298,7 +298,7 @@ export const useSaveRecordTableWidgetsViewDataOnDashboardSave = () => {
       performViewFilterAPIDelete,
       performViewFilterGroupAPICreate,
       performViewFilterGroupAPIUpdate,
-      performViewFilterGroupAPIDelete,
+      performViewFilterGroupAPIDestroy,
       performViewSortAPICreate,
       performViewSortAPIUpdate,
       performViewSortAPIDelete,

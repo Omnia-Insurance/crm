@@ -1,12 +1,13 @@
-import { FAQ_DATA, MENU_DATA } from '@/app/_constants';
-import {
-  ENGAGEMENT_BAND_DATA,
-  HERO_DATA,
-  PLAN_TABLE_DATA,
-  SALESFORCE_DATA,
-} from '@/app/pricing/_constants';
+import { FAQ_DATA } from '@/sections/Faq/data';
+import { MENU_DATA } from '@/sections/Menu/data';
+import { TalkToUsButton } from '@/lib/contact-cal';
+import { BecomePartnerButton } from '@/app/partners/components/PartnerApplication';
+import { ENGAGEMENT_BAND_DATA } from '@/app/pricing/engagement-band.data';
+import { HERO_DATA } from '@/app/pricing/hero.data';
+import { PLAN_TABLE_DATA } from '@/app/pricing/plan-table.data';
+import { SALESFORCE_DATA } from '@/app/pricing/salesforce.data';
 import { Eyebrow, LinkButton } from '@/design-system/components';
-import { Pages } from '@/enums/pages';
+import { Pages } from '@/lib/pages';
 import { fetchCommunityStats } from '@/lib/community/fetch-community-stats';
 import { mergeSocialLinkLabels } from '@/lib/community/merge-social-link-labels';
 import { EngagementBand } from '@/sections/EngagementBand/components';
@@ -14,16 +15,32 @@ import { Faq } from '@/sections/Faq/components';
 import { Hero } from '@/sections/Hero/components';
 import { Menu } from '@/sections/Menu/components';
 import { Plans } from '@/sections/Plans/components';
+import { PricingStateProvider } from '@/sections/Plans/context/PricingStateContext';
 import { PlanTable } from '@/sections/PlanTable/components';
 import { Salesforce } from '@/sections/Salesforce/components';
 import { theme } from '@/theme';
+import { buildPageMetadata } from '@/lib/seo';
+import { styled } from '@linaria/react';
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = {
-  title: 'Pricing — Twenty',
+const PricingPlansContainer = styled.div`
+  display: grid;
+  margin: 0 auto;
+  row-gap: ${theme.spacing(8)};
+  width: 100%;
+`;
+
+const PricingBannerContainer = styled.div`
+  margin: 0 auto;
+  width: 100%;
+`;
+
+export const metadata: Metadata = buildPageMetadata({
+  path: '/pricing',
+  title: 'Pricing | Twenty',
   description:
-    'Plans that scale with your team. Compare tiers and see how Twenty stacks up for your open source CRM.',
-};
+    'Plans that scale with your team. Compare tiers of the #1 open source CRM.',
+});
 
 export default async function PricingPage() {
   const stats = await fetchCommunityStats();
@@ -45,39 +62,52 @@ export default async function PricingPage() {
 
       <Hero.Root backgroundColor={theme.colors.secondary.background[5]}>
         <Hero.Heading page={Pages.Pricing} segments={HERO_DATA.heading} />
-        <Hero.Body page={Pages.Pricing} body={HERO_DATA.body} />
+        <Hero.Body
+          body={HERO_DATA.body}
+          page={Pages.Pricing}
+          preserveLineBreaks
+        />
       </Hero.Root>
 
-      <Plans.Root backgroundColor={theme.colors.secondary.background[5]}>
-        <Plans.Content />
-      </Plans.Root>
+      <PricingStateProvider>
+        <Plans.Root backgroundColor={theme.colors.secondary.background[5]}>
+          <PricingPlansContainer>
+            <Plans.Content />
+          </PricingPlansContainer>
+        </Plans.Root>
 
-      <EngagementBand.Root
-        backgroundColor={theme.colors.secondary.background[5]}
-      >
-        <EngagementBand.Strip
-          fillColor={theme.colors.primary.background[100]}
-          variant="primary"
+        <EngagementBand.Root
+          backgroundColor={theme.colors.secondary.background[5]}
         >
-          <EngagementBand.Copy>
-            <EngagementBand.Heading segments={ENGAGEMENT_BAND_DATA.heading} />
-            <EngagementBand.Body body={ENGAGEMENT_BAND_DATA.body} />
-          </EngagementBand.Copy>
-          <EngagementBand.Actions>
-            <LinkButton
-              color="secondary"
-              href="https://app.twenty.com/welcome"
-              label="Read our case studies"
-              type="anchor"
-              variant="contained"
-            />
-          </EngagementBand.Actions>
-        </EngagementBand.Strip>
-      </EngagementBand.Root>
+          <PricingBannerContainer>
+            <EngagementBand.Strip
+              desktopCopyMaxWidth="60%"
+              fillColor={theme.colors.primary.background[100]}
+              variant="primary"
+            >
+              <EngagementBand.Copy>
+                <EngagementBand.Heading
+                  segments={ENGAGEMENT_BAND_DATA.heading}
+                />
+                <EngagementBand.Body body={ENGAGEMENT_BAND_DATA.body} />
+              </EngagementBand.Copy>
+              <EngagementBand.Actions>
+                <BecomePartnerButton
+                  color="secondary"
+                  label="Find a partner"
+                  variant="outlined"
+                />
+              </EngagementBand.Actions>
+            </EngagementBand.Strip>
+          </PricingBannerContainer>
+        </EngagementBand.Root>
 
-      <PlanTable.Root backgroundColor={theme.colors.secondary.background[100]}>
-        <PlanTable.Content data={PLAN_TABLE_DATA} />
-      </PlanTable.Root>
+        <PlanTable.Root
+          backgroundColor={theme.colors.secondary.background[100]}
+        >
+          <PlanTable.Content data={PLAN_TABLE_DATA} />
+        </PlanTable.Root>
+      </PricingStateProvider>
 
       <Salesforce.Flow
         backgroundColor={theme.colors.secondary.background[5]}
@@ -86,7 +116,7 @@ export default async function PricingPage() {
         pricing={SALESFORCE_DATA.pricing}
       />
 
-      <Faq.Root illustration={FAQ_DATA.illustration}>
+      <Faq.Root>
         <Faq.Intro>
           <Eyebrow colorScheme="secondary" heading={FAQ_DATA.eyebrow.heading} />
           <Faq.Heading segments={FAQ_DATA.heading} />
@@ -98,11 +128,9 @@ export default async function PricingPage() {
               type="anchor"
               variant="contained"
             />
-            <LinkButton
+            <TalkToUsButton
               color="primary"
-              href="https://twenty.com/contact"
               label="Talk to us"
-              type="anchor"
               variant="outlined"
             />
           </Faq.Cta>

@@ -1,6 +1,7 @@
 import { useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 
+import { EmailAttachmentsField } from '@/activities/emails/components/EmailAttachmentsField';
 import { type EmailComposerState } from '@/activities/emails/types/EmailComposerState';
 import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
 import { FormMultiTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormMultiTextFieldInput';
@@ -110,7 +111,12 @@ export const EmailComposerFields = ({
         placeholder={t`Type something or press "/" to see commands`}
         minHeight={120}
         maxWidth={600}
-        contentType="json"
+        contentType="html"
+      />
+      <EmailAttachmentsField
+        label={t`Attachments`}
+        files={composerState.files}
+        onChange={composerState.setFiles}
       />
     </StyledFieldsContainer>
   );
