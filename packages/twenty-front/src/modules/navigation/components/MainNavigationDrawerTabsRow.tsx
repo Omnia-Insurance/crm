@@ -12,6 +12,7 @@ import { useIsMobile } from 'twenty-ui/utilities';
 import { useContext } from 'react';
 
 import { useSwitchToNewAiChat } from '@/ai/hooks/useSwitchToNewAiChat';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { NavigationDrawerAnimatedCollapseWrapper } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerAnimatedCollapseWrapper';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { navigationDrawerActiveTabState } from '@/ui/navigation/states/navigationDrawerActiveTabState';
@@ -22,6 +23,7 @@ import {
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 const StyledRow = styled.div<{ isExpanded: boolean }>`
   align-items: center;
@@ -143,6 +145,9 @@ export const MainNavigationDrawerTabsRow = () => {
     isNavigationDrawerExpandedState,
   );
 
+  // OMNIA-CUSTOM: hide AI chat tabs for roles without AI permission
+  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.AI);
+
   const isExpanded = isNavigationDrawerExpanded || isMobile;
 
   const handleTabClick = (tab: NavigationDrawerActiveTab) => () => {
@@ -173,6 +178,10 @@ export const MainNavigationDrawerTabsRow = () => {
 
   const getTabIconColor = (isActive: boolean) =>
     isActive ? theme.font.color.primary : theme.font.color.tertiary;
+
+  if (!hasAiPermission) {
+    return null;
+  }
 
   return (
     <StyledRow isExpanded={isExpanded}>
