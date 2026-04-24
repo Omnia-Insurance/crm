@@ -16,7 +16,10 @@ import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 import { useIcons } from 'twenty-ui/display';
 import { Loader } from 'twenty-ui/feedback';
 import { MenuItem } from 'twenty-ui/navigation';
-import { type CommandMenuItemFieldsFragment } from '~/generated-metadata/graphql';
+import {
+  EngineComponentKey,
+  type CommandMenuItemFieldsFragment,
+} from '~/generated-metadata/graphql';
 
 type CommandMenuItemRendererProps = {
   item: CommandMenuItemFieldsFragment;
@@ -43,6 +46,10 @@ const CommandMenuItemButtonRenderer = ({
     label,
   });
 
+  // OMNIA-CUSTOM: Create Record CTA gets filled blue primary styling
+  const isCreateRecordAction =
+    item.engineComponentKey === EngineComponentKey.CREATE_NEW_RECORD;
+
   return (
     <CommandMenuButton
       command={{
@@ -50,6 +57,11 @@ const CommandMenuItemButtonRenderer = ({
         label,
         shortLabel,
         Icon,
+        ...(isCreateRecordAction && {
+          buttonVariant: 'primary' as const,
+          accent: 'blue' as const,
+          isPrimaryCTA: true,
+        }),
       }}
       onClick={disabled ? undefined : handleClick}
       disabled={disabled}

@@ -174,6 +174,10 @@ check_file_contains \
   "isActive" \
   "Go To label resolver must filter deactivated objects"
 check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/display/components/CommandMenuItemRenderer.tsx" \
+  "CREATE_NEW_RECORD" \
+  "Create Record button must apply blue primary CTA styling"
+check_file_contains \
   "packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-command-menu-item.constant.ts" \
   "deleteSingleRecord" \
   "Delete single record action must be pinned as a header button"
@@ -387,6 +391,17 @@ check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-schema.factory.ts" \
   "'schemaGenerationMs'" \
   "Workspace schema factory slow observer must include schema generation timing"
+
+echo ""
+echo "--- Critical: Server Watcher Ignore Patterns ---"
+check_file_contains \
+  "packages/twenty-server/nest-cli.json" \
+  "\"**/.yarn/**\"" \
+  "Nest watcher must ignore Yarn cache directories to reduce open file watchers"
+check_file_contains \
+  "packages/twenty-server/nest-cli.json" \
+  "seed-project/**" \
+  "Nest watcher must ignore large static seed project assets to avoid EMFILE in watch mode"
 
 echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
