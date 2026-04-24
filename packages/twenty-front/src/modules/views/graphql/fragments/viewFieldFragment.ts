@@ -11,6 +11,7 @@ export const VIEW_FIELD_FRAGMENT = gql`
     aggregateOperation
     viewFieldGroupId
     subFieldName
+    isOverridden
     isActive
     createdAt
     updatedAt
