@@ -4619,6 +4619,7 @@ export type RowLevelPermissionPredicate = {
   positionInRowLevelPermissionPredicateGroup?: Maybe<Scalars['Float']>;
   roleId: Scalars['String'];
   rowLevelPermissionPredicateGroupId?: Maybe<Scalars['String']>;
+  scope?: Maybe<Scalars['String']>;
   subFieldName?: Maybe<Scalars['String']>;
   value?: Maybe<Scalars['JSON']>;
   workspaceMemberFieldMetadataId?: Maybe<Scalars['String']>;
