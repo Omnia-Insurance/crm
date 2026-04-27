@@ -1327,6 +1327,17 @@ check_file_exists \
   "Ingestion pipeline server module"
 
 echo ""
+echo "--- FieldsWidget Honors Field-Level Read Permissions ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/widgets/fields/hooks/useFieldsWidgetGroups.ts" \
+  "objectMetadataItem.readableFields" \
+  "FieldsWidget groups must filter by readableFields so restricted fields (LTV, paidThroughDate for members) drop out"
+check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/widgets/fields/hooks/useFieldsWidgetHiddenFields.ts" \
+  "objectMetadataItem.readableFields" \
+  "FieldsWidget hidden-fields list must filter by readableFields"
+
+echo ""
 echo "--- Insert Field Permission Skip ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/repository/permissions.utils.ts" \
