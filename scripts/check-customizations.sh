@@ -1327,11 +1327,41 @@ check_file_exists \
   "Ingestion pipeline server module"
 
 echo ""
+echo "--- Read-Only Check Honors WRITE-Scoped RLS Predicates ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/read-only/utils/isObjectMetadataReadOnly.ts" \
+  "hasWriteScopedRowLevelPredicate" \
+  "Read-only check must treat WRITE/ALL row-level predicates as not-read-only so relation dropdowns and pencil icons stay visible for member roles"
+
+echo ""
 echo "--- Insert Field Permission Skip ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/repository/permissions.utils.ts" \
   "Field-level restrictions" \
   "INSERT case must skip field-level permission checks (pre-query hooks set restricted fields)"
+
+echo ""
+echo "--- Omnia Marketing Site Branding ---"
+check_file_contains \
+  "packages/twenty-website-new/src/theme/css-variables.ts" \
+  "#0f6b3a" \
+  "Marketing site CSS variables must use Omnia emerald (#0f6b3a) — primary brand color"
+check_file_contains \
+  "packages/twenty-website-new/src/theme/css-variables.ts" \
+  "#d9e52c" \
+  "Marketing site CSS variables must use Omnia citron (#d9e52c) — primary brand yellow"
+check_file_contains \
+  "packages/twenty-website-new/src/theme/css-variables.ts" \
+  "#faf9f2" \
+  "Marketing site CSS variables must use Omnia warm cream (#faf9f2) — canvas surface"
+check_file_contains \
+  "packages/twenty-website-new/src/theme/css-variables.ts" \
+  "#0b0f0c" \
+  "Marketing site CSS variables must use Omnia near-black (#0b0f0c) — ink"
+check_file_contains \
+  "packages/twenty-website-new/src/design-system/components/Button/BaseButton.tsx" \
+  "BRAND_EMERALD_FILL" \
+  "Marketing site primary button must use Omnia emerald + citron brand fills"
 
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
