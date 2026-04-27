@@ -12,6 +12,7 @@ import { useUpdateMetadataStoreDraft } from '@/metadata-store/hooks/useUpdateMet
 import { type FlatFieldMetadataItem } from '@/metadata-store/types/FlatFieldMetadataItem';
 import { type FlatObjectMetadataItem } from '@/metadata-store/types/FlatObjectMetadataItem';
 import { splitViewWithRelated } from '@/metadata-store/utils/splitViewWithRelated';
+import { type ViewWithRelations } from '@/views/types/ViewWithRelations';
 import { type MetadataRequestResult } from '@/object-metadata/types/MetadataRequestResult.type';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useLoadCurrentUser } from '@/users/hooks/useLoadCurrentUser';
@@ -90,7 +91,8 @@ export const useCreateOneObjectMetadataItem = () => {
             }),
           ]);
 
-        const fetchedViews = viewsResult.data?.getViews ?? [];
+        const fetchedViews = (viewsResult.data?.getViews ??
+          []) as unknown as ViewWithRelations[];
 
         const {
           flatViews,

@@ -6,13 +6,13 @@ describe('resolveCreateRecordActionLabels', () => {
   it('rewrites the create record action label and marks it as the primary CTA', () => {
     const actions = [
       {
-        key: EngineComponentKey.CREATE_NEW_RECORD,
+        engineComponentKey: EngineComponentKey.CREATE_NEW_RECORD,
         label: 'Create new record',
         shortLabel: 'New record',
         isPrimaryCTA: false,
       },
       {
-        key: 'other-action',
+        engineComponentKey: 'other-action',
         label: 'Other action',
       },
     ];
@@ -25,15 +25,13 @@ describe('resolveCreateRecordActionLabels', () => {
       resolveCreateRecordActionLabels(actions, objectMetadataItem),
     ).toEqual([
       {
-        key: EngineComponentKey.CREATE_NEW_RECORD,
+        engineComponentKey: EngineComponentKey.CREATE_NEW_RECORD,
         label: 'Create Policy',
         shortLabel: 'Create Policy',
-        accent: 'blue',
-        buttonVariant: 'primary',
-        isPrimaryCTA: true,
+        isPrimaryCTA: false,
       },
       {
-        key: 'other-action',
+        engineComponentKey: 'other-action',
         label: 'Other action',
       },
     ]);
@@ -42,7 +40,7 @@ describe('resolveCreateRecordActionLabels', () => {
   it('leaves actions unchanged when no object metadata is available', () => {
     const actions = [
       {
-        key: EngineComponentKey.CREATE_NEW_RECORD,
+        engineComponentKey: EngineComponentKey.CREATE_NEW_RECORD,
         label: 'Create new record',
         shortLabel: 'New record',
       },

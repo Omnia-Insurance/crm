@@ -12,10 +12,7 @@ export class LocationDTO {
 @ObjectType('PlaceDetailsResult')
 export class PlaceDetailsResultDTO {
   @Field({ nullable: true })
-  street1?: string;
-
-  @Field({ nullable: true })
-  street2?: string;
+  street?: string;
 
   @Field({ nullable: true })
   state?: string;

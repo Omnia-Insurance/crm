@@ -1,15 +1,17 @@
-import {
-  HELPED_DATA,
-  HERO_DATA,
-  HOME_STEPPER_DATA,
-  PROBLEM_DATA,
-  TESTIMONIALS_DATA,
-  THREE_CARDS_FEATURE_DATA,
-  THREE_CARDS_ILLUSTRATION_DATA,
-} from '@/app/(home)/_constants';
-import { FAQ_DATA, MENU_DATA, TRUSTED_BY_DATA } from '@/app/_constants';
+import { HELPED_DATA } from '@/app/(home)/helped.data';
+import { HERO_DATA } from '@/app/(home)/hero.data';
+import { HOME_STEPPER_DATA } from '@/app/(home)/home-stepper.data';
+import { PROBLEM_DATA } from '@/app/(home)/problem.data';
+import { TESTIMONIALS_DATA } from '@/app/(home)/testimonials.data';
+import { THREE_CARDS_FEATURE_DATA } from '@/app/(home)/three-cards-feature.data';
+import { THREE_CARDS_ILLUSTRATION_DATA } from '@/app/(home)/three-cards-illustration.data';
+import { TalkToUsButton } from '@/lib/contact-cal';
+import { FAQ_DATA } from '@/sections/Faq/data';
+import { MENU_DATA } from '@/sections/Menu/data';
+import { TRUSTED_BY_DATA } from '@/sections/TrustedBy/data';
 import { Body, Eyebrow, Heading, LinkButton } from '@/design-system/components';
-import { Pages } from '@/enums/pages';
+import { Pages } from '@/lib/pages';
+import { ArrowRightUpIcon } from '@/icons';
 import { fetchCommunityStats } from '@/lib/community/fetch-community-stats';
 import { mergeSocialLinkLabels } from '@/lib/community/merge-social-link-labels';
 import { Faq } from '@/sections/Faq/components';
@@ -22,12 +24,124 @@ import { Testimonials } from '@/sections/Testimonials/components';
 import { ThreeCards } from '@/sections/ThreeCards/components';
 import { TrustedBy } from '@/sections/TrustedBy/components';
 import { theme } from '@/theme';
+import { css } from '@linaria/core';
+import { styled } from '@linaria/react';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Twenty — Open Source CRM',
-  description: 'Modular, scalable open source CRM for modern teams.',
+  alternates: { canonical: '/' },
 };
+
+const HOME_TOP_BACKGROUND_COLOR = '#F4F4F4';
+const PRODUCT_HUNT_LAUNCH_URL =
+  'https://www.producthunt.com/products/twenty-crm?launch=twenty-2-0';
+const PRODUCT_HUNT_BRAND_COLOR = '#DA552F';
+
+const HeroHeadingGroup = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: ${theme.spacing(3)};
+  width: 100%;
+
+  > *:last-child {
+    margin-top: 0;
+  }
+`;
+
+const HeroLaunchChip = styled.a`
+  align-items: center;
+  background: ${theme.colors.primary.background[100]};
+  border: 1px solid ${theme.colors.primary.border[10]};
+  border-radius: 999px;
+  color: ${theme.colors.primary.text[100]};
+  display: inline-flex;
+  font-family: ${theme.font.family.mono};
+  font-size: ${theme.font.size(2.5)};
+  font-weight: ${theme.font.weight.medium};
+  gap: ${theme.spacing(2)};
+  line-height: ${theme.lineHeight(3)};
+  padding: ${theme.spacing(2)} ${theme.spacing(3)};
+  text-decoration: none;
+  text-transform: uppercase;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+  white-space: nowrap;
+
+  &:is(:hover, :focus-visible) {
+    border-color: ${PRODUCT_HUNT_BRAND_COLOR};
+    color: ${PRODUCT_HUNT_BRAND_COLOR};
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 1px solid ${theme.colors.highlight[100]};
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+`;
+
+const HeroLaunchChipDot = styled.span`
+  background: ${PRODUCT_HUNT_BRAND_COLOR};
+  border-radius: 999px;
+  display: block;
+  flex-shrink: 0;
+  height: ${theme.spacing(2)};
+  width: ${theme.spacing(2)};
+`;
+
+const HeroLaunchChipLabel = styled.span`
+  align-items: center;
+  display: inline-flex;
+  gap: ${theme.spacing(1.5)};
+`;
+
+const HeroIntroGroup = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: ${theme.spacing(8)};
+  width: 100%;
+`;
+
+const ThreeCardsIllustrationIntroContent = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: ${theme.spacing(2)};
+  width: 100%;
+`;
+
+const ThreeCardsIllustrationIntroHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr;
+  row-gap: ${theme.spacing(6)};
+  width: 100%;
+`;
+
+const threeCardsIllustrationHeadingClassName = css`
+  width: 100%;
+
+  @media (min-width: ${theme.breakpoints.md}px) {
+    max-width: ${theme.layout.editorial};
+  }
+
+  [data-family='sans'] {
+    letter-spacing: -0.02em;
+  }
+`;
+
+const threeCardsIllustrationBodyClassName = css`
+  width: 100%;
+
+  @media (min-width: ${theme.breakpoints.md}px) {
+    max-width: 571px;
+  }
+`;
 
 export default async function HomePage() {
   const stats = await fetchCommunityStats();
@@ -35,8 +149,18 @@ export default async function HomePage() {
 
   return (
     <>
+      {/*
+       * Above-the-fold home hero background texture. Preload warms the
+       * HTTP cache so it is ready by the time HomeBackgroundHalftone
+       * binds it to the WebGL pipeline.
+       */}
+      <link
+        as="image"
+        href="/illustrations/generated/home-background-bridge.png"
+        rel="preload"
+      />
       <Menu.Root
-        backgroundColor={theme.colors.primary.background[100]}
+        backgroundColor={HOME_TOP_BACKGROUND_COLOR}
         scheme="primary"
         navItems={MENU_DATA.navItems}
         socialLinks={menuSocialLinks}
@@ -47,27 +171,45 @@ export default async function HomePage() {
         <Menu.Cta scheme="primary" />
       </Menu.Root>
 
-      <Hero.Root backgroundColor={theme.colors.primary.background[100]}>
-        <Hero.Heading page={Pages.Home} segments={HERO_DATA.heading} />
-        <Hero.Body page={Pages.Home} body={HERO_DATA.body} size="sm" />
-        <Hero.Cta>
-          <LinkButton
-            color="secondary"
-            href="https://app.twenty.com/welcome"
-            label="Get started"
-            type="anchor"
-            variant="contained"
-          />
-        </Hero.Cta>
+      <Hero.Root backgroundColor={HOME_TOP_BACKGROUND_COLOR} showHomeBackground>
+        <HeroIntroGroup data-halftone-exclude>
+          <HeroHeadingGroup>
+            <HeroLaunchChip
+              href={PRODUCT_HUNT_LAUNCH_URL}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <HeroLaunchChipDot />
+              <HeroLaunchChipLabel>
+                Live on Product Hunt
+                <ArrowRightUpIcon size={8} strokeColor="currentColor" />
+              </HeroLaunchChipLabel>
+            </HeroLaunchChip>
+            <Hero.Heading page={Pages.Home} segments={HERO_DATA.heading} />
+            <Hero.Body page={Pages.Home} body={HERO_DATA.body} size="sm" />
+          </HeroHeadingGroup>
+          <Hero.Cta>
+            <LinkButton
+              color="secondary"
+              href="https://app.twenty.com/welcome"
+              label="Get started"
+              type="anchor"
+              variant="contained"
+            />
+            <TalkToUsButton
+              color="secondary"
+              label="Talk to us"
+              variant="outlined"
+            />
+          </Hero.Cta>
+        </HeroIntroGroup>
         <Hero.HomeVisual visual={HERO_DATA.visual} />
       </Hero.Root>
 
       <TrustedBy.Root>
         <TrustedBy.Separator separator={TRUSTED_BY_DATA.separator} />
-        <TrustedBy.Logos
-          clientCountLabel={TRUSTED_BY_DATA.clientCountLabel}
-          logos={TRUSTED_BY_DATA.logos}
-        />
+        <TrustedBy.Logos logos={TRUSTED_BY_DATA.logos} />
+        <TrustedBy.ClientCount label={TRUSTED_BY_DATA.clientCountLabel.text} />
       </TrustedBy.Root>
 
       <Problem.Root>
@@ -84,16 +226,25 @@ export default async function HomePage() {
 
       <ThreeCards.Root backgroundColor={theme.colors.primary.background[100]}>
         <ThreeCards.Intro page={Pages.Home} align="left">
-          <Eyebrow
-            colorScheme="primary"
-            heading={THREE_CARDS_ILLUSTRATION_DATA.eyebrow.heading}
-          />
-          <Heading
-            segments={THREE_CARDS_ILLUSTRATION_DATA.heading}
-            size="lg"
-            weight="light"
-          />
-          <Body body={THREE_CARDS_ILLUSTRATION_DATA.body} size="sm" />
+          <ThreeCardsIllustrationIntroContent>
+            <ThreeCardsIllustrationIntroHeader>
+              <Eyebrow
+                colorScheme="primary"
+                heading={THREE_CARDS_ILLUSTRATION_DATA.eyebrow.heading}
+              />
+              <Heading
+                className={threeCardsIllustrationHeadingClassName}
+                segments={THREE_CARDS_ILLUSTRATION_DATA.heading}
+                size="lg"
+                weight="light"
+              />
+            </ThreeCardsIllustrationIntroHeader>
+            <Body
+              body={THREE_CARDS_ILLUSTRATION_DATA.body}
+              className={threeCardsIllustrationBodyClassName}
+              size="sm"
+            />
+          </ThreeCardsIllustrationIntroContent>
         </ThreeCards.Intro>
         <ThreeCards.IllustrationCards
           illustrationCards={THREE_CARDS_ILLUSTRATION_DATA.illustrationCards}
@@ -126,7 +277,6 @@ export default async function HomePage() {
       <Testimonials.Root
         backgroundColor={theme.colors.secondary.background[5]}
         color={theme.colors.primary.text[100]}
-        shapeFillColor={theme.colors.primary.background[100]}
       >
         <Testimonials.Carousel
           eyebrow={TESTIMONIALS_DATA.eyebrow}
@@ -136,7 +286,7 @@ export default async function HomePage() {
         </Testimonials.Carousel>
       </Testimonials.Root>
 
-      <Faq.Root illustration={FAQ_DATA.illustration}>
+      <Faq.Root>
         <Faq.Intro>
           <Eyebrow colorScheme="secondary" heading={FAQ_DATA.eyebrow.heading} />
           <Faq.Heading segments={FAQ_DATA.heading} />
@@ -148,11 +298,9 @@ export default async function HomePage() {
               type="anchor"
               variant="contained"
             />
-            <LinkButton
+            <TalkToUsButton
               color="primary"
-              href="https://twenty.com/contact"
               label="Talk to us"
-              type="anchor"
               variant="outlined"
             />
           </Faq.Cta>

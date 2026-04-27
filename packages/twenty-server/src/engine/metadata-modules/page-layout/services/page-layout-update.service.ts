@@ -174,6 +174,7 @@ export class PageLayoutUpdateService {
       });
 
     const orphanedViewIds = this.collectOrphanedViewIdsFromRemovedWidgets({
+      widgetsToCreate,
       widgetsToUpdate,
       widgetsToDelete,
       tabsToUpdate,
@@ -598,7 +599,9 @@ export class PageLayoutUpdateService {
           applicationId: workspaceCustomApplicationId,
           applicationUniversalIdentifier:
             workspaceCustomApplicationUniversalIdentifier,
-          conditionalDisplay: null,
+          conditionalDisplay: widgetInput.conditionalDisplay ?? null,
+          conditionalAvailabilityExpression:
+            widgetInput.conditionalAvailabilityExpression ?? null,
           overrides: null,
           universalOverrides: null,
           isActive: true,
@@ -737,6 +740,11 @@ export class PageLayoutUpdateService {
         widgetInput.conditionalDisplay ?? null;
     }
 
+    if (widgetInput.conditionalAvailabilityExpression !== undefined) {
+      editableProperties.conditionalAvailabilityExpression =
+        widgetInput.conditionalAvailabilityExpression ?? null;
+    }
+
     const { overrides, updatedEditableProperties } =
       sanitizeOverridableEntityInput({
         metadataName: 'pageLayoutWidget',
@@ -861,12 +869,14 @@ export class PageLayoutUpdateService {
   }
 
   private collectOrphanedViewIdsFromRemovedWidgets({
+    widgetsToCreate,
     widgetsToUpdate,
     widgetsToDelete,
     tabsToUpdate,
     tabsToDelete,
     flatPageLayoutWidgetMaps,
   }: {
+    widgetsToCreate: FlatPageLayoutWidget[];
     widgetsToUpdate: FlatPageLayoutWidget[];
     widgetsToDelete: FlatPageLayoutWidget[];
     tabsToUpdate: FlatPageLayoutTab[];
@@ -891,11 +901,6 @@ export class PageLayoutUpdateService {
     for (const widget of widgetsToUpdate) {
       if (!widget.isActive) {
         directlyRemovedWidgetIds.add(widget.id);
-        const viewId = this.getViewIdFromFieldsWidget(widget);
-
-        if (isDefined(viewId)) {
-          viewIdsToDelete.add(viewId);
-        }
       }
     }
 
@@ -929,6 +934,14 @@ export class PageLayoutUpdateService {
         if (isDefined(viewId)) {
           viewIdsToDelete.delete(viewId);
         }
+      }
+    }
+
+    for (const widget of widgetsToCreate) {
+      const viewId = this.getViewIdFromFieldsWidget(widget);
+
+      if (isDefined(viewId)) {
+        viewIdsToDelete.delete(viewId);
       }
     }
 

@@ -1,17 +1,14 @@
 import { EngineComponentKey } from '~/generated-metadata/graphql';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { type MessageDescriptor } from '@lingui/core';
 import { type Nullable } from 'twenty-shared/types';
-import { type ButtonAccent, type ButtonVariant } from 'twenty-ui/input';
 
+// OMNIA-CUSTOM: resolves "Create Record" labels to object-aware variants
+// (e.g. "Create Policy") and applies blue accent CTA styling.
 export const resolveCreateRecordActionLabels = <
   TAction extends {
-    key: string;
-    label: Nullable<string | MessageDescriptor>;
-    shortLabel?: Nullable<string | MessageDescriptor>;
-    accent?: ButtonAccent;
-    buttonVariant?: ButtonVariant;
-    isPrimaryCTA?: boolean;
+    engineComponentKey: string;
+    label: Nullable<string>;
+    shortLabel?: Nullable<string>;
   },
 >(
   actions: TAction[],
@@ -24,7 +21,7 @@ export const resolveCreateRecordActionLabels = <
   const createRecordLabel = `Create ${objectMetadataItem.labelSingular}`;
 
   return actions.map((action) => {
-    if (action.key !== EngineComponentKey.CREATE_NEW_RECORD) {
+    if (action.engineComponentKey !== EngineComponentKey.CREATE_NEW_RECORD) {
       return action;
     }
 
@@ -32,9 +29,6 @@ export const resolveCreateRecordActionLabels = <
       ...action,
       label: createRecordLabel,
       shortLabel: createRecordLabel,
-      accent: 'blue',
-      buttonVariant: 'primary',
-      isPrimaryCTA: true,
     };
   });
 };

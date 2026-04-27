@@ -17,6 +17,7 @@ export type { AvatarSize } from './avatar/types/AvatarSize';
 export type { AvatarType } from './avatar/types/AvatarType';
 export type { BannerColor, BannerVariant } from './banner/components/Banner';
 export { Banner } from './banner/components/Banner';
+export { InlineBanner } from './banner/components/InlineBanner';
 export type { SidePanelInformationBannerProps } from './banner/components/SidePanelInformationBanner';
 export { SidePanelInformationBanner } from './banner/components/SidePanelInformationBanner';
 export type { CalloutVariant, CalloutProps } from './callout/Callout';
@@ -92,6 +93,7 @@ export {
   IconArchive,
   IconArchiveOff,
   IconArrowBackUp,
+  IconArrowBarToDown,
   IconArrowDown,
   IconArrowLeft,
   IconArrowMerge,
@@ -122,6 +124,7 @@ export {
   IconBracketsContain,
   IconBrain,
   IconBrandDaysCounter,
+  IconBrandDocker,
   IconBrandGithub,
   IconBrandGoogle,
   IconBrandGraphql,
@@ -249,6 +252,7 @@ export {
   IconEye,
   IconEyeOff,
   IconEyeShare,
+  IconEyeX,
   IconFile,
   IconFileCheck,
   IconFileExport,
@@ -276,6 +280,7 @@ export {
   IconFrame,
   IconFunction,
   IconGauge,
+  IconGitBranch,
   IconGitBranchDeleted,
   IconGitCommit,
   IconGizmo,
@@ -514,6 +519,11 @@ export { Info } from './info/components/Info';
 export { Status } from './status/components/Status';
 export { HorizontalSeparator } from './text/components/HorizontalSeparator';
 export { SeparatorLineText } from './text/components/SeparatorLineText';
+export { StyledTintedIconTileContainer } from './tinted-icon-tile/components/StyledTintedIconTileContainer';
+export type { TintedIconTileProps } from './tinted-icon-tile/components/TintedIconTile';
+export { TintedIconTile } from './tinted-icon-tile/components/TintedIconTile';
+export type { IconTileColorShades } from './tinted-icon-tile/utils/getIconTileColorShades';
+export { getIconTileColorShades } from './tinted-icon-tile/utils/getIconTileColorShades';
 export type { AppTooltipProps } from './tooltip/AppTooltip';
 export {
   TooltipPosition,

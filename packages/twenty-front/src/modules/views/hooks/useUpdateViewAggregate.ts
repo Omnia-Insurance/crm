@@ -8,7 +8,7 @@ import { usePerformViewAPIUpdate } from '@/views/hooks/internal/usePerformViewAP
 import { useCanPersistViewChanges } from '@/views/hooks/useCanPersistViewChanges';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { type View as GqlView } from '~/generated-metadata/graphql';
+import { type View } from '@/views/types/View';
 
 export const useUpdateViewAggregate = () => {
   const { canPersistChanges } = useCanPersistViewChanges();
@@ -54,7 +54,7 @@ export const useUpdateViewAggregate = () => {
 
       if (updatedViewResult.status === 'successful') {
         const updatedView = updatedViewResult.response.data
-          ?.updateView as GqlView;
+          ?.updateView as unknown as View;
 
         if (!isDefined(updatedView)) {
           return;

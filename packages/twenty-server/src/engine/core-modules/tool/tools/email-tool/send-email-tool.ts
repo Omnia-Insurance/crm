@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { FileFolder } from 'twenty-shared/types';
+
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
 import { EmailToolInputZodSchema } from 'src/engine/core-modules/tool/tools/email-tool/email-tool.schema';
 import { EmailToolException } from 'src/engine/core-modules/tool/tools/email-tool/exceptions/email-tool.exception';
@@ -31,6 +33,7 @@ export class SendEmailTool implements Tool {
       const result = await this.emailComposerService.composeEmail(
         parameters,
         context,
+        { attachmentsFileFolder: FileFolder.Workflow },
       );
 
       if (!result.success) {
@@ -41,11 +44,13 @@ export class SendEmailTool implements Tool {
 
       const sendResult = await this.sendEmailService.sendComposedEmail(data);
 
-      await this.sendEmailService.persistSentMessage(
-        sendResult,
-        data,
-        context.workspaceId,
-      );
+      if (data.shouldPersistMessage) {
+        await this.sendEmailService.persistSentMessage(
+          sendResult,
+          data,
+          context.workspaceId,
+        );
+      }
 
       this.logger.log(
         `Email sent successfully to ${data.toRecipientsDisplay}${data.attachments.length > 0 ? ` with ${data.attachments.length} attachments` : ''}`,

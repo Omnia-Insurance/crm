@@ -1,5 +1,8 @@
 'use client';
 
+import { getSharedCompanyLogoUrlFromDomainName } from '@/content/site/asset-paths';
+import { RatingStarIcon } from '@/icons';
+import { createBoundedFailureCache } from '@/lib/visual-runtime';
 import { theme } from '@/theme';
 import { styled } from '@linaria/react';
 import {
@@ -62,8 +65,8 @@ const LANE_TONES: Record<string, { background: string; color: string }> = {
   purple: { background: '#ede9fe', color: '#8e4ec6' },
 };
 
-const failedAvatarUrls = new Set<string>();
-const failedFaviconUrls = new Set<string>();
+const failedAvatarUrls = createBoundedFailureCache(256);
+const failedFaviconUrls = createBoundedFailureCache(256);
 
 const BoardShell = styled.div`
   flex: 1 1 auto;
@@ -247,11 +250,12 @@ const StarsRow = styled.div`
   padding: 0 4px;
 `;
 
-const StarGlyph = styled.span<{ $filled: boolean }>`
-  color: ${({ $filled }) => ($filled ? COLORS.textSecondary : '#d6d6d6')};
-  font-family: ${APP_FONT};
-  font-size: 13px;
-  line-height: 1;
+const StarGlyph = styled.span`
+  align-items: center;
+  display: inline-flex;
+  height: 12px;
+  justify-content: center;
+  width: 12px;
 `;
 
 const AddCardButton = styled.div`
@@ -319,6 +323,12 @@ function sanitizeURL(link: string | null | undefined) {
 }
 
 function getLogoUrlFromDomainName(domainName?: string): string | undefined {
+  const sharedLogoUrl = getSharedCompanyLogoUrlFromDomainName(domainName);
+
+  if (sharedLogoUrl) {
+    return sharedLogoUrl;
+  }
+
   const sanitizedDomain = sanitizeURL(domainName);
 
   return sanitizedDomain
@@ -448,8 +458,10 @@ function RatingValue({ rating }: { rating: number }) {
   return (
     <StarsRow>
       {Array.from({ length: 5 }, (_, index) => (
-        <StarGlyph key={index} $filled={index < rating}>
-          {index < rating ? '★' : '★'}
+        <StarGlyph key={index}>
+          <RatingStarIcon
+            fillColor={index < rating ? COLORS.textSecondary : '#d6d6d6'}
+          />
         </StarGlyph>
       ))}
     </StarsRow>
@@ -623,7 +635,9 @@ function KanbanLane({
 
 export function KanbanPage({ page }: { page: HeroKanbanPageDefinition }) {
   return (
-    <BoardShell aria-label={`Interactive preview of the ${page.header.title} board`}>
+    <BoardShell
+      aria-label={`Interactive preview of the ${page.header.title} board`}
+    >
       <BoardCanvas $laneCount={page.lanes.length}>
         {page.lanes.map((lane, index) => (
           <KanbanLane

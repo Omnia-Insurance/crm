@@ -1,6 +1,4 @@
-import { useParams } from 'react-router-dom';
-
-import { useWorkspaceNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useWorkspaceNavigationMenuItems';
+import { useIdentifyActiveNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useIdentifyActiveNavigationMenuItems';
 import { NavigationDrawerSectionForObjectMetadataItems } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
@@ -16,20 +14,14 @@ export const NavigationDrawerOpenedSection = () => {
 
   const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
 
-  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
+  const { objectMetadataIdForOpenedSection } =
+    useIdentifyActiveNavigationMenuItems();
 
-  const { objectMetadataIdsInWorkspaceNav } = useWorkspaceNavigationMenuItems();
+  const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
 
-  const {
-    objectNamePlural: currentObjectNamePlural,
-    objectNameSingular: currentObjectNameSingular,
-  } = useParams();
-
   const objectMetadataItem = activeObjectMetadataItems.find(
-    (item) =>
-      item.namePlural === currentObjectNamePlural ||
-      item.nameSingular === currentObjectNameSingular,
+    (item) => item.id === objectMetadataIdForOpenedSection,
   );
 
   // Omnia: also suppress the "Opened" section when the object is already
@@ -42,10 +34,8 @@ export const NavigationDrawerOpenedSection = () => {
       objectMetadataItem.id,
     ).showInSidebar;
 
-  const shouldShowOpenedSection = isDefined(objectMetadataItem)
-    ? !objectMetadataIdsInWorkspaceNav.has(objectMetadataItem.id) &&
-      !isAlreadyShownInWorkspaceSection
-    : false;
+  const shouldShowOpenedSection =
+    isDefined(objectMetadataItem) && !isAlreadyShownInWorkspaceSection;
 
   return (
     <AnimatedExpandableContainer isExpanded={shouldShowOpenedSection}>

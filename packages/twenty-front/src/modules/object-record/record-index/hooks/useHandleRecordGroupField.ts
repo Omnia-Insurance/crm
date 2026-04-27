@@ -11,7 +11,7 @@ import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
-import { type View as GqlView } from '~/generated-metadata/graphql';
+import { type View } from '@/views/types/View';
 import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 
 export const useHandleRecordGroupField = () => {
@@ -60,7 +60,7 @@ export const useHandleRecordGroupField = () => {
 
       if (updatedViewResult.status === 'successful') {
         const updatedView = updatedViewResult.response.data
-          ?.updateView as GqlView;
+          ?.updateView as unknown as View;
 
         if (isDefined(updatedView)) {
           await loadRecordIndexStates(updatedView, objectMetadataItem);

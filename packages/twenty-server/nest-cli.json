@@ -8,7 +8,16 @@
       "**/dist/**",
       "**/.git/**",
       "**/.nx/**",
-      "**/.local-storage/**"
+      "**/.local-storage/**",
+      "**/.yarn/**",
+      "**/.pnp.*",
+      "**/coverage/**",
+      "**/src/engine/metadata-modules/front-component/constants/seed-project/**",
+      "**/src/engine/core-modules/logic-function/logic-function-resource/constants/seed-project/**",
+      "**/src/engine/core-modules/application/application-package/constants/seed-dependencies/**",
+      "**/src/engine/core-modules/application/application-package/constants/yarn-engine/**",
+      "**/src/engine/core-modules/logic-function/logic-function-drivers/constants/common-layer-dependencies/**",
+      "**/src/engine/workspace-manager/dev-seeder/data/sample-files/**"
     ]
   },
   "compilerOptions": {

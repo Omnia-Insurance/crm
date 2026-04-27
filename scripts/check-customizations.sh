@@ -162,27 +162,27 @@ check_file_contains \
   'Create ${objectMetadataItem.labelSingular}' \
   "Create-record button label must stay object-specific (Create Policy, Create Lead, etc.)"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/utils/resolveCreateRecordActionLabels.ts" \
-  "buttonVariant: 'primary'" \
-  "Create-record label resolver must preserve filled primary CTA styling"
-check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "resolveCreateRecordActionLabels" \
-  "Server-driven command menu items must apply object-aware create CTA labels"
+  "Command menu context provider must apply object-aware create CTA labels"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "resolveGoToActionLabels" \
-  "Server-driven command menu items must apply object-aware Go To labels and filter deactivated objects"
+  "Command menu context provider must apply object-aware Go To labels and filter deactivated objects"
 check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/utils/resolveGoToActionLabels.ts" \
   "isActive" \
   "Go To label resolver must filter deactivated objects"
 check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/display/components/CommandMenuItemRenderer.tsx" \
+  "CREATE_NEW_RECORD" \
+  "Create Record button must apply blue primary CTA styling"
+check_file_contains \
   "packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-command-menu-item.constant.ts" \
   "deleteSingleRecord" \
   "Delete single record action must be pinned as a header button"
 check_file_contains \
-  "packages/twenty-front/src/modules/command-menu-item/server-items/common/hooks/useCommandMenuItemsFromBackend.tsx" \
+  "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "PermissionFlagType.LAYOUTS" \
   "Edit Record Page Layout must be gated behind LAYOUTS permission"
 
@@ -391,6 +391,17 @@ check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-schema.factory.ts" \
   "'schemaGenerationMs'" \
   "Workspace schema factory slow observer must include schema generation timing"
+
+echo ""
+echo "--- Critical: Server Watcher Ignore Patterns ---"
+check_file_contains \
+  "packages/twenty-server/nest-cli.json" \
+  "\"**/.yarn/**\"" \
+  "Nest watcher must ignore Yarn cache directories to reduce open file watchers"
+check_file_contains \
+  "packages/twenty-server/nest-cli.json" \
+  "seed-project/**" \
+  "Nest watcher must ignore large static seed project assets to avoid EMFILE in watch mode"
 
 echo ""
 echo "--- Critical: Edit Window Column (Role Entity) ---"
@@ -1319,7 +1330,7 @@ echo ""
 echo "--- Insert Field Permission Skip ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/repository/permissions.utils.ts" \
-  "Field-level restrictions are for updates, not creates" \
+  "Field-level restrictions" \
   "INSERT case must skip field-level permission checks (pre-query hooks set restricted fields)"
 
 if [ $ERRORS -gt 0 ]; then

@@ -1,7 +1,8 @@
 /**/**/.env
 .DS_Store
 /.idea
-.claude/settings.json
+.claude/
+.cursor/debug-*.log
 **/**/node_modules/
 .cache
 
@@ -57,3 +58,5 @@ plans
 .nx/polygraph
 .playwright-cli/
 backfill-progress.json
+output/playwright/
+.api-token.txt

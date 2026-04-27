@@ -8,11 +8,13 @@ import { transformPageLayout } from '@/page-layout/utils/transformPageLayout';
 import { useApolloClient } from '@apollo/client/react';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { type ViewWithRelations } from '@/views/types/ViewWithRelations';
 import {
   FindAllViewsDocument,
   FindManyCommandMenuItemsDocument,
   FindAllRecordPageLayoutsDocument,
   FindFieldsWidgetViewsDocument,
+  FindTableWidgetViewsDocument,
   FindManyFrontComponentsDocument,
   FindManyLogicFunctionsDocument,
   FindManyNavigationMenuItemsDocument,
@@ -44,6 +46,7 @@ const PAGE_LAYOUTS_GROUP_KEYS: MetadataEntityKey[] = [
 
 const INDEX_VIEW_TYPES = [ViewType.TABLE, ViewType.KANBAN, ViewType.CALENDAR];
 const FIELDS_WIDGET_VIEW_TYPES = [ViewType.FIELDS_WIDGET];
+const TABLE_WIDGET_VIEW_TYPES = [ViewType.TABLE_WIDGET];
 
 const hasOverlap = (
   staleKeys: MetadataEntityKey[],
@@ -93,30 +96,42 @@ export const useLoadStaleMetadataEntities = () => {
               variables: { viewTypes: FIELDS_WIDGET_VIEW_TYPES },
               fetchPolicy: 'network-only',
             }),
-          ]).then(([indexViewsResult, fieldsWidgetViewsResult]) => {
-            const allViews = [
-              ...(indexViewsResult.data?.getViews ?? []),
-              ...(fieldsWidgetViewsResult.data?.getViews ?? []),
-            ];
+            client.query({
+              query: FindTableWidgetViewsDocument,
+              variables: { viewTypes: TABLE_WIDGET_VIEW_TYPES },
+              fetchPolicy: 'network-only',
+            }),
+          ]).then(
+            ([
+              indexViewsResult,
+              fieldsWidgetViewsResult,
+              tableWidgetViewsResult,
+            ]) => {
+              const allViews = [
+                ...(indexViewsResult.data?.getViews ?? []),
+                ...(fieldsWidgetViewsResult.data?.getViews ?? []),
+                ...(tableWidgetViewsResult.data?.getViews ?? []),
+              ] as unknown as ViewWithRelations[];
 
-            const {
-              flatViews,
-              flatViewFields,
-              flatViewFilters,
-              flatViewSorts,
-              flatViewGroups,
-              flatViewFilterGroups,
-              flatViewFieldGroups,
-            } = splitViewWithRelated(allViews);
+              const {
+                flatViews,
+                flatViewFields,
+                flatViewFilters,
+                flatViewSorts,
+                flatViewGroups,
+                flatViewFilterGroups,
+                flatViewFieldGroups,
+              } = splitViewWithRelated(allViews);
 
-            replaceDraft('views', flatViews);
-            replaceDraft('viewFields', flatViewFields);
-            replaceDraft('viewFilters', flatViewFilters);
-            replaceDraft('viewSorts', flatViewSorts);
-            replaceDraft('viewGroups', flatViewGroups);
-            replaceDraft('viewFilterGroups', flatViewFilterGroups);
-            replaceDraft('viewFieldGroups', flatViewFieldGroups);
-          }),
+              replaceDraft('views', flatViews);
+              replaceDraft('viewFields', flatViewFields);
+              replaceDraft('viewFilters', flatViewFilters);
+              replaceDraft('viewSorts', flatViewSorts);
+              replaceDraft('viewGroups', flatViewGroups);
+              replaceDraft('viewFilterGroups', flatViewFilterGroups);
+              replaceDraft('viewFieldGroups', flatViewFieldGroups);
+            },
+          ),
         );
       }
 

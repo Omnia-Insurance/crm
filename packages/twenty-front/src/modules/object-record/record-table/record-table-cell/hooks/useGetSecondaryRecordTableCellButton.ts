@@ -1,3 +1,4 @@
+import { useOpenEmailInAppOrFallback } from '@/activities/emails/hooks/useOpenEmailInAppOrFallback';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import {
   type FieldEmailsValue,
@@ -12,88 +13,49 @@ import { t } from '@lingui/core/macro';
 import { useContext } from 'react';
 import { FieldMetadataSettingsOnClickAction } from 'twenty-shared/types';
 import { ensureAbsoluteUrl, isDefined } from 'twenty-shared/utils';
-import { IconArrowUpRight, IconCopy } from 'twenty-ui/display';
+import { IconArrowUpRight, IconCopy, IconMail } from 'twenty-ui/display';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 export const useGetSecondaryRecordTableCellButton = () => {
   const { fieldDefinition, recordId } = useContext(FieldContext);
   const { copyToClipboard } = useCopyToClipboard();
 
-  const metadata = fieldDefinition.metadata as Record<string, unknown>;
-  const isSubField = !!metadata.subFieldName;
-  const relationFieldName = fieldDefinition.metadata.fieldName;
+  const isEmailField = isFieldEmails(fieldDefinition);
 
-  // For sub-field columns, read the value from the related object
-  const relatedObject = useRecordFieldValue<Record<string, unknown> | null>(
-    recordId,
-    relationFieldName,
-    fieldDefinition,
-  );
-
-  const subFieldValue = isSubField
-    ? relatedObject?.[metadata.subFieldName as string]
-    : undefined;
-
-  // For sub-fields, check the column's type (which is the sub-field's actual type)
-  const isSubFieldPhones =
-    isSubField && fieldDefinition.type === 'PHONES';
-  const isSubFieldEmails =
-    isSubField && fieldDefinition.type === 'EMAILS';
+  const { openEmail } = useOpenEmailInAppOrFallback({ skip: !isEmailField });
 
   const fieldValue = useRecordFieldValue<
     FieldPhonesValue | FieldEmailsValue | FieldLinksValue | undefined
   >(recordId, fieldDefinition.metadata.fieldName, fieldDefinition);
 
-  // OMNIA-CUSTOM: Handle sub-field phone/email actions
-  if (isSubFieldPhones && isDefined(subFieldValue)) {
-    const phonesValue = subFieldValue as FieldPhonesValue;
-    const phoneNumber = `${phonesValue.primaryPhoneCallingCode ?? ''}${phonesValue.primaryPhoneNumber ?? ''}`;
-
-    return [
-      {
-        onClick: () =>
-          copyToClipboard(phoneNumber, t`Phone number copied to clipboard`),
-        Icon: IconCopy,
-      },
-    ];
-  }
-
-  if (isSubFieldEmails && isDefined(subFieldValue)) {
-    const email = (subFieldValue as FieldEmailsValue).primaryEmail ?? '';
-
-    return [
-      {
-        onClick: () =>
-          copyToClipboard(email, t`Email copied to clipboard`),
-        Icon: IconCopy,
-      },
-    ];
-  }
-
-  if (isSubField) {
-    return [];
-  }
-
   if (
     (!isFieldPhones(fieldDefinition) &&
       !isFieldLinks(fieldDefinition) &&
-      !isFieldEmails(fieldDefinition)) ||
+      !isEmailField) ||
     !isDefined(fieldValue)
   ) {
     return [];
   }
 
+  const defaultClickAction = isEmailField
+    ? FieldMetadataSettingsOnClickAction.OPEN_IN_APP
+    : FieldMetadataSettingsOnClickAction.OPEN_LINK;
+
   const mainActionOnClick =
-    fieldDefinition.metadata.settings?.clickAction ??
-    FieldMetadataSettingsOnClickAction.OPEN_LINK;
+    fieldDefinition.metadata.settings?.clickAction ?? defaultClickAction;
+
+  const openActionForFieldType = isEmailField
+    ? FieldMetadataSettingsOnClickAction.OPEN_IN_APP
+    : FieldMetadataSettingsOnClickAction.OPEN_LINK;
 
   const secondaryActionOnClick =
-    mainActionOnClick === FieldMetadataSettingsOnClickAction.OPEN_LINK
-      ? FieldMetadataSettingsOnClickAction.COPY
-      : FieldMetadataSettingsOnClickAction.OPEN_LINK;
+    mainActionOnClick === FieldMetadataSettingsOnClickAction.COPY
+      ? openActionForFieldType
+      : FieldMetadataSettingsOnClickAction.COPY;
 
   let openLinkOnClick: () => void = () => {};
   let copyOnClick: () => void = () => {};
+  let openInAppOnClick: () => void = () => {};
 
   if (isFieldPhones(fieldDefinition)) {
     const { primaryPhoneCallingCode = '', primaryPhoneNumber = '' } =
@@ -115,25 +77,12 @@ export const useGetSecondaryRecordTableCellButton = () => {
     copyOnClick = () => {
       copyToClipboard(email, t`Email copied to clipboard`);
     };
+    openInAppOnClick = () => {
+      openEmail(email);
+    };
   }
 
   if (isFieldLinks(fieldDefinition)) {
-    const displayAs = fieldDefinition.metadata.settings?.displayAs;
-
-    if (displayAs === 'audio') {
-      const url = (fieldValue as FieldLinksValue).primaryLinkUrl ?? '';
-      copyOnClick = () => {
-        copyToClipboard(url, t`Link copied to clipboard`);
-      };
-
-      return [
-        {
-          onClick: copyOnClick,
-          Icon: IconCopy,
-        },
-      ];
-    }
-
     const url = (fieldValue as FieldLinksValue).primaryLinkUrl ?? '';
     openLinkOnClick = () => {
       window.open(ensureAbsoluteUrl(url), '_blank');
@@ -143,16 +92,25 @@ export const useGetSecondaryRecordTableCellButton = () => {
     };
   }
 
+  const onClickByAction: Record<
+    FieldMetadataSettingsOnClickAction,
+    () => void
+  > = {
+    [FieldMetadataSettingsOnClickAction.OPEN_LINK]: openLinkOnClick,
+    [FieldMetadataSettingsOnClickAction.COPY]: copyOnClick,
+    [FieldMetadataSettingsOnClickAction.OPEN_IN_APP]: openInAppOnClick,
+  };
+
+  const iconByAction = {
+    [FieldMetadataSettingsOnClickAction.OPEN_LINK]: IconArrowUpRight,
+    [FieldMetadataSettingsOnClickAction.COPY]: IconCopy,
+    [FieldMetadataSettingsOnClickAction.OPEN_IN_APP]: IconMail,
+  };
+
   return [
     {
-      onClick:
-        secondaryActionOnClick === FieldMetadataSettingsOnClickAction.OPEN_LINK
-          ? openLinkOnClick
-          : copyOnClick,
-      Icon:
-        secondaryActionOnClick === FieldMetadataSettingsOnClickAction.OPEN_LINK
-          ? IconArrowUpRight
-          : IconCopy,
+      onClick: onClickByAction[secondaryActionOnClick],
+      Icon: iconByAction[secondaryActionOnClick],
     },
   ];
 };

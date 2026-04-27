@@ -30,7 +30,7 @@ export const useSaveRecordTableWidgetFiltersToView = (
   const {
     performViewFilterGroupAPICreate,
     performViewFilterGroupAPIUpdate,
-    performViewFilterGroupAPIDelete,
+    performViewFilterGroupAPIDestroy,
   } = usePerformViewFilterGroupAPIPersist();
 
   const currentRecordFiltersCallbackState = useAtomComponentStateCallbackState(
@@ -143,7 +143,7 @@ export const useSaveRecordTableWidgetFiltersToView = (
       })),
     );
 
-    await performViewFilterGroupAPIDelete(
+    await performViewFilterGroupAPIDestroy(
       viewFilterGroupsToDelete.map((viewFilterGroup) => viewFilterGroup.id),
     );
   }, [
@@ -156,7 +156,7 @@ export const useSaveRecordTableWidgetFiltersToView = (
     performViewFilterAPIDelete,
     performViewFilterGroupAPICreate,
     performViewFilterGroupAPIUpdate,
-    performViewFilterGroupAPIDelete,
+    performViewFilterGroupAPIDestroy,
   ]);
 
   return { saveRecordTableWidgetFiltersToView };
