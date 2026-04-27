@@ -27,7 +27,8 @@ export const useFieldsWidgetHiddenFields = ({
       return [];
     }
 
-    const activeFields = objectMetadataItem.fields.filter(
+    // OMNIA-CUSTOM: respect field-level read permissions (see useFieldsWidgetGroups).
+    const activeFields = objectMetadataItem.readableFields.filter(
       (field) => field.isActive,
     );
 

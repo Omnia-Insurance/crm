@@ -37,7 +37,12 @@ export const useFieldsWidgetGroups = ({
       return { groups: [], displayMode: 'grouped' };
     }
 
-    const activeFields = objectMetadataItem.fields.filter(
+    // OMNIA-CUSTOM: respect field-level read permissions (restrictedFields).
+    // Upstream uses .fields (all fields), which surfaces fields the user has
+    // canRead=false on (e.g. LTV, paidThroughDate for members) in the
+    // FieldsWidget. Use readableFields so view fields backed by restricted
+    // fields drop out of the widget.
+    const activeFields = objectMetadataItem.readableFields.filter(
       (field) => field.isActive,
     );
 
