@@ -1300,6 +1300,14 @@ check_file_contains \
   "packages/twenty-front/package.json" \
   "@pierre/diffs" \
   "@pierre/diffs dependency required for review UI unified-diff rendering"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts" \
+  "reconciliationQueue" \
+  "MessageQueue must include reconciliationQueue for the reconciliation pipeline"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts" \
+  "MessageQueue.reconciliationQueue" \
+  "MESSAGE_QUEUE_PRIORITY must include reconciliationQueue priority"
 
 echo ""
 

@@ -14,10 +14,7 @@ import {
 import { ReconciliationAttachmentService } from 'src/modules/reconciliation/services/attachment.service';
 import { ReconciliationDataService } from 'src/modules/reconciliation/services/data.service';
 import { ReconciliationStateMachineService } from 'src/modules/reconciliation/services/state-machine.service';
-import type {
-  ColumnMapping,
-  ReconciliationJobData,
-} from 'src/modules/reconciliation/types/reconciliation';
+import type { ReconciliationJobData } from 'src/modules/reconciliation/types/reconciliation';
 
 @Processor({
   queueName: MessageQueue.reconciliationQueue,
@@ -57,7 +54,7 @@ export class CommissionParseJob {
         statement.carrierConfigId,
       );
 
-      const columnMapping = statement.columnMapping as ColumnMapping | null;
+      const columnMapping = statement.columnMapping;
 
       if (!columnMapping || Object.keys(columnMapping).length === 0) {
         throw new Error(

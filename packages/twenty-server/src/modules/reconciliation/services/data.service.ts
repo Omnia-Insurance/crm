@@ -5,6 +5,7 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
 import type {
   CarrierConfigRecord,
+  CommissionStatementRecord,
   EnrichedPolicyData,
   ReconciliationRecord,
 } from 'src/modules/reconciliation/types/reconciliation';
@@ -82,7 +83,7 @@ export class ReconciliationDataService {
   async getCommissionStatement(
     workspaceId: string,
     statementId: string,
-  ): Promise<Record<string, unknown>> {
+  ): Promise<CommissionStatementRecord> {
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -103,7 +104,7 @@ export class ReconciliationDataService {
           );
         }
 
-        return record as Record<string, unknown>;
+        return record as unknown as CommissionStatementRecord;
       },
       authContext,
     );

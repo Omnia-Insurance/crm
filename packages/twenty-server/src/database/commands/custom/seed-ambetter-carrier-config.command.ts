@@ -3,8 +3,6 @@
 //
 // Run with: npx nx run twenty-server:command workspace:seed-ambetter-carrier-config
 
-import { Logger } from '@nestjs/common';
-
 import { Command } from 'nest-commander';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
@@ -115,10 +113,6 @@ const AMBETTER_EXPLANATION_RULES: Record<string, unknown> = {
     'Insert the Ambetter CarrierConfig record with column mappings, matching thresholds, and status rules. Idempotent.',
 })
 export class SeedAmbetterCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
-  protected override logger = new Logger(
-    SeedAmbetterCarrierConfigCommand.name,
-  );
-
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,

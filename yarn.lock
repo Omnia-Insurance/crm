@@ -36000,6 +36000,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"diff@npm:^8.0.0":
+  version: 8.0.4
+  resolution: "diff@npm:8.0.4"
+  checksum: 10c0/7ee5d03926db4039be7252ac3b0abaae1bd122a2ca971e5ca7270e444e36ff83dd906fad1a719740ca347e97ed5dc8f458a76a8391dbcd7aff363bdafb348a00
+  languageName: node
+  linkType: hard
+
 "diffable-html@npm:^4.1.0":
   version: 4.1.0
   resolution: "diffable-html@npm:4.1.0"
@@ -60703,6 +60710,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     cron-parser: "npm:5.1.1"
     date-fns: "npm:^2.30.0"
+    diff: "npm:^8.0.0"
     file-saver: "npm:^2.0.5"
     graphiql: "npm:^3.1.1"
     graphql: "npm:16.8.1"

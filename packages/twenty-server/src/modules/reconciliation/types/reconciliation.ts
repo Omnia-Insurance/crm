@@ -15,10 +15,11 @@
 // Generic parsed row (output of config-driven parser)
 // ---------------------------------------------------------------------------
 
-export type GenericRow = Record<string, string | number | boolean | null> & {
+export type GenericRow = {
   rowNumber: number;
   name: string;
   rawPayload: Record<string, unknown>;
+  [key: string]: unknown;
 };
 
 // ---------------------------------------------------------------------------
@@ -93,12 +94,56 @@ export type CarrierConfigRecord = {
   policyNumberPattern?: string | null;
   columnMapping?: ColumnMapping | null;
   productMapping?: ProductMappingEntry[] | null;
+  commissionConfig?: CommissionConfig | null;
+  commissionColumnMapping?: ColumnMapping | null;
   /** @deprecated Use fieldConfig instead */
   transformRules?: Record<string, unknown> | null;
   /** @deprecated Use statusConfig instead */
   statusRules?: Record<string, unknown> | null;
   /** @deprecated Use fieldConfig instead */
   explanationRules?: Record<string, unknown> | null;
+};
+
+// ---------------------------------------------------------------------------
+// Commission rate configuration
+// ---------------------------------------------------------------------------
+
+export type CommissionConfig = {
+  compType: 'pmpm' | 'percentage';
+  paymentLagMonths: number;
+  defaultRate: number;
+  rates: CommissionRate[];
+};
+
+export type CommissionRate = {
+  state: string;
+  product?: string;
+  upline?: string;
+  rate: number;
+};
+
+// ---------------------------------------------------------------------------
+// Commission statement record (workspace object fields)
+// ---------------------------------------------------------------------------
+
+export type CommissionStatementStatus =
+  | 'UPLOADED'
+  | 'PARSING'
+  | 'MATCHING'
+  | 'REVIEW'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type CommissionStatementRecord = {
+  id: string;
+  name: string;
+  statementPeriod: string | null;
+  sheetName: string | null;
+  status: CommissionStatementStatus;
+  columnMapping: ColumnMapping | null;
+  stats: Record<string, unknown> | null;
+  errorMessage: string | null;
+  carrierConfigId: string | null;
 };
 
 // ---------------------------------------------------------------------------

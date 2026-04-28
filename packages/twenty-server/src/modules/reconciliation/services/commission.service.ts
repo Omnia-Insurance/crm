@@ -2,25 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { sleep } from 'src/modules/reconciliation/types/reconciliation';
+import {
+  type CommissionConfig,
+  sleep,
+} from 'src/modules/reconciliation/types/reconciliation';
+
+export type {
+  CommissionConfig,
+  CommissionRate,
+} from 'src/modules/reconciliation/types/reconciliation';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export type CommissionConfig = {
-  compType: 'pmpm' | 'percentage';
-  paymentLagMonths: number;
-  defaultRate: number;
-  rates: CommissionRate[];
-};
-
-export type CommissionRate = {
-  state: string;
-  product?: string;
-  upline?: string;
-  rate: number;
-};
 
 export type CommissionStatementStats = {
   totalLines: number;

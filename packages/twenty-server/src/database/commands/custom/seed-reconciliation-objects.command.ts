@@ -19,7 +19,6 @@ import { Repository } from 'typeorm';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
-import { DataSourceService } from 'src/engine/metadata-modules/data-source/data-source.service';
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
@@ -617,7 +616,6 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
-    private readonly dataSourceService: DataSourceService,
     private readonly workspaceCacheService: WorkspaceCacheService,
   ) {
     super(workspaceIteratorService);
@@ -635,29 +633,21 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       }`,
     );
 
-    const dataSourceMetadata =
-      await this.dataSourceService.getLastDataSourceMetadataFromWorkspaceIdOrFail(
-        workspaceId,
-      );
-
     // 1. Create objects (each auto-creates a `name` field)
     await this.ensureObjectExists({
       workspaceId,
-      dataSourceId: dataSourceMetadata.id,
       seed: RECONCILIATION_OBJECT,
       dryRun: isDryRun,
     });
 
     await this.ensureObjectExists({
       workspaceId,
-      dataSourceId: dataSourceMetadata.id,
       seed: CARRIER_CONFIG_OBJECT,
       dryRun: isDryRun,
     });
 
     await this.ensureObjectExists({
       workspaceId,
-      dataSourceId: dataSourceMetadata.id,
       seed: REVIEW_ITEM_OBJECT,
       dryRun: isDryRun,
     });
@@ -760,14 +750,12 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
     await this.ensureObjectExists({
       workspaceId,
-      dataSourceId: dataSourceMetadata.id,
       seed: COMMISSION_STATEMENT_OBJECT,
       dryRun: isDryRun,
     });
 
     await this.ensureObjectExists({
       workspaceId,
-      dataSourceId: dataSourceMetadata.id,
       seed: COMMISSION_LINE_ITEM_OBJECT,
       dryRun: isDryRun,
     });
@@ -865,12 +853,10 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
   private async ensureObjectExists({
     workspaceId,
-    dataSourceId,
     seed,
     dryRun,
   }: {
     workspaceId: string;
-    dataSourceId: string;
     seed: ObjectMetadataSeed;
     dryRun: boolean;
   }): Promise<void> {
@@ -900,7 +886,6 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       await this.objectMetadataService.createOneObject({
         createObjectInput: {
           ...seed,
-          dataSourceId,
         },
         workspaceId,
       });

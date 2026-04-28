@@ -10,15 +10,10 @@ import {
   CommissionService,
   lookupRate,
   computeDeltaStatus,
-  type CommissionConfig,
   type CommissionStatementStats,
 } from 'src/modules/reconciliation/services/commission.service';
-import { resolveFieldMapping } from 'src/modules/reconciliation/parsers/transforms';
 import { buildMatchIndexes } from 'src/modules/reconciliation/engines/matching';
-import type {
-  ColumnMapping,
-  ReconciliationJobData,
-} from 'src/modules/reconciliation/types/reconciliation';
+import type { ReconciliationJobData } from 'src/modules/reconciliation/types/reconciliation';
 
 @Processor({
   queueName: MessageQueue.reconciliationQueue,
@@ -57,9 +52,14 @@ export class CommissionMatchJob {
         statement.carrierConfigId,
       );
 
-      const columnMapping = statement.columnMapping as ColumnMapping;
-      const commissionConfig =
-        carrierConfig.commissionConfig as CommissionConfig | null;
+      if (!statement.columnMapping) {
+        throw new Error(
+          'Commission statement has no column mapping. The import dialog must capture column matches before the pipeline can run.',
+        );
+      }
+
+      const columnMapping = statement.columnMapping;
+      const commissionConfig = carrierConfig.commissionConfig ?? null;
 
       if (!commissionConfig) {
         throw new Error(

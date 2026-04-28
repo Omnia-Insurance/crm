@@ -266,8 +266,8 @@ Moves CSV export from browser-only to a BullMQ background job. The server fetche
 | File                                                                                                      | Modification                                                  |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `packages/twenty-shared/src/types/FileFolder.ts`                                                          | Added `Export = 'export'`                                     |
-| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`                 | Added `exportQueue`                                           |
-| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts`         | Added export queue priority                                   |
+| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`                 | Added `exportQueue` and `reconciliationQueue` (Reconciliation v2) |
+| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts`         | Added export queue + reconciliation queue priorities          |
 | `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-concurrency.constant.ts`      | Added export queue concurrency                                |
 | `packages/twenty-server/src/engine/subscriptions/enums/subscription-channel.enum.ts`                      | Added `EXPORT_JOB_PROGRESS`                                   |
 | `packages/twenty-server/src/engine/core-modules/message-queue/jobs.module.ts`                             | Registered `ExportJobProcessorModule`                         |
