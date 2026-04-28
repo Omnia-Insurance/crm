@@ -1280,33 +1280,26 @@ check_file_contains \
   "Column picker must support relation sub-field expansion"
 
 # ==========================================================
-# Payment Reconciliation Review UI
+# Payment Reconciliation v2 (feature/reconciliation-v2)
 # ==========================================================
+# v1 review UI (ReconciliationReviewPage, PolicyConflictCard, etc.) was
+# superseded by v2 and deliberately not ported. See
+# memory/project-reconciliation-v2.md for architecture.
 
 echo ""
-echo "--- Payment Reconciliation Review UI ---"
+echo "--- Payment Reconciliation v2 ---"
 
-check_file_contains \
-  "packages/twenty-shared/src/types/AppPath.ts" \
-  "ReconciliationReview" \
-  "AppPath must include ReconciliationReview route"
-check_file_contains \
-  "packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx" \
-  "ReconciliationReviewPage" \
-  "Router must include ReconciliationReview route"
-check_file_contains \
-  "packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts" \
-  "reconciliation/review" \
-  "Fullscreen hook must include reconciliation review path"
 check_file_exists \
-  "packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx" \
-  "Reconciliation review page component"
-check_file_exists \
-  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx" \
-  "Reconciliation review main component"
-check_file_exists \
-  "packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx" \
-  "Policy conflict card component"
+  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "Seed command that creates the Reconciliation + CarrierConfig custom workspace objects"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "SeedReconciliationObjectsCommand" \
+  "DatabaseCommandModule must register SeedReconciliationObjectsCommand"
+check_file_contains \
+  "packages/twenty-front/package.json" \
+  "@pierre/diffs" \
+  "@pierre/diffs dependency required for review UI unified-diff rendering"
 
 echo ""
 

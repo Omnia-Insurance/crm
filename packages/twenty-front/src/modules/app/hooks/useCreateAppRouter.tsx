@@ -28,6 +28,15 @@ const RecordShowPage = lazy(() =>
   })),
 );
 
+// OMNIA-CUSTOM: reconciliation review page replaces standard show page
+const ReconciliationReviewPage = lazy(() =>
+  import(
+    '@/reconciliation/components/ReconciliationReviewPage'
+  ).then((module) => ({
+    default: module.ReconciliationReviewPage,
+  })),
+);
+
 const SignInUp = lazy(() =>
   import('~/pages/auth/SignInUp').then((module) => ({
     default: module.SignInUp,
@@ -215,6 +224,15 @@ export const useCreateAppRouter = (
             element={
               <LazyRoute>
                 <RecordIndexPage />
+              </LazyRoute>
+            }
+          />
+          {/* OMNIA-CUSTOM: reconciliation review page intercepts before generic show page */}
+          <Route
+            path="/object/reconciliation/:objectRecordId"
+            element={
+              <LazyRoute>
+                <ReconciliationReviewPage />
               </LazyRoute>
             }
           />

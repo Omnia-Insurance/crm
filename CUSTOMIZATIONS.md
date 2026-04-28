@@ -640,36 +640,12 @@ After every upstream merge:
 16. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
 17. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
 
-## Payment Reconciliation Review UI
+## Payment Reconciliation v2
 
-Full-page merge conflict review UI for BOB reconciliation. Per-field Accept Current / Accept Incoming resolution with bulk actions.
+Fresh-start rewrite on `feature/reconciliation-v2`. The v1 review UI and twenty-apps backend have been **superseded** and are not being ported. New architecture uses native twenty-server NestJS module, two custom workspace objects (`reconciliation`, `carrierConfig`), and `@pierre/diffs` for the review UI. See `memory/project-reconciliation-v2.md` for full architecture.
 
-| File                                                                                | What We Changed                                     | Why                                     |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------- |
-| `packages/twenty-shared/src/types/AppPath.ts`                                       | Added `ReconciliationReview` path                   | Route for the review page               |
-| `packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx`                | Added route for `/reconciliation/review/:runId`     | Registers the review page in the router |
-| `packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts` | Added `reconciliation/review/*` to fullscreen paths | Hides sidebar on the review page        |
-
-### Custom Frontend (Reconciliation Review)
-
-| File                                                                                   | Purpose                                                                   |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx`          | Page component (lazy-loaded)                                              |
-| `packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx` | Main review orchestrator: fetches run + results, manages resolution state |
-| `packages/twenty-front/src/modules/reconciliation/components/ReviewSummaryHeader.tsx`  | Stats bar with run summary and Accept All button                          |
-| `packages/twenty-front/src/modules/reconciliation/components/ReviewSectionGroup.tsx`   | Collapsible section groups (Status Updates, Needs Review, etc.)           |
-| `packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx`   | Per-policy card with field-level Accept Current / Accept Incoming         |
-| `packages/twenty-front/src/modules/reconciliation/hooks/useConflictResolution.ts`      | Resolution state management hook                                          |
-| `packages/twenty-front/src/modules/reconciliation/utils/serializeFieldDiffs.ts`        | Converts fieldDiffs to merge conflict text                                |
-| `packages/twenty-front/src/modules/reconciliation/utils/groupMatchResults.ts`          | Groups results by section                                                 |
-| `packages/twenty-front/src/modules/reconciliation/types/reconciliation.types.ts`       | TypeScript types                                                          |
-
-### Payment Reconciliation App Backend Fixes
-
-| File                                                                                             | What We Changed                                                                                     | Why                                                                  |
-| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/apply-updates.ts`                | Changed approval filter from `CONFIRMED` to `CONFIRMED \| AUTO_MATCHED`                             | Unblocks write-back pipeline (nothing was ever applied)              |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/matching-engine.ts`              | Removed 0.55 multiplier in Tier 6 scoring; externalized thresholds to MatchingConfig                | Multi-match scoring was unreachable; thresholds are now configurable |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/status-engine.ts`                | Added StatusEngineConfig for placed/payment-error thresholds                                        | 30d/10d thresholds now configurable per carrier                      |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/run-matching.ts`                 | Replaced OMNIA_START_DATE with config; passes StatusEngineConfig; externalized discovery thresholds | All hardcoded values now in CarrierConfig                            |
-| `packages/twenty-apps/internal/payment-reconciliation/src/logic-functions/recover-stuck-jobs.ts` | Consolidated 3 recovery crons into 1                                                                | Reduces maintenance; single file checks all stuck states             |
+| File                                                                                     | What We Changed                                                    | Why                                                                                 |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts` | New NestJS command                                                 | Creates the `reconciliation` + `carrierConfig` custom workspace objects idempotently |
+| `packages/twenty-server/src/database/commands/database-command.module.ts`                | Registered `SeedReconciliationObjectsCommand` in providers         | Required for nest-commander to discover the custom command                          |
+| `packages/twenty-front/package.json`                                                     | Added `@pierre/diffs@^1.1.12`                                      | Unified-diff rendering for the review UI (planned for next session)                 |

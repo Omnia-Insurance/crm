@@ -30,7 +30,8 @@ export const UploadStep = ({
   currentStepState,
 }: UploadStepProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const { maxRecords, uploadStepHook, selectHeaderStepHook, selectHeader } =
+  // OMNIA-CUSTOM: onSheetSelected callback for reconciliation
+  const { maxRecords, uploadStepHook, selectHeaderStepHook, selectHeader, onSheetSelected } =
     useSpreadsheetImportInternal();
 
   const computeColumnSuggestionsAndAutoMatch =
@@ -51,6 +52,9 @@ export const UploadStep = ({
         }
         try {
           const mappedWorkbook = await uploadStepHook(mapWorkbook(workbook));
+
+          // OMNIA-CUSTOM: Notify caller of selected sheet name (single-sheet case)
+          onSheetSelected?.(workbook.SheetNames[0]);
 
           if (selectHeader) {
             setCurrentStepState({

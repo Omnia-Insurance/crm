@@ -61,4 +61,13 @@ export type SpreadsheetImportDialogOptions = {
   selectHeader?: boolean;
   // Available field for import
   availableFieldMetadataItems: FieldMetadataItem[];
+  // OMNIA-CUSTOM: Allow multiple XLSX columns to map to the same target field.
+  // Used by reconciliation where broker + policy dates both map to CRM dates.
+  allowDuplicateFieldMatching?: boolean;
+  // OMNIA-CUSTOM: Called when the user selects a sheet in a multi-sheet workbook.
+  onSheetSelected?: (sheetName: string) => void;
+  // OMNIA-CUSTOM: Pre-computed column→field matches from a saved mapping.
+  // Applied before Fuse.js auto-matching for pre-fill on subsequent runs.
+  // Keys are XLSX column headers, values are SpreadsheetImportField.key values.
+  precomputedMatches?: Record<string, string>;
 };

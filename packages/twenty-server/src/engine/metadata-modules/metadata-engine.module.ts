@@ -27,6 +27,9 @@ import { ViewModule } from 'src/engine/metadata-modules/view/view.module';
 import { IngestionPipelineModule } from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.module';
 import { WebhookModule } from 'src/engine/metadata-modules/webhook/webhook.module';
 import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/workspace-metadata-version/workspace-metadata-version.module';
+// OMNIA-CUSTOM: Reconciliation resolver needs to be in the metadata module tree
+// so the @MetadataResolver() mutations appear in the metadata GraphQL schema.
+import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
 
 @Module({
   imports: [
@@ -55,6 +58,7 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
     MessageChannelMetadataModule,
     CalendarChannelMetadataModule,
     MessageFolderMetadataModule,
+    ReconciliationModule,
   ],
   providers: [
     {

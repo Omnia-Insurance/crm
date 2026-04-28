@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
+// OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
+import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
+import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
+import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
 import { InstallPreInstalledAppsCommand } from 'src/database/commands/install-pre-installed-apps.command';
 import { InstanceCommandGenerationService } from 'src/database/commands/instance-command-generation.service';
@@ -19,9 +24,7 @@ import { StaleRegistrationCleanupModule } from 'src/engine/core-modules/applicat
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
 import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { RebuildApplicationDefaultDepsCommand } from 'src/database/commands/rebuild-application-default-deps.command';
-import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
-import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { EnforceUsageCapCronCommand } from 'src/engine/core-modules/billing/crons/commands/enforce-usage-cap.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
@@ -38,6 +41,7 @@ import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { DevSeederModule } from 'src/engine/workspace-manager/dev-seeder/dev-seeder.module';
 import { WorkspaceCleanerModule } from 'src/engine/workspace-manager/workspace-cleaner/workspace-cleaner.module';
 import { WorkspaceManagerModule } from 'src/engine/workspace-manager/workspace-manager.module';
@@ -51,7 +55,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([WorkspaceEntity]),
+    TypeOrmModule.forFeature([ObjectMetadataEntity, WorkspaceEntity]),
     WorkspaceExportModule,
     // Cron command dependencies
     MessagingImportManagerModule,
@@ -67,6 +71,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     DevSeederModule,
     WorkspaceManagerModule,
     WorkspaceCacheStorageModule,
+    WorkspaceCacheModule,
+    WorkspaceIteratorModule,
     ApiKeyModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
@@ -80,9 +86,7 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     ApplicationUpgradeModule,
     StaleRegistrationCleanupModule,
     PreInstalledAppsModule,
-    WorkspaceIteratorModule,
     ApplicationModule,
-    WorkspaceCacheModule,
     WorkspaceVersionModule,
     UpgradeModule,
   ],
@@ -100,6 +104,9 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
+    // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
+    SeedReconciliationObjectsCommand,
+    SeedAmbetterCarrierConfigCommand,
   ],
 })
 export class DatabaseCommandModule {}

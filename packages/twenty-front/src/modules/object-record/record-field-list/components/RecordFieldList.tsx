@@ -27,6 +27,17 @@ import {
   FieldMetadataType,
   type CoreObjectNameSingular,
 } from 'twenty-shared/types';
+import { useMemo } from 'react';
+
+// OMNIA-CUSTOM: reconciliation diff data
+type ReconciliationFieldDiff = {
+  field: string;
+  label: string;
+  crmField: string | null;
+  bobValue: string | null;
+  crmValue: string | null;
+  crmObjectType: string | null;
+};
 
 type RecordFieldListProps = {
   instanceId: string;
@@ -37,6 +48,8 @@ type RecordFieldListProps = {
   excludeFieldMetadataIds?: string[];
   excludeCreatedAtAndUpdatedAt?: boolean;
   showRequiredIndicator?: boolean;
+  // OMNIA-CUSTOM: optional reconciliation diffs to overlay on fields
+  fieldDiffs?: ReconciliationFieldDiff[];
 };
 
 export const RecordFieldList = ({
@@ -48,6 +61,7 @@ export const RecordFieldList = ({
   excludeFieldMetadataIds = [],
   excludeCreatedAtAndUpdatedAt = true,
   showRequiredIndicator = false,
+  fieldDiffs,
 }: RecordFieldListProps) => {
   const { recordLoading } = useRecordShowContainerData({
     objectRecordId,
@@ -77,6 +91,26 @@ export const RecordFieldList = ({
   const handleMouseEnter = (index: number) => {
     setRecordFieldListHoverPosition(index);
   };
+
+  // OMNIA-CUSTOM: Build diff lookup for field overlay
+  const diffByFieldName = useMemo(() => {
+    if (!fieldDiffs) return null;
+    const map = new Map<string, ReconciliationFieldDiff>();
+    fieldDiffs.forEach((d) => {
+      if (d.bobValue === null || d.bobValue === d.crmValue) return;
+      if (d.crmField) {
+        map.set(d.crmField, d);
+        // Also by last segment for composite paths like "emails.primaryEmail" → "emails"
+        const parts = d.crmField.split('.');
+        if (parts.length > 1) {
+          map.set(parts[parts.length - 1], d);
+          // Also just the first segment for composite fields
+          map.set(parts[0], d);
+        }
+      }
+    });
+    return map;
+  }, [fieldDiffs]);
 
   const {
     inlineFieldMetadataItems,
@@ -210,6 +244,19 @@ export const RecordFieldList = ({
                   objectMetadataItems,
                   objectPermissionsByObjectMetadataId,
                 }),
+                // OMNIA-CUSTOM: inject reconciliation diff if available
+                ...((() => {
+                  const diff = diffByFieldName?.get(fieldMetadataItem.name);
+                  if (!diff) return {};
+                  return {
+                    fieldDiff: {
+                      oldValue: diff.crmValue,
+                      newValue: diff.bobValue,
+                      label: diff.label,
+                      crmFieldPath: diff.crmField ?? undefined,
+                    },
+                  };
+                })()),
               }}
             >
               <RecordFieldComponentInstanceContext.Provider

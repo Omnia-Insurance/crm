@@ -1,6 +1,6 @@
 import { styled } from '@linaria/react';
 import { motion } from 'framer-motion';
-import { useCallback, useContext } from 'react';
+import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
@@ -11,6 +11,8 @@ import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
+// OMNIA-CUSTOM: reconciliation diffs context
+import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import { useRecordFieldsScopeContextOrThrow } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { RecordDetailRecordsListItemContainer } from '@/object-record/record-field-list/record-detail-section/components/RecordDetailRecordsListItemContainer';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
@@ -43,7 +45,8 @@ import {
   IconUnlink,
   type IconComponent,
 } from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
+import { LightIconButton, Button } from 'twenty-ui/input';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { MenuItem } from 'twenty-ui/navigation';
 import { AnimatedEaseInOut } from 'twenty-ui/utilities';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
@@ -58,6 +61,67 @@ const StyledClickableZone = styled.div`
 `;
 
 const MotionIconChevronDown = motion.create(IconChevronDown);
+
+// OMNIA-CUSTOM: Diff highlight wrapper for the relation chip row
+const StyledDiffChipRow = styled.div<{ accepted: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: ${themeCssVariables.spacing[2]};
+  flex: 1;
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+  margin: -${themeCssVariables.spacing[1]} 0;
+  border-radius: 0 ${themeCssVariables.border.radius.sm}
+    ${themeCssVariables.border.radius.sm} 0;
+  background: ${({ accepted }) =>
+    accepted
+      ? themeCssVariables.color.transparent.red2
+      : themeCssVariables.color.transparent.green2};
+  border-left: 2px solid
+    ${({ accepted }) =>
+      accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
+`;
+
+const StyledDiffAnnotation = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: ${themeCssVariables.spacing[1]};
+  font-size: ${themeCssVariables.font.size.sm};
+  white-space: nowrap;
+`;
+
+const StyledDiffOldName = styled.span`
+  text-decoration: line-through;
+  color: ${themeCssVariables.font.color.tertiary};
+`;
+
+const StyledDiffArrow = styled.span`
+  color: ${themeCssVariables.font.color.light};
+`;
+
+const StyledDiffNewName = styled.span`
+  font-weight: ${themeCssVariables.font.weight.medium};
+  color: ${themeCssVariables.font.color.primary};
+`;
+
+const StyledDiffBtn = styled.button<{ isAccepted: boolean }>`
+  flex-shrink: 0;
+  padding: 0 ${themeCssVariables.spacing[2]};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  font-family: inherit;
+  cursor: pointer;
+  height: 20px;
+  border: none;
+  background: ${({ isAccepted }) =>
+    isAccepted ? themeCssVariables.color.red : themeCssVariables.color.green};
+  color: #fff;
+  opacity: 0.75;
+  &:hover {
+    opacity: 1;
+  }
+`;
 
 const getDeleteRelationModalId = (recordId: string) =>
   `delete-relation-modal-${recordId}`;
@@ -87,6 +151,98 @@ export const RecordDetailRelationRecordsListItem = ({
   } = useContext(FieldContext);
 
   const { onSubmit } = useContext(FieldInputEventContext);
+
+  // OMNIA-CUSTOM: Get reconciliation diffs for this relation's fields
+  const reconDiffs = useContext(ReconciliationDiffsContext);
+  const relationName = fieldDefinition?.metadata?.fieldName;
+  const relationFieldDiffs = useMemo(() => {
+    if (!reconDiffs?.fieldDiffs || !relationName) return undefined;
+    const relDiffs = reconDiffs.fieldDiffs.filter(
+      (d) =>
+        d.crmField?.startsWith(`${relationName}.`) &&
+        d.bobValue !== null &&
+        d.bobValue !== d.crmValue,
+    );
+    if (relDiffs.length === 0) return undefined;
+    return relDiffs.map((d) => ({
+      ...d,
+      crmField: d.crmField?.slice(relationName.length + 1) ?? d.crmField,
+    }));
+  }, [reconDiffs, relationName]);
+
+  // OMNIA-CUSTOM: Extract name diffs for the diff-chip on the relation header
+  const nameDiffs = useMemo(() => {
+    if (!relationFieldDiffs) return null;
+    return relationFieldDiffs.filter(
+      (d) => d.crmField?.startsWith('name.'),
+    );
+  }, [relationFieldDiffs]);
+
+  const hasNameDiff = nameDiffs !== null && nameDiffs.length > 0;
+
+  const proposedName = useMemo(() => {
+    if (!nameDiffs || nameDiffs.length === 0) return null;
+    const first = nameDiffs.find((d) => d.crmField === 'name.firstName');
+    const last = nameDiffs.find((d) => d.crmField === 'name.lastName');
+    const currentFirst =
+      (relationRecord as Record<string, unknown>).name &&
+      typeof (relationRecord as Record<string, unknown>).name === 'object'
+        ? ((relationRecord as Record<string, unknown>).name as Record<string, string>)
+            ?.firstName
+        : null;
+    const currentLast =
+      (relationRecord as Record<string, unknown>).name &&
+      typeof (relationRecord as Record<string, unknown>).name === 'object'
+        ? ((relationRecord as Record<string, unknown>).name as Record<string, string>)
+            ?.lastName
+        : null;
+    return {
+      oldFirst: first?.crmValue ?? currentFirst ?? '',
+      oldLast: last?.crmValue ?? currentLast ?? '',
+      newFirst: first?.bobValue ?? currentFirst ?? '',
+      newLast: last?.bobValue ?? currentLast ?? '',
+    };
+  }, [nameDiffs, relationRecord]);
+
+  // Check if name has already been accepted (current value matches proposed)
+  const nameAccepted = useMemo(() => {
+    if (!proposedName) return false;
+    const name = (relationRecord as Record<string, unknown>).name as Record<
+      string,
+      string
+    > | null;
+    if (!name) return false;
+    return (
+      name.firstName === proposedName.newFirst &&
+      name.lastName === proposedName.newLast
+    );
+  }, [proposedName, relationRecord]);
+
+  const { updateOneRecord: updateRelationRecordForName } = useUpdateOneRecord();
+
+  const handleAcceptName = useCallback(() => {
+    if (!proposedName) return;
+    updateRelationRecordForName({
+      objectNameSingular: relationObjectMetadataNameSingular,
+      idToUpdate: relationRecord.id,
+      updateOneRecordInput: {
+        name: {
+          firstName: nameAccepted
+            ? proposedName.oldFirst
+            : proposedName.newFirst,
+          lastName: nameAccepted
+            ? proposedName.oldLast
+            : proposedName.newLast,
+        },
+      },
+    });
+  }, [
+    proposedName,
+    nameAccepted,
+    relationRecord.id,
+    relationObjectMetadataNameSingular,
+    updateRelationRecordForName,
+  ]);
 
   const { openModal } = useModal();
 
@@ -222,10 +378,36 @@ export const RecordDetailRelationRecordsListItem = ({
         isDropdownOpen={isDropdownOpen}
         data-testid="record-detail-records-list-item"
       >
-        <RecordChip
-          record={relationRecord}
-          objectNameSingular={relationObjectMetadataItem.nameSingular}
-        />
+        {hasNameDiff && proposedName ? (
+          <StyledDiffChipRow accepted={nameAccepted}>
+            <RecordChip
+              record={relationRecord}
+              objectNameSingular={relationObjectMetadataItem.nameSingular}
+            />
+            <StyledDiffAnnotation>
+              <StyledDiffArrow>→</StyledDiffArrow>
+              <StyledDiffNewName>
+                {nameAccepted
+                  ? `${proposedName.oldFirst} ${proposedName.oldLast}`
+                  : `${proposedName.newFirst} ${proposedName.newLast}`}
+              </StyledDiffNewName>
+            </StyledDiffAnnotation>
+            <StyledDiffBtn
+              isAccepted={nameAccepted}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAcceptName();
+              }}
+            >
+              {nameAccepted ? 'Undo' : 'Accept'}
+            </StyledDiffBtn>
+          </StyledDiffChipRow>
+        ) : (
+          <RecordChip
+            record={relationRecord}
+            objectNameSingular={relationObjectMetadataItem.nameSingular}
+          />
+        )}
         <StyledClickableZone onClick={handleClick} data-testid="expand-button">
           <LightIconButton
             className="displayOnHover"
@@ -277,6 +459,7 @@ export const RecordDetailRelationRecordsListItem = ({
           excludeCreatedAtAndUpdatedAt={true}
           excludeFieldMetadataIds={[relationFieldMetadataId]}
           showRequiredIndicator={showRequiredIndicator}
+          fieldDiffs={relationFieldDiffs}
         />
       </AnimatedEaseInOut>
       {createPortal(

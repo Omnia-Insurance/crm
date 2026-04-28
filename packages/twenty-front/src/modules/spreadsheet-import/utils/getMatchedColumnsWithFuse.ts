@@ -15,10 +15,13 @@ export const getMatchedColumnsWithFuse = ({
   columns,
   fields,
   data,
+  precomputedMatches,
 }: {
   columns: SpreadsheetColumns;
   fields: SpreadsheetImportFields;
   data: MatchColumnsStepProps['data'];
+  // OMNIA-CUSTOM: Pre-computed column→field matches from a saved mapping.
+  precomputedMatches?: Record<string, string>;
 }) => {
   const matchedColumns: SpreadsheetColumn[] = [];
 
@@ -26,8 +29,17 @@ export const getMatchedColumnsWithFuse = ({
     keys: ['label'],
     includeScore: true,
     ignoreLocation: true,
-    threshold: 0.3,
+    threshold: 0.2,
   });
+
+  // OMNIA-CUSTOM: Build a lookup for precomputed matches (field key → field)
+  const precomputedFieldByKey = new Map<string, SpreadsheetImportField>();
+
+  if (precomputedMatches) {
+    for (const field of fields) {
+      precomputedFieldByKey.set(field.key, field);
+    }
+  }
 
   const suggestedFieldsByColumnHeader: Record<
     SpreadsheetColumn['header'],
@@ -35,6 +47,21 @@ export const getMatchedColumnsWithFuse = ({
   > = {};
 
   for (const column of columns) {
+    // OMNIA-CUSTOM: Check precomputed matches first (from saved carrier config)
+    const precomputedFieldKey = precomputedMatches?.[column.header];
+    const precomputedField = precomputedFieldKey
+      ? precomputedFieldByKey.get(precomputedFieldKey)
+      : undefined;
+
+    if (isDefined(precomputedField)) {
+      const newColumn = setColumn(column, precomputedField as any, data);
+
+      matchedColumns.push(newColumn);
+      suggestedFieldsByColumnHeader[column.header] = [precomputedField];
+      continue;
+    }
+
+    // Fall through to Fuse.js matching for non-precomputed columns
     const fieldsThatMatch = fieldsToSearch.search(column.header);
 
     const firstMatch = fieldsThatMatch[0] ?? null;
@@ -55,7 +82,7 @@ export const getMatchedColumnsWithFuse = ({
     const isClearBestMatch =
       isDefined(firstMatch?.item) &&
       isDefined(firstMatch?.score) &&
-      firstMatch.score < 0.4 &&
+      firstMatch.score < 0.3 &&
       ((isDefined(secondMatch?.score) &&
         secondMatch.score > firstMatch.score + 0.05) ||
         !isDefined(secondMatch));

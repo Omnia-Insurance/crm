@@ -1,8 +1,10 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
+import { useCallback, useContext } from 'react';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
+import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
+import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useFieldFocus } from '@/object-record/record-field/ui/hooks/useFieldFocus';
 import { RecordInlineCellValue } from '@/object-record/record-inline-cell/components/RecordInlineCellValue';
 import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
@@ -54,7 +56,10 @@ const StyledLabelContainer = styled.div<{ width?: number }>`
   width: ${({ width }) => (width !== undefined ? `${width}px` : 'auto')};
 `;
 
-const StyledInlineCellBaseContainer = styled.div<{ readonly: boolean }>`
+const StyledInlineCellBaseContainer = styled.div<{
+  readonly: boolean;
+  diffState?: 'none' | 'pending' | 'accepted';
+}>`
   align-items: center;
   box-sizing: border-box;
   cursor: ${({ readonly }) => (readonly ? 'default' : 'pointer')};
@@ -63,10 +68,83 @@ const StyledInlineCellBaseContainer = styled.div<{ readonly: boolean }>`
   height: fit-content;
   user-select: none;
   width: 100%;
+  background: ${({ diffState }) => {
+    if (diffState === 'accepted') return themeCssVariables.color.transparent.red2;
+    if (diffState === 'pending') return themeCssVariables.color.transparent.green2;
+    return 'transparent';
+  }};
+  border-left: ${({ diffState }) => {
+    if (diffState === 'accepted') return `2px solid ${themeCssVariables.color.red}`;
+    if (diffState === 'pending') return `2px solid ${themeCssVariables.color.green}`;
+    return '2px solid transparent';
+  }};
+  border-radius: ${({ diffState }) =>
+    diffState && diffState !== 'none'
+      ? `0 ${themeCssVariables.border.radius.sm} ${themeCssVariables.border.radius.sm} 0`
+      : '0'};
+  padding-left: ${({ diffState }) =>
+    diffState && diffState !== 'none' ? themeCssVariables.spacing[1] : '0'};
 `;
 
 export const StyledSkeletonDiv = styled.div`
   height: 24px;
+`;
+
+// OMNIA-CUSTOM: Inline diff value display (replaces standard value when diff exists)
+const StyledDiffValueDisplay = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${themeCssVariables.spacing[1]};
+  min-width: 0;
+  width: 100%;
+  font-size: ${themeCssVariables.font.size.md};
+`;
+
+const StyledDiffOld = styled.span`
+  color: ${themeCssVariables.font.color.tertiary};
+  text-decoration: line-through;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const StyledDiffArrow = styled.span`
+  color: ${themeCssVariables.font.color.light};
+  flex-shrink: 0;
+`;
+
+const StyledDiffNew = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const StyledDiffAcceptBtn = styled.button<{ accepted: boolean }>`
+  flex-shrink: 0;
+  padding: 0 ${themeCssVariables.spacing[2]};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  font-family: inherit;
+  cursor: pointer;
+  height: 20px;
+  border: 1px solid
+    ${({ accepted }) =>
+      accepted
+        ? themeCssVariables.color.red
+        : themeCssVariables.color.green};
+  background: ${({ accepted }) =>
+    accepted
+      ? themeCssVariables.color.red
+      : themeCssVariables.color.green};
+  color: #fff;
+  opacity: 0.75;
+
+  &:hover {
+    opacity: 1;
+  }
 `;
 
 export const RecordInlineCellContainer = () => {
@@ -74,8 +152,14 @@ export const RecordInlineCellContainer = () => {
     useRecordInlineCellContext();
   const { theme } = useContext(ThemeContext);
 
-  const { recordId, fieldDefinition, onMouseEnter, onMouseLeave, anchorId } =
-    useContext(FieldContext);
+  const {
+    recordId,
+    fieldDefinition,
+    onMouseEnter,
+    onMouseLeave,
+    anchorId,
+    fieldDiff,
+  } = useContext(FieldContext);
 
   if (isFieldText(fieldDefinition)) {
     assertFieldMetadata(FieldMetadataType.TEXT, isFieldText, fieldDefinition);
@@ -102,9 +186,94 @@ export const RecordInlineCellContainer = () => {
     fieldName: fieldDefinition?.metadata?.fieldName,
   })}`;
 
+  const hasDiff = fieldDiff && fieldDiff.newValue !== null;
+
+  // OMNIA-CUSTOM: Read current field value to derive accepted state from store
+  const fieldName = fieldDefinition?.metadata?.fieldName;
+  const currentFieldValue = useAtomFamilySelectorValue(
+    recordStoreFamilySelector,
+    { recordId, fieldName: fieldName ?? '' },
+  );
+
+  // Derive accepted state from store — no local state needed
+  const accepted = hasDiff
+    ? (() => {
+        // For composite sub-fields, check the sub-field value
+        const crmFieldPath = fieldDiff?.crmFieldPath ?? '';
+        const parts = crmFieldPath.split('.');
+        if (parts.length >= 2) {
+          const subField = parts[parts.length - 1];
+          const compositeValue =
+            typeof currentFieldValue === 'object' && currentFieldValue !== null
+              ? (currentFieldValue as Record<string, unknown>)[subField]
+              : null;
+          return String(compositeValue ?? '') === fieldDiff.newValue;
+        }
+        return String(currentFieldValue ?? '') === fieldDiff.newValue;
+      })()
+    : false;
+
+  // OMNIA-CUSTOM: Get update hook from context
+  const useUpdateRecord = useContext(FieldContext).useUpdateRecord;
+  const [updateRecord] = useUpdateRecord?.() ?? [null];
+
+  const buildUpdateValue = useCallback(
+    (rawValue: string | null) => {
+      if (rawValue === null) return null;
+
+      const crmFieldPath = fieldDiff?.crmFieldPath ?? '';
+      const parts = crmFieldPath.split('.');
+
+      // Composite sub-field: merge with existing value to preserve other sub-fields
+      if (parts.length >= 2) {
+        const subField = parts[parts.length - 1];
+        // Start with existing composite value from the store
+        const existing =
+          typeof currentFieldValue === 'object' && currentFieldValue !== null
+            ? JSON.parse(JSON.stringify(currentFieldValue))
+            : {};
+        // Remove __typename if present (GraphQL artifact)
+        delete existing.__typename;
+        // Set the changed sub-field
+        existing[subField] = rawValue;
+        return existing;
+      }
+
+      return rawValue;
+    },
+    [fieldDiff?.crmFieldPath, currentFieldValue],
+  );
+
+  const handleAccept = useCallback(() => {
+    if (!updateRecord || !fieldName || !fieldDiff) return;
+    const value = buildUpdateValue(fieldDiff.newValue);
+    if (value === null) return;
+    updateRecord({
+      variables: {
+        where: { id: recordId },
+        updateOneRecordInput: { [fieldName]: value },
+      },
+    });
+  }, [updateRecord, fieldName, fieldDiff, buildUpdateValue, recordId]);
+
+  const handleUndo = useCallback(() => {
+    if (!updateRecord || !fieldName || !fieldDiff) return;
+    const value = buildUpdateValue(fieldDiff.oldValue);
+    if (value === null) return;
+    updateRecord({
+      variables: {
+        where: { id: recordId },
+        updateOneRecordInput: { [fieldName]: value },
+      },
+    });
+  }, [updateRecord, fieldName, fieldDiff, buildUpdateValue, recordId]);
+
+  const diffState = hasDiff ? (accepted ? 'accepted' : 'pending') : 'none';
+
   return (
     <StyledInlineCellBaseContainer
       readonly={readonly ?? false}
+      diffState={diffState as 'none' | 'pending' | 'accepted'}
       onMouseEnter={handleContainerMouseEnter}
       onMouseLeave={handleContainerMouseLeave}
     >
@@ -120,7 +289,6 @@ export const RecordInlineCellContainer = () => {
               <OverflowingTextWithTooltip text={label} displayedMaxRows={1} />
             </StyledLabelContainer>
           )}
-          {/* TODO: Displaying Tooltips on the board is causing performance issues https://react-tooltip.com/docs/examples/render */}
           {!showLabel && (
             <AppTooltip
               anchorSelect={`#${labelId}`}
@@ -134,9 +302,38 @@ export const RecordInlineCellContainer = () => {
           )}
         </StyledLabelAndIconContainer>
       )}
-      <StyledValueContainer readonly={readonly ?? false} id={anchorId}>
-        <RecordInlineCellValue />
-      </StyledValueContainer>
+      {hasDiff ? (
+        <StyledDiffValueDisplay>
+          <StyledDiffOld>
+            {accepted
+              ? fieldDiff.newValue || '(empty)'
+              : fieldDiff.oldValue || '(empty)'}
+          </StyledDiffOld>
+          <StyledDiffArrow>→</StyledDiffArrow>
+          <StyledDiffNew>
+            {accepted
+              ? fieldDiff.oldValue || '(empty)'
+              : fieldDiff.newValue}
+          </StyledDiffNew>
+          <StyledDiffAcceptBtn
+            accepted={accepted}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (accepted) {
+                handleUndo();
+              } else {
+                handleAccept();
+              }
+            }}
+          >
+            {accepted ? 'Undo' : 'Accept'}
+          </StyledDiffAcceptBtn>
+        </StyledDiffValueDisplay>
+      ) : (
+        <StyledValueContainer readonly={readonly ?? false} id={anchorId}>
+          <RecordInlineCellValue />
+        </StyledValueContainer>
+      )}
     </StyledInlineCellBaseContainer>
   );
 };

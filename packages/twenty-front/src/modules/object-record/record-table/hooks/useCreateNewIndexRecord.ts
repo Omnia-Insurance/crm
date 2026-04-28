@@ -1,4 +1,7 @@
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+// OMNIA-CUSTOM: Reconciliation + Commission wizard intercepts
+import { useOpenReconciliationWizard } from '@/reconciliation/hooks/useOpenReconciliationWizard';
+import { useOpenCommissionWizard } from '@/reconciliation/hooks/useOpenCommissionWizard';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useDraftRecordDefaults } from '@/object-record/hooks/useDraftRecordDefaults';
 import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
@@ -23,6 +26,10 @@ export const useCreateNewIndexRecord = ({
 
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
+  // OMNIA-CUSTOM: Open reconciliation/commission wizard instead of side panel
+  const { openReconciliationWizard } = useOpenReconciliationWizard();
+  const { openCommissionWizard } = useOpenCommissionWizard();
+
   const { buildRecordInputFromFilters } = useBuildRecordInputFromFilters({
     objectMetadataItem,
     instanceId,
@@ -32,6 +39,17 @@ export const useCreateNewIndexRecord = ({
 
   const openDraftInSidePanel = useCallback(
     (recordInput?: Partial<ObjectRecord>) => {
+      // OMNIA-CUSTOM: Intercept reconciliation/commission object creation → open wizard.
+      // Returns the promise so HeadlessEngineCommandWrapperEffect awaits it
+      // before unmounting (otherwise the data-loading refs get torn down).
+      if (objectMetadataItem.nameSingular === 'reconciliation') {
+        return openReconciliationWizard();
+      }
+
+      if (objectMetadataItem.nameSingular === 'commissionStatement') {
+        return openCommissionWizard();
+      }
+
       const recordId = v4();
       const { position, ...restRecordInput } = recordInput ?? {};
 
@@ -73,6 +91,8 @@ export const useCreateNewIndexRecord = ({
       buildRecordInputFromFilters,
       objectMetadataItem,
       openRecordInSidePanel,
+      openReconciliationWizard,
+      openCommissionWizard,
     ],
   );
 

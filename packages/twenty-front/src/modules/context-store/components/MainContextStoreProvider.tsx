@@ -117,9 +117,13 @@ export const MainContextStoreProvider = () => {
     firstAvailableViewId,
   );
 
+  // OMNIA-CUSTOM: skip context store computation when the URL matches a
+  // record show page pattern but the object metadata can't be resolved from
+  // route params (e.g. /object/reconciliation/:objectRecordId — handled by
+  // its own page component with a manual context store effect).
   const shouldComputeContextStore =
     (isRecordIndexPage ||
-      isRecordShowPage ||
+      (isRecordShowPage && isDefined(objectMetadataItem)) ||
       isStandalonePage ||
       isSettingsPage ||
       showAuthModal) &&

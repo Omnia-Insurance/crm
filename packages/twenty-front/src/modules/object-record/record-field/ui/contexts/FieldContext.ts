@@ -20,6 +20,15 @@ export type RecordUpdateHook = () => [
   RecordUpdateHookReturn,
 ];
 
+// OMNIA-CUSTOM: Reconciliation diff overlay data
+export type FieldDiffOverlay = {
+  oldValue: string | null;
+  newValue: string | null;
+  label: string;
+  /** Full CRM field path, e.g. "emails.primaryEmail" for composite sub-fields */
+  crmFieldPath?: string;
+};
+
 export type GenericFieldContextType = {
   fieldMetadataItemId?: string;
   recordId: string;
@@ -43,6 +52,8 @@ export type GenericFieldContextType = {
   triggerEvent?: TriggerEventType;
   isForbidden?: boolean;
   anchorId?: string;
+  // OMNIA-CUSTOM: reconciliation diff overlay
+  fieldDiff?: FieldDiffOverlay;
 };
 
 export const FieldContext = createContext<GenericFieldContextType>(
