@@ -15,7 +15,6 @@ import { START_RECONCILIATION_APPLY } from '@/reconciliation/graphql/mutations/s
 import { BATCH_APPROVE_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
 
 // Exact same imports as RecordShowPage
-import { CommandMenuItemMoreActionsButton } from '@/command-menu-item/server-items/display/components/CommandMenuItemMoreActionsButton';
 import { RecordShowCommandMenu } from '@/command-menu-item/components/RecordShowCommandMenu';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
@@ -320,7 +319,6 @@ export const ReconciliationReviewPageContent = ({
               objectRecordId={objectRecordId}
             >
               <RecordShowCommandMenu />
-              <CommandMenuItemMoreActionsButton />
             </RecordShowPageHeader>
             <MainContainerLayoutWithSidePanel>
               <TimelineActivityContext.Provider
