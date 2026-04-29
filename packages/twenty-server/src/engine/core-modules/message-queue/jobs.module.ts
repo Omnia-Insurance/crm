@@ -44,6 +44,7 @@ import { AutoCompaniesAndContactsCreationJobModule } from 'src/modules/contact-c
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 import { TimelineJobModule } from 'src/modules/timeline/jobs/timeline-job.module';
 import { TimelineActivityModule } from 'src/modules/timeline/timeline-activity.module';
+import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
 import { WorkflowModule } from 'src/modules/workflow/workflow.module';
 
 @Module({
@@ -84,6 +85,7 @@ import { WorkflowModule } from 'src/modules/workflow/workflow.module';
     AiChatModule,
     LogicFunctionModule,
     EnterpriseModule,
+    ReconciliationModule,
   ],
   providers: [
     CleanSuspendedWorkspacesJob,

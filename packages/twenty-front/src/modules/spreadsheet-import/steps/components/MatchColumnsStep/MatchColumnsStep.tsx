@@ -75,7 +75,8 @@ export const MatchColumnsStep = ({
 }: MatchColumnsStepProps) => {
   const { enqueueDialog } = useDialogManager();
   const dataExample = data.slice(0, 2);
-  const { spreadsheetImportFields: fields } = useSpreadsheetImportInternal();
+  // OMNIA-CUSTOM: allowDuplicateFieldMatching for reconciliation
+  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } = useSpreadsheetImportInternal();
   const [isLoading, setIsLoading] = useState(false);
   const [columns, setColumns] = useAtomFamilySelectorState(
     initialComputedColumnsSelector,
@@ -120,9 +121,12 @@ export const MatchColumnsStep = ({
         const field = fields.find(
           (field) => field.key === value,
         ) as unknown as SpreadsheetImportField;
-        const existingFieldIndex = columns.findIndex(
-          (column) => 'value' in column && column.value === field.key,
-        );
+        // OMNIA-CUSTOM: Skip duplicate removal when allowDuplicateFieldMatching is set
+        const existingFieldIndex = allowDuplicateFieldMatching
+          ? -1
+          : columns.findIndex(
+              (column) => 'value' in column && column.value === field.key,
+            );
         setColumns(
           columns.map<SpreadsheetColumn>((column, index) => {
             if (columnIndex === index) {

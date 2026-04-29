@@ -18,6 +18,7 @@ import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdow
 import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
+import { type View } from '@/views/types/View';
 import { RecordFilterGroupLogicalOperator } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { Pill } from 'twenty-ui/components';
@@ -34,6 +35,26 @@ const StyledPillContainer = styled.span`
 `;
 
 export const ViewBarFilterDropdownAdvancedFilterButton = () => {
+  const { currentView } = useGetCurrentViewOnly();
+
+  // OMNIA-CUSTOM: Gracefully hide the advanced filter affordance when no
+  // current view is bound (e.g. when reusing this filter UI outside the
+  // RecordIndex, like our reconciliation review page). Advanced filter groups
+  // are persisted on a view, so without one this button cannot do anything.
+  if (!currentView?.objectMetadataId) {
+    return null;
+  }
+
+  return (
+    <ViewBarFilterDropdownAdvancedFilterButtonInner currentView={currentView} />
+  );
+};
+
+const ViewBarFilterDropdownAdvancedFilterButtonInner = ({
+  currentView,
+}: {
+  currentView: View;
+}) => {
   const advancedFilterQuerySubFilterCount = 0; // TODO
 
   const { t } = useLingui();
@@ -47,20 +68,12 @@ export const ViewBarFilterDropdownAdvancedFilterButton = () => {
 
   const { closeDropdown: closeObjectFilterDropdown } = useCloseDropdown();
 
-  const { currentView } = useGetCurrentViewOnly();
-
   const { upsertRecordFilterGroup } = useUpsertRecordFilterGroup();
 
   const { upsertRecordFilter } = useUpsertRecordFilter();
 
-  const objectMetadataId = currentView?.objectMetadataId;
-
-  if (!objectMetadataId) {
-    throw new Error('Object metadata id is missing from current view');
-  }
-
   const { objectMetadataItem } = useObjectMetadataItemById({
-    objectId: objectMetadataId ?? null,
+    objectId: currentView.objectMetadataId,
   });
 
   const availableFieldMetadataItemsForFilter = useAtomFamilySelectorValue(

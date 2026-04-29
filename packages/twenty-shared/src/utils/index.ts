@@ -28,6 +28,10 @@ export { evaluateConditionalAvailabilityExpression } from './command-menu-items/
 export { interpolateCommandMenuItemTemplate } from './command-menu-items/interpolateCommandMenuItemTemplate';
 export { resolveObjectMetadataLabel } from './command-menu-items/resolveObjectMetadataLabel';
 export { safeGetNestedProperty } from './command-menu-items/safeGetNestedProperty';
+export {
+  promotePrimaryPhoneToAdditional,
+  promotePrimaryEmailToAdditional,
+} from './composite/promotePrimaryToAdditional';
 export { computeDiffBetweenObjects } from './compute-diff-between-objects';
 export { isPlainDateAfter } from './date/isPlainDateAfter';
 export { isPlainDateBefore } from './date/isPlainDateBefore';

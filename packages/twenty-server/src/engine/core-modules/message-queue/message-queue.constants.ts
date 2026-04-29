@@ -23,4 +23,6 @@ export enum MessageQueue {
   exportQueue = 'export-queue',
   importQueue = 'import-queue',
   ingestionQueue = 'ingestion-queue',
+  // OMNIA-CUSTOM: Payment Reconciliation v2 pipeline jobs
+  reconciliationQueue = 'reconciliation-queue',
 }

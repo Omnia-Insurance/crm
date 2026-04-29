@@ -20,5 +20,7 @@ export const MESSAGE_QUEUE_PRIORITY: Record<MessageQueue, number> = {
   [MessageQueue.aiStreamQueue]: 2,
   [MessageQueue.exportQueue]: 4,
   [MessageQueue.importQueue]: 4,
+  // OMNIA-CUSTOM: Payment Reconciliation v2 — user-initiated batch ingestion
+  [MessageQueue.reconciliationQueue]: 4,
   [MessageQueue.ingestionQueue]: 3,
 };

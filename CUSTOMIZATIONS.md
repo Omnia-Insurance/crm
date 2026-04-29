@@ -213,6 +213,8 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Derives relation export configs from view sub-field columns                           |
 | `spreadsheet-import/utils/dataMutations.ts`                                                            | Trim whitespace before validation                                                     |
 | `spreadsheet-import/utils/normalizeTableData.ts`                                                       | Trim whitespace on matched column values                                              |
+| `spreadsheet-import/utils/setColumn.ts`                                                                | Widened `field` param to accept `ReadonlyDeep<SpreadsheetImportField>` (read-only)    |
+| `spreadsheet-import/utils/getMatchedColumnsWithFuse.ts`                                                | Added optional `precomputedMatches` param for carrier-config-driven pre-fill          |
 
 ### New Spreadsheet Import Utilities
 
@@ -266,8 +268,8 @@ Moves CSV export from browser-only to a BullMQ background job. The server fetche
 | File                                                                                                      | Modification                                                  |
 | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `packages/twenty-shared/src/types/FileFolder.ts`                                                          | Added `Export = 'export'`                                     |
-| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`                 | Added `exportQueue`                                           |
-| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts`         | Added export queue priority                                   |
+| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts`                 | Added `exportQueue` and `reconciliationQueue` (Reconciliation v2) |
+| `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts`         | Added export queue + reconciliation queue priorities          |
 | `packages/twenty-server/src/engine/core-modules/message-queue/message-queue-concurrency.constant.ts`      | Added export queue concurrency                                |
 | `packages/twenty-server/src/engine/subscriptions/enums/subscription-channel.enum.ts`                      | Added `EXPORT_JOB_PROGRESS`                                   |
 | `packages/twenty-server/src/engine/core-modules/message-queue/jobs.module.ts`                             | Registered `ExportJobProcessorModule`                         |
@@ -640,36 +642,17 @@ After every upstream merge:
 16. **Run migrations**: `npx nx run twenty-server:database:migrate:prod`
 17. **Flush Redis after deploy**: `cache:flat-cache-invalidate --all-metadata`
 
-## Payment Reconciliation Review UI
+## Payment Reconciliation v2
 
-Full-page merge conflict review UI for BOB reconciliation. Per-field Accept Current / Accept Incoming resolution with bulk actions.
+Fresh-start rewrite on `feature/reconciliation-v2`. The v1 review UI and twenty-apps backend have been **superseded** and are not being ported. New architecture uses native twenty-server NestJS module, two custom workspace objects (`reconciliation`, `carrierConfig`), and `@pierre/diffs` for the review UI. See `memory/project-reconciliation-v2.md` for full architecture.
 
-| File                                                                                | What We Changed                                     | Why                                     |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------- |
-| `packages/twenty-shared/src/types/AppPath.ts`                                       | Added `ReconciliationReview` path                   | Route for the review page               |
-| `packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx`                | Added route for `/reconciliation/review/:runId`     | Registers the review page in the router |
-| `packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts` | Added `reconciliation/review/*` to fullscreen paths | Hides sidebar on the review page        |
-
-### Custom Frontend (Reconciliation Review)
-
-| File                                                                                   | Purpose                                                                   |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx`          | Page component (lazy-loaded)                                              |
-| `packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx` | Main review orchestrator: fetches run + results, manages resolution state |
-| `packages/twenty-front/src/modules/reconciliation/components/ReviewSummaryHeader.tsx`  | Stats bar with run summary and Accept All button                          |
-| `packages/twenty-front/src/modules/reconciliation/components/ReviewSectionGroup.tsx`   | Collapsible section groups (Status Updates, Needs Review, etc.)           |
-| `packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx`   | Per-policy card with field-level Accept Current / Accept Incoming         |
-| `packages/twenty-front/src/modules/reconciliation/hooks/useConflictResolution.ts`      | Resolution state management hook                                          |
-| `packages/twenty-front/src/modules/reconciliation/utils/serializeFieldDiffs.ts`        | Converts fieldDiffs to merge conflict text                                |
-| `packages/twenty-front/src/modules/reconciliation/utils/groupMatchResults.ts`          | Groups results by section                                                 |
-| `packages/twenty-front/src/modules/reconciliation/types/reconciliation.types.ts`       | TypeScript types                                                          |
-
-### Payment Reconciliation App Backend Fixes
-
-| File                                                                                             | What We Changed                                                                                     | Why                                                                  |
-| ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/apply-updates.ts`                | Changed approval filter from `CONFIRMED` to `CONFIRMED \| AUTO_MATCHED`                             | Unblocks write-back pipeline (nothing was ever applied)              |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/matching-engine.ts`              | Removed 0.55 multiplier in Tier 6 scoring; externalized thresholds to MatchingConfig                | Multi-match scoring was unreachable; thresholds are now configurable |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/status-engine.ts`                | Added StatusEngineConfig for placed/payment-error thresholds                                        | 30d/10d thresholds now configurable per carrier                      |
-| `packages/twenty-apps/internal/payment-reconciliation/src/utils/run-matching.ts`                 | Replaced OMNIA_START_DATE with config; passes StatusEngineConfig; externalized discovery thresholds | All hardcoded values now in CarrierConfig                            |
-| `packages/twenty-apps/internal/payment-reconciliation/src/logic-functions/recover-stuck-jobs.ts` | Consolidated 3 recovery crons into 1                                                                | Reduces maintenance; single file checks all stuck states             |
+| File                                                                                     | What We Changed                                                    | Why                                                                                 |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts` | New NestJS command                                                 | Creates the `reconciliation` + `carrierConfig` custom workspace objects idempotently |
+| `packages/twenty-server/src/database/commands/database-command.module.ts`                | Registered `SeedReconciliationObjectsCommand` in providers         | Required for nest-commander to discover the custom command                          |
+| `packages/twenty-front/package.json`                                                     | Added `@pierre/diffs@^1.1.12`                                      | Unified-diff rendering for the review UI (planned for next session)                 |
+| `packages/twenty-front/src/modules/views/components/ViewBarFilterDropdownAdvancedFilterButton.tsx` | Hide button when no current view; extracted inner component       | Lets the reconciliation review page reuse the native filter UI without a saved view (advanced filter groups require a view to persist) |
+| `packages/twenty-front/src/modules/object-record/object-filter-dropdown/hooks/useOptionsForSelect.ts` | Read object metadata from `RecordIndexContext` instead of `useParams().objectNamePlural` | The reconciliation review page lives on a custom route that doesn't expose `:objectNamePlural`. RecordIndexContext is always present where this hook is used. |
+| `packages/twenty-front/src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx` | Diff-aware relation chip: inline name diff annotation (composite `lead.name.firstName/lastName` + single `agent.name`) with accept/undo. Non-name diffs surface only on the expanded RecordFieldList. Reads `ReconciliationDiffsContext`. | Lets the reconciliation review page show name mismatches on any relation chip — both Person-style composite names and TEXT names. |
+| `packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx` | Inline diff overlay (oldValue → newValue [Accept/Undo]) for fields whose `FieldContext.fieldDiff` is set, with row highlighting; primary phone/email accepts route through `promotePrimary{Phone,Email}ToAdditional` so old primary is preserved in `additionalPhones`/`additionalEmails`. | Renders reconciliation diffs inline on the policy/lead show page; non-destructive accept keeps both contact values reachable. |
+| `packages/twenty-shared/src/utils/composite/promotePrimaryToAdditional.ts` (new) + barrel re-export | New shared helpers `promotePrimaryPhoneToAdditional` / `promotePrimaryEmailToAdditional` used by both frontend (`RecordInlineCellContainer`, `MatchedDiffView`) and backend (`orchestrator.runApplyInline`). Identical merge logic in both paths. | Avoids client/server divergence on a behavior that affects user-visible data integrity. |

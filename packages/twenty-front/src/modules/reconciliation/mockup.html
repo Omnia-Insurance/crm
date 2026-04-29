@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reconciliation Review</title>
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<style>
+  :root {
+    font-family: InterVariable, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    --bg: #fff;
+    --bg-2: #fafafa;
+    --bg-3: #f4f4f5;
+    --border: #e4e4e7;
+    --border-light: #f0f0f2;
+    --text: #18181b;
+    --text-2: #52525b;
+    --text-3: #a1a1aa;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --green-bg2: #dcfce7;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --red-bg2: #fee2e2;
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --amber: #d97706;
+    --amber-bg: #fffbeb;
+    --purple: #7c3aed;
+    --purple-bg: #f5f3ff;
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body { color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; font-size: 0.875rem; line-height: 1.5; }
+
+  /* ═══ HEADER ═══ */
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 20px; height: 48px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back { color: var(--text-3); text-decoration: none; display: flex; align-items: center; gap: 4px; font-size: 0.8125rem; }
+  .back:hover { color: var(--blue); }
+  .title { font-weight: 600; font-size: 0.875rem; }
+  .pill { font-size: 0.6875rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+  .pill-amber { background: var(--amber-bg); color: var(--amber); }
+  .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .hdr-stat { font-size: 0.8125rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .hdr-stat b { color: var(--text-2); }
+  .hdr-sep { width: 1px; height: 16px; background: var(--border); }
+
+  /* ═══ BUTTONS ═══ */
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border-radius: 6px;
+    font: inherit; font-size: 0.8125rem; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--text-2);
+  }
+  .btn:hover { background: var(--bg-2); }
+  .btn-sm { padding: 3px 8px; font-size: 0.75rem; }
+  .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+  .btn-green:hover { background: #15803d; }
+  .btn-red-text { color: var(--red); border-color: var(--red-bg2); }
+  .btn-red-text:hover { background: var(--red-bg); }
+  .btn-amber-text { color: var(--amber); border-color: var(--amber-bg); }
+  .btn-amber-text:hover { background: var(--amber-bg); }
+
+  /* ═══ LAYOUT ═══ */
+  .layout { display: flex; height: calc(100dvh - 48px); }
+
+  /* ═══ SIDEBAR ═══ */
+  .side { width: 280px; min-width: 280px; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .side-top { padding: 8px 10px; border-bottom: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 6px; }
+  .side-search {
+    width: 100%; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; font-size: 0.8125rem; outline: none; background: var(--bg);
+  }
+  .side-search:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chip {
+    padding: 2px 8px; border-radius: 999px; font-size: 0.6875rem;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text-2); cursor: pointer;
+  }
+  .chip:hover { background: var(--bg-2); }
+  .chip.on { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+
+  .side-list { flex: 1; overflow-y: auto; }
+  .si {
+    padding: 8px 10px; border-bottom: 1px solid var(--border-light); cursor: pointer;
+  }
+  .si:hover { background: var(--bg-2); }
+  .si.active { background: var(--blue-bg); border-left: 2px solid var(--blue); padding-left: 8px; }
+  .si.done { opacity: .45; }
+  .si-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .si-name { font-size: 0.8125rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .si-id { font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .si-tags { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+  .tag { padding: 0 5px; border-radius: 999px; font-size: 0.625rem; font-weight: 500; line-height: 1.125rem; }
+  .tag-blue { background: var(--blue-bg); color: var(--blue); }
+  .tag-red { background: var(--red-bg); color: var(--red); }
+  .tag-amber { background: var(--amber-bg); color: var(--amber); }
+  .tag-purple { background: var(--purple-bg); color: var(--purple); }
+
+  .side-foot {
+    padding: 8px 10px; border-top: 1px solid var(--border);
+    font-size: 0.6875rem; color: var(--text-3); font-variant-numeric: tabular-nums;
+  }
+  .bar { height: 3px; background: var(--bg-3); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--green); }
+
+  /* ═══ DETAIL ═══ */
+  .detail { flex: 1; overflow-y: auto; }
+
+  .d-head {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .d-name { font-weight: 600; }
+  .d-id { font-size: 0.75rem; color: var(--text-3); }
+  .d-link { font-size: 0.8125rem; color: var(--blue); text-decoration: none; }
+  .d-link:hover { text-decoration: underline; }
+  .d-match { margin-left: auto; font-size: 0.75rem; color: var(--text-3); }
+
+  /* ── Callout ── */
+  .callout {
+    display: flex; gap: 6px; padding: 8px 20px;
+    font-size: 0.8125rem; line-height: 1.4;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .callout b { font-weight: 600; }
+  .callout-amber { background: var(--amber-bg); }
+  .callout-blue { background: var(--blue-bg); }
+  .callout-red { background: var(--red-bg); }
+  .callout .sec { color: var(--text-2); }
+
+  /* ── Diff table ── */
+  .diff { width: 100%; border-collapse: collapse; }
+  .diff td { vertical-align: top; padding: 2px 0; }
+  .diff .mk {
+    width: 24px; text-align: center; user-select: none;
+    font-weight: 600; font-size: 0.75rem; color: var(--text-3);
+  }
+  .diff .ct { padding-left: 16px; padding-right: 16px; }
+  .diff .ac { width: 56px; text-align: center; vertical-align: middle; }
+
+  /* Section divider */
+  .diff .sec-row td {
+    padding: 4px 16px; font-size: 0.6875rem; font-weight: 600;
+    color: var(--text-3); letter-spacing: .03em; text-transform: uppercase;
+    background: var(--bg-2); border-top: 1px solid var(--border-light); border-bottom: 1px solid var(--border-light);
+  }
+
+  /* Row types */
+  .diff .row-ctx td { background: var(--bg); }
+  .diff .row-del td.ct { background: var(--red-bg); }
+  .diff .row-del td.mk { color: var(--red); }
+  .diff .row-add td.ct { background: var(--green-bg); }
+  .diff .row-add td.mk { color: var(--green); }
+
+  /* Critical rows */
+  .diff .row-del.crit td.ct { background: var(--red-bg2); }
+  .diff .row-add.crit td.ct { background: var(--red-bg2); }
+  .diff .row-del.crit td.mk,
+  .diff .row-add.crit td.mk { color: var(--red); font-weight: 700; }
+
+  /* Word highlights */
+  .hl-del { background: rgba(220,38,38,.12); border-radius: 2px; padding: 0 1px; }
+  .hl-add { background: rgba(22,163,74,.12); border-radius: 2px; padding: 0 1px; }
+
+  /* Field label styling within diff */
+  .fl { color: var(--text-2); }
+  .fv { color: var(--text); }
+
+  /* Per-line buttons */
+  .lb { display: flex; gap: 2px; justify-content: center; opacity: 0; }
+  tr:hover .lb { opacity: 1; }
+  .lb.on { opacity: 1; }
+  .lbtn {
+    width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg); cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 0.625rem; color: var(--text-3);
+  }
+  .lbtn:hover { background: var(--bg-2); }
+  .lbtn.y:hover, .lbtn.y.a { background: var(--green-bg2); border-color: var(--green); color: var(--green); }
+  .lbtn.n:hover, .lbtn.n.a { background: var(--red-bg2); border-color: var(--red); color: var(--red); }
+
+  /* ── Footer ── */
+  .d-foot {
+    padding: 10px 20px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+    position: sticky; bottom: 0; background: var(--bg);
+  }
+  .d-foot .note {
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; font-size: 0.8125rem; outline: none; width: 200px;
+  }
+  .d-foot .note:focus { border-color: var(--blue); }
+  .spacer { flex: 1; }
+
+  /* ── Unmatched view ── */
+  .um-row {
+    display: flex; gap: 8px; padding: 5px 20px; border-bottom: 1px solid var(--border-light);
+    font-size: 0.8125rem;
+  }
+  .um-label { color: var(--text-3); width: 140px; flex-shrink: 0; }
+  .um-val { color: var(--text); }
+  .um-head {
+    padding: 6px 20px; font-size: 0.75rem; font-weight: 600; color: var(--text-2);
+    background: var(--bg-2); border-bottom: 1px solid var(--border-light);
+  }
+
+  /* Scrollbar */
+  .side-list::-webkit-scrollbar, .detail::-webkit-scrollbar { width: 5px; }
+  .side-list::-webkit-scrollbar-thumb, .detail::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Modal ── */
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35);
+    z-index: 50; align-items: center; justify-content: center;
+  }
+  .overlay.open { display: flex; }
+  .modal { background: var(--bg); border-radius: 10px; width: 380px; box-shadow: 0 20px 50px rgba(0,0,0,.12); overflow: hidden; }
+  .m-head { padding: 14px 16px; font-weight: 600; border-bottom: 1px solid var(--border); }
+  .m-body { padding: 14px 16px; font-size: 0.8125rem; }
+  .m-row { display: flex; justify-content: space-between; padding: 3px 0; font-variant-numeric: tabular-nums; }
+  .m-row .ml { color: var(--text-2); }
+  .m-row .mv { font-weight: 600; }
+  .m-row .mv-g { color: var(--green); }
+  .m-row .mv-r { color: var(--red); }
+  .m-row .mv-m { color: var(--text-3); }
+  .m-row .mv-a { color: var(--amber); }
+  .m-hr { border: none; border-top: 1px solid var(--border-light); margin: 8px 0; }
+  .m-foot { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 6px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <a href="#" class="back">← Reconciliations</a>
+  <span class="title">Ambetter — 4/16/2026</span>
+  <span class="pill pill-amber">In Review</span>
+  <div class="hdr-right">
+    <span class="hdr-stat"><b>925</b> updates</span>
+    <span class="hdr-stat"><b style="color:var(--red)">49</b> unmatched</span>
+    <span class="hdr-sep"></span>
+    <button type="button" class="btn btn-sm" title="Export flagged items as CSV">Export</button>
+    <button type="button" class="btn btn-sm" title="Accept 820 items with no flags">Accept routine</button>
+    <button type="button" class="btn btn-sm btn-green" id="apply-btn">Apply changes</button>
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<nav class="side">
+  <div class="side-top">
+    <input type="search" class="side-search" placeholder="Search name or policy #…" aria-label="Search">
+    <div class="chips">
+      <button class="chip on">All (974)</button>
+      <button class="chip">Flagged (47)</button>
+      <button class="chip">Unmatched (49)</button>
+    </div>
+  </div>
+  <div class="side-list" role="list">
+    <div class="si active" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Chancelyn Archer</span><span class="si-id">U73426133</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span><span class="tag tag-purple">Name mismatch</span></div>
+    </div>
+    <div class="si done" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">✓ Michael Chen</span><span class="si-id">U71238310</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Sarah Johnson</span><span class="si-id">U73381466</span></div>
+      <div class="si-tags"><span class="tag tag-amber">Broker date</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Emily Davis</span><span class="si-id">U97175496</span></div>
+      <div class="si-tags"><span class="tag tag-purple">Name mismatch</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Robert Martinez</span><span class="si-id">U73591636</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Lisa Archer-McKenley</span><span class="si-id">U73586667</span></div>
+      <div class="si-tags"><span class="tag tag-purple">Name mismatch</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">David Thompson</span><span class="si-id">UZ1910227</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Maria Garcia</span><span class="si-id">U95793108</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span><span class="tag tag-red">Payment issue</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="unmatched">
+      <div class="si-row"><span class="si-name">Ashley Brown</span><span class="si-id">U73345896</span></div>
+      <div class="si-tags"><span class="tag tag-red">Not in CRM</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Kevin Wilson</span><span class="si-id">U97563145</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Patricia Lee</span><span class="si-id">U95791565</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span><span class="tag tag-amber">Broker date</span></div>
+    </div>
+    <div class="si" role="listitem" data-v="matched">
+      <div class="si-row"><span class="si-name">Thomas Anderson</span><span class="si-id">U73304762</span></div>
+      <div class="si-tags"><span class="tag tag-blue">Status change</span><span class="tag tag-red">Payment issue</span></div>
+    </div>
+  </div>
+  <div class="side-foot">
+    <div style="display:flex;justify-content:space-between"><span>Reviewed</span><span>1 of 974</span></div>
+    <div class="bar"><div class="bar-fill" style="width:.1%"></div></div>
+  </div>
+</nav>
+
+<!-- DETAIL -->
+<main class="detail">
+
+  <!-- Matched view -->
+  <div id="v-matched">
+    <div class="d-head">
+      <span class="d-name">Chancelyn Archer</span>
+      <span class="d-id">U73426133</span>
+      <a href="#" class="d-link">View policy</a>
+      <a href="#" class="d-link">View lead</a>
+      <span class="d-match">Strong match — policy #, date, and agent</span>
+    </div>
+
+    <div class="callout callout-amber">
+      <span>⚠</span>
+      <div>
+        <b>Status will change</b> — Payment Error - Active Canceled → Canceled<br>
+        <span class="sec">Not eligible for commission. Canceled (expire: 2026-01-31).</span>
+      </div>
+    </div>
+    <div class="callout callout-blue">
+      <span>ℹ</span>
+      <div>
+        <b>Name mismatch</b><br>
+        <span class="sec">BOB shows "Chancelyn Archer-McKenley" — may be a hyphenation difference.</span>
+      </div>
+    </div>
+
+    <table class="diff">
+      <colgroup><col style="width:24px"><col><col style="width:56px"></colgroup>
+
+      <tr class="sec-row"><td colspan="3">Policy</td></tr>
+
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Policy Number:</span> <span class="fv">U73426133</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Product:</span> <span class="fv">Ambetter — Major Medical</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Effective Date:</span> <span class="fv">Jan 1, 2026</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Paid Through:</span> <span class="fv">Jan 31, 2026</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Broker Effective:</span> <span class="fv">Jan 1, 2026</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Eligible for Commission:</span> <span class="fv">No</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Agent:</span> <span class="fv">Jane Smith</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Agent NPN:</span> <span class="fv">12345678</span></td><td class="ac"></td></tr>
+
+      <tr class="row-del">
+        <td class="mk">−</td>
+        <td class="ct"><span class="fl">Broker Name:</span> <span class="hl-del">Chancelyn Archer</span></td>
+        <td class="ac"><div class="lb"><button class="lbtn y" title="Accept">✓</button><button class="lbtn n" title="Reject">✗</button></div></td>
+      </tr>
+      <tr class="row-add">
+        <td class="mk">+</td>
+        <td class="ct"><span class="fl">Broker Name:</span> <span class="hl-add">Chancelyn Archer-McKenley</span></td>
+        <td class="ac"></td>
+      </tr>
+
+      <tr class="sec-row"><td colspan="3">Status</td></tr>
+
+      <tr class="row-del crit">
+        <td class="mk">−</td>
+        <td class="ct"><span class="fl">Status:</span> <span class="hl-del">Payment Error - Active Canceled</span></td>
+        <td class="ac"><div class="lb"><button class="lbtn y" title="Accept">✓</button><button class="lbtn n" title="Reject">✗</button></div></td>
+      </tr>
+      <tr class="row-add crit">
+        <td class="mk">+</td>
+        <td class="ct"><span class="fl">Status:</span> <span class="hl-add">Canceled</span></td>
+        <td class="ac"></td>
+      </tr>
+
+      <tr class="sec-row"><td colspan="3">Lead</td></tr>
+
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Name:</span> <span class="fv">Chancelyn Archer</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Date of Birth:</span> <span class="fv">Mar 15, 1992</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Email:</span> <span class="fv">c.archer@gmail.com</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">Phone:</span> <span class="fv">(786) 555-0199</span></td><td class="ac"></td></tr>
+      <tr class="row-ctx"><td class="mk"></td><td class="ct"><span class="fl">State:</span> <span class="fv">Florida</span></td><td class="ac"></td></tr>
+    </table>
+
+    <div class="d-foot">
+      <button type="button" class="btn btn-green">Accept all</button>
+      <button type="button" class="btn btn-red-text">Reject</button>
+      <button type="button" class="btn">Skip</button>
+      <input type="text" class="note" placeholder="Add a note…" aria-label="Note">
+      <div class="spacer"></div>
+      <button type="button" class="btn btn-amber-text">Flag for review</button>
+    </div>
+  </div>
+
+  <!-- Unmatched view -->
+  <div id="v-unmatched" style="display:none">
+    <div class="d-head">
+      <span class="d-name">Ashley Brown</span>
+      <span class="d-id">U73345896</span>
+      <span class="tag tag-red" style="font-size:.75rem">Not found in CRM</span>
+      <span class="d-match">No match on policy #, date, name, or NPN</span>
+    </div>
+    <div class="callout callout-red">
+      <span>⚠</span>
+      <div>
+        <b>This policy is on the carrier's Book of Business but has no matching CRM record.</b><br>
+        <span class="sec">Could be a new enrollment, an AOR change from another agency, or a data entry issue.</span>
+      </div>
+    </div>
+    <div class="um-head">Carrier Book of Business data</div>
+    <div class="um-row"><span class="um-label">Policy Number</span><span class="um-val">U73345896</span></div>
+    <div class="um-row"><span class="um-label">Member Name</span><span class="um-val">Ashley Brown</span></div>
+    <div class="um-row"><span class="um-label">Date of Birth</span><span class="um-val">Jul 22, 1995</span></div>
+    <div class="um-row"><span class="um-label">Product</span><span class="um-val">Ambetter — Major Medical</span></div>
+    <div class="um-row"><span class="um-label">Policy Effective</span><span class="um-val">Jan 1, 2026</span></div>
+    <div class="um-row"><span class="um-label">Broker Effective</span><span class="um-val">Mar 15, 2026</span></div>
+    <div class="um-row"><span class="um-label">Paid Through</span><span class="um-val">Apr 30, 2026</span></div>
+    <div class="um-row"><span class="um-label">Eligible</span><span class="um-val">Yes</span></div>
+    <div class="um-row"><span class="um-label">Term Date</span><span class="um-val" style="color:var(--text-3)">—</span></div>
+    <div class="um-row"><span class="um-label">Broker Name</span><span class="um-val">Jane Smith</span></div>
+    <div class="um-row"><span class="um-label">Broker NPN</span><span class="um-val">12345678</span></div>
+    <div class="um-row"><span class="um-label">Applicant Count</span><span class="um-val">1</span></div>
+    <div class="d-foot">
+      <button type="button" class="btn btn-green">Create policy</button>
+      <button type="button" class="btn">Dismiss</button>
+      <input type="text" class="note" placeholder="Add a note…" aria-label="Note">
+      <div class="spacer"></div>
+      <button type="button" class="btn btn-amber-text">Flag for review</button>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <div class="m-head">Apply changes to CRM?</div>
+    <div class="m-body">
+      <p style="color:var(--text-2);margin-bottom:10px">These changes will be written to policy and lead records:</p>
+      <div class="m-row"><span class="ml">Accepted</span><span class="mv mv-g">450</span></div>
+      <div class="m-row"><span class="ml">Status changes</span><span class="mv mv-g">87</span></div>
+      <div class="m-row"><span class="ml">Rejected</span><span class="mv mv-r">12</span></div>
+      <div class="m-row"><span class="ml">Skipped</span><span class="mv mv-m">413</span></div>
+      <div class="m-row"><span class="ml">Flagged</span><span class="mv mv-a">23</span></div>
+      <div class="m-row"><span class="ml">Unmatched</span><span class="mv mv-m">49</span></div>
+      <hr class="m-hr">
+      <div class="m-row"><span class="ml" style="font-weight:600">CRM records affected</span><span class="mv">450</span></div>
+    </div>
+    <div class="m-foot">
+      <button type="button" class="btn" id="modal-cancel">Cancel</button>
+      <button type="button" class="btn btn-green">Apply 450 changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Sidebar click
+  document.querySelectorAll('.si').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.si').forEach(i => i.classList.remove('active'));
+      el.classList.add('active');
+      const v = el.dataset.v || 'matched';
+      document.getElementById('v-matched').style.display = v === 'matched' ? '' : 'none';
+      document.getElementById('v-unmatched').style.display = v === 'unmatched' ? '' : 'none';
+    });
+  });
+  // Per-line buttons
+  document.querySelectorAll('.lbtn').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      const g = b.closest('.lb');
+      const was = b.classList.contains('a');
+      g.querySelectorAll('.lbtn').forEach(x => x.classList.remove('a'));
+      if (!was) b.classList.add('a');
+      g.classList.toggle('on', !was);
+    });
+  });
+  // Filter chips
+  document.querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+    });
+  });
+  // Modal
+  document.getElementById('apply-btn').addEventListener('click', () => document.getElementById('modal').classList.add('open'));
+  document.getElementById('modal-cancel').addEventListener('click', () => document.getElementById('modal').classList.remove('open'));
+  document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+</script>
+</body>
+</html>

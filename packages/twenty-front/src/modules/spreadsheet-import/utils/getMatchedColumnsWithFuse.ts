@@ -15,10 +15,13 @@ export const getMatchedColumnsWithFuse = ({
   columns,
   fields,
   data,
+  precomputedMatches,
 }: {
   columns: SpreadsheetColumns;
   fields: SpreadsheetImportFields;
   data: MatchColumnsStepProps['data'];
+  // OMNIA-CUSTOM: Pre-computed column→field matches from a saved mapping.
+  precomputedMatches?: Record<string, string>;
 }) => {
   const matchedColumns: SpreadsheetColumn[] = [];
 
@@ -26,7 +29,7 @@ export const getMatchedColumnsWithFuse = ({
     keys: ['label'],
     includeScore: true,
     ignoreLocation: true,
-    threshold: 0.3,
+    threshold: 0.2,
   });
 
   const suggestedFieldsByColumnHeader: Record<
@@ -35,6 +38,23 @@ export const getMatchedColumnsWithFuse = ({
   > = {};
 
   for (const column of columns) {
+    // OMNIA-CUSTOM: Check precomputed matches first (from saved carrier config).
+    const precomputedFieldKey = precomputedMatches?.[column.header];
+    const precomputedField = precomputedFieldKey
+      ? fields.find((f) => f.key === precomputedFieldKey)
+      : undefined;
+
+    if (isDefined(precomputedField)) {
+      const newColumn = setColumn(column, precomputedField, data);
+
+      matchedColumns.push(newColumn);
+      // Skip suggestions for precomputed columns — the dropdown still has all
+      // fields available if the user wants to change the match.
+      suggestedFieldsByColumnHeader[column.header] = [];
+      continue;
+    }
+
+    // Fall through to Fuse.js matching for non-precomputed columns
     const fieldsThatMatch = fieldsToSearch.search(column.header);
 
     const firstMatch = fieldsThatMatch[0] ?? null;
@@ -55,7 +75,7 @@ export const getMatchedColumnsWithFuse = ({
     const isClearBestMatch =
       isDefined(firstMatch?.item) &&
       isDefined(firstMatch?.score) &&
-      firstMatch.score < 0.4 &&
+      firstMatch.score < 0.3 &&
       ((isDefined(secondMatch?.score) &&
         secondMatch.score > firstMatch.score + 0.05) ||
         !isDefined(secondMatch));

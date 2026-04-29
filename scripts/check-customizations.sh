@@ -21,7 +21,11 @@ check_file_contains() {
     return
   fi
 
-  if ! grep -q "$pattern" "$file" 2>/dev/null; then
+  # -F: treat the pattern as a literal string. Without it, BSD grep on
+  # macOS rejects patterns containing repetition operators like `**` with
+  # "repetition-operator operand invalid", producing false-positive overwrite
+  # reports for entirely intact customizations.
+  if ! grep -qF "$pattern" "$file" 2>/dev/null; then
     echo -e "${RED}OVERWRITTEN${NC} $file — $description"
     echo "  Expected pattern: $pattern"
     ERRORS=$((ERRORS + 1))
@@ -52,7 +56,7 @@ check_file_not_contains() {
     return
   fi
 
-  if grep -q "$pattern" "$file" 2>/dev/null; then
+  if grep -qF "$pattern" "$file" 2>/dev/null; then
     echo -e "${RED}REVERTED${NC} $file — $description"
     ERRORS=$((ERRORS + 1))
   else
@@ -874,6 +878,17 @@ check_file_contains \
   "Validation should trim whitespace"
 
 echo ""
+echo "--- Spreadsheet Import Carrier-Config Pre-fill ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/spreadsheet-import/utils/setColumn.ts" \
+  "ReadonlyDeep<SpreadsheetImportField>" \
+  "setColumn must accept ReadonlyDeep<SpreadsheetImportField> for carrier-config pre-fill"
+check_file_contains \
+  "packages/twenty-front/src/modules/spreadsheet-import/utils/getMatchedColumnsWithFuse.ts" \
+  "precomputedMatches" \
+  "getMatchedColumnsWithFuse must accept precomputedMatches param"
+
+echo ""
 echo "--- Relation Picker Filtering ---"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPicker.tsx" \
@@ -893,7 +908,7 @@ check_file_contains \
   "Multiple record picker search must support forceAdditionalFilter"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-picker/multiple-record-picker/hooks/useMultipleRecordPickerPerformSearch.ts" \
-  "combineFilters(\\[excludeFilter, additionalFilter\\])" \
+  "combineFilters([excludeFilter, additionalFilter])" \
   "Lead policy allowlist must persist while excluding already-picked records"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter.ts" \
@@ -1280,33 +1295,53 @@ check_file_contains \
   "Column picker must support relation sub-field expansion"
 
 # ==========================================================
-# Payment Reconciliation Review UI
+# Payment Reconciliation v2 (feature/reconciliation-v2)
 # ==========================================================
+# v1 review UI (ReconciliationReviewPage, PolicyConflictCard, etc.) was
+# superseded by v2 and deliberately not ported. See
+# memory/project-reconciliation-v2.md for architecture.
 
 echo ""
-echo "--- Payment Reconciliation Review UI ---"
+echo "--- Payment Reconciliation v2 ---"
 
-check_file_contains \
-  "packages/twenty-shared/src/types/AppPath.ts" \
-  "ReconciliationReview" \
-  "AppPath must include ReconciliationReview route"
-check_file_contains \
-  "packages/twenty-front/src/modules/app/hooks/useCreateAppRouter.tsx" \
-  "ReconciliationReviewPage" \
-  "Router must include ReconciliationReview route"
-check_file_contains \
-  "packages/twenty-front/src/modules/ui/layout/fullscreen/hooks/useShowFullscreen.ts" \
-  "reconciliation/review" \
-  "Fullscreen hook must include reconciliation review path"
 check_file_exists \
-  "packages/twenty-front/src/pages/reconciliation/ReconciliationReviewPage.tsx" \
-  "Reconciliation review page component"
+  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "Seed command that creates the Reconciliation + CarrierConfig custom workspace objects"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "SeedReconciliationObjectsCommand" \
+  "DatabaseCommandModule must register SeedReconciliationObjectsCommand"
+check_file_contains \
+  "packages/twenty-front/package.json" \
+  "@pierre/diffs" \
+  "@pierre/diffs dependency required for review UI unified-diff rendering"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue.constants.ts" \
+  "reconciliationQueue" \
+  "MessageQueue must include reconciliationQueue for the reconciliation pipeline"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue-priority.constant.ts" \
+  "MessageQueue.reconciliationQueue" \
+  "MESSAGE_QUEUE_PRIORITY must include reconciliationQueue priority"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewBarFilterDropdownAdvancedFilterButton.tsx" \
+  "Gracefully hide the advanced filter affordance when no" \
+  "Advanced filter button must early-return when no current view (reconciliation review page)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/object-filter-dropdown/hooks/useOptionsForSelect.ts" \
+  "useRecordIndexContextOrThrow" \
+  "useOptionsForSelect must read object metadata from RecordIndexContext, not the URL (reconciliation review page)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx" \
+  "ReconciliationDiffsContext" \
+  "Relation chip must read ReconciliationDiffsContext to render inline diff annotations + change-count badge"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "promotePrimaryPhoneToAdditional" \
+  "Inline diff Accept must promote old primary phone/email to additional* (reconciliation review page)"
 check_file_exists \
-  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReview.tsx" \
-  "Reconciliation review main component"
-check_file_exists \
-  "packages/twenty-front/src/modules/reconciliation/components/PolicyConflictCard.tsx" \
-  "Policy conflict card component"
+  "packages/twenty-shared/src/utils/composite/promotePrimaryToAdditional.ts" \
+  "Shared helper used by frontend + backend reconciliation Accept paths"
 
 echo ""
 

@@ -12,8 +12,11 @@ import { useStore } from 'jotai';
 
 export const useComputeColumnSuggestionsAndAutoMatch = () => {
   const store = useStore();
-  const { spreadsheetImportFields: fields, autoMapHeaders } =
-    useSpreadsheetImportInternal();
+  const {
+    spreadsheetImportFields: fields,
+    autoMapHeaders,
+    precomputedMatches,
+  } = useSpreadsheetImportInternal();
 
   const computeColumnSuggestionsAndAutoMatch = useCallback(
     async ({
@@ -29,7 +32,12 @@ export const useComputeColumnSuggestionsAndAutoMatch = () => {
         );
 
         const { matchedColumns, suggestedFieldsByColumnHeader } =
-          getMatchedColumnsWithFuse({ columns, fields, data });
+          getMatchedColumnsWithFuse({
+            columns,
+            fields,
+            data,
+            precomputedMatches,
+          });
 
         store.set(matchColumnsState.atom, matchedColumns);
         store.set(
@@ -38,7 +46,7 @@ export const useComputeColumnSuggestionsAndAutoMatch = () => {
         );
       }
     },
-    [autoMapHeaders, fields, store],
+    [autoMapHeaders, fields, precomputedMatches, store],
   );
 
   return computeColumnSuggestionsAndAutoMatch;
