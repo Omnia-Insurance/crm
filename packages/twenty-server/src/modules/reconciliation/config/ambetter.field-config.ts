@@ -138,7 +138,9 @@ export const AMBETTER_FIELD_CONFIG: FieldConfigEntry[] = [
     statusRole: 'termDate',
   },
 
-  // ─── Commission ──────────────────────────────────────
+  // ─── Eligibility (status-derivation input, not commission tracking) ───
+  // Ambetter sets "Eligible for Commission" = No when a policy lapses.
+  // The status engine reads this to derive CANCELED.
   {
     name: 'eligibleForCommission',
     label: 'Eligible for Commission',
