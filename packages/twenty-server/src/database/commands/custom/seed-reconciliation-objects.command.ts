@@ -14,7 +14,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -22,9 +22,21 @@ import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { ObjectPermissionService } from 'src/engine/metadata-modules/object-permission/object-permission.service';
+import { ADMIN_ROLE_LABEL } from 'src/engine/metadata-modules/permissions/constants/admin-role-label.constants';
+import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { type FieldMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/field-metadata-seed.type';
 import { type ObjectMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/object-metadata-seed.type';
+
+// All Omnia reconciliation/commission objects that should be admin-only.
+const ADMIN_ONLY_OBJECT_NAMES = [
+  'reconciliation',
+  'carrierConfig',
+  'reviewItem',
+  'commissionStatement',
+  'commissionLineItem',
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object + field specs
@@ -614,8 +626,11 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     @InjectRepository(ObjectMetadataEntity)
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
+    @InjectRepository(RoleEntity)
+    private readonly roleRepository: Repository<RoleEntity>,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
+    private readonly objectPermissionService: ObjectPermissionService,
     private readonly workspaceCacheService: WorkspaceCacheService,
   ) {
     super(workspaceIteratorService);
@@ -842,9 +857,77 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       ]);
     }
 
+    // 5. Restrict to Admin role: deny read/write on these objects for every
+    //    non-Admin role in the workspace. The reconciliation/commission
+    //    pipeline is internal-only — agents and members shouldn't see it.
+    await this.restrictToAdminRole({ workspaceId, dryRun: isDryRun });
+
     this.logger.log(
       `Finished seeding reconciliation objects for workspace ${workspaceId}`,
     );
+  }
+
+  private async restrictToAdminRole({
+    workspaceId,
+    dryRun,
+  }: {
+    workspaceId: string;
+    dryRun: boolean;
+  }): Promise<void> {
+    const objects = await this.objectMetadataRepository.find({
+      where: {
+        workspaceId,
+        nameSingular: In(ADMIN_ONLY_OBJECT_NAMES),
+      },
+    });
+
+    if (objects.length === 0) {
+      this.logger.warn(
+        '  No reconciliation/commission objects found — skipping permission lock-down',
+      );
+
+      return;
+    }
+
+    const roles = await this.roleRepository.find({ where: { workspaceId } });
+    const nonAdminRoles = roles.filter((r) => r.label !== ADMIN_ROLE_LABEL);
+
+    if (nonAdminRoles.length === 0) {
+      this.logger.log(
+        '  Only Admin role exists — no per-role permissions to write',
+      );
+
+      return;
+    }
+
+    if (dryRun) {
+      this.logger.log(
+        `  [DRY RUN] would deny read/write on ${objects.length} object(s) for ${nonAdminRoles.length} non-admin role(s): ${nonAdminRoles.map((r) => r.label).join(', ')}`,
+      );
+
+      return;
+    }
+
+    const objectPermissions = objects.map((o) => ({
+      objectMetadataId: o.id,
+      canReadObjectRecords: false,
+      canUpdateObjectRecords: false,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
+    }));
+
+    for (const role of nonAdminRoles) {
+      this.logger.log(
+        `  + Locking ${objects.length} object(s) from role "${role.label}"`,
+      );
+      await this.objectPermissionService.upsertObjectPermissions({
+        workspaceId,
+        input: {
+          roleId: role.id,
+          objectPermissions,
+        },
+      });
+    }
   }
 
   // ───────────────────────────────────────────────────────────────────────

@@ -39,6 +39,9 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
+// OMNIA-CUSTOM: needed by SeedReconciliationObjectsCommand to lock recon objects to admins
+import { ObjectPermissionModule } from 'src/engine/metadata-modules/object-permission/object-permission.module';
+import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
@@ -55,7 +58,9 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([ObjectMetadataEntity, WorkspaceEntity]),
+    TypeOrmModule.forFeature([ObjectMetadataEntity, RoleEntity, WorkspaceEntity]),
+    // OMNIA-CUSTOM: Reconciliation seed restricts new objects to Admin role only
+    ObjectPermissionModule,
     WorkspaceExportModule,
     // Cron command dependencies
     MessagingImportManagerModule,
