@@ -874,6 +874,17 @@ check_file_contains \
   "Validation should trim whitespace"
 
 echo ""
+echo "--- Spreadsheet Import Carrier-Config Pre-fill ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/spreadsheet-import/utils/setColumn.ts" \
+  "ReadonlyDeep<SpreadsheetImportField>" \
+  "setColumn must accept ReadonlyDeep<SpreadsheetImportField> for carrier-config pre-fill"
+check_file_contains \
+  "packages/twenty-front/src/modules/spreadsheet-import/utils/getMatchedColumnsWithFuse.ts" \
+  "precomputedMatches" \
+  "getMatchedColumnsWithFuse must accept precomputedMatches param"
+
+echo ""
 echo "--- Relation Picker Filtering ---"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-picker/single-record-picker/components/SingleRecordPicker.tsx" \

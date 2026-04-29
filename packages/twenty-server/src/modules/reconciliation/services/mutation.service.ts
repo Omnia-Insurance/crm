@@ -53,27 +53,6 @@ export class ReconciliationMutationService {
     );
   }
 
-  async updateCommissionStatement(
-    workspaceId: string,
-    statementId: string,
-    data: Record<string, unknown>,
-  ): Promise<void> {
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'commissionStatement',
-          { shouldBypassPermissionChecks: true },
-        );
-
-        await repo.update({ id: statementId }, data);
-      },
-      authContext,
-    );
-  }
-
   async updateLead(
     workspaceId: string,
     leadId: string,

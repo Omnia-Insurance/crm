@@ -5,7 +5,6 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
-import { ContextStoreViewType } from '@/context-store/types/ContextStoreViewType';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { styled } from '@linaria/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -107,7 +106,7 @@ export const ReconciliationReviewPageContent = ({
   );
   useEffect(() => {
     setContextStoreCurrentObjectMetadataItemId(objectMetadataItem.id);
-    setContextStoreCurrentViewType(ContextStoreViewType.ShowPage);
+    setContextStoreCurrentViewType(null);
     return () => {
       setContextStoreCurrentObjectMetadataItemId(undefined);
       setContextStoreCurrentViewType(null);

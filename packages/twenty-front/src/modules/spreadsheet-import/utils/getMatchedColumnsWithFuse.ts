@@ -32,32 +32,25 @@ export const getMatchedColumnsWithFuse = ({
     threshold: 0.2,
   });
 
-  // OMNIA-CUSTOM: Build a lookup for precomputed matches (field key → field)
-  const precomputedFieldByKey = new Map<string, SpreadsheetImportField>();
-
-  if (precomputedMatches) {
-    for (const field of fields) {
-      precomputedFieldByKey.set(field.key, field);
-    }
-  }
-
   const suggestedFieldsByColumnHeader: Record<
     SpreadsheetColumn['header'],
     SpreadsheetImportField[]
   > = {};
 
   for (const column of columns) {
-    // OMNIA-CUSTOM: Check precomputed matches first (from saved carrier config)
+    // OMNIA-CUSTOM: Check precomputed matches first (from saved carrier config).
     const precomputedFieldKey = precomputedMatches?.[column.header];
     const precomputedField = precomputedFieldKey
-      ? precomputedFieldByKey.get(precomputedFieldKey)
+      ? fields.find((f) => f.key === precomputedFieldKey)
       : undefined;
 
     if (isDefined(precomputedField)) {
-      const newColumn = setColumn(column, precomputedField as any, data);
+      const newColumn = setColumn(column, precomputedField, data);
 
       matchedColumns.push(newColumn);
-      suggestedFieldsByColumnHeader[column.header] = [precomputedField];
+      // Skip suggestions for precomputed columns — the dropdown still has all
+      // fields available if the user wants to change the match.
+      suggestedFieldsByColumnHeader[column.header] = [];
       continue;
     }
 

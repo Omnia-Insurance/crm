@@ -5,7 +5,6 @@ import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
 import type {
   CarrierConfigRecord,
-  CommissionStatementRecord,
   EnrichedPolicyData,
   ReconciliationRecord,
 } from 'src/modules/reconciliation/types/reconciliation';
@@ -75,36 +74,6 @@ export class ReconciliationDataService {
         }
 
         return record as unknown as CarrierConfigRecord;
-      },
-      authContext,
-    );
-  }
-
-  async getCommissionStatement(
-    workspaceId: string,
-    statementId: string,
-  ): Promise<CommissionStatementRecord> {
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'commissionStatement',
-          { shouldBypassPermissionChecks: true },
-        );
-
-        const record = await repo.findOne({
-          where: { id: statementId },
-        });
-
-        if (!record) {
-          throw new Error(
-            `CommissionStatement ${statementId} not found in workspace ${workspaceId}`,
-          );
-        }
-
-        return record as unknown as CommissionStatementRecord;
       },
       authContext,
     );

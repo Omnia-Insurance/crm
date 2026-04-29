@@ -104,25 +104,6 @@ export class ReconciliationOrchestratorService {
     }
   }
 
-  async startCommissionParsing(
-    workspaceId: string,
-    statementId: string,
-  ): Promise<void> {
-    await this.stateMachine.transitionCommissionStatement(
-      workspaceId,
-      statementId,
-      'UPLOADED',
-      'PARSING',
-    );
-
-    await this.queue.add<ReconciliationJobData>('commission-parse', {
-      workspaceId,
-      reconciliationId: statementId,
-    });
-
-    this.logger.log(`Enqueued commission parse job for statement ${statementId}`);
-  }
-
   private async runApplyInline(
     workspaceId: string,
     reconciliationId: string,

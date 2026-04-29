@@ -213,6 +213,8 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `command-menu-item/engine-command/record/multiple-records/components/ExportMultipleRecordsCommand.tsx` | Derives relation export configs from view sub-field columns                           |
 | `spreadsheet-import/utils/dataMutations.ts`                                                            | Trim whitespace before validation                                                     |
 | `spreadsheet-import/utils/normalizeTableData.ts`                                                       | Trim whitespace on matched column values                                              |
+| `spreadsheet-import/utils/setColumn.ts`                                                                | Widened `field` param to accept `ReadonlyDeep<SpreadsheetImportField>` (read-only)    |
+| `spreadsheet-import/utils/getMatchedColumnsWithFuse.ts`                                                | Added optional `precomputedMatches` param for carrier-config-driven pre-fill          |
 
 ### New Spreadsheet Import Utilities
 

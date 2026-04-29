@@ -29,13 +29,11 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 import { type FieldMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/field-metadata-seed.type';
 import { type ObjectMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/object-metadata-seed.type';
 
-// All Omnia reconciliation/commission objects that should be admin-only.
+// All Omnia reconciliation objects that should be admin-only.
 const ADMIN_ONLY_OBJECT_NAMES = [
   'reconciliation',
   'carrierConfig',
   'reviewItem',
-  'commissionStatement',
-  'commissionLineItem',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,243 +223,6 @@ const CARRIER_CONFIG_V2_FIELDS: FieldMetadataSeed[] = [
     description:
       'Maps BOB plan names to CRM product records. Array of { pattern, productId, productName }. Case-insensitive substring match, first match wins.',
     icon: 'IconPackage',
-  },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Commission tracking — CarrierConfig extensions + new objects
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CARRIER_CONFIG_COMMISSION_FIELDS: FieldMetadataSeed[] = [
-  {
-    type: FieldMetadataType.RAW_JSON,
-    name: 'commissionConfig',
-    label: 'Commission Config',
-    description:
-      'Commission rate configuration: comp type (pmpm/percentage), payment lag, default rate, and per-state rate table.',
-    icon: 'IconCash',
-  },
-  {
-    type: FieldMetadataType.RAW_JSON,
-    name: 'commissionColumnMapping',
-    label: 'Commission Column Mapping',
-    description:
-      'Default column mapping for commission statement imports (separate from BOB column mapping).',
-    icon: 'IconColumns',
-  },
-];
-
-const COMMISSION_STATEMENT_OBJECT: ObjectMetadataSeed = {
-  nameSingular: 'commissionStatement',
-  namePlural: 'commissionStatements',
-  labelSingular: 'Commission Statement',
-  labelPlural: 'Commission Statements',
-  description:
-    'An uploaded carrier commission statement. Contains payment lines matched to CRM policies with expected vs actual delta calculations.',
-  icon: 'IconReportMoney',
-};
-
-const COMMISSION_STATEMENT_FIELDS: FieldMetadataSeed[] = [
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'statementPeriod',
-    label: 'Statement Period',
-    description: 'The period this statement covers (e.g., "2026-03")',
-    icon: 'IconCalendar',
-  },
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'sheetName',
-    label: 'Sheet Name',
-    description: 'Which sheet of the uploaded workbook was used',
-    icon: 'IconTable',
-  },
-  {
-    type: FieldMetadataType.SELECT,
-    name: 'status',
-    label: 'Status',
-    description: 'Pipeline state',
-    icon: 'IconProgress',
-    options: [
-      { label: 'Uploaded', value: 'UPLOADED', position: 0, color: 'sky' },
-      { label: 'Parsing', value: 'PARSING', position: 1, color: 'blue' },
-      { label: 'Matching', value: 'MATCHING', position: 2, color: 'orange' },
-      { label: 'Review', value: 'REVIEW', position: 3, color: 'yellow' },
-      { label: 'Completed', value: 'COMPLETED', position: 4, color: 'green' },
-      { label: 'Failed', value: 'FAILED', position: 5, color: 'red' },
-    ],
-  },
-  {
-    type: FieldMetadataType.RAW_JSON,
-    name: 'columnMapping',
-    label: 'Column Mapping',
-    description: 'Snapshot of the column mapping used for this statement',
-    icon: 'IconColumns',
-  },
-  {
-    type: FieldMetadataType.RAW_JSON,
-    name: 'stats',
-    label: 'Stats',
-    description:
-      'Aggregate stats: totalLines, matched, unmatched, totalExpected, totalReceived, delta',
-    icon: 'IconChartBar',
-  },
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'errorMessage',
-    label: 'Error Message',
-    description: 'Last error encountered, if any',
-    icon: 'IconAlertTriangle',
-  },
-];
-
-const COMMISSION_LINE_ITEM_OBJECT: ObjectMetadataSeed = {
-  nameSingular: 'commissionLineItem',
-  namePlural: 'commissionLineItems',
-  labelSingular: 'Commission Line Item',
-  labelPlural: 'Commission Line Items',
-  description:
-    'Individual payment line from a commission statement, matched to a CRM policy with expected vs actual delta.',
-  icon: 'IconReceipt',
-};
-
-const COMMISSION_LINE_ITEM_FIELDS: FieldMetadataSeed[] = [
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'policyNumber',
-    label: 'Policy Number',
-    description: 'Policy number from the commission statement',
-    icon: 'IconHash',
-  },
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'memberName',
-    label: 'Member Name',
-    description: 'Member name from the commission statement',
-    icon: 'IconUser',
-  },
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'amountPaid',
-    label: 'Amount Paid',
-    description: 'Actual commission amount received',
-    icon: 'IconCash',
-  },
-  {
-    type: FieldMetadataType.TEXT,
-    name: 'periodCovered',
-    label: 'Period Covered',
-    description: 'Which month(s) this payment covers',
-    icon: 'IconCalendar',
-  },
-  {
-    type: FieldMetadataType.SELECT,
-    name: 'matchMethod',
-    label: 'Match Method',
-    description: 'How this line was matched to a policy',
-    icon: 'IconLink',
-    options: [
-      { label: 'Exact', value: 'EXACT', position: 0, color: 'green' },
-      { label: 'Fuzzy', value: 'FUZZY', position: 1, color: 'blue' },
-      { label: 'Manual', value: 'MANUAL', position: 2, color: 'orange' },
-      { label: 'Unmatched', value: 'UNMATCHED', position: 3, color: 'red' },
-    ],
-  },
-  {
-    type: FieldMetadataType.NUMBER,
-    name: 'confidence',
-    label: 'Confidence',
-    description: 'Match confidence score (0-100)',
-    icon: 'IconPercentage',
-  },
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'expectedAmount',
-    label: 'Expected Amount',
-    description: 'Expected commission calculated from rate table (member_count × PMPM)',
-    icon: 'IconCalculator',
-  },
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'delta',
-    label: 'Delta',
-    description: 'Difference: expected - actual (positive = underpaid)',
-    icon: 'IconArrowsUpDown',
-  },
-  {
-    type: FieldMetadataType.SELECT,
-    name: 'deltaStatus',
-    label: 'Delta Status',
-    description: 'Classification of the payment delta',
-    icon: 'IconScale',
-    options: [
-      { label: 'Correct', value: 'CORRECT', position: 0, color: 'green' },
-      { label: 'Underpaid', value: 'UNDERPAID', position: 1, color: 'red' },
-      { label: 'Overpaid', value: 'OVERPAID', position: 2, color: 'blue' },
-      { label: 'Unmatched', value: 'UNMATCHED', position: 3, color: 'orange' },
-      { label: 'Missing', value: 'MISSING', position: 4, color: 'red' },
-    ],
-  },
-  {
-    type: FieldMetadataType.RAW_JSON,
-    name: 'rowSnapshot',
-    label: 'Row Snapshot',
-    description: 'Snapshot of the raw statement row data',
-    icon: 'IconDatabase',
-  },
-];
-
-// Policy fields for commission tracking
-const POLICY_COMMISSION_FIELDS: FieldMetadataSeed[] = [
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'expectedMonthlyCommission',
-    label: 'Expected Monthly Commission',
-    description: 'Expected monthly commission (member_count × PMPM rate)',
-    icon: 'IconCash',
-  },
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'totalCommissionReceived',
-    label: 'Total Commission Received',
-    description: 'Running total of commission received across all statements',
-    icon: 'IconCash',
-  },
-  {
-    type: FieldMetadataType.DATE,
-    name: 'lastCommissionDate',
-    label: 'Last Commission Date',
-    description: 'Date of the most recent commission payment',
-    icon: 'IconCalendar',
-  },
-  {
-    type: FieldMetadataType.CURRENCY,
-    name: 'lastCommissionAmount',
-    label: 'Last Commission Amount',
-    description: 'Amount of the most recent commission payment',
-    icon: 'IconCash',
-  },
-  {
-    type: FieldMetadataType.NUMBER,
-    name: 'consecutiveMissedPayments',
-    label: 'Consecutive Missed Payments',
-    description: 'Counter for unmonitored policies that stop getting paid',
-    icon: 'IconAlertTriangle',
-  },
-  {
-    type: FieldMetadataType.NUMBER,
-    name: 'monthsPaidWhileUnmonitored',
-    label: 'Months Paid While Unmonitored',
-    description: 'Tracks how long a termed-agent policy has been paying without BOB visibility',
-    icon: 'IconEye',
-  },
-  {
-    type: FieldMetadataType.BOOLEAN,
-    name: 'autoAuditFlag',
-    label: 'Auto Audit Flag',
-    description: 'Set when an unmonitored policy misses a payment, triggers audit queue',
-    icon: 'IconFlag',
-    defaultValue: false,
   },
 ];
 
@@ -761,94 +522,6 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       dryRun: isDryRun,
     });
 
-    // ── Commission tracking objects ──
-
-    await this.ensureObjectExists({
-      workspaceId,
-      seed: COMMISSION_STATEMENT_OBJECT,
-      dryRun: isDryRun,
-    });
-
-    await this.ensureObjectExists({
-      workspaceId,
-      seed: COMMISSION_LINE_ITEM_OBJECT,
-      dryRun: isDryRun,
-    });
-
-    // Commission fields on CarrierConfig
-    await this.ensureFieldsExist({
-      workspaceId,
-      objectNameSingular: CARRIER_CONFIG_OBJECT.nameSingular,
-      fieldSeeds: CARRIER_CONFIG_COMMISSION_FIELDS,
-      dryRun: isDryRun,
-    });
-
-    await this.ensureFieldsExist({
-      workspaceId,
-      objectNameSingular: COMMISSION_STATEMENT_OBJECT.nameSingular,
-      fieldSeeds: COMMISSION_STATEMENT_FIELDS,
-      dryRun: isDryRun,
-    });
-
-    await this.ensureFieldsExist({
-      workspaceId,
-      objectNameSingular: COMMISSION_LINE_ITEM_OBJECT.nameSingular,
-      fieldSeeds: COMMISSION_LINE_ITEM_FIELDS,
-      dryRun: isDryRun,
-    });
-
-    // Commission tracking fields on Policy
-    await this.ensureFieldsExist({
-      workspaceId,
-      objectNameSingular: 'policy',
-      fieldSeeds: POLICY_COMMISSION_FIELDS,
-      dryRun: isDryRun,
-    });
-
-    // ── Commission relations ──
-
-    // CarrierConfig -> CommissionStatement (ONE_TO_MANY)
-    await this.ensureRelation({
-      workspaceId,
-      sourceObjectNameSingular: CARRIER_CONFIG_OBJECT.nameSingular,
-      targetObjectNameSingular: COMMISSION_STATEMENT_OBJECT.nameSingular,
-      fieldName: 'commissionStatements',
-      fieldLabel: 'Commission Statements',
-      fieldIcon: 'IconReportMoney',
-      relationType: RelationType.ONE_TO_MANY,
-      targetFieldLabel: 'Carrier Config',
-      targetFieldIcon: 'IconSettings',
-      dryRun: isDryRun,
-    });
-
-    // CommissionLineItem -> CommissionStatement (MANY_TO_ONE)
-    await this.ensureRelation({
-      workspaceId,
-      sourceObjectNameSingular: COMMISSION_LINE_ITEM_OBJECT.nameSingular,
-      targetObjectNameSingular: COMMISSION_STATEMENT_OBJECT.nameSingular,
-      fieldName: 'commissionStatement',
-      fieldLabel: 'Commission Statement',
-      fieldIcon: 'IconReportMoney',
-      relationType: RelationType.MANY_TO_ONE,
-      targetFieldLabel: 'Line Items',
-      targetFieldIcon: 'IconReceipt',
-      dryRun: isDryRun,
-    });
-
-    // CommissionLineItem -> Policy (MANY_TO_ONE)
-    await this.ensureRelation({
-      workspaceId,
-      sourceObjectNameSingular: COMMISSION_LINE_ITEM_OBJECT.nameSingular,
-      targetObjectNameSingular: 'policy',
-      fieldName: 'policy',
-      fieldLabel: 'Policy',
-      fieldIcon: 'IconFileText',
-      relationType: RelationType.MANY_TO_ONE,
-      targetFieldLabel: 'Commission Line Items',
-      targetFieldIcon: 'IconReceipt',
-      dryRun: isDryRun,
-    });
-
     // 4. Invalidate workspace caches so new metadata is picked up
     if (!isDryRun) {
       await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
@@ -858,8 +531,8 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     }
 
     // 5. Restrict to Admin role: deny read/write on these objects for every
-    //    non-Admin role in the workspace. The reconciliation/commission
-    //    pipeline is internal-only — agents and members shouldn't see it.
+    //    non-Admin role in the workspace. The reconciliation pipeline
+    //    is internal-only — agents and members shouldn't see it.
     await this.restrictToAdminRole({ workspaceId, dryRun: isDryRun });
 
     this.logger.log(
@@ -883,7 +556,7 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
     if (objects.length === 0) {
       this.logger.warn(
-        '  No reconciliation/commission objects found — skipping permission lock-down',
+        '  No reconciliation objects found — skipping permission lock-down',
       );
 
       return;

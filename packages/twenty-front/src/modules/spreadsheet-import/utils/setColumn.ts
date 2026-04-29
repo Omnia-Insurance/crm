@@ -6,12 +6,16 @@ import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetCol
 import { type SpreadsheetMatchedOptions } from '@/spreadsheet-import/types/SpreadsheetMatchedOptions';
 import { spreadsheetImportParseMultiSelectOptionsOrThrow } from '@/spreadsheet-import/utils/spreadsheetImportParseMultiSelectOptionsOrThrow';
 import { t } from '@lingui/core/macro';
+import { type ReadonlyDeep } from 'type-fest';
 import { isDefined } from 'twenty-shared/utils';
 import { uniqueEntries } from './uniqueEntries';
 
+// OMNIA-CUSTOM: param widened from `SpreadsheetImportField` to allow the
+// readonly-deep variant produced by SpreadsheetImportFields. This function
+// only reads `field`, never mutates, so accepting either is safe.
 export const setColumn = (
   oldColumn: SpreadsheetColumn,
-  field?: SpreadsheetImportField,
+  field?: SpreadsheetImportField | ReadonlyDeep<SpreadsheetImportField>,
   data?: MatchColumnsStepProps['data'],
 ): SpreadsheetColumn => {
   if (field?.fieldType.type === 'select') {

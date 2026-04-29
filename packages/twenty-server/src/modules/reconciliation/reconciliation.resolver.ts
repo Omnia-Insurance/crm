@@ -81,24 +81,6 @@ export class ReconciliationResolver {
   }
 
   @Mutation(() => StartReconciliationResultDTO)
-  async startCommissionParsing(
-    @Args('statementId', { type: () => UUIDScalarType })
-    statementId: string,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-  ): Promise<StartReconciliationResultDTO> {
-    await this.orchestratorService.startCommissionParsing(
-      workspace.id,
-      statementId,
-    );
-
-    return {
-      success: true,
-      reconciliationId: statementId,
-      status: 'PARSING',
-    };
-  }
-
-  @Mutation(() => StartReconciliationResultDTO)
   async batchApproveReviewItems(
     @Args('reconciliationId', { type: () => UUIDScalarType })
     reconciliationId: string,

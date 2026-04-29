@@ -264,13 +264,6 @@ export const buildSyntheticPolicyRecord = ({
     applicationId: null,
     oldCrmPolicyId: null,
     ltv: { amountMicros: ltvAmountMicros, currencyCode: 'USD' },
-    expectedMonthlyCommission: { amountMicros: null, currencyCode: 'USD' },
-    totalCommissionReceived: { amountMicros: null, currencyCode: 'USD' },
-    lastCommissionDate: null,
-    lastCommissionAmount: { amountMicros: null, currencyCode: 'USD' },
-    consecutiveMissedPayments: null,
-    monthsPaidWhileUnmonitored: null,
-    autoAuditFlag: false,
   } as ObjectRecord;
 
   return { policy, lead };
