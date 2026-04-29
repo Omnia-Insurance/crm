@@ -16,6 +16,11 @@ import {
   OverflowingTextWithTooltip,
   TooltipDelay,
 } from 'twenty-ui/display';
+import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
+import {
+  promotePrimaryEmailToAdditional,
+  promotePrimaryPhoneToAdditional,
+} from 'twenty-shared/utils';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 import { useRecordInlineCellContext } from './RecordInlineCellContext';
 
@@ -69,13 +74,17 @@ const StyledInlineCellBaseContainer = styled.div<{
   user-select: none;
   width: 100%;
   background: ${({ diffState }) => {
-    if (diffState === 'accepted') return themeCssVariables.color.transparent.red2;
-    if (diffState === 'pending') return themeCssVariables.color.transparent.green2;
+    if (diffState === 'accepted')
+      return themeCssVariables.color.transparent.red2;
+    if (diffState === 'pending')
+      return themeCssVariables.color.transparent.green2;
     return 'transparent';
   }};
   border-left: ${({ diffState }) => {
-    if (diffState === 'accepted') return `2px solid ${themeCssVariables.color.red}`;
-    if (diffState === 'pending') return `2px solid ${themeCssVariables.color.green}`;
+    if (diffState === 'accepted')
+      return `2px solid ${themeCssVariables.color.red}`;
+    if (diffState === 'pending')
+      return `2px solid ${themeCssVariables.color.green}`;
     return '2px solid transparent';
   }};
   border-radius: ${({ diffState }) =>
@@ -132,13 +141,9 @@ const StyledDiffAcceptBtn = styled.button<{ accepted: boolean }>`
   height: 20px;
   border: 1px solid
     ${({ accepted }) =>
-      accepted
-        ? themeCssVariables.color.red
-        : themeCssVariables.color.green};
+      accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
   background: ${({ accepted }) =>
-    accepted
-      ? themeCssVariables.color.red
-      : themeCssVariables.color.green};
+    accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
   color: #fff;
   opacity: 0.75;
 
@@ -234,6 +239,24 @@ export const RecordInlineCellContainer = () => {
             : {};
         // Remove __typename if present (GraphQL artifact)
         delete existing.__typename;
+
+        // OMNIA-CUSTOM: When the changed sub-field is the primary of a
+        // phones/emails composite, push the previous primary into the
+        // additional bucket instead of overwriting it. Keeps both contacts
+        // reachable. See twenty-shared/utils/composite/promotePrimaryToAdditional.
+        if (subField === 'primaryPhoneNumber') {
+          return promotePrimaryPhoneToAdditional(
+            existing as PhonesMetadata,
+            rawValue,
+          );
+        }
+        if (subField === 'primaryEmail') {
+          return promotePrimaryEmailToAdditional(
+            existing as EmailsMetadata,
+            rawValue,
+          );
+        }
+
         // Set the changed sub-field
         existing[subField] = rawValue;
         return existing;
@@ -311,9 +334,7 @@ export const RecordInlineCellContainer = () => {
           </StyledDiffOld>
           <StyledDiffArrow>→</StyledDiffArrow>
           <StyledDiffNew>
-            {accepted
-              ? fieldDiff.oldValue || '(empty)'
-              : fieldDiff.newValue}
+            {accepted ? fieldDiff.oldValue || '(empty)' : fieldDiff.newValue}
           </StyledDiffNew>
           <StyledDiffAcceptBtn
             accepted={accepted}

@@ -5,6 +5,7 @@ import { Process } from 'src/engine/core-modules/message-queue/decorators/proces
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { STATUS_ENGINE_ROLE_TYPES } from 'src/modules/reconciliation/engines/status';
 import { parseXlsxSheet } from 'src/modules/reconciliation/parsers/xlsx';
 import {
   TRANSFORMS,
@@ -102,26 +103,17 @@ export class ReconciliationParseJob {
         actualHeaders,
       );
 
-      // Status engine role → implicit data type (for non-CRM pipeline inputs)
-      const STATUS_ROLE_TYPES: Record<string, string> = {
-        effectiveDate: 'date',
-        paidThroughDate: 'date',
-        termDate: 'date',
-        eligibleForCommission: 'boolean',
-        brokerEffectiveDate: 'date',
-        policyEffectiveDate: 'date',
-      };
-
       // Build header → dataType map from both columnMapping (CRM-mapped)
-      // AND statusFieldMapping (pipeline inputs with implicit types).
+      // AND statusFieldMapping (pipeline inputs with implicit types — see
+      // STATUS_ENGINE_ROLE_TYPES in engines/status.ts for the contract).
       const headerTypes = new Map<string, string>();
 
       for (const [header, entry] of Object.entries(columnMapping)) {
         headerTypes.set(header, inferDataType(entry.fieldType));
       }
       for (const [role, header] of Object.entries(statusFieldMapping)) {
-        if (!headerTypes.has(header) && STATUS_ROLE_TYPES[role]) {
-          headerTypes.set(header, STATUS_ROLE_TYPES[role]);
+        if (!headerTypes.has(header) && STATUS_ENGINE_ROLE_TYPES[role]) {
+          headerTypes.set(header, STATUS_ENGINE_ROLE_TYPES[role]);
         }
       }
 

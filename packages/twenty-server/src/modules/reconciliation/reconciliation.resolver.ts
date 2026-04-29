@@ -63,35 +63,19 @@ export class ReconciliationResolver {
   }
 
   @Mutation(() => StartReconciliationResultDTO)
-  async startReconciliationApply(
-    @Args('reconciliationId', { type: () => UUIDScalarType })
-    reconciliationId: string,
-    @AuthWorkspace() workspace: WorkspaceEntity,
-  ): Promise<StartReconciliationResultDTO> {
-    await this.orchestratorService.startApplying(
-      workspace.id,
-      reconciliationId,
-    );
-
-    return {
-      success: true,
-      reconciliationId,
-      status: 'COMPLETED',
-    };
-  }
-
-  @Mutation(() => StartReconciliationResultDTO)
   async batchApproveReviewItems(
     @Args('reconciliationId', { type: () => UUIDScalarType })
     reconciliationId: string,
     @Args('minConfidence', { type: () => Float, nullable: true })
     minConfidence: number | undefined,
+    @Args('reviewItemIds', { type: () => [UUIDScalarType], nullable: true })
+    reviewItemIds: string[] | undefined,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<StartReconciliationResultDTO> {
     const result = await this.reviewItemService.batchApprove(
       workspace.id,
       reconciliationId,
-      { minConfidence },
+      { minConfidence, reviewItemIds },
     );
 
     return {

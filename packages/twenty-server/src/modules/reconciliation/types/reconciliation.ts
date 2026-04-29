@@ -86,7 +86,9 @@ export type CarrierConfigRecord = {
   id: string;
   name: string;
   parserVersion: string | null;
-  /** @deprecated Use columnMapping (new format) instead */
+  /** Computed-field definitions (`ComputedFieldDef[]`). Despite the legacy
+   *  name, this is the active home for computed-field config — read by
+   *  match.job.ts and parse.job.ts. */
   fieldConfig: Record<string, unknown>[] | null;
   matchingConfig: Record<string, unknown> | null;
   statusConfig: StatusConfig | null;
@@ -94,12 +96,6 @@ export type CarrierConfigRecord = {
   policyNumberPattern?: string | null;
   columnMapping?: ColumnMapping | null;
   productMapping?: ProductMappingEntry[] | null;
-  /** @deprecated Use fieldConfig instead */
-  transformRules?: Record<string, unknown> | null;
-  /** @deprecated Use statusConfig instead */
-  statusRules?: Record<string, unknown> | null;
-  /** @deprecated Use fieldConfig instead */
-  explanationRules?: Record<string, unknown> | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -118,9 +114,6 @@ export type ColumnMappingEntry = {
 };
 
 export type ColumnMapping = Record<string, ColumnMappingEntry>;
-
-/** @deprecated Legacy column mapping format (canonical name → XLSX aliases) */
-export type LegacyColumnMapping = Record<string, string[]>;
 
 // ---------------------------------------------------------------------------
 // Status engine config
@@ -159,12 +152,16 @@ export type ComputedFieldDef = {
 // Enriched policy data (extra fields fetched after matching)
 // ---------------------------------------------------------------------------
 
+/**
+ * Phase-2 enrichment loaded only for matched policies. Path-keyed to match
+ * `CrmPolicy` shape so a simple spread is enough to merge in `buildPolicyForDiff`.
+ */
 export type EnrichedPolicyData = {
   id: string;
   planIdentifier: string | null;
-  leadId: string | null;
-  leadPhone: string | null;
-  leadEmail: string | null;
+  'lead.id': string | null;
+  'lead.phones.primaryPhoneNumber': string | null;
+  'lead.emails.primaryEmail': string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -199,34 +196,6 @@ export const ACTIVE_CRM_STATUSES = new Set([
   'PAYMENT_ERROR_ACTIVE_APPROVED',
   'PAYMENT_ERROR_ACTIVE_PLACED',
 ]);
-
-// ---------------------------------------------------------------------------
-// Pipeline error
-// ---------------------------------------------------------------------------
-
-export class PipelineError extends Error {
-  public readonly reconciliationId: string;
-  public readonly step: string;
-  public readonly originalError: unknown;
-
-  constructor(
-    reconciliationId: string,
-    step: string,
-    originalError: unknown,
-  ) {
-    const originalMessage =
-      originalError instanceof Error
-        ? originalError.message
-        : String(originalError);
-
-    super(`[${step}] ${originalMessage}`);
-
-    this.name = 'PipelineError';
-    this.reconciliationId = reconciliationId;
-    this.step = step;
-    this.originalError = originalError;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Utility

@@ -170,71 +170,113 @@ export const RecordDetailRelationRecordsListItem = ({
     }));
   }, [reconDiffs, relationName]);
 
-  // OMNIA-CUSTOM: Extract name diffs for the diff-chip on the relation header
-  const nameDiffs = useMemo(() => {
-    if (!relationFieldDiffs) return null;
-    return relationFieldDiffs.filter(
-      (d) => d.crmField?.startsWith('name.'),
-    );
+  // OMNIA-CUSTOM: Extract this relation's name diffs (composite or single).
+  // "Name-shaped" covers both composite (lead.name.firstName/lastName) and
+  // single TEXT name fields (agent.name). Non-name diffs surface only on
+  // the expanded RecordFieldList — the chip is name-focused.
+  const compositeNameDiffs = useMemo(() => {
+    if (!relationFieldDiffs) return [];
+    return relationFieldDiffs.filter((d) => d.crmField?.startsWith('name.'));
   }, [relationFieldDiffs]);
 
-  const hasNameDiff = nameDiffs !== null && nameDiffs.length > 0;
+  const singleNameDiff = useMemo(() => {
+    if (!relationFieldDiffs) return null;
+    return relationFieldDiffs.find((d) => d.crmField === 'name') ?? null;
+  }, [relationFieldDiffs]);
 
-  const proposedName = useMemo(() => {
-    if (!nameDiffs || nameDiffs.length === 0) return null;
-    const first = nameDiffs.find((d) => d.crmField === 'name.firstName');
-    const last = nameDiffs.find((d) => d.crmField === 'name.lastName');
-    const currentFirst =
-      (relationRecord as Record<string, unknown>).name &&
-      typeof (relationRecord as Record<string, unknown>).name === 'object'
-        ? ((relationRecord as Record<string, unknown>).name as Record<string, string>)
-            ?.firstName
-        : null;
-    const currentLast =
-      (relationRecord as Record<string, unknown>).name &&
-      typeof (relationRecord as Record<string, unknown>).name === 'object'
-        ? ((relationRecord as Record<string, unknown>).name as Record<string, string>)
-            ?.lastName
-        : null;
-    return {
-      oldFirst: first?.crmValue ?? currentFirst ?? '',
-      oldLast: last?.crmValue ?? currentLast ?? '',
-      newFirst: first?.bobValue ?? currentFirst ?? '',
-      newLast: last?.bobValue ?? currentLast ?? '',
-    };
-  }, [nameDiffs, relationRecord]);
+  const hasNameDiff =
+    compositeNameDiffs.length > 0 || singleNameDiff !== null;
+
+  type NameProposal =
+    | {
+        kind: 'composite';
+        oldFirst: string;
+        oldLast: string;
+        newFirst: string;
+        newLast: string;
+      }
+    | { kind: 'single'; oldValue: string; newValue: string };
+
+  const proposedName = useMemo<NameProposal | null>(() => {
+    const recordObj = relationRecord as Record<string, unknown>;
+
+    if (compositeNameDiffs.length > 0) {
+      const first = compositeNameDiffs.find(
+        (d) => d.crmField === 'name.firstName',
+      );
+      const last = compositeNameDiffs.find(
+        (d) => d.crmField === 'name.lastName',
+      );
+      const nameVal =
+        recordObj.name && typeof recordObj.name === 'object'
+          ? (recordObj.name as Record<string, string>)
+          : null;
+      const currentFirst = nameVal?.firstName ?? null;
+      const currentLast = nameVal?.lastName ?? null;
+      return {
+        kind: 'composite',
+        oldFirst: first?.crmValue ?? currentFirst ?? '',
+        oldLast: last?.crmValue ?? currentLast ?? '',
+        newFirst: first?.bobValue ?? currentFirst ?? '',
+        newLast: last?.bobValue ?? currentLast ?? '',
+      };
+    }
+
+    if (singleNameDiff) {
+      const currentValue =
+        typeof recordObj.name === 'string' ? recordObj.name : '';
+      return {
+        kind: 'single',
+        oldValue: singleNameDiff.crmValue ?? currentValue,
+        newValue: singleNameDiff.bobValue ?? currentValue,
+      };
+    }
+
+    return null;
+  }, [compositeNameDiffs, singleNameDiff, relationRecord]);
 
   // Check if name has already been accepted (current value matches proposed)
   const nameAccepted = useMemo(() => {
     if (!proposedName) return false;
-    const name = (relationRecord as Record<string, unknown>).name as Record<
-      string,
-      string
-    > | null;
-    if (!name) return false;
-    return (
-      name.firstName === proposedName.newFirst &&
-      name.lastName === proposedName.newLast
-    );
+    const recordObj = relationRecord as Record<string, unknown>;
+
+    if (proposedName.kind === 'composite') {
+      const name = recordObj.name as Record<string, string> | null;
+      if (!name) return false;
+      return (
+        name.firstName === proposedName.newFirst &&
+        name.lastName === proposedName.newLast
+      );
+    }
+
+    return recordObj.name === proposedName.newValue;
   }, [proposedName, relationRecord]);
 
   const { updateOneRecord: updateRelationRecordForName } = useUpdateOneRecord();
 
   const handleAcceptName = useCallback(() => {
     if (!proposedName) return;
+
+    const newName =
+      proposedName.kind === 'composite'
+        ? {
+            name: {
+              firstName: nameAccepted
+                ? proposedName.oldFirst
+                : proposedName.newFirst,
+              lastName: nameAccepted
+                ? proposedName.oldLast
+                : proposedName.newLast,
+            },
+          }
+        : {
+            name: nameAccepted ? proposedName.oldValue : proposedName.newValue,
+          };
+
     updateRelationRecordForName({
       objectNameSingular: relationObjectMetadataNameSingular,
       idToUpdate: relationRecord.id,
-      updateOneRecordInput: {
-        name: {
-          firstName: nameAccepted
-            ? proposedName.oldFirst
-            : proposedName.newFirst,
-          lastName: nameAccepted
-            ? proposedName.oldLast
-            : proposedName.newLast,
-        },
-      },
+      updateOneRecordInput: newName,
     });
   }, [
     proposedName,
@@ -387,9 +429,13 @@ export const RecordDetailRelationRecordsListItem = ({
             <StyledDiffAnnotation>
               <StyledDiffArrow>→</StyledDiffArrow>
               <StyledDiffNewName>
-                {nameAccepted
-                  ? `${proposedName.oldFirst} ${proposedName.oldLast}`
-                  : `${proposedName.newFirst} ${proposedName.newLast}`}
+                {proposedName.kind === 'composite'
+                  ? nameAccepted
+                    ? `${proposedName.oldFirst} ${proposedName.oldLast}`
+                    : `${proposedName.newFirst} ${proposedName.newLast}`
+                  : nameAccepted
+                    ? proposedName.oldValue
+                    : proposedName.newValue}
               </StyledDiffNewName>
             </StyledDiffAnnotation>
             <StyledDiffBtn

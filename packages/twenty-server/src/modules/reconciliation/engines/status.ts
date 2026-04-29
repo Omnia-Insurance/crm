@@ -9,19 +9,32 @@ export type OmniaStatus =
   | 'PAYMENT_ERROR_ACTIVE_APPROVED'
   | 'CANCELED';
 
+/**
+ * Type contract for status-engine pipeline inputs.
+ *
+ * The status engine receives BOB row values mapped to these role names via
+ * `StatusConfig.fieldMapping` (XLSX header → role). Status roles are not
+ * CRM fields — they're parser-side inputs the engine reads to derive status,
+ * so they don't appear in `ColumnMapping` and aren't covered by `fieldType`.
+ *
+ * Used by `ReconciliationParseJob` to coerce raw cell values to the right
+ * primitive shape before the engine runs. Add a new role here when extending
+ * the status engine.
+ */
+export const STATUS_ENGINE_ROLE_TYPES: Record<string, 'date' | 'boolean'> = {
+  effectiveDate: 'date',
+  paidThroughDate: 'date',
+  termDate: 'date',
+  brokerEffectiveDate: 'date',
+  policyEffectiveDate: 'date',
+  eligibleForCommission: 'boolean',
+};
+
 export type StatusDecision = {
   derivedStatus: OmniaStatus;
   derivedExpireDate: string | null;
   cancelPreviousPolicyId: string | null;
   statusChangeReason: string;
-};
-
-/** @deprecated Use StatusInput + buildStatusInput instead */
-type BobRowForStatus = {
-  trueEffectiveDate: string | null;
-  paidThroughDate: string | null;
-  termDate: string | null;
-  eligibleForCommission: boolean | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -78,18 +91,6 @@ export const buildStatusInputFromMapping = (
     ? ((row[fieldMapping.eligibleForCommission] as boolean) ?? null)
     : null,
 });
-
-/** Normalize BobRowForStatus or StatusInput */
-const toStatusInput = (row: BobRowForStatus | StatusInput): StatusInput => {
-  if ('effectiveDate' in row) return row as StatusInput;
-
-  return {
-    effectiveDate: (row as BobRowForStatus).trueEffectiveDate,
-    paidThroughDate: (row as BobRowForStatus).paidThroughDate,
-    termDate: (row as BobRowForStatus).termDate,
-    eligibleForCommission: (row as BobRowForStatus).eligibleForCommission,
-  };
-};
 
 export type StatusEngineConfig = {
   /** Days since effective to consider a policy "placed". Default: 30 */
@@ -286,7 +287,7 @@ const STATUS_ENGINES: Record<string, StatusEngineFn> = {
 
 export const deriveStatus = (
   parserId: string,
-  bobRow: BobRowForStatus | StatusInput,
+  input: StatusInput,
   allCrmPoliciesForNumber: CrmPolicy[],
   today: Date,
   config: StatusEngineConfig = DEFAULT_STATUS_ENGINE_CONFIG,
@@ -297,7 +298,7 @@ export const deriveStatus = (
     return null;
   }
 
-  return engine(toStatusInput(bobRow), allCrmPoliciesForNumber, today, config);
+  return engine(input, allCrmPoliciesForNumber, today, config);
 };
 
 export const getCancelExpireDate = (newEffectiveDate: string): string =>

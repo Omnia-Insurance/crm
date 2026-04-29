@@ -366,6 +366,14 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
   },
   {
     type: FieldMetadataType.RAW_JSON,
+    name: 'flagReasons',
+    label: 'Flag Reasons',
+    description:
+      'Per-flag explanations (Record<flag, reason>) — concrete details of what triggered each flag',
+    icon: 'IconInfoCircle',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
     name: 'bobRowSnapshot',
     label: 'BOB Row Snapshot',
     description: 'Snapshot of the parsed BOB row data at match time',

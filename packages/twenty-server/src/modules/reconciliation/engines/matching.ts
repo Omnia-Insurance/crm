@@ -26,17 +26,6 @@ export type MatchDecision = {
   notes: string;
 };
 
-/** @deprecated Use MatchInput + buildMatchInput instead */
-export type BobRow = {
-  carrierPolicyNumber: string | null;
-  brokerName: string | null;
-  brokerNpn: string | null;
-  trueEffectiveDate: string | null;
-  memberFirstName: string | null;
-  memberLastName: string | null;
-  memberDob: string | null;
-};
-
 // ---------------------------------------------------------------------------
 // Role-based match input (config-driven replacement for BobRow)
 // ---------------------------------------------------------------------------
@@ -50,6 +39,42 @@ export type MatchInput = {
   memberLastName: string | null;
   memberDob: string | null;
 };
+
+/**
+ * Schema: which CRM dot-paths feed which matching role.
+ *
+ * The matching engine compares BOB rows against `CrmPolicy` records via the
+ * roles defined on `MatchInput`. A `ColumnMapping` entry whose `crmField` is
+ * a key here contributes its BOB-row value to the corresponding role.
+ *
+ * Adding a row that maps a new CRM path → existing role is safe.
+ * Adding a *new* role to `MatchInput` without an entry here will fail the
+ * `_MatchingRoleCoverageGuard` typecheck below.
+ */
+export const MATCHING_ROLE_BY_CRM_FIELD = {
+  policyNumber: 'policyNumber',
+  effectiveDate: 'effectiveDate',
+  'lead.name.firstName': 'memberFirstName',
+  'lead.name.lastName': 'memberLastName',
+  'lead.dateOfBirth': 'memberDob',
+  'agent.name': 'agentName',
+  'agent.npn': 'agentNpn',
+  // Bare sub-field paths (when a row is keyed against a person directly)
+  'name.firstName': 'memberFirstName',
+  'name.lastName': 'memberLastName',
+  dateOfBirth: 'memberDob',
+} as const satisfies Record<string, keyof MatchInput>;
+
+// Compile-time guard: every role in MatchInput must appear as a value in the
+// registry above. If you add a role without an entry, this line errors with
+// "Type 'X' does not satisfy the constraint 'never'".
+type _Assert<T extends never> = T;
+type _UncoveredMatchInputRoles = Exclude<
+  keyof MatchInput,
+  (typeof MATCHING_ROLE_BY_CRM_FIELD)[keyof typeof MATCHING_ROLE_BY_CRM_FIELD]
+>;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _MatchingRoleCoverageGuard = _Assert<_UncoveredMatchInputRoles>;
 
 export const buildMatchInput = (
   row: Record<string, unknown>,
@@ -78,26 +103,34 @@ export const buildMatchInput = (
 
 import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
-/** CRM field path → matching role. Universal pipeline logic: if you map a
- *  column to policyNumber CRM field, it's used for policy number matching. */
-const CRM_TO_MATCH_ROLE: Record<string, keyof MatchInput> = {
-  'policyNumber': 'policyNumber',
-  'effectiveDate': 'effectiveDate',
-  'lead.name.firstName': 'memberFirstName',
-  'lead.name.lastName': 'memberLastName',
-  'lead.dateOfBirth': 'memberDob',
-  'agent.name': 'agentName',
-  'agent.npn': 'agentNpn',
-  // Also accept dot-path sub-fields (e.g. name.firstName on person)
-  'name.firstName': 'memberFirstName',
-  'name.lastName': 'memberLastName',
-  'dateOfBirth': 'memberDob',
+const MATCHING_FIELD_SIMILARITY_THRESHOLD = 0.85;
+
+const lookupMatchingRole = (
+  crmField: string,
+): keyof MatchInput | undefined =>
+  MATCHING_ROLE_BY_CRM_FIELD[
+    crmField as keyof typeof MATCHING_ROLE_BY_CRM_FIELD
+  ];
+
+/**
+ * True when `crmField` is *close to* a registered matching path but not in
+ * the registry. Used by `buildMatchInputFromMapping` to surface likely
+ * carrier-config typos (e.g. `lead.name.first` instead of `lead.name.firstName`)
+ * via the optional `onUnmappedField` callback.
+ */
+const looksLikeMatchingFieldButMisses = (crmField: string): boolean => {
+  if (lookupMatchingRole(crmField) !== undefined) return false;
+  return Object.keys(MATCHING_ROLE_BY_CRM_FIELD).some(
+    (key) =>
+      jaroWinkler(crmField, key) >= MATCHING_FIELD_SIMILARITY_THRESHOLD,
+  );
 };
 
 export const buildMatchInputFromMapping = (
   row: Record<string, unknown>,
   columnMapping: ColumnMapping,
   computedFieldCrmFields?: Record<string, string>,
+  onUnmappedField?: (xlsxHeader: string, crmField: string) => void,
 ): MatchInput => {
   const result: MatchInput = {
     policyNumber: null,
@@ -111,17 +144,22 @@ export const buildMatchInputFromMapping = (
 
   // Map from column mapping entries (XLSX header → CRM field → matching role)
   for (const [xlsxHeader, entry] of Object.entries(columnMapping)) {
-    const role = CRM_TO_MATCH_ROLE[entry.crmField];
+    const role = lookupMatchingRole(entry.crmField);
 
     if (role) {
       result[role] = (row[xlsxHeader] as string) ?? null;
+    } else if (
+      onUnmappedField !== undefined &&
+      looksLikeMatchingFieldButMisses(entry.crmField)
+    ) {
+      onUnmappedField(xlsxHeader, entry.crmField);
     }
   }
 
   // Map from computed fields (output key → CRM field → matching role)
   if (computedFieldCrmFields) {
     for (const [outputKey, crmField] of Object.entries(computedFieldCrmFields)) {
-      const role = CRM_TO_MATCH_ROLE[crmField];
+      const role = lookupMatchingRole(crmField);
 
       if (role && result[role] === null) {
         result[role] = (row[outputKey] as string) ?? null;
@@ -132,39 +170,37 @@ export const buildMatchInputFromMapping = (
   return result;
 };
 
-/** Normalize BobRow or MatchInput to MatchInput */
-const toMatchInput = (row: BobRow | MatchInput): MatchInput => {
-  if ('policyNumber' in row) return row as MatchInput;
-
-  return {
-    policyNumber: (row as BobRow).carrierPolicyNumber,
-    effectiveDate: (row as BobRow).trueEffectiveDate,
-    agentName: (row as BobRow).brokerName,
-    agentNpn: (row as BobRow).brokerNpn,
-    memberFirstName: (row as BobRow).memberFirstName,
-    memberLastName: (row as BobRow).memberLastName,
-    memberDob: (row as BobRow).memberDob,
-  };
-};
-
+/**
+ * CRM policy snapshot for matching + diff. Keyed by the same dot-paths used
+ * in `ColumnMapping.crmField` so the diff engine can read values with a
+ * direct property access (no flat-to-path translation table required).
+ *
+ * Phase-1 fields are populated by `fetchPoliciesForMatching`. Phase-2 fields
+ * (the `enriched` group) are populated by `enrichMatchedPolicies` only for
+ * matched policies and merged at diff time.
+ */
 export type CrmPolicy = {
   id: string;
+  // Top-level (no dot)
   policyNumber: string | null;
   applicationId: string | null;
   effectiveDate: string | null;
   expirationDate: string | null;
   status: string | null;
   applicantCount: number | null;
-  leadFirstName: string | null;
-  leadLastName: string | null;
-  leadDob: string | null;
-  leadState: string | null;
-  agentName: string | null;
-  agentNpn: string | null;
+  // Lead (path-keyed)
+  'lead.name.firstName': string | null;
+  'lead.name.lastName': string | null;
+  'lead.dateOfBirth': string | null;
+  'lead.addressCustom.addressState': string | null;
+  // Agent (path-keyed)
+  'agent.name': string | null;
+  'agent.npn': string | null;
+  // Phase-2 enrichment (defaulted null on initial fetch)
   planIdentifier: string | null;
-  leadPhone: string | null;
-  leadEmail: string | null;
-  leadId: string | null;
+  'lead.phones.primaryPhoneNumber': string | null;
+  'lead.emails.primaryEmail': string | null;
+  'lead.id': string | null;
 };
 
 export type Override = {
@@ -383,18 +419,22 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
       policyByNumber.set(p.policyNumber, existing);
     }
 
-    if (p.agentNpn) {
-      const existing = policyByNpn.get(p.agentNpn) ?? [];
+    const agentNpn = p['agent.npn'];
+
+    if (agentNpn) {
+      const existing = policyByNpn.get(agentNpn) ?? [];
 
       existing.push(p);
-      policyByNpn.set(p.agentNpn, existing);
+      policyByNpn.set(agentNpn, existing);
     }
 
-    if (p.leadDob) {
-      const existing = policyByDob.get(p.leadDob) ?? [];
+    const leadDob = p['lead.dateOfBirth'];
+
+    if (leadDob) {
+      const existing = policyByDob.get(leadDob) ?? [];
 
       existing.push(p);
-      policyByDob.set(p.leadDob, existing);
+      policyByDob.set(leadDob, existing);
     }
   }
 
@@ -402,13 +442,12 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
 };
 
 export const matchRow = (
-  row: BobRow | MatchInput,
+  input: MatchInput,
   indexes: MatchIndexes,
   overrides: Override[],
   carrierName: string,
   config: MatchingConfig = DEFAULT_MATCHING_CONFIG,
 ): MatchDecision => {
-  const input = toMatchInput(row);
   const tolerance = config.dateToleranceDays;
 
   // Tier 1: Override check
@@ -449,7 +488,11 @@ export const matchRow = (
       const tripleMatches = policyNumberMatches.filter(
         (p) =>
           datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance) &&
-          agentNameMatches(input.agentName, p.agentName, config.agentNameThreshold),
+          agentNameMatches(
+            input.agentName,
+            p['agent.name'],
+            config.agentNameThreshold,
+          ),
       );
 
       if (tripleMatches.length === 1) {
@@ -461,7 +504,7 @@ export const matchRow = (
           confidence: 98,
           method: 'POLICY_NUMBER_DATE_AGENT',
           status: classifyConfidence(98, config),
-          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match.agentName}"`,
+          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"`,
         };
       }
     }
@@ -492,7 +535,11 @@ export const matchRow = (
     // Tier 4: Policy number + agent name (fuzzy)
     if (isTierEnabled('POLICY_NUMBER_AGENT', config) && input.agentName) {
       const agentMatches = policyNumberMatches.filter((p) =>
-        agentNameMatches(input.agentName, p.agentName, config.agentNameThreshold),
+        agentNameMatches(
+          input.agentName,
+          p['agent.name'],
+          config.agentNameThreshold,
+        ),
       );
 
       if (agentMatches.length === 1) {
@@ -504,7 +551,7 @@ export const matchRow = (
           confidence: 85,
           method: 'POLICY_NUMBER_PLUS_AGENT',
           status: classifyConfidence(85, config),
-          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match.agentName}"`,
+          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"`,
         };
       }
     }
@@ -539,24 +586,28 @@ export const matchRow = (
         score +=
           dateProximityScore(p.effectiveDate, input.effectiveDate) * 40;
 
-        if (agentNameMatches(input.agentName, p.agentName, config.agentNameThreshold)) {
+        if (
+          agentNameMatches(
+            input.agentName,
+            p['agent.name'],
+            config.agentNameThreshold,
+          )
+        ) {
           score += 30;
         }
 
         const nameScore = memberNameScore(
           input.memberFirstName,
           input.memberLastName,
-          p.leadFirstName,
-          p.leadLastName,
+          p['lead.name.firstName'],
+          p['lead.name.lastName'],
         );
 
         score += nameScore * 20;
 
-        if (
-          input.memberDob &&
-          p.leadDob &&
-          input.memberDob === p.leadDob
-        ) {
+        const leadDob = p['lead.dateOfBirth'];
+
+        if (input.memberDob && leadDob && input.memberDob === leadDob) {
           score += 10;
         }
 
@@ -597,8 +648,8 @@ export const matchRow = (
       const nameScore = memberNameScore(
         input.memberFirstName,
         input.memberLastName,
-        p.leadFirstName,
-        p.leadLastName,
+        p['lead.name.firstName'],
+        p['lead.name.lastName'],
       );
 
       if (nameScore >= config.tier7MinNameScore) {
@@ -634,12 +685,14 @@ export const matchRow = (
     const dobCandidates = indexes.policyByDob.get(input.memberDob) ?? [];
 
     for (const p of dobCandidates) {
-      if (p.leadDob && p.leadDob === input.memberDob) {
+      const leadDob = p['lead.dateOfBirth'];
+
+      if (leadDob && leadDob === input.memberDob) {
         const nameScore = memberNameScore(
           input.memberFirstName,
           input.memberLastName,
-          p.leadFirstName,
-          p.leadLastName,
+          p['lead.name.firstName'],
+          p['lead.name.lastName'],
         );
 
         if (

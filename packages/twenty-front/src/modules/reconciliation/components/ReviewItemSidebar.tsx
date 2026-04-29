@@ -144,7 +144,15 @@ export const ReviewItemSidebar = ({
                 {(item.flags ?? []).map((flag) => {
                   const label = FLAG_LABELS[flag];
                   if (!label) return null;
-                  return <Tag key={flag} color="gray" text={label} />;
+                  const reason = item.flagReasons?.[flag];
+                  return (
+                    <span
+                      key={flag}
+                      title={reason ? `${label}: ${reason}` : label}
+                    >
+                      <Tag color="gray" text={label} />
+                    </span>
+                  );
                 })}
               </StyledTags>
             )}

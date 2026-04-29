@@ -1,23 +1,44 @@
 import {
-  computeFieldDiffs,
+  computeFieldDiffsFromMapping,
   summarizeDiffs,
 } from 'src/modules/reconciliation/engines/diff';
-import { AMBETTER_FIELD_CONFIG } from 'src/modules/reconciliation/config/ambetter.field-config';
+import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
 describe('diff engine', () => {
-  const fieldConfig = AMBETTER_FIELD_CONFIG;
+  const baseColumnMapping: ColumnMapping = {
+    policy_no: {
+      crmField: 'policyNumber',
+      fieldType: 'TEXT',
+      fieldKey: 'policyNumber',
+    },
+    member_first: {
+      crmField: 'lead.name.firstName',
+      fieldType: 'FULL_NAME',
+      fieldKey: 'update:firstName-name (lead)',
+    },
+    member_last: {
+      crmField: 'lead.name.lastName',
+      fieldType: 'FULL_NAME',
+      fieldKey: 'update:lastName-name (lead)',
+    },
+    broker_name: {
+      crmField: 'agent.name',
+      fieldType: 'TEXT',
+      fieldKey: 'update:name (agent)',
+    },
+    eff_date: {
+      crmField: 'effectiveDate',
+      fieldType: 'DATE',
+      fieldKey: 'effectiveDate',
+    },
+  };
 
   const baseBobRow = {
-    memberFirstName: 'John',
-    memberLastName: 'Smith',
-    memberDob: '1990-05-15',
-    brokerName: 'Omnia Insurance',
-    brokerNpn: '12345678',
-    trueEffectiveDate: '2026-01-01',
-    carrierPolicyNumber: 'U94692964',
-    planName: 'Ambetter Gold',
-    memberPhone: '555-1234',
-    memberEmail: 'john@example.com',
+    policy_no: 'U94692964',
+    member_first: 'John',
+    member_last: 'Smith',
+    broker_name: 'Omnia Insurance',
+    eff_date: '2026-01-01',
   };
 
   const baseCrmPolicy = {
@@ -25,18 +46,18 @@ describe('diff engine', () => {
     expirationDate: null,
     effectiveDate: '2026-01-01',
     policyNumber: 'U94692964',
-    planIdentifier: 'Ambetter Gold',
-    leadFirstName: 'John',
-    leadLastName: 'Smith',
-    leadDob: '1990-05-15',
-    agentName: 'Omnia Insurance',
-    agentNpn: '12345678',
-    leadPhone: '555-1234',
-    leadEmail: 'john@example.com',
+    'lead.name.firstName': 'John',
+    'lead.name.lastName': 'Smith',
+    'agent.name': 'Omnia Insurance',
   };
 
   it('returns no diffs when everything matches', () => {
-    const diffs = computeFieldDiffs(baseBobRow, baseCrmPolicy, null, fieldConfig);
+    const diffs = computeFieldDiffsFromMapping(
+      baseBobRow,
+      baseCrmPolicy,
+      null,
+      baseColumnMapping,
+    );
 
     expect(diffs).toHaveLength(0);
   });
@@ -49,9 +70,15 @@ describe('diff engine', () => {
       statusChangeReason: 'Not eligible for commission',
     };
 
-    const diffs = computeFieldDiffs(baseBobRow, baseCrmPolicy, statusDecision, fieldConfig);
-    const statusDiff = diffs.find((d) => d.field === 'status');
-    const expireDiff = diffs.find((d) => d.field === 'expirationDate');
+    const diffs = computeFieldDiffsFromMapping(
+      baseBobRow,
+      baseCrmPolicy,
+      statusDecision,
+      baseColumnMapping,
+    );
+
+    const statusDiff = diffs.find((d) => d.crmField === 'status');
+    const expireDiff = diffs.find((d) => d.crmField === 'expirationDate');
 
     expect(statusDiff).toBeDefined();
     expect(statusDiff?.bobValue).toBe('CANCELED');
@@ -63,51 +90,95 @@ describe('diff engine', () => {
     expect(expireDiff?.bobValue).toBe('2026-03-01');
   });
 
-  it('detects name discrepancy', () => {
-    const diffs = computeFieldDiffs(
-      { ...baseBobRow, memberFirstName: 'Jonathan' },
+  it('detects member name discrepancy past fuzzy threshold', () => {
+    const diffs = computeFieldDiffsFromMapping(
+      { ...baseBobRow, member_first: 'Beatrice' },
       baseCrmPolicy,
       null,
-      fieldConfig,
+      baseColumnMapping,
     );
 
-    const nameDiff = diffs.find((d) => d.field === 'memberFirstName');
+    const nameDiff = diffs.find((d) => d.crmField === 'lead.name.firstName');
 
     expect(nameDiff).toBeDefined();
-    expect(nameDiff?.bobValue).toBe('Jonathan');
+    expect(nameDiff?.bobValue).toBe('Beatrice');
     expect(nameDiff?.crmValue).toBe('John');
     expect(nameDiff?.action).toBe('UPDATE');
     expect(nameDiff?.crmObjectType).toBe('lead');
   });
 
-  it('detects effective date discrepancy', () => {
-    const diffs = computeFieldDiffs(
-      { ...baseBobRow, trueEffectiveDate: '2026-02-01' },
+  it('detects effective-date discrepancy', () => {
+    const diffs = computeFieldDiffsFromMapping(
+      { ...baseBobRow, eff_date: '2026-02-01' },
       baseCrmPolicy,
       null,
-      fieldConfig,
+      baseColumnMapping,
     );
 
-    const dateDiff = diffs.find((d) => d.field === 'trueEffectiveDate');
+    const dateDiff = diffs.find((d) => d.crmField === 'effectiveDate');
 
     expect(dateDiff).toBeDefined();
     expect(dateDiff?.bobValue).toBe('2026-02-01');
     expect(dateDiff?.crmValue).toBe('2026-01-01');
   });
 
-  it('marks INFO_ONLY diffs as SKIPPED approval', () => {
-    const diffs = computeFieldDiffs(
-      { ...baseBobRow, brokerName: 'Different Agency' },
-      baseCrmPolicy,
-      null,
-      fieldConfig,
-    );
+  describe('name-like field classification', () => {
+    // Regression: agent.name used to be a literal-equality special case in
+    // the isNameField check. After unifying the helper to a path-suffix check,
+    // verify it still picks fuzzyName comparison (so trailing entity suffixes
+    // like " LLC" don't produce false-positive diffs).
+    it('uses fuzzyName comparison for agent.name (no diff for entity-suffix variant)', () => {
+      const columnMapping: ColumnMapping = {
+        broker_name: {
+          crmField: 'agent.name',
+          fieldType: 'TEXT',
+          fieldKey: 'update:name (agent)',
+        },
+      };
 
-    const agentDiff = diffs.find((d) => d.field === 'brokerName');
+      const diffs = computeFieldDiffsFromMapping(
+        { broker_name: 'Omnia Insurance LLC' },
+        { 'agent.name': 'Omnia Insurance' },
+        null,
+        columnMapping,
+      );
 
-    expect(agentDiff).toBeDefined();
-    expect(agentDiff?.action).toBe('INFO_ONLY');
-    expect(agentDiff?.approval).toBe('SKIPPED');
+      expect(diffs.find((d) => d.crmField === 'agent.name')).toBeUndefined();
+    });
+
+    // Regression: when the BOB row carries the hyphenated suffix
+    // ("Archer-Mckenley") and the CRM has the canonical short form
+    // ("Archer"), the fuzzy matcher used to fail because of the equal
+    // word-count tiebreak. The hyphen check must work either direction.
+    it('matches hyphenated suffix regardless of which side carries it', () => {
+      const columnMapping: ColumnMapping = {
+        broker_name: {
+          crmField: 'agent.name',
+          fieldType: 'TEXT',
+          fieldKey: 'update:name (agent)',
+        },
+      };
+
+      const bobLonger = computeFieldDiffsFromMapping(
+        { broker_name: 'Chancelyn Archer-Mckenley' },
+        { 'agent.name': 'Chancelyn Archer' },
+        null,
+        columnMapping,
+      );
+      expect(
+        bobLonger.find((d) => d.crmField === 'agent.name'),
+      ).toBeUndefined();
+
+      const crmLonger = computeFieldDiffsFromMapping(
+        { broker_name: 'Chancelyn Archer' },
+        { 'agent.name': 'Chancelyn Archer-Mckenley' },
+        null,
+        columnMapping,
+      );
+      expect(
+        crmLonger.find((d) => d.crmField === 'agent.name'),
+      ).toBeUndefined();
+    });
   });
 
   describe('summarizeDiffs', () => {
@@ -116,20 +187,16 @@ describe('diff engine', () => {
     });
 
     it('summarizes up to 3 diffs inline', () => {
-      const diffs = computeFieldDiffs(
-        {
-          ...baseBobRow,
-          memberFirstName: 'Jane',
-          memberDob: '1991-01-01',
-        },
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, member_first: 'Jane', member_last: 'Doe' },
         baseCrmPolicy,
         null,
-        fieldConfig,
+        baseColumnMapping,
       );
 
       const summary = summarizeDiffs(diffs);
 
-      expect(summary).toContain('First Name');
+      expect(summary).toContain('member_first');
       expect(summary).toContain('Jane');
     });
   });

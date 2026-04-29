@@ -1,11 +1,32 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import type { WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { sleep } from 'src/modules/reconciliation/types/reconciliation';
 
 const BATCH_SIZE = 200;
 const BATCH_DELAY_MS = 500;
+
+/**
+ * Local typed view of the workspace `reviewItem` entity. Covers the fields
+ * this service reads/writes — enough to type the workspace ORM repository
+ * generically and eliminate the per-call-site `as any` casts.
+ *
+ * (The actual entity is generated per-workspace by Twenty's metadata
+ * system; there's no shared TS class to import.)
+ */
+type ReviewItem = {
+  id: string;
+  reconciliationId: string;
+  decision: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  decidedAt: string | null;
+  category: string | null;
+  matchMethod: string | null;
+  confidence: number | null;
+  policyId: string | null;
+  bobRowSnapshot: Record<string, unknown> | null;
+};
 
 @Injectable()
 export class ReviewItemService {
@@ -15,6 +36,16 @@ export class ReviewItemService {
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
   ) {}
 
+  private async getRepo(
+    workspaceId: string,
+  ): Promise<WorkspaceRepository<ReviewItem>> {
+    return this.globalWorkspaceOrmManager.getRepository<ReviewItem>(
+      workspaceId,
+      'reviewItem',
+      { shouldBypassPermissionChecks: true },
+    );
+  }
+
   async deleteByReconciliation(
     workspaceId: string,
     reconciliationId: string,
@@ -23,15 +54,9 @@ export class ReviewItemService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
-        const result = await repo.delete({
-          reconciliationId,
-        } as any);
+        const result = await repo.delete({ reconciliationId });
 
         return result.affected ?? 0;
       },
@@ -49,11 +74,7 @@ export class ReviewItemService {
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
         const totalBatches = Math.ceil(items.length / BATCH_SIZE);
 
@@ -85,15 +106,9 @@ export class ReviewItemService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
-        return repo.find({
-          where: { reconciliationId } as any,
-        });
+        return repo.find({ where: { reconciliationId } });
       },
       authContext,
     );
@@ -102,17 +117,13 @@ export class ReviewItemService {
   async batchApprove(
     workspaceId: string,
     reconciliationId: string,
-    filter: { minConfidence?: number },
+    filter: { minConfidence?: number; reviewItemIds?: string[] },
   ): Promise<{ updatedCount: number }> {
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
         const qb = repo
           .createQueryBuilder()
@@ -120,14 +131,22 @@ export class ReviewItemService {
           .set({
             decision: 'APPROVED',
             decidedAt: new Date().toISOString(),
-          } as any)
+          })
           .where('"reconciliationId" = :reconciliationId', {
             reconciliationId,
           })
           .andWhere('"decision" = :pending', { pending: 'PENDING' })
           .andWhere('"category" != :unmatched', { unmatched: 'UNMATCHED' });
 
-        if (filter.minConfidence !== undefined) {
+        if (filter.reviewItemIds !== undefined) {
+          if (filter.reviewItemIds.length === 0) {
+            return { updatedCount: 0 };
+          }
+
+          qb.andWhere('"id" IN (:...reviewItemIds)', {
+            reviewItemIds: filter.reviewItemIds,
+          });
+        } else if (filter.minConfidence !== undefined) {
           qb.andWhere('"confidence" >= :minConfidence', {
             minConfidence: filter.minConfidence,
           });
@@ -156,11 +175,7 @@ export class ReviewItemService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
         // Find approved matches from previous runs — these are human-confirmed
         // overrides that should auto-match in future reconciliation runs.
@@ -168,7 +183,7 @@ export class ReviewItemService {
           where: [
             { decision: 'APPROVED', category: 'UNMATCHED' },
             { decision: 'APPROVED', matchMethod: 'POLICY_NUMBER_MULTI_BEST' },
-          ] as any,
+          ],
         });
 
         const overrides: {
@@ -178,11 +193,8 @@ export class ReviewItemService {
         }[] = [];
 
         for (const item of items) {
-          const snapshot = (item as Record<string, unknown>)
-            .bobRowSnapshot as Record<string, unknown> | null;
-          const policyId = (item as Record<string, unknown>).policyId as
-            | string
-            | null;
+          const snapshot = item.bobRowSnapshot;
+          const policyId = item.policyId;
 
           if (!snapshot || !policyId) continue;
 
@@ -219,14 +231,10 @@ export class ReviewItemService {
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
       async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reviewItem',
-          { shouldBypassPermissionChecks: true },
-        );
+        const repo = await this.getRepo(workspaceId);
 
         return repo.find({
-          where: { reconciliationId, decision: 'APPROVED' } as any,
+          where: { reconciliationId, decision: 'APPROVED' },
         });
       },
       authContext,

@@ -15,7 +15,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: '2026-03-01',
           termDate: null,
           eligibleForCommission: false,
@@ -33,7 +33,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-02-01',
+          effectiveDate: '2026-02-01',
           paidThroughDate: '2026-01-15',
           termDate: null,
           eligibleForCommission: false,
@@ -51,7 +51,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: '2026-03-01',
           termDate: '2026-03-15',
           eligibleForCommission: true,
@@ -70,7 +70,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-05-01',
+          effectiveDate: '2026-05-01',
           paidThroughDate: null,
           termDate: null,
           eligibleForCommission: true,
@@ -87,7 +87,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: '2026-04-10',
           termDate: null,
           eligibleForCommission: true,
@@ -104,7 +104,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-04-01',
+          effectiveDate: '2026-04-01',
           paidThroughDate: '2026-04-10',
           termDate: null,
           eligibleForCommission: true,
@@ -121,7 +121,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: '2026-03-01',
           termDate: null,
           eligibleForCommission: true,
@@ -140,7 +140,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-03-20',
+          effectiveDate: '2026-03-20',
           paidThroughDate: '2026-03-25',
           termDate: null,
           eligibleForCommission: true,
@@ -164,22 +164,22 @@ describe('status engine (ambetter-bob-v1)', () => {
         expirationDate: null,
         status: 'ACTIVE_PLACED',
         applicantCount: null,
-        leadFirstName: 'John',
-        leadLastName: 'Smith',
-        leadDob: null,
-        leadState: null,
-        agentName: null,
-        agentNpn: null,
+        'lead.name.firstName': 'John',
+        'lead.name.lastName': 'Smith',
+        'lead.dateOfBirth': null,
+        'lead.addressCustom.addressState': null,
+        'agent.name': null,
+        'agent.npn': null,
         planIdentifier: null,
-        leadPhone: null,
-        leadEmail: null,
-        leadId: null,
+        'lead.phones.primaryPhoneNumber': null,
+        'lead.emails.primaryEmail': null,
+        'lead.id': null,
       };
 
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: '2026-04-10',
           termDate: null,
           eligibleForCommission: true,
@@ -198,7 +198,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         parserId,
         {
-          trueEffectiveDate: null,
+          effectiveDate: null,
           paidThroughDate: null,
           termDate: null,
           eligibleForCommission: true,
@@ -215,7 +215,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       const result = deriveStatus(
         'unknown-parser',
         {
-          trueEffectiveDate: '2026-01-01',
+          effectiveDate: '2026-01-01',
           paidThroughDate: null,
           termDate: null,
           eligibleForCommission: true,

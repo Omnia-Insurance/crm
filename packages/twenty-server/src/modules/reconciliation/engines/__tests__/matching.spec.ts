@@ -1,14 +1,16 @@
 import {
   matchRow,
   buildMatchIndexes,
+  buildMatchInputFromMapping,
   agentNameMatches,
   memberNameScore,
   datesWithinDays,
   isValidAmbetterPolicyNumber,
   DEFAULT_MATCHING_CONFIG,
   type CrmPolicy,
-  type BobRow,
+  type MatchInput,
 } from 'src/modules/reconciliation/engines/matching';
+import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
 const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   id: 'policy-1',
@@ -18,24 +20,24 @@ const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   expirationDate: null,
   status: 'ACTIVE_PLACED',
   applicantCount: null,
-  leadFirstName: 'John',
-  leadLastName: 'Smith',
-  leadDob: '1990-05-15',
-  leadState: null,
-  agentName: 'Omnia Insurance Group',
-  agentNpn: '12345678',
+  'lead.name.firstName': 'John',
+  'lead.name.lastName': 'Smith',
+  'lead.dateOfBirth': '1990-05-15',
+  'lead.addressCustom.addressState': null,
+  'agent.name': 'Omnia Insurance Group',
+  'agent.npn': '12345678',
   planIdentifier: null,
-  leadPhone: null,
-  leadEmail: null,
-  leadId: null,
+  'lead.phones.primaryPhoneNumber': null,
+  'lead.emails.primaryEmail': null,
+  'lead.id': null,
   ...overrides,
 });
 
-const makeBobRow = (overrides: Partial<BobRow> = {}): BobRow => ({
-  carrierPolicyNumber: 'U94692964',
-  brokerName: 'Omnia Insurance Group',
-  brokerNpn: '12345678',
-  trueEffectiveDate: '2026-01-01',
+const makeMatchInput = (overrides: Partial<MatchInput> = {}): MatchInput => ({
+  policyNumber: 'U94692964',
+  effectiveDate: '2026-01-01',
+  agentName: 'Omnia Insurance Group',
+  agentNpn: '12345678',
   memberFirstName: 'John',
   memberLastName: 'Smith',
   memberDob: '1990-05-15',
@@ -112,7 +114,7 @@ describe('matching engine', () => {
     it('Tier 2: matches on policy# + date + agent (3-signal)', () => {
       const policies = [makePolicy()];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
 
       const result = matchRow(row, indexes, [], 'Ambetter', DEFAULT_MATCHING_CONFIG);
 
@@ -123,9 +125,9 @@ describe('matching engine', () => {
     });
 
     it('Tier 3: matches on policy# + date when agent differs', () => {
-      const policies = [makePolicy({ agentName: 'Different Agency' })];
+      const policies = [makePolicy({ 'agent.name': 'Different Agency' })];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
 
       const result = matchRow(row, indexes, [], 'Ambetter', DEFAULT_MATCHING_CONFIG);
 
@@ -135,11 +137,11 @@ describe('matching engine', () => {
 
     it('Tier 5: single policy# match when date and agent differ', () => {
       const policies = [makePolicy({
-        agentName: 'Different Agency',
+        'agent.name': 'Different Agency',
         effectiveDate: '2025-01-01',
       })];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
 
       const result = matchRow(row, indexes, [], 'Ambetter', DEFAULT_MATCHING_CONFIG);
 
@@ -150,13 +152,13 @@ describe('matching engine', () => {
     it('Tier 9: unmatched when no signals match', () => {
       const policies = [makePolicy({
         policyNumber: 'U99999999',
-        agentNpn: '00000000',
-        leadDob: '1970-01-01',
-        leadFirstName: 'Alice',
-        leadLastName: 'Wonderland',
+        'agent.npn': '00000000',
+        'lead.dateOfBirth': '1970-01-01',
+        'lead.name.firstName': 'Alice',
+        'lead.name.lastName': 'Wonderland',
       })];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
 
       const result = matchRow(row, indexes, [], 'Ambetter', DEFAULT_MATCHING_CONFIG);
 
@@ -168,7 +170,7 @@ describe('matching engine', () => {
     it('Tier 1: override takes precedence', () => {
       const policies = [makePolicy()];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
       const overrides = [{
         carrierPolicyNumber: 'U94692964',
         carrierName: 'Ambetter',
@@ -185,16 +187,80 @@ describe('matching engine', () => {
     it('Tier 6: disambiguates multiple policies with same number', () => {
       const policies = [
         makePolicy({ id: 'policy-1', effectiveDate: '2026-01-01' }),
-        makePolicy({ id: 'policy-2', effectiveDate: '2025-01-01', agentName: 'Other Agent' }),
+        makePolicy({ id: 'policy-2', effectiveDate: '2025-01-01', 'agent.name': 'Other Agent' }),
       ];
       const indexes = buildMatchIndexes(policies);
-      const row = makeBobRow();
+      const row = makeMatchInput();
 
       const result = matchRow(row, indexes, [], 'Ambetter', DEFAULT_MATCHING_CONFIG);
 
       // Should pick policy-1 (closer date + matching agent)
       expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
       expect(result.crmPolicyId).toBe('policy-1');
+    });
+  });
+
+  describe('buildMatchInputFromMapping', () => {
+    const columnMapping: ColumnMapping = {
+      policy_no: {
+        crmField: 'policyNumber',
+        fieldType: 'TEXT',
+        fieldKey: 'policyNumber',
+      },
+      member_first: {
+        crmField: 'lead.name.firstName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:firstName-name (lead)',
+      },
+      member_email: {
+        crmField: 'lead.emails.primaryEmail',
+        fieldType: 'EMAILS',
+        fieldKey: 'update:primaryEmail-emails (lead)',
+      },
+    };
+
+    it('extracts roles from registered crmField paths', () => {
+      const input = buildMatchInputFromMapping(
+        { policy_no: 'U123', member_first: 'Sherry', member_email: 'x@y.z' },
+        columnMapping,
+      );
+
+      expect(input.policyNumber).toBe('U123');
+      expect(input.memberFirstName).toBe('Sherry');
+      // Email is in the mapping but not a matching role — should not appear
+      // anywhere in MatchInput.
+      expect(input.memberLastName).toBeNull();
+      expect(input.memberDob).toBeNull();
+    });
+
+    it('fires onUnmappedField for typo-shaped crmFields, but not for legitimate non-matching fields', () => {
+      const onUnmappedField = jest.fn();
+
+      const typoMapping: ColumnMapping = {
+        member_first: {
+          // Typo: should be lead.name.firstName
+          crmField: 'lead.name.first',
+          fieldType: 'FULL_NAME',
+          fieldKey: 'whatever',
+        },
+        member_email: {
+          // Legitimate non-matching field — must NOT trigger the warning
+          crmField: 'lead.emails.primaryEmail',
+          fieldType: 'EMAILS',
+          fieldKey: 'whatever',
+        },
+      };
+
+      buildMatchInputFromMapping({}, typoMapping, undefined, onUnmappedField);
+
+      expect(onUnmappedField).toHaveBeenCalledWith(
+        'member_first',
+        'lead.name.first',
+      );
+      expect(onUnmappedField).not.toHaveBeenCalledWith(
+        'member_email',
+        'lead.emails.primaryEmail',
+      );
     });
   });
 });

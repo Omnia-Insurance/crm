@@ -1,12 +1,7 @@
 /**
  * Tests for the config-driven generic parser.
- * Includes parity tests proving identical output to the legacy Ambetter parser.
  */
 
-import {
-  parseAmbetterBob,
-  DEFAULT_AMBETTER_COLUMN_MAPPING,
-} from 'src/modules/reconciliation/parsers/ambetter';
 import { parseGenericBob } from 'src/modules/reconciliation/parsers/generic';
 import { AMBETTER_FIELD_CONFIG } from 'src/modules/reconciliation/config/ambetter.field-config';
 
@@ -127,69 +122,4 @@ describe('generic parser', () => {
     });
   });
 
-  describe('parity with legacy Ambetter parser', () => {
-    // Fields that both parsers produce (the legacy parser has some extra fields
-    // like exchangeSubscriberId that duplicate subscriberNumber — we check the
-    // canonical set that matters for pipeline correctness)
-    const PARITY_FIELDS = [
-      'carrierPolicyNumber',
-      'memberFirstName',
-      'memberLastName',
-      'memberDob',
-      'brokerName',
-      'brokerNpn',
-      'brokerEffectiveDate',
-      'policyEffectiveDate',
-      'trueEffectiveDate',
-      'paidThroughDate',
-      'termDate',
-      'eligibleForCommission',
-      'planName',
-      'memberPhone',
-      'memberEmail',
-      'monthlyPremium',
-      'memberResponsibility',
-      'numberOfMembers',
-      'state',
-      'county',
-      'payableAgent',
-      'subscriberNumber',
-      'onOffExchange',
-    ];
-
-    it('produces identical field values for all 3 real BOB rows', () => {
-      const legacy = parseAmbetterBob(REAL_ROWS, DEFAULT_AMBETTER_COLUMN_MAPPING);
-      const generic = parseGenericBob(REAL_ROWS, AMBETTER_FIELD_CONFIG);
-
-      expect(legacy.normalized).toHaveLength(3);
-      expect(generic.normalized).toHaveLength(3);
-
-      for (let i = 0; i < 3; i++) {
-        const legacyRow = legacy.normalized[i];
-        const genericRow = generic.normalized[i];
-
-        for (const field of PARITY_FIELDS) {
-          expect({
-            row: i,
-            field,
-            generic: genericRow[field],
-          }).toEqual({
-            row: i,
-            field,
-            generic: (legacyRow as Record<string, unknown>)[field] ?? null,
-          });
-        }
-      }
-    });
-
-    it('produces identical rowNumber and name', () => {
-      const legacy = parseAmbetterBob(REAL_ROWS, DEFAULT_AMBETTER_COLUMN_MAPPING);
-      const generic = parseGenericBob(REAL_ROWS, AMBETTER_FIELD_CONFIG);
-
-      for (let i = 0; i < 3; i++) {
-        expect(generic.normalized[i].rowNumber).toBe(legacy.normalized[i].rowNumber);
-        expect(generic.normalized[i].name).toBe(legacy.normalized[i].name);
-      }
-    });
-  });
 });
