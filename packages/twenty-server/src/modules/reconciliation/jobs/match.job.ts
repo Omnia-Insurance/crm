@@ -102,9 +102,7 @@ export class ReconciliationMatchJob {
     workspaceId,
     reconciliationId,
   }: ReconciliationJobData): Promise<void> {
-    this.logger.log(
-      `Starting match for reconciliation ${reconciliationId}`,
-    );
+    this.logger.log(`Starting match for reconciliation ${reconciliationId}`);
 
     try {
       const ctx = await this.loadMatchContext(workspaceId, reconciliationId);
@@ -195,7 +193,7 @@ export class ReconciliationMatchJob {
 
           const policyNumber = matchInput.policyNumber;
           const allPoliciesForNumber = policyNumber
-            ? policyNumberMap.get(policyNumber) ?? []
+            ? (policyNumberMap.get(policyNumber) ?? [])
             : [];
 
           const statusEngineConfig: StatusEngineConfig = {
@@ -235,8 +233,7 @@ export class ReconciliationMatchJob {
           const paidThruKey =
             statusFieldMapping.paidThroughDate ?? 'paidThroughDate';
           const eligibleKey =
-            statusFieldMapping.eligibleForCommission ??
-            'eligibleForCommission';
+            statusFieldMapping.eligibleForCommission ?? 'eligibleForCommission';
           const brokerEffDate = row[brokerEffDateKey] as string | null;
 
           if (brokerEffDate) {
@@ -341,13 +338,18 @@ export class ReconciliationMatchJob {
       confirmed += enrichResult.confirmed;
       discrepanciesFound += enrichResult.discrepanciesFound;
 
-      await this.persistMatchResults(workspaceId, reconciliationId, reviewItems, {
-        totalBobRows: parsedRows.length,
-        autoMatched,
-        needsReview,
-        unmatched,
-        discrepanciesFound,
-      });
+      await this.persistMatchResults(
+        workspaceId,
+        reconciliationId,
+        reviewItems,
+        {
+          totalBobRows: parsedRows.length,
+          autoMatched,
+          needsReview,
+          unmatched,
+          discrepanciesFound,
+        },
+      );
 
       this.logger.log(
         `Match complete for ${reconciliationId}: ${autoMatched} auto-matched, ${needsReview} needs review, ${unmatched} unmatched, ${confirmed} confirmed (skipped), ${discrepanciesFound} updates out of ${parsedRows.length}`,
@@ -381,11 +383,10 @@ export class ReconciliationMatchJob {
       discrepanciesFound: number;
     },
   ): Promise<void> {
-    const existingCount =
-      await this.reviewItemService.deleteByReconciliation(
-        workspaceId,
-        reconciliationId,
-      );
+    const existingCount = await this.reviewItemService.deleteByReconciliation(
+      workspaceId,
+      reconciliationId,
+    );
 
     if (existingCount > 0) {
       this.logger.warn(
@@ -470,12 +471,25 @@ export class ReconciliationMatchJob {
             }
           : null;
 
+      // Pass other CRM policies sharing this policy number so the diff
+      // engine can detect cross-term namesake conflicts (BOB row's name
+      // matches a lead linked to a different policy under the same
+      // number — usually a renamed lead or a separate person on a
+      // canceled-and-rebuy term).
+      const policyNumber = matchedPolicy.policyNumber;
+      const namesakes = policyNumber
+        ? (ctx.matchIndexes.policyByNumber.get(policyNumber) ?? []).filter(
+            (p) => p.id !== matchedPolicy.id,
+          )
+        : [];
+
       const diffs = computeFieldDiffsFromMapping(
         pending.row,
         policyForDiff,
         statusResult,
         ctx.columnMapping,
         ctx.computedFields,
+        namesakes,
       );
 
       // Synthetic diff for UI visibility when an older policy version needs

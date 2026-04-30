@@ -356,6 +356,202 @@ describe('diff engine', () => {
     });
   });
 
+  describe('cross-term namesake conflict', () => {
+    // Regression for U73572258: two CRM policies share the same policy
+    // number across plan years. BOB row's eff date + agent + contact info
+    // match the brianna-falcon policy, but its NAME ("Andy Guebara")
+    // matches the lead on the other policy under the same number. Engine
+    // used to propose overwriting brianna's name + DOB with Andy's,
+    // destroying brianna's identity even though Andy already exists in
+    // CRM as a separate lead.
+    const sharedPolicyNumberMapping: ColumnMapping = {
+      member_first: {
+        crmField: 'lead.name.firstName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:firstName-name (lead)',
+      },
+      member_last: {
+        crmField: 'lead.name.lastName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:lastName-name (lead)',
+      },
+      member_dob: {
+        crmField: 'lead.dateOfBirth',
+        fieldType: 'DATE',
+        fieldKey: 'update:dateOfBirth (lead)',
+      },
+    };
+
+    const matchedBriannaPolicy = {
+      status: 'CANCELED',
+      effectiveDate: '2026-03-01',
+      expirationDate: '2026-03-01',
+      applicantCount: 1,
+      policyNumber: 'U73572258',
+      'lead.name.firstName': 'brianna',
+      'lead.name.lastName': 'falcon',
+      'lead.dateOfBirth': '1966-11-07',
+    };
+
+    const namesakeAndyPolicy = {
+      id: 'c8979322-policy',
+      status: 'PAYMENT_ERROR_CANCELED',
+      effectiveDate: '2026-02-01',
+      expirationDate: '2026-02-01',
+      policyNumber: 'U73572258',
+      'lead.name.firstName': 'Andy',
+      'lead.name.lastName': 'Guebara',
+      'lead.dateOfBirth': '1966-11-07',
+    };
+
+    const bobRowAndy = {
+      member_first: 'Andy',
+      member_last: 'Guebara',
+      member_dob: '1966-11-07',
+    };
+
+    it('suppresses lead identity diffs when BOB name matches a namesake under the same policy number', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        matchedBriannaPolicy,
+        null,
+        sharedPolicyNumberMapping,
+        undefined,
+        [namesakeAndyPolicy],
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.lastName'),
+      ).toBeUndefined();
+    });
+
+    it('emits a synthetic INFO_ONLY notice naming the namesake', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        matchedBriannaPolicy,
+        null,
+        sharedPolicyNumberMapping,
+        undefined,
+        [namesakeAndyPolicy],
+      );
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.action).toBe('INFO_ONLY');
+      expect(notice?.crmField).toBeNull();
+      expect(notice?.label).toContain('Cross-term namesake');
+      expect(notice?.note).toContain('Andy Guebara');
+      expect(notice?.bobValue).toContain('Andy');
+      expect(notice?.crmValue).toContain('brianna');
+    });
+
+    it('does NOT fire when no namesakes are passed (single-policy reconciliation)', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        matchedBriannaPolicy,
+        null,
+        sharedPolicyNumberMapping,
+      );
+
+      // Without namesake context, this looks like a normal name correction
+      // and the diff should still surface for review.
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeDefined();
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+    });
+
+    it('does NOT fire when matched lead name already matches BOB (legitimate match)', () => {
+      const matchedAndyPolicy = {
+        ...matchedBriannaPolicy,
+        'lead.name.firstName': 'Andy',
+        'lead.name.lastName': 'Guebara',
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        matchedAndyPolicy,
+        null,
+        sharedPolicyNumberMapping,
+        undefined,
+        // brianna falcon as namesake, but matched lead already matches
+        // BOB so there's no conflict — names line up with the right one.
+        [
+          {
+            id: 'b892d548-policy',
+            'lead.name.firstName': 'brianna',
+            'lead.name.lastName': 'falcon',
+            'lead.dateOfBirth': '1966-11-07',
+          },
+        ],
+      );
+
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+    });
+
+    it('does NOT fire when no namesake lead matches BOB (genuine name correction)', () => {
+      const unrelatedNamesake = {
+        id: 'unrelated-policy',
+        'lead.name.firstName': 'Charles',
+        'lead.name.lastName': 'Different',
+        'lead.dateOfBirth': '1980-01-01',
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        matchedBriannaPolicy,
+        null,
+        sharedPolicyNumberMapping,
+        undefined,
+        [unrelatedNamesake],
+      );
+
+      // No namesake matches BOB → likely a real name correction → diff
+      // should still surface for review.
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeDefined();
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+    });
+
+    it('multi-member detection still wins when both could fire', () => {
+      const multiMemberPolicy = {
+        ...matchedBriannaPolicy,
+        applicantCount: 2,
+        'lead.dateOfBirth': '2005-01-01',
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        bobRowAndy,
+        multiMemberPolicy,
+        null,
+        sharedPolicyNumberMapping,
+        undefined,
+        [namesakeAndyPolicy],
+      );
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      // Multi-member is more specific (applicantCount + DOB delta) so it
+      // takes precedence over the cross-term namesake explanation.
+      expect(notice?.label).toContain('Multi-member');
+    });
+  });
+
   describe('name-like field classification', () => {
     // Regression: agent.name used to be a literal-equality special case in
     // the isNameField check. After unifying the helper to a path-suffix check,

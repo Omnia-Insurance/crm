@@ -251,45 +251,44 @@ const LEAD_IDENTITY_CRM_FIELDS: ReadonlySet<string> = new Set([
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
- * Detect the case where a multi-member policy's CRM primary-lead identity
- * doesn't match the BOB row's subscriber. Carriers report ONE row per
- * policy keyed against the subscriber, so when:
- *
- *   1. CRM `applicantCount > 1` (the policy has dependents), AND
- *   2. The BOB row's DOB and the CRM lead's DOB are clearly different
- *      humans (>1 year apart — rules out typos / same-day-different-year
- *      data-entry slips, catches actual identity mismatches),
- *
- * …the BOB describes a different family member than the one currently
- * linked as the policy's primary lead. Auto-applying name/DOB updates in
- * that situation overwrites the linked person with the subscriber's
- * identity and silently destroys the dependent's record. The right move
- * is human research: either fix the subscriber/dependent linkage or
- * verify the BOB.
- *
- * Returns the detected context (used by caller to emit a synthetic
- * INFO_ONLY diff) or null when the heuristic doesn't fire.
+ * Why the diff engine is suppressing lead identity updates. Both reasons
+ * point to "the BOB row describes a person other than the CRM primary
+ * lead" — auto-applying name/DOB diffs would overwrite the linked person
+ * with someone else's identity. Surfaced as a synthetic INFO_ONLY diff
+ * so reviewers see the rationale.
  */
+type SubscriberMismatchReason =
+  | {
+      kind: 'MULTI_MEMBER_DOB_MISMATCH';
+      yearsApart: number;
+      applicantCount: number;
+    }
+  | {
+      kind: 'CROSS_TERM_NAMESAKE';
+      namesakePolicyId: string;
+      namesakeFirstName: string | null;
+      namesakeLastName: string | null;
+    };
+
 type SubscriberMismatch = {
+  reason: SubscriberMismatchReason;
   bobFirstName: string | null;
   bobLastName: string | null;
-  bobDob: string;
+  bobDob: string | null;
   crmFirstName: string | null;
   crmLastName: string | null;
-  crmDob: string;
-  yearsApart: number;
-  applicantCount: number;
+  crmDob: string | null;
 };
 
-const detectMultiMemberSubscriberMismatch = (
-  bobRow: Record<string, unknown>,
-  crmPolicy: Record<string, unknown>,
+type LeadIdentityHeaders = {
+  dobHeader: string | null;
+  firstHeader: string | null;
+  lastHeader: string | null;
+};
+
+const findLeadIdentityHeaders = (
   columnMapping: ColumnMapping,
-): SubscriberMismatch | null => {
-  const applicantCount = Number(crmPolicy.applicantCount);
-
-  if (!Number.isFinite(applicantCount) || applicantCount <= 1) return null;
-
+): LeadIdentityHeaders => {
   let dobHeader: string | null = null;
   let firstHeader: string | null = null;
   let lastHeader: string | null = null;
@@ -300,9 +299,26 @@ const detectMultiMemberSubscriberMismatch = (
     else if (entry.crmField === 'lead.name.lastName') lastHeader = xlsxHeader;
   }
 
-  if (!dobHeader) return null;
+  return { dobHeader, firstHeader, lastHeader };
+};
 
-  const bobDob = bobRow[dobHeader];
+/**
+ * Multi-member policy: CRM `applicantCount > 1` AND BOB DOB differs from
+ * CRM lead DOB by > 1 year. The BOB describes a different family member
+ * than the one linked as the policy's primary lead — typically because
+ * the CRM has the dependent linked instead of the subscriber.
+ */
+const detectMultiMemberSubscriberMismatch = (
+  bobRow: Record<string, unknown>,
+  crmPolicy: Record<string, unknown>,
+  headers: LeadIdentityHeaders,
+): SubscriberMismatch | null => {
+  const applicantCount = Number(crmPolicy.applicantCount);
+
+  if (!Number.isFinite(applicantCount) || applicantCount <= 1) return null;
+  if (!headers.dobHeader) return null;
+
+  const bobDob = bobRow[headers.dobHeader];
   const crmDob = crmPolicy['lead.dateOfBirth'];
 
   if (typeof bobDob !== 'string' || typeof crmDob !== 'string') return null;
@@ -317,27 +333,134 @@ const detectMultiMemberSubscriberMismatch = (
   if (yearsApart <= 1) return null;
 
   return {
-    bobFirstName: firstHeader
-      ? ((bobRow[firstHeader] as string) ?? null)
+    reason: {
+      kind: 'MULTI_MEMBER_DOB_MISMATCH',
+      yearsApart,
+      applicantCount,
+    },
+    bobFirstName: headers.firstHeader
+      ? ((bobRow[headers.firstHeader] as string) ?? null)
       : null,
-    bobLastName: lastHeader ? ((bobRow[lastHeader] as string) ?? null) : null,
+    bobLastName: headers.lastHeader
+      ? ((bobRow[headers.lastHeader] as string) ?? null)
+      : null,
     bobDob,
     crmFirstName: (crmPolicy['lead.name.firstName'] as string) ?? null,
     crmLastName: (crmPolicy['lead.name.lastName'] as string) ?? null,
     crmDob,
-    yearsApart,
-    applicantCount,
   };
+};
+
+/**
+ * Cross-term namesake conflict: another CRM policy under the same policy
+ * number has a lead whose name matches the BOB row, while the matched
+ * policy's lead doesn't. Carriers reuse policy numbers across plan years
+ * / cancel-rebuy cycles, and Twenty creates a new lead per policy term.
+ * When this fires, the BOB-named person already exists as a separate
+ * CRM lead (linked to a different policy under the same number) — auto-
+ * updating the matched lead's identity would overwrite the wrong person.
+ *
+ * `namesakes` is the list of CRM policies sharing this policy number
+ * other than the matched one. Empty array (or absent) → no detection.
+ */
+const detectCrossTermNamesakeConflict = (
+  bobRow: Record<string, unknown>,
+  crmPolicy: Record<string, unknown>,
+  headers: LeadIdentityHeaders,
+  namesakes: readonly Record<string, unknown>[],
+): SubscriberMismatch | null => {
+  if (namesakes.length === 0) return null;
+  if (!headers.firstHeader || !headers.lastHeader) return null;
+
+  const bobFirst = (bobRow[headers.firstHeader] as string) ?? null;
+  const bobLast = (bobRow[headers.lastHeader] as string) ?? null;
+
+  if (!bobFirst || !bobLast) return null;
+
+  const matchedFirst = (crmPolicy['lead.name.firstName'] as string) ?? null;
+  const matchedLast = (crmPolicy['lead.name.lastName'] as string) ?? null;
+
+  // Only fires when matched lead's name DOESN'T match BOB. Otherwise the
+  // BOB is describing the linked person and there's no conflict to flag.
+  const matchedFullName =
+    matchedFirst && matchedLast ? `${matchedFirst} ${matchedLast}` : null;
+
+  if (
+    matchedFullName &&
+    fuzzyNameMatch(`${bobFirst} ${bobLast}`, matchedFullName)
+  ) {
+    return null;
+  }
+
+  for (const namesake of namesakes) {
+    const nFirst = (namesake['lead.name.firstName'] as string) ?? null;
+    const nLast = (namesake['lead.name.lastName'] as string) ?? null;
+
+    if (!nFirst || !nLast) continue;
+
+    if (fuzzyNameMatch(`${bobFirst} ${bobLast}`, `${nFirst} ${nLast}`)) {
+      const dobValue = headers.dobHeader
+        ? (bobRow[headers.dobHeader] as string)
+        : null;
+
+      return {
+        reason: {
+          kind: 'CROSS_TERM_NAMESAKE',
+          namesakePolicyId: (namesake.id as string) ?? '<unknown>',
+          namesakeFirstName: nFirst,
+          namesakeLastName: nLast,
+        },
+        bobFirstName: bobFirst,
+        bobLastName: bobLast,
+        bobDob: dobValue,
+        crmFirstName: matchedFirst,
+        crmLastName: matchedLast,
+        crmDob: (crmPolicy['lead.dateOfBirth'] as string) ?? null,
+      };
+    }
+  }
+
+  return null;
 };
 
 const formatSubscriberMismatchValue = (
   first: string | null,
   last: string | null,
-  dob: string,
+  dob: string | null,
 ): string => {
   const name = [first, last].filter(Boolean).join(' ').trim();
 
-  return name ? `${name} (DOB ${dob})` : `DOB ${dob}`;
+  if (name && dob) return `${name} (DOB ${dob})`;
+  if (name) return name;
+  if (dob) return `DOB ${dob}`;
+
+  return '∅';
+};
+
+const formatSubscriberMismatchNote = (mismatch: SubscriberMismatch): string => {
+  if (mismatch.reason.kind === 'MULTI_MEMBER_DOB_MISMATCH') {
+    return (
+      `Policy has ${mismatch.reason.applicantCount} members; BOB ` +
+      `subscriber DOB differs from CRM primary lead by ` +
+      `${mismatch.reason.yearsApart.toFixed(1)} years. Lead identity ` +
+      `not auto-updated — verify subscriber/dependent linkage.`
+    );
+  }
+
+  const namesakeFull = [
+    mismatch.reason.namesakeFirstName,
+    mismatch.reason.namesakeLastName,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    `Another CRM policy under the same policy number is already linked ` +
+    `to a lead matching the BOB row's name (${namesakeFull}). Lead ` +
+    `identity not auto-updated — likely the BOB describes a different ` +
+    `lead's policy term, or this lead was renamed; verify linkage ` +
+    `before applying.`
+  );
 };
 
 /** Infer compare method from CRM field metadata type. */
@@ -360,6 +483,11 @@ const inferCompareMethod = (fieldType: string): string => {
 /**
  * Compute field diffs using the column mapping (XLSX header → CRM field)
  * instead of FieldConfigEntry[]. Compare methods are inferred from fieldType.
+ *
+ * `namesakes` (optional): other CRM policies sharing the same policyNumber
+ * as the matched policy. Used by the cross-term namesake detector to
+ * suppress lead identity diffs when the BOB row's name matches a lead
+ * already linked to a different policy under the same number.
  */
 export const computeFieldDiffsFromMapping = (
   bobRow: Record<string, unknown>,
@@ -367,6 +495,7 @@ export const computeFieldDiffsFromMapping = (
   statusDecision: StatusDecision | null,
   columnMapping: ColumnMapping,
   computedFields?: ComputedFieldDef[] | null,
+  namesakes?: readonly Record<string, unknown>[],
 ): FieldDiff[] => {
   const diffs: FieldDiff[] = [];
 
@@ -416,15 +545,21 @@ export const computeFieldDiffsFromMapping = (
     }
   }
 
-  // Detect once per row: does the BOB describe a different family member
-  // than the CRM's primary lead on a multi-member policy? When true, lead
-  // identity diffs below are skipped to avoid overwriting one person's
-  // record with another's.
-  const subscriberMismatch = detectMultiMemberSubscriberMismatch(
-    bobRow,
-    crmPolicy,
-    columnMapping,
-  );
+  // Detect once per row: does the BOB describe a different person than
+  // the CRM's primary lead? Two distinct triggers — multi-member policy
+  // with DOB mismatch (subscriber-vs-dependent confusion) or cross-term
+  // namesake conflict (BOB name matches a lead linked to a different
+  // policy under the same number). Either way, suppress lead identity
+  // diffs so we don't overwrite one person's record with another's.
+  const headers = findLeadIdentityHeaders(columnMapping);
+  const subscriberMismatch =
+    detectMultiMemberSubscriberMismatch(bobRow, crmPolicy, headers) ??
+    detectCrossTermNamesakeConflict(
+      bobRow,
+      crmPolicy,
+      headers,
+      namesakes ?? [],
+    );
 
   // Field-level diffs from column mapping
   for (const [xlsxHeader, entry] of Object.entries(columnMapping)) {
@@ -523,8 +658,8 @@ export const computeFieldDiffsFromMapping = (
     }
   }
 
-  // Surface the multi-member subscriber mismatch as a synthetic INFO_ONLY
-  // diff. `crmField: null` keeps it out of the apply step's update loop
+  // Surface the subscriber mismatch as a synthetic INFO_ONLY diff.
+  // `crmField: null` keeps it out of the apply step's update loop
   // (frontend filters on `d.crmField !== null`); the UI still renders it
   // so reviewers see *why* the lead identity wasn't proposed for update.
   if (subscriberMismatch) {
@@ -538,10 +673,14 @@ export const computeFieldDiffsFromMapping = (
       subscriberMismatch.crmLastName,
       subscriberMismatch.crmDob,
     );
+    const label =
+      subscriberMismatch.reason.kind === 'MULTI_MEMBER_DOB_MISMATCH'
+        ? 'Multi-member policy: BOB describes a different person'
+        : 'Cross-term namesake: BOB name matches a different CRM lead under this policy number';
 
     diffs.push({
       field: '__multiMemberSubscriberMismatch',
-      label: 'Multi-member policy: BOB describes a different person',
+      label,
       bobValue: bobLabel,
       crmValue: crmLabel,
       action: 'INFO_ONLY',
@@ -549,11 +688,7 @@ export const computeFieldDiffsFromMapping = (
       approval: 'PENDING',
       crmField: null,
       crmObjectType: null,
-      note:
-        `Policy has ${subscriberMismatch.applicantCount} members; BOB ` +
-        `subscriber DOB differs from CRM primary lead by ` +
-        `${subscriberMismatch.yearsApart.toFixed(1)} years. Lead identity ` +
-        `not auto-updated — verify subscriber/dependent linkage.`,
+      note: formatSubscriberMismatchNote(subscriberMismatch),
     });
   }
 
