@@ -122,6 +122,72 @@ describe('diff engine', () => {
     expect(dateDiff?.crmValue).toBe('2026-01-01');
   });
 
+  describe('backwards effectiveDate suppression', () => {
+    // Carriers like Ambetter carry forward the original enrollment date in
+    // policy_effective_date even after a renewal. Without this suppression
+    // the diff engine would propose moving the renewal CRM record's
+    // effectiveDate backwards to the prior plan year — almost always wrong.
+    it('suppresses backwards effectiveDate moves on column-mapped diffs', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        // BOB carries forward 2025 enrollment …
+        { ...baseBobRow, eff_date: '2025-10-01' },
+        // … but CRM is the 2026 renewal record.
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+
+    it('still emits a diff for forward effectiveDate corrections', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, eff_date: '2026-03-01' },
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeDefined();
+    });
+
+    it('suppresses backwards effectiveDate moves on computed-field diffs', () => {
+      // Ambetter wires effectiveDate through a computed field
+      // (trueEffectiveDate = maxDate(broker, policy)). Without the guard on
+      // the computed-field loop the diff still slips through.
+      const columnMapping: ColumnMapping = {
+        // No direct effectiveDate mapping — the computed field claims it.
+        policy_no: {
+          crmField: 'policyNumber',
+          fieldType: 'TEXT',
+          fieldKey: 'policyNumber',
+        },
+      };
+      const computedFields = [
+        {
+          outputKey: 'trueEffectiveDate',
+          method: 'maxDate',
+          inputs: ['brokerEffectiveDate', 'policyEffectiveDate'],
+          type: 'date',
+          crmField: 'effectiveDate',
+        },
+      ];
+
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          policy_no: 'U94692964',
+          trueEffectiveDate: '2025-10-01',
+        },
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        columnMapping,
+        computedFields,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+  });
+
   describe('name-like field classification', () => {
     // Regression: agent.name used to be a literal-equality special case in
     // the isNameField check. After unifying the helper to a path-suffix check,

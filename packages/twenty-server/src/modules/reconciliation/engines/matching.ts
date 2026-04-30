@@ -33,6 +33,7 @@ export type MatchDecision = {
 export type MatchInput = {
   policyNumber: string | null;
   effectiveDate: string | null;
+  paidThroughDate: string | null;
   agentName: string | null;
   agentNpn: string | null;
   memberFirstName: string | null;
@@ -54,6 +55,7 @@ export type MatchInput = {
 export const MATCHING_ROLE_BY_CRM_FIELD = {
   policyNumber: 'policyNumber',
   effectiveDate: 'effectiveDate',
+  paidThroughDate: 'paidThroughDate',
   'lead.name.firstName': 'memberFirstName',
   'lead.name.lastName': 'memberLastName',
   'lead.dateOfBirth': 'memberDob',
@@ -89,6 +91,7 @@ export const buildMatchInput = (
   return {
     policyNumber: (row[byRole.get('policyNumber')!] as string) ?? null,
     effectiveDate: (row[byRole.get('effectiveDate')!] as string) ?? null,
+    paidThroughDate: (row[byRole.get('paidThroughDate')!] as string) ?? null,
     agentName: (row[byRole.get('agentName')!] as string) ?? null,
     agentNpn: (row[byRole.get('agentNpn')!] as string) ?? null,
     memberFirstName: (row[byRole.get('memberFirstName')!] as string) ?? null,
@@ -105,9 +108,7 @@ import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliat
 
 const MATCHING_FIELD_SIMILARITY_THRESHOLD = 0.85;
 
-const lookupMatchingRole = (
-  crmField: string,
-): keyof MatchInput | undefined =>
+const lookupMatchingRole = (crmField: string): keyof MatchInput | undefined =>
   MATCHING_ROLE_BY_CRM_FIELD[
     crmField as keyof typeof MATCHING_ROLE_BY_CRM_FIELD
   ];
@@ -121,8 +122,7 @@ const lookupMatchingRole = (
 const looksLikeMatchingFieldButMisses = (crmField: string): boolean => {
   if (lookupMatchingRole(crmField) !== undefined) return false;
   return Object.keys(MATCHING_ROLE_BY_CRM_FIELD).some(
-    (key) =>
-      jaroWinkler(crmField, key) >= MATCHING_FIELD_SIMILARITY_THRESHOLD,
+    (key) => jaroWinkler(crmField, key) >= MATCHING_FIELD_SIMILARITY_THRESHOLD,
   );
 };
 
@@ -135,6 +135,7 @@ export const buildMatchInputFromMapping = (
   const result: MatchInput = {
     policyNumber: null,
     effectiveDate: null,
+    paidThroughDate: null,
     agentName: null,
     agentNpn: null,
     memberFirstName: null,
@@ -158,7 +159,9 @@ export const buildMatchInputFromMapping = (
 
   // Map from computed fields (output key → CRM field → matching role)
   if (computedFieldCrmFields) {
-    for (const [outputKey, crmField] of Object.entries(computedFieldCrmFields)) {
+    for (const [outputKey, crmField] of Object.entries(
+      computedFieldCrmFields,
+    )) {
       const role = lookupMatchingRole(crmField);
 
       if (role && result[role] === null) {
@@ -271,7 +274,11 @@ const COMPANY_SUFFIXES = /\b(llc|inc|corp|corporation|dba|ltd|co|company)\b/gi;
 const PUNCTUATION_RE = /[.,]/g;
 
 const normalizeAgentName = (name: string): string =>
-  name.toLowerCase().replace(COMPANY_SUFFIXES, '').replace(PUNCTUATION_RE, '').trim();
+  name
+    .toLowerCase()
+    .replace(COMPANY_SUFFIXES, '')
+    .replace(PUNCTUATION_RE, '')
+    .trim();
 
 export const agentNameMatches = (
   brokerName: string | null,
@@ -306,10 +313,7 @@ export const memberNameScore = (
     bobFirst.toLowerCase(),
     crmFirst.toLowerCase(),
   );
-  const lastScore = jaroWinkler(
-    bobLast.toLowerCase(),
-    crmLast.toLowerCase(),
-  );
+  const lastScore = jaroWinkler(bobLast.toLowerCase(), crmLast.toLowerCase());
 
   return firstScore * 0.4 + lastScore * 0.6;
 };
@@ -441,6 +445,44 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
   return { policyByNumber, policyByNpn, policyByDob, policyById };
 };
 
+/**
+ * When multiple CRM policies share a policyNumber (typical for renewals
+ * where carriers carry the same number forward across plan years), narrow
+ * to the candidate whose [effectiveDate, expirationDate ?? ∞] term-window
+ * contains the BOB row's `paid_through_date`.
+ *
+ * This avoids tier-2/3 picking the canceled prior-term record on renewals
+ * where the BOB still reports the original `policy_effective_date`.
+ *
+ * Returns the unique winner, or null when 0 or >1 candidates qualify
+ * (caller falls back to existing date-proximity ranking).
+ */
+export const selectByActiveTerm = (
+  candidates: CrmPolicy[],
+  bobPaidThroughDate: string | null,
+): CrmPolicy | null => {
+  if (!bobPaidThroughDate || candidates.length < 2) return null;
+
+  const paid = new Date(bobPaidThroughDate).getTime();
+
+  if (Number.isNaN(paid)) return null;
+
+  const matches = candidates.filter((p) => {
+    if (!p.effectiveDate) return false;
+
+    const eff = new Date(p.effectiveDate).getTime();
+
+    if (Number.isNaN(eff) || paid < eff) return false;
+    if (!p.expirationDate) return true;
+
+    const exp = new Date(p.expirationDate).getTime();
+
+    return Number.isNaN(exp) ? false : paid <= exp;
+  });
+
+  return matches.length === 1 ? matches[0] : null;
+};
+
 export const matchRow = (
   input: MatchInput,
   indexes: MatchIndexes,
@@ -474,9 +516,24 @@ export const matchRow = (
   }
 
   // Find all policies with matching policy number
-  const policyNumberMatches = input.policyNumber
-    ? indexes.policyByNumber.get(input.policyNumber) ?? []
+  const allPolicyNumberMatches = input.policyNumber
+    ? (indexes.policyByNumber.get(input.policyNumber) ?? [])
     : [];
+
+  // Term-window disambiguation: when paid-through falls inside exactly one
+  // candidate's [effectiveDate, expirationDate] window, narrow to that one
+  // candidate before running the proximity-based tiers.
+  const termWindowWinner = selectByActiveTerm(
+    allPolicyNumberMatches,
+    input.paidThroughDate,
+  );
+  const policyNumberMatches = termWindowWinner
+    ? [termWindowWinner]
+    : allPolicyNumberMatches;
+  const termWindowSuffix =
+    termWindowWinner && allPolicyNumberMatches.length > 1
+      ? ` (term-window disambiguated from ${allPolicyNumberMatches.length} candidates by paid-through ${input.paidThroughDate})`
+      : '';
 
   if (policyNumberMatches.length > 0) {
     // Tier 2: Policy number + effective date + agent name (3-signal)
@@ -504,16 +561,13 @@ export const matchRow = (
           confidence: 98,
           method: 'POLICY_NUMBER_DATE_AGENT',
           status: classifyConfidence(98, config),
-          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"`,
+          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"${termWindowSuffix}`,
         };
       }
     }
 
     // Tier 3: Policy number + effective date
-    if (
-      isTierEnabled('POLICY_NUMBER_DATE', config) &&
-      input.effectiveDate
-    ) {
+    if (isTierEnabled('POLICY_NUMBER_DATE', config) && input.effectiveDate) {
       const dateMatches = policyNumberMatches.filter((p) =>
         datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
       );
@@ -527,7 +581,7 @@ export const matchRow = (
           confidence: 95,
           method: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE',
           status: classifyConfidence(95, config),
-          notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})`,
+          notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${termWindowSuffix}`,
         };
       }
     }
@@ -551,7 +605,7 @@ export const matchRow = (
           confidence: 85,
           method: 'POLICY_NUMBER_PLUS_AGENT',
           status: classifyConfidence(85, config),
-          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"`,
+          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"${termWindowSuffix}`,
         };
       }
     }
@@ -571,7 +625,7 @@ export const matchRow = (
         confidence: 90,
         method: 'POLICY_NUMBER_SINGLE',
         status: classifyConfidence(90, config),
-        notes: `Single CRM policy matched by policy number "${input.policyNumber}"`,
+        notes: `Single CRM policy matched by policy number "${input.policyNumber}"${termWindowSuffix}`,
       };
     }
 
@@ -583,8 +637,7 @@ export const matchRow = (
       const scored = policyNumberMatches.map((p) => {
         let score = 0;
 
-        score +=
-          dateProximityScore(p.effectiveDate, input.effectiveDate) * 40;
+        score += dateProximityScore(p.effectiveDate, input.effectiveDate) * 40;
 
         if (
           agentNameMatches(
@@ -639,9 +692,8 @@ export const matchRow = (
     input.memberLastName
   ) {
     const npnCandidates = indexes.policyByNpn.get(input.agentNpn) ?? [];
-    const npnMatches = npnCandidates.filter(
-      (p) =>
-        datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
+    const npnMatches = npnCandidates.filter((p) =>
+      datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
     );
 
     for (const p of npnMatches) {
@@ -660,7 +712,11 @@ export const matchRow = (
         const bands = config.tier7NameBands;
         const scores = config.tier7ConfidenceScores;
         const confidence =
-          nameScore >= bands.high ? scores.high : nameScore >= bands.medium ? scores.medium : scores.low;
+          nameScore >= bands.high
+            ? scores.high
+            : nameScore >= bands.medium
+              ? scores.medium
+              : scores.low;
 
         return {
           crmPolicyId: p.id,
@@ -727,8 +783,9 @@ export const matchRow = (
     confidence: 0,
     method: 'UNMATCHED',
     status: 'UNMATCHED',
-    notes: candidates.length > 0
-      ? `Unmatched. ${candidates.join('. ')}`
-      : `No CRM policy found for carrier policy "${input.policyNumber}"`,
+    notes:
+      candidates.length > 0
+        ? `Unmatched. ${candidates.join('. ')}`
+        : `No CRM policy found for carrier policy "${input.policyNumber}"`,
   };
 };

@@ -72,28 +72,25 @@ export class ReviewItemService {
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.getRepo(workspaceId);
+    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+      const repo = await this.getRepo(workspaceId);
 
-        const totalBatches = Math.ceil(items.length / BATCH_SIZE);
+      const totalBatches = Math.ceil(items.length / BATCH_SIZE);
 
-        for (let i = 0; i < totalBatches; i++) {
-          const batch = items.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+      for (let i = 0; i < totalBatches; i++) {
+        const batch = items.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
 
-          await repo.save(batch);
+        await repo.save(batch);
 
-          this.logger.log(
-            `Batch ${i + 1}/${totalBatches}: inserted ${batch.length} review items`,
-          );
+        this.logger.log(
+          `Batch ${i + 1}/${totalBatches}: inserted ${batch.length} review items`,
+        );
 
-          if (i < totalBatches - 1) {
-            await sleep(BATCH_DELAY_MS);
-          }
+        if (i < totalBatches - 1) {
+          await sleep(BATCH_DELAY_MS);
         }
-      },
-      authContext,
-    );
+      }
+    }, authContext);
 
     this.logger.log(`Created ${items.length} review items total`);
   }
@@ -113,6 +110,22 @@ export class ReviewItemService {
       authContext,
     );
   }
+
+  /**
+   * Flags that disqualify an item from the implicit "high-confidence batch
+   * approve" path. These represent ambiguity a human should resolve even
+   * when raw confidence is high — picking the wrong CRM record on a
+   * renewal-vs-reinstatement, an audit-eligible cancel, or a tie-broken
+   * multi-match would all be high-impact mistakes to auto-apply.
+   *
+   * Doesn't apply when the caller passes an explicit `reviewItemIds` list:
+   * that's a deliberate opt-in (filtered review, single-row approve).
+   */
+  static readonly BATCH_APPROVE_BLOCKING_FLAGS = [
+    'REINSTATEMENT',
+    'BROKER_EFF_AUDIT',
+    'MULTI_MATCH',
+  ] as const;
 
   async batchApprove(
     workspaceId: string,
@@ -149,6 +162,8 @@ export class ReviewItemService {
         } else if (filter.minConfidence !== undefined) {
           qb.andWhere('"confidence" >= :minConfidence', {
             minConfidence: filter.minConfidence,
+          }).andWhere('NOT ("flags"::text[] && (:blockingFlags)::text[])', {
+            blockingFlags: [...ReviewItemService.BATCH_APPROVE_BLOCKING_FLAGS],
           });
         }
 

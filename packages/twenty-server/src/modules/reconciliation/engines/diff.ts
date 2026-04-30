@@ -211,6 +211,30 @@ export const isNameLikeCrmField = (
     crmField.endsWith('.lastName') ||
     crmField.endsWith('.name'));
 
+/**
+ * True when proposing to move CRM's `effectiveDate` *backwards* in time —
+ * almost always the carrier carrying forward the original enrollment date
+ * across a renewal, not a real correction. Suppressing avoids over-writing
+ * a renewal record's effective date with the prior plan year's start.
+ *
+ * Forward moves still produce a diff (rare data corrections still surface).
+ */
+const isBackwardsEffectiveDateMove = (
+  crmField: string,
+  bobValue: string | null,
+  crmValue: string | null,
+): boolean => {
+  if (crmField !== 'effectiveDate') return false;
+  if (!bobValue || !crmValue) return false;
+
+  const bob = new Date(bobValue).getTime();
+  const crm = new Date(crmValue).getTime();
+
+  if (Number.isNaN(bob) || Number.isNaN(crm)) return false;
+
+  return bob < crm;
+};
+
 /** Infer compare method from CRM field metadata type. */
 const inferCompareMethod = (fieldType: string): string => {
   switch (fieldType) {
@@ -311,6 +335,9 @@ export const computeFieldDiffsFromMapping = (
     // Don't suggest clearing CRM data when BOB has no value
     if ((bobStr == null || bobStr === '') && crmStr != null) continue;
 
+    // Don't suggest moving effectiveDate backwards (renewal carry-forward)
+    if (isBackwardsEffectiveDateMove(entry.crmField, bobStr, crmStr)) continue;
+
     // Use fuzzyName for name-related fields regardless of inferred type
     const compareMethod = isNameLikeCrmField(entry.crmField)
       ? 'fuzzyName'
@@ -343,6 +370,9 @@ export const computeFieldDiffsFromMapping = (
       const crmStr = readCrmValue(crmPolicy, cf.crmField);
 
       if (bobStr == null && crmStr == null) continue;
+
+      // Don't suggest moving effectiveDate backwards (renewal carry-forward)
+      if (isBackwardsEffectiveDateMove(cf.crmField, bobStr, crmStr)) continue;
 
       const compareMethod = inferCompareMethod(
         cf.type === 'date' ? 'DATE_TIME' : 'TEXT',

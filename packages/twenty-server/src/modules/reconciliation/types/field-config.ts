@@ -22,6 +22,7 @@ export type CompareMethod =
 export type MatchingRole =
   | 'policyNumber'
   | 'effectiveDate'
+  | 'paidThroughDate'
   | 'agentName'
   | 'agentNpn'
   | 'memberFirstName'
