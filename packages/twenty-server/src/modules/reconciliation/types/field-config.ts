@@ -225,17 +225,36 @@ export const deriveFlags = (
       'Multiple CRM policies share this policy number — picked best by weighted score';
   }
 
-  // Name mismatch: any name-related field diff present
+  // Multi-member subscriber mismatch — surfaced by the diff engine as a
+  // synthetic INFO_ONLY diff (see detectMultiMemberSubscriberMismatch in
+  // engines/diff.ts). The diff already suppresses lead identity updates;
+  // we reuse the existing NAME_MISMATCH flag for visibility so reviewers
+  // see something is off without needing a new enum value in the DB.
+  const subscriberMismatchDiff = fieldDiffs.find(
+    (d) => d.field === '__multiMemberSubscriberMismatch',
+  );
+
+  // Name mismatch: any name-related field diff present, OR a multi-member
+  // subscriber-mismatch notice (where name diffs were suppressed).
   const nameDiffs = fieldDiffs.filter((d) => isNameLikeCrmField(d.crmField));
 
-  if (nameDiffs.length > 0) {
+  if (nameDiffs.length > 0 || subscriberMismatchDiff) {
     flags.push('NAME_MISMATCH');
-    const first = nameDiffs[0];
 
-    reasons.NAME_MISMATCH =
-      nameDiffs.length === 1
-        ? `${first.crmField}: "${first.crmValue ?? '∅'}" → "${first.bobValue ?? '∅'}"`
-        : `${nameDiffs.length} name fields differ (e.g. ${first.crmField}: "${first.crmValue ?? '∅'}" → "${first.bobValue ?? '∅'}")`;
+    if (subscriberMismatchDiff) {
+      reasons.NAME_MISMATCH =
+        subscriberMismatchDiff.note ??
+        `BOB ${subscriberMismatchDiff.bobValue ?? '∅'} vs CRM ${
+          subscriberMismatchDiff.crmValue ?? '∅'
+        }`;
+    } else {
+      const first = nameDiffs[0];
+
+      reasons.NAME_MISMATCH =
+        nameDiffs.length === 1
+          ? `${first.crmField}: "${first.crmValue ?? '∅'}" → "${first.bobValue ?? '∅'}"`
+          : `${nameDiffs.length} name fields differ (e.g. ${first.crmField}: "${first.crmValue ?? '∅'}" → "${first.bobValue ?? '∅'}")`;
+    }
   }
 
   return { flags, reasons };

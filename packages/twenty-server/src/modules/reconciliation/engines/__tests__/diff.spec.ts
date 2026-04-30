@@ -188,6 +188,174 @@ describe('diff engine', () => {
     });
   });
 
+  describe('multi-member subscriber mismatch', () => {
+    // Regression for UZ1687884: family policy with applicantCount=2.
+    // CRM has the dependent (Antoine Williams, DOB 2005) attached as the
+    // primary lead. BOB describes the subscriber (Shabretta Williams, DOB
+    // 1983). Engine used to propose overwriting Antoine's name + DOB with
+    // Shabretta's, destroying the dependent's identity. Expected: lead
+    // identity diffs suppressed, synthetic INFO_ONLY notice emitted so
+    // the UI surfaces the linkage problem for human review.
+    const familyColumnMapping: ColumnMapping = {
+      member_first: {
+        crmField: 'lead.name.firstName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:firstName-name (lead)',
+      },
+      member_last: {
+        crmField: 'lead.name.lastName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:lastName-name (lead)',
+      },
+      member_dob: {
+        crmField: 'lead.dateOfBirth',
+        fieldType: 'DATE',
+        fieldKey: 'update:dateOfBirth (lead)',
+      },
+      broker_name: {
+        crmField: 'agent.name',
+        fieldType: 'TEXT',
+        fieldKey: 'update:name (agent)',
+      },
+    };
+
+    const subscriberRow = {
+      member_first: 'Shabretta',
+      member_last: 'Williams',
+      member_dob: '1983-06-16',
+      broker_name: 'Kevin Desku',
+    };
+
+    const dependentLeadOnPolicy = {
+      status: 'ACTIVE_PLACED',
+      effectiveDate: '2026-01-01',
+      expirationDate: null,
+      applicantCount: 2,
+      'lead.name.firstName': 'Antoine',
+      'lead.name.lastName': 'Williams',
+      'lead.dateOfBirth': '2005-08-29',
+      'agent.name': 'Kevin Desku',
+    };
+
+    it('suppresses lead identity diffs when applicantCount > 1 and DOB clearly differs', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        subscriberRow,
+        dependentLeadOnPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.lastName'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.dateOfBirth'),
+      ).toBeUndefined();
+    });
+
+    it('emits a synthetic INFO_ONLY diff that the apply step ignores (crmField=null)', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        subscriberRow,
+        dependentLeadOnPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.action).toBe('INFO_ONLY');
+      expect(notice?.crmField).toBeNull();
+      expect(notice?.bobValue).toContain('Shabretta');
+      expect(notice?.bobValue).toContain('1983-06-16');
+      expect(notice?.crmValue).toContain('Antoine');
+      expect(notice?.crmValue).toContain('2005-08-29');
+      expect(notice?.note).toMatch(/2 members/);
+    });
+
+    it('does NOT suppress when applicantCount = 1 (single-member policy)', () => {
+      const singleMemberPolicy = {
+        ...dependentLeadOnPolicy,
+        applicantCount: 1,
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        subscriberRow,
+        singleMemberPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      // Real corrections still propose updates on solo policies.
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeDefined();
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+    });
+
+    it('does NOT suppress when DOBs differ by less than a year (typo-shaped)', () => {
+      const closeDobPolicy = {
+        ...dependentLeadOnPolicy,
+        'lead.dateOfBirth': '1983-08-16', // 2 months from BOB
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        subscriberRow,
+        closeDobPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      // Small DOB delta is more likely a data-entry slip than a wrong
+      // person — let the diff surface for normal review.
+      expect(
+        diffs.find((d) => d.crmField === 'lead.dateOfBirth'),
+      ).toBeDefined();
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+    });
+
+    it('does NOT suppress non-lead diffs even when subscriber mismatch fires', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...subscriberRow, broker_name: 'Different Agent' },
+        dependentLeadOnPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      // Status/agent/etc. should still flow normally
+      expect(diffs.find((d) => d.crmField === 'agent.name')).toBeDefined();
+    });
+
+    it('does not fire when applicantCount is missing (legacy policies)', () => {
+      const noCountPolicy = { ...dependentLeadOnPolicy };
+
+      delete (noCountPolicy as Record<string, unknown>).applicantCount;
+
+      const diffs = computeFieldDiffsFromMapping(
+        subscriberRow,
+        noCountPolicy,
+        null,
+        familyColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeDefined();
+    });
+  });
+
   describe('name-like field classification', () => {
     // Regression: agent.name used to be a literal-equality special case in
     // the isNameField check. After unifying the helper to a path-suffix check,
