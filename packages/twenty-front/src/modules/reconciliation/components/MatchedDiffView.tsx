@@ -148,6 +148,60 @@ const StyledBody = styled.div`
   padding-left: ${themeCssVariables.spacing[4]};
 `;
 
+// Callout for synthetic INFO_ONLY diffs (e.g., multi-member subscriber
+// mismatch, cross-term namesake) — these have no inline field to attach
+// to but still need to be visible. Without this, the only visible signal
+// is the small flag reason in the header, and the body looks like an
+// unchanged record despite the NAME_MISMATCH chip.
+const StyledInfoCallout = styled.div`
+  background: ${themeCssVariables.background.tertiary};
+  border: 1px solid ${themeCssVariables.border.color.medium};
+  border-left: 3px solid ${themeCssVariables.color.yellow};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  margin: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]}
+    ${themeCssVariables.spacing[2]} 0;
+  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[3]};
+`;
+
+const StyledInfoCalloutHeader = styled.div`
+  align-items: center;
+  color: ${themeCssVariables.font.color.primary};
+  display: flex;
+  font-size: ${themeCssVariables.font.size.sm};
+  font-weight: ${themeCssVariables.font.weight.semiBold};
+  gap: ${themeCssVariables.spacing[1]};
+
+  svg {
+    color: ${themeCssVariables.color.yellow};
+  }
+`;
+
+const StyledInfoCalloutBody = styled.div`
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+  line-height: 1.5;
+`;
+
+const StyledInfoCalloutValues = styled.div`
+  color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
+  flex-wrap: wrap;
+  font-size: ${themeCssVariables.font.size.xs};
+  gap: ${themeCssVariables.spacing[2]};
+`;
+
+const StyledInfoCalloutValue = styled.span`
+  font-variant-numeric: tabular-nums;
+
+  strong {
+    color: ${themeCssVariables.font.color.secondary};
+    font-weight: ${themeCssVariables.font.weight.medium};
+  }
+`;
+
 const StyledFooter = styled.div`
   padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
   border-top: 1px solid ${themeCssVariables.border.color.medium};
@@ -243,6 +297,18 @@ export const MatchedDiffView = ({
       d.action === 'COMPUTED' &&
       d.bobValue !== null &&
       d.bobValue !== d.crmValue,
+  );
+
+  // Synthetic informational diffs from the server (e.g., multi-member
+  // subscriber mismatch, cross-term namesake). They have no actionable
+  // crmField — the apply step skips them. We render them as a banner
+  // because the inline RecordFieldList has no field to attach them to,
+  // and the header flag-reason is too subtle for cases where the body
+  // shows an apparently unchanged record.
+  const informationalNotices = useMemo(
+    () =>
+      fieldDiffs.filter((d) => d.action === 'INFO_ONLY' && d.crmField === null),
+    [fieldDiffs],
   );
 
   // Read policy record from store to get lead relation ID
@@ -509,9 +575,7 @@ export const MatchedDiffView = ({
   const allDiffsAccepted = useMemo(() => {
     const actionable = fieldDiffs.filter(
       (d) =>
-        d.crmField !== null &&
-        d.bobValue !== null &&
-        d.bobValue !== d.crmValue,
+        d.crmField !== null && d.bobValue !== null && d.bobValue !== d.crmValue,
     );
 
     if (actionable.length === 0) return false;
@@ -629,6 +693,31 @@ export const MatchedDiffView = ({
       </StyledHeader>
 
       <StyledBody>
+        {informationalNotices.map((notice) => (
+          <StyledInfoCallout key={notice.field}>
+            <StyledInfoCalloutHeader>
+              <IconAlertTriangle size={14} />
+              {notice.label}
+            </StyledInfoCalloutHeader>
+            {notice.note && (
+              <StyledInfoCalloutBody>{notice.note}</StyledInfoCalloutBody>
+            )}
+            {(notice.bobValue || notice.crmValue) && (
+              <StyledInfoCalloutValues>
+                {notice.crmValue && (
+                  <StyledInfoCalloutValue>
+                    <strong>CRM:</strong> {notice.crmValue}
+                  </StyledInfoCalloutValue>
+                )}
+                {notice.bobValue && (
+                  <StyledInfoCalloutValue>
+                    <strong>BOB:</strong> {notice.bobValue}
+                  </StyledInfoCalloutValue>
+                )}
+              </StyledInfoCalloutValues>
+            )}
+          </StyledInfoCallout>
+        ))}
         {policyId && (
           <>
             <RecordShowEffect objectNameSingular="policy" recordId={policyId} />
