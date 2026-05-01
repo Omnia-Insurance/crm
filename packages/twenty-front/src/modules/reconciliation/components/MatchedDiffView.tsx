@@ -25,12 +25,8 @@ import { RecordFieldList } from '@/object-record/record-field-list/components/Re
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
-import { useOpenCreateActivityDrawer } from '@/activities/hooks/useOpenCreateActivityDrawer';
-import {
-  CoreObjectNameSingular,
-  type EmailsMetadata,
-  type PhonesMetadata,
-} from 'twenty-shared/types';
+import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
+import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
   promotePrimaryEmailToAdditional,
   promotePrimaryPhoneToAdditional,
@@ -85,10 +81,7 @@ const StyledPolicyBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: ${themeCssVariables.spacing[1]};
-  padding: 0 ${themeCssVariables.spacing[2]};
   height: 24px;
-  border-radius: ${themeCssVariables.border.radius.sm};
-  background: ${themeCssVariables.background.tertiary};
   font-size: ${themeCssVariables.font.size.xs};
   font-weight: ${themeCssVariables.font.weight.medium};
   color: ${themeCssVariables.font.color.secondary};
@@ -109,12 +102,6 @@ const StyledMatchLabel = styled.div`
   svg {
     color: ${themeCssVariables.color.orange};
   }
-`;
-
-const StyledStatusNote = styled.div`
-  margin-top: ${themeCssVariables.spacing[2]};
-  font-size: ${themeCssVariables.font.size.sm};
-  color: ${themeCssVariables.font.color.secondary};
 `;
 
 const StyledFlagReasons = styled.ul`
@@ -286,23 +273,23 @@ export const MatchedDiffView = ({
     return rawColumnMapping as Record<string, ColumnMappingEntry>;
   }, [rawColumnMapping]);
 
-  // Enrich fieldDiffs with proper crmField from column mapping
-  const fieldDiffs = useMemo(
-    () => enrichFieldDiffs(rawFieldDiffs, columnMapping),
-    [rawFieldDiffs, columnMapping],
-  );
+  // Enrich fieldDiffs with proper crmField from column mapping, and surface
+  // statusChangeReason as a tooltip on the status field's inline diff so the
+  // explanation lives next to the change instead of pinned to the header.
+  const fieldDiffs = useMemo(() => {
+    const enriched = enrichFieldDiffs(rawFieldDiffs, columnMapping);
+    if (!item.statusChangeReason) return enriched;
+    return enriched.map((d) =>
+      d.crmField === 'status' && !d.note
+        ? { ...d, note: item.statusChangeReason }
+        : d,
+    );
+  }, [rawFieldDiffs, columnMapping, item.statusChangeReason]);
 
   const matchLabel = MATCH_LABELS[item.matchMethod] ?? item.matchMethod;
   const displayName = item.policy?.name ?? item.name;
   const policyNumber =
     item.name.split(' → ')[0] ?? item.name.split(' ')[0] ?? '';
-
-  const hasStatusChange = fieldDiffs.some(
-    (d) =>
-      d.action === 'COMPUTED' &&
-      d.bobValue !== null &&
-      d.bobValue !== d.crmValue,
-  );
 
   // Synthetic informational diffs from the server (e.g., multi-member
   // subscriber mismatch, cross-term namesake). They have no actionable
@@ -634,27 +621,22 @@ export const MatchedDiffView = ({
     [updateDecision],
   );
 
-  // Create task: spawns a Twenty task targeting the reviewItem and opens
-  // it in the side panel for the reviewer to fill in title/body/assignee.
-  // Tasks supersede the previous inline note prompt — they support
-  // assignees, due dates, threaded comments, and show up on the lead /
-  // policy timeline. Creating a task auto-flips decision to FLAG_AUDIT
-  // so the row dims in the queue.
-  const openCreateTaskDrawer = useOpenCreateActivityDrawer({
-    activityObjectNameSingular: CoreObjectNameSingular.Task,
+  // Create task: opens a *draft* task targeting the reviewItem in the
+  // side panel. Nothing is persisted until the reviewer types a title
+  // and clicks Create — accidental clicks of the button leave no orphan
+  // empty task behind. Mirrors the lead/policy creation pattern used
+  // elsewhere in the app.
+  //
+  // Decision flips to FLAG_AUDIT only AFTER the task is actually
+  // created (via the draft's onRecordCreated callback), so the queue's
+  // dim signal stays in sync with whether real audit work exists.
+  const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
+    onTaskCreated: () => updateDecision('FLAG_AUDIT'),
   });
 
-  const handleCreateTask = useCallback(async () => {
-    await openCreateTaskDrawer({
-      targetableObjects: [
-        {
-          id: item.id,
-          targetObjectNameSingular: 'reviewItem',
-        },
-      ],
-    });
-    await updateDecision('FLAG_AUDIT');
-  }, [openCreateTaskDrawer, item.id, updateDecision]);
+  const handleCreateTask = useCallback(() => {
+    openCreateAuditTaskDraft({ reviewItemId: item.id });
+  }, [openCreateAuditTaskDraft, item.id]);
 
   // ── Copy policy number ──
   const [copied, setCopied] = useState(false);
@@ -686,13 +668,6 @@ export const MatchedDiffView = ({
             {matchLabel}
           </StyledMatchLabel>
         </StyledHeaderRow>
-        {hasStatusChange && item.statusChangeReason && (
-          <StyledStatusNote>
-            {item.currentCrmStatus} → {item.derivedStatus}
-            {' — '}
-            {item.statusChangeReason}
-          </StyledStatusNote>
-        )}
         {item.flagReasons &&
           (item.flags ?? []).some(
             (flag) =>
