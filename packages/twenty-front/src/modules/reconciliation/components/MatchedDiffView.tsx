@@ -7,7 +7,6 @@ import {
   IconArrowBackUp,
   IconCheck,
   IconX,
-  IconMessage,
   IconCopy,
   IconAlertTriangle,
   TooltipDelay,
@@ -25,6 +24,7 @@ import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
+import { ReviewItemCommentsButton } from '@/reconciliation/components/ReviewItemCommentsButton';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
@@ -736,13 +736,9 @@ export const MatchedDiffView = ({
           onClick={handleReject}
         />
         <StyledSpacer />
-        <Button
-          title="Leave comment"
-          variant="tertiary"
-          accent="default"
-          size="small"
-          Icon={IconMessage}
-          onClick={handleCreateTask}
+        <ReviewItemCommentsButton
+          reviewItemId={item.id}
+          onAddComment={handleCreateTask}
         />
       </StyledFooter>
     </StyledContainer>
