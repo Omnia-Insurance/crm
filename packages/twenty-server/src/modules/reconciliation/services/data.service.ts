@@ -136,6 +136,10 @@ export class ReconciliationDataService {
               string
             > | null;
 
+            const premium = record.premium as {
+              amountMicros?: number | null;
+            } | null;
+
             policies.push({
               id: record.id as string,
               policyNumber: (record.policyNumber as string) ?? null,
@@ -145,6 +149,7 @@ export class ReconciliationDataService {
               paidThroughDate: (record.paidThroughDate as string) ?? null,
               status: (record.status as string) ?? null,
               applicantCount: (record.applicantCount as number) ?? null,
+              'premium.amountMicros': premium?.amountMicros ?? null,
               'lead.name.firstName': name?.firstName ?? null,
               'lead.name.lastName': name?.lastName ?? null,
               'lead.dateOfBirth': (lead?.dateOfBirth as string) ?? null,

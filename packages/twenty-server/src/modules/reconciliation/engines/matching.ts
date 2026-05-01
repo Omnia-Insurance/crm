@@ -192,6 +192,8 @@ export type CrmPolicy = {
   paidThroughDate: string | null;
   status: string | null;
   applicantCount: number | null;
+  // Currency is stored as integer micros on the CRM (1 USD = 1_000_000)
+  'premium.amountMicros': number | null;
   // Lead (path-keyed)
   'lead.name.firstName': string | null;
   'lead.name.lastName': string | null;

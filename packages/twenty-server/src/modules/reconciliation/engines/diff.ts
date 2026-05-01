@@ -474,10 +474,21 @@ const inferCompareMethod = (fieldType: string): string => {
     case 'NUMBER':
     case 'NUMERIC':
     case 'BOOLEAN':
+    case 'CURRENCY':
       return 'exact';
     default:
       return 'caseInsensitive';
   }
+};
+
+// BOB currency columns are dollars (e.g. "156.50"); CRM stores integer micros.
+// Convert to micros for comparison so 156.50 ↔ 156500000 isn't a false diff,
+// and so the FieldDiff carries the value in the unit Apply will write back.
+const toMicrosString = (s: string | null): string | null => {
+  if (s == null || s === '') return null;
+  const num = Number(s);
+  if (!Number.isFinite(num)) return null;
+  return String(Math.round(num * 1_000_000));
 };
 
 /**
@@ -585,6 +596,13 @@ export const computeFieldDiffsFromMapping = (
     if (entry.crmField.endsWith('.addressState')) {
       bobStr = normalizeState(bobStr);
       crmStr = normalizeState(crmStr);
+    }
+
+    // BOB stores currency in dollars; CRM stores integer micros.
+    // Convert so the diff record (and the Apply payload it produces) is
+    // already in CRM's unit.
+    if (entry.crmField.endsWith('.amountMicros')) {
+      bobStr = toMicrosString(bobStr);
     }
 
     if (bobStr == null && crmStr == null) continue;

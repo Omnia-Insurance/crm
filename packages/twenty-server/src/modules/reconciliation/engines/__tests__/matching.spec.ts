@@ -22,6 +22,7 @@ const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   paidThroughDate: null,
   status: 'ACTIVE_PLACED',
   applicantCount: null,
+  'premium.amountMicros': null,
   'lead.name.firstName': 'John',
   'lead.name.lastName': 'Smith',
   'lead.dateOfBirth': '1990-05-15',

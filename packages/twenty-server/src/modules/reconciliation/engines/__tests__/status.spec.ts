@@ -166,6 +166,7 @@ describe('status engine (ambetter-bob-v1)', () => {
         paidThroughDate: null,
         status: 'ACTIVE_PLACED',
         applicantCount: null,
+        'premium.amountMicros': null,
         'lead.name.firstName': 'John',
         'lead.name.lastName': 'Smith',
         'lead.dateOfBirth': null,

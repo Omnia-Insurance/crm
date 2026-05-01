@@ -122,6 +122,45 @@ describe('diff engine', () => {
     expect(dateDiff?.crmValue).toBe('2026-01-01');
   });
 
+  describe('currency (premium.amountMicros)', () => {
+    const currencyMapping: ColumnMapping = {
+      ...baseColumnMapping,
+      premium_amount: {
+        crmField: 'premium.amountMicros',
+        fieldType: 'CURRENCY',
+        fieldKey: 'Amount (premium)',
+      },
+    };
+
+    it('compares BOB dollars to CRM micros without false diffs', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, premium_amount: 156.5 },
+        { ...baseCrmPolicy, 'premium.amountMicros': 156_500_000 },
+        null,
+        currencyMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'premium.amountMicros')).toBeUndefined();
+    });
+
+    it('emits a micros-denominated diff when amounts differ', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, premium_amount: 200 },
+        { ...baseCrmPolicy, 'premium.amountMicros': 156_500_000 },
+        null,
+        currencyMapping,
+      );
+
+      const premiumDiff = diffs.find(
+        (d) => d.crmField === 'premium.amountMicros',
+      );
+
+      expect(premiumDiff).toBeDefined();
+      expect(premiumDiff?.bobValue).toBe('200000000');
+      expect(premiumDiff?.crmValue).toBe('156500000');
+    });
+  });
+
   describe('backwards effectiveDate suppression', () => {
     // Carriers like Ambetter carry forward the original enrollment date in
     // policy_effective_date even after a renewal. Without this suppression
