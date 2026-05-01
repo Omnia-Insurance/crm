@@ -189,6 +189,7 @@ export type CrmPolicy = {
   applicationId: string | null;
   effectiveDate: string | null;
   expirationDate: string | null;
+  paidThroughDate: string | null;
   status: string | null;
   applicantCount: number | null;
   // Lead (path-keyed)

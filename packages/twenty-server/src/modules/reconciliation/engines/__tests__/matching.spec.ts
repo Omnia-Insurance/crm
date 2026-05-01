@@ -19,6 +19,7 @@ const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   applicationId: null,
   effectiveDate: '2026-01-01',
   expirationDate: null,
+  paidThroughDate: null,
   status: 'ACTIVE_PLACED',
   applicantCount: null,
   'lead.name.firstName': 'John',

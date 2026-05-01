@@ -142,6 +142,7 @@ export class ReconciliationDataService {
               applicationId: (record.applicationId as string) ?? null,
               effectiveDate: (record.effectiveDate as string) ?? null,
               expirationDate: (record.expirationDate as string) ?? null,
+              paidThroughDate: (record.paidThroughDate as string) ?? null,
               status: (record.status as string) ?? null,
               applicantCount: (record.applicantCount as number) ?? null,
               'lead.name.firstName': name?.firstName ?? null,
