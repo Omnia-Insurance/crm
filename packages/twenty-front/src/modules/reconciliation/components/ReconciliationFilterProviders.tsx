@@ -1,4 +1,4 @@
-import { useEffect, type PropsWithChildren } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useColumnDefinitionsFromObjectMetadata } from '@/object-metadata/hooks/useColumnDefinitionsFromObjectMetadata';
@@ -7,6 +7,10 @@ import { RecordIndexContextProvider } from '@/object-record/record-index/context
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
 import { useInitViewBar } from '@/views/hooks/useInitViewBar';
+import { useUpsertRecordFilter } from '@/object-record/record-filter/hooks/useUpsertRecordFilter';
+import { FieldMetadataType } from '~/generated-metadata/graphql';
+import { ViewFilterOperand } from 'twenty-shared/types';
+import { v4 } from 'uuid';
 
 type Props = PropsWithChildren<{
   viewBarId: string;
@@ -26,6 +30,16 @@ const ReconciliationFilterBarInitEffect = ({
   const { setViewObjectMetadataId, setAvailableFieldDefinitions } =
     useInitViewBar(viewBarId);
 
+  const { upsertRecordFilter } = useUpsertRecordFilter(viewBarId);
+
+  // Seed the view with a default `flags contains STATUS_CHANGE` filter on
+  // first mount. STATUS_CHANGE rows are the audit-relevant ones (a CRM
+  // policy moved between PLACED / APPROVED / CANCELED / payment-error
+  // states). Everything else is data hygiene that doesn't need eyeball
+  // attention. Reviewers can remove the filter via the chip if they want
+  // to see all rows; remounting the page restores the default.
+  const [hasSeededDefaultFilter, setHasSeededDefaultFilter] = useState(false);
+
   useEffect(() => {
     setViewObjectMetadataId?.(reviewItemMetadata.id);
     setAvailableFieldDefinitions?.(columnDefinitions);
@@ -35,6 +49,30 @@ const ReconciliationFilterBarInitEffect = ({
     reviewItemMetadata.id,
     columnDefinitions,
   ]);
+
+  useEffect(() => {
+    if (hasSeededDefaultFilter) return;
+
+    const flagsField = reviewItemMetadata.fields.find(
+      (f) => f.name === 'flags' && f.type === FieldMetadataType.MULTI_SELECT,
+    );
+
+    if (!flagsField) return;
+
+    const value = JSON.stringify(['STATUS_CHANGE']);
+
+    upsertRecordFilter({
+      id: v4(),
+      fieldMetadataId: flagsField.id,
+      type: FieldMetadataType.MULTI_SELECT,
+      operand: ViewFilterOperand.CONTAINS,
+      value,
+      displayValue: value,
+      label: flagsField.label ?? 'Flags',
+    });
+
+    setHasSeededDefaultFilter(true);
+  }, [hasSeededDefaultFilter, reviewItemMetadata.fields, upsertRecordFilter]);
 
   return null;
 };
