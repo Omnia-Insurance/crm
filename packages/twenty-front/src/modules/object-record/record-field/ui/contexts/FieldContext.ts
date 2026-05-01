@@ -27,6 +27,8 @@ export type FieldDiffOverlay = {
   label: string;
   /** Full CRM field path, e.g. "emails.primaryEmail" for composite sub-fields */
   crmFieldPath?: string;
+  /** Tooltip body shown on the inline diff (e.g. status change reason) */
+  note?: string | null;
 };
 
 export type GenericFieldContextType = {

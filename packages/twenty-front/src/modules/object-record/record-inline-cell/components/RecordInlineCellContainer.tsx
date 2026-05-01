@@ -191,6 +191,11 @@ export const RecordInlineCellContainer = () => {
     fieldName: fieldDefinition?.metadata?.fieldName,
   })}`;
 
+  const diffNoteId = `diff-note-${getRecordFieldInputInstanceId({
+    recordId,
+    fieldName: fieldDefinition?.metadata?.fieldName,
+  })}`;
+
   const hasDiff = fieldDiff && fieldDiff.newValue !== null;
 
   // OMNIA-CUSTOM: Read current field value to derive accepted state from store
@@ -333,7 +338,7 @@ export const RecordInlineCellContainer = () => {
               : fieldDiff.oldValue || '(empty)'}
           </StyledDiffOld>
           <StyledDiffArrow>→</StyledDiffArrow>
-          <StyledDiffNew>
+          <StyledDiffNew id={diffNoteId}>
             {accepted ? fieldDiff.oldValue || '(empty)' : fieldDiff.newValue}
           </StyledDiffNew>
           <StyledDiffAcceptBtn
@@ -349,6 +354,17 @@ export const RecordInlineCellContainer = () => {
           >
             {accepted ? 'Undo' : 'Accept'}
           </StyledDiffAcceptBtn>
+          {fieldDiff.note && (
+            <AppTooltip
+              anchorSelect={`#${diffNoteId}`}
+              content={fieldDiff.note}
+              clickable
+              noArrow
+              place="top"
+              positionStrategy="fixed"
+              delay={TooltipDelay.shortDelay}
+            />
+          )}
         </StyledDiffValueDisplay>
       ) : (
         <StyledValueContainer readonly={readonly ?? false} id={anchorId}>

@@ -72,11 +72,6 @@ export const ReconciliationReviewBody = ({
       },
     });
 
-  const reviewedCount = useMemo(
-    () => reviewItems.filter((i) => i.decision !== 'PENDING').length,
-    [reviewItems],
-  );
-
   const selectedItem =
     reviewItems.find((item) => item.id === selectedItemId) ??
     reviewItems[0] ??
@@ -155,9 +150,6 @@ export const ReconciliationReviewBody = ({
   return (
     <>
       <ReconciliationToolbar
-        reviewedCount={reviewedCount}
-        totalCount={reviewItems.length}
-        loading={reviewItemsLoading}
         batchApproveCount={batchApproveCount}
         onBatchApproveClick={handleBatchApproveClick}
         batchApproveLoading={batchApproveLoading}

@@ -1,13 +1,18 @@
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
+import { contextStoreCurrentPageTypeComponentState } from '@/context-store/states/contextStoreCurrentPageTypeComponentState';
 import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { styled } from '@linaria/react';
 import { useEffect, useMemo } from 'react';
+import { ContextStorePageType } from 'twenty-shared/types';
 
 // Exact same imports as RecordShowPage
 import { RecordShowCommandMenu } from '@/command-menu-item/components/RecordShowCommandMenu';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
+import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
+import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
@@ -65,6 +70,10 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
     objectRecordId,
   );
 
+  const isLayoutCustomizationModeEnabled = useAtomStateValue(
+    isLayoutCustomizationModeEnabledState,
+  );
+
   // OMNIA-CUSTOM: Set the context store's current object metadata item ID
   // (normally set by MainContextStoreProviderEffect via route params,
   // but our custom route doesn't expose :objectNameSingular as a param)
@@ -82,17 +91,28 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
     contextStoreCurrentViewTypeComponentState,
     MAIN_CONTEXT_STORE_INSTANCE_ID,
   );
+  // OMNIA-CUSTOM: page type must be Record so standard pinned command-menu
+  // items (whose conditional expressions require pageType == "RECORD_PAGE")
+  // appear in the header — MainContextStoreProvider skips this route because
+  // it can't resolve objectMetadataItem from URL params.
+  const setContextStoreCurrentPageType = useSetAtomComponentState(
+    contextStoreCurrentPageTypeComponentState,
+    MAIN_CONTEXT_STORE_INSTANCE_ID,
+  );
   useEffect(() => {
     setContextStoreCurrentObjectMetadataItemId(objectMetadataItem.id);
     setContextStoreCurrentViewType(null);
+    setContextStoreCurrentPageType(ContextStorePageType.Record);
     return () => {
       setContextStoreCurrentObjectMetadataItemId(undefined);
       setContextStoreCurrentViewType(null);
+      setContextStoreCurrentPageType(null);
     };
   }, [
     objectMetadataItem.id,
     setContextStoreCurrentObjectMetadataItemId,
     setContextStoreCurrentViewType,
+    setContextStoreCurrentPageType,
   ]);
 
   const recordShowComponentInstanceId =
@@ -135,6 +155,7 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
                   objectRecordId={objectRecordId}
                 >
                   <RecordShowCommandMenu />
+                  {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
                 </RecordShowPageHeader>
                 <MainContainerLayoutWithSidePanel>
                   <TimelineActivityContext.Provider

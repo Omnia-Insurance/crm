@@ -3,12 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button, LightIconButton } from 'twenty-ui/input';
 import {
+  AppTooltip,
   IconArrowBackUp,
   IconCheck,
   IconX,
-  IconFlag,
+  IconMessage,
   IconCopy,
   IconAlertTriangle,
+  TooltipDelay,
 } from 'twenty-ui/display';
 
 import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
@@ -103,36 +105,6 @@ const StyledMatchLabel = styled.div`
     color: ${themeCssVariables.color.orange};
   }
 `;
-
-const StyledFlagReasons = styled.ul`
-  margin: ${themeCssVariables.spacing[2]} 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: ${themeCssVariables.font.size.sm};
-  color: ${themeCssVariables.font.color.secondary};
-`;
-
-const StyledFlagReason = styled.li`
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  margin-top: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledFlagLabel = styled.span`
-  font-weight: ${themeCssVariables.font.weight.medium};
-  color: ${themeCssVariables.font.color.primary};
-  white-space: nowrap;
-`;
-
-// Surfaced inline next to the status-change note. STATUS_CHANGE is already
-// rendered via statusChangeReason above, so skip it here to avoid duplication.
-const FLAG_LABELS_FOR_REASONS: Record<string, string> = {
-  PAYMENT_ERROR: 'Payment error',
-  REINSTATEMENT: 'Reinstatement',
-  BROKER_EFF_AUDIT: 'Broker date',
-  MULTI_MATCH: 'Multi match',
-  NAME_MISMATCH: 'Name mismatch',
-};
 
 const StyledBody = styled.div`
   flex: 1;
@@ -287,6 +259,8 @@ export const MatchedDiffView = ({
   }, [rawFieldDiffs, columnMapping, item.statusChangeReason]);
 
   const matchLabel = MATCH_LABELS[item.matchMethod] ?? item.matchMethod;
+  const matchLabelId = `match-label-${item.id}`;
+  const multiMatchReason = item.flagReasons?.MULTI_MATCH ?? null;
   const displayName = item.policy?.name ?? item.name;
   const policyNumber =
     item.name.split(' → ')[0] ?? item.name.split(' ')[0] ?? '';
@@ -663,36 +637,22 @@ export const MatchedDiffView = ({
             />
           </StyledPolicyBadge>
           <StyledSpacer />
-          <StyledMatchLabel>
+          <StyledMatchLabel id={matchLabelId}>
             <IconAlertTriangle size={14} />
             {matchLabel}
           </StyledMatchLabel>
-        </StyledHeaderRow>
-        {item.flagReasons &&
-          (item.flags ?? []).some(
-            (flag) =>
-              flag !== 'STATUS_CHANGE' &&
-              FLAG_LABELS_FOR_REASONS[flag] &&
-              item.flagReasons?.[flag],
-          ) && (
-            <StyledFlagReasons>
-              {(item.flags ?? [])
-                .filter(
-                  (flag) =>
-                    flag !== 'STATUS_CHANGE' &&
-                    FLAG_LABELS_FOR_REASONS[flag] &&
-                    item.flagReasons?.[flag],
-                )
-                .map((flag) => (
-                  <StyledFlagReason key={flag}>
-                    <StyledFlagLabel>
-                      {FLAG_LABELS_FOR_REASONS[flag]}:
-                    </StyledFlagLabel>
-                    <span>{item.flagReasons?.[flag]}</span>
-                  </StyledFlagReason>
-                ))}
-            </StyledFlagReasons>
+          {multiMatchReason && (
+            <AppTooltip
+              anchorSelect={`#${matchLabelId}`}
+              content={multiMatchReason}
+              clickable
+              noArrow
+              place="bottom"
+              positionStrategy="fixed"
+              delay={TooltipDelay.shortDelay}
+            />
           )}
+        </StyledHeaderRow>
       </StyledHeader>
 
       <StyledBody>
@@ -760,7 +720,7 @@ export const MatchedDiffView = ({
 
       <StyledFooter>
         <Button
-          title={allDiffsAccepted ? 'Undo all' : 'Accept all'}
+          title={allDiffsAccepted ? 'Undo all' : 'Apply all'}
           variant="primary"
           accent={allDiffsAccepted ? 'danger' : 'blue'}
           size="small"
@@ -777,11 +737,11 @@ export const MatchedDiffView = ({
         />
         <StyledSpacer />
         <Button
-          title="Create task"
+          title="Leave comment"
           variant="tertiary"
           accent="default"
           size="small"
-          Icon={IconFlag}
+          Icon={IconMessage}
           onClick={handleCreateTask}
         />
       </StyledFooter>

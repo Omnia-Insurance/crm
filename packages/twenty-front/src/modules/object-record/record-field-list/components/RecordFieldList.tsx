@@ -37,6 +37,7 @@ type ReconciliationFieldDiff = {
   bobValue: string | null;
   crmValue: string | null;
   crmObjectType: string | null;
+  note?: string | null;
 };
 
 type RecordFieldListProps = {
@@ -245,7 +246,7 @@ export const RecordFieldList = ({
                   objectPermissionsByObjectMetadataId,
                 }),
                 // OMNIA-CUSTOM: inject reconciliation diff if available
-                ...((() => {
+                ...(() => {
                   const diff = diffByFieldName?.get(fieldMetadataItem.name);
                   if (!diff) return {};
                   return {
@@ -254,9 +255,10 @@ export const RecordFieldList = ({
                       newValue: diff.bobValue,
                       label: diff.label,
                       crmFieldPath: diff.crmField ?? undefined,
+                      note: diff.note ?? null,
                     },
                   };
-                })()),
+                })(),
               }}
             >
               <RecordFieldComponentInstanceContext.Provider

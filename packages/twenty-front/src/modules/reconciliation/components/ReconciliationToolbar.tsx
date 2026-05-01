@@ -5,9 +5,6 @@ import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type ReconciliationToolbarProps = {
-  reviewedCount: number;
-  totalCount: number;
-  loading: boolean;
   /** Number of PENDING items eligible for batch approve in current filter */
   batchApproveCount?: number;
   /** Fire the batch-approve mutation */
@@ -32,57 +29,35 @@ const StyledFilterRow = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.medium};
 `;
 
-const StyledFilterBarSlot = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const StyledProgressSection = styled.div`
+const StyledLeftSection = styled.div`
   display: flex;
   align-items: center;
   gap: ${themeCssVariables.spacing[2]};
   flex-shrink: 0;
-  font-size: ${themeCssVariables.font.size.xs};
-  color: ${themeCssVariables.font.color.tertiary};
-  font-variant-numeric: tabular-nums;
 `;
 
-const StyledProgressBar = styled.div`
-  width: 100px;
-  height: 3px;
-  background: ${themeCssVariables.background.tertiary};
-  border-radius: 2px;
-  overflow: hidden;
-`;
-
-const StyledProgressFill = styled.div<{ percent: number }>`
-  height: 100%;
-  width: ${({ percent }) => percent}%;
-  background: ${themeCssVariables.accent.primary};
-  transition: width 0.2s ease;
+const StyledFilterBarSlot = styled.div`
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
 `;
 
 export const ReconciliationToolbar = ({
-  reviewedCount,
-  totalCount,
   batchApproveCount,
   onBatchApproveClick,
   batchApproveLoading,
   filterBar,
 }: ReconciliationToolbarProps) => {
-  const progressPercent =
-    totalCount > 0 ? (reviewedCount / totalCount) * 100 : 0;
-
   return (
     <StyledToolbarContainer>
       <StyledFilterRow>
-        <StyledFilterBarSlot>{filterBar}</StyledFilterBarSlot>
-        <StyledProgressSection>
+        <StyledLeftSection>
           {onBatchApproveClick &&
             batchApproveCount !== undefined &&
             batchApproveCount > 0 && (
               <Button
-                title={`Accept ${batchApproveCount}`}
+                title={`Apply ${batchApproveCount} changes`}
                 variant="secondary"
                 accent="blue"
                 size="small"
@@ -91,13 +66,8 @@ export const ReconciliationToolbar = ({
                 disabled={batchApproveLoading}
               />
             )}
-          <span>
-            Reviewed {reviewedCount}/{totalCount}
-          </span>
-          <StyledProgressBar>
-            <StyledProgressFill percent={progressPercent} />
-          </StyledProgressBar>
-        </StyledProgressSection>
+        </StyledLeftSection>
+        <StyledFilterBarSlot>{filterBar}</StyledFilterBarSlot>
       </StyledFilterRow>
     </StyledToolbarContainer>
   );
