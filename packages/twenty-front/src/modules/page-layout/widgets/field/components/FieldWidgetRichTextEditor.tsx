@@ -1,9 +1,11 @@
 import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { lazy, Suspense, useContext } from 'react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
@@ -72,7 +74,13 @@ export const FieldWidgetRichTextEditor = ({
     fieldName,
   });
 
-  if (isUndefined(fieldValue)) {
+  // OMNIA-CUSTOM: Draft records have no server-side fetch — the body is
+  // undefined until the user types. Treat draft + undefined as "empty body"
+  // and render the editor immediately, instead of a misleading skeleton.
+  const draftRecordIds = useAtomStateValue(draftRecordIdsState);
+  const isDraft = draftRecordIds.has(recordId);
+
+  if (isUndefined(fieldValue) && !isDraft) {
     return <LoadingSkeleton />;
   }
 

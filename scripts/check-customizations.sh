@@ -1363,6 +1363,10 @@ check_file_contains \
   "draftRecordIdsState" \
   "ActivityRichTextEditor must skip upsertActivity for side-panel draft tasks/notes (body lives in store until Create)"
 check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/widgets/field/components/FieldWidgetRichTextEditor.tsx" \
+  "draftRecordIdsState" \
+  "FieldWidgetRichTextEditor must skip the loading skeleton for draft records (no server fetch — body is just empty)"
+check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewPageContent.tsx" \
   "ContextStorePageType.Record" \
   "Reconciliation review page must set pageType=Record so standard pinned command-menu items appear in the header"
