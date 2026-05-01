@@ -8,6 +8,7 @@ import { ClickOutsideListenerContext } from '@/ui/utilities/pointer-event/contex
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
+import { Agentation } from 'agentation';
 import { Provider as JotaiProvider } from 'jotai';
 import { HelmetProvider } from 'react-helmet-async';
 import { IconsProvider } from 'twenty-ui/display';
@@ -34,6 +35,7 @@ export const App = () => {
                     value={{ excludedClickOutsideId: undefined }}
                   >
                     <AppRouter />
+                    {process.env.NODE_ENV === 'development' && <Agentation />}
                   </ClickOutsideListenerContext.Provider>
                 </HelmetProvider>
               </ExceptionHandlerProvider>
