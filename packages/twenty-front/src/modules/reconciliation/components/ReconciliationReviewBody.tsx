@@ -57,6 +57,7 @@ export const ReconciliationReviewBody = ({
         category: true,
         decision: true,
         flags: true,
+        flagReasons: true,
         confidence: true,
         matchMethod: true,
         summary: true,

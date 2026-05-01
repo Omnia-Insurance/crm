@@ -25,6 +25,7 @@ import { RecordFieldList } from '@/object-record/record-field-list/components/Re
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
+import { TextArea } from '@/ui/input/components/TextArea';
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
   promotePrimaryEmailToAdditional,
@@ -198,6 +199,41 @@ const StyledInfoCalloutValue = styled.span`
 
   strong {
     color: ${themeCssVariables.font.color.secondary};
+    font-weight: ${themeCssVariables.font.weight.medium};
+  }
+`;
+
+// Inline prompt that appears above the footer when the user clicks
+// "Flag for review". A note is optional but encouraged so reviewers
+// capture WHY a row needs research.
+const StyledFlagPrompt = styled.div`
+  background: ${themeCssVariables.background.secondary};
+  border-top: 1px solid ${themeCssVariables.border.color.medium};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
+`;
+
+const StyledFlagPromptActions = styled.div`
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
+`;
+
+// Surfaces an existing note on a previously-flagged row so reviewers
+// can see why it was flagged without opening the prompt.
+const StyledFlagNote = styled.div`
+  background: ${themeCssVariables.background.tertiary};
+  border-left: 3px solid ${themeCssVariables.color.orange};
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
+  margin: ${themeCssVariables.spacing[2]} 0 0;
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+
+  strong {
+    color: ${themeCssVariables.font.color.primary};
     font-weight: ${themeCssVariables.font.weight.medium};
   }
 `;
@@ -382,14 +418,20 @@ export const MatchedDiffView = ({
   const { updateOneRecord } = useUpdateOneRecord();
 
   const updateDecision = useCallback(
-    async (decision: string) => {
+    async (decision: string, note?: string | null) => {
+      const updateInput: Record<string, unknown> = {
+        decision,
+        decidedAt: new Date().toISOString(),
+      };
+
+      if (note !== undefined) {
+        updateInput.note = note ?? '';
+      }
+
       await updateOneRecord({
         objectNameSingular: 'reviewItem',
         idToUpdate: item.id,
-        updateOneRecordInput: {
-          decision,
-          decidedAt: new Date().toISOString(),
-        },
+        updateOneRecordInput: updateInput,
       });
       onDecisionMade?.(item.id);
     },
@@ -623,10 +665,27 @@ export const MatchedDiffView = ({
     [updateDecision],
   );
 
-  const handleFlag = useCallback(
-    () => updateDecision('FLAG_AUDIT'),
-    [updateDecision],
-  );
+  // Flag for review: open the note prompt instead of flagging immediately
+  // so reviewers can capture WHY they're flagging. Pre-fills with the
+  // current note when re-flagging an already-flagged row.
+  const [isFlagPromptOpen, setIsFlagPromptOpen] = useState(false);
+  const [flagNoteDraft, setFlagNoteDraft] = useState('');
+
+  const handleFlag = useCallback(() => {
+    setFlagNoteDraft(item.note ?? '');
+    setIsFlagPromptOpen(true);
+  }, [item.note]);
+
+  const handleSubmitFlag = useCallback(async () => {
+    const trimmed = flagNoteDraft.trim();
+
+    await updateDecision('FLAG_AUDIT', trimmed.length > 0 ? trimmed : null);
+    setIsFlagPromptOpen(false);
+  }, [updateDecision, flagNoteDraft]);
+
+  const handleCancelFlag = useCallback(() => {
+    setIsFlagPromptOpen(false);
+  }, []);
 
   // ── Copy policy number ──
   const [copied, setCopied] = useState(false);
@@ -664,6 +723,11 @@ export const MatchedDiffView = ({
             {' — '}
             {item.statusChangeReason}
           </StyledStatusNote>
+        )}
+        {item.decision === 'FLAG_AUDIT' && item.note && !isFlagPromptOpen && (
+          <StyledFlagNote>
+            <strong>Reviewer note:</strong> {item.note}
+          </StyledFlagNote>
         )}
         {item.flagReasons &&
           (item.flags ?? []).some(
@@ -755,6 +819,39 @@ export const MatchedDiffView = ({
         )}
       </StyledBody>
 
+      {isFlagPromptOpen && (
+        <StyledFlagPrompt>
+          <TextArea
+            textAreaId={`flag-note-${item.id}`}
+            label="Reviewer note (optional)"
+            value={flagNoteDraft}
+            onChange={setFlagNoteDraft}
+            placeholder="What needs research on this row?"
+            minRows={2}
+            maxRows={5}
+          />
+          <StyledFlagPromptActions>
+            <Button
+              title="Cancel"
+              variant="secondary"
+              accent="default"
+              size="small"
+              onClick={handleCancelFlag}
+            />
+            <Button
+              title={
+                item.decision === 'FLAG_AUDIT' ? 'Update flag' : 'Save flag'
+              }
+              variant="primary"
+              accent="blue"
+              size="small"
+              Icon={IconFlag}
+              onClick={handleSubmitFlag}
+            />
+          </StyledFlagPromptActions>
+        </StyledFlagPrompt>
+      )}
+
       <StyledFooter>
         <Button
           title={allDiffsAccepted ? 'Undo all' : 'Accept all'}
@@ -774,7 +871,11 @@ export const MatchedDiffView = ({
         />
         <StyledSpacer />
         <Button
-          title="Flag for review"
+          title={
+            item.decision === 'FLAG_AUDIT'
+              ? 'Edit flag note'
+              : 'Flag for review'
+          }
           variant="tertiary"
           accent="default"
           size="small"
