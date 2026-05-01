@@ -53,16 +53,15 @@ export const buildStatusInput = (
   fieldConfig: FieldConfigEntry[],
 ): StatusInput => {
   const byRole = new Map(
-    fieldConfig
-      .filter((f) => f.statusRole)
-      .map((f) => [f.statusRole, f.name]),
+    fieldConfig.filter((f) => f.statusRole).map((f) => [f.statusRole, f.name]),
   );
 
   return {
     effectiveDate: (row[byRole.get('effectiveDate')!] as string) ?? null,
     paidThroughDate: (row[byRole.get('paidThroughDate')!] as string) ?? null,
     termDate: (row[byRole.get('termDate')!] as string) ?? null,
-    eligibleForCommission: (row[byRole.get('eligibleForCommission')!] as boolean) ?? null,
+    eligibleForCommission:
+      (row[byRole.get('eligibleForCommission')!] as boolean) ?? null,
   };
 };
 
@@ -123,16 +122,50 @@ const subtractDays = (dateStr: string, days: number): string => {
   return toDateString(d);
 };
 
+/**
+ * Last day of the calendar month containing `dateStr` (UTC).
+ * For 2026-02-01 → 2026-02-28; for 2026-03-15 → 2026-03-31.
+ */
+const lastDayOfMonth = (dateStr: string): string | null => {
+  const d = new Date(dateStr);
+
+  if (Number.isNaN(d.getTime())) return null;
+
+  // Day 0 of next month = last day of current month.
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+
+  return toDateString(last);
+};
+
+/**
+ * Per Jackie's ACA placement rule: commissions are paid per calendar
+ * month (not per day), so a policy is "placed" once the customer has
+ * paid for the full effective month — even if that's < 30 days from
+ * effective. Example: eff 2/1, paid through 2/28 = full February
+ * paid = placed (28 days, fails the days-based threshold).
+ *
+ * Returns true when paidThroughDate covers at least the last day of
+ * effectiveDate's calendar month.
+ */
+export const isFullEffectiveMonthPaid = (
+  effectiveDate: string | null,
+  paidThroughDate: string | null,
+): boolean => {
+  if (!effectiveDate || !paidThroughDate) return false;
+
+  const eom = lastDayOfMonth(effectiveDate);
+
+  if (!eom) return false;
+
+  return paidThroughDate >= eom;
+};
+
 const findPreviousVersion = (
   allCrmPoliciesForNumber: CrmPolicy[],
   newEffectiveDate: string,
 ): string | null => {
   const candidates = allCrmPoliciesForNumber
-    .filter(
-      (p) =>
-        p.effectiveDate &&
-        p.effectiveDate < newEffectiveDate,
-    )
+    .filter((p) => p.effectiveDate && p.effectiveDate < newEffectiveDate)
     .sort((a, b) => b.effectiveDate!.localeCompare(a.effectiveDate!));
 
   return candidates.length > 0 ? candidates[0].id : null;
@@ -151,7 +184,8 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: null,
-      statusChangeReason: 'No effective date available, defaulting to Active-Approved',
+      statusChangeReason:
+        'No effective date available, defaulting to Active-Approved',
     };
   }
 
@@ -164,9 +198,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
 
   if (eligible === false) {
     const expireDate =
-      paidThrough && paidThrough >= effectiveDate
-        ? paidThrough
-        : effectiveDate;
+      paidThrough && paidThrough >= effectiveDate ? paidThrough : effectiveDate;
 
     return {
       derivedStatus: 'CANCELED',
@@ -178,9 +210,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
 
   if (termDate && termDate < todayStr) {
     const expireDate =
-      paidThrough && paidThrough >= effectiveDate
-        ? paidThrough
-        : termDate;
+      paidThrough && paidThrough >= effectiveDate ? paidThrough : termDate;
 
     return {
       derivedStatus: 'CANCELED',
@@ -212,8 +242,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason:
-        'No payment data → Active-Approved',
+      statusChangeReason: 'No payment data → Active-Approved',
     };
   }
 
@@ -243,15 +272,28 @@ const deriveAmbetterStatus: StatusEngineFn = (
   const daysSinceEffective = daysBetween(effectiveDate, paidThrough);
   const paidThroughAge = daysBetween(paidThrough, todayStr);
 
-  const isPlaced = daysSinceEffective >= config.placedThresholdDays;
+  // "Placed" fires under EITHER rule:
+  //   1. Calendar-month rule (Jackie): paid-through covers the full
+  //      effective month — handles 28-day Februaries and other short
+  //      months that don't reach the days-based threshold.
+  //   2. Days-based fallback: ≥ placedThresholdDays since effective —
+  //      catches non-1st-of-month effective dates (e.g. eff 1/15, paid
+  //      2/14 doesn't cover any full calendar month but is 30+ days).
+  const fullMonthPaid = isFullEffectiveMonthPaid(effectiveDate, paidThrough);
+  const isPlaced =
+    fullMonthPaid || daysSinceEffective >= config.placedThresholdDays;
   const hasPaymentError = paidThroughAge > config.paymentErrorAgeDays;
+
+  const placementReason = fullMonthPaid
+    ? `paid through end of effective month (${paidThrough})`
+    : `${daysSinceEffective} days between effective and paid-through`;
 
   if (isPlaced && hasPaymentError) {
     return {
       derivedStatus: 'PAYMENT_ERROR_ACTIVE_PLACED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Placed (${daysSinceEffective} days since effective) with payment error (paid-through ${paidThroughAge} days ago)`,
+      statusChangeReason: `Placed (${placementReason}) with payment error (paid-through ${paidThroughAge} days ago)`,
     };
   }
 
@@ -260,7 +302,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'PAYMENT_ERROR_ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Approved (${daysSinceEffective} days since effective) with payment error (paid-through ${paidThroughAge} days ago)`,
+      statusChangeReason: `Approved (${daysSinceEffective} days since effective, no full month yet) with payment error (paid-through ${paidThroughAge} days ago)`,
     };
   }
 
@@ -269,7 +311,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'ACTIVE_PLACED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Placed: ${daysSinceEffective} days between effective and paid-through, payment current`,
+      statusChangeReason: `Placed: ${placementReason}, payment current`,
     };
   }
 
@@ -277,7 +319,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
     derivedStatus: 'ACTIVE_APPROVED',
     derivedExpireDate: null,
     cancelPreviousPolicyId: cancelPrev,
-    statusChangeReason: `Approved: ${daysSinceEffective} days between effective and paid-through, payment current`,
+    statusChangeReason: `Approved: ${daysSinceEffective} days between effective and paid-through (no full month yet), payment current`,
   };
 };
 

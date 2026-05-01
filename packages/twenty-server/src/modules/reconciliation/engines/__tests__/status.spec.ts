@@ -1,6 +1,7 @@
 import {
   deriveStatus,
   getCancelExpireDate,
+  isFullEffectiveMonthPaid,
   DEFAULT_STATUS_ENGINE_CONFIG,
 } from 'src/modules/reconciliation/engines/status';
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
@@ -233,6 +234,141 @@ describe('status engine (ambetter-bob-v1)', () => {
     it('returns day before the new effective date', () => {
       expect(getCancelExpireDate('2026-01-01')).toBe('2025-12-31');
       expect(getCancelExpireDate('2026-03-15')).toBe('2026-03-14');
+    });
+  });
+
+  // Per Jackie's ACA placement rule: commission is paid per calendar
+  // month, not per day. A policy effective 2/1 with paid_through 2/28 is
+  // "placed" because the full month of February is paid — even though
+  // 28 days < the 30-day fallback threshold.
+  describe('isFullEffectiveMonthPaid', () => {
+    it('true when paid through end of effective month (Feb 28)', () => {
+      expect(isFullEffectiveMonthPaid('2026-02-01', '2026-02-28')).toBe(true);
+    });
+
+    it('true when paid past end of effective month', () => {
+      expect(isFullEffectiveMonthPaid('2026-02-01', '2026-04-30')).toBe(true);
+    });
+
+    it('false when paid mid-effective-month', () => {
+      expect(isFullEffectiveMonthPaid('2026-02-01', '2026-02-15')).toBe(false);
+    });
+
+    it('handles 31-day months (March)', () => {
+      expect(isFullEffectiveMonthPaid('2026-03-01', '2026-03-31')).toBe(true);
+      expect(isFullEffectiveMonthPaid('2026-03-01', '2026-03-30')).toBe(false);
+    });
+
+    it('handles leap-year February (2028)', () => {
+      expect(isFullEffectiveMonthPaid('2028-02-01', '2028-02-29')).toBe(true);
+      expect(isFullEffectiveMonthPaid('2028-02-01', '2028-02-28')).toBe(false);
+    });
+
+    it('false when either date is null', () => {
+      expect(isFullEffectiveMonthPaid(null, '2026-02-28')).toBe(false);
+      expect(isFullEffectiveMonthPaid('2026-02-01', null)).toBe(false);
+      expect(isFullEffectiveMonthPaid(null, null)).toBe(false);
+    });
+
+    it('false on malformed input rather than throwing', () => {
+      expect(isFullEffectiveMonthPaid('not-a-date', '2026-02-28')).toBe(false);
+    });
+  });
+
+  // Regression for Jackie's flagged policy U70621435: eff 2026-02-01,
+  // paid through 2026-02-28. Old engine derived ACTIVE_APPROVED because
+  // 28 days < 30; correct call per Jackie is ACTIVE_PLACED because the
+  // full effective month is paid.
+  describe("Jackie's calendar-month placement rule", () => {
+    it('eff 2/1, paid 2/28 → ACTIVE_PLACED (full February paid)', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-02-01',
+          paidThroughDate: '2026-02-28',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-03-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
+      expect(result?.statusChangeReason).toContain('end of effective month');
+    });
+
+    it('eff 3/1, paid 3/31 → ACTIVE_PLACED (full March paid)', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-03-01',
+          paidThroughDate: '2026-03-31',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-04-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
+    });
+
+    it('eff 3/1, paid 3/29 → ACTIVE_APPROVED (March not fully paid)', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-03-01',
+          paidThroughDate: '2026-03-29',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-04-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+    });
+
+    it('eff 1/15, paid 2/14 → ACTIVE_PLACED (30-day fallback still works)', () => {
+      // Doesn't cover any full calendar month, but the days-based
+      // fallback fires (30 days). Keeps behavior intact for non-1st
+      // effective dates.
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-01-15',
+          paidThroughDate: '2026-02-14',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-02-15'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
+    });
+
+    it('full-month paid + payment error → PAYMENT_ERROR_ACTIVE_PLACED', () => {
+      // Eff 2/1, paid 2/28, but today is 4/13 → paid-through is 44d old
+      // (> 10) → payment error. Still placed via calendar-month rule.
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-02-01',
+          paidThroughDate: '2026-02-28',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
     });
   });
 });
