@@ -15,6 +15,7 @@ import { SidePanelRecordPageFieldsSettings } from '@/side-panel/pages/page-layou
 import { SidePanelPageLayoutDashboardWidgetTypeSelect } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutDashboardWidgetTypeSelect';
 import { SidePanelPageLayoutRecordPageWidgetTypeSelect } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutRecordPageWidgetTypeSelect';
 import { SidePanelPageLayoutTabSettings } from '@/side-panel/pages/page-layout/components/SidePanelPageLayoutTabSettings';
+import { SidePanelReviewItemCommentsPage } from '@/reconciliation/components/SidePanelReviewItemCommentsPage';
 import { SidePanelMergeRecordPage } from '@/side-panel/pages/record-page/components/SidePanelMergeRecordPage';
 import { SidePanelRecordPage } from '@/side-panel/pages/record-page/components/SidePanelRecordPage';
 import { SidePanelUpdateMultipleRecords } from '@/side-panel/pages/record-page/components/SidePanelUpdateMultipleRecords';
@@ -88,5 +89,7 @@ export const SIDE_PANEL_PAGES_CONFIG = new Map<SidePanelPages, React.ReactNode>(
     [SidePanelPages.NavigationMenuAddItem, <SidePanelNewSidebarItemPage />],
     [SidePanelPages.CommandMenuEdit, <SidePanelCommandMenuItemEditPage />],
     [SidePanelPages.ComposeEmail, <SidePanelComposeEmailPage />],
+    // OMNIA-CUSTOM: stacked-card list of audit tasks for a reviewItem
+    [SidePanelPages.ReviewItemComments, <SidePanelReviewItemCommentsPage />],
   ],
 );

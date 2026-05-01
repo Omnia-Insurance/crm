@@ -43,6 +43,11 @@ export type ViewBarDetailsProps = {
   rightComponent?: ReactNode;
   viewBarId: string;
   objectNamePlural: string;
+  // OMNIA-CUSTOM: optional dropdown id forwarded to the inline "+ Add filter"
+  // button. Defaults to ViewBarFilterDropdownIds.MAIN. Required for scoped
+  // filter UIs (e.g. the audit-comments side panel) to avoid toggling the
+  // page-level filter dropdown.
+  addFilterDropdownId?: string;
 };
 
 const StyledBar = styled.div`
@@ -104,6 +109,7 @@ export const ViewBarDetails = ({
   rightComponent,
   viewBarId,
   objectNamePlural,
+  addFilterDropdownId,
 }: ViewBarDetailsProps) => {
   const isViewBarExpanded = useAtomComponentStateValue(
     isViewBarExpandedComponentState,
@@ -271,7 +277,9 @@ export const ViewBarDetails = ({
         </ScrollWrapper>
         {hasFilterButton && (
           <StyledAddFilterContainer>
-            <ViewBarDetailsAddFilterButton />
+            <ViewBarDetailsAddFilterButton
+              dropdownId={addFilterDropdownId}
+            />
           </StyledAddFilterContainer>
         )}
       </StyledFilterContainer>

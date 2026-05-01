@@ -9,6 +9,7 @@ import {
   IconX,
   IconCopy,
   IconAlertTriangle,
+  IconMessage,
   TooltipDelay,
 } from 'twenty-ui/display';
 
@@ -22,12 +23,13 @@ import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAto
 import { type RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 
+import { useTasks } from '@/activities/tasks/hooks/useTasks';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
-import { ReviewItemCommentsButton } from '@/reconciliation/components/ReviewItemCommentsButton';
+import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
+import { useOpenReviewItemCommentsInSidePanel } from '@/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
-import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
   promotePrimaryEmailToAdditional,
@@ -595,22 +597,37 @@ export const MatchedDiffView = ({
     [updateDecision],
   );
 
-  // Create task: opens a *draft* task targeting the reviewItem in the
-  // side panel. Nothing is persisted until the reviewer types a title
-  // and clicks Create — accidental clicks of the button leave no orphan
-  // empty task behind. Mirrors the lead/policy creation pattern used
-  // elsewhere in the app.
-  //
-  // Decision flips to FLAG_AUDIT only AFTER the task is actually
-  // created (via the draft's onRecordCreated callback), so the queue's
-  // dim signal stays in sync with whether real audit work exists.
+  // ── Leave comment ──
+  // Routes to one of two flows depending on whether comments exist:
+  //   * 0 tasks: open the new audit-task draft side panel directly (no
+  //     point in showing an empty list).
+  //   * ≥1 tasks: open the SidePanelReviewItemCommentsPage with the
+  //     stacked-card list + filters; the user can add a new one from there.
+  const { tasks: existingTasks } = useTasks({
+    targetableObjects: [
+      { id: item.id, targetObjectNameSingular: 'reviewItem' },
+    ],
+  });
+  const commentCount = existingTasks.length;
+
   const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
     onTaskCreated: () => updateDecision('FLAG_AUDIT'),
   });
+  const { openReviewItemCommentsInSidePanel } =
+    useOpenReviewItemCommentsInSidePanel();
 
-  const handleCreateTask = useCallback(() => {
-    openCreateAuditTaskDraft({ reviewItemId: item.id });
-  }, [openCreateAuditTaskDraft, item.id]);
+  const handleCommentClick = useCallback(() => {
+    if (commentCount === 0) {
+      openCreateAuditTaskDraft({ reviewItemId: item.id });
+    } else {
+      openReviewItemCommentsInSidePanel(item.id);
+    }
+  }, [
+    commentCount,
+    openCreateAuditTaskDraft,
+    openReviewItemCommentsInSidePanel,
+    item.id,
+  ]);
 
   // ── Copy policy number ──
   const [copied, setCopied] = useState(false);
@@ -736,9 +753,17 @@ export const MatchedDiffView = ({
           onClick={handleReject}
         />
         <StyledSpacer />
-        <ReviewItemCommentsButton
-          reviewItemId={item.id}
-          onAddComment={handleCreateTask}
+        <Button
+          title={
+            commentCount > 0
+              ? `Comments (${commentCount})`
+              : 'Leave comment'
+          }
+          variant="tertiary"
+          accent="default"
+          size="small"
+          Icon={IconMessage}
+          onClick={handleCommentClick}
         />
       </StyledFooter>
     </StyledContainer>

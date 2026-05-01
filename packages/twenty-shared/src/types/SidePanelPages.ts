@@ -28,4 +28,8 @@ export enum SidePanelPages {
   CommandMenuEdit = 'command-menu-edit',
   PageLayoutRecordPageWidgetTypeSelect = 'page-layout-record-page-widget-type-select',
   ComposeEmail = 'compose-email',
+  // OMNIA-CUSTOM: stacked-card view of audit tasks linked to a reviewItem,
+  // opened from the reconciliation review UI's footer button when ≥1 tasks
+  // exist for the current item.
+  ReviewItemComments = 'review-item-comments',
 }

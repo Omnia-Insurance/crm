@@ -3528,6 +3528,11 @@ msgstr ""
 msgid "Comment"
 msgstr ""
 
+#. js-lingui-id: VbyRUy
+#: src/modules/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel.ts
+msgid "Comments"
+msgstr ""
+
 #. js-lingui-id: NM9bMd
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownLayoutContent.tsx
 msgid "Compact view"

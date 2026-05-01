@@ -28,7 +28,7 @@ import { mockedViews } from '~/testing/mock-data/generated/metadata/views/mock-v
 import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';
 import { setTestViewsInMetadataStore } from '~/testing/utils/setTestViewsInMetadataStore';
 
-const meta: Meta<typeof ViewBarFilterDropdown> = {
+const meta: Meta = {
   title: 'Modules/Views/ViewBarFilterDropdown',
   component: ViewBarFilterDropdown,
   decorators: [
@@ -140,7 +140,7 @@ const meta: Meta<typeof ViewBarFilterDropdown> = {
 };
 
 export default meta;
-type Story = StoryObj<typeof ViewBarFilterDropdown>;
+type Story = StoryObj;
 
 export const Default: Story = {
   play: async ({ canvasElement }) => {

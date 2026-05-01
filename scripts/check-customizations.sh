@@ -1367,6 +1367,26 @@ check_file_contains \
   "draftRecordIdsState" \
   "FieldWidgetRichTextEditor must skip the loading skeleton for draft records (no server fetch — body is just empty)"
 check_file_contains \
+  "packages/twenty-shared/src/types/SidePanelPages.ts" \
+  "ReviewItemComments" \
+  "SidePanelPages enum must include ReviewItemComments for the audit-comments side panel"
+check_file_contains \
+  "packages/twenty-front/src/modules/side-panel/constants/SidePanelPagesConfig.tsx" \
+  "SidePanelReviewItemCommentsPage" \
+  "SIDE_PANEL_PAGES_CONFIG must register SidePanelReviewItemCommentsPage for SidePanelPages.ReviewItemComments"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewBarFilterDropdown.tsx" \
+  "dropdownId = ViewBarFilterDropdownIds.MAIN" \
+  "ViewBarFilterDropdown must accept an optional dropdownId prop (scoped filter UIs need their own Dropdown atom)"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewBarDetailsAddFilterButton.tsx" \
+  "dropdownId = ViewBarFilterDropdownIds.MAIN" \
+  "ViewBarDetailsAddFilterButton must accept an optional dropdownId prop"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewBarDetails.tsx" \
+  "addFilterDropdownId" \
+  "ViewBarDetails must forward addFilterDropdownId to ViewBarDetailsAddFilterButton"
+check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewPageContent.tsx" \
   "ContextStorePageType.Record" \
   "Reconciliation review page must set pageType=Record so standard pinned command-menu items appear in the header"
