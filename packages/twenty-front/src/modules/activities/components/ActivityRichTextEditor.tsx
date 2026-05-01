@@ -10,6 +10,7 @@ import { type BLOCK_SCHEMA } from '@/blocknote-editor/blocks/Schema';
 import { BLOCK_EDITOR_GLOBAL_HOTKEYS_CONFIG } from '@/blocknote-editor/constants/BlockEditorGlobalHotkeysConfig';
 import { useLabelIdentifierFieldMetadataItem } from '@/object-metadata/hooks/useLabelIdentifierFieldMetadataItem';
 import { RichTextFieldEditor } from '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { isTitleCellInEditModeComponentState } from '@/object-record/record-title-cell/states/isTitleCellInEditModeComponentState';
 import { RecordTitleCellContainerType } from '@/object-record/record-title-cell/types/RecordTitleCellContainerType';
@@ -66,6 +67,16 @@ export const ActivityRichTextEditor = ({
 
   const handlePersistBody = useCallback(
     (blocknote: string) => {
+      // OMNIA-CUSTOM: Side-panel draft guard. When the activity is a draft
+      // opened via `useOpenCreateAuditTaskDraft` (or any side-panel draft),
+      // it's not yet on the server, so upsertActivity's update branch throws
+      // RECORD_NOT_FOUND. The body is already written to recordStoreFamilyState
+      // by RichTextFieldEditor.handleBodyChange and gets picked up by
+      // RecordShowSidePanelCreateRecordButton when the user clicks Create.
+      if (store.get(draftRecordIdsState.atom).has(activityId)) {
+        return;
+      }
+
       if (!canCreateActivity) {
         setCanCreateActivity(true);
       }

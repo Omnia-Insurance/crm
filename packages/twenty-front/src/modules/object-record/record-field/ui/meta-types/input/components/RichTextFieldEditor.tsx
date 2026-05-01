@@ -17,6 +17,7 @@ import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { modifyRecordFromCache } from '@/object-record/cache/utils/modifyRecordFromCache';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useIsRecordFieldReadOnly } from '@/object-record/read-only/hooks/useIsRecordFieldReadOnly';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
@@ -115,6 +116,15 @@ export const RichTextFieldEditor = ({
 
     if (onPersistBody) {
       onPersistBody(blocknote);
+      return;
+    }
+
+    // OMNIA-CUSTOM: Draft guard. Mirrors usePersistField's draft handling —
+    // the record doesn't exist on the server yet, so updateOneRecord throws
+    // "record does not exist or has been deleted". The store write in
+    // handleBodyChange already keeps the body in memory, and
+    // RecordShowSidePanelCreateRecordButton picks it up on Create.
+    if (store.get(draftRecordIdsState.atom).has(recordId)) {
       return;
     }
 

@@ -1155,6 +1155,13 @@ check_file_contains \
   "SignInUp.tsx must show workspace name instead of 'Welcome, X.'"
 
 echo ""
+echo "--- Agentation (Dev Annotation Toolbar) ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/app/components/App.tsx" \
+  "Agentation" \
+  "App.tsx must mount <Agentation /> in development for annotation syncing"
+
+echo ""
 echo "--- Compressed localStorage ---"
 check_file_contains \
   "packages/twenty-front/src/modules/metadata-store/states/metadataStoreState.ts" \
@@ -1339,6 +1346,30 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "promotePrimaryPhoneToAdditional" \
   "Inline diff Accept must promote old primary phone/email to additional* (reconciliation review page)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "fieldDiff.note" \
+  "Inline diff must render note as a tooltip over the diff display (reconciliation review page)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/contexts/FieldContext.ts" \
+  "note?: string | null" \
+  "FieldDiffOverlay must carry note for per-field diff explanations (reconciliation status-change reason)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
+  "draftRecordIdsState" \
+  "RichTextFieldEditor must skip updateOneRecord for draft records (body lives in store until Create)"
+check_file_contains \
+  "packages/twenty-front/src/modules/activities/components/ActivityRichTextEditor.tsx" \
+  "draftRecordIdsState" \
+  "ActivityRichTextEditor must skip upsertActivity for side-panel draft tasks/notes (body lives in store until Create)"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewPageContent.tsx" \
+  "ContextStorePageType.Record" \
+  "Reconciliation review page must set pageType=Record so standard pinned command-menu items appear in the header"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewPageContent.tsx" \
+  "SidePanelToggleButton" \
+  "Reconciliation review page must mount the SidePanelToggleButton (cmd+K hotkey entry point) in the header"
 check_file_exists \
   "packages/twenty-shared/src/utils/composite/promotePrimaryToAdditional.ts" \
   "Shared helper used by frontend + backend reconciliation Accept paths"
