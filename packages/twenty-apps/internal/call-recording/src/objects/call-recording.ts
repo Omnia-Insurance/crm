@@ -27,6 +27,18 @@ export const SUMMARY_FIELD_UNIVERSAL_IDENTIFIER =
 export const STATUS_FIELD_UNIVERSAL_IDENTIFIER =
   '24c92ad0-4559-4bf9-a9fa-09168914a142';
 
+export const PARTICIPANTS_RAW_FIELD_UNIVERSAL_IDENTIFIER =
+  '8d2a9c4f-7e15-4b3a-9c2d-1e6f3a5b8c47';
+
+export const AGENT_PROFILE_ID_FIELD_UNIVERSAL_IDENTIFIER =
+  'a4f8b2c1-3d9e-4f7a-8b5c-6e2d9f1a3b54';
+
+export const LEAD_ID_FIELD_UNIVERSAL_IDENTIFIER =
+  'b6c1d4e2-5a8f-4c9b-a3d7-8e1f4b2c6d09';
+
+export const CALL_ID_FIELD_UNIVERSAL_IDENTIFIER =
+  'c2e9f3a8-6b4d-4e1c-b7a5-9d3f2e1c8b46';
+
 export default defineObject({
   universalIdentifier: CALL_RECORDING_OBJECT_UNIVERSAL_IDENTIFIER,
   nameSingular: 'callRecording',
@@ -119,6 +131,39 @@ export default defineObject({
       label: 'Summary',
       description: 'AI-generated summary of the call',
       icon: 'IconSparkles',
+    },
+    {
+      universalIdentifier: PARTICIPANTS_RAW_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.RAW_JSON,
+      name: 'participantsRaw',
+      label: 'Participants (raw)',
+      description:
+        'Raw participant payload from the recording client; consumed by match-and-link-on-ended',
+      icon: 'IconUsers',
+    },
+    {
+      universalIdentifier: AGENT_PROFILE_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.UUID,
+      name: 'agentProfileId',
+      label: 'Agent profile ID',
+      description: 'Matched agentProfile record ID',
+      icon: 'IconHeadset',
+    },
+    {
+      universalIdentifier: LEAD_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.UUID,
+      name: 'leadId',
+      label: 'Lead ID',
+      description: 'Matched lead record ID',
+      icon: 'IconUser',
+    },
+    {
+      universalIdentifier: CALL_ID_FIELD_UNIVERSAL_IDENTIFIER,
+      type: FieldType.UUID,
+      name: 'callId',
+      label: 'Call ID',
+      description: 'Linked workspace Call record ID',
+      icon: 'IconPhone',
     },
   ],
 });

@@ -2,14 +2,16 @@ import {
   RECORDING_FILE_FIELD_UNIVERSAL_IDENTIFIER,
   TRANSCRIPT_FILE_FIELD_UNIVERSAL_IDENTIFIER,
 } from 'src/objects/call-recording';
-import {
-  matchParticipants,
-  type Participant,
-} from 'src/utils/match-participants';
-import { summarizeTranscript } from 'src/utils/summarize-transcript';
 import { defineLogicFunction } from 'twenty-sdk/define';
 import { CoreApiClient, MetadataApiClient } from 'twenty-sdk/clients';
 import { z } from 'zod';
+
+interface Participant {
+  id: string;
+  name: string;
+  isHost: boolean;
+  platform: string;
+}
 
 interface LocalTranscriptWord {
   text: string;
@@ -218,6 +220,7 @@ const handler = async (event: any) => {
     status: 'ENDED',
     endedAt: new Date().toISOString(),
     recordingFile: [{ fileId: uploadedRecording.id, label: fileName }],
+    participantsRaw: body.participants ?? null,
     ...transcriptData,
     ...(callName ? { name: callName } : {}),
   };
@@ -228,68 +231,13 @@ const handler = async (event: any) => {
     updateCallRecording: {
       __args: {
         id: callRecording.id,
-        data: updateData,
+        data: updateData as any,
       },
       id: true,
       endedAt: true,
       status: true,
     },
   });
-
-  // TODO: remove `as any` after running `yarn twenty dev` to regenerate the typed client
-  const updateSummary = async (markdown: string) => {
-    await client.mutation({
-      updateCallRecording: {
-        __args: {
-          id: callRecording.id,
-          data: {
-            summary: { blocknote: null, markdown },
-          } as any,
-        },
-        id: true,
-      },
-    });
-  };
-
-  if (transcriptData?.transcript?.markdown) {
-    console.log(
-      '[end-recording] Transcript available, attempting summarization...',
-    );
-
-    await updateSummary('*Generating summary...*');
-
-    try {
-      const summaryMarkdown = await summarizeTranscript(
-        transcriptData.transcript.markdown,
-      );
-
-      console.log(
-        '[end-recording] Summarization result:',
-        summaryMarkdown ? `${summaryMarkdown.length} chars` : 'undefined',
-      );
-
-      if (summaryMarkdown) {
-        await updateSummary(summaryMarkdown);
-        console.log('[end-recording] Summary saved to record');
-      } else {
-        await updateSummary('*Failed to generate summary: NO_RESPONSE*');
-      }
-    } catch (error) {
-      const errorCode =
-        error instanceof Error ? error.message : 'UNKNOWN_ERROR';
-
-      console.error('[end-recording] AI summarization failed:', error);
-      await updateSummary(`*Failed to generate summary: ${errorCode}*`);
-    }
-  } else {
-    console.log(
-      '[end-recording] No transcript markdown, skipping summarization',
-    );
-  }
-
-  if (body.participants?.length) {
-    await matchParticipants(callRecording.id, body.participants);
-  }
 };
 
 export default defineLogicFunction({
