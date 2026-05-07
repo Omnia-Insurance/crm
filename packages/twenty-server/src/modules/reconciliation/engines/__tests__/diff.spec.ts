@@ -90,6 +90,48 @@ describe('diff engine', () => {
     expect(expireDiff?.bobValue).toBe('2026-03-01');
   });
 
+  it('does not downgrade PAYMENT_ERROR_CANCELED to CANCELED', () => {
+    // Reviewers were rejecting these by hand: the legacy CRM carries
+    // PAYMENT_ERROR_CANCELED (canceled because of non-payment). The engine
+    // only emits plain CANCELED, so left alone the diff would strip the
+    // payment-error context without changing the underlying termination.
+    const statusDecision = {
+      derivedStatus: 'CANCELED' as const,
+      derivedExpireDate: '2026-03-01',
+      cancelPreviousPolicyId: null,
+      statusChangeReason: 'Not eligible for commission',
+    };
+
+    const diffs = computeFieldDiffsFromMapping(
+      baseBobRow,
+      { ...baseCrmPolicy, status: 'PAYMENT_ERROR_CANCELED' },
+      statusDecision,
+      baseColumnMapping,
+    );
+
+    expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
+  });
+
+  it('still emits a status diff when CRM is plain CANCELED → ACTIVE_*', () => {
+    // Sanity check that the suppression is one-directional — going from a
+    // terminal state back to active still surfaces.
+    const statusDecision = {
+      derivedStatus: 'ACTIVE_PLACED' as const,
+      derivedExpireDate: null,
+      cancelPreviousPolicyId: null,
+      statusChangeReason: 'reinstated',
+    };
+
+    const diffs = computeFieldDiffsFromMapping(
+      baseBobRow,
+      { ...baseCrmPolicy, status: 'PAYMENT_ERROR_CANCELED' },
+      statusDecision,
+      baseColumnMapping,
+    );
+
+    expect(diffs.find((d) => d.crmField === 'status')).toBeDefined();
+  });
+
   it('detects member name discrepancy past fuzzy threshold', () => {
     const diffs = computeFieldDiffsFromMapping(
       { ...baseBobRow, member_first: 'Beatrice' },

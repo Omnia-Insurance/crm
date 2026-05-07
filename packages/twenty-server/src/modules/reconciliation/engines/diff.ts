@@ -491,6 +491,23 @@ const toMicrosString = (s: string | null): string | null => {
   return String(Math.round(num * 1_000_000));
 };
 
+// Legacy CRM statuses that already represent "canceled with extra context"
+// (e.g. canceled due to non-payment). The engine never derives these, so a
+// proposal to change one of them → plain CANCELED would strip useful context
+// without changing the underlying termination state. Reviewers were rejecting
+// these diffs by hand; suppress them.
+const LEGACY_TERMINAL_CANCELED_STATUSES: ReadonlySet<string> = new Set([
+  'PAYMENT_ERROR_CANCELED',
+]);
+
+const isTerminalCanceledDowngrade = (
+  derivedStatus: string,
+  crmStatus: unknown,
+): boolean =>
+  derivedStatus === 'CANCELED' &&
+  typeof crmStatus === 'string' &&
+  LEGACY_TERMINAL_CANCELED_STATUSES.has(crmStatus);
+
 /**
  * Compute field diffs using the column mapping (XLSX header → CRM field)
  * instead of FieldConfigEntry[]. Compare methods are inferred from fieldType.
@@ -512,7 +529,13 @@ export const computeFieldDiffsFromMapping = (
 
   // Status diffs (COMPUTED from the status engine — not driven by columnMapping)
   if (statusDecision) {
-    if (statusDecision.derivedStatus !== crmPolicy.status) {
+    if (
+      statusDecision.derivedStatus !== crmPolicy.status &&
+      !isTerminalCanceledDowngrade(
+        statusDecision.derivedStatus,
+        crmPolicy.status,
+      )
+    ) {
       diffs.push({
         field: 'status',
         label: 'Status',
