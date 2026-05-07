@@ -491,22 +491,24 @@ const toMicrosString = (s: string | null): string | null => {
   return String(Math.round(num * 1_000_000));
 };
 
-// Legacy CRM statuses that already represent "canceled with extra context"
-// (e.g. canceled due to non-payment). The engine never derives these, so a
-// proposal to change one of them → plain CANCELED would strip useful context
-// without changing the underlying termination state. Reviewers were rejecting
-// these diffs by hand; suppress them.
-const LEGACY_TERMINAL_CANCELED_STATUSES: ReadonlySet<string> = new Set([
+// Statuses that all represent some form of "this policy is over." Moving
+// between them (e.g. PAYMENT_ERROR_CANCELED → CANCELED, DECLINED → CANCELED)
+// doesn't change the underlying outcome and usually strips useful context
+// the legacy CRM carried. Reviewers were rejecting those diffs by hand.
+const NEGATIVE_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
+  'CANCELED',
   'PAYMENT_ERROR_CANCELED',
+  'DECLINED',
+  'INCOMPLETE',
 ]);
 
-const isTerminalCanceledDowngrade = (
+const isNegativeToNegativeStatusChange = (
   derivedStatus: string,
   crmStatus: unknown,
 ): boolean =>
-  derivedStatus === 'CANCELED' &&
   typeof crmStatus === 'string' &&
-  LEGACY_TERMINAL_CANCELED_STATUSES.has(crmStatus);
+  NEGATIVE_TERMINAL_STATUSES.has(crmStatus) &&
+  NEGATIVE_TERMINAL_STATUSES.has(derivedStatus);
 
 /**
  * Compute field diffs using the column mapping (XLSX header → CRM field)
@@ -531,7 +533,7 @@ export const computeFieldDiffsFromMapping = (
   if (statusDecision) {
     if (
       statusDecision.derivedStatus !== crmPolicy.status &&
-      !isTerminalCanceledDowngrade(
+      !isNegativeToNegativeStatusChange(
         statusDecision.derivedStatus,
         crmPolicy.status,
       )
@@ -600,6 +602,12 @@ export const computeFieldDiffsFromMapping = (
     // Skip if a computed field (or status engine) already covers this CRM field
     if (computedCrmFields.has(entry.crmField)) continue;
 
+    // Agent identity is never synced from BOB. Some agents sell under
+    // another agent's NPN (the agent-of-record arrangement), so the BOB
+    // describes the AOR while CRM tracks the actual selling agent. Any
+    // diff here would propose overwriting the selling agent with the AOR.
+    if (entry.crmField.startsWith('agent.')) continue;
+
     // On multi-member policies where BOB describes a different person,
     // don't touch lead identity. Surfaced via the synthetic INFO_ONLY
     // diff pushed below.
@@ -663,7 +671,10 @@ export const computeFieldDiffsFromMapping = (
     for (const cf of computedFields) {
       if (!cf.crmField) continue;
 
-      // Same suppression on the computed-fields path
+      // Same agent suppression on the computed-fields path
+      if (cf.crmField.startsWith('agent.')) continue;
+
+      // Same lead-identity suppression on the computed-fields path
       if (subscriberMismatch && LEAD_IDENTITY_CRM_FIELDS.has(cf.crmField)) {
         continue;
       }

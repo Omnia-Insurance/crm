@@ -90,46 +90,53 @@ describe('diff engine', () => {
     expect(expireDiff?.bobValue).toBe('2026-03-01');
   });
 
-  it('does not downgrade PAYMENT_ERROR_CANCELED to CANCELED', () => {
-    // Reviewers were rejecting these by hand: the legacy CRM carries
-    // PAYMENT_ERROR_CANCELED (canceled because of non-payment). The engine
-    // only emits plain CANCELED, so left alone the diff would strip the
-    // payment-error context without changing the underlying termination.
-    const statusDecision = {
+  describe('negative-to-negative status transitions', () => {
+    // Reviewers were rejecting these by hand: PAYMENT_ERROR_CANCELED,
+    // DECLINED, and INCOMPLETE all describe a policy that is over. Moving
+    // between them or to plain CANCELED strips legacy context without
+    // changing the underlying outcome.
+    const canceledDecision = {
       derivedStatus: 'CANCELED' as const,
       derivedExpireDate: '2026-03-01',
       cancelPreviousPolicyId: null,
       statusChangeReason: 'Not eligible for commission',
     };
 
-    const diffs = computeFieldDiffsFromMapping(
-      baseBobRow,
-      { ...baseCrmPolicy, status: 'PAYMENT_ERROR_CANCELED' },
-      statusDecision,
-      baseColumnMapping,
-    );
+    it.each([
+      ['PAYMENT_ERROR_CANCELED'],
+      ['DECLINED'],
+      ['INCOMPLETE'],
+      ['CANCELED'],
+    ])('suppresses status diff when CRM is %s and engine derives CANCELED', (crmStatus) => {
+      const diffs = computeFieldDiffsFromMapping(
+        baseBobRow,
+        { ...baseCrmPolicy, status: crmStatus },
+        canceledDecision,
+        baseColumnMapping,
+      );
 
-    expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
-  });
+      expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
+    });
 
-  it('still emits a status diff when CRM is plain CANCELED → ACTIVE_*', () => {
-    // Sanity check that the suppression is one-directional — going from a
-    // terminal state back to active still surfaces.
-    const statusDecision = {
-      derivedStatus: 'ACTIVE_PLACED' as const,
-      derivedExpireDate: null,
-      cancelPreviousPolicyId: null,
-      statusChangeReason: 'reinstated',
-    };
+    it('still emits a status diff when CRM is a negative terminal but engine derives ACTIVE_*', () => {
+      // Sanity check: going from a terminal state back to active still
+      // surfaces (could be a real reinstatement worth reviewing).
+      const reinstatedDecision = {
+        derivedStatus: 'ACTIVE_PLACED' as const,
+        derivedExpireDate: null,
+        cancelPreviousPolicyId: null,
+        statusChangeReason: 'reinstated',
+      };
 
-    const diffs = computeFieldDiffsFromMapping(
-      baseBobRow,
-      { ...baseCrmPolicy, status: 'PAYMENT_ERROR_CANCELED' },
-      statusDecision,
-      baseColumnMapping,
-    );
+      const diffs = computeFieldDiffsFromMapping(
+        baseBobRow,
+        { ...baseCrmPolicy, status: 'PAYMENT_ERROR_CANCELED' },
+        reinstatedDecision,
+        baseColumnMapping,
+      );
 
-    expect(diffs.find((d) => d.crmField === 'status')).toBeDefined();
+      expect(diffs.find((d) => d.crmField === 'status')).toBeDefined();
+    });
   });
 
   it('detects member name discrepancy past fuzzy threshold', () => {
@@ -298,6 +305,11 @@ describe('diff engine', () => {
         fieldType: 'TEXT',
         fieldKey: 'update:name (agent)',
       },
+      eff_date: {
+        crmField: 'effectiveDate',
+        fieldType: 'DATE',
+        fieldKey: 'effectiveDate',
+      },
     };
 
     const subscriberRow = {
@@ -305,6 +317,7 @@ describe('diff engine', () => {
       member_last: 'Williams',
       member_dob: '1983-06-16',
       broker_name: 'Kevin Desku',
+      eff_date: '2026-01-01',
     };
 
     const dependentLeadOnPolicy = {
@@ -406,14 +419,17 @@ describe('diff engine', () => {
 
     it('does NOT suppress non-lead diffs even when subscriber mismatch fires', () => {
       const diffs = computeFieldDiffsFromMapping(
-        { ...subscriberRow, broker_name: 'Different Agent' },
+        { ...subscriberRow, eff_date: '2026-02-15' },
         dependentLeadOnPolicy,
         null,
         familyColumnMapping,
       );
 
-      // Status/agent/etc. should still flow normally
-      expect(diffs.find((d) => d.crmField === 'agent.name')).toBeDefined();
+      // Subscriber-mismatch suppression is scoped to lead identity —
+      // policy-level fields still surface normally.
+      expect(
+        diffs.find((d) => d.crmField === 'effectiveDate'),
+      ).toBeDefined();
     });
 
     it('does not fire when applicantCount is missing (legacy policies)', () => {
@@ -630,6 +646,70 @@ describe('diff engine', () => {
       // Multi-member is more specific (applicantCount + DOB delta) so it
       // takes precedence over the cross-term namesake explanation.
       expect(notice?.label).toContain('Multi-member');
+    });
+  });
+
+  describe('agent identity suppression', () => {
+    // Agents sometimes sell under another agent's NPN (the agent-of-record
+    // arrangement). The carrier reports the AOR; CRM tracks the actual
+    // selling agent. Diffs against agent.* would propose overwriting the
+    // selling agent with the AOR — never what we want.
+    it('suppresses agent.name diffs even when the values clearly differ', () => {
+      const columnMapping: ColumnMapping = {
+        broker_name: {
+          crmField: 'agent.name',
+          fieldType: 'TEXT',
+          fieldKey: 'update:name (agent)',
+        },
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        { broker_name: 'Nicholas James' },
+        { 'agent.name': 'Dania Chavarri' },
+        null,
+        columnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'agent.name')).toBeUndefined();
+    });
+
+    it('suppresses agent.npn diffs', () => {
+      const columnMapping: ColumnMapping = {
+        broker_npn: {
+          crmField: 'agent.npn',
+          fieldType: 'TEXT',
+          fieldKey: 'update:npn (agent)',
+        },
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        { broker_npn: '15293460' },
+        { 'agent.npn': '19668254' },
+        null,
+        columnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'agent.npn')).toBeUndefined();
+    });
+
+    it('suppresses agent.* diffs from computed fields too', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { computed_agent: 'Nicholas James' },
+        { 'agent.name': 'Dania Chavarri' },
+        null,
+        {},
+        [
+          {
+            outputKey: 'computed_agent',
+            method: 'coalesce',
+            inputs: ['broker_name'],
+            type: 'string',
+            crmField: 'agent.name',
+          },
+        ],
+      );
+
+      expect(diffs.find((d) => d.crmField === 'agent.name')).toBeUndefined();
     });
   });
 
