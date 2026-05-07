@@ -6,6 +6,7 @@ import {
   memberNameScore,
   datesWithinDays,
   isValidAmbetterPolicyNumber,
+  selectByActiveStatus,
   selectByActiveTerm,
   DEFAULT_MATCHING_CONFIG,
   type CrmPolicy,
@@ -255,13 +256,15 @@ describe('matching engine', () => {
       expect(result.crmPolicyId).toBe('policy-1');
     });
 
-    // Regression for U73273168: a CRM has two records sharing a policyNumber
-    // (the canceled prior plan year + the active renewal). The BOB carries
-    // forward the original policy_effective_date, so without term-window
-    // disambiguation tier 2/3 picks the canceled record. With the disambig
-    // pre-pass, the renewal wins because the BOB's paid_through_date falls
-    // inside its [effectiveDate, ∞) window.
-    describe('renewal vs. canceled prior-term disambiguation', () => {
+    // Regression for U73273168 / U70248113: CRM holds two records sharing a
+    // policyNumber — a canceled prior version and an active replacement. We
+    // never want to update the canceled one: any field-level diff against
+    // it is a false correction (effective date, agent, status would all
+    // need to flip back to the active term). The narrow-by-active-status
+    // pre-pass picks the active candidate before the proximity-based tiers
+    // run, regardless of what BOB's paid_through or effective_date look
+    // like.
+    describe('active-vs-canceled prior-term disambiguation', () => {
       const cancelledPriorTerm = makePolicy({
         id: 'policy-2025',
         effectiveDate: '2025-10-01',
@@ -275,7 +278,7 @@ describe('matching engine', () => {
         status: 'ACTIVE_PLACED',
       });
 
-      it('picks the active renewal when BOB paid-through is inside its window', () => {
+      it('picks the active candidate when BOB paid-through is inside its window (renewal carry-forward)', () => {
         const indexes = buildMatchIndexes([cancelledPriorTerm, activeRenewal]);
         const row = makeMatchInput({
           // Ambetter renewal BOBs keep the original enrollment date
@@ -292,13 +295,31 @@ describe('matching engine', () => {
         );
 
         expect(result.crmPolicyId).toBe('policy-2026');
-        // Tier 2/3 fail (eff dates >30d apart). After term-window narrowing
-        // the agent still matches the sole remaining candidate, so Tier 4
-        // (POLICY_NUMBER_PLUS_AGENT, 85%) fires — still AUTO_MATCHED, on
-        // the *correct* record. The disambiguation note is what matters.
-        expect(result.method).toBe('POLICY_NUMBER_PLUS_AGENT');
-        expect(result.status).toBe('AUTO_MATCHED');
-        expect(result.notes).toContain('term-window disambiguated');
+        expect(result.notes).toContain('disambiguated');
+        expect(result.notes).toContain('active status');
+      });
+
+      it('picks the active candidate when BOB describes the new term (re-enrollment)', () => {
+        // The opposite of the renewal carry-forward case: BOB's effective
+        // date matches the new active term and paid-through is stale (still
+        // on the old canceled term's window). Tier-2 catches it because the
+        // active-status pre-pass narrowed to the active candidate first.
+        const indexes = buildMatchIndexes([cancelledPriorTerm, activeRenewal]);
+        const row = makeMatchInput({
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2025-12-15',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.crmPolicyId).toBe('policy-2026');
+        expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
       });
 
       it('falls all the way to Tier 5 when agent also differs', () => {
@@ -323,10 +344,12 @@ describe('matching engine', () => {
         expect(result.crmPolicyId).toBe('policy-2026');
         expect(result.method).toBe('POLICY_NUMBER_SINGLE');
         expect(result.confidence).toBe(90);
-        expect(result.notes).toContain('term-window disambiguated');
+        expect(result.notes).toContain('active status');
       });
 
-      it('does not narrow when BOB has no paid-through date', () => {
+      it('still picks the active candidate when BOB has no paid-through date', () => {
+        // Active-status narrowing doesn't depend on paid-through, so the
+        // active replacement wins even when BOB omits paid-through.
         const indexes = buildMatchIndexes([cancelledPriorTerm, activeRenewal]);
         const row = makeMatchInput({
           effectiveDate: '2025-10-01',
@@ -341,12 +364,10 @@ describe('matching engine', () => {
           DEFAULT_MATCHING_CONFIG,
         );
 
-        // Falls back to legacy behavior — tier 2 picks the prior-term record
-        // because its eff date is within 30d of BOB.
-        expect(result.crmPolicyId).toBe('policy-2025');
+        expect(result.crmPolicyId).toBe('policy-2026');
       });
 
-      it('does not narrow when paid-through falls outside every window', () => {
+      it('still picks the active candidate when paid-through falls outside every window', () => {
         const indexes = buildMatchIndexes([cancelledPriorTerm, activeRenewal]);
         const row = makeMatchInput({
           effectiveDate: '2025-10-01',
@@ -361,10 +382,91 @@ describe('matching engine', () => {
           DEFAULT_MATCHING_CONFIG,
         );
 
-        // Both candidates remain; legacy proximity-based tier 2 fires.
-        expect(result.crmPolicyId).toBe('policy-2025');
-        expect(result.notes).not.toContain('term-window disambiguated');
+        expect(result.crmPolicyId).toBe('policy-2026');
       });
+
+      it('falls back to term-window narrowing when BOTH candidates are non-terminal', () => {
+        // Status alone can't disambiguate (both active mid-transition);
+        // term-window using paid-through still works as a fallback.
+        const indexes = buildMatchIndexes([
+          { ...cancelledPriorTerm, status: 'ACTIVE_PLACED' },
+          activeRenewal,
+        ]);
+        const row = makeMatchInput({
+          effectiveDate: '2025-10-01',
+          paidThroughDate: '2026-04-30',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.crmPolicyId).toBe('policy-2026');
+        expect(result.notes).toContain('paid-through');
+      });
+    });
+  });
+
+  describe('selectByActiveStatus', () => {
+    const cancelled = (overrides: Partial<CrmPolicy> = {}): CrmPolicy =>
+      makePolicy({ id: 'p-canceled', status: 'CANCELED', ...overrides });
+    const active = (overrides: Partial<CrmPolicy> = {}): CrmPolicy =>
+      makePolicy({ id: 'p-active', status: 'ACTIVE_PLACED', ...overrides });
+
+    it('returns null when fewer than 2 candidates', () => {
+      expect(selectByActiveStatus([active()])).toBeNull();
+      expect(selectByActiveStatus([])).toBeNull();
+    });
+
+    it('returns the unique non-terminal candidate', () => {
+      const winner = selectByActiveStatus([cancelled(), active()]);
+
+      expect(winner?.id).toBe('p-active');
+    });
+
+    it.each([
+      'CANCELED',
+      'PAYMENT_ERROR_CANCELED',
+      'DECLINED',
+      'INCOMPLETE',
+    ])('treats %s as terminal', (status) => {
+      const winner = selectByActiveStatus([
+        cancelled({ status }),
+        active(),
+      ]);
+
+      expect(winner?.id).toBe('p-active');
+    });
+
+    it('returns null when all candidates are terminal', () => {
+      expect(
+        selectByActiveStatus([
+          cancelled({ id: 'a', status: 'CANCELED' }),
+          cancelled({ id: 'b', status: 'DECLINED' }),
+        ]),
+      ).toBeNull();
+    });
+
+    it('returns null when more than one candidate is non-terminal', () => {
+      expect(
+        selectByActiveStatus([
+          active({ id: 'a' }),
+          active({ id: 'b' }),
+        ]),
+      ).toBeNull();
+    });
+
+    it('treats missing status as non-terminal (legacy data)', () => {
+      const winner = selectByActiveStatus([
+        cancelled(),
+        active({ status: null }),
+      ]);
+
+      expect(winner?.id).toBe('p-active');
     });
   });
 

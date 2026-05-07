@@ -449,6 +449,41 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
 };
 
 /**
+ * Statuses that mean "this policy is over." When narrowing multi-policy-
+ * number candidates, prefer the unique non-terminal candidate over a
+ * terminal one — re-enrollments add a new active policy alongside the
+ * canceled prior version, and the BOB row almost always describes the
+ * active one.
+ */
+const NEGATIVE_TERMINAL_STATUSES_FOR_MATCHING: ReadonlySet<string> = new Set([
+  'CANCELED',
+  'PAYMENT_ERROR_CANCELED',
+  'DECLINED',
+  'INCOMPLETE',
+]);
+
+/**
+ * When multiple CRM policies share a policyNumber and exactly one is in a
+ * non-terminal state, return that candidate. The terminal one is the
+ * canceled/declined prior version; the BOB row almost always describes
+ * the active replacement.
+ *
+ * Returns null when 0 or >1 candidates are non-terminal (caller falls
+ * back to other narrowing strategies).
+ */
+export const selectByActiveStatus = (
+  candidates: CrmPolicy[],
+): CrmPolicy | null => {
+  if (candidates.length < 2) return null;
+
+  const active = candidates.filter(
+    (p) => !p.status || !NEGATIVE_TERMINAL_STATUSES_FOR_MATCHING.has(p.status),
+  );
+
+  return active.length === 1 ? active[0] : null;
+};
+
+/**
  * When multiple CRM policies share a policyNumber (typical for renewals
  * where carriers carry the same number forward across plan years), narrow
  * to the candidate whose [effectiveDate, expirationDate ?? ∞] term-window
@@ -523,20 +558,47 @@ export const matchRow = (
     ? (indexes.policyByNumber.get(input.policyNumber) ?? [])
     : [];
 
-  // Term-window disambiguation: when paid-through falls inside exactly one
-  // candidate's [effectiveDate, expirationDate] window, narrow to that one
-  // candidate before running the proximity-based tiers.
-  const termWindowWinner = selectByActiveTerm(
-    allPolicyNumberMatches,
-    input.paidThroughDate,
-  );
-  const policyNumberMatches = termWindowWinner
-    ? [termWindowWinner]
+  // Disambiguate multi-policy-number candidates BEFORE running proximity-
+  // based tiers. Two narrowing strategies, in priority order:
+  //
+  //   1. Active-status: when exactly one candidate isn't in a terminal
+  //      state (CANCELED / DECLINED / etc.), pick it. Re-enrollments add
+  //      a new active policy alongside the canceled prior; without this,
+  //      tier 5 (single) would happily lock onto the canceled one when
+  //      neither date nor agent disambiguates.
+  //   2. Term-window: when status alone doesn't disambiguate (e.g. both
+  //      candidates active mid-transition), fall back to picking the
+  //      candidate whose [effectiveDate, expirationDate] contains the
+  //      BOB paid-through date — handles renewals where the BOB carries
+  //      forward the old policy_effective_date.
+  let narrowedWinner: CrmPolicy | null = null;
+  let narrowReason: string | null = null;
+
+  if (allPolicyNumberMatches.length > 1) {
+    const activeWinner = selectByActiveStatus(allPolicyNumberMatches);
+
+    if (activeWinner) {
+      narrowedWinner = activeWinner;
+      narrowReason = 'active status';
+    } else {
+      const termWinner = selectByActiveTerm(
+        allPolicyNumberMatches,
+        input.paidThroughDate,
+      );
+
+      if (termWinner) {
+        narrowedWinner = termWinner;
+        narrowReason = `paid-through ${input.paidThroughDate}`;
+      }
+    }
+  }
+
+  const policyNumberMatches = narrowedWinner
+    ? [narrowedWinner]
     : allPolicyNumberMatches;
-  const termWindowSuffix =
-    termWindowWinner && allPolicyNumberMatches.length > 1
-      ? ` (term-window disambiguated from ${allPolicyNumberMatches.length} candidates by paid-through ${input.paidThroughDate})`
-      : '';
+  const narrowSuffix = narrowedWinner
+    ? ` (disambiguated from ${allPolicyNumberMatches.length} candidates by ${narrowReason})`
+    : '';
 
   if (policyNumberMatches.length > 0) {
     // Tier 2: Policy number + effective date + agent name (3-signal)
@@ -564,7 +626,7 @@ export const matchRow = (
           confidence: 98,
           method: 'POLICY_NUMBER_DATE_AGENT',
           status: classifyConfidence(98, config),
-          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"${termWindowSuffix}`,
+          notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"${narrowSuffix}`,
         };
       }
     }
@@ -584,7 +646,7 @@ export const matchRow = (
           confidence: 95,
           method: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE',
           status: classifyConfidence(95, config),
-          notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${termWindowSuffix}`,
+          notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${narrowSuffix}`,
         };
       }
     }
@@ -608,7 +670,7 @@ export const matchRow = (
           confidence: 85,
           method: 'POLICY_NUMBER_PLUS_AGENT',
           status: classifyConfidence(85, config),
-          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"${termWindowSuffix}`,
+          notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"${narrowSuffix}`,
         };
       }
     }
@@ -628,7 +690,7 @@ export const matchRow = (
         confidence: 90,
         method: 'POLICY_NUMBER_SINGLE',
         status: classifyConfidence(90, config),
-        notes: `Single CRM policy matched by policy number "${input.policyNumber}"${termWindowSuffix}`,
+        notes: `Single CRM policy matched by policy number "${input.policyNumber}"${narrowSuffix}`,
       };
     }
 
