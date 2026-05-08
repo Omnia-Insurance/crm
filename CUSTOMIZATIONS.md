@@ -122,18 +122,102 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `query-hooks/call-create-many.post-query.hook.ts` — Same for bulk
 - `query-hooks/call-query-hook.module.ts` — Module registration
 
-### `packages/twenty-apps/internal/compliance-qa/`
+### `packages/twenty-apps/internal/call-recording/src/compliance/`
 
-- `src/application-config.ts` — App registration (Compliance QA)
-- `src/objects/qa-scorecard.ts` — QA Scorecard object definition with 25+ fields (scores, red flags, rich text details)
-- `src/constants/compliance-rules.ts` — All compliance rules, scripts, scoring criteria, red flag definitions, AI prompts
-- `src/logic-functions/analyze-call-compliance.ts` — Two-pass AI analysis (red flags + full scorecard) via HTTP endpoint
-- `src/logic-functions/backfill-compliance-qa.ts` — Batch backfill for existing call recordings
-- `src/utils/transcribe-recording.ts` — Deepgram Nova-3 batch transcription with speaker diarization
-- `src/utils/call-ai.ts` — Wrapper for Twenty's AI text generation endpoint
-- `src/roles/default-role.ts` — App role with read/write/AI permissions
-- `src/views/qa-scorecard-view.ts` — Default list view for QA Scorecards
-- `src/navigation-menu-items/qa-scorecard-navigation-menu-item.ts` — Sidebar navigation entry
+Omnia compliance QA — sourced from internal compliance docs (Mandatory Disclosures, Recorded Line Disclosure, Compliance Training, ACA & Ancillary QA Checklists). Lives inside the upstream `call-recording` app since scoring extends `callRecording` rather than introducing a new object. Schema is versioned (`Scorecard.version`) — bump when rules or weights change so historical scores remain interpretable.
+
+- `types.ts` — schema for both rule definitions (Scorecard, Criterion, AutoFail, Rule union including LlmJudge / Keyword / Verbatim / Sequence / Composite / **Conditional** / **Timeband** / ManualOnly) and engine output contract (RuleResult, CriterionResult, AutoFailResult, CallScorability, ScorecardResult, Recommendation, PhaseSegment)
+- `canonical-scripts.ts` — verbatim Marketplace + AOR disclosures, recorded-line keywords, presentation-order components, DNC keywords + false-positive guards, HealthSherpa keywords, attribution note (transferred marketplace.gov rep ≠ Omnia compliance), default placeholder pattern for verbatim wildcards
+- `scorecards/aca.ts` — ACA-only scorecard (23 criteria + 6 auto-fails)
+- `scorecards/ancillary.ts` — Ancillaries-only scorecard (22 criteria + 6 auto-fails; HealthSherpa instead of Commission auto-fail)
+- `scorecards/index.ts` — barrel + `SCORECARDS` registry by track
+
+#### `call-recording` data model — compliance extensions
+
+Extended `callRecording` with seven new fields (compliance scoring) and added three new child objects to render scoring results without resorting to JSON blobs.
+
+**Modified:** `src/objects/call-recording.ts` — adds `complianceTrack` (SELECT), `complianceScore` (NUMBER), `complianceStatus` (SELECT), `autoFails` (MULTI_SELECT), `callQualityClassification` (SELECT), `notScorableReason` (TEXT), `disciplinaryDraft` (RICH_TEXT).
+
+**New child objects** (each linked back to `callRecording` via MANY_TO_ONE):
+- `src/objects/compliance-violation.ts` — one record per triggered auto-fail (type, startSeconds, endSeconds, quote)
+- `src/objects/compliance-criterion-result.ts` — one record per scorecard criterion (criterionId, criterionLabel, phase, result, weight, pointsAwarded, pointsPossible, rationale, quote, startSeconds, requiresManualReview)
+- `src/objects/call-phase-segment.ts` — one record per detected call phase (phase, startSeconds, endSeconds)
+
+**New relation field files:**
+- `src/fields/compliance-violations-on-call-recording.field.ts` + `src/fields/call-recording-on-compliance-violation.field.ts`
+- `src/fields/compliance-criterion-results-on-call-recording.field.ts` + `src/fields/call-recording-on-compliance-criterion-result.field.ts`
+- `src/fields/call-phase-segments-on-call-recording.field.ts` + `src/fields/call-recording-on-call-phase-segment.field.ts`
+
+#### Compliance scoring engine
+
+Pure-function scorer that consumes a transcript + scorecard and produces a `ScorecardResult`. Reused for both post-call batch scoring and the live `twenty-companion` flow. Adapted from the deleted compliance-qa app's two-pass pattern (git ref `0fdb6cf111`), restructured around the rule union from `src/compliance/types.ts`.
+
+**Utils (ported from compliance-qa@0fdb6cf111):**
+- `src/utils/transcribe-recording.ts` — Deepgram Nova-3 batch transcription with diarization → speaker-labeled `TranscriptSegment[]`
+- `src/utils/call-ai.ts` — provider-pluggable LLM wrapper (`callAi`, `parseAiJson`, `callAiJson`). Selects between Twenty's `/rest/ai/generate-text` (production, when `TWENTY_API_URL` + token are set) and direct Anthropic Messages API (dev/CLI, when `ANTHROPIC_API_KEY` is set). Anthropic model overridable via `COMPLIANCE_LLM_MODEL`; default `claude-haiku-4-5-20251001`.
+
+**Scorer (`src/compliance/scorer/`):**
+- `transcript.ts` — normalized `Transcript` type + helpers (`sliceByTime`, `filterBySpeaker`, `flattenText`, `renderForLlm`)
+- `context.ts` — `ScoringContext` threaded through evaluators
+- `evaluators/keyword.ts` — word-boundary matching with `excludePhrases` guards
+- `evaluators/verbatim.ts` — Levenshtein / token-Jaccard with placeholder-pattern wildcards
+- `evaluators/sequence.ts` — first-mention detection of canonical components, order-violation reporting
+- `evaluators/manual-only.ts` — always returns `indeterminate` + `requiresManualReview: true`
+- `evaluators/llm-judge.ts` — strict-JSON output via `callAiJson`, falls back to indeterminate on parse failure
+- `evaluators/composite.ts` — `mode: 'all' | 'any'` aggregation with verdict ranking
+- `evaluators/conditional.ts` — `if`-pass-then-evaluate-`then`; otherwise `not_applicable`
+- `evaluators/timeband.ts` — slices transcript to time window before evaluating inner rule
+- `evaluators/index.ts` — recursive dispatcher
+- `score-criterion.ts` — wraps a `Criterion` → `CriterionResult` (pointsAwarded/possible from `partialCreditValues`)
+- `score-auto-fail.ts` — wraps an `AutoFail` → `AutoFailResult`
+- `aggregate.ts` — weighted score, status (auto-fail override / pending-review / pass / fail), recommendations / strengths / areasForImprovement
+- `index.ts` — top-level `scoreCall(input) → ScorecardResult` entry; supports `mode: 'live' | 'post_call'` filtering by criterion `realtime` flag
+- `speaker-resolution.ts` — pre-pass that picks the agent speaker_id from Deepgram diarization (LLM-first via `callAiJson`, deterministic cue-phrase heuristic fallback). `relabelTranscript` rewrites segment speakers from raw diarization ids to `'agent' | 'customer' | 'unknown'` before scoring runs.
+- `evaluators/speaker-change-triggered.ts` — for each NEW speaker entering after t=0, evaluates an inner rule on a narrow window starting at the new speaker's first utterance. Aggregates composite-all. Used to enforce re-disclosure on new-party joins deterministically from diarization signal (replaces brittle LLM-judge-on-text approach in `recorded_line_disclosure` auto-fail).
+- `scorability.ts` — Pass 0 classifier. Returns `CallScorability` (scorable + reason union from `types.ts`). Heuristic gate first (duration < 15s → too_short; single speaker → no_two_way_conversation), then LLM judge for borderline cases. Fails open to scorable so downstream criteria still run on edge cases (and produce indeterminate routes-to-manual instead of silently rejecting calls).
+- `track-detection.ts` — Pass 1 classifier. Returns `TrackDetection` with `aca | ancillary | mixed | unknown`. Heuristic keyword counts first (ACA cues: marketplace / subsidy / QLE / etc; ancillary cues: dental / vision / accident / supplemental / UHF / etc) — when one side dominates by ≥3 hits we trust the heuristic; otherwise the LLM judge confirms with the heuristic counts in context.
+
+Pass 2 (phase segmentation) still TBD; phase scoping degrades gracefully when segments are absent.
+
+**Harness:** `scripts/score-call.ts` — CLI that transcribes an mp3, resolves agent speaker (with `--agent-name` hint), runs the scorer, prints the result. Used for ground-truth iteration.
+
+### `packages/twenty-apps/community/telephony/`
+
+Omnia telephony app — click-to-call, browser softphone, SMS and recording inside Twenty, with a provider-agnostic adapter layer so the same workspace can use Twilio (default) and fail over outbound traffic to Vonage / RingCentral / Aircall when a provider is unhealthy. Inbound stays single-provider per number; routing is outbound-only.
+
+- `src/application-config.ts` — App entry; declares workspace `applicationVariables` for Twilio + Vonage credentials, router policy (`weighted` / `priority` / `cost`), per-provider weights, circuit-breaker thresholds, and feature toggles (recording, AI summary)
+- `src/default-role.ts` — Default function role granting CRUD on the app's objects
+- `src/modules/shared/universal-identifiers.ts` — All app-level UUIDs (app, role, applicationVariable identifiers) in one place
+- `src/modules/core/adapter/types.ts` — Normalized event shape (`TelephonyEvent`), `ProviderId`, `CallStatus`, `SmsStatus` so logic functions don't branch per provider
+- `src/modules/core/adapter/telephony-adapter.ts` — `TelephonyAdapter` interface every provider implements (initiateCall / hangup / sendSms / parseWebhook / generateBrowserAccessToken / probe / classifyError)
+- `src/modules/core/adapter/circuit-breaker.ts` — Per-provider rolling-window breaker (closed → open → half-open) keyed on error rate + cooldown
+- `src/modules/core/adapter/provider-router.ts` — Outbound-only `ProviderRouter` with weighted / priority / cost selection, circuit-breaker filtering, single retry on the next-best provider for transient errors
+- `src/modules/twilio/adapter.ts` — Twilio implementation: REST methods (`initiateCall`, `hangup`, `sendSms`), browser AccessToken minting, webhook event parsing, REST probe (`/Accounts/{sid}.json`), error classification by HTTP status + Twilio error code (permanent codes like 21211 short-circuit retries)
+- `src/modules/twilio/access-token.ts` — Mints Twilio Voice JS SDK AccessToken JWTs inline (HMAC-SHA256 over the API Key Secret) without pulling in the `twilio` npm package, keeping the app's logic-function bundle minimal
+- `src/modules/twilio/webhook-signature.ts` — `X-Twilio-Signature` (HMAC-SHA1) verification + form-body parsing
+- `src/modules/twilio/build-adapter.ts` — Constructs a configured `TwilioAdapter` from the workspace's applicationVariables (injected as `process.env` in logic-function processes); fast-fails on missing required credentials.
+- `src/modules/core/logic-functions/twilio-webhook.logic-function.ts` — `POST /twilio/webhook`. Reconstructs the canonical URL from `WEBHOOK_PUBLIC_URL` for signature verification, normalizes via the adapter, dispatches per event kind. Call lifecycle handlers (initiated/answered/completed/recording.completed) upsert by `providerCallSid`; SMS handlers (`sms.received`, `sms.delivered`) upsert by `providerMessageSid` and write through the standard `message`/`messageParticipant`/`messageThread`/`messageChannelMessageAssociation` objects via the helpers below.
+- `src/modules/core/messaging/helpers.ts` — Centralizes the GraphQL shape for SMS work: `findPersonByPhone`, `findPhoneNumberByE164`, `findActiveAssignmentForNumber`, `resolveAgentForDialedNumber` (two-step lookup since the SDK filter shape is FK-based), `findMessageChannelByHandle`, `findMessageBySid`, `createMessageThread`, `createSmsMessage`, `createMessageParticipant`, `createChannelAssociation`, `updateMessageStatus`. Used by `twilio-webhook` and `twiml-app`.
+- `src/modules/core/front-components/Softphone.front-component.tsx` + `src/modules/core/components/Softphone/` — Browser softphone backed by `@twilio/voice-sdk`. Registered as a GLOBAL command (Cmd+K → "Softphone") that opens in a side panel. Handles outbound dialing via the Voice SDK's WebRTC channel, inbound calls via Twilio's `<Dial><Client>{workspaceMemberId}</Client></Dial>`, accept/reject/mute/hangup, DTMF during calls, and AccessToken refresh on the SDK's `tokenWillExpire` event. The `useCurrentWorkspaceMemberId` hook bridges Twenty's `useUserId()` to the workspaceMember id used by TwiML and PhoneAssignment. The hook also listens for a `telephony:dial` window event so the upstream cell action can trigger calls without importing app code.
+
+### Click-to-call cell action (touches upstream)
+
+| File | Modification |
+| ---- | ------------ |
+| `packages/twenty-front/src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts` | Adds an `IconPhoneCall` secondary cell button for phone fields that calls `useDialFromPhoneField().dial(e164)`. |
+| `packages/twenty-front/src/modules/object-record/record-table/record-table-cell/hooks/useDialFromPhoneField.ts` | New hook that orchestrates click-to-call with auto-open. Writes `{ phoneNumber, ts }` to `localStorage['__omnia_telephony_pending_dial']`, opens the softphone front-component in the side panel via `useOpenFrontComponentInSidePanel` (looking it up by `universalIdentifier` from Apollo cache), and dispatches a `telephony:dial` window event. The softphone hook handles the direct event when already mounted, and reads localStorage on its `ready` transition when newly mounting. Returns `canDial` (true when the softphone front-component is in Apollo cache, i.e. the Telephony app is installed) so detail-page consumers can fall through to the upstream `tel:`/copy behavior when telephony isn't installed. Hardcoded contracts shared with the Telephony app: `TELEPHONY_SOFTPHONE_UNIVERSAL_IDENTIFIER` (= `31069075-0ea1-4f05-a753-758f3eb2fd80`), `TELEPHONY_PENDING_DIAL_STORAGE_KEY`, `TELEPHONY_DIAL_EVENT_NAME`. |
+| `packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/display/components/PhonesFieldDisplay.tsx` | When the Telephony app is installed (`canDial === true`), phone clicks on detail pages preventDefault the underlying `tel:` link and route to the softphone via `useDialFromPhoneField().dial(phoneNumber)`. The existing `COPY` click action takes precedence and is unchanged; non-COPY clicks fall through to the upstream `tel:` behavior when telephony isn't installed. |
+- `src/modules/core/logic-functions/initiate-call.logic-function.ts` — `POST /initiate-call`: server-initiated outbound voice via the configured provider; the Call workspace row is created by the webhook handler, not here.
+- `src/modules/core/logic-functions/send-sms.logic-function.ts` — `POST /send-sms`: outbound SMS / MMS; the message row is created by the delivery-callback webhook keyed on `providerMessageSid`.
+- `src/modules/core/logic-functions/generate-access-token.logic-function.ts` — `POST /twilio/access-token`: returns a short-lived Voice JS SDK AccessToken for the agent's browser softphone identity.
+- `src/modules/core/logic-functions/twiml-app.logic-function.ts` — `POST /twilio/twiml`: dynamic TwiML returned to Twilio. For inbound, looks up the agent assignment by dialed E.164 (active `phoneAssignment` with `webrtcEnabled = true`) and dials `<Client>{memberId}</Client>`; for outbound, dials the destination, optionally bridged to an agent client passed via `?agent=` query.
+- `src/modules/core/logic-functions/{search,buy,release,assign,release-assignment}-numbers.logic-function.ts` — Five endpoints under `/numbers/*` powering the CSO settings UI: search available numbers at the provider, buy (provisions + writes `phoneNumber` row + provisions matching SMS `messageChannel` + optional initial assignment, sets VoiceUrl/SmsUrl on the new IncomingPhoneNumber so inbound traffic routes from the moment of purchase), release (provider release + soft-delete `phoneNumber` + soft-delete active assignments), assign (append-only with optional `replaceExisting` for the reassign flow), release-assignment (soft-delete only). All mutations preserve historic call/SMS attribution via `onDelete: SET_NULL` on the relations.
+- `src/modules/core/front-components/NumberManagement.front-component.tsx` + `src/modules/core/components/NumberManagement/` — CSO-facing settings UI. Mounted as a GLOBAL command (Cmd+K → "Manage telephony numbers") that opens in a side panel. Three flows: list existing numbers with their active assignment + Reassign / Unassign / Release inline actions; buy a new number via area-code / contains search → pick from results → optionally assign on purchase; reassign via member dropdown. All mutations dispatch through the `/numbers/*` logic-function endpoints so business rules stay server-side.
+- `src/modules/core/objects/call.ts` — `Call` workspace object: name, direction, status, from/to, started/answered/ended timestamps, duration, recording URL, transcript, summary, provider, provider call SID, cost (CURRENCY composite)
+- `src/modules/core/objects/phone-number.ts` — `PhoneNumber` workspace object: workspace-owned numbers (E.164, friendly name, provider, providerNumberSid, voice/sms/mms capabilities, monthly price as CURRENCY). The CSO buys these from the provider; agency owns them, not agents.
+- `src/modules/core/objects/phone-assignment.ts` — `PhoneAssignment` join object linking a `PhoneNumber` to a `WorkspaceMember`. Append-only with platform soft-delete: reassignment is `softDelete(old) + create(new)` so historic calls/SMS keep their original member attribution. Fields: name, isDefault, outboundCallerId, webrtcEnabled, forwardToPersonalNumber.
+- `src/modules/core/fields/` — Five RELATION pairs (10 files), each defining both sides with `onDelete: SET_NULL` so history survives parent removal: `phoneAssignment ↔ phoneNumber`, `phoneAssignment ↔ workspaceMember`, `call ↔ person`, `call ↔ workspaceMember` (agent attribution), `call ↔ phoneNumber` (which workspace DID was used).
+- `src/modules/core/fields/{status,provider,provider-message-sid,cost}-on-message.field.ts` — SMS reuses Twenty's standard `message` / `messageParticipant` / `messageChannel` objects (channel `type: SMS` is already a first-class enum upstream). These four scalar fields are added to the standard `message` object via app-level `defineField` rather than editing upstream code, so the SMS lifecycle (status, provider attribution, provider SID for callback dedup, cost as CURRENCY) lands on real columns of the `message` table without any upstream-file changes. Email rows leave them null. MMS attachments use the existing `attachment` standard object via `targetMessage`.
 
 ### `packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/`
 

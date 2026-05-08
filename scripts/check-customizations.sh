@@ -471,6 +471,122 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/modules/lead/query-hooks/lead-query-hook.module.ts" \
   "Lead query hook module registration"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/types.ts" \
+  "Compliance scorecard schema types"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/canonical-scripts.ts" \
+  "Compliance canonical disclosure scripts + keyword lists"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorecards/aca.ts" \
+  "ACA-only compliance scorecard"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorecards/ancillary.ts" \
+  "Ancillaries-only compliance scorecard"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorecards/index.ts" \
+  "Compliance scorecard registry barrel"
+check_file_contains \
+  "packages/twenty-apps/internal/call-recording/src/objects/call-recording.ts" \
+  "COMPLIANCE_TRACK_FIELD_ID" \
+  "callRecording extended with compliance fields"
+check_file_contains \
+  "packages/twenty-apps/internal/call-recording/src/objects/call-recording.ts" \
+  "DISCIPLINARY_DRAFT_FIELD_ID" \
+  "callRecording disciplinaryDraft field present"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/objects/compliance-violation.ts" \
+  "complianceViolation child object"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/objects/compliance-criterion-result.ts" \
+  "complianceCriterionResult child object"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/objects/call-phase-segment.ts" \
+  "callPhaseSegment child object"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/compliance-violations-on-call-recording.field.ts" \
+  "callRecording → complianceViolations relation (parent side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/call-recording-on-compliance-violation.field.ts" \
+  "complianceViolation → callRecording relation (child side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/compliance-criterion-results-on-call-recording.field.ts" \
+  "callRecording → complianceCriterionResults relation (parent side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/call-recording-on-compliance-criterion-result.field.ts" \
+  "complianceCriterionResult → callRecording relation (child side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/call-phase-segments-on-call-recording.field.ts" \
+  "callRecording → callPhaseSegments relation (parent side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/fields/call-recording-on-call-phase-segment.field.ts" \
+  "callPhaseSegment → callRecording relation (child side)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/utils/transcribe-recording.ts" \
+  "Deepgram transcription util (compliance scorer)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/utils/call-ai.ts" \
+  "Twenty AI generate-text wrapper (compliance scorer)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/transcript.ts" \
+  "Scorer Transcript type + helpers"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/context.ts" \
+  "Scorer ScoringContext"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/index.ts" \
+  "Scorer rule-evaluator dispatcher"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/keyword.ts" \
+  "Scorer keyword evaluator"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/verbatim.ts" \
+  "Scorer verbatim (fuzzy + placeholder) evaluator"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/sequence.ts" \
+  "Scorer sequence evaluator (presentation order)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/manual-only.ts" \
+  "Scorer manual-only evaluator"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/llm-judge.ts" \
+  "Scorer LLM-judge evaluator"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/composite.ts" \
+  "Scorer composite evaluator (any/all)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/conditional.ts" \
+  "Scorer conditional evaluator (if/then)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/timeband.ts" \
+  "Scorer timeband evaluator (within first N seconds)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/score-criterion.ts" \
+  "Scorer per-criterion wrapper"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/score-auto-fail.ts" \
+  "Scorer per-auto-fail wrapper"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/aggregate.ts" \
+  "Scorer aggregate (overall score + status + recommendations)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/index.ts" \
+  "Scorer top-level scoreCall entry"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/speaker-resolution.ts" \
+  "Scorer speaker-resolution pre-pass (LLM + heuristic)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/evaluators/speaker-change-triggered.ts" \
+  "Scorer speaker-change-triggered evaluator (re-disclosure)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/scorability.ts" \
+  "Scorer Pass 0 scorability classifier"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/src/compliance/scorer/track-detection.ts" \
+  "Scorer Pass 1 track detection (ACA / Ancillary / Mixed)"
+check_file_exists \
+  "packages/twenty-apps/internal/call-recording/scripts/score-call.ts" \
+  "Compliance scorer CLI harness"
 
 echo ""
 echo "--- Policy Pre-Query Hook: agentId Assignment ---"
@@ -1433,6 +1549,184 @@ check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/repository/permissions.utils.ts" \
   "Field-level restrictions" \
   "INSERT case must skip field-level permission checks (pre-query hooks set restricted fields)"
+
+echo ""
+echo "--- Telephony App Scaffold ---"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/application-config.ts" \
+  "Telephony app entry point with applicationVariables for Twilio/Vonage/router"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/adapter/telephony-adapter.ts" \
+  "Provider-agnostic TelephonyAdapter interface"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/adapter/provider-router.ts" \
+  "ProviderRouter with weighted/priority/cost policies"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/adapter/circuit-breaker.ts" \
+  "Per-provider circuit breaker"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/twilio/adapter.ts" \
+  "Twilio adapter implementation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/twilio/webhook-signature.ts" \
+  "Twilio X-Twilio-Signature verification"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/twilio/access-token.ts" \
+  "Twilio Voice JS SDK AccessToken JWT minter (no twilio npm dependency)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/twilio/build-adapter.ts" \
+  "Twilio adapter builder reading workspace applicationVariables"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/twilio-webhook.logic-function.ts" \
+  "Twilio webhook endpoint (signature-verified, dispatches per-kind handlers)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/messaging/helpers.ts" \
+  "Twenty-messaging helpers (Person/agent/channel/message lookups + creators) for SMS dispatch"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/components/Softphone/Softphone.tsx" \
+  "Softphone widget UI (Twilio Voice SDK)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/components/Softphone/useSoftphone.ts" \
+  "Softphone Device-lifecycle hook"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/components/Softphone/useCurrentWorkspaceMemberId.ts" \
+  "userId to workspaceMemberId resolver hook"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/front-components/Softphone.front-component.tsx" \
+  "Softphone front-component manifest (GLOBAL command)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-table/record-table-cell/hooks/useGetSecondaryRecordTableCellButton.ts" \
+  "useDialFromPhoneField" \
+  "Phone field cell action delegates to useDialFromPhoneField (auto-opens softphone panel)"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-table/record-table-cell/hooks/useDialFromPhoneField.ts" \
+  "Click-to-call hook: opens softphone side panel via useOpenFrontComponentInSidePanel + writes pending dial to localStorage"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/display/components/PhonesFieldDisplay.tsx" \
+  "useDialFromPhoneField" \
+  "Detail-page phone field intercepts clicks to dial via softphone when telephony is installed"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/initiate-call.logic-function.ts" \
+  "Outbound call REST initiation logic function"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/send-sms.logic-function.ts" \
+  "Outbound SMS logic function"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/generate-access-token.logic-function.ts" \
+  "Voice JS SDK AccessToken minter logic function"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/twiml-app.logic-function.ts" \
+  "Dynamic TwiML endpoint for inbound + browser-originated outbound"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/search-numbers.logic-function.ts" \
+  "Search-numbers logic function (CSO buy flow)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/buy-number.logic-function.ts" \
+  "Buy-number logic function (provisions provider number, phoneNumber row, messageChannel)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/release-number.logic-function.ts" \
+  "Release-number logic function (provider release + soft-delete)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/assign-number.logic-function.ts" \
+  "Assign-number logic function (append-only with optional reassign)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/logic-functions/release-assignment.logic-function.ts" \
+  "Release-assignment logic function (soft-delete only)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/components/NumberManagement/NumberManagement.tsx" \
+  "CSO number management UI"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/components/NumberManagement/useNumberManagement.ts" \
+  "Number management data hook + callRoute helper"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/front-components/NumberManagement.front-component.tsx" \
+  "Number management front-component manifest (GLOBAL command)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/objects/call.ts" \
+  "Call workspace object definition"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/objects/phone-number.ts" \
+  "PhoneNumber workspace object (workspace-owned numbers)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/objects/phone-assignment.ts" \
+  "PhoneAssignment workspace object (append-only number to member link)"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/phone-number-on-phone-assignment.field.ts" \
+  "PhoneAssignment to PhoneNumber MANY_TO_ONE relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/phone-assignment-on-phone-number.field.ts" \
+  "PhoneNumber to PhoneAssignment ONE_TO_MANY back-relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/workspace-member-on-phone-assignment.field.ts" \
+  "PhoneAssignment to WorkspaceMember MANY_TO_ONE relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/phone-assignment-on-workspace-member.field.ts" \
+  "WorkspaceMember to PhoneAssignment ONE_TO_MANY back-relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/person-on-call.field.ts" \
+  "Call to Person MANY_TO_ONE relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/call-on-person.field.ts" \
+  "Person to Call ONE_TO_MANY back-relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/workspace-member-on-call.field.ts" \
+  "Call to WorkspaceMember (agent) MANY_TO_ONE relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/call-on-workspace-member.field.ts" \
+  "WorkspaceMember to Call ONE_TO_MANY back-relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/phone-number-on-call.field.ts" \
+  "Call to PhoneNumber (workspace number) MANY_TO_ONE relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/call-on-phone-number.field.ts" \
+  "PhoneNumber to Call ONE_TO_MANY back-relation"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/status-on-message.field.ts" \
+  "Telephony status field added to standard message object"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/provider-on-message.field.ts" \
+  "Telephony provider field added to standard message object"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/provider-message-sid-on-message.field.ts" \
+  "Provider message SID field added to standard message object"
+check_file_exists \
+  "packages/twenty-apps/community/telephony/src/modules/core/fields/cost-on-message.field.ts" \
+  "Per-message cost field added to standard message object"
+
+# Icon string literals in SDK definitions are silent failures: the file
+# imports cleanly, but at metadata-sync / runtime the icon resolver returns
+# nothing and the row renders blank. Only icons exported from TablerIcons.ts
+# are reachable via `twenty-ui/display` (which the icon registry follows).
+echo ""
+echo "--- Telephony Icons Present in TablerIcons.ts ---"
+TABLER_ICONS_FILE="packages/twenty-ui/src/display/icon/components/TablerIcons.ts"
+if [ ! -f "$TABLER_ICONS_FILE" ]; then
+  echo -e "${YELLOW}SKIPPED${NC} TablerIcons.ts not found at $TABLER_ICONS_FILE"
+  WARNINGS=$((WARNINGS + 1))
+else
+  MISSING_ICONS=""
+  TELEPHONY_ICONS=$(
+    grep -rho -E "icon: '(Icon[A-Za-z0-9]+)'" \
+      packages/twenty-apps/community/telephony/src 2>/dev/null \
+      | sed -E "s/icon: '([^']+)'/\1/" \
+      | sort -u
+  )
+  for icon in $TELEPHONY_ICONS; do
+    if ! grep -qE "^  $icon," "$TABLER_ICONS_FILE"; then
+      MISSING_ICONS="$MISSING_ICONS $icon"
+    fi
+  done
+  if [ -n "$MISSING_ICONS" ]; then
+    echo -e "${RED}MISSING${NC} icons referenced as \`icon: '...'\` strings but not in TablerIcons.ts:"
+    for icon in $MISSING_ICONS; do
+      echo -e "  ${RED}$icon${NC}"
+    done
+    echo "  Pick a replacement from $TABLER_ICONS_FILE — only icons listed there resolve via the icon registry."
+    ERRORS=$((ERRORS + 1))
+  else
+    echo -e "${GREEN}OK${NC} all telephony \`icon: '...'\` strings resolve in TablerIcons.ts"
+  fi
+fi
 
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
