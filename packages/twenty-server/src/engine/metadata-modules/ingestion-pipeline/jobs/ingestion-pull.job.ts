@@ -38,7 +38,7 @@ export class IngestionPullJob {
 
   @Process(IngestionPullJob.name)
   async handle(data: IngestionPullJobData): Promise<void> {
-    const { pipelineId, workspaceId } = data;
+    const { pipelineId, workspaceId, manual } = data;
 
     this.logger.log(`Starting pull ingestion for pipeline ${pipelineId}`);
 
@@ -52,11 +52,18 @@ export class IngestionPullJob {
         workspaceId,
       );
 
-      if (!isDefined(pipeline) || !pipeline.isEnabled) {
-        await this.logService.markFailed(
-          log.id,
-          'Pipeline not found or disabled',
-        );
+      if (!isDefined(pipeline)) {
+        await this.logService.markFailed(log.id, 'Pipeline not found');
+
+        return;
+      }
+
+      // Manual triggers (via the GraphQL mutation) bypass isEnabled so a
+      // pipeline can be paused for backfill while still accepting manual
+      // pulls. Scheduled jobs are gated upstream by the scheduler service,
+      // which removes the cron entry when isEnabled flips to false.
+      if (!pipeline.isEnabled && !manual) {
+        await this.logService.markFailed(log.id, 'Pipeline disabled');
 
         return;
       }

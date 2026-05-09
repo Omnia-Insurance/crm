@@ -168,11 +168,11 @@ describe('IngestionPullJob', () => {
 
     expect(logService.markFailed).toHaveBeenCalledWith(
       'log-1',
-      'Pipeline not found or disabled',
+      'Pipeline not found',
     );
   });
 
-  it('should fail when pipeline is disabled', async () => {
+  it('should fail when pipeline is disabled and trigger is not manual', async () => {
     pipelineService.findEntityById.mockResolvedValue({
       ...mockPipeline,
       isEnabled: false,
@@ -182,7 +182,21 @@ describe('IngestionPullJob', () => {
 
     expect(logService.markFailed).toHaveBeenCalledWith(
       'log-1',
-      'Pipeline not found or disabled',
+      'Pipeline disabled',
+    );
+  });
+
+  it('should run when pipeline is disabled but trigger is manual', async () => {
+    pipelineService.findEntityById.mockResolvedValue({
+      ...mockPipeline,
+      isEnabled: false,
+    } as IngestionPipelineEntity);
+
+    await job.handle({ pipelineId, workspaceId, manual: true });
+
+    expect(logService.markFailed).not.toHaveBeenCalledWith(
+      'log-1',
+      'Pipeline disabled',
     );
   });
 

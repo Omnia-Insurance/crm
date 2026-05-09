@@ -19,12 +19,14 @@ import { IngestionPipelineGraphqlApiExceptionInterceptor } from 'src/engine/meta
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
-import { IngestionPullSchedulerService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
+import {
+  IngestionPullSchedulerService,
+  type IngestionPullJobData,
+} from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { IngestionPullJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-pull.job';
-import { type IngestionPullJobData } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
 import {
   IngestionPipelineException,
   IngestionPipelineExceptionCode,
@@ -67,10 +69,7 @@ export class IngestionPipelineResolver {
     @Args('input') input: CreateIngestionPipelineInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<IngestionPipelineDTO> {
-    const dto = await this.ingestionPipelineService.create(
-      input,
-      workspace.id,
-    );
+    const dto = await this.ingestionPipelineService.create(input, workspace.id);
 
     // Sync cron schedule for pull pipelines
     const entity = await this.ingestionPipelineService.findEntityById(
@@ -91,10 +90,7 @@ export class IngestionPipelineResolver {
     @Args('input') input: UpdateIngestionPipelineInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<IngestionPipelineDTO> {
-    const dto = await this.ingestionPipelineService.update(
-      input,
-      workspace.id,
-    );
+    const dto = await this.ingestionPipelineService.update(input, workspace.id);
 
     // Re-sync cron schedule (handles enable/disable, schedule changes)
     const entity = await this.ingestionPipelineService.findEntityById(
@@ -155,6 +151,7 @@ export class IngestionPipelineResolver {
       {
         pipelineId,
         workspaceId: workspace.id,
+        manual: true,
       },
       { retryLimit: 3 },
     );
@@ -217,8 +214,7 @@ export class IngestionPipelineResolver {
         invalidRecords++;
         errors.push({
           recordIndex: i,
-          message:
-            error instanceof Error ? error.message : 'Unknown error',
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }

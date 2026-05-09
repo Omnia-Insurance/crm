@@ -13,6 +13,10 @@ import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-p
 export type IngestionPullJobData = {
   pipelineId: string;
   workspaceId: string;
+  // Set when triggered via the GraphQL mutation. Lets the worker run a
+  // pull even when isEnabled is false, so a pipeline can be paused (cron
+  // off) for backfill while still accepting manual triggers.
+  manual?: boolean;
 };
 
 @Injectable()
@@ -84,9 +88,7 @@ export class IngestionPullSchedulerService implements OnModuleInit {
         `Scheduled pull job for pipeline ${pipeline.id} with pattern "${pipeline.schedule}"`,
       );
     } else {
-      this.logger.log(
-        `Removed pull schedule for pipeline ${pipeline.id}`,
-      );
+      this.logger.log(`Removed pull schedule for pipeline ${pipeline.id}`);
     }
   }
 
