@@ -18,6 +18,11 @@ import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeli
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
+// Bounds each outbound HTTP request to the source API, including paginated
+// pages and the body read. Without this, a stalled upstream response leaves
+// the ingestion log in `running` forever and blocks subsequent pulls.
+const SOURCE_REQUEST_TIMEOUT_MS = 120_000;
+
 @Processor(MessageQueue.ingestionQueue)
 export class IngestionPullJob {
   private readonly logger = new Logger(IngestionPullJob.name);
@@ -212,15 +217,37 @@ export class IngestionPullJob {
         fetchOptions.body = JSON.stringify(pipeline.sourceRequestConfig!.body);
       }
 
-      const response = await fetch(url.toString(), fetchOptions);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(
+        () => controller.abort(),
+        SOURCE_REQUEST_TIMEOUT_MS,
+      );
 
-      if (!response.ok) {
-        throw new Error(
-          `Source API returned ${response.status}: ${response.statusText}`,
-        );
+      let responseData: Record<string, unknown>;
+
+      try {
+        const response = await fetch(url.toString(), {
+          ...fetchOptions,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Source API returned ${response.status}: ${response.statusText}`,
+          );
+        }
+
+        responseData = (await response.json()) as Record<string, unknown>;
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error(
+            `Source API request timed out after ${SOURCE_REQUEST_TIMEOUT_MS}ms (page=${page})`,
+          );
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
       }
-
-      const responseData = (await response.json()) as Record<string, unknown>;
 
       // Extract records from response
       let records: Record<string, unknown>[];
