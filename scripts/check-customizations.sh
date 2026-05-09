@@ -315,6 +315,13 @@ check_file_contains \
   "Signed-out drawer header should fall back to public workspace data"
 
 echo ""
+echo "--- Session-storage Redis error handler ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/session-storage/session-storage.module-factory.ts" \
+  "redisClient.on('error'" \
+  "Session-storage redis client must register an 'error' listener (without it a redis blip crashes the entire Node process)"
+
+echo ""
 echo "--- Critical: Cloudflare Stale Asset Fix ---"
 check_file_contains \
   "packages/twenty-server/src/app.module.ts" \

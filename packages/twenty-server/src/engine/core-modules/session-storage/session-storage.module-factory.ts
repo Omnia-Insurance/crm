@@ -59,6 +59,15 @@ export const getSessionStorageOptions = (
         url: connectionString,
       });
 
+      // Without this listener, an unhandled 'error' event from the redis
+      // socket (ECONNRESET, SocketClosedUnexpectedly, etc.) crashes the
+      // Node process via Node's default unhandled-error behavior. The
+      // client auto-reconnects on its own, so log and continue.
+      redisClient.on('error', (err) => {
+        // eslint-disable-next-line no-console
+        console.error('[session-storage] Redis client error:', err);
+      });
+
       redisClient.connect().catch((err) => {
         throw new Error(`Redis connection failed: ${err}`);
       });
