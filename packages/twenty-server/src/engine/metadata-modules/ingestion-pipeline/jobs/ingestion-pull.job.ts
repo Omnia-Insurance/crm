@@ -38,7 +38,13 @@ export class IngestionPullJob {
 
   @Process(IngestionPullJob.name)
   async handle(data: IngestionPullJobData): Promise<void> {
-    const { pipelineId, workspaceId, manual } = data;
+    const {
+      pipelineId,
+      workspaceId,
+      manual,
+      startTimeOverride,
+      endTimeOverride,
+    } = data;
 
     this.logger.log(`Starting pull ingestion for pipeline ${pipelineId}`);
 
@@ -86,8 +92,14 @@ export class IngestionPullJob {
         return;
       }
 
-      // Fetch records from source
-      const allRecords = await this.fetchRecords(pipeline);
+      // Fetch records from source. Job-data overrides (from triggerIngestionPull)
+      // take precedence over pipeline.sourceRequestConfig overrides — that's how
+      // parallel backfill chunks pass per-trigger date windows without trampling
+      // the shared pipeline config.
+      const allRecords = await this.fetchRecords(pipeline, {
+        startTimeOverride,
+        endTimeOverride,
+      });
 
       if (allRecords.length === 0) {
         await this.logService.markCompleted(log.id, {
@@ -145,14 +157,20 @@ export class IngestionPullJob {
     }
   }
 
-  private async fetchRecords(pipeline: {
-    sourceUrl: string | null;
-    sourceHttpMethod: string | null;
-    sourceAuthConfig: SourceAuthConfig | null;
-    sourceRequestConfig: SourceRequestConfig | null;
-    responseRecordsPath: string | null;
-    paginationConfig: PaginationConfig | null;
-  }): Promise<Record<string, unknown>[]> {
+  private async fetchRecords(
+    pipeline: {
+      sourceUrl: string | null;
+      sourceHttpMethod: string | null;
+      sourceAuthConfig: SourceAuthConfig | null;
+      sourceRequestConfig: SourceRequestConfig | null;
+      responseRecordsPath: string | null;
+      paginationConfig: PaginationConfig | null;
+    },
+    triggerOverrides: {
+      startTimeOverride?: string;
+      endTimeOverride?: string;
+    } = {},
+  ): Promise<Record<string, unknown>[]> {
     const allRecords: Record<string, unknown>[] = [];
     let hasMore = true;
     let page = 0;
@@ -179,19 +197,21 @@ export class IngestionPullJob {
         }
       }
 
-      // Apply dynamic date range params
+      // Apply dynamic date range params. Per-trigger overrides win over the
+      // shared pipeline config; falling back to the config covers normal
+      // lookback-driven cadence pulls.
       if (isDefined(pipeline.sourceRequestConfig?.dateRangeParams)) {
-        const {
-          startParam,
-          endParam,
-          lookbackMinutes,
-          timezone,
-          startTimeOverride,
-          endTimeOverride,
-        } = pipeline.sourceRequestConfig!.dateRangeParams!;
+        const { startParam, endParam, lookbackMinutes, timezone } =
+          pipeline.sourceRequestConfig!.dateRangeParams!;
+
+        const startTimeOverride =
+          triggerOverrides.startTimeOverride ??
+          pipeline.sourceRequestConfig!.dateRangeParams!.startTimeOverride;
+        const endTimeOverride =
+          triggerOverrides.endTimeOverride ??
+          pipeline.sourceRequestConfig!.dateRangeParams!.endTimeOverride;
 
         if (isDefined(startTimeOverride) && isDefined(endTimeOverride)) {
-          // Explicit date range (used by backfill script)
           url.searchParams.set(startParam, startTimeOverride);
           url.searchParams.set(endParam, endTimeOverride);
         } else {

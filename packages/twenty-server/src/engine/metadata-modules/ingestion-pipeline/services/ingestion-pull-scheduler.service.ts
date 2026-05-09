@@ -17,6 +17,13 @@ export type IngestionPullJobData = {
   // pull even when isEnabled is false, so a pipeline can be paused (cron
   // off) for backfill while still accepting manual triggers.
   manual?: boolean;
+  // Per-trigger date window. When set, the worker uses these instead of
+  // the pipeline's sourceRequestConfig.dateRangeParams overrides — lets
+  // backfills fire many parallel chunks without fighting over the shared
+  // pipeline config. Live cadence pulls leave these unset and continue
+  // to read the pipeline config (lookback minutes).
+  startTimeOverride?: string;
+  endTimeOverride?: string;
 };
 
 @Injectable()

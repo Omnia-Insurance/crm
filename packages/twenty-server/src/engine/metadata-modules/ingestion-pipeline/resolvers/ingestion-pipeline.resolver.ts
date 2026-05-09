@@ -131,6 +131,10 @@ export class IngestionPipelineResolver {
   async triggerIngestionPull(
     @Args('pipelineId', { type: () => UUIDScalarType }) pipelineId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @Args('startTime', { type: () => String, nullable: true })
+    startTime?: string,
+    @Args('endTime', { type: () => String, nullable: true })
+    endTime?: string,
   ): Promise<IngestionLogDTO> {
     const pipeline = await this.ingestionPipelineService.findEntityById(
       pipelineId,
@@ -152,6 +156,11 @@ export class IngestionPipelineResolver {
         pipelineId,
         workspaceId: workspace.id,
         manual: true,
+        // Optional per-trigger date window. Lets the backfill script fire many
+        // parallel chunks without each trigger having to mutate the shared
+        // pipeline config.
+        startTimeOverride: startTime,
+        endTimeOverride: endTime,
       },
       { retryLimit: 3 },
     );
