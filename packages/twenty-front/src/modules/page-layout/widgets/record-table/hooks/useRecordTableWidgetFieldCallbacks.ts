@@ -68,6 +68,7 @@ export const useRecordTableWidgetFieldCallbacks = ({
               isVisible: recordField.isVisible,
               size: recordField.size,
               isActive: true,
+              isOverridden: false,
               viewId,
               clientRecordFieldId: recordField.id,
             },

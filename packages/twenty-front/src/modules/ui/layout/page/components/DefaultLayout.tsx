@@ -11,12 +11,12 @@ import { MobileNavigationBar } from '@/navigation/components/MobileNavigationBar
 import { PageDragDropProvider } from '@/navigation-menu-item/display/dnd/providers/PageDragDropProvider';
 import { useIsSettingsPage } from '@/navigation/hooks/useIsSettingsPage';
 import { OBJECT_SETTINGS_WIDTH } from '@/settings/data-model/constants/ObjectSettings';
-import { BackgroundMockNavigationDrawer } from '@/sign-in-background-mock/components/BackgroundMockNavigationDrawer';
+import { SignInAppNavigationDrawerMock } from '@/sign-in-background-mock/components/SignInAppNavigationDrawerMock';
 import { Suspense, lazy, useContext } from 'react';
 
-const BackgroundMockPage = lazy(() =>
-  import('@/sign-in-background-mock/components/BackgroundMockPage').then(
-    (module) => ({ default: module.BackgroundMockPage }),
+const SignInBackgroundMockPage = lazy(() =>
+  import('@/sign-in-background-mock/components/SignInBackgroundMockPage').then(
+    (module) => ({ default: module.SignInBackgroundMockPage }),
   ),
 );
 import { useShowFullscreen } from '@/ui/layout/fullscreen/hooks/useShowFullscreen';
@@ -95,7 +95,7 @@ export const DefaultLayout = () => {
                 {!showAuthModal && <KeyboardShortcutMenu />}
                 {showAuthModal ? (
                   <StyledNavigationDrawerWrapper>
-                    <BackgroundMockNavigationDrawer />
+                    <SignInAppNavigationDrawerMock />
                   </StyledNavigationDrawerWrapper>
                 ) : useShowFullScreen ? null : (
                   <StyledNavigationDrawerWrapper>
@@ -106,7 +106,7 @@ export const DefaultLayout = () => {
                   <>
                     <StyledMainContainer>
                       <Suspense fallback={null}>
-                        <BackgroundMockPage />
+                        <SignInBackgroundMockPage />
                       </Suspense>
                     </StyledMainContainer>
                     <AnimatePresence mode="wait">

@@ -35,8 +35,8 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useSignUpInNewWorkspace } from '@/auth/sign-in-up/hooks/useSignUpInNewWorkspace';
-import { useLoadMockedMetadata } from '@/metadata-store/hooks/useLoadMockedMetadata';
-import { preloadMockedMetadata } from '@/metadata-store/utils/preloadMockedMetadata';
+import { useLoadMockedMetadata } from '~/testing/hooks/useLoadMockedMetadata';
+import { preloadMockedMetadata } from '~/testing/utils/preloadMockedMetadata';
 import { lastAuthenticatedMethodState } from '@/auth/states/lastAuthenticatedMethodState';
 import { loginTokenState } from '@/auth/states/loginTokenState';
 import {

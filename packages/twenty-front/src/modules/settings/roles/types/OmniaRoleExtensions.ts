@@ -18,24 +18,21 @@ import {
 } from '~/generated-metadata/graphql';
 
 // ---------------------------------------------------------------------------
-// RowLevelPermissionPredicateScope — re-export from twenty-shared
+// RowLevelPermissionPredicateScope — upstream now generates this type from the
+// schema, so re-export the generated enum to keep call-sites stable.
 // ---------------------------------------------------------------------------
 
-export { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
-import { type RowLevelPermissionPredicateScope } from 'twenty-shared/types';
+export { RowLevelPermissionPredicateScope } from '~/generated-metadata/graphql';
 
 // ---------------------------------------------------------------------------
-// Extended predicate / predicate-group types (adds `scope`)
+// Extended predicate / predicate-group types — `scope` is now part of the
+// upstream-generated base types, so no extension is needed.
 // ---------------------------------------------------------------------------
 
-export type OmniaRowLevelPermissionPredicate = RowLevelPermissionPredicate & {
-  scope?: RowLevelPermissionPredicateScope;
-};
+export type OmniaRowLevelPermissionPredicate = RowLevelPermissionPredicate;
 
 export type OmniaRowLevelPermissionPredicateGroup =
-  RowLevelPermissionPredicateGroup & {
-    scope?: RowLevelPermissionPredicateScope;
-  };
+  RowLevelPermissionPredicateGroup;
 
 // ---------------------------------------------------------------------------
 // Extended ObjectPermission (adds editWindowMinutes, showInSidebar)

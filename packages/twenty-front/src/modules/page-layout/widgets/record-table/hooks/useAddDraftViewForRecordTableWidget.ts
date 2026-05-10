@@ -65,6 +65,7 @@ export const useAddDraftViewForRecordTableWidget = (pageLayoutId: string) => {
           size: DEFAULT_VIEW_FIELD_SIZE,
           isVisible: index < INITIAL_VISIBLE_FIELDS_COUNT_IN_WIDGET,
           isActive: true,
+          isOverridden: false,
         }),
       );
 

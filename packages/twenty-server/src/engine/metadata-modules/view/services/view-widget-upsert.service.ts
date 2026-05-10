@@ -503,6 +503,7 @@ export class ViewWidgetUpsertService {
         aggregateOperation: null,
         overrides: null,
         universalOverrides: null,
+        subFieldName: null,
         isActive: true,
         createdAt: now,
         updatedAt: now,
