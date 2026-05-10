@@ -144,11 +144,18 @@ export const MainNavigationDrawerTabsRow = () => {
   const setIsNavigationDrawerExpanded = useSetAtomState(
     isNavigationDrawerExpandedState,
   );
+  const hasAiSettingsPermission = useHasPermissionFlag(
+    PermissionFlagType.AI_SETTINGS,
+  );
 
   // OMNIA-CUSTOM: hide AI chat tabs for roles without AI permission
   const hasAiPermission = useHasPermissionFlag(PermissionFlagType.AI);
 
   const isExpanded = isNavigationDrawerExpanded || isMobile;
+
+  if (!hasAiSettingsPermission) {
+    return null;
+  }
 
   const handleTabClick = (tab: NavigationDrawerActiveTab) => () => {
     setNavigationDrawerActiveTab(tab);

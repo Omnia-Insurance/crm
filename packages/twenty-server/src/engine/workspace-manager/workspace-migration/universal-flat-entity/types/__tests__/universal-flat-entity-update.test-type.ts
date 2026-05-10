@@ -36,6 +36,7 @@ type Assertions = [
       | 'labelSingular'
       | 'labelPlural'
       | 'labelIdentifierFieldMetadataUniversalIdentifier'
+      | 'imageIdentifierFieldMetadataUniversalIdentifier'
       | 'isSearchable'
     >
   >,

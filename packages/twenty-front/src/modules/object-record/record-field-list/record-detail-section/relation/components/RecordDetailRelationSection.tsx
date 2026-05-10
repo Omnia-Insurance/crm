@@ -32,7 +32,7 @@ import {
   type RecordGqlOperationFilter,
 } from 'twenty-shared/types';
 import {
-  computeMorphRelationFieldName,
+  computeMorphRelationGqlFieldName,
   CustomError,
   getAppPath,
   isDefined,
@@ -140,7 +140,7 @@ export const RecordDetailRelationSection = ({
     relationFieldMetadataItem?.type === FieldMetadataType.MORPH_RELATION;
 
   const computedName = isDefined(relationFieldMetadataItem)
-    ? computeMorphRelationFieldName({
+    ? computeMorphRelationGqlFieldName({
         fieldName: relationFieldMetadataItem.name,
         relationType: relationFieldMetadataItem.settings.relationType,
         targetObjectMetadataNameSingular: objectMetadataItem.nameSingular,

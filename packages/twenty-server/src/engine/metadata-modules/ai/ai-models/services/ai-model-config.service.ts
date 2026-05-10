@@ -45,10 +45,10 @@ export class AiModelConfigService {
     model: RegisteredAiModel,
     options: NativeModelToolOptions,
   ): ToolSet {
-    const tools: ToolSet = {};
+    const tools: Record<string, unknown> = {};
 
     if (!options.webSearchEnabled) {
-      return tools;
+      return tools as ToolSet;
     }
 
     switch (model.sdkPackage) {
@@ -76,16 +76,7 @@ export class AiModelConfigService {
       }
     }
 
-    return tools;
-  }
-
-  getNativeModelToolsForAgent(
-    model: RegisteredAiModel,
-    agent: FlatAgentWithRoleId,
-  ): ToolSet {
-    return this.getNativeModelTools(model, {
-      webSearchEnabled: agent.modelConfiguration?.webSearch?.enabled === true,
-    });
+    return tools as ToolSet;
   }
 
   private getXaiProviderOptions(agent: FlatAgentWithRoleId): ProviderOptions {

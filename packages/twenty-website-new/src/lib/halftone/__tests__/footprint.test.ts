@@ -1,10 +1,10 @@
 import {
-  HALFTONE_FOOTPRINT_RUNTIME_SOURCE,
   getContainedImageRect,
   getImageFootprintScale,
   getMeshFootprintScale,
   REFERENCE_PREVIEW_DISTANCE,
-} from '@/lib/halftone/footprint';
+} from '@/lib/halftone/utils/footprint';
+import { HALFTONE_FOOTPRINT_RUNTIME_SOURCE } from '@/lib/halftone/generated/footprint-runtime-source';
 import * as THREE from 'three';
 
 describe('halftone footprint helpers', () => {
@@ -22,6 +22,24 @@ describe('halftone footprint helpers', () => {
       y: 200,
       width: 800,
       height: 400,
+    });
+  });
+
+  it('computes the visible covered image rect', () => {
+    expect(
+      getContainedImageRect({
+        imageFit: 'cover',
+        imageHeight: 500,
+        imageWidth: 1000,
+        viewportHeight: 800,
+        viewportWidth: 800,
+        zoom: 1,
+      }),
+    ).toEqual({
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 800,
     });
   });
 
@@ -82,6 +100,7 @@ return { getContainedImageRect, getImageFootprintScale, getMeshFootprintScale };
     };
 
     const imageArgs = {
+      imageFit: 'cover' as const,
       imageHeight: 1000,
       imageWidth: 1600,
       previewDistance: 6,

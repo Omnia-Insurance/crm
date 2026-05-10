@@ -266,7 +266,7 @@ check_file_exists \
   "packages/twenty-front/src/modules/sign-in-background-mock/utils/signInBackgroundMockMetadata.ts" \
   "Auth-only lead metadata helpers should exist for the signed-out shell"
 check_file_contains \
-  "packages/twenty-front/src/modules/metadata-store/utils/preloadMockedMetadata.ts" \
+  "packages/twenty-front/src/testing/utils/preloadMockedMetadata.ts" \
   "extendSignInBackgroundMockedMetadata" \
   "Signed-out mocked metadata should be extended for the lead auth shell"
 check_file_contains \

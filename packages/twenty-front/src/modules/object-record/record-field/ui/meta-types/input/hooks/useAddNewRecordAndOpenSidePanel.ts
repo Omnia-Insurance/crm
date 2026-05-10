@@ -16,7 +16,10 @@ import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomStat
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { buildRecordLabelPayload } from '@/object-record/utils/buildRecordLabelPayload';
 import { getOperationName } from '~/utils/getOperationName';
-import { computeMorphRelationFieldName, isDefined } from 'twenty-shared/utils';
+import {
+  computeMorphRelationGqlFieldName,
+  isDefined,
+} from 'twenty-shared/utils';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 import { useStore } from 'jotai';
 
@@ -98,7 +101,7 @@ export const useAddNewRecordAndOpenSidePanel = ({
         const gqlField =
           relationFieldMetadataItem.type === FieldMetadataType.RELATION
             ? relationFieldMetadataItem.name
-            : computeMorphRelationFieldName({
+            : computeMorphRelationGqlFieldName({
                 fieldName: relationFieldMetadataItem.name,
                 relationType: relationFieldMetadataItemRelationType,
                 targetObjectMetadataNameSingular:

@@ -2,6 +2,7 @@ import {
   CommandMenuContext,
   type CommandMenuContextType,
 } from '@/command-menu-item/contexts/CommandMenuContext';
+import { commandMenuItemsDraftState } from '@/command-menu-item/edit/states/commandMenuItemsDraftState';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
 // OMNIA-CUSTOM: import resolvers for object-aware labels and permission gate
 import { resolveCreateRecordActionLabels } from '@/command-menu-item/utils/resolveCreateRecordActionLabels';
@@ -9,6 +10,7 @@ import { resolveGoToActionLabels } from '@/command-menu-item/utils/resolveGoToAc
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
 import { doesCommandMenuItemMatchPageType } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageType';
+import { doesCommandMenuItemMatchSelectionState } from '@/command-menu-item/utils/doesCommandMenuItemMatchSelectionState';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
@@ -26,6 +28,7 @@ type CommandMenuContextProviderContentProps = {
   containerType: CommandMenuContextType['containerType'];
   children: React.ReactNode;
   commandMenuContextApi: CommandMenuContextApi;
+  isInPreviewMode: boolean;
 };
 
 export const CommandMenuContextProviderContent = ({
@@ -33,8 +36,10 @@ export const CommandMenuContextProviderContent = ({
   containerType,
   children,
   commandMenuContextApi,
+  isInPreviewMode,
 }: CommandMenuContextProviderContentProps) => {
   const commandMenuItems = useAtomStateValue(commandMenuItemsSelector);
+  const commandMenuItemsDraft = useAtomStateValue(commandMenuItemsDraftState);
   const currentPageLayoutId = useAtomStateValue(currentPageLayoutIdState);
 
   // OMNIA-CUSTOM: object metadata for label resolution and permission gating
@@ -57,16 +62,22 @@ export const CommandMenuContextProviderContent = ({
   const filteredCommandMenuItems = useMemo(() => {
     const currentObjectMetadataItemId =
       commandMenuContextApi.objectMetadataItem.id;
+    const hasSelectedRecords =
+      commandMenuContextApi.numberOfSelectedRecords > 0;
+    const commandMenuItemsToDisplay = isInPreviewMode
+      ? (commandMenuItemsDraft ?? commandMenuItems)
+      : commandMenuItems;
 
     const currentObjectMetadataItem = objectMetadataItems.find(
       (item) => item.id === currentObjectMetadataItemId,
     );
 
-    let items = commandMenuItems
+    let items = commandMenuItemsToDisplay
       .filter(
         doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
       )
       .filter(doesCommandMenuItemMatchPageType(commandMenuContextApi.pageType))
+      .filter(doesCommandMenuItemMatchSelectionState(hasSelectedRecords))
       .filter(doesCommandMenuItemMatchPageLayoutId(currentPageLayoutId))
       .filter((item) =>
         evaluateConditionalAvailabilityExpression(
@@ -97,6 +108,8 @@ export const CommandMenuContextProviderContent = ({
     );
   }, [
     commandMenuItems,
+    commandMenuItemsDraft,
+    isInPreviewMode,
     commandMenuContextApi,
     currentPageLayoutId,
     objectMetadataItems,
@@ -111,6 +124,7 @@ export const CommandMenuContextProviderContent = ({
         containerType,
         commandMenuItems: filteredCommandMenuItems,
         commandMenuContextApi,
+        isInPreviewMode,
       }}
     >
       {children}

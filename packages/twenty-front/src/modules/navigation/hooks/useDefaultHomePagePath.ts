@@ -1,4 +1,5 @@
 import { currentUserState } from '@/auth/states/currentUserState';
+import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { lastVisitedObjectMetadataItemIdState } from '@/navigation/states/lastVisitedObjectMetadataItemIdState';
 import { type ObjectPathInfo } from '@/navigation/types/ObjectPathInfo';
 import { navigationMenuItemsSelector } from '@/navigation-menu-item/common/states/navigationMenuItemsSelector';
@@ -7,6 +8,7 @@ import { filterReadableActiveObjectMetadataItems } from '@/object-metadata/utils
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { getObjectPermissionsFromMapByObjectMetadataId } from '@/settings/roles/role-permissions/objects-permissions/utils/getObjectPermissionsFromMapByObjectMetadataId';
 import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import isEmpty from 'lodash.isempty';
@@ -25,6 +27,11 @@ export const useDefaultHomePagePath = () => {
   const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
   const permissionFlagMap = usePermissionFlagMap();
   const isAdmin = permissionFlagMap[PermissionFlagType.LAYOUTS];
+  const metadataStore = useAtomFamilyStateValue(
+    metadataStoreState,
+    'objectMetadataItems',
+  );
+  const areObjectMetadataItemsLoaded = metadataStore.status === 'up-to-date';
 
   const { activeObjectMetadataItems } = useFilteredObjectMetadataItems();
 
@@ -217,6 +224,15 @@ export const useDefaultHomePagePath = () => {
     }
 
     if (isEmpty(readableNonSystemObjectMetadataItems)) {
+      // Object metadata may legitimately be empty for a user with no readable
+      // objects, in which case /settings/profile is the intended fallback.
+      // It can also be transiently empty during the post-login window before
+      // workspace metadata has finished loading. Defer to AppPath.Index in
+      // that case so the user isn't stranded on /settings/profile once
+      // metadata becomes available.
+      if (!areObjectMetadataItemsLoaded) {
+        return AppPath.Index;
+      }
       return getSettingsPath(SettingsPath.ProfilePage);
     }
 
@@ -240,6 +256,7 @@ export const useDefaultHomePagePath = () => {
     currentUser,
     getDefaultObjectPathInfo,
     readableNonSystemObjectMetadataItems,
+    areObjectMetadataItemsLoaded,
   ]);
 
   return { defaultHomePagePath };
