@@ -482,8 +482,17 @@ export class ConvosoCallPreprocessor {
       root.data,
       root.results,
       root.leads,
+      root.entries,
       ...(nestedData
-        ? [nestedData.data, nestedData.results, nestedData.leads]
+        ? [
+            nestedData.data,
+            nestedData.results,
+            nestedData.leads,
+            // Convoso /leads/search wraps results in {data: {entries: [...]}}.
+            // Without this, every lookup silently returns [] and we lose all
+            // name/email enrichment.
+            nestedData.entries,
+          ]
         : []),
     ];
 
