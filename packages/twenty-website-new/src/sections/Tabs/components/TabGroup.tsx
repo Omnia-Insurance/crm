@@ -1,17 +1,20 @@
 'use client';
 
-import type { TabType } from '@/sections/Tabs/types';
+import { useId, useState } from 'react';
+
 import { theme } from '@/theme';
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+
+import type { TabType } from '@/sections/Tabs/types';
+
 import { TabButtons } from './TabButtons';
 import { TabVisuals } from './TabVisuals';
 
 const StyledTabGroup = styled.div`
   display: grid;
   grid-template-columns: 1fr;
-  width: 100%;
   row-gap: ${theme.spacing(18)};
+  width: 100%;
 `;
 
 type TabGroupProps = {
@@ -20,15 +23,22 @@ type TabGroupProps = {
 
 export function TabGroup({ tabs }: TabGroupProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const idPrefix = useId();
 
   return (
     <StyledTabGroup>
       <TabButtons
-        tabs={tabs}
         activeIndex={activeIndex}
+        idPrefix={idPrefix}
         onSelect={setActiveIndex}
+        tabs={tabs}
       />
-      <TabVisuals tabs={tabs} activeIndex={activeIndex} />
+      <TabVisuals
+        activeIndex={activeIndex}
+        panelId={`${idPrefix}-panel`}
+        tabId={`${idPrefix}-tab-${activeIndex}`}
+        tabs={tabs}
+      />
     </StyledTabGroup>
   );
 }

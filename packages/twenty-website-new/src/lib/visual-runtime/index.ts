@@ -1,33 +1,17 @@
-export {
-  evaluateWebGlPolicy,
-  detectWebGlSupport,
-  detectPrefersReducedMotion,
-  isHeavyVisualsKillSwitchEnabled,
-  WebGlUnavailableError,
-  type WebGlPolicyDecision,
-  type WebGlPolicyDenialReason,
-} from './visual-runtime-policy';
+export { evaluateWebGlPolicy } from './utils/visual-runtime-policy';
 
-export {
-  getActiveWebGlContextCount,
-  getMaxActiveWebGlContexts,
-  subscribeToActiveWebGlContextCount,
-  tryReserveWebGlContextSlot,
-} from './active-webgl-context-budget';
-
-export { useWebGlPolicy } from './use-webgl-policy';
-export { WebGlErrorBoundary } from './webgl-error-boundary';
-export { WebGlMount } from './webgl-mount';
+export { WebGlMount } from './components/WebglMount';
+export { loadVisualImage } from './utils/load-visual-image';
+export { scheduleVisualMount } from './utils/visual-mount-scheduler';
 export {
   createSiteWebGlRenderer,
-  type SiteWebGlRendererParameters,
-} from './create-site-webgl-renderer';
-
-export { createFrameTimer, type FrameTimer } from './frame-timer';
+  tryCreateSiteWebGlRenderer,
+} from './utils/create-site-webgl-renderer';
 
 export {
-  createBoundedFailureCache,
-  type BoundedFailureCache,
-} from './bounded-failure-cache';
+  createVisualRenderLoop,
+  type VisualRenderLoop,
+  type VisualRenderLoopFrame,
+} from './utils/visual-render-loop';
 
-export { DRACO_DECODER_PATH, DRACO_DECODER_ORIGIN } from './draco-decoder-path';
+export { createBoundedFailureCache } from './utils/bounded-failure-cache';

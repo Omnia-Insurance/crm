@@ -36,11 +36,33 @@ const nextConfig: LinariaConfig = {
     configFile: path.resolve(__dirname, 'wyw-in-js.config.cjs'),
   },
   reactCompiler: true,
+  experimental: {
+    swcPlugins: [
+      [
+        '@lingui/swc-plugin',
+        {
+          runtimeModules: {
+            i18n: ['@lingui/core', 'i18n'],
+            trans: ['@lingui/react', 'Trans'],
+          },
+        },
+      ],
+    ],
+  },
   async headers() {
     return [
       {
         source: '/:path*',
         headers: SECURITY_HEADERS.map((h) => ({ ...h })),
+      },
+      {
+        source: '/(images|illustrations|lottie)/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
       },
     ];
   },
@@ -99,6 +121,11 @@ const nextConfig: LinariaConfig = {
       {
         source: '/twenty-ui/:slug',
         destination: 'https://docs.twenty.com/twenty-ui/:slug',
+        permanent: true,
+      },
+      {
+        source: '/resources/why-twenty',
+        destination: '/why-twenty',
         permanent: true,
       },
       {

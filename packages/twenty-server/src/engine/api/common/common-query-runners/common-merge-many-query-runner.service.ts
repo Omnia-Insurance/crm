@@ -19,6 +19,7 @@ import {
   filterRestrictedFieldsFromRelations,
   filterRestrictedFieldsFromSelect,
 } from 'src/engine/api/common/common-select-fields/utils/filter-restricted-fields-from-select.util';
+import { computeMorphOrRelationFieldJoinColumnName } from 'src/engine/metadata-modules/field-metadata/utils/compute-morph-or-relation-field-join-column-name.util';
 import { CommonBaseQueryRunnerService } from 'src/engine/api/common/common-query-runners/common-base-query-runner.service';
 import {
   CommonQueryRunnerException,
@@ -417,10 +418,7 @@ export class CommonMergeManyQueryRunnerService extends CommonBaseQueryRunnerServ
         | FieldMetadataSettingsMapping['RELATION']
         | undefined;
 
-      if (
-        relationSettings?.relationType !== RelationType.MANY_TO_ONE ||
-        !relationSettings?.joinColumnName
-      ) {
+      if (relationSettings?.relationType !== RelationType.MANY_TO_ONE) {
         continue;
       }
 
@@ -437,7 +435,9 @@ export class CommonMergeManyQueryRunnerService extends CommonBaseQueryRunnerServ
         objectMetadata: objMetadata,
         fieldName: field.name,
         fieldId: field.id,
-        joinColumnName: relationSettings.joinColumnName,
+        joinColumnName: computeMorphOrRelationFieldJoinColumnName({
+          name: field.name,
+        }),
       });
     }
 

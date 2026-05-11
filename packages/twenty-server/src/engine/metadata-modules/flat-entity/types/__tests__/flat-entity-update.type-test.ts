@@ -50,6 +50,8 @@ type Assertions = [
       | 'labelPlural'
       | 'labelIdentifierFieldMetadataId'
       | 'labelIdentifierFieldMetadataUniversalIdentifier'
+      | 'imageIdentifierFieldMetadataId'
+      | 'imageIdentifierFieldMetadataUniversalIdentifier'
       | 'isSearchable'
     >
   >,
@@ -59,6 +61,7 @@ type Assertions = [
       FlatEntityUpdate<'objectMetadata'>,
       {
         labelIdentifierFieldMetadataUniversalIdentifier?: never;
+        imageIdentifierFieldMetadataUniversalIdentifier?: never;
       }
     >
   >,

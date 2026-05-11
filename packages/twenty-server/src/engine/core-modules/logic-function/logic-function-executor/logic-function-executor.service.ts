@@ -19,11 +19,13 @@ import {
 import { ApplicationLogsService } from 'src/engine/core-modules/application-logs/application-logs.service';
 import { parseApplicationLogLines } from 'src/engine/core-modules/application-logs/utils/parse-application-log-lines';
 import { ApplicationRegistrationVariableEntity } from 'src/engine/core-modules/application/application-registration-variable/application-registration-variable.entity';
-import type { FlatApplicationVariable } from 'src/engine/core-modules/application/application-variable/types/flat-application-variable.type';
+import type { FlatApplicationVariable } from 'src/engine/metadata-modules/flat-application-variable/types/flat-application-variable.type';
 import { FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
 import { LOGIC_FUNCTION_EXECUTED_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/logic-function/logic-function-executed';
 import { ApplicationTokenService } from 'src/engine/core-modules/auth/token/services/application-token.service';
+import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
+import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { LogicFunctionDriverFactory } from 'src/engine/core-modules/logic-function/logic-function-drivers/logic-function-driver.factory';
 import { buildEnvVar } from 'src/engine/core-modules/logic-function/logic-function-executor/utils/build-env-var';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
@@ -72,6 +74,8 @@ export class LogicFunctionExecutorService {
     private readonly auditService: AuditService,
     private readonly applicationLogsService: ApplicationLogsService,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
+    private readonly billingService: BillingService,
+    private readonly billingUsageService: BillingUsageService,
     @InjectRepository(ApplicationRegistrationVariableEntity)
     private readonly applicationRegistrationVariableRepository: Repository<ApplicationRegistrationVariableEntity>,
   ) {}
@@ -80,10 +84,14 @@ export class LogicFunctionExecutorService {
     logicFunctionId,
     workspaceId,
     payload,
+    userId,
+    userWorkspaceId,
   }: {
     logicFunctionId: string;
     workspaceId: string;
     payload: object;
+    userId?: string;
+    userWorkspaceId?: string;
   }): Promise<LogicFunctionExecuteResult> {
     await this.throttleExecution(workspaceId);
 
@@ -97,6 +105,8 @@ export class LogicFunctionExecutorService {
       workspaceId,
       flatApplication,
       flatApplicationVariables,
+      userId,
+      userWorkspaceId,
     });
 
     const driver = this.logicFunctionDriverFactory.getCurrentDriver();
@@ -201,8 +211,17 @@ export class LogicFunctionExecutorService {
       );
     }
 
-    const flatApplicationVariables =
-      applicationVariableMaps.byApplicationId[flatApplication.id] ?? [];
+    const flatApplicationVariableUniversalIdentifiers =
+      applicationVariableMaps.universalIdentifiersByApplicationId[
+        flatApplication.id
+      ] ?? [];
+
+    const flatApplicationVariables = flatApplicationVariableUniversalIdentifiers
+      .map(
+        (universalIdentifier) =>
+          applicationVariableMaps.byUniversalIdentifier[universalIdentifier],
+      )
+      .filter(isDefined);
 
     return { flatApplication, flatLogicFunction, flatApplicationVariables };
   }
@@ -211,15 +230,21 @@ export class LogicFunctionExecutorService {
     workspaceId,
     flatApplication,
     flatApplicationVariables,
+    userId,
+    userWorkspaceId,
   }: {
     workspaceId: string;
     flatApplication: FlatApplication;
     flatApplicationVariables: FlatApplicationVariable[];
+    userId?: string;
+    userWorkspaceId?: string;
   }) {
     const applicationAccessToken =
       await this.applicationTokenService.generateApplicationAccessToken({
         workspaceId,
         applicationId: flatApplication.id,
+        userId,
+        userWorkspaceId,
       });
 
     const baseUrl = cleanServerUrl(this.twentyConfigService.get('SERVER_URL'));
@@ -338,6 +363,23 @@ export class LogicFunctionExecutorService {
         functionName: flatLogicFunction.name,
       });
 
+    let periodStart: Date | undefined;
+
+    if (this.billingService.isBillingEnabled()) {
+      const {
+        billingSubscription: { currentPeriodStart },
+      } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'billingSubscription',
+      ]);
+
+      periodStart = currentPeriodStart;
+
+      await this.billingUsageService.decrementAvailableCredits({
+        workspaceId,
+        usedCredits: 100,
+      });
+    }
+
     this.workspaceEventEmitter.emitCustomBatchEvent<UsageEvent>(
       USAGE_RECORDED,
       [
@@ -348,6 +390,7 @@ export class LogicFunctionExecutorService {
           quantity: 1,
           unit: UsageUnit.INVOCATION,
           resourceId: flatLogicFunction.id,
+          periodStart,
         },
       ],
       workspaceId,

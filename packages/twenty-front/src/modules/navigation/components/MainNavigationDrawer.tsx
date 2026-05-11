@@ -10,6 +10,7 @@ import { useOpenRecordsSearchPageInSidePanel } from '@/side-panel/hooks/useOpenR
 import { NavigationDrawerAiChatContent } from '@/ai/components/NavigationDrawerAiChatContent';
 import { MainNavigationDrawerNavigationContent } from '@/navigation/components/MainNavigationDrawerNavigationContent';
 import { MainNavigationDrawerTabsRow } from '@/navigation/components/MainNavigationDrawerTabsRow';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { NavigationDrawer } from '@/ui/navigation/navigation-drawer/components/NavigationDrawer';
 import { NavigationDrawerFixedContent } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerFixedContent';
 import { NavigationDrawerItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItem';
@@ -22,6 +23,7 @@ import { navigationMemorizedUrlState } from '@/ui/navigation/states/navigationMe
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 export const MainNavigationDrawer = ({ className }: { className?: string }) => {
   const { t } = useLingui();
@@ -49,6 +51,14 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
     navigate(getSettingsPath(SettingsPath.ProfilePage));
   };
 
+  const hasAiSettingsPermission = useHasPermissionFlag(
+    PermissionFlagType.AI_SETTINGS,
+  );
+
+  const showAiChatContent =
+    hasAiSettingsPermission &&
+    navigationDrawerActiveTab === NAVIGATION_DRAWER_TABS.AI_CHAT_HISTORY;
+
   return (
     <NavigationDrawer
       className={className}
@@ -74,8 +84,7 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
       </NavigationDrawerFixedContent>
 
       <NavigationDrawerScrollableContent>
-        {navigationDrawerActiveTab ===
-        NAVIGATION_DRAWER_TABS.AI_CHAT_HISTORY ? (
+        {showAiChatContent ? (
           <NavigationDrawerAiChatContent />
         ) : (
           <MainNavigationDrawerNavigationContent />

@@ -19,24 +19,26 @@ import { WORKSPACE_LOOKUP_ADMIN_PANEL } from '@/settings/admin-panel/graphql/que
 import { useFeatureFlagState } from '@/settings/admin-panel/hooks/useFeatureFlagState';
 import { useHandleImpersonate } from '@/settings/admin-panel/hooks/useHandleImpersonate';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { TabList } from '@/ui/layout/tab-list/components/TabList';
+import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { Table } from '@/ui/layout/table/components/Table';
 import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { TabList } from '@/ui/layout/tab-list/components/TabList';
-import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
+  Avatar,
   H2Title,
   IconCreditCard,
   IconEyeShare,
   IconFlag,
   IconMessage,
+  OverflowingTextWithTooltip,
   IconSettings2,
   IconUsers,
 } from 'twenty-ui/display';
@@ -47,6 +49,7 @@ import {
   type FeatureFlagKey,
   type GetAdminWorkspaceChatThreadsQuery,
   type WorkspaceLookupAdminPanelQuery,
+  GetUpgradeStatusDocument,
   UpdateWorkspaceFeatureFlagDocument,
 } from '~/generated-admin/graphql';
 
@@ -104,6 +107,15 @@ export const SettingsAdminWorkspaceDetail = () => {
           effectiveTabId !== WORKSPACE_DETAIL_TAB_IDS.CHATS,
       },
     );
+  const { data: workspaceUpgradeStatusData } = useQuery(
+    GetUpgradeStatusDocument,
+    {
+      client: apolloAdminClient,
+      variables: { workspaceIds: workspaceId ? [workspaceId] : [] },
+      skip: !workspaceId,
+      fetchPolicy: 'network-only',
+    },
+  );
 
   const threads = threadsData?.getAdminWorkspaceChatThreads ?? [];
 
@@ -209,7 +221,12 @@ export const SettingsAdminWorkspaceDetail = () => {
         />
 
         {effectiveTabId === WORKSPACE_DETAIL_TAB_IDS.INFO && workspace && (
-          <SettingsAdminWorkspaceContent activeWorkspace={workspace} />
+          <SettingsAdminWorkspaceContent
+            activeWorkspace={workspace}
+            workspaceUpgradeStatus={workspaceUpgradeStatusData?.getUpgradeStatus?.find(
+              (status) => status?.workspaceId === workspaceId,
+            )}
+          />
         )}
 
         {effectiveTabId === WORKSPACE_DETAIL_TAB_IDS.BILLING &&
@@ -241,9 +258,27 @@ export const SettingsAdminWorkspaceDetail = () => {
                         userId,
                       })}
                     >
-                      <TableCell color={themeCssVariables.font.color.primary}>
-                        {`${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-                          '\u2014'}
+                      <TableCell
+                        color={themeCssVariables.font.color.primary}
+                        gap={themeCssVariables.spacing[2]}
+                        overflow="hidden"
+                      >
+                        <Avatar
+                          avatarUrl={user.avatarUrl}
+                          placeholder={
+                            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                            user.email
+                          }
+                          placeholderColorSeed={user.id}
+                          size="md"
+                          type="rounded"
+                        />
+                        <OverflowingTextWithTooltip
+                          text={
+                            `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                            '\u2014'
+                          }
+                        />
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell align="right">

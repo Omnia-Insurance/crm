@@ -9,6 +9,8 @@ import {
   WorkflowRunStepInfos,
 } from 'twenty-shared/workflow';
 
+import { BillingUsageService } from 'src/engine/core-modules/billing/services/billing-usage.service';
+import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -20,6 +22,7 @@ import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-op
 import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
 import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
 import { type UsageEvent } from 'src/engine/core-modules/usage/types/usage-event.type';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { workflowHasRunningSteps } from 'src/modules/workflow/common/utils/workflow-has-running-steps.util';
@@ -56,6 +59,9 @@ export class WorkflowExecutorWorkspaceService {
     private readonly workflowActionFactory: WorkflowActionFactory,
     private readonly workspaceEventEmitter: WorkspaceEventEmitter,
     private readonly workflowRunWorkspaceService: WorkflowRunWorkspaceService,
+    private readonly billingService: BillingService,
+    private readonly billingUsageService: BillingUsageService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly metricsService: MetricsService,
     @InjectMessageQueue(MessageQueue.workflowQueue)
@@ -178,7 +184,7 @@ export class WorkflowExecutorWorkspaceService {
       !actionOutput.shouldFailSafely &&
       !actionOutput.shouldSkipStepExecution
     ) {
-      this.sendWorkflowNodeRunEvent(workspaceId, workflowRun.workflowId);
+      await this.sendWorkflowNodeRunEvent(workspaceId, workflowRun.workflowId);
     }
 
     const { shouldProcessNextSteps } = await this.processStepExecutionResult({
@@ -355,7 +361,26 @@ export class WorkflowExecutorWorkspaceService {
     });
   }
 
-  private sendWorkflowNodeRunEvent(workspaceId: string, workflowId: string) {
+  private async sendWorkflowNodeRunEvent(
+    workspaceId: string,
+    workflowId: string,
+  ) {
+    let periodStart: Date | undefined;
+    if (this.billingService.isBillingEnabled()) {
+      const {
+        billingSubscription: { currentPeriodStart },
+      } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'billingSubscription',
+      ]);
+
+      periodStart = currentPeriodStart;
+
+      await this.billingUsageService.decrementAvailableCredits({
+        workspaceId,
+        usedCredits: 100,
+      });
+    }
+
     this.workspaceEventEmitter.emitCustomBatchEvent<UsageEvent>(
       USAGE_RECORDED,
       [
@@ -366,6 +391,7 @@ export class WorkflowExecutorWorkspaceService {
           quantity: 1,
           unit: UsageUnit.INVOCATION,
           resourceId: workflowId,
+          periodStart,
         },
       ],
       workspaceId,
@@ -453,9 +479,10 @@ export class WorkflowExecutorWorkspaceService {
     workflowRunId: string;
     workspaceId: string;
   }) {
-    // TODO: re-enable workflow node execution credit cap once billing limits are revisited.
-    // Previously gated on BillingService.canBillMeteredProduct(WORKFLOW_NODE_EXECUTION);
-    // temporarily disabled so workflows keep running when the period cap is reached.
+    // Credit-cap enforcement lives at the AI entry points (chat resolver,
+    // executeAgent, generate-text controller, title generation). Cheap
+    // workflow steps (DB CRUD, branching, actions) are not gated here so a
+    // chat-driven cap exhaustion does not block non-AI automations.
     const stepId = step.id;
 
     const workflowAction = this.workflowActionFactory.get(step.type);

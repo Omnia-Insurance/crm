@@ -84,7 +84,9 @@ spec:
             - sh
             - -c
             - >-
-              cd /app/packages/twenty-server && node /app/node_modules/typeorm/cli.js migration:run -d /app/packages/twenty-server/dist/database/typeorm/core/core.datasource
+              cd /app/packages/twenty-server &&
+              node /app/node_modules/typeorm/cli.js migration:run -d /app/packages/twenty-server/dist/database/typeorm/core/core.datasource &&
+              node /app/packages/twenty-server/dist/command/command.js run-instance-commands --force
           env:
             {{- if .Values.db.enabled }}
             - name: PGPASSWORD
