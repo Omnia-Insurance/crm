@@ -12,20 +12,24 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 
 @Injectable()
 export class GeoMapService {
-  private apiMapKey: string | undefined;
   constructor(
     private readonly twentyConfigService: TwentyConfigService,
     private readonly secureHttpClientService: SecureHttpClientService,
-  ) {
+  ) {}
+
+  // OMNIA-CUSTOM: read flag + key per-request instead of in the constructor.
+  // DatabaseConfigDriver loads its cache in `async onModuleInit` which runs
+  // AFTER provider constructors, so caching the key at construction time
+  // returns `undefined` on DB-only deploys and every Google Places call
+  // produces `?key=undefined` → REQUEST_DENIED → empty results.
+  private getApiMapKey(): string | undefined {
     if (
-      !this.twentyConfigService.get(
-        'IS_MAPS_AND_ADDRESS_AUTOCOMPLETE_ENABLED',
-      ) ||
-      !this.twentyConfigService.get('GOOGLE_MAP_API_KEY')
+      !this.twentyConfigService.get('IS_MAPS_AND_ADDRESS_AUTOCOMPLETE_ENABLED')
     ) {
-      return;
+      return undefined;
     }
-    this.apiMapKey = this.twentyConfigService.get('GOOGLE_MAP_API_KEY');
+
+    return this.twentyConfigService.get('GOOGLE_MAP_API_KEY') || undefined;
   }
 
   public async getAutoCompleteAddress(
@@ -38,7 +42,13 @@ export class GeoMapService {
       return [];
     }
 
-    let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(address)}&sessiontoken=${token}&key=${this.apiMapKey}`;
+    const apiMapKey = this.getApiMapKey();
+
+    if (!isNonEmptyString(apiMapKey)) {
+      return [];
+    }
+
+    let url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(address)}&sessiontoken=${token}&key=${apiMapKey}`;
 
     if (isNonEmptyString(country)) {
       url += `&components=country:${country}`;
@@ -61,10 +71,16 @@ export class GeoMapService {
     placeId: string,
     token: string,
   ): Promise<GeoMapAddressFields | undefined> {
+    const apiMapKey = this.getApiMapKey();
+
+    if (!isNonEmptyString(apiMapKey)) {
+      return {};
+    }
+
     const httpClient = this.secureHttpClientService.getHttpClient();
 
     const result = await httpClient.get(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&sessiontoken=${token}&fields=address_components%2Cgeometry&key=${this.apiMapKey}`,
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&sessiontoken=${token}&fields=address_components%2Cgeometry&key=${apiMapKey}`,
     );
 
     if (result.data.status === 'OK') {

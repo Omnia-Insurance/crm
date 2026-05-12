@@ -1416,6 +1416,25 @@ check_file_exists \
 echo ""
 
 # ==========================================================
+# Geo-Map Service: per-request config read
+# ==========================================================
+# Upstream caches GOOGLE_MAP_API_KEY in the constructor, but DatabaseConfigDriver
+# loads its cache in async onModuleInit (which runs AFTER provider constructors),
+# so DB-only deploys (us) cache `undefined` and every Places call fails silently
+# with `?key=undefined` → REQUEST_DENIED → empty array. Read per-request instead.
+echo "--- Geo-Map Service: per-request config read ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/geo-map/services/geo-map.service.ts" \
+  "private getApiMapKey()" \
+  "Geo-map service must read GOOGLE_MAP_API_KEY per-request, not in the constructor (DB config driver loads after provider init)"
+check_file_not_contains \
+  "packages/twenty-server/src/engine/core-modules/geo-map/services/geo-map.service.ts" \
+  "private apiMapKey:" \
+  "Geo-map service must not cache apiMapKey in a field (DB-only deploys cache undefined at boot)"
+
+echo ""
+
+# ==========================================================
 # Summary
 # ==========================================================
 
