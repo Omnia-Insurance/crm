@@ -1448,6 +1448,21 @@ check_file_contains \
   "omnia.cachedAppVersion" \
   "useClientConfig must clear localStorage when clientConfig.appVersion differs from the cached version (post-upstream-merge stale-cache fix)"
 
+echo ""
+echo "--- Timeline Field Diff: Before → After ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiff.tsx" \
+  "diffBeforeRecord" \
+  "Timeline update events must render before → after for field diffs (not just after)"
+check_file_contains \
+  "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiff.tsx" \
+  "StyledBeforeValue" \
+  "Before-value preview must use muted + strike-through styling"
+check_file_contains \
+  "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiffContainer.tsx" \
+  "diffBeforeArtificialRecordStoreId" \
+  "EventFieldDiffContainer must build a separate before-value record store id"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."
