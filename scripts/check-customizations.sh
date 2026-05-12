@@ -236,6 +236,14 @@ check_file_contains \
   "objectMetadataItem?.labelPlural ?? t\`Leads\`" \
   "Signed-out background page should read the Leads header label from auth metadata"
 check_file_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx" \
+  "objectMetadataItemFamilySelector" \
+  "Signed-out background page must use the safe selector (not useObjectMetadataItem, which throws on empty metadata for unauthed visitors)"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockPage.tsx" \
+  "useObjectMetadataItem" \
+  "Signed-out background page must not use useObjectMetadataItem (it throws when no workspace metadata is loaded)"
+check_file_contains \
   "packages/twenty-front/src/modules/sign-in-background-mock/constants/SignInBackgroundMockConfig.ts" \
   "objectNameSingular: 'person'" \
   "Signed-out background should target people/leads mock data"
