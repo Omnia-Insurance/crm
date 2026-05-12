@@ -1441,6 +1441,13 @@ check_file_contains \
   "Field-level restrictions" \
   "INSERT case must skip field-level permission checks (pre-query hooks set restricted fields)"
 
+echo ""
+echo "--- localStorage Cache Bust on App Version Change ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/client-config/hooks/useClientConfig.ts" \
+  "omnia.cachedAppVersion" \
+  "useClientConfig must clear localStorage when clientConfig.appVersion differs from the cached version (post-upstream-merge stale-cache fix)"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."

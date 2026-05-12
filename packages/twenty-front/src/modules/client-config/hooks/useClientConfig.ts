@@ -150,6 +150,36 @@ export const useClientConfig = (): UseClientConfigResult => {
         isErrored: false,
         error: undefined,
       }));
+      // OMNIA-CUSTOM: clear localStorage when the deployed app version changes.
+      // Twenty stores Jotai state (object metadata items, sidebar state, etc.)
+      // in localStorage via atomWithStorage. Auth lives in cookies, so users
+      // stay logged in across deploys and their stale localStorage gets replayed
+      // against the new bundle — which can break in subtle ways (e.g. all
+      // object icons rendering as "123" after the 2026-05-09 upstream merge
+      // because cached icon names no longer resolve in the new tabler-icons map).
+      // On version change, wipe localStorage (preserving a small allowlist) and
+      // reload so atoms re-initialise cleanly.
+      if (clientConfig.appVersion) {
+        const CACHED_APP_VERSION_KEY = 'omnia.cachedAppVersion';
+        const PRESERVED_KEYS = ['locale', CACHED_APP_VERSION_KEY];
+        const storedVersion = localStorage.getItem(CACHED_APP_VERSION_KEY);
+        if (storedVersion !== clientConfig.appVersion) {
+          const preserved: Record<string, string> = {};
+          for (const key of PRESERVED_KEYS) {
+            const value = localStorage.getItem(key);
+            if (value !== null) preserved[key] = value;
+          }
+          localStorage.clear();
+          for (const [key, value] of Object.entries(preserved)) {
+            localStorage.setItem(key, value);
+          }
+          localStorage.setItem(CACHED_APP_VERSION_KEY, clientConfig.appVersion);
+          if (storedVersion !== null) {
+            window.location.reload();
+            return;
+          }
+        }
+      }
       setAppVersion(clientConfig.appVersion);
       setAuthProviders({
         google: clientConfig.authProviders.google,
