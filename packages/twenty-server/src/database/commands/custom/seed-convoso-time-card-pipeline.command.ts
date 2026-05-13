@@ -95,8 +95,10 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
       // Composite dedup: one Time Card per (agent, day). The relation
       // resolver fills agentsId from convosoUserId before dedup runs.
       dedupFieldNames: ['agentsId', 'date'],
-      // 1:15 AM PT daily — after midnight LA so the prior day is complete.
-      schedule: '15 1 * * *',
+      // Hourly. Dedup is on (agent, date) so each run refreshes the same
+      // ~50 rows with the running daily totals — no row growth, current-
+      // day cards lag at most an hour. Timezone-agnostic by design.
+      schedule: '0 * * * *',
       isEnabled: true,
     });
 
