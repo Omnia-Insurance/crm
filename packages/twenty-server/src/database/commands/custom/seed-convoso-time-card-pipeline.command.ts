@@ -157,6 +157,13 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
         targetFieldName: 'billableHours',
         position: 4,
       },
+      // "{Agent Name} - {date}" — set by the preprocessor.
+      {
+        pipelineId,
+        sourceFieldPath: 'name',
+        targetFieldName: 'name',
+        position: 5,
+      },
     ];
   }
 

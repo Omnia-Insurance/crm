@@ -13,6 +13,7 @@ describe('TimeCardPreprocessor', () => {
   const event = (
     overrides: Partial<{
       user_id: string;
+      user_name: string;
       state: string;
       availability_code: string;
       event_sec: string;
@@ -20,6 +21,7 @@ describe('TimeCardPreprocessor', () => {
     }> = {},
   ) => ({
     user_id: '12345',
+    user_name: 'Test Agent',
     state: 'READY',
     availability_code: '0',
     event_sec: '00:10:00',
@@ -50,6 +52,7 @@ describe('TimeCardPreprocessor', () => {
         {
           user_id: '12345',
           date: '2026-05-10',
+          name: 'Test Agent - 2026-05-10',
           loginSeconds: 5400,
           pauseSeconds: 0,
           billableHours: 1.5,
@@ -73,6 +76,7 @@ describe('TimeCardPreprocessor', () => {
         {
           user_id: '12345',
           date: '2026-05-10',
+          name: 'Test Agent - 2026-05-10',
           loginSeconds: 3600,
           pauseSeconds: 0,
           billableHours: 1,
@@ -94,6 +98,7 @@ describe('TimeCardPreprocessor', () => {
         {
           user_id: '12345',
           date: '2026-05-10',
+          name: 'Test Agent - 2026-05-10',
           loginSeconds: 32400,
           pauseSeconds: 3600,
           billableHours: 8,

@@ -4,6 +4,7 @@ import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-p
 
 type ProductivityEvent = Record<string, unknown> & {
   user_id?: string;
+  user_name?: string;
   state?: string;
   availability_code?: string;
   event_sec?: string;
@@ -12,6 +13,7 @@ type ProductivityEvent = Record<string, unknown> & {
 
 type DailyAggregate = {
   user_id: string;
+  user_name: string;
   date: string;
   totalSeconds: number;
   lunchSeconds: number;
@@ -104,9 +106,15 @@ export class TimeCardPreprocessor {
         if (payload.availability_code === LUNCH_AVAILABILITY_CODE) {
           existing.lunchSeconds += eventSeconds;
         }
+        // Convoso sometimes omits user_name on later events for the same
+        // user — keep whichever non-empty value we saw first.
+        if (!existing.user_name && payload.user_name) {
+          existing.user_name = payload.user_name;
+        }
       } else {
         aggregates.set(key, {
           user_id: userId,
+          user_name: payload.user_name ?? '',
           date,
           totalSeconds: eventSeconds,
           lunchSeconds:
@@ -124,6 +132,9 @@ export class TimeCardPreprocessor {
     return Array.from(aggregates.values()).map((agg) => ({
       user_id: agg.user_id,
       date: agg.date,
+      // Display name for the Time Card row — Convoso's user_name plus the
+      // working day. Falls back to user_id if Convoso never gave us a name.
+      name: `${agg.user_name || agg.user_id} - ${agg.date}`,
       loginSeconds: agg.totalSeconds,
       pauseSeconds: agg.lunchSeconds,
       billableHours:
