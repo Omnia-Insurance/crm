@@ -1,10 +1,15 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm';
 
 /**
- * Adds a composite partial unique index on (agentsId, date) for every
- * workspace's `_timeCard` table. The ingestion pipeline relies on this
- * index for its insert-or-update fallback (unique_violation → update) when
- * two daily sync runs race for the same (agent, day) row.
+ * Adds a composite partial unique index on (agent FK, date) for every
+ * workspace's `_timeCard` table. The agent FK column name depends on how
+ * the relation was named when the object was created in that workspace
+ * (Twenty derives `{fieldName}Id`) — we probe information_schema to find
+ * whichever variant actually exists and use that.
+ *
+ * The ingestion pipeline relies on this index for its insert-or-update
+ * fallback (unique_violation → update) when concurrent sync runs race for
+ * the same (agent, day) row.
  */
 export class AddTimeCardUniqueIndex1776100000000
   implements MigrationInterface
@@ -36,10 +41,20 @@ export class AddTimeCardUniqueIndex1776100000000
         continue;
       }
 
+      const agentColumn = await this.findAgentColumn(
+        queryRunner,
+        schemaName,
+        tableName,
+      );
+
+      if (!agentColumn) {
+        continue;
+      }
+
       await queryRunner.query(
         `CREATE UNIQUE INDEX IF NOT EXISTS "IDX_${schemaName}_timeCard_agent_date_unique"
-         ON "${schemaName}"."${tableName}" ("agentsId", "date")
-         WHERE "agentsId" IS NOT NULL
+         ON "${schemaName}"."${tableName}" ("${agentColumn}", "date")
+         WHERE "${agentColumn}" IS NOT NULL
            AND "date" IS NOT NULL
            AND "deletedAt" IS NULL`,
       );
@@ -94,6 +109,34 @@ export class AddTimeCardUniqueIndex1776100000000
 
     if (unprefixed[0].exists) {
       return baseName;
+    }
+
+    return null;
+  }
+
+  // Workspaces created the Time Card object with the agent relation named
+  // either `agent` (FK `agentId`) or `agents` (FK `agentsId`). Twenty
+  // doesn't normalize the relation-field name, so we probe both.
+  private async findAgentColumn(
+    queryRunner: QueryRunner,
+    schemaName: string,
+    tableName: string,
+  ): Promise<string | null> {
+    const candidates = ['agentId', 'agentsId'];
+
+    for (const candidate of candidates) {
+      const result = await queryRunner.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.columns
+          WHERE table_schema = '${schemaName}'
+          AND table_name = '${tableName}'
+          AND column_name = '${candidate}'
+        )`,
+      );
+
+      if (result[0].exists) {
+        return candidate;
+      }
     }
 
     return null;
