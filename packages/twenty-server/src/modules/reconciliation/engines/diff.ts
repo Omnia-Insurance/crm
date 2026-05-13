@@ -608,6 +608,14 @@ export const computeFieldDiffsFromMapping = (
     // diff here would propose overwriting the selling agent with the AOR.
     if (entry.crmField.startsWith('agent.')) continue;
 
+    // Currency diffs are suppressed until we settle the semantics. CRM
+    // `premium` currently holds the member's post-subsidy responsibility
+    // (from the legacy `total_premium` backfill), while carrier BOBs ship
+    // both gross premium and a frequently-zero member responsibility
+    // column. Neither maps cleanly without a second field, so don't
+    // propose any currency change.
+    if (entry.crmField.endsWith('.amountMicros')) continue;
+
     // On multi-member policies where BOB describes a different person,
     // don't touch lead identity. Surfaced via the synthetic INFO_ONLY
     // diff pushed below.

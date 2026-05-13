@@ -181,18 +181,10 @@ describe('diff engine', () => {
       },
     };
 
-    it('compares BOB dollars to CRM micros without false diffs', () => {
-      const diffs = computeFieldDiffsFromMapping(
-        { ...baseBobRow, premium_amount: 156.5 },
-        { ...baseCrmPolicy, 'premium.amountMicros': 156_500_000 },
-        null,
-        currencyMapping,
-      );
-
-      expect(diffs.find((d) => d.crmField === 'premium.amountMicros')).toBeUndefined();
-    });
-
-    it('emits a micros-denominated diff when amounts differ', () => {
+    // Currency diffs are suppressed wholesale — see diff.ts for the
+    // rationale (CRM `premium` = member responsibility from legacy
+    // backfill vs. BOB columns shipping both gross and member amounts).
+    it('suppresses currency diffs even when amounts differ', () => {
       const diffs = computeFieldDiffsFromMapping(
         { ...baseBobRow, premium_amount: 200 },
         { ...baseCrmPolicy, 'premium.amountMicros': 156_500_000 },
@@ -200,13 +192,9 @@ describe('diff engine', () => {
         currencyMapping,
       );
 
-      const premiumDiff = diffs.find(
-        (d) => d.crmField === 'premium.amountMicros',
-      );
-
-      expect(premiumDiff).toBeDefined();
-      expect(premiumDiff?.bobValue).toBe('200000000');
-      expect(premiumDiff?.crmValue).toBe('156500000');
+      expect(
+        diffs.find((d) => d.crmField === 'premium.amountMicros'),
+      ).toBeUndefined();
     });
   });
 
