@@ -5,6 +5,7 @@ import { ConvosoCallPreprocessor } from 'src/engine/metadata-modules/ingestion-p
 import { ConvosoLeadPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-lead.preprocessor';
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
 import { OldCrmPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/old-crm-policy.preprocessor';
+import { TimeCardPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/time-card.preprocessor';
 
 export interface IngestionPreprocessor {
   preProcess(
@@ -12,6 +13,15 @@ export interface IngestionPreprocessor {
     pipeline: IngestionPipelineEntity,
     workspaceId: string,
   ): Promise<Record<string, unknown> | null>;
+  // Optional N→M batch hook. When present, takes precedence over per-record
+  // preProcess and lets the preprocessor aggregate/expand across the whole
+  // fetched batch (e.g. Convoso agent productivity events → one row per
+  // (user, date)).
+  preProcessBatch?(
+    payloads: Record<string, unknown>[],
+    pipeline: IngestionPipelineEntity,
+    workspaceId: string,
+  ): Promise<Record<string, unknown>[]>;
 }
 
 @Injectable()
@@ -23,6 +33,7 @@ export class IngestionPreprocessorRegistry {
     private readonly convosoCallPreprocessor: ConvosoCallPreprocessor,
     private readonly convosoLeadPreprocessor: ConvosoLeadPreprocessor,
     private readonly oldCrmPolicyPreprocessor: OldCrmPolicyPreprocessor,
+    private readonly timeCardPreprocessor: TimeCardPreprocessor,
   ) {}
 
   async preProcessRecords(
@@ -40,6 +51,10 @@ export class IngestionPreprocessorRegistry {
     this.logger.log(
       `Preprocessing ${records.length} records with preprocessor for pipeline ${pipeline.name}`,
     );
+
+    if (preprocessor.preProcessBatch) {
+      return preprocessor.preProcessBatch(records, pipeline, workspaceId);
+    }
 
     // Process each record through the preprocessor
     const processedRecords: Record<string, unknown>[] = [];
@@ -91,6 +106,13 @@ export class IngestionPreprocessorRegistry {
 
     if (pipelineName.includes('convoso') && pipelineName.includes('lead')) {
       return this.convosoLeadPreprocessor;
+    }
+
+    if (
+      pipelineName.includes('agent productivity') ||
+      pipelineName.includes('time card')
+    ) {
+      return this.timeCardPreprocessor;
     }
 
     if (pipelineName.includes('old crm') || pipelineName.includes('legacy')) {

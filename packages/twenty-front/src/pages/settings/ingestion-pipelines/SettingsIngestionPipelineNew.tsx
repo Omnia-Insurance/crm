@@ -20,7 +20,7 @@ export const SettingsIngestionPipelineNew = () => {
     description?: string;
     sourceUrl?: string;
     schedule?: string;
-    dedupFieldName?: string;
+    dedupFieldNames?: string[];
   }) => {
     const pipeline = await createPipeline({
       name: values.name,
@@ -33,7 +33,7 @@ export const SettingsIngestionPipelineNew = () => {
       sourceRequestConfig: null,
       responseRecordsPath: null,
       schedule: values.schedule ?? null,
-      dedupFieldName: values.dedupFieldName ?? null,
+      dedupFieldNames: values.dedupFieldNames ?? null,
       paginationConfig: null,
       isEnabled: false,
     });

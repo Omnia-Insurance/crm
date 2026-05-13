@@ -76,18 +76,20 @@ export class IngestionRecordProcessorService {
                 relationCache,
               );
 
-            if (isDefined(pipeline.dedupFieldName)) {
-              const dedupValue = getDedupValue(
+            if (
+              isDefined(pipeline.dedupFieldNames) &&
+              pipeline.dedupFieldNames.length > 0
+            ) {
+              const whereClause = buildDedupWhereClause(
                 resolvedRecord,
-                pipeline.dedupFieldName,
+                pipeline.dedupFieldNames,
               );
 
-              if (isDefined(dedupValue)) {
+              if (isDefined(whereClause)) {
                 const saved = await this.saveWithDedup(
                   repository,
                   resolvedRecord,
-                  pipeline.dedupFieldName,
-                  dedupValue,
+                  whereClause,
                   result,
                 );
 
@@ -122,29 +124,22 @@ export class IngestionRecordProcessorService {
   }
 
   /**
-   * Atomically insert-or-update a record using the dedup field's unique index.
+   * Atomically insert-or-update a record using the dedup unique index.
    *
    * Strategy: try INSERT first. If a unique constraint violation fires
-   * (concurrent insert won the race), fall back to UPDATE by dedup field.
-   * This eliminates the TOCTOU race in the old findOne + save pattern.
+   * (concurrent insert won the race), fall back to UPDATE matching the
+   * dedup WHERE clause. Eliminates the TOCTOU race in the old findOne +
+   * save pattern. The WHERE clause may be a single field or a composite
+   * AND of several fields (e.g. (agents.id, date) for Time Cards).
    */
   private async saveWithDedup(
     repository: Awaited<
       ReturnType<GlobalWorkspaceOrmManager['getRepository']>
     >,
     resolvedRecord: Record<string, unknown>,
-    dedupFieldName: string,
-    dedupValue: unknown,
+    whereClause: Record<string, unknown>,
     result: ProcessingResult,
   ): Promise<boolean> {
-    const [field, subField] = dedupFieldName.includes('.')
-      ? dedupFieldName.split('.')
-      : [dedupFieldName, null];
-
-    const whereClause = isDefined(subField)
-      ? { [field]: { [subField]: dedupValue } }
-      : { [field]: dedupValue };
-
     // Check for existing record first (fast path for updates)
     const existing = await repository.findOne({ where: whereClause });
 
@@ -196,6 +191,38 @@ const getDedupValue = (
   }
 
   return record[dedupFieldName];
+};
+
+// Build a TypeORM-shaped WHERE object from N dedup fields. Returns null
+// if any required value is undefined — we won't try to upsert against a
+// partial natural key.
+const buildDedupWhereClause = (
+  record: Record<string, unknown>,
+  dedupFieldNames: string[],
+): Record<string, unknown> | null => {
+  const where: Record<string, unknown> = {};
+
+  for (const fieldName of dedupFieldNames) {
+    const value = getDedupValue(record, fieldName);
+
+    if (!isDefined(value)) {
+      return null;
+    }
+
+    const [field, subField] = fieldName.includes('.')
+      ? fieldName.split('.')
+      : [fieldName, null];
+
+    if (isDefined(subField)) {
+      const existing = (where[field] as Record<string, unknown>) ?? {};
+
+      where[field] = { ...existing, [subField]: value };
+    } else {
+      where[field] = value;
+    }
+  }
+
+  return where;
 };
 
 const isUniqueViolation = (error: unknown): boolean => {

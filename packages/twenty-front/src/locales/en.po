@@ -5149,10 +5149,10 @@ msgstr "Debug Info"
 msgid "Decide which Sub-address fields you want to display"
 msgstr "Decide which Sub-address fields you want to display"
 
-#. js-lingui-id: VBuRrB
+#. js-lingui-id: ZEM9on
 #: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
-msgid "Dedup Field"
-msgstr "Dedup Field"
+msgid "Dedup Fields"
+msgstr "Dedup Fields"
 
 #. js-lingui-id: Bn9+El
 #: src/modules/ai/hooks/useAiModelOptions.ts
@@ -5964,10 +5964,10 @@ msgstr "e.g. OpenAI EU"
 msgid "e.g. person, call, company"
 msgstr "e.g. person, call, company"
 
-#. js-lingui-id: resH7U
+#. js-lingui-id: tDtZf7
 #: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
-msgid "e.g. phones.primaryPhoneNumber"
-msgstr "e.g. phones.primaryPhoneNumber"
+msgid "e.g. phones.primaryPhoneNumber, or agents.id, date"
+msgstr "e.g. phones.primaryPhoneNumber, or agents.id, date"
 
 #. js-lingui-id: p5P8NB
 #: src/pages/settings/ai/components/SettingsAiMoreTab.tsx

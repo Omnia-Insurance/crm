@@ -14,7 +14,7 @@ export const INGESTION_PIPELINE_FRAGMENT = gql`
     sourceRequestConfig
     responseRecordsPath
     schedule
-    dedupFieldName
+    dedupFieldNames
     paginationConfig
     isEnabled
     createdAt

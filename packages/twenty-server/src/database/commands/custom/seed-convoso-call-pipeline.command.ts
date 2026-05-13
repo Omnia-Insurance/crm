@@ -78,7 +78,7 @@ export class SeedConvosoCallPipelineCommand extends ActiveOrSuspendedWorkspaceCo
       mode: 'push',
       targetObjectNameSingular: 'call',
       webhookSecret,
-      dedupFieldName: 'convosoCallId',
+      dedupFieldNames: ['convosoCallId'],
       isEnabled: true,
     });
 

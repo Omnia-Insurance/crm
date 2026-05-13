@@ -5,6 +5,9 @@ import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/w
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
 // OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
 import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
+// OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
+import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-time-cards.command';
+import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
 import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
@@ -112,6 +115,9 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,
+    // OMNIA-CUSTOM: Time Card ingestion seed + backfill
+    SeedConvosoTimeCardPipelineCommand,
+    BackfillTimeCardsCommand,
   ],
 })
 export class DatabaseCommandModule {}

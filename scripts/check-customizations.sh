@@ -744,6 +744,12 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/database/typeorm/core/migrations/common/1775300000000-dedup-calls-and-add-unique-index.ts" \
   "Call dedup migration + unique index on convosoCallId"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1776000000000-add-ingestion-pipeline-dedup-field-names.ts" \
+  "Composite dedup migration (dedupFieldNames array column)"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1776100000000-add-time-card-unique-index.ts" \
+  "Time Card composite unique index migration"
 
 echo ""
 echo "--- Ingestion Record Processor: Atomic Dedup ---"
@@ -751,6 +757,27 @@ check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service.ts" \
   "PG_UNIQUE_VIOLATION" \
   "Record processor must catch unique_violation for atomic dedup (prevents race-condition duplicates)"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service.ts" \
+  "buildDedupWhereClause" \
+  "Record processor must support composite (multi-field) dedup via dedupFieldNames"
+
+echo ""
+echo "--- Time Card Ingestion ---"
+check_file_exists \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/time-card.preprocessor.ts" \
+  "TimeCardPreprocessor (N→M batch aggregation of Convoso productivity events)"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/seed-convoso-time-card-pipeline.command.ts" \
+  "Time Card ingestion seed command"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry.ts" \
+  "preProcessBatch" \
+  "Preprocessor registry must support optional batch hook for N→M aggregation"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry.ts" \
+  "timeCardPreprocessor" \
+  "Preprocessor registry must route Time Card / agent productivity pipelines to TimeCardPreprocessor"
 
 echo ""
 echo "--- Convoso Call Billing ---"

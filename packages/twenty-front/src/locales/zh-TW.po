@@ -5154,9 +5154,9 @@ msgstr "除錯資訊"
 msgid "Decide which Sub-address fields you want to display"
 msgstr "決定您希望顯示哪些子地址欄位"
 
-#. js-lingui-id: VBuRrB
+#. js-lingui-id: ZEM9on
 #: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
-msgid "Dedup Field"
+msgid "Dedup Fields"
 msgstr ""
 
 #. js-lingui-id: Bn9+El
@@ -5969,9 +5969,9 @@ msgstr "例如 OpenAI EU"
 msgid "e.g. person, call, company"
 msgstr ""
 
-#. js-lingui-id: resH7U
+#. js-lingui-id: tDtZf7
 #: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
-msgid "e.g. phones.primaryPhoneNumber"
+msgid "e.g. phones.primaryPhoneNumber, or agents.id, date"
 msgstr ""
 
 #. js-lingui-id: p5P8NB

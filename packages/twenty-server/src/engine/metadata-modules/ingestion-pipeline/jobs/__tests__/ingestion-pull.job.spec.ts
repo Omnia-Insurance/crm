@@ -30,7 +30,7 @@ const mockPipeline = {
   sourceRequestConfig: null,
   responseRecordsPath: 'data.entries',
   paginationConfig: null,
-  dedupFieldName: null,
+  dedupFieldNames: null,
 } as unknown as IngestionPipelineEntity;
 
 const mockMappings = [

@@ -17,7 +17,7 @@ type IngestionPipelineFormValues = {
   targetObjectNameSingular: string;
   sourceUrl?: string;
   schedule?: string;
-  dedupFieldName?: string;
+  dedupFieldNames?: string[];
 };
 
 type IngestionPipelineFormProps = {
@@ -109,8 +109,9 @@ export const IngestionPipelineForm = ({
   );
   const [sourceUrl, setSourceUrl] = useState(pipeline?.sourceUrl ?? '');
   const [schedule, setSchedule] = useState(pipeline?.schedule ?? '');
-  const [dedupFieldName, setDedupFieldName] = useState(
-    pipeline?.dedupFieldName ?? '',
+  // Stored as a comma-separated string for the input; split to array on save.
+  const [dedupFieldNames, setDedupFieldNames] = useState(
+    pipeline?.dedupFieldNames?.join(', ') ?? '',
   );
   const [isSaving, setIsSaving] = useState(false);
 
@@ -124,7 +125,11 @@ export const IngestionPipelineForm = ({
         targetObjectNameSingular: targetObject,
         sourceUrl: sourceUrl || undefined,
         schedule: schedule || undefined,
-        dedupFieldName: dedupFieldName || undefined,
+        dedupFieldNames:
+          dedupFieldNames
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean) || undefined,
       });
     } finally {
       setIsSaving(false);
@@ -225,10 +230,10 @@ export const IngestionPipelineForm = ({
       )}
 
       <TextInput
-        label={t`Dedup Field`}
-        placeholder={t`e.g. phones.primaryPhoneNumber`}
-        value={dedupFieldName}
-        onChange={setDedupFieldName}
+        label={t`Dedup Fields`}
+        placeholder={t`e.g. phones.primaryPhoneNumber, or agents.id, date`}
+        value={dedupFieldNames}
+        onChange={setDedupFieldNames}
         fullWidth
       />
 

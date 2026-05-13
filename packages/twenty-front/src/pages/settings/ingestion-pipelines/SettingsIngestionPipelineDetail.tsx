@@ -61,7 +61,7 @@ export const SettingsIngestionPipelineDetail = () => {
     targetObjectNameSingular: string;
     sourceUrl?: string;
     schedule?: string;
-    dedupFieldName?: string;
+    dedupFieldNames?: string[];
   }) => {
     await updatePipeline(pipeline.id, values);
   };

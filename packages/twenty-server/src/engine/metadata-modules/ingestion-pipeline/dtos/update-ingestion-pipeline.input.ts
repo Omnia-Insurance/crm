@@ -64,9 +64,8 @@ export class UpdateIngestionPipelineInputUpdates {
   schedule?: string;
 
   @IsOptional()
-  @IsString()
-  @Field({ nullable: true })
-  dedupFieldName?: string;
+  @Field(() => [String], { nullable: true })
+  dedupFieldNames?: string[];
 
   @IsOptional()
   @Field(() => GraphQLJSON, { nullable: true })

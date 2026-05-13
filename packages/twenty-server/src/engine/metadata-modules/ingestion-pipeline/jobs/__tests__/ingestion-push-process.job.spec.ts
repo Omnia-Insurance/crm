@@ -16,7 +16,7 @@ const mockPipeline = {
   id: pipelineId,
   workspaceId,
   targetObjectNameSingular: 'person',
-  dedupFieldName: null,
+  dedupFieldNames: null,
 } as IngestionPipelineEntity;
 
 const mockMappings = [

@@ -11,7 +11,7 @@ export type IngestionPipeline = {
   sourceRequestConfig: Record<string, unknown> | null;
   responseRecordsPath: string | null;
   schedule: string | null;
-  dedupFieldName: string | null;
+  dedupFieldNames: string[] | null;
   paginationConfig: Record<string, unknown> | null;
   isEnabled: boolean;
   createdAt: string;

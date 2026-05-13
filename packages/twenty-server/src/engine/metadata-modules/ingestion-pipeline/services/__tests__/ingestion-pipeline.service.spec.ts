@@ -26,7 +26,7 @@ const mockPipeline: IngestionPipelineEntity = {
   sourceRequestConfig: null,
   responseRecordsPath: null,
   schedule: null,
-  dedupFieldName: 'phones.primaryPhoneNumber',
+  dedupFieldNames: ['phones.primaryPhoneNumber'],
   paginationConfig: null,
   isEnabled: true,
   createdAt: new Date('2025-01-01'),

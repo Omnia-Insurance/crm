@@ -58,10 +58,9 @@ export class CreateIngestionPipelineInput {
   @Field({ nullable: true })
   schedule?: string;
 
-  @IsString()
   @IsOptional()
-  @Field({ nullable: true })
-  dedupFieldName?: string;
+  @Field(() => [String], { nullable: true })
+  dedupFieldNames?: string[];
 
   @IsOptional()
   @Field(() => GraphQLJSON, { nullable: true })

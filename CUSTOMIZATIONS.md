@@ -162,12 +162,15 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - `preprocessors/healthsherpa-policy.preprocessor.ts` — HealthSherpa policy ingestion preprocessor
 - `preprocessors/convoso-call.preprocessor.ts` — Convoso call ingestion preprocessor; inbound calls routed to the System agent (no human handled them) are forced non-billable
 - `preprocessors/convoso-lead.preprocessor.ts` — Convoso lead ingestion preprocessor
+- `preprocessors/time-card.preprocessor.ts` — Convoso agent productivity → Time Card N→M batch preprocessor; aggregates events to one row per (agent, day)
 - `utils/build-record-from-mappings.util.ts` — Builds record from field mappings + source data
 - `utils/apply-field-transform.util.ts` — Field value transforms (date, number, etc.)
 - `utils/extract-value-by-path.util.ts` — Dot-path value extraction from nested objects
 - `database/typeorm/core/migrations/common/1771284860000-add-ingestion-pipeline-entities.ts` — **Migration** creating `ingestionPipeline`, `ingestionFieldMapping`, `ingestionLog` tables
 - `database/typeorm/core/migrations/common/1771400000000-add-ingestion-log-incoming-payload.ts` — **Migration** adding `incomingPayload` column to `ingestionLog`
 - `database/typeorm/core/migrations/common/1775300000000-dedup-calls-and-add-unique-index.ts` — **Migration** deduplicates existing call records by `convosoCallId` and adds a unique partial index
+- `database/typeorm/core/migrations/common/1776000000000-add-ingestion-pipeline-dedup-field-names.ts` — **Migration** adds `dedupFieldNames` array column to `ingestionPipeline` for composite dedup (e.g. Time Cards on `(agent, day)`)
+- `database/typeorm/core/migrations/common/1776100000000-add-time-card-unique-index.ts` — **Migration** adds composite partial unique index on `_timeCard(agentsId, date)` per workspace
 
 ### `packages/twenty-server/src/modules/lead/`
 

@@ -88,7 +88,7 @@ export class SeedHealthSherpaPipelineCommand extends ActiveOrSuspendedWorkspaceC
       mode: 'push',
       targetObjectNameSingular: 'policy',
       webhookSecret,
-      dedupFieldName: 'applicationId', // Match on applicationId to update existing
+      dedupFieldNames: ['applicationId'], // Match on applicationId to update existing
       isEnabled: true,
     });
 

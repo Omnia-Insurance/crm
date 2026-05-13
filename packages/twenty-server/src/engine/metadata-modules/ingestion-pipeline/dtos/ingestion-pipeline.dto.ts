@@ -72,10 +72,9 @@ export class IngestionPipelineDTO {
   @Field(() => String, { nullable: true })
   schedule: string | null;
 
-  @IsString()
   @IsOptional()
-  @Field(() => String, { nullable: true })
-  dedupFieldName: string | null;
+  @Field(() => [String], { nullable: true })
+  dedupFieldNames: string[] | null;
 
   @IsOptional()
   @Field(() => GraphQLJSON, { nullable: true })

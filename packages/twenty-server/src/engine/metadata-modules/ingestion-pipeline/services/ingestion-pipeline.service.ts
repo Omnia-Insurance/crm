@@ -37,7 +37,7 @@ export class IngestionPipelineService {
         entity.sourceRequestConfig as Record<string, unknown> | null,
       responseRecordsPath: entity.responseRecordsPath,
       schedule: entity.schedule,
-      dedupFieldName: entity.dedupFieldName,
+      dedupFieldNames: entity.dedupFieldNames,
       paginationConfig:
         entity.paginationConfig as Record<string, unknown> | null,
       isEnabled: entity.isEnabled,

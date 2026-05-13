@@ -54,8 +54,11 @@ export class IngestionPipelineEntity {
   @Column({ type: 'varchar', nullable: true })
   schedule: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  dedupFieldName: string | null;
+  // Dedup fields for atomic upsert. Single-element array = simple dedup;
+  // N-element array ANDs the fields together (e.g. `['agents.id', 'date']`
+  // for Time Cards). Each entry supports dot-path syntax for sub-fields.
+  @Column({ type: 'varchar', array: true, nullable: true })
+  dedupFieldNames: string[] | null;
 
   @Column({ type: 'jsonb', nullable: true })
   paginationConfig: PaginationConfig | null;

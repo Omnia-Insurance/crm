@@ -12,7 +12,7 @@ const mockPipeline = {
   id: 'pipeline-1',
   workspaceId,
   targetObjectNameSingular: 'person',
-  dedupFieldName: null,
+  dedupFieldNames: null,
 } as IngestionPipelineEntity;
 
 const mockMappings: IngestionFieldMappingEntity[] = [
@@ -130,7 +130,7 @@ describe('IngestionRecordProcessorService', () => {
   it('should update existing records when dedup match found', async () => {
     const pipelineWithDedup = {
       ...mockPipeline,
-      dedupFieldName: 'phones.primaryPhoneNumber',
+      dedupFieldNames: ['phones.primaryPhoneNumber'],
     } as IngestionPipelineEntity;
 
     const records = [
@@ -160,7 +160,7 @@ describe('IngestionRecordProcessorService', () => {
   it('should create new record when dedup match not found', async () => {
     const pipelineWithDedup = {
       ...mockPipeline,
-      dedupFieldName: 'phones.primaryPhoneNumber',
+      dedupFieldNames: ['phones.primaryPhoneNumber'],
     } as IngestionPipelineEntity;
 
     const records = [
