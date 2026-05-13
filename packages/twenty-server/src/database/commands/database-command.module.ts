@@ -10,6 +10,8 @@ import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-
 import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
 import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
+import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
+import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
 import { InstallPreInstalledAppsCommand } from 'src/database/commands/install-pre-installed-apps.command';
@@ -61,7 +63,14 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
 @Module({
   imports: [
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([ObjectMetadataEntity, RoleEntity, WorkspaceEntity]),
+    TypeOrmModule.forFeature([
+      ObjectMetadataEntity,
+      RoleEntity,
+      WorkspaceEntity,
+      // OMNIA-CUSTOM: needed by SeedConvosoTimeCardPipelineCommand + BackfillTimeCardsCommand
+      IngestionPipelineEntity,
+      IngestionFieldMappingEntity,
+    ]),
     // OMNIA-CUSTOM: Reconciliation seed restricts new objects to Admin role only
     ObjectPermissionModule,
     WorkspaceExportModule,

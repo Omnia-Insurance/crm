@@ -38,24 +38,34 @@ export class IngestionPullSchedulerService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
-    // Re-register cron jobs for all enabled pull pipelines on startup
-    const pullPipelines = await this.pipelineRepository.find({
-      where: {
-        mode: 'pull',
-        isEnabled: true,
-        deletedAt: IsNull(),
-      },
-    });
+    // Re-register cron jobs for all enabled pull pipelines on startup.
+    // Wrapped so a schema drift (e.g. a pending migration that hasn't run
+    // yet) doesn't block app boot — the migration runner itself needs the
+    // app to boot to execute pending migrations. We log and move on; the
+    // next boot after the schema catches up will re-sync cleanly.
+    try {
+      const pullPipelines = await this.pipelineRepository.find({
+        where: {
+          mode: 'pull',
+          isEnabled: true,
+          deletedAt: IsNull(),
+        },
+      });
 
-    for (const pipeline of pullPipelines) {
-      if (isDefined(pipeline.schedule)) {
-        await this.syncSchedule(pipeline);
+      for (const pipeline of pullPipelines) {
+        if (isDefined(pipeline.schedule)) {
+          await this.syncSchedule(pipeline);
+        }
       }
-    }
 
-    if (pullPipelines.length > 0) {
-      this.logger.log(
-        `Re-registered cron jobs for ${pullPipelines.length} pull pipelines`,
+      if (pullPipelines.length > 0) {
+        this.logger.log(
+          `Re-registered cron jobs for ${pullPipelines.length} pull pipelines`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Skipped pull-pipeline cron re-registration on boot (likely schema drift, will retry on next boot): ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
