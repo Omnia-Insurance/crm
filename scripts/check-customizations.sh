@@ -1261,6 +1261,17 @@ check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithMicrosoft.ts" \
   "postSignInRedirect" \
   "useSignInWithMicrosoft must read postSignInRedirect from URL and forward to Microsoft OAuth"
+check_file_exists \
+  "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
+  "SignInUpExternalRedirectEffect must exist to honor postSignInRedirect on the already-authed path"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
+  "isExternalRedirectTrusted" \
+  "SignInUpExternalRedirectEffect must trust-check postSignInRedirect before redirecting"
+check_file_contains \
+  "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
+  "SignInUpExternalRedirectEffect" \
+  "SignInUp page must mount SignInUpExternalRedirectEffect so already-authed users honor postSignInRedirect"
 
 echo ""
 echo "--- Agentation (Dev Annotation Toolbar) ---"

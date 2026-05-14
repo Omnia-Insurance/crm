@@ -24,6 +24,9 @@ import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCu
 import { useIsCurrentLocationOnDefaultDomain } from '@/domain-manager/hooks/useIsCurrentLocationOnDefaultDomain';
 import { useMemo } from 'react';
 
+// OMNIA-CUSTOM: mounted unconditionally at the top of the page to handle the
+// already-authed cross-app SSO bounce-back. See the effect file for details.
+import { SignInUpExternalRedirectEffect } from '@/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect';
 import { SignInUpGlobalScopeFormEffect } from '@/auth/sign-in-up/components/internal/SignInUpGlobalScopeFormEffect';
 import { SignInUpTwoFactorAuthenticationProvision } from '@/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationProvision';
 import { SignInUpTOTPVerification } from '@/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationVerification';
@@ -206,19 +209,27 @@ export const SignInUp = () => {
 
   if (signInUpStep === SignInUpStep.EmailVerification) {
     return (
-      <ModalContent isVerticallyCentered isHorizontallyCentered>
-        <EmailVerificationSent email={searchParams.get('email')} />
-      </ModalContent>
+      <>
+        {/* OMNIA-CUSTOM: cross-app SSO already-authed bounce-back */}
+        <SignInUpExternalRedirectEffect />
+        <ModalContent isVerticallyCentered isHorizontallyCentered>
+          <EmailVerificationSent email={searchParams.get('email')} />
+        </ModalContent>
+      </>
     );
   }
 
   return (
-    <StandardContent
-      workspacePublicData={workspacePublicData}
-      signInUpForm={signInUpForm}
-      signInUpStep={signInUpStep}
-      title={title}
-      onClickOnLogo={onClickOnLogo}
-    />
+    <>
+      {/* OMNIA-CUSTOM: cross-app SSO already-authed bounce-back */}
+      <SignInUpExternalRedirectEffect />
+      <StandardContent
+        workspacePublicData={workspacePublicData}
+        signInUpForm={signInUpForm}
+        signInUpStep={signInUpStep}
+        title={title}
+        onClickOnLogo={onClickOnLogo}
+      />
+    </>
   );
 };
