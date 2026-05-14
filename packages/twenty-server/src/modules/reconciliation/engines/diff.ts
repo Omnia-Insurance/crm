@@ -268,6 +268,10 @@ type SubscriberMismatchReason =
       namesakePolicyId: string;
       namesakeFirstName: string | null;
       namesakeLastName: string | null;
+    }
+  | {
+      kind: 'LEAD_NAME_DIVERGENCE';
+      sharedLastName: boolean;
     };
 
 type SubscriberMismatch = {
@@ -423,6 +427,74 @@ const detectCrossTermNamesakeConflict = (
   return null;
 };
 
+/**
+ * Last-resort safety net: BOB row's name doesn't fuzzy-match the CRM primary
+ * lead's name, and the more specific detectors above didn't fire. Catches:
+ *   • Spouse swap on single-applicant policy (same last name, different
+ *     first name — carriers list whichever spouse holds the subscription
+ *     that month).
+ *   • Legacy mis-linkings where Pierre tied a wholly different lead to the
+ *     policy (different last name entirely).
+ * Either case, silently overwriting `lead.name.*` and `lead.dateOfBirth`
+ * would re-point the policy at a different person's identity — and along
+ * with it their calls, tasks, emails, and history.
+ */
+// Looser than NAME_THRESHOLD (0.98) — the strict threshold gates auto-merge
+// for the per-field fuzzy comparator, where we accept only near-identical
+// names. Here we only want to detect "clearly a different person," so leave
+// room for typo-shaped variants (Jon/John, Steven/Stephen) to fall through
+// and produce normal name diffs the reviewer can approve.
+const SAFETY_NET_SIMILARITY_THRESHOLD = 0.85;
+
+const detectLeadNameDivergence = (
+  bobRow: Record<string, unknown>,
+  crmPolicy: Record<string, unknown>,
+  headers: LeadIdentityHeaders,
+): SubscriberMismatch | null => {
+  if (!headers.firstHeader || !headers.lastHeader) return null;
+
+  const bobFirst = (bobRow[headers.firstHeader] as string) ?? null;
+  const bobLast = (bobRow[headers.lastHeader] as string) ?? null;
+  const crmFirst = (crmPolicy['lead.name.firstName'] as string) ?? null;
+  const crmLast = (crmPolicy['lead.name.lastName'] as string) ?? null;
+
+  // Need both sides populated to compare meaningfully.
+  if (!bobFirst || !bobLast || !crmFirst || !crmLast) return null;
+
+  const bobFirstLower = bobFirst.trim().toLowerCase();
+  const crmFirstLower = crmFirst.trim().toLowerCase();
+  const bobLastLower = bobLast.trim().toLowerCase();
+  const crmLastLower = crmLast.trim().toLowerCase();
+
+  // Same person under a forgiving similarity check (typos, nicknames close
+  // enough in shape) — let the normal diff flow handle any small correction.
+  const firstSimilar =
+    jaroWinkler(bobFirstLower, crmFirstLower) >=
+    SAFETY_NET_SIMILARITY_THRESHOLD;
+  const lastSimilar =
+    jaroWinkler(bobLastLower, crmLastLower) >=
+    SAFETY_NET_SIMILARITY_THRESHOLD;
+
+  if (firstSimilar && lastSimilar) return null;
+
+  const dobValue = headers.dobHeader
+    ? ((bobRow[headers.dobHeader] as string) ?? null)
+    : null;
+
+  return {
+    reason: {
+      kind: 'LEAD_NAME_DIVERGENCE',
+      sharedLastName: lastSimilar,
+    },
+    bobFirstName: bobFirst,
+    bobLastName: bobLast,
+    bobDob: dobValue,
+    crmFirstName: crmFirst,
+    crmLastName: crmLast,
+    crmDob: (crmPolicy['lead.dateOfBirth'] as string) ?? null,
+  };
+};
+
 const formatSubscriberMismatchValue = (
   first: string | null,
   last: string | null,
@@ -447,20 +519,36 @@ const formatSubscriberMismatchNote = (mismatch: SubscriberMismatch): string => {
     );
   }
 
-  const namesakeFull = [
-    mismatch.reason.namesakeFirstName,
-    mismatch.reason.namesakeLastName,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  if (mismatch.reason.kind === 'CROSS_TERM_NAMESAKE') {
+    const namesakeFull = [
+      mismatch.reason.namesakeFirstName,
+      mismatch.reason.namesakeLastName,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-  return (
-    `Another CRM policy under the same policy number is already linked ` +
-    `to a lead matching the BOB row's name (${namesakeFull}). Lead ` +
-    `identity not auto-updated — likely the BOB describes a different ` +
-    `lead's policy term, or this lead was renamed; verify linkage ` +
-    `before applying.`
-  );
+    return (
+      `Another CRM policy under the same policy number is already linked ` +
+      `to a lead matching the BOB row's name (${namesakeFull}). Lead ` +
+      `identity not auto-updated — likely the BOB describes a different ` +
+      `lead's policy term, or this lead was renamed; verify linkage ` +
+      `before applying.`
+    );
+  }
+
+  return mismatch.reason.sharedLastName
+    ? (
+      `BOB row's first name doesn't match the CRM primary lead's, but the ` +
+      `last name does — likely a spouse or family-member subscriber swap. ` +
+      `Lead identity not auto-updated; verify which household member ` +
+      `should remain linked before applying.`
+    )
+    : (
+      `BOB row's name doesn't match the CRM primary lead at all — likely ` +
+      `a legacy mis-linking from the prior CRM, or this policy belongs ` +
+      `to a different person. Lead identity not auto-updated; verify ` +
+      `the linked lead before applying.`
+    );
 };
 
 /** Infer compare method from CRM field metadata type. */
@@ -596,7 +684,8 @@ export const computeFieldDiffsFromMapping = (
       crmPolicy,
       headers,
       namesakes ?? [],
-    );
+    ) ??
+    detectLeadNameDivergence(bobRow, crmPolicy, headers);
 
   // Field-level diffs from column mapping
   for (const [xlsxHeader, entry] of Object.entries(columnMapping)) {
@@ -737,7 +826,11 @@ export const computeFieldDiffsFromMapping = (
     const label =
       subscriberMismatch.reason.kind === 'MULTI_MEMBER_DOB_MISMATCH'
         ? 'Multi-member policy: BOB describes a different person'
-        : 'Cross-term namesake: BOB name matches a different CRM lead under this policy number';
+        : subscriberMismatch.reason.kind === 'CROSS_TERM_NAMESAKE'
+          ? 'Cross-term namesake: BOB name matches a different CRM lead under this policy number'
+          : subscriberMismatch.reason.sharedLastName
+            ? 'Likely spouse swap: BOB names a different household member than the linked lead'
+            : 'Lead identity mismatch: BOB names a different person than the linked lead';
 
     diffs.push({
       field: '__multiMemberSubscriberMismatch',

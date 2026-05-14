@@ -139,7 +139,10 @@ describe('diff engine', () => {
     });
   });
 
-  it('detects member name discrepancy past fuzzy threshold', () => {
+  it('suppresses lead identity diffs and surfaces a notice when BOB name diverges from CRM lead', () => {
+    // Beatrice Smith vs John Smith — same last name, different first name —
+    // covered by the spouse/safety-net detector (detectLeadNameDivergence).
+    // We never auto-rewrite the linked lead; reviewer decides what's right.
     const diffs = computeFieldDiffsFromMapping(
       { ...baseBobRow, member_first: 'Beatrice' },
       baseCrmPolicy,
@@ -147,13 +150,20 @@ describe('diff engine', () => {
       baseColumnMapping,
     );
 
-    const nameDiff = diffs.find((d) => d.crmField === 'lead.name.firstName');
+    expect(
+      diffs.find((d) => d.crmField === 'lead.name.firstName'),
+    ).toBeUndefined();
 
-    expect(nameDiff).toBeDefined();
-    expect(nameDiff?.bobValue).toBe('Beatrice');
-    expect(nameDiff?.crmValue).toBe('John');
-    expect(nameDiff?.action).toBe('UPDATE');
-    expect(nameDiff?.crmObjectType).toBe('lead');
+    const notice = diffs.find(
+      (d) => d.field === '__multiMemberSubscriberMismatch',
+    );
+
+    expect(notice).toBeDefined();
+    expect(notice?.action).toBe('INFO_ONLY');
+    expect(notice?.crmField).toBeNull();
+    expect(notice?.label).toContain('spouse');
+    expect(notice?.bobValue).toContain('Beatrice');
+    expect(notice?.crmValue).toContain('John');
   });
 
   it('detects effective-date discrepancy', () => {
@@ -360,7 +370,10 @@ describe('diff engine', () => {
       expect(notice?.note).toMatch(/2 members/);
     });
 
-    it('does NOT suppress when applicantCount = 1 (single-member policy)', () => {
+    it('still suppresses on a single-member policy via the safety-net detector', () => {
+      // applicantCount=1 means the multi-member detector doesn't fire, but
+      // detectLeadNameDivergence catches the shared-last-name / different-
+      // first-name spouse-swap pattern regardless of applicant count.
       const singleMemberPolicy = {
         ...dependentLeadOnPolicy,
         applicantCount: 1,
@@ -373,16 +386,22 @@ describe('diff engine', () => {
         familyColumnMapping,
       );
 
-      // Real corrections still propose updates on solo policies.
       expect(
         diffs.find((d) => d.crmField === 'lead.name.firstName'),
-      ).toBeDefined();
-      expect(
-        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
       ).toBeUndefined();
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.label).toContain('spouse');
     });
 
-    it('does NOT suppress when DOBs differ by less than a year (typo-shaped)', () => {
+    it('still suppresses when DOBs are close but names diverge', () => {
+      // Small DOB delta would have slipped past the multi-member detector,
+      // but the safety net cares about the name divergence — Shabretta vs
+      // Antoine is not a typo, it's a different person.
       const closeDobPolicy = {
         ...dependentLeadOnPolicy,
         'lead.dateOfBirth': '1983-08-16', // 2 months from BOB
@@ -395,14 +414,12 @@ describe('diff engine', () => {
         familyColumnMapping,
       );
 
-      // Small DOB delta is more likely a data-entry slip than a wrong
-      // person — let the diff surface for normal review.
       expect(
         diffs.find((d) => d.crmField === 'lead.dateOfBirth'),
-      ).toBeDefined();
+      ).toBeUndefined();
       expect(
         diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
-      ).toBeUndefined();
+      ).toBeDefined();
     });
 
     it('does NOT suppress non-lead diffs even when subscriber mismatch fires', () => {
@@ -420,7 +437,10 @@ describe('diff engine', () => {
       ).toBeDefined();
     });
 
-    it('does not fire when applicantCount is missing (legacy policies)', () => {
+    it('safety-net detector still fires when applicantCount is missing (legacy policies)', () => {
+      // The multi-member detector early-returns without applicantCount, but
+      // we still don't want to overwrite Antoine's identity with Shabretta's
+      // on a legacy policy where the field never got populated.
       const noCountPolicy = { ...dependentLeadOnPolicy };
 
       delete (noCountPolicy as Record<string, unknown>).applicantCount;
@@ -434,10 +454,10 @@ describe('diff engine', () => {
 
       expect(
         diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
-      ).toBeUndefined();
+      ).toBeDefined();
       expect(
         diffs.find((d) => d.crmField === 'lead.name.firstName'),
-      ).toBeDefined();
+      ).toBeUndefined();
     });
   });
 
@@ -536,7 +556,10 @@ describe('diff engine', () => {
       expect(notice?.crmValue).toContain('brianna');
     });
 
-    it('does NOT fire when no namesakes are passed (single-policy reconciliation)', () => {
+    it('safety-net detector still fires when no namesakes are passed', () => {
+      // Without namesake context, the cross-term detector can't fire, but
+      // brianna falcon vs Andy Guebara is a complete identity divergence —
+      // the safety-net detector catches it as a generic lead-name mismatch.
       const diffs = computeFieldDiffsFromMapping(
         bobRowAndy,
         matchedBriannaPolicy,
@@ -544,14 +567,16 @@ describe('diff engine', () => {
         sharedPolicyNumberMapping,
       );
 
-      // Without namesake context, this looks like a normal name correction
-      // and the diff should still surface for review.
       expect(
         diffs.find((d) => d.crmField === 'lead.name.firstName'),
-      ).toBeDefined();
-      expect(
-        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
       ).toBeUndefined();
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.label).toContain('Lead identity mismatch');
     });
 
     it('does NOT fire when matched lead name already matches BOB (legitimate match)', () => {
@@ -584,7 +609,11 @@ describe('diff engine', () => {
       ).toBeUndefined();
     });
 
-    it('does NOT fire when no namesake lead matches BOB (genuine name correction)', () => {
+    it('falls through to the safety-net detector when no namesake matches BOB', () => {
+      // Cross-term namesake doesn't fire (Charles Different ≠ Andy Guebara),
+      // but the BOB name still diverges from the matched lead's name. We'd
+      // rather surface for review than silently overwrite — Andy might be
+      // a real correction, or a wrong link from the legacy CRM.
       const unrelatedNamesake = {
         id: 'unrelated-policy',
         'lead.name.firstName': 'Charles',
@@ -601,14 +630,12 @@ describe('diff engine', () => {
         [unrelatedNamesake],
       );
 
-      // No namesake matches BOB → likely a real name correction → diff
-      // should still surface for review.
       expect(
         diffs.find((d) => d.crmField === 'lead.name.firstName'),
-      ).toBeDefined();
+      ).toBeUndefined();
       expect(
         diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
-      ).toBeUndefined();
+      ).toBeDefined();
     });
 
     it('multi-member detection still wins when both could fire', () => {
@@ -634,6 +661,126 @@ describe('diff engine', () => {
       // Multi-member is more specific (applicantCount + DOB delta) so it
       // takes precedence over the cross-term namesake explanation.
       expect(notice?.label).toContain('Multi-member');
+    });
+  });
+
+  describe('lead-name divergence safety net', () => {
+    // Regression for UZ1801522 (Melony Percy → Robert Percy) and U70546719
+    // (Megan Lynch → Marcus Lynch): single-applicant policies where BOB
+    // lists the spouse instead of the linked subscriber. Multi-member and
+    // cross-term detectors didn't fire, so the engine proposed silently
+    // re-pointing the lead at the spouse's identity (name, DOB, email).
+    const spouseColumnMapping: ColumnMapping = {
+      member_first: {
+        crmField: 'lead.name.firstName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:firstName-name (lead)',
+      },
+      member_last: {
+        crmField: 'lead.name.lastName',
+        fieldType: 'FULL_NAME',
+        fieldKey: 'update:lastName-name (lead)',
+      },
+      member_dob: {
+        crmField: 'lead.dateOfBirth',
+        fieldType: 'DATE',
+        fieldKey: 'update:dateOfBirth (lead)',
+      },
+    };
+
+    it('suppresses lead identity when last names share but first names diverge (spouse swap)', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          member_first: 'Robert',
+          member_last: 'Percy',
+          member_dob: '1964-12-12',
+        },
+        {
+          status: 'ACTIVE_PLACED',
+          applicantCount: 1,
+          'lead.name.firstName': 'Melony',
+          'lead.name.lastName': 'Percy',
+          'lead.dateOfBirth': '1965-01-02',
+        },
+        null,
+        spouseColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.dateOfBirth'),
+      ).toBeUndefined();
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.label).toContain('spouse');
+    });
+
+    it('suppresses lead identity when both first and last name diverge entirely (legacy mis-link)', () => {
+      // U97236991 case: matched policy is linked to "juliun dixon" but BOB
+      // describes "Randella Glasco" — totally different person. Likely a
+      // legacy mis-link from the prior CRM; either way don't auto-rewrite.
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          member_first: 'Randella',
+          member_last: 'Glasco',
+          member_dob: '1973-03-23',
+        },
+        {
+          status: 'ACTIVE_PLACED',
+          applicantCount: 2,
+          'lead.name.firstName': 'juliun',
+          'lead.name.lastName': 'dixon',
+          'lead.dateOfBirth': '1973-03-23',
+        },
+        null,
+        spouseColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.name.lastName'),
+      ).toBeUndefined();
+
+      const notice = diffs.find(
+        (d) => d.field === '__multiMemberSubscriberMismatch',
+      );
+
+      expect(notice).toBeDefined();
+      expect(notice?.label).toContain('Lead identity mismatch');
+    });
+
+    it('does NOT fire on close fuzzy-matching names (typo correction passes through)', () => {
+      // "Jon" vs "John" should fuzzy-match and not trigger the safety net —
+      // this is the case where we DO want the diff to surface for review,
+      // since fuzzyNameMatch already keeps them as the same person.
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          member_first: 'Jon',
+          member_last: 'Smith',
+          member_dob: '1980-01-01',
+        },
+        {
+          status: 'ACTIVE_PLACED',
+          applicantCount: 1,
+          'lead.name.firstName': 'John',
+          'lead.name.lastName': 'Smith',
+          'lead.dateOfBirth': '1980-01-01',
+        },
+        null,
+        spouseColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeUndefined();
     });
   });
 
@@ -766,8 +913,10 @@ describe('diff engine', () => {
     });
 
     it('summarizes up to 3 diffs inline', () => {
+      // Lead identity diffs are now suppressed by the safety-net detector,
+      // so feed in a non-name diff (effectiveDate) to exercise the summary.
       const diffs = computeFieldDiffsFromMapping(
-        { ...baseBobRow, member_first: 'Jane', member_last: 'Doe' },
+        { ...baseBobRow, eff_date: '2026-02-15' },
         baseCrmPolicy,
         null,
         baseColumnMapping,
@@ -775,8 +924,8 @@ describe('diff engine', () => {
 
       const summary = summarizeDiffs(diffs);
 
-      expect(summary).toContain('member_first');
-      expect(summary).toContain('Jane');
+      expect(summary).toContain('eff_date');
+      expect(summary).toContain('2026-02-15');
     });
   });
 });
