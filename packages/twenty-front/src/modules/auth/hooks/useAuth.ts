@@ -568,6 +568,8 @@ export const useAuth = () => {
         workspaceInviteHash?: string;
         billingCheckoutSession?: BillingCheckoutSession;
         action?: string;
+        // OMNIA-CUSTOM: trusted external redirect target forwarded to OAuth
+        postSignInRedirect?: string;
       },
     ) => {
       const url = new URL(`${REACT_APP_SERVER_BASE_URL}${path}`);
@@ -591,6 +593,10 @@ export const useAuth = () => {
         url.searchParams.set('action', params.action);
       }
 
+      if (isDefined(params.postSignInRedirect)) {
+        url.searchParams.set('postSignInRedirect', params.postSignInRedirect);
+      }
+
       if (isDefined(workspacePublicData)) {
         url.searchParams.set('workspaceId', workspacePublicData.id);
       }
@@ -606,6 +612,7 @@ export const useAuth = () => {
       workspaceInviteHash?: string;
       billingCheckoutSession?: BillingCheckoutSession;
       action: string;
+      postSignInRedirect?: string;
     }) => {
       redirect(buildRedirectUrl('/auth/google', params));
     },
@@ -618,6 +625,7 @@ export const useAuth = () => {
       workspaceInviteHash?: string;
       billingCheckoutSession?: BillingCheckoutSession;
       action: string;
+      postSignInRedirect?: string;
     }) => {
       redirect(buildRedirectUrl('/auth/microsoft', params));
     },

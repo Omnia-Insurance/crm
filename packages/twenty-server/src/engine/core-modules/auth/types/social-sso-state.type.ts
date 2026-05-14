@@ -9,4 +9,8 @@ export type SocialSSOState = {
   workspacePersonalInviteToken?: string;
   action?: SocialSSOSignInUpActionType;
   locale?: keyof typeof APP_LOCALES;
+  // OMNIA-CUSTOM: carries a trusted external redirect target through the
+  // OAuth round-trip so sibling-subdomain apps (e.g. omniaagent.com) can
+  // bounce users back home after signing in at crm.omniaagent.com.
+  postSignInRedirect?: string;
 };

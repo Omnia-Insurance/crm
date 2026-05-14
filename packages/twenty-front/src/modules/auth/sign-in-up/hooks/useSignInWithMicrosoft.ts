@@ -10,6 +10,8 @@ export const useSignInWithMicrosoft = () => {
   const [searchParams] = useSearchParams();
   const workspacePersonalInviteToken =
     searchParams.get('inviteToken') ?? undefined;
+  // OMNIA-CUSTOM: forward trusted external redirect target to OAuth flow
+  const postSignInRedirect = searchParams.get('postSignInRedirect') ?? undefined;
   const billingCheckoutSession = useAtomStateValue(billingCheckoutSessionState);
 
   const { signInWithMicrosoft } = useAuth();
@@ -24,6 +26,7 @@ export const useSignInWithMicrosoft = () => {
         workspacePersonalInviteToken,
         billingCheckoutSession,
         action,
+        postSignInRedirect,
       }),
   };
 };

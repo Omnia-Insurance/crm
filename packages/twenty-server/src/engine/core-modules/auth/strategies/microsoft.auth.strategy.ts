@@ -31,6 +31,8 @@ export type MicrosoftRequest = Omit<
     workspaceId?: string;
     billingCheckoutSessionState?: string;
     action: SocialSSOSignInUpActionType;
+    // OMNIA-CUSTOM: trusted external redirect target carried through OAuth
+    postSignInRedirect?: string;
   };
 };
 
@@ -58,6 +60,7 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
         billingCheckoutSessionState: req.query.billingCheckoutSessionState,
         workspacePersonalInviteToken: req.query.workspacePersonalInviteToken,
         action: req.query.action,
+        postSignInRedirect: req.query.postSignInRedirect,
         oauthRetryCount: req.query.oauthRetryCount
           ? Number(req.query.oauthRetryCount)
           : undefined,
@@ -95,6 +98,7 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
       billingCheckoutSessionState: state?.billingCheckoutSessionState,
       locale: state?.locale,
       action: state?.action ?? 'list-available-workspaces',
+      postSignInRedirect: state?.postSignInRedirect,
     };
 
     done(null, user);

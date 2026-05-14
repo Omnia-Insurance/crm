@@ -1199,6 +1199,49 @@ check_file_contains \
   "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
   "OMNIA-CUSTOM" \
   "auth cookie domain widening (shared across sibling subdomains)"
+check_file_exists \
+  "packages/twenty-shared/src/utils/auth/derive-trusted-redirect-domain.ts" \
+  "Trusted external redirect helpers must exist (shared by server + frontend)"
+check_file_contains \
+  "packages/twenty-shared/src/utils/auth/derive-trusted-redirect-domain.ts" \
+  "isExternalRedirectTrusted" \
+  "Trust-check helper must be exported for post-sign-in redirects"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/types/social-sso-state.type.ts" \
+  "postSignInRedirect" \
+  "SocialSSOState must carry postSignInRedirect through OAuth round-trip"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/strategies/google.auth.strategy.ts" \
+  "postSignInRedirect" \
+  "Google strategy must propagate postSignInRedirect into and out of OAuth state"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/strategies/microsoft.auth.strategy.ts" \
+  "postSignInRedirect" \
+  "Microsoft strategy must propagate postSignInRedirect into and out of OAuth state"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
+  "isExternalRedirectTrusted" \
+  "auth.service must trust-check postSignInRedirect against FRONTEND_URL before forwarding"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpGlobalScopeFormEffect.tsx" \
+  "postSignInRedirect" \
+  "SignInUpGlobalScopeFormEffect must redirect to trusted postSignInRedirect after sign-in"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/components/VerifyLoginTokenEffect.tsx" \
+  "postSignInRedirect" \
+  "VerifyLoginTokenEffect must redirect to trusted postSignInRedirect after /verify"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
+  "postSignInRedirect" \
+  "useAuth buildRedirectUrl must forward postSignInRedirect into OAuth kickoff URLs"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithGoogle.ts" \
+  "postSignInRedirect" \
+  "useSignInWithGoogle must read postSignInRedirect from URL and forward to Google OAuth"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithMicrosoft.ts" \
+  "postSignInRedirect" \
+  "useSignInWithMicrosoft must read postSignInRedirect from URL and forward to Microsoft OAuth"
 
 echo ""
 echo "--- Agentation (Dev Annotation Toolbar) ---"

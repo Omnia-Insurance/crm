@@ -10,7 +10,11 @@ import ms from 'ms';
 import { PasswordUpdateNotifyEmail } from 'twenty-emails';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { AppPath, ConnectedAccountProvider } from 'twenty-shared/types';
-import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
+import {
+  assertIsDefinedOrThrow,
+  isDefined,
+  isExternalRedirectTrusted,
+} from 'twenty-shared/utils';
 import { IsNull, Repository } from 'typeorm';
 
 import {
@@ -761,10 +765,13 @@ export class AuthService {
     loginToken,
     workspace,
     billingCheckoutSessionState,
+    postSignInRedirect,
   }: {
     loginToken: string;
     workspace: WorkspaceDomainConfig;
     billingCheckoutSessionState?: string;
+    // OMNIA-CUSTOM: trusted external redirect target threaded through /verify
+    postSignInRedirect?: string;
   }) {
     const url = this.workspaceDomainsService.buildWorkspaceURL({
       workspace,
@@ -772,6 +779,7 @@ export class AuthService {
       searchParams: {
         loginToken,
         ...(billingCheckoutSessionState ? { billingCheckoutSessionState } : {}),
+        ...(postSignInRedirect ? { postSignInRedirect } : {}),
       },
     });
 
@@ -944,10 +952,22 @@ export class AuthService {
       billingCheckoutSessionState,
       action,
       locale,
+      postSignInRedirect,
     }: MicrosoftRequest['user'] | GoogleRequest['user'],
     authProvider: AuthProviderEnum.Google | AuthProviderEnum.Microsoft,
   ): Promise<string> {
     const email = rawEmail.toLowerCase();
+
+    // OMNIA-CUSTOM: only propagate postSignInRedirect downstream if it points
+    // to a trusted host derived from FRONTEND_URL. Untrusted values are
+    // silently dropped so the frontend never sees them.
+    const frontendUrl = this.twentyConfigService.get('FRONTEND_URL');
+    const trustedPostSignInRedirect =
+      isDefined(postSignInRedirect) &&
+      isDefined(frontendUrl) &&
+      isExternalRedirectTrusted(postSignInRedirect, frontendUrl)
+        ? postSignInRedirect
+        : undefined;
 
     const availableWorkspacesCount =
       action === 'list-available-workspaces'
@@ -995,6 +1015,10 @@ export class AuthService {
               targetedTokenType: JwtTokenTypeEnum.WORKSPACE_AGNOSTIC,
             }),
           }),
+          // OMNIA-CUSTOM: forward trusted external redirect target to frontend
+          ...(trustedPostSignInRedirect
+            ? { postSignInRedirect: trustedPostSignInRedirect }
+            : {}),
         },
       });
 
@@ -1066,6 +1090,7 @@ export class AuthService {
         loginToken: loginToken.token,
         workspace,
         billingCheckoutSessionState,
+        postSignInRedirect: trustedPostSignInRedirect,
       });
     } catch (error) {
       return this.guardRedirectService.getRedirectErrorUrlAndCaptureExceptions({

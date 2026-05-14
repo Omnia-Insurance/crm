@@ -22,6 +22,10 @@ export { sumByProperty } from './array/sumByProperty';
 export { upsertIntoArrayOfObjectsComparingId } from './array/upsertIntoArrayOfObjectsComparingId';
 export { upsertPropertiesOfItemIntoArrayOfObjectsComparingId } from './array/upsertPropertiesOfItemIntoArrayOfObjectsComparingId';
 export { assertUnreachable } from './assertUnreachable';
+export {
+  deriveTrustedParentDomain,
+  isExternalRedirectTrusted,
+} from './auth/derive-trusted-redirect-domain';
 export { base64UrlEncode } from './base64UrlEncode';
 export { conditionalAvailabilityParser } from './command-menu-items/conditionalAvailabilityParser';
 export { evaluateConditionalAvailabilityExpression } from './command-menu-items/evaluateConditionalAvailabilityExpression';

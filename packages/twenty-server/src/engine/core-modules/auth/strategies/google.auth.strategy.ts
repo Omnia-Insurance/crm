@@ -33,6 +33,8 @@ export type GoogleRequest = Omit<
     action: SocialSSOSignInUpActionType;
     workspaceId?: string;
     billingCheckoutSessionState?: string;
+    // OMNIA-CUSTOM: trusted external redirect target carried through OAuth
+    postSignInRedirect?: string;
   };
 };
 
@@ -59,6 +61,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         workspacePersonalInviteToken: req.query.workspacePersonalInviteToken,
         action: req.query.action,
         locale: req.query.locale,
+        postSignInRedirect: req.query.postSignInRedirect,
       }),
     };
 
@@ -97,6 +100,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       billingCheckoutSessionState: state?.billingCheckoutSessionState,
       action: state?.action ?? 'list-available-workspaces',
       locale: state?.locale,
+      postSignInRedirect: state?.postSignInRedirect,
     };
 
     done(null, user);
