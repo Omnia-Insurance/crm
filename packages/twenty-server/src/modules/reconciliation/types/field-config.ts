@@ -104,6 +104,7 @@ export type DecisionAction =
 import {
   type FieldDiff,
   isNameLikeCrmField,
+  isNegativeToNegativeStatusChange,
 } from 'src/modules/reconciliation/engines/diff';
 
 /**
@@ -119,7 +120,12 @@ export const deriveCategory = (
   if (isUnmatched) return 'UNMATCHED';
 
   const hasDiffs = fieldDiffs.length > 0;
-  const statusChanged = derivedStatus !== currentCrmStatus;
+  // Mirror diff.ts: terminal-to-terminal status changes don't produce a diff,
+  // so they shouldn't promote a record to UPDATE on their own. Otherwise the
+  // review queue fills with ghost rows (STATUS_CHANGE flag, nothing to apply).
+  const statusChanged =
+    derivedStatus !== currentCrmStatus &&
+    !isNegativeToNegativeStatusChange(derivedStatus, currentCrmStatus);
 
   if (hasDiffs || statusChanged) return 'UPDATE';
 
@@ -155,8 +161,15 @@ export const deriveFlags = (
   const flags: ReviewFlag[] = [];
   const reasons: FlagReasons = {};
 
-  // Status change: derived status differs from CRM
-  if (derivedStatus && currentCrmStatus && derivedStatus !== currentCrmStatus) {
+  // Status change: derived status differs from CRM. Suppress when both are
+  // terminal-negative — diff.ts hides the diff in that case, so flagging it
+  // here would leave a review item with nothing to review.
+  if (
+    derivedStatus &&
+    currentCrmStatus &&
+    derivedStatus !== currentCrmStatus &&
+    !isNegativeToNegativeStatusChange(derivedStatus, currentCrmStatus)
+  ) {
     flags.push('STATUS_CHANGE');
     reasons.STATUS_CHANGE = `${currentCrmStatus} → ${derivedStatus}`;
   }

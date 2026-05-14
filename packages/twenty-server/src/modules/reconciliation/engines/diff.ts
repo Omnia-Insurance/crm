@@ -502,10 +502,11 @@ const NEGATIVE_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   'INCOMPLETE',
 ]);
 
-const isNegativeToNegativeStatusChange = (
-  derivedStatus: string,
+export const isNegativeToNegativeStatusChange = (
+  derivedStatus: string | null,
   crmStatus: unknown,
 ): boolean =>
+  typeof derivedStatus === 'string' &&
   typeof crmStatus === 'string' &&
   NEGATIVE_TERMINAL_STATUSES.has(crmStatus) &&
   NEGATIVE_TERMINAL_STATUSES.has(derivedStatus);
