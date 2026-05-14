@@ -1,11 +1,35 @@
 import { createAtomState } from '@/ui/utilities/state/jotai/utils/createAtomState';
 import { type AuthTokenPair } from '~/generated-metadata/graphql';
 
+// OMNIA-CUSTOM: scope auth cookie to the parent of the current hostname so it
+// can be shared with sibling subdomains (e.g. omniaagent.com dashboard reading
+// the cookie set by crm.omniaagent.com). Falls back to undefined (current host)
+// on localhost, IPs, and apex domains with no subdomain to strip.
+const IP_HOSTNAME_REGEX = /^[\d.]+$/;
+
+const deriveCookieDomain = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const { hostname } = window.location;
+  if (hostname === 'localhost' || IP_HOSTNAME_REGEX.test(hostname))
+    return undefined;
+  const parts = hostname.split('.');
+  if (parts.length < 3) return undefined;
+  return '.' + parts.slice(1).join('.');
+};
+
+const cookieDomain = deriveCookieDomain();
+
 export const tokenPairState = createAtomState<AuthTokenPair | null>({
   key: 'tokenPairState',
   defaultValue: null,
   useCookieStorage: {
     cookieKey: 'tokenPair',
+    attributes: cookieDomain
+      ? {
+          domain: cookieDomain,
+          secure: window.location.protocol === 'https:',
+        }
+      : undefined,
     validateInitFn: (payload: AuthTokenPair) =>
       Boolean(payload['accessOrWorkspaceAgnosticToken']),
   },

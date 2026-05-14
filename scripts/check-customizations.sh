@@ -1195,6 +1195,10 @@ check_file_contains \
   "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
   "OMNIA-CUSTOM" \
   "SignInUp.tsx must show workspace name instead of 'Welcome, X.'"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
+  "OMNIA-CUSTOM" \
+  "auth cookie domain widening (shared across sibling subdomains)"
 
 echo ""
 echo "--- Agentation (Dev Annotation Toolbar) ---"
