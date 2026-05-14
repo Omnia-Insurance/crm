@@ -27,6 +27,10 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: server
     spec:
+      {{- /* OMNIA-CUSTOM: serviceAccountName for EKS Pod Identity (Bedrock access under AWS BAA) */}}
+      {{- with .Values.server.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end }}
       {{- with .Values.server.nodeSelector | default .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

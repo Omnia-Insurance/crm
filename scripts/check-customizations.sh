@@ -357,6 +357,25 @@ check_file_contains \
   "Ingress must keep HTML/app routes uncacheable"
 
 echo ""
+echo "--- Critical: Bedrock Pod Identity (HIPAA) ---"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/templates/deployment-server.yaml" \
+  "serviceAccountName" \
+  "Server deployment must render serviceAccountName so EKS Pod Identity (Bedrock) works"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/templates/deployment-worker.yaml" \
+  "serviceAccountName" \
+  "Worker deployment must render serviceAccountName so EKS Pod Identity (Bedrock) works"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "serviceAccountName: twenty-bedrock" \
+  "omnia-values must point server+worker at the twenty-bedrock service account"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json" \
+  '"@ai-sdk/amazon-bedrock"' \
+  "AI provider catalog must include native Bedrock entry (HIPAA-clean path via AWS BAA)"
+
+echo ""
 echo "--- Critical: Metadata Response Cache ---"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \

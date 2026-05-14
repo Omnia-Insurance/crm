@@ -1,5 +1,8 @@
 server:
   replicaCount: 2
+  # OMNIA-CUSTOM: Pod Identity Association maps this SA → twenty-bedrock-runtime
+  # role for Anthropic Claude invocation on Bedrock under AWS BAA (HIPAA).
+  serviceAccountName: twenty-bedrock
   persistence:
     enabled: false
   dockerDataPersistence:
@@ -8,10 +11,6 @@ server:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
   env:
-    EXCEPTION_HANDLER_DRIVER: sentry
-    SENTRY_ENVIRONMENT: production
-    SENTRY_DSN: https://3364f6ba21801fb70491652bd784a367@o4510840638930944.ingest.us.sentry.io/4510840660819968
-    SENTRY_FRONT_DSN: https://660cb58838f1dbf2ee91c1290136056e@o4510840638930944.ingest.us.sentry.io/4510840650989568
     NODE_OPTIONS: "--max-old-space-size=1536"
   extraEnv:
     - name: LOGIC_FUNCTION_TYPE
@@ -67,6 +66,9 @@ server:
 
 worker:
   replicaCount: 2
+  # OMNIA-CUSTOM: Pod Identity Association maps this SA → twenty-bedrock-runtime
+  # role for Anthropic Claude invocation on Bedrock under AWS BAA (HIPAA).
+  serviceAccountName: twenty-bedrock
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest

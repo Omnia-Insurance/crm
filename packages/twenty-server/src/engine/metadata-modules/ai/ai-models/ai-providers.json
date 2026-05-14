@@ -1701,5 +1701,60 @@
         "modalities": ["image"]
       }
     ]
+  },
+  "bedrock": {
+    "npm": "@ai-sdk/amazon-bedrock",
+    "label": "AWS Bedrock (Anthropic Claude)",
+    "authType": "role",
+    "region": "us-east-1",
+    "models": [
+      {
+        "name": "us.anthropic.claude-opus-4-7",
+        "label": "Claude Opus 4.7 (Bedrock)",
+        "modelFamily": "CLAUDE",
+        "inputCostPerMillionTokens": 15,
+        "outputCostPerMillionTokens": 75,
+        "cachedInputCostPerMillionTokens": 1.5,
+        "contextWindowTokens": 200000,
+        "maxOutputTokens": 32000,
+        "modalities": ["image"],
+        "supportsReasoning": true
+      },
+      {
+        "name": "us.anthropic.claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6 (Bedrock)",
+        "modelFamily": "CLAUDE",
+        "inputCostPerMillionTokens": 3,
+        "outputCostPerMillionTokens": 15,
+        "cachedInputCostPerMillionTokens": 0.3,
+        "contextWindowTokens": 200000,
+        "maxOutputTokens": 64000,
+        "modalities": ["image"],
+        "supportsReasoning": true
+      },
+      {
+        "name": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        "label": "Claude Sonnet 4.5 (Bedrock)",
+        "modelFamily": "CLAUDE",
+        "inputCostPerMillionTokens": 3,
+        "outputCostPerMillionTokens": 15,
+        "cachedInputCostPerMillionTokens": 0.3,
+        "contextWindowTokens": 200000,
+        "maxOutputTokens": 64000,
+        "modalities": ["image"],
+        "supportsReasoning": true
+      },
+      {
+        "name": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        "label": "Claude Haiku 4.5 (Bedrock)",
+        "modelFamily": "CLAUDE",
+        "inputCostPerMillionTokens": 1,
+        "outputCostPerMillionTokens": 5,
+        "cachedInputCostPerMillionTokens": 0.1,
+        "contextWindowTokens": 200000,
+        "maxOutputTokens": 8192,
+        "modalities": ["image"]
+      }
+    ]
   }
 }

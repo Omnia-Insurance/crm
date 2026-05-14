@@ -486,6 +486,17 @@ Moves CSV export from browser-only to a BullMQ background job. The server fetche
 | `engine/core-modules/application/resolvers/application-development.resolver.ts` | Removed `DevelopmentGuard` — allows `app:dev` deployment on self-hosted production server |
 | `.github/workflows/deploy-eks.yaml`                                             | Added `APP_VERSION=1.20.0` build arg so upgrade migrations run on deploy                  |
 
+### Bedrock Pod Identity (HIPAA, 2026-05-14)
+
+Native AWS Bedrock as the AI provider for product features (chat, workflow agents, etc.). Runs under the AWS BAA via EKS Pod Identity — no API keys stored in cluster. See `~/.claude/projects/-Users-matthew-crm/memory/project-bedrock-setup.md` for the IAM architecture.
+
+| File                                                                                              | Modification                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/twenty-docker/helm/twenty/templates/deployment-server.yaml`                             | Added `serviceAccountName: {{ .Values.server.serviceAccountName }}` rendering so pods can assume the `twenty-bedrock-runtime` IAM role via Pod Identity. Upstream chart had no SA support.                                  |
+| `packages/twenty-docker/helm/twenty/templates/deployment-worker.yaml`                             | Same as above for worker deployment (workflow agents run here).                                                                                                                                                             |
+| `packages/twenty-docker/helm/twenty/omnia-values.yaml`                                            | Sets `server.serviceAccountName: twenty-bedrock` and `worker.serviceAccountName: twenty-bedrock` so the Pod Identity Association takes effect.                                                                              |
+| `packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json`               | Added `bedrock` provider entry (native `@ai-sdk/amazon-bedrock`, `authType: "role"`, region `us-east-1`) with Claude Opus 4.7 / Sonnet 4.6 / Sonnet 4.5 / Haiku 4.5 model configs. Upstream catalog has no Bedrock entry.    |
+
 ### Cloudflare / Asset Caching
 
 | File                                                   | Modification                                                                                                                                        |
