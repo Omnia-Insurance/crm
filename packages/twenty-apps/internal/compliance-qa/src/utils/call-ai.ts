@@ -1,117 +1,176 @@
-// Calls Twenty's built-in AI text generation endpoint.
-// Requires an AI provider key (e.g. ANTHROPIC_API_KEY) configured on the server.
+import {
+  BedrockRuntimeClient,
+  ConverseCommand,
+  type ContentBlock,
+} from '@aws-sdk/client-bedrock-runtime';
 
-type AiResponse = {
-  text?: string;
-  usage?: { inputTokens: number; outputTokens: number };
+import { getAwsClientConfig } from 'src/utils/aws-config';
+
+const DEFAULT_BEDROCK_MODEL_ID =
+  'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const getBedrockModelId = (): string => {
+  const modelId = process.env.COMPLIANCE_QA_BEDROCK_MODEL_ID?.trim();
+
+  return modelId !== undefined && modelId.length > 0
+    ? modelId
+    : DEFAULT_BEDROCK_MODEL_ID;
 };
+
+const extractTextContent = (content: ContentBlock[] | undefined): string =>
+  content
+    ?.map((contentBlock) => contentBlock.text)
+    .filter((text): text is string => text !== undefined)
+    .join('\n')
+    .trim() ?? '';
 
 export const callAi = async (
   systemPrompt: string,
   userPrompt: string,
 ): Promise<string> => {
-  const apiBaseUrl = process.env.TWENTY_API_URL;
-  const token =
-    process.env.TWENTY_APP_ACCESS_TOKEN ?? process.env.TWENTY_API_KEY;
-
-  if (!apiBaseUrl || !token) {
-    throw new Error(
-      'Missing TWENTY_API_URL or TWENTY_APP_ACCESS_TOKEN/TWENTY_API_KEY',
-    );
-  }
-
-  const url = `${apiBaseUrl}/rest/ai/generate-text`;
-
-  console.log('[callAi] Calling', url, 'prompt length:', userPrompt.length);
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ systemPrompt, userPrompt }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-
-    throw new Error(`AI request failed (${response.status}): ${errorBody}`);
-  }
-
-  const data = (await response.json()) as AiResponse;
+  const modelId = getBedrockModelId();
+  const bedrockClient = new BedrockRuntimeClient(
+    getAwsClientConfig({ serviceName: 'Compliance QA scoring' }),
+  );
 
   console.log(
-    '[callAi] Response:',
-    JSON.stringify({
-      textLength: data.text?.length ?? 0,
-      inputTokens: data.usage?.inputTokens,
-      outputTokens: data.usage?.outputTokens,
+    '[callAi] Calling Bedrock model',
+    modelId,
+    'prompt length:',
+    userPrompt.length,
+  );
+
+  const response = await bedrockClient.send(
+    new ConverseCommand({
+      modelId,
+      system: [{ text: systemPrompt }],
+      messages: [
+        {
+          role: 'user',
+          content: [{ text: userPrompt }],
+        },
+      ],
+      inferenceConfig: {
+        maxTokens: 8192,
+        temperature: 0,
+      },
     }),
   );
 
-  if (!data.text) {
+  const text = extractTextContent(response.output?.message?.content);
+
+  console.log(
+    '[callAi] Bedrock response:',
+    JSON.stringify({
+      textLength: text.length,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
+      stopReason: response.stopReason,
+    }),
+  );
+
+  if (text.length === 0) {
     throw new Error('AI returned empty response');
   }
 
-  return data.text;
+  return text;
 };
 
-// Extract JSON from AI response that may contain markdown code fences or trailing text
-export const parseAiJson = <T>(text: string): T => {
-  let cleaned = text.trim();
-
-  // Strip markdown code fences
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```[a-z]*\n?/, '');
-    cleaned = cleaned.replace(/\n?```\s*$/, '');
+const stripCodeFence = (text: string): string => {
+  if (!text.startsWith('```')) {
+    return text;
   }
 
-  // Try parsing as-is first
-  try {
-    return JSON.parse(cleaned) as T;
-  } catch {
-    // Find the outermost JSON object or array
-    const startIdx = cleaned.search(/[{[]/);
+  return text.replace(/^```[a-z]*\n?/, '').replace(/\n?```\s*$/, '');
+};
 
-    if (startIdx === -1) {
+const findJsonEndIndex = ({
+  text,
+  startIndex,
+  opener,
+}: {
+  text: string;
+  startIndex: number;
+  opener: '{' | '[';
+}): number | null => {
+  const closer = opener === '{' ? '}' : ']';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < text.length; index++) {
+    const character = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (character === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+
+    if (character === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (character === opener) depth++;
+    if (character === closer) depth--;
+
+    if (depth === 0) {
+      return index + 1;
+    }
+  }
+
+  return null;
+};
+
+const parseJson = (text: string): unknown => {
+  const parsed: unknown = JSON.parse(text);
+
+  if (!isRecord(parsed) && !Array.isArray(parsed)) {
+    throw new Error('AI JSON response must be an object or array');
+  }
+
+  return parsed;
+};
+
+// Extract JSON from AI response that may contain markdown code fences or trailing text.
+export const parseAiJson = (text: string): unknown => {
+  const cleaned = stripCodeFence(text.trim());
+
+  try {
+    return parseJson(cleaned);
+  } catch {
+    const startIndex = cleaned.search(/[{[]/);
+
+    if (startIndex === -1) {
       throw new Error('No JSON found in AI response');
     }
 
-    const opener = cleaned[startIdx];
-    const closer = opener === '{' ? '}' : ']';
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
+    const opener = cleaned[startIndex];
 
-    for (let i = startIdx; i < cleaned.length; i++) {
-      const ch = cleaned[i];
-
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-
-      if (ch === '\\' && inString) {
-        escaped = true;
-        continue;
-      }
-
-      if (ch === '"') {
-        inString = !inString;
-        continue;
-      }
-
-      if (inString) continue;
-
-      if (ch === opener) depth++;
-      if (ch === closer) depth--;
-
-      if (depth === 0) {
-        return JSON.parse(cleaned.slice(startIdx, i + 1)) as T;
-      }
+    if (opener !== '{' && opener !== '[') {
+      throw new Error('No JSON found in AI response');
     }
 
-    throw new Error('Malformed JSON in AI response');
+    const endIndex = findJsonEndIndex({
+      text: cleaned,
+      startIndex,
+      opener,
+    });
+
+    if (endIndex === null) {
+      throw new Error('Malformed JSON in AI response');
+    }
+
+    return parseJson(cleaned.slice(startIndex, endIndex));
   }
 };

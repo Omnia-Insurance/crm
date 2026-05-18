@@ -186,6 +186,14 @@ check_file_contains \
   "deleteSingleRecord" \
   "Delete single record action must be pinned as a header button"
 check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-manifest/application-manifest-migration.service.ts" \
+  "workspaceCustomFlatApplication.id" \
+  "App manifest sync must validate relations against workspace-custom CRM objects"
+check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/workspace-graphql-schema-sdl/workspace-graphql-schema-sdl.service.ts" \
+  "workspaceCustomApplicationId" \
+  "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
+check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "PermissionFlagType.LAYOUTS" \
   "Edit Record Page Layout must be gated behind LAYOUTS permission"
@@ -357,19 +365,23 @@ check_file_contains \
   "Ingress must keep HTML/app routes uncacheable"
 
 echo ""
-echo "--- Critical: Bedrock Pod Identity (HIPAA) ---"
+echo "--- Critical: AWS Runtime Pod Identity (HIPAA) ---"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/templates/deployment-server.yaml" \
   "serviceAccountName" \
-  "Server deployment must render serviceAccountName so EKS Pod Identity (Bedrock) works"
+  "Server deployment must render serviceAccountName so EKS Pod Identity works"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/templates/deployment-worker.yaml" \
   "serviceAccountName" \
-  "Worker deployment must render serviceAccountName so EKS Pod Identity (Bedrock) works"
+  "Worker deployment must render serviceAccountName so EKS Pod Identity works"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
   "serviceAccountName: twenty-bedrock" \
   "omnia-values must point server+worker at the twenty-bedrock service account"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "Amazon Transcribe" \
+  "twenty-bedrock service account comment must document Compliance QA Transcribe/S3 runtime access"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json" \
   '"@ai-sdk/amazon-bedrock"' \
@@ -505,6 +517,369 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/modules/lead/query-hooks/lead-query-hook.module.ts" \
   "Lead query hook module registration"
+
+echo ""
+echo "--- Compliance QA App ---"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "Compliance QA scorecard app object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-manager.ts" \
+  "Compliance QA app-owned manager assignment object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/constants/universal-identifiers.ts" \
+  "Compliance QA relation object and field identifiers must stay stable"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/fields/qa-managers-on-workspace-member.field.ts" \
+  "Compliance QA manager records must be selectable workspace members"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/fields/qa-scorecards-on-call.field.ts" \
+  "Compliance QA scorecards must relate back to source Call records"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/fields/qa-scorecards-on-lead.field.ts" \
+  "Compliance QA scorecards must relate back to source Lead records"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/fields/qa-scorecards-on-agent-profile.field.ts" \
+  "Compliance QA scorecards must relate back to Agent Profile records"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/fields/qa-scorecards-on-task.field.ts" \
+  "Compliance QA scorecards must relate back to follow-up Task records"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/navigation-menu-items/quality-assurance-folder-navigation-menu-item.ts" \
+  "Compliance QA sidebar views must stay nested under the Quality Assurance folder"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/.nvmrc" \
+  "Compliance app deploy action must have a local Node version file"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/.oxlintrc.json" \
+  "Compliance app linting must use the standard Twenty app oxlint config"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "\"lint\": \"oxlint -c .oxlintrc.json .\"" \
+  "Compliance app lint script must stay executable"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "\"version\": \"1." \
+  "Compliance app production package version must stay on a 1.x production line"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "\"version\": \"0." \
+  "Compliance app production package version must not regress to a 0.x prerelease"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'call'" \
+  "QA Scorecard source Call must be a relation field, not a text UUID"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'agent'" \
+  "QA Scorecard agent must be a relation field, not denormalized text"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'lead'" \
+  "QA Scorecard lead must be a relation field, not denormalized text"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'qaManager'" \
+  "QA Scorecard QA Manager must be a relation field"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'score'" \
+  "QA Scorecard should expose the concise score field"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'result'" \
+  "QA Scorecard should expose the concise result field"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'qaType'" \
+  "QA Scorecard should expose the concise call/rubric type field without using reserved field names"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "label: 'Type'" \
+  "QA Scorecard rubric type should still appear as Type in the UI"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'redFlag'" \
+  "QA Scorecard should expose the concise red flag field"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "sourceCallId" \
+  "QA Scorecard should not regress to storing source Call as text UUID"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'sourceCallKey'" \
+  "QA Scorecard must keep a unique technical source-call key for idempotency"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "isUnique: true" \
+  "QA Scorecard source-call key must stay unique to prevent duplicate scorecards"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'transcribeJobName'" \
+  "QA Scorecard should not store deterministic transient Transcribe job names"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'overallScore'" \
+  "QA Scorecard should not regress to verbose overallScore field naming"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'overallResult'" \
+  "QA Scorecard should not regress to verbose overallResult field naming"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'callType'" \
+  "QA Scorecard should not regress to verbose callType field naming"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'hasRedFlag'" \
+  "QA Scorecard should not regress to verbose hasRedFlag field naming"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'errorMessage'" \
+  "QA processing errors should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'scoreDetails'" \
+  "QA score details should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'redFlagDetails'" \
+  "QA red flag details should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'transcript'" \
+  "QA transcripts should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'recommendations'" \
+  "QA recommendations should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'scoringEvidence'" \
+  "QA scoring evidence should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'transcribeInputS3Key'" \
+  "Transcribe input artifacts should be written to Notes instead of scorecard fields"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/objects/qa-scorecard.ts" \
+  "name: 'transcribeOutputS3Key'" \
+  "Transcribe output artifacts should be written to Notes instead of scorecard fields"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/navigation-menu-items/qa-scorecard-navigation-menu-item.ts" \
+  "folderUniversalIdentifier" \
+  "Compliance QA Scorecards view must stay nested under Quality Assurance"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/navigation-menu-items/qa-manager-navigation-menu-item.ts" \
+  "folderUniversalIdentifier" \
+  "Compliance QA Managers view must stay nested under Quality Assurance"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "displayName: 'Compliance'" \
+  "Compliance app must keep the user-facing app name concise"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "aboutDescription: COMPLIANCE_APP_ABOUT_DESCRIPTION" \
+  "Compliance app must keep rich About-page markdown"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "COMPLIANCE_QA_TRANSCRIBE_BUCKET" \
+  "Compliance QA must keep S3 bucket configuration for Amazon Transcribe"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "COMPLIANCE_QA_BEDROCK_MODEL_ID" \
+  "Compliance QA must keep Amazon Bedrock model configuration for scoring"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "COMPLIANCE_QA_MIN_DURATION_SECONDS" \
+  "Compliance QA must keep a duration gate to control Transcribe spend"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "COMPLIANCE_QA_ENABLED_AFTER" \
+  "Compliance QA must support rollout-date filtering"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
+  "objectPermissions" \
+  "Compliance QA app role must use granular object permissions"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
+  "canReadAllObjectRecords: true" \
+  "Compliance QA app role must not have blanket read access"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
+  "canUpdateAllObjectRecords: true" \
+  "Compliance QA app role must not have blanket update access"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "@aws-sdk/client-bedrock-runtime" \
+  "Compliance QA must use AWS Bedrock Runtime directly for scoring"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-config.ts" \
+  "Compliance QA AWS clients must share one typed config helper"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
+  "BedrockRuntimeClient" \
+  "Compliance QA scoring must use Amazon Bedrock directly"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
+  "/rest/ai/generate-text" \
+  "Compliance QA scoring must not depend on Twenty AI REST endpoint permissions"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "Start Compliance QA" \
+  "Compliance QA workflow action must remain available for custom/manual workflows"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "Compliance QA must create its visible workflow during app install"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "definePostInstallLogicFunction" \
+  "Compliance QA workflow setup must run as a post-install hook"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "Compliance Call Pipeline" \
+  "Compliance QA must install a visible CRM Workflow object"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "call.upserted" \
+  "Compliance QA workflow must react to created and updated Calls"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "'leadId'" \
+  "Compliance QA workflow must react to source Lead changes"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "CALL_FIELDS_THAT_CAN_AFFECT_QA_ELIGIBILITY" \
+  "Compliance QA workflow must ignore unrelated Call edits"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "activateWorkflowVersion" \
+  "Compliance QA install must activate the visible workflow"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "DELAY" \
+  "Compliance QA workflow must own async Transcribe polling with delay steps"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "shouldPollAgain" \
+  "Compliance QA workflow must branch Transcribe polling based on action output"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
+  "createDraftFromWorkflowVersion" \
+  "Compliance QA app upgrades must update the app-managed workflow version"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-install/application-install.service.ts" \
+  "userWorkspaceId?: string" \
+  "App post-install hooks must receive installing user context for Workflow API permissions"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-install/application-install.resolver.ts" \
+  "@AuthUser({ allowUndefined: true })" \
+  "Direct app installs must forward user context to post-install hooks"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-marketplace/marketplace.resolver.ts" \
+  "@AuthUser({ allowUndefined: true })" \
+  "Marketplace app installs must forward user context to post-install hooks"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-upgrade/application-upgrade.resolver.ts" \
+  "@AuthUser()" \
+  "App upgrades must forward user context to post-install hooks"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "readCachedTranscribeOutputForCall" \
+  "Compliance QA retries must reuse cached Transcribe output before starting a new job"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "isCallEligibleForComplianceQa" \
+  "Compliance QA start worker must filter calls before creating scorecards or Transcribe jobs"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "upsertTranscriptionArtifactAttachments" \
+  "Compliance QA start worker must attach transcription artifacts to scorecard Files"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/backfill-compliance-qa.ts" \
+  "resolveDryRun" \
+  "Compliance QA backfill must be dry-run safe by default"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/backfill-compliance-qa.ts" \
+  "confirm" \
+  "Compliance QA backfill must require explicit confirmation before queueing live work"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "Amazon Transcribe" \
+  "Compliance QA completion worker must poll Amazon Transcribe, not Deepgram"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "cronTriggerSettings" \
+  "Compliance QA async Transcribe polling must be owned by Workflow delay steps, not cron"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "isFinalAttempt" \
+  "Compliance QA workflow polling must fail visibly when Transcribe never finishes"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "findProcessableQaScorecards" \
+  "Compliance QA completion worker must process cached SCORING scorecards"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "buildTranscriptionJobName" \
+  "Compliance QA completion worker must derive deterministic Transcribe job names from source Calls"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "title: 'Transcript'" \
+  "Compliance QA transcript output must be written to Notes without a redundant QA prefix"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "Amazon Transcribe Output JSON" \
+  "Compliance QA completion worker must attach transcription artifacts to scorecard Files"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "linkTaskToComplianceContextIfSupported" \
+  "Compliance QA follow-up tasks must be linked to scorecard, call, and agent context"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "No active QA Manager" \
+  "Compliance QA must fail loudly instead of creating unassigned follow-up tasks"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/records.ts" \
+  "targetAgentProfileId" \
+  "Compliance QA follow-up task targets must include Agent Profile links"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/records.ts" \
+  "targetQaScorecardId" \
+  "Compliance QA follow-up task targets must include QA Scorecard links"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/records.ts" \
+  "upsertQaScorecardAttachment" \
+  "Compliance QA must upsert scorecard attachments for the Files tab"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/records.ts" \
+  "uploadFilesFieldFileByUniversalIdentifier" \
+  "Compliance QA Files tab artifacts must use native Twenty file records"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/graphql-client.ts" \
+  "graphqlMultipartRequest" \
+  "Compliance QA must keep multipart GraphQL uploads for FilesField-backed attachments"
+check_file_not_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "DEEPGRAM_API_KEY" \
+  "Compliance QA must not regress to Deepgram transcription"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "getTranscribeOutputLocation" \
+  "Compliance QA must keep deterministic Transcribe output locations for retry cost control"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "ConflictException" \
+  "Compliance QA must converge duplicate Transcribe starts on the same deterministic job"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.ts" \
+  "Compliance QA call eligibility filters must stay centralized"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.test.ts" \
+  "Compliance QA scoring thresholds and red-flag override tests must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/error-message.ts" \
+  "Compliance QA must use explicit unknown error narrowing helpers"
 
 echo ""
 echo "--- Policy Pre-Query Hook: agentId Assignment ---"
@@ -769,6 +1144,13 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/database/typeorm/core/migrations/common/1776100000000-add-time-card-unique-index.ts" \
   "Time Card composite unique index migration"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts" \
+  "Time Card agent relation metadata reconciliation migration"
+check_file_contains \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts" \
+  "ReconcileTimeCardAgentRelation1778000000000" \
+  "Time Card relation migration must normalize agent/agentId metadata"
 
 echo ""
 echo "--- Ingestion Record Processor: Atomic Dedup ---"

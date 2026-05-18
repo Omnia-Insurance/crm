@@ -73,6 +73,8 @@ export class ApplicationInstallService {
     appRegistrationId: string;
     version?: string;
     workspaceId: string;
+    userId?: string;
+    userWorkspaceId?: string;
   }): Promise<boolean> {
     const appRegistration = await this.appRegistrationRepository.findOne({
       where: { id: params.appRegistrationId },
@@ -113,6 +115,8 @@ export class ApplicationInstallService {
         this.doInstallApplication(appRegistration, {
           version: params.version,
           workspaceId: params.workspaceId,
+          userId: params.userId,
+          userWorkspaceId: params.userWorkspaceId,
         }),
       lockKey,
       { ttl: 60_000, ms: 500, maxRetries: 120 },
@@ -121,7 +125,12 @@ export class ApplicationInstallService {
 
   private async doInstallApplication(
     appRegistration: ApplicationRegistrationEntity,
-    params: { version?: string; workspaceId: string },
+    params: {
+      version?: string;
+      workspaceId: string;
+      userId?: string;
+      userWorkspaceId?: string;
+    },
   ): Promise<boolean> {
     const resolvedPackage =
       await this.applicationPackageFetcherService.resolvePackage(
@@ -252,6 +261,8 @@ export class ApplicationInstallService {
       await this.runPostInstallHook({
         manifest: resolvedPackage.manifest,
         workspaceId: params.workspaceId,
+        userId: params.userId,
+        userWorkspaceId: params.userWorkspaceId,
         previousVersion,
         newVersion,
         isVersionUpgrade,
@@ -375,6 +386,8 @@ export class ApplicationInstallService {
   private async runPostInstallHook(params: {
     manifest: Manifest;
     workspaceId: string;
+    userId?: string;
+    userWorkspaceId?: string;
     previousVersion?: string;
     newVersion: string;
     isVersionUpgrade: boolean;
@@ -383,6 +396,8 @@ export class ApplicationInstallService {
     const {
       manifest,
       workspaceId,
+      userId,
+      userWorkspaceId,
       previousVersion,
       newVersion,
       isVersionUpgrade,
@@ -438,6 +453,8 @@ export class ApplicationInstallService {
           {
             logicFunctionId: flatLogicFunction.id,
             workspaceId,
+            userId,
+            userWorkspaceId,
             payload,
           },
         ],
@@ -449,6 +466,8 @@ export class ApplicationInstallService {
     const result = await this.logicFunctionExecutorService.execute({
       logicFunctionId: flatLogicFunction.id,
       workspaceId,
+      userId,
+      userWorkspaceId,
       payload,
     });
 

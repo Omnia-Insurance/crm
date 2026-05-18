@@ -8,7 +8,10 @@ import { ApplicationInstallService } from 'src/engine/core-modules/application/a
 import { MarketplaceAppDTO } from 'src/engine/core-modules/application/application-marketplace/dtos/marketplace-app.dto';
 import { MarketplaceAppDetailDTO } from 'src/engine/core-modules/application/application-marketplace/dtos/marketplace-app-detail.dto';
 import { MarketplaceQueryService } from 'src/engine/core-modules/application/application-marketplace/marketplace-query.service';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
+import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
@@ -52,6 +55,8 @@ export class MarketplaceResolver {
     @Args('version', { type: () => String, nullable: true })
     version: string | undefined,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUser({ allowUndefined: true }) user?: AuthContextUser,
+    @AuthUserWorkspaceId({ allowUndefined: true }) userWorkspaceId?: string,
   ): Promise<boolean> {
     const registration =
       await this.marketplaceQueryService.findRegistrationByUniversalIdentifier(
@@ -62,6 +67,8 @@ export class MarketplaceResolver {
       appRegistrationId: registration.id,
       version,
       workspaceId: workspace.id,
+      userId: user?.id,
+      userWorkspaceId,
     });
   }
 

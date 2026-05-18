@@ -1,10 +1,15 @@
-// Omnia Insurance Group — Compliance QA Rules
-// All scripts, disclosures, scoring criteria, and red flag definitions
-// for automated QA scoring of insurance sales calls.
+export type QaRubricType = 'ACA_SALE' | 'ANCILLARY_ONLY' | 'UNKNOWN';
 
-// ============================================================
-// Red Flag Auto-Fail Definitions
-// ============================================================
+export type QaResult = 'PASS' | 'FAIL' | 'NEEDS_REVIEW' | 'NOT_APPLICABLE';
+
+export type QaProcessingStatus =
+  | 'PENDING'
+  | 'COPYING_RECORDING'
+  | 'TRANSCRIBING'
+  | 'SCORING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'SKIPPED';
 
 export type RedFlagKey =
   | 'recordedLineDisclosure'
@@ -19,9 +24,39 @@ export type RedFlagDefinition = {
   key: RedFlagKey;
   label: string;
   description: string;
-  scorecardField: string;
-  keywords: string[];
   aiPromptGuidance: string;
+};
+
+export type ScoringCriterion = {
+  id: string;
+  label: string;
+  description: string;
+  appliesTo: 'ALL' | 'ACA_SALE' | 'ANCILLARY_ONLY';
+};
+
+export type ScoringSection = {
+  id:
+    | 'opening'
+    | 'factFinding'
+    | 'eligibility'
+    | 'presentation'
+    | 'application'
+    | 'closing';
+  label: string;
+  weight: number;
+  criteria: ScoringCriterion[];
+};
+
+export const PASSING_SCORE_EXCLUSIVE_THRESHOLD = 80;
+export const FAIL_SCORE_THRESHOLD = 60;
+
+export const SECTION_WEIGHTS: Record<ScoringSection['id'], number> = {
+  opening: 0.15,
+  factFinding: 0.2,
+  eligibility: 0.15,
+  presentation: 0.2,
+  application: 0.15,
+  closing: 0.15,
 };
 
 export const RED_FLAGS: RedFlagDefinition[] = [
@@ -29,610 +64,369 @@ export const RED_FLAGS: RedFlagDefinition[] = [
     key: 'recordedLineDisclosure',
     label: 'Recorded Line Disclosure',
     description:
-      'Agent must disclose the call is being recorded within the first 30 seconds',
-    scorecardField: 'redFlagRecordedLine',
-    keywords: [
-      'recorded line',
-      'being recorded',
-      'call is recorded',
-      'call may be recorded',
-      'monitored and recorded',
-      'quality assurance',
-    ],
+      'Agent must state that the call is recorded for quality and compliance purposes on every call, callback, transfer, and when a new person joins.',
     aiPromptGuidance:
-      'Check if the agent clearly informed the consumer that the call is being recorded. This must happen within approximately the first 30 seconds of the call. Look for phrases like "this call is being recorded" or "you are on a recorded line".',
+      'Flag as violated when a scorable call does not include a recorded-line disclosure near the beginning of the live conversation.',
   },
   {
     key: 'marketplaceDisclosure',
     label: 'Marketplace Disclosure',
     description:
-      'Agent must disclose they are not directly associated with the Health Insurance Marketplace or any government agency',
-    scorecardField: 'redFlagMarketplace',
-    keywords: [
-      'not the marketplace',
-      'not directly associated',
-      'not a government',
-      'private insurance agency',
-      'licensed insurance agency',
-      'not affiliated with',
-    ],
+      'Agent must read the Marketplace authorization disclosure before accessing or using Marketplace confidential information.',
     aiPromptGuidance:
-      'Check if the agent clearly stated they are NOT directly associated with the Health Insurance Marketplace, healthcare.gov, or any government agency. The agent should identify themselves as a private/licensed insurance agency.',
+      'Flag as violated when an ACA call requires Marketplace access/enrollment and the Marketplace authorization disclosure is missing or clearly not read.',
   },
   {
     key: 'aorDisclosure',
-    label: 'Agent of Record (AOR) Disclosure',
+    label: 'Agent of Record Disclosure',
     description:
-      'Agent must properly handle the Agent of Record disclosure — inform consumer they will become their agent and what that means',
-    scorecardField: 'redFlagAor',
-    keywords: [
-      'agent of record',
-      'your agent',
-      'assigned agent',
-      'broker of record',
-      'represent you',
-    ],
+      'Agent must provide Agent of Record disclosure when taking over or becoming the consumer agent of record.',
     aiPromptGuidance:
-      'Check if the agent explained the Agent of Record (AOR) relationship. The agent should inform the consumer that by proceeding, the agent will become their designated agent/broker of record for their health insurance plan. If this is a transfer/re-enrollment, the agent must explain the AOR change.',
+      'Flag as violated when AOR is attempted or completed without explaining the agent-of-record relationship before enrollment or transfer.',
   },
   {
     key: 'commissionDisclosure',
     label: 'Commission Disclosure',
     description:
-      'Agent must disclose that they are compensated via commission at no additional cost to the consumer',
-    scorecardField: 'redFlagCommission',
-    keywords: [
-      'commission',
-      'compensated',
-      'no cost to you',
-      'no additional cost',
-      'free service',
-      'no charge',
-      'paid by the insurance',
-    ],
+      'Agent must disclose that they may receive commission and that it does not impact the consumer premium or plan options.',
     aiPromptGuidance:
-      'Check if the agent disclosed that their services are commission-based and that there is no additional cost to the consumer. The agent should explain they are compensated by the insurance carrier, not the consumer.',
+      'Flag as violated when a scorable sales/enrollment call does not include the required commission disclosure.',
   },
   {
     key: 'healthSherpaDisclosure',
     label: 'HealthSherpa Disclosure',
     description:
-      'When using HealthSherpa for enrollment, agent must provide the HealthSherpa-required disclosure',
-    scorecardField: 'redFlagHealthSherpa',
-    keywords: [
-      'healthsherpa',
-      'health sherpa',
-      'enrollment platform',
-      'third-party platform',
-      'secure website',
-    ],
+      'Agent must provide HealthSherpa disclosure when using HealthSherpa for ACA enrollment.',
     aiPromptGuidance:
-      'Check if the agent mentioned HealthSherpa or the enrollment platform when completing the application. If HealthSherpa was used for enrollment, the agent must have disclosed they are using a third-party enrollment platform. Only flag this if the call involves an ACA enrollment.',
+      'Only evaluate when HealthSherpa or the enrollment platform is used. Flag missing required disclosure on ACA enrollment calls.',
   },
   {
     key: 'agentCoaching',
-    label: 'Agent Coaching',
+    label: 'Coaching or Manipulation',
     description:
-      'Agent must NOT coach consumers on how to answer health or eligibility questions to manipulate outcomes',
-    scorecardField: 'redFlagAgentCoaching',
-    keywords: [
-      'just say',
-      'tell them',
-      "don't mention",
-      'leave that out',
-      "don't tell",
-      'say you',
-    ],
+      'Agent must not coach, manipulate, or tell the consumer how to answer eligibility, health, income, or application questions.',
     aiPromptGuidance:
-      'Check if the agent coached or instructed the consumer on how to answer health questions, income questions, or eligibility questions in a way that would manipulate the outcome. Examples: telling a consumer to say they dont have a condition, instructing them to report different income, or coaching them to answer verification questions incorrectly. This is a CRITICAL violation.',
+      'Flag any instruction that appears designed to manipulate eligibility, health, income, identity, or application answers.',
   },
   {
     key: 'dncViolation',
-    label: 'DNC Violation',
+    label: 'Do Not Call Violation',
     description:
-      'If the consumer requests to be placed on the Do Not Call list, the agent must comply immediately',
-    scorecardField: 'redFlagDncViolation',
-    keywords: [
-      'do not call',
-      'stop calling',
-      'remove my number',
-      'take me off',
-      'dont call me',
-      "don't call me",
-      'dnc',
-    ],
+      'Agent must immediately honor requests to stop calling or place the consumer on the Do Not Call list.',
     aiPromptGuidance:
-      'Check if the consumer requested to be placed on the Do Not Call list or asked to stop receiving calls. If so, verify the agent acknowledged the request and did not attempt to continue the sales pitch. The agent must comply immediately and not try to talk the consumer out of it.',
+      'Flag when the consumer asks not to be called and the agent continues selling, ignores the request, or does not acknowledge it.',
   },
 ];
-
-// ============================================================
-// Required Scripts and Openers
-// ============================================================
-
-export type ScriptType = 'OUTBOUND' | 'INBOUND' | 'CALLBACK';
-
-export type RequiredScript = {
-  type: ScriptType;
-  label: string;
-  template: string;
-  requiredElements: string[];
-};
-
-export const REQUIRED_SCRIPTS: RequiredScript[] = [
-  {
-    type: 'OUTBOUND',
-    label: 'Outbound Call Opener',
-    template: `Hi, this is [Agent Name] with [Agency Name], a licensed insurance agency. This call is being recorded for quality assurance. I'm calling because you recently inquired about health insurance options. I want to let you know that we are not directly associated with the Health Insurance Marketplace or any government agency. We are a private licensed insurance agency. Our services are at no additional cost to you — we are compensated by the insurance carriers. Is this a good time to talk about your health insurance needs?`,
-    requiredElements: [
-      'Agent identifies themselves by name',
-      'Agency name mentioned',
-      'Licensed insurance agency',
-      'Recorded line disclosure',
-      'Not associated with marketplace/government',
-      'Commission/no cost disclosure',
-      'Permission to continue',
-    ],
-  },
-  {
-    type: 'INBOUND',
-    label: 'Inbound Call Opener',
-    template: `Thank you for calling [Agency Name], a licensed insurance agency. My name is [Agent Name]. This call is being recorded for quality assurance. Before we get started, I want to let you know that we are not directly associated with the Health Insurance Marketplace or any government agency. We are a private licensed insurance agency, and our services come at no additional cost to you. How can I help you today?`,
-    requiredElements: [
-      'Thank the caller',
-      'Agency name mentioned',
-      'Agent identifies themselves by name',
-      'Recorded line disclosure',
-      'Not associated with marketplace/government',
-      'Commission/no cost disclosure',
-    ],
-  },
-  {
-    type: 'CALLBACK',
-    label: 'Callback Opener',
-    template: `Hi, this is [Agent Name] with [Agency Name] calling you back. This call is being recorded for quality assurance. We spoke previously about your health insurance options. I wanted to follow up on our conversation. As a reminder, we are a licensed insurance agency, not directly associated with the marketplace, and our services are at no cost to you. Do you have a few minutes to continue?`,
-    requiredElements: [
-      'Agent identifies themselves by name',
-      'Reference to previous conversation',
-      'Recorded line disclosure',
-      'Not associated with marketplace (reminder)',
-      'No cost reminder',
-      'Permission to continue',
-    ],
-  },
-];
-
-// ============================================================
-// QA Scorecard Section Criteria
-// ============================================================
-
-export type ScoringCriterion = {
-  id: string;
-  label: string;
-  description: string;
-  maxPoints: number;
-  acaOnly?: boolean;
-  ancillaryOnly?: boolean;
-};
-
-export type ScoringSection = {
-  id: string;
-  label: string;
-  description: string;
-  criteria: ScoringCriterion[];
-};
 
 export const SCORING_SECTIONS: ScoringSection[] = [
   {
     id: 'opening',
     label: 'Opening',
-    description:
-      'How the agent opens the call — introductions, disclosures, and setting expectations',
+    weight: SECTION_WEIGHTS.opening,
     criteria: [
       {
-        id: 'opening-greeting',
-        label: 'Professional Greeting',
+        id: 'opening-energy-warmth',
+        label: 'Energy and warmth',
         description:
-          'Agent greets the consumer professionally, states their name and agency',
-        maxPoints: 15,
+          'Opens with energy, positivity, warmth, and a professional tone.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'opening-recorded-line',
-        label: 'Recorded Line Disclosure',
+        id: 'opening-agent-introduction',
+        label: 'Licensed agent introduction',
         description:
-          'Agent discloses the call is being recorded (within first 30 seconds)',
-        maxPoints: 20,
+          'Introduces self as a licensed agent and gives enough context for the consumer to understand who is calling.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'opening-marketplace-disclosure',
-        label: 'Marketplace/Government Disclosure',
+        id: 'opening-reason-authority',
+        label: 'Reason and authority for call',
         description:
-          'Agent states they are not associated with the marketplace or government',
-        maxPoints: 20,
+          'States why the call is occurring and establishes authority to discuss coverage.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'opening-commission-disclosure',
-        label: 'Commission/No Cost Disclosure',
+        id: 'opening-hipaa-identity',
+        label: 'Identity confirmation',
         description:
-          'Agent discloses services are commission-based at no cost to consumer',
-        maxPoints: 15,
+          'Confirms consumer name, ZIP, DOB, or contact details when appropriate before discussing protected information.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'opening-permission',
-        label: 'Permission to Proceed',
+        id: 'opening-soft-skills',
+        label: 'Soft skills and readiness',
         description:
-          'Agent asks if the consumer has time or is ready to proceed',
-        maxPoints: 10,
-      },
-      {
-        id: 'opening-rapport',
-        label: 'Rapport Building',
-        description:
-          'Agent builds rapport — friendly, professional tone, engages the consumer',
-        maxPoints: 20,
+          'Confirms readiness for the call and uses basic soft skills or rebuttals without pressure.',
+        appliesTo: 'ALL',
       },
     ],
   },
   {
     id: 'factFinding',
     label: 'Fact Finding',
-    description:
-      'How thoroughly the agent gathers information about the consumer',
+    weight: SECTION_WEIGHTS.factFinding,
     criteria: [
       {
-        id: 'ff-household',
-        label: 'Household Information',
+        id: 'fact-transition-agenda',
+        label: 'Discovery transition and agenda',
         description:
-          'Agent asks about household size, dependents, and who needs coverage',
-        maxPoints: 20,
+          'Transitions into discovery with a clear value proposition and agenda.',
+        appliesTo: 'ACA_SALE',
       },
       {
-        id: 'ff-income',
-        label: 'Income Verification',
+        id: 'fact-open-ended-probing',
+        label: 'Open-ended needs probing',
         description:
-          'Agent asks about income to determine subsidy eligibility (ACA)',
-        maxPoints: 20,
-        acaOnly: true,
+          'Uses open-ended questions to uncover needs, health conditions, tobacco use, prescriptions, and coverage concerns.',
+        appliesTo: 'ACA_SALE',
       },
       {
-        id: 'ff-current-coverage',
-        label: 'Current Coverage',
+        id: 'fact-motivation-preferences',
+        label: 'Motivation and preferences',
         description:
-          'Agent asks about current insurance status and any existing coverage',
-        maxPoints: 15,
+          'Determines motivation, pain points, HMO/PPO preferences, emergency room use, and office visit frequency.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'ff-health-needs',
-        label: 'Health Needs Assessment',
-        description:
-          'Agent asks about medical needs, doctors, prescriptions, conditions',
-        maxPoints: 25,
+        id: 'fact-recap',
+        label: 'Recap of discovery',
+        description: 'Recaps the information gathered before moving forward.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'ff-budget',
-        label: 'Budget Discussion',
+        id: 'fact-attempts-aca',
+        label: 'ACA attempt before ancillary',
         description:
-          'Agent discusses budget expectations and premium affordability',
-        maxPoints: 20,
+          'Attempts to sell or evaluate ACA coverage before moving to ancillary-only products.',
+        appliesTo: 'ANCILLARY_ONLY',
       },
     ],
   },
   {
     id: 'eligibility',
     label: 'Eligibility',
-    description:
-      'How the agent determines and explains plan eligibility (ACA-specific)',
+    weight: SECTION_WEIGHTS.eligibility,
     criteria: [
       {
-        id: 'elig-sep-qle',
-        label: 'SEP/QLE Verification',
+        id: 'eligibility-qle',
+        label: 'QLE confirmation',
         description:
-          'Agent verifies if there is a qualifying life event for Special Enrollment Period',
-        maxPoints: 25,
-        acaOnly: true,
+          'Confirms qualifying life event within the last or upcoming 60 days when outside Open Enrollment.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'elig-subsidy',
-        label: 'Subsidy Explanation',
+        id: 'eligibility-income-tax',
+        label: 'Income and tax filing',
         description:
-          'Agent explains premium tax credits and how subsidies work',
-        maxPoints: 25,
-        acaOnly: true,
+          'Asks household income and tax filing information for subsidy eligibility.',
+        appliesTo: 'ACA_SALE',
       },
       {
-        id: 'elig-medicaid',
-        label: 'Medicaid/CHIP Screening',
+        id: 'eligibility-other-products',
+        label: 'Other product eligibility',
         description:
-          'Agent screens for Medicaid/CHIP eligibility before ACA plans',
-        maxPoints: 25,
-        acaOnly: true,
-      },
-      {
-        id: 'elig-documentation',
-        label: 'Documentation Requirements',
-        description:
-          'Agent explains what documents may be needed for enrollment',
-        maxPoints: 25,
+          'Determines eligibility for other core, ancillary, or UHF products where appropriate.',
+        appliesTo: 'ALL',
       },
     ],
   },
   {
     id: 'presentation',
     label: 'Presentation',
-    description: 'How the agent presents plan options to the consumer',
+    weight: SECTION_WEIGHTS.presentation,
     criteria: [
       {
-        id: 'pres-options',
-        label: 'Multiple Plan Options',
+        id: 'presentation-aor-attempt',
+        label: 'AOR attempt',
         description:
-          'Agent presents multiple plan options for comparison, not just one',
-        maxPoints: 20,
+          'Attempts AOR when applicable and not during Open Enrollment.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'pres-benefits',
-        label: 'Benefits Explanation',
+        id: 'presentation-plan-order',
+        label: 'ACA plan components in order',
         description:
-          'Agent clearly explains plan benefits, deductibles, copays, and max out-of-pocket',
-        maxPoints: 25,
+          'Presents Carrier, Network, RX, Hospital, Deductible, Max OOP, then Premium.',
+        appliesTo: 'ACA_SALE',
       },
       {
-        id: 'pres-network',
-        label: 'Network/Provider Discussion',
+        id: 'presentation-benefits-value',
+        label: 'Benefits and value',
         description:
-          'Agent discusses provider networks and whether consumer doctors are in-network',
-        maxPoints: 20,
+          'Explains benefits and value clearly based on needs using non-misleading language.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'pres-prescription',
-        label: 'Prescription Coverage',
+        id: 'presentation-assumptive-close',
+        label: 'Assumptive close',
         description:
-          'Agent addresses prescription drug coverage and formulary',
-        maxPoints: 15,
+          'Uses an appropriate assumptive close and pauses after presenting premium or price.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'pres-recommendation',
-        label: 'Clear Recommendation',
+        id: 'presentation-no-misleading-info',
+        label: 'No misleading plan information',
         description:
-          'Agent provides a clear recommendation based on the consumer needs discussed',
-        maxPoints: 20,
+          'Avoids misleading statements about plan benefits, pricing, carriers, government affiliation, or eligibility.',
+        appliesTo: 'ALL',
+      },
+      {
+        id: 'presentation-upsell',
+        label: 'Appropriate upsell',
+        description:
+          'Attempts appropriate ancillary upsell after the core close when applicable.',
+        appliesTo: 'ACA_SALE',
       },
     ],
   },
   {
     id: 'application',
     label: 'Application',
-    description: 'How the agent handles the enrollment/application process',
+    weight: SECTION_WEIGHTS.application,
     criteria: [
       {
-        id: 'app-aor',
-        label: 'AOR Disclosure',
+        id: 'application-expectations',
+        label: 'Application expectations',
         description:
-          'Agent explains the Agent of Record relationship before enrollment',
-        maxPoints: 25,
+          'Sets realistic expectations for application time and confirms payment method or e-sign availability.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'app-healthsherpa',
-        label: 'HealthSherpa Disclosure',
+        id: 'application-verbatim-disclaimers',
+        label: 'Verbatim questions and disclaimers',
         description:
-          'Agent provides required HealthSherpa disclosure when using the platform',
-        maxPoints: 25,
-        acaOnly: true,
+          'Reads or sends required application questions, attestations, and disclaimers verbatim and records answers accurately.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'app-accuracy',
-        label: 'Information Accuracy',
+        id: 'application-commitment-esign',
+        label: 'Commitment and e-sign',
         description:
-          'Agent verifies consumer information for accuracy during application',
-        maxPoints: 25,
-      },
-      {
-        id: 'app-consent',
-        label: 'Consumer Consent',
-        description:
-          'Agent obtains clear verbal consent before submitting the application',
-        maxPoints: 25,
+          'Ensures client commitment and confirms e-sign capability or sends e-sign where required.',
+        appliesTo: 'ALL',
       },
     ],
   },
   {
     id: 'closing',
     label: 'Closing',
-    description: 'How the agent closes the call and sets expectations',
+    weight: SECTION_WEIGHTS.closing,
     criteria: [
       {
-        id: 'close-recap',
-        label: 'Enrollment Recap',
+        id: 'closing-sale-summary',
+        label: 'Sale summary',
         description:
-          'Agent recaps the selected plan, effective date, and monthly premium',
-        maxPoints: 25,
+          'Summarizes plan name, network, benefits, deductible, premium or price, effective dates, and next steps.',
+        appliesTo: 'ALL',
       },
       {
-        id: 'close-next-steps',
-        label: 'Next Steps',
+        id: 'closing-eft-primary',
+        label: 'EFT attempt for ancillary',
         description:
-          'Agent explains next steps (welcome packet, ID cards, first payment)',
-        maxPoints: 25,
+          'Attempts EFT as the primary payment method for ancillary products.',
+        appliesTo: 'ANCILLARY_ONLY',
       },
       {
-        id: 'close-contact',
-        label: 'Contact Information',
+        id: 'closing-affordability',
+        label: 'Ancillary affordability',
         description:
-          'Agent provides contact information for future questions or changes',
-        maxPoints: 25,
+          'Explains ancillary pricing and confirms the customer agrees it is affordable.',
+        appliesTo: 'ANCILLARY_ONLY',
       },
       {
-        id: 'close-satisfaction',
-        label: 'Satisfaction Check',
+        id: 'closing-referral',
+        label: 'Referral ask',
+        description: 'Asks for a referral respectfully.',
+        appliesTo: 'ALL',
+      },
+      {
+        id: 'closing-documentation',
+        label: 'Sale documentation',
         description:
-          'Agent asks if the consumer has any remaining questions or concerns',
-        maxPoints: 25,
+          'Documents the sale in HealthSherpa, CRM, and Convoso where applicable.',
+        appliesTo: 'ALL',
       },
     ],
   },
 ];
 
-// ============================================================
-// Call Type Detection Hints
-// ============================================================
+export const getScoringSectionsForRubric = (
+  rubricType: QaRubricType,
+): ScoringSection[] =>
+  SCORING_SECTIONS.map((section) => ({
+    ...section,
+    criteria: section.criteria.filter(
+      (criterion) =>
+        criterion.appliesTo === 'ALL' || criterion.appliesTo === rubricType,
+    ),
+  }));
 
-export const CALL_TYPE_HINTS = {
-  ACA_SALE: [
-    'marketplace',
-    'obamacare',
-    'affordable care act',
-    'aca',
-    'health insurance marketplace',
-    'healthcare.gov',
-    'subsidy',
-    'premium tax credit',
-    'open enrollment',
-    'special enrollment',
-    'qualifying life event',
-  ],
-  ANCILLARY: [
-    'dental',
-    'vision',
-    'life insurance',
-    'accident',
-    'critical illness',
-    'hospital indemnity',
-    'supplemental',
-    'gap coverage',
-    'short-term',
-    'short term',
-  ],
-};
+export const SCORING_SYSTEM_PROMPT = `You are a compliance QA analyst for Omnia Insurance Group. Score insurance sales call transcripts using only the provided rubric and transcript evidence.
 
-// ============================================================
-// AI System Prompts
-// ============================================================
+Return valid JSON only. Do not include markdown fences.
 
-export const RED_FLAG_SYSTEM_PROMPT = `You are a compliance QA analyst for an insurance agency. Your job is to analyze call transcripts and detect critical compliance violations (red flags) that result in automatic failure.
+Classification:
+- callQuality must be "SCORABLE" or "NOT_SCORABLE".
+- NOT_SCORABLE includes voicemail, no answer, wrong number, dead air, no live two-way conversation, or trivially short conversations.
+- rubricType must be "ACA_SALE", "ANCILLARY_ONLY", or "UNKNOWN".
+- UNKNOWN is allowed when the transcript does not clearly identify ACA versus ancillary.
 
-## Step 1: Call Classification
+Red flags:
+- A red flag means the agent failed compliance.
+- If any red flag is violated, the final score will be overridden to 0 and the final result will be FAIL.
+- Marketplace and commission disclosures are mandatory on ACA sales/enrollment calls.
+- Recorded-line disclosure is mandatory for every scorable call.
+- AOR disclosure is mandatory when AOR is attempted or completed.
+- HealthSherpa disclosure is mandatory when HealthSherpa is used for ACA enrollment.
+- Coaching/manipulation and DNC violations are automatic failures.
 
-Before analyzing red flags, classify the call as SCORABLE or NOT_SCORABLE.
+Scoring:
+- Score each criterion from 0 to 100.
+- Use null for not-applicable criteria and explain why.
+- Include evidence quotes and approximate timestamp or transcript position when available.
+- Do not invent compliance that is not supported by the transcript.`;
 
-A call is NOT_SCORABLE if ANY of these apply:
-- Voicemail: the agent left a voicemail and no live conversation occurred
-- Wrong number: the person reached is not the intended consumer
-- Mailbox full / no answer: no real connection was made
-- No two-way conversation: only one party speaks (e.g. automated message, hold music, dead air)
-- Trivially short: under ~15 seconds of actual dialogue between agent and consumer
+export const buildScoringUserPrompt = (transcript: string): string => {
+  const redFlagLines = RED_FLAGS.map(
+    (redFlag) =>
+      `- ${redFlag.key}: ${redFlag.label}. ${redFlag.aiPromptGuidance}`,
+  ).join('\n');
 
-If the call is NOT_SCORABLE:
-- Set "callQuality" to "NOT_SCORABLE"
-- Set ALL red flags to "violated": false
-- Set evidence/explanation to a brief reason (e.g. "Voicemail — no live conversation")
-- Return immediately without further analysis
+  const sectionLines = SCORING_SECTIONS.map((section) => {
+    const criteria = section.criteria
+      .map(
+        (criterion) =>
+          `  - ${criterion.id} (${criterion.appliesTo}): ${criterion.label}. ${criterion.description}`,
+      )
+      .join('\n');
 
-If the call is SCORABLE, set "callQuality" to "SCORABLE" and proceed to Step 2.
+    return `### ${section.id} (${section.label}, weight ${Math.round(
+      section.weight * 100,
+    )}%)\n${criteria}`;
+  }).join('\n\n');
 
-## Step 2: Red Flag Analysis (SCORABLE calls only)
-
-You MUST be thorough and conservative — when in doubt about whether a disclosure was made, flag it. Missing a red flag is worse than a false positive.
-
-For each red flag, you must:
-1. Determine if the violation occurred (true/false)
-2. Provide a brief explanation with evidence (direct quotes from the transcript)
-3. Note the approximate timestamp or position in the conversation
-
-Return your analysis as JSON with this exact structure:
-{
-  "callQuality": "SCORABLE" | "NOT_SCORABLE",
-  "redFlags": {
-    "recordedLineDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "marketplaceDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "aorDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "commissionDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "healthSherpaDisclosure": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "agentCoaching": { "violated": boolean, "evidence": "string", "explanation": "string" },
-    "dncViolation": { "violated": boolean, "evidence": "string", "explanation": "string" }
-  },
-  "callType": "ACA_SALE" | "ANCILLARY" | "GENERAL",
-  "callDirection": "INBOUND" | "OUTBOUND" | "CALLBACK" | "UNKNOWN"
-}
-
-IMPORTANT RULES:
-- "violated" means the agent FAILED to comply (true = bad, false = good)
-- For recordedLineDisclosure: Must be stated within ~30 seconds of call start
-- For marketplaceDisclosure: Must be stated during the opening
-- For aorDisclosure: Must be explained before enrollment; if no enrollment, mark as not violated
-- For commissionDisclosure: Must be stated during the opening
-- For healthSherpaDisclosure: Only applicable if ACA enrollment occurs using HealthSherpa; if not an ACA enrollment, mark as not violated
-- For agentCoaching: Look for agent telling consumer how to answer questions to manipulate outcomes
-- For dncViolation: Only if consumer explicitly asks to stop being called and agent doesnt comply
-- For disclosure flags (recordedLine, marketplace, commission, aor, healthSherpa): only flag as violated if the call progressed past the opening — the agent had a real conversation with the consumer. A 10-second call where the consumer hangs up immediately should NOT trigger missing disclosure flags.`;
-
-export const FULL_SCORECARD_SYSTEM_PROMPT = `You are a compliance QA analyst for an insurance agency. You are scoring a call transcript against a detailed scorecard with 6 sections.
-
-## Not-Scorable Calls
-
-If the call was classified as NOT_SCORABLE (voicemail, wrong number, trivially short, no real conversation), return immediately with:
-{
-  "sections": {},
-  "overallScore": 0,
-  "overallResult": "NOT_APPLICABLE",
-  "recommendations": [],
-  "strengths": [],
-  "areasForImprovement": []
-}
-
-Do NOT attempt to score a not-scorable call.
-
-## Scoring (SCORABLE calls only)
-
-Score each criterion on a 0-100 scale where:
-- 100 = Perfectly executed
-- 75-99 = Good with minor issues
-- 50-74 = Adequate but notable gaps
-- 25-49 = Poor execution
-- 0-24 = Not addressed or major issues
-
-For criteria marked as ACA-only, score them only if the call involves an ACA sale. For non-ACA calls, mark those criteria as "N/A" with a score of null.
-
-Return your analysis as JSON with this exact structure:
-{
-  "sections": {
-    "opening": {
-      "score": number,
-      "criteria": {
-        "[criterionId]": { "score": number, "evidence": "string", "notes": "string" }
-      }
-    },
-    "factFinding": { ... },
-    "eligibility": { ... },
-    "presentation": { ... },
-    "application": { ... },
-    "closing": { ... }
-  },
-  "overallScore": number,
-  "overallResult": "PASS" | "FAIL" | "NEEDS_REVIEW",
-  "recommendations": [
-    {
-      "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-      "category": "disclosure" | "scripting" | "fact-finding" | "presentation" | "closing" | "conduct",
-      "title": "Short action title",
-      "detail": "One sentence explanation"
-    }
-  ],
-  "strengths": ["string"],
-  "areasForImprovement": ["string"]
-}
-
-SCORING GUIDELINES:
-- Overall score is a weighted average: Opening 15%, Fact Finding 20%, Eligibility 15%, Presentation 20%, Application 15%, Closing 15%
-- PASS = overall score >= 80 AND no red flags
-- FAIL = overall score < 60 OR has red flags
-- NEEDS_REVIEW = overall score 60-79, for human reviewer to decide
-- Be specific with evidence — quote the transcript
-- Recommendations must be structured objects with priority, category, title, and detail — NOT plain strings`;
-
-export const SECTION_WEIGHTS: Record<string, number> = {
-  opening: 0.15,
-  factFinding: 0.2,
-  eligibility: 0.15,
-  presentation: 0.2,
-  application: 0.15,
-  closing: 0.15,
+  return [
+    'Analyze and score this call transcript.',
+    '',
+    'Return JSON with this exact top-level shape:',
+    '{',
+    '  "callQuality": "SCORABLE" | "NOT_SCORABLE",',
+    '  "notScorableReason": string | null,',
+    '  "rubricType": "ACA_SALE" | "ANCILLARY_ONLY" | "UNKNOWN",',
+    '  "redFlags": { "[redFlagKey]": { "violated": boolean, "evidence": string, "explanation": string, "confidence": number } },',
+    '  "sections": { "[sectionId]": { "score": number, "criteria": { "[criterionId]": { "score": number | null, "evidence": string, "notes": string, "confidence": number } } } },',
+    '  "recommendations": [{ "priority": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW", "category": string, "title": string, "detail": string }],',
+    '  "strengths": string[],',
+    '  "areasForImprovement": string[]',
+    '}',
+    '',
+    'Red flags:',
+    redFlagLines,
+    '',
+    'Rubric sections:',
+    sectionLines,
+    '',
+    'Transcript:',
+    transcript,
+  ].join('\n');
 };

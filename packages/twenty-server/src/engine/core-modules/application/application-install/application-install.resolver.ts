@@ -13,9 +13,12 @@ import { ApplicationExceptionFilter } from 'src/engine/core-modules/application/
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ApplicationInstallService } from 'src/engine/core-modules/application/application-install/application-install.service';
 import { ApplicationDTO } from 'src/engine/core-modules/application/dtos/application.dto';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
+import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
@@ -65,11 +68,15 @@ export class ApplicationInstallResolver {
     @Args('version', { type: () => String, nullable: true })
     version: string | undefined,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
+    @AuthUser({ allowUndefined: true }) user?: AuthContextUser,
+    @AuthUserWorkspaceId({ allowUndefined: true }) userWorkspaceId?: string,
   ): Promise<boolean> {
     return this.applicationInstallService.installApplication({
       appRegistrationId,
       version,
       workspaceId,
+      userId: user?.id,
+      userWorkspaceId,
     });
   }
 }

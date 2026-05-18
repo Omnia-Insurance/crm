@@ -94,6 +94,8 @@ export class ApplicationUpgradeService {
     appRegistrationId: string;
     targetVersion: string;
     workspaceId: string;
+    userId?: string;
+    userWorkspaceId?: string;
   }): Promise<boolean> {
     const appRegistration = await this.appRegistrationRepository.findOneOrFail({
       where: { id: params.appRegistrationId },
@@ -117,6 +119,8 @@ export class ApplicationUpgradeService {
         appRegistrationId: params.appRegistrationId,
         version: params.targetVersion,
         workspaceId: params.workspaceId,
+        userId: params.userId,
+        userWorkspaceId: params.userWorkspaceId,
       });
     } catch (error) {
       const appName =

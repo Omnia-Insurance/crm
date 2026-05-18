@@ -1,17 +1,17 @@
 import { QUALITY_ASSURANCE_FOLDER_NAVIGATION_MENU_ITEM_UNIVERSAL_IDENTIFIER } from 'src/navigation-menu-items/quality-assurance-folder-navigation-menu-item';
-import { QA_SCORECARD_VIEW_UNIVERSAL_IDENTIFIER } from 'src/views/qa-scorecard-view';
+import { QA_MANAGER_VIEW_UNIVERSAL_IDENTIFIER } from 'src/views/qa-manager-view';
 import {
   defineNavigationMenuItem,
   NavigationMenuItemType,
 } from 'twenty-sdk/define';
 
 export default defineNavigationMenuItem({
-  universalIdentifier: 'a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d',
-  name: 'Scorecards',
-  icon: 'IconClipboardCheck',
-  position: 1,
+  universalIdentifier: '359cbf35-7e5f-4dc0-9216-3c92c2bca55d',
+  name: 'Managers',
+  icon: 'IconUserCheck',
+  position: 2,
   type: NavigationMenuItemType.VIEW,
-  viewUniversalIdentifier: QA_SCORECARD_VIEW_UNIVERSAL_IDENTIFIER,
+  viewUniversalIdentifier: QA_MANAGER_VIEW_UNIVERSAL_IDENTIFIER,
   folderUniversalIdentifier:
     QUALITY_ASSURANCE_FOLDER_NAVIGATION_MENU_ITEM_UNIVERSAL_IDENTIFIER,
 });

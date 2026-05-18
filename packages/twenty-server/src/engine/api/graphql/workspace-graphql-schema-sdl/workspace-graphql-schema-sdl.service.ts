@@ -27,6 +27,31 @@ export type WorkspaceGraphqlSchemaSDLResult = {
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
 };
 
+const buildApplicationScopedSchemaApplicationIds = ({
+  applicationId,
+  twentyStandardApplicationId,
+  workspaceCustomApplicationId,
+}: {
+  applicationId: string;
+  twentyStandardApplicationId?: string;
+  workspaceCustomApplicationId: string;
+}): string[] => {
+  const applicationIds = [applicationId];
+
+  if (isDefined(twentyStandardApplicationId)) {
+    applicationIds.push(twentyStandardApplicationId);
+  }
+
+  // OMNIA-CUSTOM: app schemas can expose relations to workspace-custom CRM
+  // objects such as Call and Agent Profile, so API-client generation must
+  // include workspace-custom metadata for non-standard apps.
+  if (applicationId !== twentyStandardApplicationId) {
+    applicationIds.push(workspaceCustomApplicationId);
+  }
+
+  return [...new Set(applicationIds)];
+};
+
 @Injectable()
 export class WorkspaceGraphqlSchemaSDLService {
   constructor(
@@ -85,9 +110,11 @@ export class WorkspaceGraphqlSchemaSDLService {
           TWENTY_STANDARD_APPLICATION.universalIdentifier
         ];
 
-      const applicationIds = isDefined(twentyStandardApplicationId)
-        ? [twentyStandardApplicationId, applicationId]
-        : [applicationId];
+      const applicationIds = buildApplicationScopedSchemaApplicationIds({
+        applicationId,
+        twentyStandardApplicationId,
+        workspaceCustomApplicationId: workspace.workspaceCustomApplicationId,
+      });
 
       flatObjectMetadataMaps = this.filterFlatEntityMapsByApplicationIds(
         allFlatObjectMetadataMaps,

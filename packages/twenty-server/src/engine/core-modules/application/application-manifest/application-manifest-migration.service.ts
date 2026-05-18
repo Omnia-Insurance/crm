@@ -21,6 +21,34 @@ import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import { WorkspaceMigration } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration.type';
 
+const buildApplicationDependencyIds = ({
+  ownerFlatApplication,
+  twentyStandardFlatApplication,
+  workspaceCustomFlatApplication,
+}: {
+  ownerFlatApplication: FlatApplication;
+  twentyStandardFlatApplication: FlatApplication;
+  workspaceCustomFlatApplication: FlatApplication;
+}): string[] => {
+  if (
+    ownerFlatApplication.universalIdentifier ===
+    TWENTY_STANDARD_APPLICATION.universalIdentifier
+  ) {
+    return [twentyStandardFlatApplication.id];
+  }
+
+  // OMNIA-CUSTOM: app manifests can add relations to workspace-custom CRM
+  // objects such as Call and Agent Profile, so those objects must be available
+  // as migration dependencies during relation validation.
+  return [
+    ...new Set([
+      ownerFlatApplication.id,
+      twentyStandardFlatApplication.id,
+      workspaceCustomFlatApplication.id,
+    ]),
+  ];
+};
+
 @Injectable()
 export class ApplicationManifestMigrationService {
   private readonly logger = new Logger(
@@ -84,7 +112,7 @@ export class ApplicationManifestMigrationService {
 
     const now = new Date().toISOString();
 
-    const { twentyStandardFlatApplication } =
+    const { twentyStandardFlatApplication, workspaceCustomFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
       );
@@ -112,11 +140,11 @@ export class ApplicationManifestMigrationService {
       });
 
     const dependencyAllFlatEntityMaps = getApplicationSubAllFlatEntityMaps({
-      applicationIds:
-        ownerFlatApplication.universalIdentifier ===
-        TWENTY_STANDARD_APPLICATION.universalIdentifier
-          ? [twentyStandardFlatApplication.id]
-          : [ownerFlatApplication.id, twentyStandardFlatApplication.id],
+      applicationIds: buildApplicationDependencyIds({
+        ownerFlatApplication,
+        twentyStandardFlatApplication,
+        workspaceCustomFlatApplication,
+      }),
       fromAllFlatEntityMaps: existingAllFlatEntityMaps,
     });
 
@@ -168,7 +196,7 @@ export class ApplicationManifestMigrationService {
   }> {
     const now = new Date().toISOString();
 
-    const { twentyStandardFlatApplication } =
+    const { twentyStandardFlatApplication, workspaceCustomFlatApplication } =
       await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
         { workspaceId },
       );
@@ -196,11 +224,11 @@ export class ApplicationManifestMigrationService {
       });
 
     const dependencyAllFlatEntityMaps = getApplicationSubAllFlatEntityMaps({
-      applicationIds:
-        ownerFlatApplication.universalIdentifier ===
-        TWENTY_STANDARD_APPLICATION.universalIdentifier
-          ? [twentyStandardFlatApplication.id]
-          : [ownerFlatApplication.id, twentyStandardFlatApplication.id],
+      applicationIds: buildApplicationDependencyIds({
+        ownerFlatApplication,
+        twentyStandardFlatApplication,
+        workspaceCustomFlatApplication,
+      }),
       fromAllFlatEntityMaps: existingAllFlatEntityMaps,
     });
 

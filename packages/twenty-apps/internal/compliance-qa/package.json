@@ -1,6 +1,6 @@
 {
   "name": "compliance-qa",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "license": "MIT",
   "engines": {
     "node": "^24.5.0",
@@ -10,16 +10,23 @@
   "packageManager": "yarn@4.9.2",
   "scripts": {
     "twenty": "twenty",
-    "lint": "eslint",
-    "lint:fix": "eslint --fix"
+    "lint": "oxlint -c .oxlintrc.json .",
+    "lint:fix": "oxlint --fix -c .oxlintrc.json .",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "test:watch": "vitest --config vitest.unit.config.ts"
   },
   "dependencies": {
-    "twenty-sdk": "0.7.0"
+    "@aws-sdk/client-bedrock-runtime": "3.1001.0",
+    "@aws-sdk/client-s3": "3.1001.0",
+    "@aws-sdk/client-transcribe": "3.1001.0",
+    "twenty-client-sdk": "2.3.0",
+    "twenty-sdk": "2.3.0"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",
-    "eslint": "^9.32.0",
+    "oxlint": "^0.16.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "vite-tsconfig-paths": "^4.3.2",
+    "vitest": "^3.1.1"
   }
 }
