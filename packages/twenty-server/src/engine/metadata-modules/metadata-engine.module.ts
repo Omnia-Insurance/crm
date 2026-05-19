@@ -30,6 +30,9 @@ import { WorkspaceMetadataVersionModule } from 'src/engine/metadata-modules/work
 // OMNIA-CUSTOM: Reconciliation resolver needs to be in the metadata module tree
 // so the @MetadataResolver() mutations appear in the metadata GraphQL schema.
 import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
+// OMNIA-CUSTOM: Telephony resolver needs to be in the metadata module tree
+// so the @MetadataResolver() mutations appear in the metadata GraphQL schema.
+import { TelephonyModule } from 'src/modules/telephony/telephony.module';
 
 @Module({
   imports: [
@@ -59,6 +62,7 @@ import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.
     CalendarChannelMetadataModule,
     MessageFolderMetadataModule,
     ReconciliationModule,
+    TelephonyModule,
   ],
   providers: [
     {

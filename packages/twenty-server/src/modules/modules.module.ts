@@ -5,6 +5,8 @@ import { ConnectedAccountModule } from 'src/modules/connected-account/connected-
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 // OMNIA-CUSTOM: Payment Reconciliation v2
 import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
+// OMNIA-CUSTOM: CRM-owned Telephony runtime
+import { TelephonyModule } from 'src/modules/telephony/telephony.module';
 import { WorkflowModule } from 'src/modules/workflow/workflow.module';
 import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-member.module';
 
@@ -16,6 +18,7 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     WorkflowModule,
     WorkspaceMemberModule,
     ReconciliationModule,
+    TelephonyModule,
   ],
   providers: [],
   exports: [],
