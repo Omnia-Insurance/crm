@@ -86,6 +86,14 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/hooks/useFilteredSelectOptionsFromRLSPredicates.ts" \
   "RowLevelPermissionPredicateScope.WRITE" \
   "Editable select/picker option filtering must only use ALL + WRITE scoped predicates"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/AddressFieldInput.tsx" \
+  "normalizeAddressCoordinate" \
+  "Address input must not throw when persisted coordinates contain invalid strings"
+check_file_contains \
+  "packages/twenty-front/src/utils/normalize-address-coordinate.ts" \
+  "DECIMAL_NUMBER_PATTERN" \
+  "Address coordinate sanitizer must stay explicit and non-throwing"
 
 echo ""
 echo "--- Critical: Organization Plan Gate Removed ---"

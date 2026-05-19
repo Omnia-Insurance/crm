@@ -7,7 +7,7 @@ import { RecordFieldComponentInstanceContext } from '@/object-record/record-fiel
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useContext } from 'react';
-import { castAsNumberOrNull } from '~/utils/cast-as-number-or-null';
+import { normalizeAddressCoordinate } from '~/utils/normalize-address-coordinate';
 import { normalizeAddressFieldValueForPersist } from '~/utils/normalize-address-field-value-for-persist';
 
 export const AddressFieldInput = () => {
@@ -27,8 +27,8 @@ export const AddressFieldInput = () => {
       addressState: newAddress?.addressState ?? null,
       addressCountry: newAddress?.addressCountry ?? null,
       addressPostcode: newAddress?.addressPostcode ?? null,
-      addressLat: castAsNumberOrNull(newAddress?.addressLat),
-      addressLng: castAsNumberOrNull(newAddress?.addressLng),
+      addressLat: normalizeAddressCoordinate(newAddress?.addressLat),
+      addressLng: normalizeAddressCoordinate(newAddress?.addressLng),
     });
   };
   const settings = fieldDefinition.metadata.settings;
