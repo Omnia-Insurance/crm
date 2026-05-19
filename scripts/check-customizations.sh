@@ -900,6 +900,13 @@ check_file_not_contains \
   "DevelopmentGuard should be removed — app:dev must work on self-hosted prod"
 
 echo ""
+echo "--- TypeORM Migration Transaction Mode ---"
+check_file_contains \
+  "packages/twenty-server/src/database/typeorm/core/core.datasource.ts" \
+  "migrationsTransactionMode: 'each'" \
+  "TypeORM CLI migrations must allow per-migration transaction opt-out for concurrent index builds"
+
+echo ""
 echo "--- RLS Engine: Indirect Relation + Deny-by-Default ---"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
@@ -1151,6 +1158,17 @@ check_file_contains \
   "packages/twenty-server/src/database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts" \
   "ReconcileTimeCardAgentRelation1778000000000" \
   "Time Card relation migration must normalize agent/agentId metadata"
+check_file_exists \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "Call analytics covering indexes migration"
+check_file_contains \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "idx_call_live_billable_date_agent_cover" \
+  "Call analytics migration must keep the billable aggregate covering index"
+check_file_contains \
+  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "transaction = false" \
+  "Call analytics indexes must be created concurrently outside TypeORM migration transactions"
 
 echo ""
 echo "--- Ingestion Record Processor: Atomic Dedup ---"

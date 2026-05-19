@@ -189,6 +189,7 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 - `database/typeorm/core/migrations/common/1776000000000-add-ingestion-pipeline-dedup-field-names.ts` — **Migration** adds `dedupFieldNames` array column to `ingestionPipeline` for composite dedup (e.g. Time Cards on `(agent, day)`)
 - `database/typeorm/core/migrations/common/1776100000000-add-time-card-unique-index.ts` — **Migration** adds composite partial unique index on `_timeCard(agentId, date)` per workspace
 - `database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts` — **Migration** normalizes Time Card relation metadata, table column, and ingestion mappings to `agent` / `agentId`
+- `database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts` — **Migration** adds concurrent partial covering indexes on `_call` for billable, inbound, and lead-priority analytics aggregates
 
 ### `packages/twenty-server/src/modules/lead/`
 
@@ -507,6 +508,7 @@ Moves CSV export from browser-only to a BullMQ background job. The server fetche
 | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `engine/core-modules/application/resolvers/application-development.resolver.ts` | Removed `DevelopmentGuard` — allows `app:dev` deployment on self-hosted production server |
 | `.github/workflows/deploy-eks.yaml`                                             | Added `APP_VERSION=1.20.0` build arg so upgrade migrations run on deploy                  |
+| `packages/twenty-server/src/database/typeorm/core/core.datasource.ts`           | TypeORM core migrations default to `each` transaction mode so individual migrations can opt out for concurrent index builds |
 
 ### AWS Runtime Pod Identity (HIPAA, 2026-05-14)
 
