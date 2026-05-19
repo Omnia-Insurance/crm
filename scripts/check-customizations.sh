@@ -1624,6 +1624,22 @@ check_file_contains \
   "isExternalRedirectTrusted" \
   "auth.service must trust-check postSignInRedirect against FRONTEND_URL before forwarding"
 check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
+  "markEmailAsVerified" \
+  "auth.service must mark existing social SSO users as email-verified before issuing /verify login tokens"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
+  "legacyAttributesToRemove" \
+  "tokenPairState must clear the legacy host-only auth cookie after moving tokenPair to the shared parent domain"
+check_file_contains \
+  "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createAtomState.ts" \
+  "legacyAttributesToRemove" \
+  "createAtomState must pass legacy cookie attributes through to cookie storage"
+check_file_contains \
+  "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createJotaiCookieStorage.ts" \
+  "legacyAttributesToRemove" \
+  "cookie storage must support clearing legacy cookie variants after domain/path migrations"
+check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpGlobalScopeFormEffect.tsx" \
   "postSignInRedirect" \
   "SignInUpGlobalScopeFormEffect must redirect to trusted postSignInRedirect after sign-in"
@@ -1635,6 +1651,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
   "postSignInRedirect" \
   "useAuth buildRedirectUrl must forward postSignInRedirect into OAuth kickoff URLs"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
+  "throw error" \
+  "useAuth must rethrow non-2FA /verify token-exchange errors so VerifyLoginTokenEffect can leave /verify"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithGoogle.ts" \
   "postSignInRedirect" \

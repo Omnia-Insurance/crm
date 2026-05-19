@@ -1073,6 +1073,14 @@ export class AuthService {
         billingCheckoutSessionState,
       });
 
+      // OMNIA-CUSTOM: Google/Microsoft SSO proves email ownership. Existing
+      // users created before SSO can still have isEmailVerified=false; without
+      // normalizing it here, /verify generates a login token that the token
+      // exchange immediately rejects with EMAIL_NOT_VERIFIED.
+      if (!user.isEmailVerified) {
+        await this.userService.markEmailAsVerified(user.id);
+      }
+
       await this.createSSOConnectedAccountIfFeatureFlagIsOn({
         workspaceId: workspace.id,
         userId: user.id,

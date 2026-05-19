@@ -13,6 +13,12 @@ type CookieStorageConfig<ValueType> = {
     domain?: string;
     secure?: boolean;
   };
+  legacyAttributesToRemove?: {
+    expires?: number | Date;
+    path?: string;
+    domain?: string;
+    secure?: boolean;
+  }[];
   validateInitFn?: (payload: NonNullable<ValueType>) => boolean;
 };
 
@@ -45,6 +51,7 @@ export const createAtomState = <ValueType>({
     const storage = createJotaiCookieStorage<ValueType>({
       cookieKey: useCookieStorage.cookieKey,
       attributes: useCookieStorage.attributes,
+      legacyAttributesToRemove: useCookieStorage.legacyAttributesToRemove,
       validateInitFn: useCookieStorage.validateInitFn,
     });
     baseAtom = atomWithStorage<ValueType>(

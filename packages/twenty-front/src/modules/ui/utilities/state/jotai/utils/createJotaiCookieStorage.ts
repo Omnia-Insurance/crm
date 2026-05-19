@@ -28,15 +28,23 @@ type JotaiSyncStorage<ValueType> = {
 export const createJotaiCookieStorage = <ValueType>({
   cookieKey,
   attributes,
+  legacyAttributesToRemove = [],
   validateInitFn,
 }: {
   cookieKey: string;
   attributes?: CookieAttributesLike;
+  legacyAttributesToRemove?: CookieAttributesLike[];
   validateInitFn?: (payload: NonNullable<ValueType>) => boolean;
 }): JotaiSyncStorage<ValueType> => {
   const defaultAttributes = {
     expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 180),
     ...(attributes ?? {}),
+  };
+
+  const removeLegacyCookies = () => {
+    for (const legacyAttributes of legacyAttributesToRemove) {
+      cookieStorage.removeItem(cookieKey, legacyAttributes);
+    }
   };
 
   return {
@@ -77,17 +85,24 @@ export const createJotaiCookieStorage = <ValueType>({
           Object.keys(valueToStore as object).length === 0)
       ) {
         cookieStorage.removeItem(cookieKey, cookieAttrs);
+        removeLegacyCookies();
         return;
       }
 
+      // OMNIA-CUSTOM: when moving a cookie to a parent domain, delete the
+      // legacy host-only cookie before and after writing so duplicate cookie
+      // names cannot make auth reads pick up stale tokens.
+      removeLegacyCookies();
       cookieStorage.setItem(
         cookieKey,
         JSON.stringify(valueToStore),
         cookieAttrs,
       );
+      removeLegacyCookies();
     },
     removeItem: (_key: string): void => {
       cookieStorage.removeItem(cookieKey, defaultAttributes);
+      removeLegacyCookies();
     },
   };
 };

@@ -30,6 +30,7 @@ export const tokenPairState = createAtomState<AuthTokenPair | null>({
           secure: window.location.protocol === 'https:',
         }
       : undefined,
+    legacyAttributesToRemove: cookieDomain ? [{}] : undefined,
     validateInitFn: (payload: AuthTokenPair) =>
       Boolean(payload['accessOrWorkspaceAgnosticToken']),
   },
