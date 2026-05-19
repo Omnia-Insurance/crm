@@ -1466,6 +1466,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/settings/roles/graphql/fragments/objectPermissionFragment.ts" \
   "showInSidebar" \
   "ObjectPermission fragment must query showInSidebar for per-role sidebar filtering"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "export enum RowLevelPermissionPredicateScope" \
+  "Generated metadata types must include RLS predicate scope enum"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "scope: RowLevelPermissionPredicateScope" \
+  "Generated metadata predicate types must include scope fields"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  '"value":"scope"' \
+  "Generated metadata GraphQL documents must request predicate scope"
 
 # ==========================================================
 # Unique Constraints & Field Uniqueness
@@ -1609,20 +1621,24 @@ check_file_contains \
   "Trust-check helper must be exported for post-sign-in redirects"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/types/social-sso-state.type.ts" \
-  "postSignInRedirect" \
-  "SocialSSOState must carry postSignInRedirect through OAuth round-trip"
+  "returnToPath" \
+  "SocialSSOState must carry returnToPath through OAuth round-trip"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/strategies/google.auth.strategy.ts" \
-  "postSignInRedirect" \
-  "Google strategy must propagate postSignInRedirect into and out of OAuth state"
+  "returnToPath" \
+  "Google strategy must propagate returnToPath into and out of OAuth state"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/strategies/microsoft.auth.strategy.ts" \
-  "postSignInRedirect" \
-  "Microsoft strategy must propagate postSignInRedirect into and out of OAuth state"
+  "returnToPath" \
+  "Microsoft strategy must propagate returnToPath into and out of OAuth state"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
   "isExternalRedirectTrusted" \
-  "auth.service must trust-check postSignInRedirect against FRONTEND_URL before forwarding"
+  "auth.service must trust-check absolute returnToPath against FRONTEND_URL before forwarding"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
+  "getSafeReturnToPath" \
+  "auth.service must canonicalize returnToPath before forwarding it after sign-in"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
   "markEmailAsVerified" \
@@ -1641,39 +1657,39 @@ check_file_contains \
   "cookie storage must support clearing legacy cookie variants after domain/path migrations"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpGlobalScopeFormEffect.tsx" \
-  "postSignInRedirect" \
-  "SignInUpGlobalScopeFormEffect must redirect to trusted postSignInRedirect after sign-in"
+  "returnToPath" \
+  "SignInUpGlobalScopeFormEffect must redirect to trusted absolute returnToPath after sign-in"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/components/VerifyLoginTokenEffect.tsx" \
-  "postSignInRedirect" \
-  "VerifyLoginTokenEffect must redirect to trusted postSignInRedirect after /verify"
+  "returnToPath" \
+  "VerifyLoginTokenEffect must redirect to trusted absolute returnToPath after /verify"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
-  "postSignInRedirect" \
-  "useAuth buildRedirectUrl must forward postSignInRedirect into OAuth kickoff URLs"
+  "returnToPath" \
+  "useAuth buildRedirectUrl must forward safe returnToPath into OAuth kickoff URLs"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
   "throw error" \
   "useAuth must rethrow non-2FA /verify token-exchange errors so VerifyLoginTokenEffect can leave /verify"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithGoogle.ts" \
-  "postSignInRedirect" \
-  "useSignInWithGoogle must read postSignInRedirect from URL and forward to Google OAuth"
+  "returnToPath" \
+  "useSignInWithGoogle must read returnToPath from URL and forward to Google OAuth"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithMicrosoft.ts" \
-  "postSignInRedirect" \
-  "useSignInWithMicrosoft must read postSignInRedirect from URL and forward to Microsoft OAuth"
+  "returnToPath" \
+  "useSignInWithMicrosoft must read returnToPath from URL and forward to Microsoft OAuth"
 check_file_exists \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
-  "SignInUpExternalRedirectEffect must exist to honor postSignInRedirect on the already-authed path"
+  "SignInUpExternalRedirectEffect must exist to honor external returnToPath on the already-authed path"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
   "isExternalRedirectTrusted" \
-  "SignInUpExternalRedirectEffect must trust-check postSignInRedirect before redirecting"
+  "SignInUpExternalRedirectEffect must trust-check absolute returnToPath before redirecting"
 check_file_contains \
   "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
   "SignInUpExternalRedirectEffect" \
-  "SignInUp page must mount SignInUpExternalRedirectEffect so already-authed users honor postSignInRedirect"
+  "SignInUp page must mount SignInUpExternalRedirectEffect so already-authed users honor external returnToPath"
 
 echo ""
 echo "--- Agentation (Dev Annotation Toolbar) ---"
@@ -1821,6 +1837,17 @@ check_file_contains \
   "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
   "expandedRelationFieldId" \
   "Column picker must support relation sub-field expansion"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/components/AdvancedFilterFieldSelectMenu.tsx" \
+  "objectFilterDropdownIsSelectingRelationSubFieldComponentState" \
+  "Advanced filter picker must open one-to-many relation sub-field menu"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationSubField.ts" \
+  "Advanced filter relation sub-field application hook"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationSubField.ts" \
+  "relationTargetFieldMetadataItem" \
+  "Advanced filter relation sub-field hook must support target field filters"
 
 # ==========================================================
 # Payment Reconciliation v2 (feature/reconciliation-v2)

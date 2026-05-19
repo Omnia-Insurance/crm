@@ -1,5 +1,5 @@
 import { useApolloClient } from '@apollo/client/react';
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
 import { HeadlessEngineCommandWrapperEffect } from '@/command-menu-item/engine-command/components/HeadlessEngineCommandWrapperEffect';
 import { useHeadlessCommandContextApi } from '@/command-menu-item/engine-command/hooks/useHeadlessCommandContextApi';
@@ -10,6 +10,7 @@ import { contextStoreFilterGroupsComponentState } from '@/context-store/states/c
 import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { computeContextStoreFilters } from '@/context-store/utils/computeContextStoreFilters';
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
@@ -22,6 +23,7 @@ import { useExportSingleRecord } from '@/object-record/record-show/hooks/useExpo
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
 import { isDefined } from 'twenty-shared/utils';
@@ -47,7 +49,6 @@ const ExportIndexRecordsContent = ({
 }) => {
   const apolloClient = useApolloClient();
   const { startTracking } = useExportJobProgress();
-  const startedRef = useRef(false);
 
   const engineCommandId = useAvailableComponentInstanceIdOrThrow(
     CommandComponentInstanceContext,
@@ -68,12 +69,16 @@ const ExportIndexRecordsContent = ({
     contextStoreAnyFieldFilterValueComponentState,
   );
   const { filterValueDependencies } = useFilterValueDependencies();
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
 
   const queryFilter = computeContextStoreFilters({
     contextStoreTargetedRecordsRule,
     contextStoreFilters,
     contextStoreFilterGroups,
     objectMetadataItem,
+    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
     filterValueDependencies,
     contextStoreAnyFieldFilterValue,
   });
@@ -112,24 +117,15 @@ const ExportIndexRecordsContent = ({
     })
     .filter(isDefined);
 
-  const doExport = useCallback(async () => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+  const hasSpecificSelection =
+    contextStoreTargetedRecordsRule.mode === 'selection' &&
+    contextStoreTargetedRecordsRule.selectedRecordIds.length > 0;
 
+  const doExport = useCallback(async () => {
     // Use the view's filter (from useFindManyRecordIndexTableParams) as the base,
     // which includes the active view's filters/sorts. If specific records are
     // selected, use the context store filter instead (which has the id IN list).
     // Guard against empty selection filter ({ id: { in: [] } }).
-    const isEmptySelection =
-      queryFilter &&
-      'id' in queryFilter &&
-      Array.isArray((queryFilter as any).id?.in) &&
-      (queryFilter as any).id.in.length === 0;
-
-    const hasSpecificSelection =
-      contextStoreTargetedRecordsRule.mode === 'selection' &&
-      contextStoreTargetedRecordsRule.selectedRecordIds.length > 0;
-
     const effectiveFilter = hasSpecificSelection
       ? queryFilter
       : findManyRecordsParams.filter;
@@ -152,8 +148,7 @@ const ExportIndexRecordsContent = ({
 
       if (!meta || !subField.subFieldName) continue;
 
-      const targetName =
-        meta.relation?.targetObjectMetadata?.nameSingular;
+      const targetName = meta.relation?.targetObjectMetadata?.nameSingular;
 
       if (!targetName) continue;
 
@@ -205,7 +200,9 @@ const ExportIndexRecordsContent = ({
     objectMetadataItem.fields,
     columns,
     queryFilter,
+    hasSpecificSelection,
     findManyRecordsParams.orderBy,
+    findManyRecordsParams.filter,
     subFieldRecordFields,
     startTracking,
     unmountCommand,

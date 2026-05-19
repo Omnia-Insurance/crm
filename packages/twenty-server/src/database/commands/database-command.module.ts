@@ -30,11 +30,11 @@ import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-
 import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { RebuildApplicationDefaultDepsCommand } from 'src/database/commands/rebuild-application-default-deps.command';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
-import { EnforceUsageCapCronCommand } from 'src/engine/core-modules/billing/crons/commands/enforce-usage-cap.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
 import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanup/event-log-cleanup.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
@@ -116,8 +116,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     RunInstanceCommandsCommand,
     ListOrphanedWorkspaceEntitiesCommand,
     EnterpriseKeyValidationCronCommand,
+    RotateSigningKeysCronCommand,
     GenerateApiKeyCommand,
-    EnforceUsageCapCronCommand,
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,

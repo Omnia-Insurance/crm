@@ -1,9 +1,11 @@
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useAdvancedFilterFieldSelectDropdown } from '@/object-record/advanced-filter/hooks/useAdvancedFilterFieldSelectDropdown';
-import { useSelectFieldUsedInAdvancedFilterDropdown } from '@/object-record/advanced-filter/hooks/useSelectFieldUsedInAdvancedFilterDropdown';
+import { useApplyAdvancedFilterRelationSubField } from '@/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationSubField';
+import { usePushFocusForLeafFieldValuePicker } from '@/object-record/advanced-filter/hooks/usePushFocusForLeafFieldValuePicker';
 import { fieldMetadataItemUsedInDropdownComponentSelector } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemUsedInDropdownComponentSelector';
 import { objectFilterDropdownIsSelectingRelationSubFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingRelationSubFieldComponentState';
 import { useFilterableFieldMetadataItems } from '@/object-record/record-filter/hooks/useFilterableFieldMetadataItems';
+import { RecordFilterOperand } from '@/object-record/record-filter/types/RecordFilterOperand';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
 import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
@@ -16,7 +18,6 @@ import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomC
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { t } from '@lingui/core/macro';
-import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
@@ -50,8 +51,11 @@ export const AdvancedFilterRelationSubFieldSelectMenu = ({
     advancedFilterFieldSelectDropdownId,
   } = useAdvancedFilterFieldSelectDropdown(recordFilterId);
 
-  const { selectFieldUsedInAdvancedFilterDropdown } =
-    useSelectFieldUsedInAdvancedFilterDropdown();
+  const { applyAdvancedFilterRelationSubField } =
+    useApplyAdvancedFilterRelationSubField();
+
+  const { pushFocusForLeafFieldValuePicker } =
+    usePushFocusForLeafFieldValuePicker();
 
   const { objectMetadataItems } = useObjectMetadataItems();
 
@@ -77,30 +81,44 @@ export const AdvancedFilterRelationSubFieldSelectMenu = ({
     setObjectFilterDropdownIsSelectingRelationSubField(false);
   };
 
-  const handleSelectHasAny = () => {
+  const handleSelectRelationOperand = (
+    relationOperand:
+      | RecordFilterOperand.IS_EMPTY
+      | RecordFilterOperand.IS_NOT_EMPTY,
+  ) => {
     if (!isDefined(fieldMetadataItemUsedInDropdown)) {
       return;
     }
 
-    selectFieldUsedInAdvancedFilterDropdown({
-      fieldMetadataItemId: fieldMetadataItemUsedInDropdown.id,
+    applyAdvancedFilterRelationSubField({
+      sourceFieldMetadataItem: fieldMetadataItemUsedInDropdown,
       recordFilterId,
+      relationOperand,
     });
 
     closeAdvancedFilterFieldSelectDropdown();
   };
 
-  const handleSelectSubField = (targetFieldName: string) => {
+  const handleSelectSubField = (targetFieldId: string) => {
     if (!isDefined(fieldMetadataItemUsedInDropdown)) {
       return;
     }
 
-    selectFieldUsedInAdvancedFilterDropdown({
-      fieldMetadataItemId: fieldMetadataItemUsedInDropdown.id,
+    const relationTargetFieldMetadataItem = simpleFilterableFields.find(
+      (field) => field.id === targetFieldId,
+    );
+
+    if (!isDefined(relationTargetFieldMetadataItem)) {
+      return;
+    }
+
+    applyAdvancedFilterRelationSubField({
+      sourceFieldMetadataItem: fieldMetadataItemUsedInDropdown,
       recordFilterId,
-      subFieldName: targetFieldName as CompositeFieldSubFieldName,
+      relationTargetFieldMetadataItem,
     });
 
+    pushFocusForLeafFieldValuePicker(relationTargetFieldMetadataItem);
     closeAdvancedFilterFieldSelectDropdown();
   };
 
@@ -116,7 +134,7 @@ export const AdvancedFilterRelationSubFieldSelectMenu = ({
   const selectableItemIdArray = [
     'has-any',
     'has-none',
-    ...simpleFilterableFields.map((field) => field.name),
+    ...simpleFilterableFields.map((field) => field.id),
   ];
 
   return (
@@ -140,11 +158,15 @@ export const AdvancedFilterRelationSubFieldSelectMenu = ({
           <SelectableListItem
             itemId="has-any"
             key="select-filter-has-any"
-            onEnter={handleSelectHasAny}
+            onEnter={() =>
+              handleSelectRelationOperand(RecordFilterOperand.IS_NOT_EMPTY)
+            }
           >
             <MenuItem
               focused={selectedItemId === 'has-any'}
-              onClick={handleSelectHasAny}
+              onClick={() =>
+                handleSelectRelationOperand(RecordFilterOperand.IS_NOT_EMPTY)
+              }
               LeftIcon={IconFilterPlus}
               text={t`Has any ${targetObjectMetadataItem?.labelPlural ?? ''}`}
             />
@@ -152,24 +174,28 @@ export const AdvancedFilterRelationSubFieldSelectMenu = ({
           <SelectableListItem
             itemId="has-none"
             key="select-filter-has-none"
-            onEnter={handleSelectHasAny}
+            onEnter={() =>
+              handleSelectRelationOperand(RecordFilterOperand.IS_EMPTY)
+            }
           >
             <MenuItem
               focused={selectedItemId === 'has-none'}
-              onClick={handleSelectHasAny}
+              onClick={() =>
+                handleSelectRelationOperand(RecordFilterOperand.IS_EMPTY)
+              }
               LeftIcon={IconFilterOff}
               text={t`Has no ${targetObjectMetadataItem?.labelPlural ?? ''}`}
             />
           </SelectableListItem>
           {simpleFilterableFields.map((field, index) => (
             <SelectableListItem
-              itemId={field.name}
+              itemId={field.id}
               key={`select-filter-${index}`}
-              onEnter={() => handleSelectSubField(field.name)}
+              onEnter={() => handleSelectSubField(field.id)}
             >
               <MenuItem
-                focused={selectedItemId === field.name}
-                onClick={() => handleSelectSubField(field.name)}
+                focused={selectedItemId === field.id}
+                onClick={() => handleSelectSubField(field.id)}
                 LeftIcon={getIcon(field.icon)}
                 text={field.label}
               />

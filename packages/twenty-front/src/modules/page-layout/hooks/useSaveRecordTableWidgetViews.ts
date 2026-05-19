@@ -11,6 +11,7 @@ import { isDefined } from 'twenty-shared/utils';
 import {
   type UpsertViewWidgetInput,
   type ViewFragmentFragment,
+  type ViewFilterOperand as MetadataViewFilterOperand,
   WidgetType,
 } from '~/generated-metadata/graphql';
 
@@ -73,12 +74,14 @@ export const useSaveRecordTableWidgetViews = () => {
               viewFilters: widgetViewDraft.viewFilters.map((filter) => ({
                 id: filter.id,
                 fieldMetadataId: filter.fieldMetadataId,
-                operand: filter.operand,
+                operand: filter.operand as unknown as MetadataViewFilterOperand,
                 value: filter.value,
                 viewFilterGroupId: filter.viewFilterGroupId ?? undefined,
                 positionInViewFilterGroup:
                   filter.positionInViewFilterGroup ?? undefined,
                 subFieldName: filter.subFieldName ?? undefined,
+                relationTargetFieldMetadataId:
+                  filter.relationTargetFieldMetadataId ?? undefined,
               })),
               viewFilterGroups: widgetViewDraft.viewFilterGroups.map(
                 (group) => ({

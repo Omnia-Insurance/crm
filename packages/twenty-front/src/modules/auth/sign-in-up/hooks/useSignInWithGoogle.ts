@@ -13,8 +13,12 @@ export const useSignInWithGoogle = () => {
   const [searchParams] = useSearchParams();
   const workspacePersonalInviteToken =
     searchParams.get('inviteToken') ?? undefined;
-  // OMNIA-CUSTOM: forward trusted external redirect target to OAuth flow
-  const postSignInRedirect = searchParams.get('postSignInRedirect') ?? undefined;
+  // OMNIA-CUSTOM: returnToPath can carry trusted absolute URLs. Keep
+  // postSignInRedirect as an input-only compatibility fallback.
+  const returnToPath =
+    searchParams.get('returnToPath') ??
+    searchParams.get('postSignInRedirect') ??
+    undefined;
   const billingCheckoutSession = {
     plan: BillingPlanKey.PRO,
     interval: SubscriptionInterval.Month,
@@ -30,7 +34,7 @@ export const useSignInWithGoogle = () => {
         workspacePersonalInviteToken,
         billingCheckoutSession,
         action,
-        postSignInRedirect,
+        returnToPath,
       }),
   };
 };

@@ -2,6 +2,7 @@ import { rootLevelRecordFilterGroupComponentSelector } from '@/object-record/adv
 import { getAdvancedFilterObjectFilterDropdownComponentInstanceId } from '@/object-record/advanced-filter/utils/getAdvancedFilterObjectFilterDropdownComponentInstanceId';
 import { fieldMetadataItemIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemIdUsedInDropdownComponentState';
 import { objectFilterDropdownCurrentRecordFilterComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownCurrentRecordFilterComponentState';
+import { relationTargetFieldMetadataIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/relationTargetFieldMetadataIdUsedInDropdownComponentState';
 import { subFieldNameUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/subFieldNameUsedInDropdownComponentState';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
@@ -62,6 +63,13 @@ export const useSetAdvancedFilterDropdownStates = () => {
           | CompositeFieldSubFieldName
           | null
           | undefined,
+      );
+
+      store.set(
+        relationTargetFieldMetadataIdUsedInDropdownComponentState.atomFamily({
+          instanceId,
+        }),
+        recordFilter.relationTargetFieldMetadataId ?? null,
       );
     };
 

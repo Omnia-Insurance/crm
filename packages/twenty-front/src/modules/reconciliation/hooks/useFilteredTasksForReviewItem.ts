@@ -2,6 +2,7 @@ import { findActivityTargetsOperationSignatureFactory } from '@/activities/graph
 import { type Task } from '@/activities/types/Task';
 import { type TaskTarget } from '@/activities/types/TaskTarget';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { generateDepthRecordGqlFieldsFromObject } from '@/object-record/graphql/record-gql-fields/utils/generateDepthRecordGqlFieldsFromObject';
@@ -60,12 +61,15 @@ export const useFilteredTasksForReviewItem = ({
   const objectMetadataItems = useAtomStateValue<EnrichedObjectMetadataItem[]>(
     objectMetadataItemsSelector,
   );
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
 
-  const recordFilters = useAtomComponentStateValue(
+  const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
     viewBarId,
   );
-  const recordFilterGroups = useAtomComponentStateValue(
+  const currentRecordFilterGroups = useAtomComponentStateValue(
     currentRecordFilterGroupsComponentState,
     viewBarId,
   );
@@ -79,9 +83,9 @@ export const useFilteredTasksForReviewItem = ({
   const { taskUserFilter, hasActiveFilters } = useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      fields: taskMetadata.fields,
-      recordFilters,
-      recordFilterGroups,
+      findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
+      recordFilters: currentRecordFilters,
+      recordFilterGroups: currentRecordFilterGroups,
     });
 
     const { recordGqlOperationFilter: anyFieldFilter } =
@@ -105,15 +109,16 @@ export const useFilteredTasksForReviewItem = ({
     return {
       taskUserFilter: merged,
       hasActiveFilters:
-        recordFilters.length > 0 ||
-        recordFilterGroups.length > 0 ||
+        currentRecordFilters.length > 0 ||
+        currentRecordFilterGroups.length > 0 ||
         anyFieldFilterValue.length > 0,
     };
   }, [
     filterValueDependencies,
+    fieldMetadataItemByIdMap,
     taskMetadata.fields,
-    recordFilters,
-    recordFilterGroups,
+    currentRecordFilters,
+    currentRecordFilterGroups,
     anyFieldFilterValue,
   ]);
 
@@ -176,8 +181,7 @@ export const useFilteredTasksForReviewItem = ({
     return { and: [{ id: { in: taskIds } }, taskUserFilter] };
   }, [taskIds, taskUserFilter]);
 
-  const skipFilteredQuery =
-    !isDefined(taskUserFilter) || taskIds.length === 0;
+  const skipFilteredQuery = !isDefined(taskUserFilter) || taskIds.length === 0;
 
   const { records: filteredTasks, loading: filteredTasksLoading } =
     useFindManyRecords<Task>({

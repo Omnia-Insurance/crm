@@ -9,7 +9,8 @@ import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilte
 import { hasRelationToWorkspaceMember } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/hasRelationToWorkspaceMember';
 import { AdvancedFilterFieldSelectSearchInput } from '@/object-record/advanced-filter/components/AdvancedFilterFieldSelectSearchInput';
 import { useAdvancedFilterFieldSelectDropdown } from '@/object-record/advanced-filter/hooks/useAdvancedFilterFieldSelectDropdown';
-import { useSelectFieldUsedInAdvancedFilterDropdown } from '@/object-record/advanced-filter/hooks/useSelectFieldUsedInAdvancedFilterDropdown';
+import { useApplyAdvancedFilterSourceField } from '@/object-record/advanced-filter/hooks/useApplyAdvancedFilterSourceField';
+import { usePushFocusForLeafFieldValuePicker } from '@/object-record/advanced-filter/hooks/usePushFocusForLeafFieldValuePicker';
 import { AdvancedFilterContext } from '@/object-record/advanced-filter/states/context/AdvancedFilterContext';
 import { ObjectFilterDropdownFilterSelectMenuItem } from '@/object-record/object-filter-dropdown/components/ObjectFilterDropdownFilterSelectMenuItem';
 import { fieldMetadataItemIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemIdUsedInDropdownComponentState';
@@ -82,8 +83,8 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectF
       advancedFilterFieldSelectDropdownId,
     );
 
-    const { selectFieldUsedInAdvancedFilterDropdown } =
-      useSelectFieldUsedInAdvancedFilterDropdown();
+    const { applyAdvancedFilterSourceField } =
+      useApplyAdvancedFilterSourceField();
 
     const [, setObjectFilterDropdownSubMenuFieldType] = useAtomComponentState(
       objectFilterDropdownSubMenuFieldTypeComponentState,
@@ -98,6 +99,9 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectF
       fieldMetadataItemIdUsedInDropdownComponentState,
     );
 
+    const { pushFocusForLeafFieldValuePicker } =
+      usePushFocusForLeafFieldValuePicker();
+
     const handleFieldSelect = (
       selectedFieldMetadataItem: FieldMetadataItem,
     ) => {
@@ -111,13 +115,17 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectF
         setObjectFilterDropdownSubMenuFieldType(filterType);
         setFieldMetadataItemIdUsedInDropdown(selectedFieldMetadataItem.id);
         setObjectFilterDropdownIsSelectingCompositeField(true);
-      } else {
-        selectFieldUsedInAdvancedFilterDropdown({
-          fieldMetadataItemId: selectedFieldMetadataItem.id,
-          recordFilterId,
-        });
-        closeAdvancedFilterFieldSelectDropdown();
+        return;
       }
+
+      applyAdvancedFilterSourceField({
+        sourceFieldMetadataItem: selectedFieldMetadataItem,
+        recordFilterId,
+      });
+
+      pushFocusForLeafFieldValuePicker(selectedFieldMetadataItem);
+
+      closeAdvancedFilterFieldSelectDropdown();
     };
 
     const selectableItemIdArray = filteredFieldMetadataItems.map(

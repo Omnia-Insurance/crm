@@ -4,7 +4,10 @@ import { type RecordFilterGroup } from '@/object-record/record-filter-group/type
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type RecordSort } from '@/object-record/record-sort/types/RecordSort';
 import { type RecordFilterValueDependencies } from 'twenty-shared/types';
-import { computeRecordGqlOperationFilter } from 'twenty-shared/utils';
+import {
+  computeRecordGqlOperationFilter,
+  type FindFieldMetadataItemById,
+} from 'twenty-shared/utils';
 
 export const getQueryVariablesFromFiltersAndSorts = ({
   recordFilterGroups,
@@ -12,6 +15,7 @@ export const getQueryVariablesFromFiltersAndSorts = ({
   recordSorts,
   objectMetadataItem,
   objectMetadataItems = [],
+  findFieldMetadataItemById,
   filterValueDependencies,
 }: {
   recordFilterGroups: RecordFilterGroup[];
@@ -19,10 +23,11 @@ export const getQueryVariablesFromFiltersAndSorts = ({
   recordSorts: RecordSort[];
   objectMetadataItem: EnrichedObjectMetadataItem;
   objectMetadataItems?: EnrichedObjectMetadataItem[];
+  findFieldMetadataItemById: FindFieldMetadataItemById;
   filterValueDependencies: RecordFilterValueDependencies;
 }) => {
   const filter = computeRecordGqlOperationFilter({
-    fields: objectMetadataItem?.fields ?? [],
+    findFieldMetadataItemById,
     filterValueDependencies,
     recordFilterGroups,
     recordFilters,

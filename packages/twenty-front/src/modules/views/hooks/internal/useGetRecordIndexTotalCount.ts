@@ -1,4 +1,5 @@
 import { useContextStoreObjectMetadataItemOrThrow } from '@/context-store/hooks/useContextStoreObjectMetadataItemOrThrow';
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { useAggregateRecords } from '@/object-record/hooks/useAggregateRecords';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
@@ -8,6 +9,7 @@ import { AggregateOperations } from '@/object-record/record-table/constants/Aggr
 import { SIGN_IN_BACKGROUND_MOCK_RECORDS } from '@/sign-in-background-mock/constants/SignInBackgroundMockRecords';
 import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useGetViewGroupsFilters } from '@/views/hooks/useGetViewGroupsFilters';
 import {
   computeRecordGqlOperationFilter,
@@ -28,13 +30,17 @@ export const useGetRecordIndexTotalCount = () => {
 
   const { filterValueDependencies } = useFilterValueDependencies();
 
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
+
   const recordGroupsVisibilityFilter = useGetViewGroupsFilters();
 
   const filter = computeRecordGqlOperationFilter({
     filterValueDependencies,
     recordFilters: [...currentRecordFilters, ...recordGroupsVisibilityFilter],
     recordFilterGroups: currentRecordFilterGroups,
-    fields: objectMetadataItem.fields,
+    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
   });
 
   const anyFieldFilterValue = useAtomComponentStateValue(

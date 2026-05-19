@@ -1,4 +1,5 @@
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { turnSortsIntoOrderBy } from '@/object-record/object-sort-dropdown/utils/turnSortsIntoOrderBy';
 import { useRelevantRecordsGqlFields } from '@/object-record/record-field/hooks/useRelevantRecordsGqlFields';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
@@ -12,6 +13,7 @@ import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record
 import { currentRecordSortsComponentState } from '@/object-record/record-sort/states/currentRecordSortsComponentState';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
   combineFilters,
   computeRecordGqlOperationFilter,
@@ -36,11 +38,15 @@ export const useRecordIndexGroupCommonQueryVariables = () => {
 
   const { filterValueDependencies } = useFilterValueDependencies();
 
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
+
   const requestFilters = computeRecordGqlOperationFilter({
     filterValueDependencies,
     recordFilters: currentRecordFilters,
     recordFilterGroups: currentRecordFilterGroups,
-    fields: objectMetadataItem.fields,
+    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
   });
 
   const anyFieldFilterValue = useAtomComponentStateValue(

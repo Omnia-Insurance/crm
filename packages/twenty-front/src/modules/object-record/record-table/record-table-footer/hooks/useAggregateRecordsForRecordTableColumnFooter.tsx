@@ -1,3 +1,4 @@
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { useAggregateRecords } from '@/object-record/hooks/useAggregateRecords';
 import { transformAggregateRawValueIntoAggregateDisplayValue } from '@/object-record/record-aggregate/utils/transformAggregateRawValueIntoAggregateDisplayValue';
 import { getAggregateOperationLabel } from '@/object-record/record-board/record-board-column/utils/getAggregateOperationLabel';
@@ -45,10 +46,14 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
 
   const dateLocale = useAtomStateValue(dateLocaleState);
 
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
+
   const { filterValueDependencies } = useFilterValueDependencies();
 
   const requestFilters = computeRecordGqlOperationFilter({
-    fields: objectMetadataItem.fields,
+    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
     filterValueDependencies,
     recordFilterGroups: currentRecordFilterGroups,
     recordFilters: currentRecordFilters,

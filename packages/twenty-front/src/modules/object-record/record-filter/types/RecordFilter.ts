@@ -1,4 +1,5 @@
 import { type FILTER_OPERANDS_MAP } from '@/object-record/record-filter/utils/getRecordFilterOperands';
+import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
 import {
   type FilterableAndTSVectorFieldType,
   type ViewFilterOperand,
@@ -22,8 +23,8 @@ export type RecordFilter = {
   operand: ViewFilterOperand;
   positionInRecordFilterGroup?: number | null;
   label: string;
-  subFieldName?: string | null | undefined;
-  // RLS-specific: when set, filter compares against current user's field value
+  subFieldName?: CompositeFieldSubFieldName | null | undefined;
+  relationTargetFieldMetadataId?: string | null;
   rlsDynamicValue?: RLSDynamicValue | null;
 };
 

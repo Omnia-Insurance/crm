@@ -680,6 +680,11 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toStringify: false,
       universalProperty: undefined,
     },
+    relationTargetFieldMetadataId: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: 'relationTargetFieldMetadataUniversalIdentifier',
+    },
     createdAt: {
       toCompare: false,
       toStringify: false,
@@ -1202,16 +1207,58 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       universalProperty: 'pageLayoutUniversalIdentifier',
     },
   },
-  permissionFlag: {
-    flag: {
+  rolePermissionFlag: {
+    permissionFlagId: {
       toCompare: true,
       toStringify: false,
-      universalProperty: undefined,
+      universalProperty: 'permissionFlagUniversalIdentifier',
     },
     roleId: {
       toCompare: true,
       toStringify: false,
       universalProperty: 'roleUniversalIdentifier',
+    },
+    flag: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    createdAt: {
+      toCompare: false,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    updatedAt: {
+      toCompare: false,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+  },
+  permissionFlag: {
+    key: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    label: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    description: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    icon: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    permissionType: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
     },
     createdAt: {
       toCompare: false,
@@ -1431,6 +1478,11 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
   },
   viewSort: {
     direction: {
+      toCompare: true,
+      toStringify: false,
+      universalProperty: undefined,
+    },
+    subFieldName: {
       toCompare: true,
       toStringify: false,
       universalProperty: undefined,

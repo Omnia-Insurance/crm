@@ -1,5 +1,7 @@
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
+import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import {
   computeRecordGqlOperationFilter,
   isDefined,
@@ -38,10 +40,16 @@ export const useGraphWidgetQueryCommon = ({
 
   const { filterValueDependencies } = useFilterValueDependencies();
 
+  const fieldMetadataItemByIdMap = useAtomStateValue(
+    fieldMetadataItemByIdMapSelector,
+  );
+
+  const widgetRecordFilters = configuration.filter?.recordFilters ?? [];
+
   const gqlOperationFilter = computeRecordGqlOperationFilter({
-    fields: objectMetadataItem.fields,
+    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
     filterValueDependencies,
-    recordFilters: configuration.filter?.recordFilters ?? [],
+    recordFilters: widgetRecordFilters,
     recordFilterGroups: configuration.filter?.recordFilterGroups ?? [],
   });
 
