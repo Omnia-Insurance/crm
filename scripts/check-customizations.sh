@@ -2271,6 +2271,14 @@ check_file_contains \
   "note?: string | null" \
   "FieldDiffOverlay must carry note for per-field diff explanations (reconciliation status-change reason)"
 check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "decision.crmPolicyId" \
+  "Reconciliation status engine must receive matched policy id to avoid self-cancel previous-version writes"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "cancelId && cancelId !== policyId" \
+  "Reconciliation Apply all must not cancel the same policy it is updating"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \
   "RichTextFieldEditor must skip updateOneRecord for draft records (body lives in store until Create)"

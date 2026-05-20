@@ -190,9 +190,50 @@ describe('status engine (ambetter-bob-v1)', () => {
         [previousPolicy],
         today,
         DEFAULT_STATUS_ENGINE_CONFIG,
+        'new-policy',
       );
 
       expect(result?.cancelPreviousPolicyId).toBe('old-policy');
+    });
+
+    it('does not cancel the matched policy itself when it is the only older policy', () => {
+      const matchedPolicy: CrmPolicy = {
+        id: 'matched-policy',
+        policyNumber: 'U94692964',
+        applicationId: null,
+        effectiveDate: '2025-01-01',
+        expirationDate: null,
+        paidThroughDate: null,
+        status: 'ACTIVE_PLACED',
+        applicantCount: null,
+        'premium.amountMicros': null,
+        'lead.name.firstName': 'John',
+        'lead.name.lastName': 'Smith',
+        'lead.dateOfBirth': null,
+        'lead.addressCustom.addressState': null,
+        'agent.name': null,
+        'agent.npn': null,
+        planIdentifier: null,
+        'lead.phones.primaryPhoneNumber': null,
+        'lead.emails.primaryEmail': null,
+        'lead.id': null,
+      };
+
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-04-10',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [matchedPolicy],
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+        matchedPolicy.id,
+      );
+
+      expect(result?.cancelPreviousPolicyId).toBeNull();
     });
   });
 

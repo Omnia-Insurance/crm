@@ -108,6 +108,7 @@ type StatusEngineFn = (
   allCrmPoliciesForNumber: CrmPolicy[],
   today: Date,
   config: StatusEngineConfig,
+  currentPolicyId?: string | null,
 ) => StatusDecision;
 
 const daysBetween = daysBetweenUTC;
@@ -163,9 +164,15 @@ export const isFullEffectiveMonthPaid = (
 const findPreviousVersion = (
   allCrmPoliciesForNumber: CrmPolicy[],
   newEffectiveDate: string,
+  currentPolicyId?: string | null,
 ): string | null => {
   const candidates = allCrmPoliciesForNumber
-    .filter((p) => p.effectiveDate && p.effectiveDate < newEffectiveDate)
+    .filter(
+      (p) =>
+        p.id !== currentPolicyId &&
+        p.effectiveDate &&
+        p.effectiveDate < newEffectiveDate,
+    )
     .sort((a, b) => b.effectiveDate!.localeCompare(a.effectiveDate!));
 
   return candidates.length > 0 ? candidates[0].id : null;
@@ -176,6 +183,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
   allCrmPoliciesForNumber,
   today,
   config,
+  currentPolicyId,
 ) => {
   const effectiveDate = bobRow.effectiveDate;
 
@@ -225,6 +233,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
   const cancelPrev = findPreviousVersion(
     allCrmPoliciesForNumber,
     effectiveDate,
+    currentPolicyId,
   );
 
   if (effectiveDate > todayStr) {
@@ -333,6 +342,7 @@ export const deriveStatus = (
   allCrmPoliciesForNumber: CrmPolicy[],
   today: Date,
   config: StatusEngineConfig = DEFAULT_STATUS_ENGINE_CONFIG,
+  currentPolicyId?: string | null,
 ): StatusDecision | null => {
   const engine = STATUS_ENGINES[parserId];
 
@@ -340,7 +350,7 @@ export const deriveStatus = (
     return null;
   }
 
-  return engine(input, allCrmPoliciesForNumber, today, config);
+  return engine(input, allCrmPoliciesForNumber, today, config, currentPolicyId);
 };
 
 export const getCancelExpireDate = (newEffectiveDate: string): string =>

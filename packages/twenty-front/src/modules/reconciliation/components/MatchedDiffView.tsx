@@ -491,7 +491,7 @@ export const MatchedDiffView = ({
       | null;
     const cancelId = snapshot?.__cancelPreviousPolicyId;
 
-    if (cancelId) {
+    if (cancelId && cancelId !== policyId) {
       await updateOneRecord({
         objectNameSingular: 'policy',
         idToUpdate: cancelId,
