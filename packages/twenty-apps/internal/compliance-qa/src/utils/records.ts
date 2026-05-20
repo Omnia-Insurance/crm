@@ -52,6 +52,10 @@ export type QaScorecardRecord = {
     id: string;
     name?: string | null;
     convosoCallId?: string | null;
+    recording?: {
+      primaryLinkUrl?: string | null;
+      primaryLinkLabel?: string | null;
+    } | null;
   } | null;
   agentId?: string | null;
   agent?: {
@@ -203,6 +207,7 @@ type CreateTaskResponse = {
 };
 
 type TaskCreateData = {
+  id?: string;
   title: string;
   bodyV2: RichTextValue;
   status: 'TODO';
@@ -239,6 +244,19 @@ type TaskTargetLookupResponse = {
     edges: {
       node: {
         id: string;
+      };
+    }[];
+  };
+};
+
+type TaskTargetTaskLookupResponse = {
+  taskTargets: {
+    edges: {
+      node: {
+        taskId?: string | null;
+        task?: {
+          id: string;
+        } | null;
       };
     }[];
   };
@@ -295,6 +313,10 @@ const qaScorecardSelection = `
     id
     name
     convosoCallId
+    recording {
+      primaryLinkUrl
+      primaryLinkLabel
+    }
   }
   agentId
   agent {
@@ -419,21 +441,37 @@ const findQaScorecardsByStatus = async (
 export const findProcessableQaScorecards = async (
   first: number,
 ): Promise<QaScorecardRecord[]> => {
-  const transcribingScorecards = await findQaScorecardsByStatus(
-    'TRANSCRIBING',
+  const copyingRecordingScorecards = await findQaScorecardsByStatus(
+    'COPYING_RECORDING',
     first,
   );
 
-  if (transcribingScorecards.length >= first) {
-    return transcribingScorecards;
+  if (copyingRecordingScorecards.length >= first) {
+    return copyingRecordingScorecards;
+  }
+
+  const transcribingScorecards = await findQaScorecardsByStatus(
+    'TRANSCRIBING',
+    first - copyingRecordingScorecards.length,
+  );
+
+  if (
+    copyingRecordingScorecards.length + transcribingScorecards.length >=
+    first
+  ) {
+    return [...copyingRecordingScorecards, ...transcribingScorecards];
   }
 
   const scoringScorecards = await findQaScorecardsByStatus(
     'SCORING',
-    first - transcribingScorecards.length,
+    first - copyingRecordingScorecards.length - transcribingScorecards.length,
   );
 
-  return [...transcribingScorecards, ...scoringScorecards];
+  return [
+    ...copyingRecordingScorecards,
+    ...transcribingScorecards,
+    ...scoringScorecards,
+  ];
 };
 
 export const createQaScorecard = async (
@@ -802,10 +840,12 @@ export const upsertQaScorecardAttachment = async ({
 };
 
 export const createFollowUpTask = async ({
+  id,
   title,
   markdown,
   assigneeId,
 }: {
+  id?: string;
   title: string;
   markdown: string;
   assigneeId?: string | null;
@@ -816,6 +856,10 @@ export const createFollowUpTask = async ({
     status: 'TODO',
     dueAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
   };
+
+  if (id !== undefined && id.length > 0) {
+    data.id = id;
+  }
 
   if (
     assigneeId !== undefined &&
@@ -843,6 +887,35 @@ export const createFollowUpTask = async ({
 const getFirstTaskTargetId = (
   response: TaskTargetLookupResponse,
 ): string | null => response.taskTargets.edges[0]?.node.id ?? null;
+
+export const findTaskIdLinkedToQaScorecard = async (
+  scorecardId: string,
+): Promise<string | null> => {
+  const result = await graphqlRequest<TaskTargetTaskLookupResponse>({
+    tokenType: 'workspace',
+    variables: { scorecardId },
+    query: `
+      query FindComplianceQaLinkedTask($scorecardId: UUID!) {
+        taskTargets(
+          filter: { targetQaScorecardId: { eq: $scorecardId } }
+          first: 1
+        ) {
+          edges {
+            node {
+              taskId
+              task {
+                id
+              }
+            }
+          }
+        }
+      }
+    `,
+  });
+  const node = result.taskTargets.edges[0]?.node;
+
+  return node?.taskId ?? node?.task?.id ?? null;
+};
 
 const createTaskTarget = async (
   data: TaskTargetCreateData,

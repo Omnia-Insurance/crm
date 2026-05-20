@@ -330,9 +330,33 @@ export const determineOverallResult = ({
   return 'NEEDS_REVIEW';
 };
 
-const buildRedFlags = (
-  analysis: AiScorecardAnalysis,
-): Record<RedFlagKey, RedFlagScore> => {
+const isRedFlagApplicable = ({
+  analysis,
+  redFlagKey,
+  rubricType,
+}: {
+  analysis: AiScorecardAnalysis;
+  redFlagKey: RedFlagKey;
+  rubricType: QaRubricType;
+}): boolean => {
+  if (analysis.callQuality === 'NOT_SCORABLE') {
+    return false;
+  }
+
+  if (redFlagKey === 'commissionDisclosure' && rubricType !== 'ACA_SALE') {
+    return false;
+  }
+
+  return true;
+};
+
+const buildRedFlags = ({
+  analysis,
+  rubricType,
+}: {
+  analysis: AiScorecardAnalysis;
+  rubricType: QaRubricType;
+}): Record<RedFlagKey, RedFlagScore> => {
   const redFlagScores: Record<RedFlagKey, RedFlagScore> = {
     recordedLineDisclosure: DEFAULT_RED_FLAG_SCORE,
     marketplaceDisclosure: DEFAULT_RED_FLAG_SCORE,
@@ -344,6 +368,18 @@ const buildRedFlags = (
   };
 
   for (const redFlag of RED_FLAGS) {
+    if (
+      !isRedFlagApplicable({
+        analysis,
+        redFlagKey: redFlag.key,
+        rubricType,
+      })
+    ) {
+      redFlagScores[redFlag.key] = DEFAULT_RED_FLAG_SCORE;
+
+      continue;
+    }
+
     redFlagScores[redFlag.key] = {
       ...DEFAULT_RED_FLAG_SCORE,
       ...analysis.redFlags?.[redFlag.key],
@@ -517,7 +553,7 @@ export const finalizeAiAnalysis = (
   aiAnalysis: AiScorecardAnalysis,
 ): FinalScorecardAnalysis => {
   const rubricType = normalizeRubricType(aiAnalysis.rubricType);
-  const redFlags = buildRedFlags(aiAnalysis);
+  const redFlags = buildRedFlags({ analysis: aiAnalysis, rubricType });
   const hasRedFlag = Object.values(redFlags).some(
     (redFlag) => redFlag.violated,
   );

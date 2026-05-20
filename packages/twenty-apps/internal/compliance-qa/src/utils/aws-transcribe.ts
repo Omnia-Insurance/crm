@@ -5,6 +5,8 @@ import {
 } from '@aws-sdk/client-s3';
 import {
   GetTranscriptionJobCommand,
+  type GetTranscriptionJobCommandOutput,
+  type LanguageCode,
   type MediaFormat,
   StartTranscriptionJobCommand,
   TranscribeClient,
@@ -17,6 +19,7 @@ export type CopiedRecording = {
   inputKey: string;
   outputKey: string;
   mediaFormat: MediaFormat;
+  mediaSampleRateHertz?: number;
   inputFileName: string;
   inputFileContent: Buffer;
   inputContentType: string;
@@ -42,6 +45,7 @@ export type TranscriptionJobStatus =
 export type TranscriptionJobSnapshot = {
   status: TranscriptionJobStatus;
   failureReason?: string;
+  mediaFormat?: MediaFormat;
   mediaFileUri?: string;
   transcriptFileUri?: string;
 };
@@ -51,15 +55,34 @@ export type TranscriptionArtifactFile = {
   contentType: string;
 };
 
+export class RecordingNotReadyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordingNotReadyError';
+  }
+}
+
+export const isRecordingNotReadyError = (
+  error: unknown,
+): error is RecordingNotReadyError => error instanceof RecordingNotReadyError;
+
 export type AmazonTranscriptItem = {
   start_time?: string;
   end_time?: string;
   alternatives?: { content?: string; confidence?: string }[];
   type?: string;
+  language_code?: string;
+};
+
+export type AmazonTranscriptLanguageCode = {
+  language_code?: string;
+  duration_in_seconds?: number;
 };
 
 export type AmazonTranscriptResult = {
   results?: {
+    language_code?: string;
+    language_codes?: AmazonTranscriptLanguageCode[];
     transcripts?: { transcript?: string }[];
     items?: AmazonTranscriptItem[];
   };
@@ -70,6 +93,7 @@ export type TranscriptSegment = {
   text: string;
   startTime: number;
   endTime: number;
+  languageCode?: string;
 };
 
 export type TranscriptionResult = {
@@ -138,8 +162,57 @@ const normalizePrefix = (prefix: string | undefined, fallback: string) =>
 const sanitizeJobPart = (value: string): string =>
   value.replace(/[^0-9A-Za-z._-]/g, '-').slice(0, 120);
 
+export const TRANSCRIPTION_PIPELINE_VERSION = 'lid-v1';
+
+const TRANSCRIBE_LANGUAGE_OPTIONS: LanguageCode[] = ['en-US', 'es-US'];
+
 export const buildTranscriptionJobName = (callId: string): string =>
-  `compliance-qa-${sanitizeJobPart(callId)}`;
+  `compliance-qa-${sanitizeJobPart(callId)}-${TRANSCRIPTION_PIPELINE_VERSION}`;
+
+export const buildSampleRateFallbackTranscriptionJobName = (
+  callId: string,
+  attempt: number,
+): string =>
+  attempt === 1
+    ? `${buildTranscriptionJobName(callId)}-sr`
+    : `${buildTranscriptionJobName(callId)}-sr${attempt}`;
+
+const buildSampleRateFallbackOutputKey = (
+  callId: string,
+  attempt: number,
+): string =>
+  attempt === 1
+    ? `${getOutputPrefix()}/${sanitizeJobPart(
+        callId,
+      )}-${TRANSCRIPTION_PIPELINE_VERSION}-sr.json`
+    : `${getOutputPrefix()}/${sanitizeJobPart(
+        callId,
+      )}-${TRANSCRIPTION_PIPELINE_VERSION}-sr${attempt}.json`;
+
+const buildTranscribeOutputKey = (callId: string): string =>
+  `${getOutputPrefix()}/${sanitizeJobPart(
+    callId,
+  )}-${TRANSCRIPTION_PIPELINE_VERSION}.json`;
+
+const getLanguageIdentificationSettings = () => ({
+  IdentifyMultipleLanguages: true,
+  LanguageOptions: TRANSCRIBE_LANGUAGE_OPTIONS,
+});
+
+const getMediaFormat = (value: string | undefined): MediaFormat | undefined => {
+  switch (value) {
+    case 'mp3':
+    case 'mp4':
+    case 'wav':
+    case 'flac':
+    case 'ogg':
+    case 'amr':
+    case 'webm':
+      return value;
+    default:
+      return undefined;
+  }
+};
 
 const getExtensionFromUrl = (recordingUrl: string): string | null => {
   const pathname = new URL(recordingUrl).pathname;
@@ -171,6 +244,174 @@ const inferMediaFormat = (
   if (contentType?.includes('flac')) return 'flac';
 
   return 'mp3';
+};
+
+const getMp3SampleRatesForVersion = (
+  versionId: number,
+): [number, number, number] | undefined => {
+  switch (versionId) {
+    case 0:
+      return [11025, 12000, 8000];
+    case 2:
+      return [22050, 24000, 16000];
+    case 3:
+      return [44100, 48000, 32000];
+    default:
+      return undefined;
+  }
+};
+
+const getMp3SampleRateHertz = (
+  content: Uint8Array,
+): number | undefined => {
+  for (let index = 0; index < content.length - 3; index += 1) {
+    const firstByte = content[index];
+    const secondByte = content[index + 1];
+    const thirdByte = content[index + 2];
+
+    if (
+      firstByte === undefined ||
+      secondByte === undefined ||
+      thirdByte === undefined
+    ) {
+      continue;
+    }
+
+    const hasFrameSync =
+      firstByte === 0xff && (secondByte & 0xe0) === 0xe0;
+
+    if (!hasFrameSync) {
+      continue;
+    }
+
+    const versionId = (secondByte >> 3) & 0x03;
+    const layerId = (secondByte >> 1) & 0x03;
+    const sampleRateIndex = (thirdByte >> 2) & 0x03;
+    const sampleRates = getMp3SampleRatesForVersion(versionId);
+
+    if (
+      layerId === 0 ||
+      sampleRateIndex === 3 ||
+      sampleRates === undefined
+    ) {
+      continue;
+    }
+
+    return sampleRates[sampleRateIndex];
+  }
+
+  return undefined;
+};
+
+const inferMediaSampleRateHertz = ({
+  mediaFormat,
+  inputFileContent,
+}: {
+  mediaFormat: MediaFormat;
+  inputFileContent: Uint8Array;
+}): number | undefined =>
+  mediaFormat === 'mp3' ? getMp3SampleRateHertz(inputFileContent) : undefined;
+
+const getUtf8Snippet = (content: Uint8Array): string => {
+  const maxSnippetLength = Math.min(content.length, 500);
+
+  return Buffer.from(content.slice(0, maxSnippetLength))
+    .toString('utf-8')
+    .trim();
+};
+
+const getRemoteRecordingErrorMessage = (
+  content: Uint8Array,
+): string | undefined => {
+  const snippet = getUtf8Snippet(content);
+
+  if (snippet.length === 0) {
+    return undefined;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(snippet);
+
+    if (!isRecord(parsed)) {
+      return snippet;
+    }
+
+    const text = parsed.text;
+    const message = parsed.message;
+    const code = parsed.code;
+
+    if (typeof text === 'string' && text.length > 0) {
+      return text;
+    }
+
+    if (typeof message === 'string' && message.length > 0) {
+      return message;
+    }
+
+    if (typeof code === 'string' || typeof code === 'number') {
+      return `remote recording error code ${code}`;
+    }
+
+    return snippet;
+  } catch {
+    return snippet;
+  }
+};
+
+const isSupportedRecordingContentType = (contentType: string): boolean => {
+  const normalizedContentType = contentType.toLowerCase();
+
+  return (
+    normalizedContentType.startsWith('audio/') ||
+    normalizedContentType.startsWith('video/') ||
+    normalizedContentType.includes('application/octet-stream')
+  );
+};
+
+const assertRecordingLooksLikeMedia = ({
+  recordingUrl,
+  contentType,
+  inputFileContent,
+}: {
+  recordingUrl: string;
+  contentType: string;
+  inputFileContent: Uint8Array;
+}): void => {
+  if (isSupportedRecordingContentType(contentType)) {
+    return;
+  }
+
+  const remoteError = getRemoteRecordingErrorMessage(inputFileContent);
+  const detail =
+    remoteError !== undefined && remoteError.length > 0
+      ? `: ${remoteError}`
+      : '';
+
+  throw new RecordingNotReadyError(
+    `Recording URL returned ${contentType} instead of audio for ${recordingUrl}${detail}`,
+  );
+};
+
+const isRetryableRecordingHttpStatus = (status: number): boolean =>
+  status === 404 ||
+  status === 409 ||
+  status === 425 ||
+  status === 429 ||
+  status >= 500;
+
+const buildRecordingDownloadErrorMessage = ({
+  recordingUrl,
+  status,
+  responseText,
+}: {
+  recordingUrl: string;
+  status: number;
+  responseText: string;
+}): string => {
+  const detail =
+    responseText.trim().length > 0 ? `: ${responseText.trim()}` : '';
+
+  return `Recording URL returned HTTP ${status} for ${recordingUrl}${detail}`;
 };
 
 const streamToBuffer = async (body: unknown): Promise<Buffer> => {
@@ -231,25 +472,42 @@ export const copyRecordingToS3 = async ({
 }): Promise<CopiedRecording> => {
   const bucket = getBucket();
   const inputPrefix = getInputPrefix();
-  const outputPrefix = getOutputPrefix();
 
   const response = await fetch(recordingUrl);
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to download recording (${
-        response.status
-      }): ${await response.text()}`,
-    );
+    const errorMessage = buildRecordingDownloadErrorMessage({
+      recordingUrl,
+      status: response.status,
+      responseText: await response.text(),
+    });
+
+    if (isRetryableRecordingHttpStatus(response.status)) {
+      throw new RecordingNotReadyError(errorMessage);
+    }
+
+    throw new Error(errorMessage);
   }
 
-  const contentType = response.headers.get('content-type') ?? 'audio/mpeg';
+  const contentType =
+    response.headers.get('content-type') ?? 'application/octet-stream';
   const arrayBuffer = await response.arrayBuffer();
+  const inputFileContent = Buffer.from(arrayBuffer);
+
+  assertRecordingLooksLikeMedia({
+    recordingUrl,
+    contentType,
+    inputFileContent,
+  });
+
   const mediaFormat = inferMediaFormat(recordingUrl, contentType);
   const safeCallId = sanitizeJobPart(callId);
   const inputKey = `${inputPrefix}/${safeCallId}.${mediaFormat}`;
-  const outputKey = `${outputPrefix}/${safeCallId}.json`;
-  const inputFileContent = Buffer.from(arrayBuffer);
+  const outputKey = buildTranscribeOutputKey(callId);
+  const mediaSampleRateHertz = inferMediaSampleRateHertz({
+    mediaFormat,
+    inputFileContent,
+  });
 
   const s3Client = new S3Client(
     getAwsClientConfig({ serviceName: 'Compliance QA transcription' }),
@@ -269,6 +527,7 @@ export const copyRecordingToS3 = async ({
     inputKey,
     outputKey,
     mediaFormat,
+    mediaSampleRateHertz,
     inputFileName: `amazon-transcribe-input-${safeCallId}.${mediaFormat}`,
     inputFileContent,
     inputContentType: contentType,
@@ -279,7 +538,7 @@ export const getTranscribeOutputLocation = (
   callId: string,
 ): Omit<CachedTranscribeOutput, 'raw'> => {
   const bucket = getBucket();
-  const outputKey = `${getOutputPrefix()}/${sanitizeJobPart(callId)}.json`;
+  const outputKey = buildTranscribeOutputKey(callId);
 
   return {
     bucket,
@@ -304,8 +563,9 @@ export const startTranscriptionJob = async ({
     await transcribeClient.send(
       new StartTranscriptionJobCommand({
         TranscriptionJobName: jobName,
-        LanguageCode: 'en-US',
+        ...getLanguageIdentificationSettings(),
         MediaFormat: recording.mediaFormat,
+        MediaSampleRateHertz: recording.mediaSampleRateHertz,
         Media: {
           MediaFileUri: `s3://${recording.bucket}/${recording.inputKey}`,
         },
@@ -333,16 +593,89 @@ export const startTranscriptionJob = async ({
   };
 };
 
-export const getTranscriptionJobSnapshot = async (
+export const startSampleRateFallbackTranscriptionJob = async ({
+  callId,
+  attempt,
+  mediaFileUri,
+  mediaFormat,
+  mediaSampleRateHertz,
+}: {
+  callId: string;
+  attempt: number;
+  mediaFileUri: string;
+  mediaFormat: MediaFormat;
+  mediaSampleRateHertz: number;
+}): Promise<{ jobName: string; transcriptFileUri: string }> => {
+  const transcribeClient = new TranscribeClient(
+    getAwsClientConfig({ serviceName: 'Compliance QA transcription' }),
+  );
+  const bucket = getBucket();
+  const jobName = buildSampleRateFallbackTranscriptionJobName(
+    callId,
+    attempt,
+  );
+  const outputKey = buildSampleRateFallbackOutputKey(callId, attempt);
+
+  try {
+    await transcribeClient.send(
+      new StartTranscriptionJobCommand({
+        TranscriptionJobName: jobName,
+        ...getLanguageIdentificationSettings(),
+        MediaFormat: mediaFormat,
+        MediaSampleRateHertz: mediaSampleRateHertz,
+        Media: {
+          MediaFileUri: mediaFileUri,
+        },
+        OutputBucketName: bucket,
+        OutputKey: outputKey,
+        Settings: {
+          ShowSpeakerLabels: true,
+          MaxSpeakerLabels: 4,
+        },
+      }),
+    );
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      (error.name !== 'ConflictException' &&
+        !error.message.includes('already exists'))
+    ) {
+      throw error;
+    }
+  }
+
+  return {
+    jobName,
+    transcriptFileUri: `s3://${bucket}/${outputKey}`,
+  };
+};
+
+const isTranscribeJobNotFoundError = (error: unknown): boolean =>
+  error instanceof Error &&
+  (error.name === 'NotFoundException' ||
+    error.message.includes('The requested job couldn') ||
+    error.message.includes('not be found'));
+
+export const findTranscriptionJobSnapshot = async (
   jobName: string,
-): Promise<TranscriptionJobSnapshot> => {
+): Promise<TranscriptionJobSnapshot | null> => {
   const transcribeClient = new TranscribeClient(
     getAwsClientConfig({ serviceName: 'Compliance QA transcription' }),
   );
 
-  const response = await transcribeClient.send(
-    new GetTranscriptionJobCommand({ TranscriptionJobName: jobName }),
-  );
+  let response: GetTranscriptionJobCommandOutput;
+
+  try {
+    response = await transcribeClient.send(
+      new GetTranscriptionJobCommand({ TranscriptionJobName: jobName }),
+    );
+  } catch (error) {
+    if (isTranscribeJobNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 
   const job = response.TranscriptionJob;
   const status = job?.TranscriptionJobStatus;
@@ -361,9 +694,22 @@ export const getTranscriptionJobSnapshot = async (
   return {
     status,
     failureReason: job?.FailureReason,
+    mediaFormat: getMediaFormat(job?.MediaFormat),
     mediaFileUri: job?.Media?.MediaFileUri,
     transcriptFileUri: job?.Transcript?.TranscriptFileUri,
   };
+};
+
+export const getTranscriptionJobSnapshot = async (
+  jobName: string,
+): Promise<TranscriptionJobSnapshot> => {
+  const snapshot = await findTranscriptionJobSnapshot(jobName);
+
+  if (snapshot === null) {
+    throw new Error(`Amazon Transcribe job not found: ${jobName}`);
+  }
+
+  return snapshot;
 };
 
 type S3Location = {
@@ -440,6 +786,51 @@ const getS3ObjectFile = async ({
     contentType: response.ContentType ?? 'application/octet-stream',
   };
 };
+
+const getS3ObjectPrefix = async ({
+  bucket,
+  key,
+}: S3Location): Promise<Buffer> => {
+  const s3Client = new S3Client(
+    getAwsClientConfig({ serviceName: 'Compliance QA transcription' }),
+  );
+
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Range: 'bytes=0-65535',
+    }),
+  );
+
+  return streamToBuffer(response.Body);
+};
+
+export const readMediaSampleRateHertzFromUri = async ({
+  mediaFileUri,
+  mediaFormat,
+}: {
+  mediaFileUri: string;
+  mediaFormat: MediaFormat;
+}): Promise<number | undefined> => {
+  if (mediaFormat !== 'mp3') {
+    return undefined;
+  }
+
+  const s3Location = parseS3Uri(mediaFileUri);
+
+  if (s3Location === null) {
+    return undefined;
+  }
+
+  return getMp3SampleRateHertz(await getS3ObjectPrefix(s3Location));
+};
+
+export const isInvalidInputMediaFailure = (
+  failureReason: string | undefined,
+): boolean =>
+  failureReason !== undefined &&
+  failureReason.includes("input media file isn't valid");
 
 export const readTranscriptionArtifactFileFromUri = async (
   uri: string,
@@ -529,7 +920,9 @@ const isMissingS3ObjectError = (error: unknown): boolean =>
   (error.name === 'NoSuchKey' ||
     error.name === 'NotFound' ||
     error.message.includes('NoSuchKey') ||
-    error.message.includes('Not Found'));
+    error.message.includes('Not Found') ||
+    (error.name === 'AccessDenied' &&
+      error.message.includes('s3:ListBucket')));
 
 export const readCachedTranscribeOutputForCall = async (
   callId: string,
@@ -593,6 +986,105 @@ const formatTimestamp = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
+export const formatTranscriptMarkdown = (
+  segments: TranscriptSegment[],
+): string =>
+  segments
+    .map(
+      (segment) =>
+        `**${segment.speaker}** [${formatTimestamp(segment.startTime)}]: ${
+          segment.text
+        }`,
+    )
+    .join('\n\n');
+
+const normalizeLanguageCode = (languageCode: string): string | null => {
+  const normalizedParts = languageCode
+    .trim()
+    .replace(/_/g, '-')
+    .split('-')
+    .filter(Boolean);
+
+  const language = normalizedParts[0];
+
+  if (language === undefined || !/^[a-z]{2,3}$/i.test(language)) {
+    return null;
+  }
+
+  const region = normalizedParts[1];
+
+  return region === undefined
+    ? language.toLowerCase()
+    : `${language.toLowerCase()}-${region.toUpperCase()}`;
+};
+
+export const getTranscriptLanguageCodes = (
+  raw: AmazonTranscriptResult,
+): string[] => {
+  const languageCodes = new Set<string>();
+  const addLanguageCode = (languageCode: string | undefined): void => {
+    if (languageCode === undefined) {
+      return;
+    }
+
+    const normalizedLanguageCode = normalizeLanguageCode(languageCode);
+
+    if (normalizedLanguageCode !== null) {
+      languageCodes.add(normalizedLanguageCode);
+    }
+  };
+
+  addLanguageCode(raw.results?.language_code);
+
+  for (const languageCode of raw.results?.language_codes ?? []) {
+    addLanguageCode(languageCode.language_code);
+  }
+
+  for (const item of raw.results?.items ?? []) {
+    addLanguageCode(item.language_code);
+  }
+
+  return [...languageCodes];
+};
+
+export const isSpanishLanguageCode = (languageCode: string): boolean =>
+  normalizeLanguageCode(languageCode)?.startsWith('es') === true;
+
+export const shouldTranslateTranscriptToEnglish = (
+  raw: AmazonTranscriptResult,
+): boolean => getTranscriptLanguageCodes(raw).some(isSpanishLanguageCode);
+
+const getDominantLanguageCode = (
+  languageCodes: string[],
+): string | undefined => {
+  const counts = new Map<string, number>();
+
+  for (const languageCode of languageCodes) {
+    const normalizedLanguageCode = normalizeLanguageCode(languageCode);
+
+    if (normalizedLanguageCode === null) {
+      continue;
+    }
+
+    counts.set(
+      normalizedLanguageCode,
+      (counts.get(normalizedLanguageCode) ?? 0) + 1,
+    );
+  }
+
+  let dominantLanguageCode: string | undefined;
+  let dominantCount = 0;
+
+  for (const [languageCode, count] of counts) {
+    if (count > dominantCount) {
+      dominantLanguageCode = languageCode;
+      dominantCount = count;
+    }
+  }
+
+  return dominantLanguageCode;
+};
+
 const tokenText = (item: AmazonTranscriptItem): string =>
   item.alternatives?.[0]?.content ?? '';
 
@@ -622,6 +1114,7 @@ export const normalizeAmazonTranscript = (
   const items = raw.results?.items ?? [];
   const segments: TranscriptSegment[] = [];
   let currentWords: string[] = [];
+  let currentLanguageCodes: string[] = [];
   let segmentStart = 0;
   let segmentEnd = 0;
 
@@ -645,6 +1138,9 @@ export const normalizeAmazonTranscript = (
     }
 
     currentWords.push(text);
+    if (item.language_code !== undefined) {
+      currentLanguageCodes.push(item.language_code);
+    }
     segmentEnd = Number.isFinite(endTime) ? endTime : segmentEnd;
 
     if (currentWords.length >= 45) {
@@ -653,8 +1149,10 @@ export const normalizeAmazonTranscript = (
         text: currentWords.join(' '),
         startTime: segmentStart,
         endTime: segmentEnd,
+        languageCode: getDominantLanguageCode(currentLanguageCodes),
       });
       currentWords = [];
+      currentLanguageCodes = [];
     }
   }
 
@@ -664,6 +1162,7 @@ export const normalizeAmazonTranscript = (
       text: currentWords.join(' '),
       startTime: segmentStart,
       endTime: segmentEnd,
+      languageCode: getDominantLanguageCode(currentLanguageCodes),
     });
   }
 
@@ -676,17 +1175,11 @@ export const normalizeAmazonTranscript = (
             text: transcriptText,
             startTime: 0,
             endTime: 0,
+            languageCode: getTranscriptLanguageCodes(raw)[0],
           },
         ];
 
-  const markdown = fallbackSegments
-    .map(
-      (segment) =>
-        `**${segment.speaker}** [${formatTimestamp(segment.startTime)}]: ${
-          segment.text
-        }`,
-    )
-    .join('\n\n');
+  const markdown = formatTranscriptMarkdown(fallbackSegments);
 
   return {
     segments: fallbackSegments,

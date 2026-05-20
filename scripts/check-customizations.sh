@@ -418,6 +418,14 @@ check_file_contains \
   "Amazon Transcribe" \
   "twenty-bedrock service account comment must document Compliance QA Transcribe/S3 runtime access"
 check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "Amazon Translate" \
+  "twenty-bedrock service account comment must document Compliance QA translation runtime access"
+check_file_contains \
+  "CUSTOMIZATIONS.md" \
+  "translate:TranslateText" \
+  "AWS runtime customization docs must include Compliance QA Translate permissions"
+check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json" \
   '"@ai-sdk/amazon-bedrock"' \
   "AI provider catalog must include native Bedrock entry (HIPAA-clean path via AWS BAA)"
@@ -596,6 +604,10 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"1." \
   "Compliance app production package version must stay on a 1.x production line"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "\"version\": \"1.0.11\"" \
+  "Compliance app production package version must include contextual Spanish transcript translation"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"0." \
@@ -733,6 +745,14 @@ check_file_contains \
   "COMPLIANCE_QA_ENABLED_AFTER" \
   "Compliance QA must support rollout-date filtering"
 check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "Sale - ACA Only,Sale - ACA + Private,Sale - Private Only" \
+  "Compliance QA must default to sale-disposition status-name eligibility"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "Amazon Translate" \
+  "Compliance QA app setup copy must mention translation runtime usage"
+check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
   "objectPermissions" \
   "Compliance QA app role must use granular object permissions"
@@ -748,13 +768,32 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "@aws-sdk/client-bedrock-runtime" \
   "Compliance QA must use AWS Bedrock Runtime directly for scoring"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "@aws-sdk/client-translate" \
+  "Compliance QA must keep Amazon Translate available as transcript translation fallback"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/aws-config.ts" \
   "Compliance QA AWS clients must share one typed config helper"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "Compliance QA Spanish-to-English transcript translation helper must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "callAi" \
+  "Compliance QA transcript translation must use Bedrock context before literal segment fallback"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "TranslateTextCommand" \
+  "Compliance QA transcript translation must retain Amazon Translate fallback"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
   "BedrockRuntimeClient" \
   "Compliance QA scoring must use Amazon Bedrock directly"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
+  "escapeControlCharactersInJsonStrings" \
+  "Compliance QA scoring must tolerate raw control characters in AI JSON strings"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
   "/rest/ai/generate-text" \
@@ -824,6 +863,10 @@ check_file_contains \
   "Compliance QA retries must reuse cached Transcribe output before starting a new job"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "isRecordingNotReadyError" \
+  "Compliance QA start worker must keep provider-not-ready recordings retryable"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "isCallEligibleForComplianceQa" \
   "Compliance QA start worker must filter calls before creating scorecards or Transcribe jobs"
 check_file_contains \
@@ -860,6 +903,14 @@ check_file_contains \
   "Compliance QA completion worker must derive deterministic Transcribe job names from source Calls"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "startSampleRateFallbackTranscriptionJob" \
+  "Compliance QA must retry playable MP3s with an explicit Transcribe sample rate"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "translateTranscriptToEnglish" \
+  "Compliance QA must translate Spanish transcripts before scoring"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "title: 'Transcript'" \
   "Compliance QA transcript output must be written to Notes without a redundant QA prefix"
 check_file_contains \
@@ -870,6 +921,10 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "linkTaskToComplianceContextIfSupported" \
   "Compliance QA follow-up tasks must be linked to scorecard, call, and agent context"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "analysis.overallResult !== 'FAIL' || analysis.hasRedFlag !== true" \
+  "Compliance QA follow-up tasks must only be created for failed red-flag scorecards"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "No active QA Manager" \
@@ -904,14 +959,34 @@ check_file_contains \
   "Compliance QA must keep deterministic Transcribe output locations for retry cost control"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "IdentifyMultipleLanguages" \
+  "Compliance QA Transcribe jobs must identify English and Spanish audio"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "RecordingNotReadyError" \
+  "Compliance QA must classify provider recording-not-ready responses before paid Transcribe jobs"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
   "ConflictException" \
   "Compliance QA must converge duplicate Transcribe starts on the same deterministic job"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.ts" \
   "Compliance QA call eligibility filters must stay centralized"
 check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.test.ts" \
+  "Compliance QA status-name eligibility filters must stay covered"
+check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.test.ts" \
   "Compliance QA scoring thresholds and red-flag override tests must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.test.ts" \
+  "Compliance QA Transcribe caching and recording validation must stay covered"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.test.ts" \
+  "Compliance QA transcript translation must stay covered"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.test.ts" \
+  "Compliance QA AI JSON extraction must stay covered"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/error-message.ts" \
   "Compliance QA must use explicit unknown error narrowing helpers"

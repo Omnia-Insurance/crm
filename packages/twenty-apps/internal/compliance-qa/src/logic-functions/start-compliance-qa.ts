@@ -14,6 +14,7 @@ import {
 } from 'src/utils/records';
 import {
   copyRecordingToS3,
+  isRecordingNotReadyError,
   readCachedTranscribeOutputForCall,
   startTranscriptionJob,
 } from 'src/utils/aws-transcribe';
@@ -67,39 +68,99 @@ const buildScorecardName = ({
 };
 
 const isInProgressOrDone = (scorecard: QaScorecardRecord): boolean =>
-  scorecard.status === 'COPYING_RECORDING' ||
   scorecard.status === 'TRANSCRIBING' ||
   scorecard.status === 'SCORING' ||
   scorecard.status === 'COMPLETED' ||
   scorecard.status === 'SKIPPED';
 
+const formatS3Uri = ({
+  bucket,
+  key,
+}: {
+  bucket: string;
+  key: string;
+}): string => `s3://${bucket}/${key}`;
+
+const upsertTranscriptionArtifactNote = async ({
+  scorecardId,
+  inputRecordingUri,
+  outputTranscriptUri,
+  detail,
+}: {
+  scorecardId: string;
+  inputRecordingUri?: string;
+  outputTranscriptUri?: string;
+  detail?: string;
+}): Promise<void> => {
+  const lines = ['Amazon Transcribe artifacts for this QA run.'];
+
+  if (detail !== undefined && detail.length > 0) {
+    lines.push('', detail);
+  }
+
+  if (inputRecordingUri !== undefined) {
+    lines.push('', `Input Recording: ${inputRecordingUri}`);
+  }
+
+  if (outputTranscriptUri !== undefined) {
+    lines.push(`Output Transcript JSON: ${outputTranscriptUri}`);
+  }
+
+  try {
+    await upsertQaScorecardNote({
+      scorecardId,
+      title: 'Transcription Artifacts',
+      markdown: lines.join('\n'),
+    });
+  } catch (error) {
+    console.warn(
+      '[compliance-qa] Could not write transcription artifact note:',
+      getErrorMessage(error),
+    );
+  }
+};
+
+const upsertQaScorecardAttachmentIfPossible = async ({
+  scorecardId,
+  name,
+  filename,
+  content,
+  contentType,
+}: {
+  scorecardId: string;
+  name: string;
+  filename: string;
+  content: Uint8Array;
+  contentType: string;
+}): Promise<void> => {
+  try {
+    await upsertQaScorecardAttachment({
+      scorecardId,
+      name,
+      filename,
+      content,
+      contentType,
+    });
+  } catch (error) {
+    console.warn(
+      `[compliance-qa] Could not attach ${name} to QA scorecard Files:`,
+      getErrorMessage(error),
+    );
+  }
+};
+
 const upsertTranscriptionArtifactAttachments = async ({
   scorecardId,
-  inputFile,
   transcriptOutput,
 }: {
   scorecardId: string;
-  inputFile?: {
-    filename: string;
-    content: Uint8Array;
-    contentType: string;
-  };
   transcriptOutput?: {
     content: Uint8Array;
   };
 }): Promise<void> => {
-  await Promise.all([
-    inputFile !== undefined
-      ? upsertQaScorecardAttachment({
-          scorecardId,
-          name: 'Amazon Transcribe Input Recording',
-          filename: inputFile.filename,
-          content: inputFile.content,
-          contentType: inputFile.contentType,
-        })
-      : Promise.resolve(null),
+  await Promise.allSettled([
     transcriptOutput !== undefined
-      ? upsertQaScorecardAttachment({
+      ? upsertQaScorecardAttachmentIfPossible({
           scorecardId,
           name: 'Amazon Transcribe Output JSON',
           filename: 'amazon-transcribe-output.json',
@@ -259,6 +320,12 @@ export const startComplianceQaHandler = async (
         },
       });
 
+      await upsertTranscriptionArtifactNote({
+        scorecardId: scorecard.id,
+        outputTranscriptUri: cachedTranscribeOutput.transcriptFileUri,
+        detail: 'Cached transcript reused; no new Transcribe job was started.',
+      });
+
       await upsertTranscriptionArtifactAttachments({
         scorecardId: scorecard.id,
         transcriptOutput: {
@@ -296,6 +363,14 @@ export const startComplianceQaHandler = async (
       callId: call.id,
       recording: copiedRecording,
     });
+    const inputRecordingUri = formatS3Uri({
+      bucket: transcriptionJob.bucket,
+      key: transcriptionJob.inputKey,
+    });
+    const outputTranscriptUri = formatS3Uri({
+      bucket: transcriptionJob.bucket,
+      key: transcriptionJob.outputKey,
+    });
 
     await updateQaScorecard({
       id: scorecard.id,
@@ -304,13 +379,12 @@ export const startComplianceQaHandler = async (
       },
     });
 
-    await upsertTranscriptionArtifactAttachments({
+    await upsertTranscriptionArtifactNote({
       scorecardId: scorecard.id,
-      inputFile: {
-        filename: transcriptionJob.inputFileName,
-        content: transcriptionJob.inputFileContent,
-        contentType: transcriptionJob.inputContentType,
-      },
+      inputRecordingUri,
+      outputTranscriptUri,
+      detail:
+        'Input audio remains in S3 because native Files uploads are limited by CRM ingress size and MIME validation.',
     });
 
     return {
@@ -322,6 +396,29 @@ export const startComplianceQaHandler = async (
     const errorMessage = getErrorMessage(error);
 
     if (scorecard !== null) {
+      if (isRecordingNotReadyError(error)) {
+        await updateQaScorecard({
+          id: scorecard.id,
+          data: {
+            status: 'COPYING_RECORDING',
+          },
+        });
+
+        await upsertQaScorecardNote({
+          scorecardId: scorecard.id,
+          title: 'Recording Pending',
+          markdown:
+            `${errorMessage}\n\n` +
+            'Compliance QA will retry the recording URL during workflow polling.',
+        });
+
+        return {
+          success: true,
+          scorecardId: scorecard.id,
+          status: 'COPYING_RECORDING',
+        };
+      }
+
       await updateQaScorecard({
         id: scorecard.id,
         data: {

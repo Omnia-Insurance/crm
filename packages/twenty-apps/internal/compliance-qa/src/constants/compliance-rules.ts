@@ -368,6 +368,7 @@ Return valid JSON only. Do not include markdown fences.
 Classification:
 - callQuality must be "SCORABLE" or "NOT_SCORABLE".
 - NOT_SCORABLE includes voicemail, no answer, wrong number, dead air, no live two-way conversation, or trivially short conversations.
+- Only sale/enrollment calls are scorable for this QA scorecard. Mark customer-service, troubleshooting, cancellation, transfer-only, hangup-before-sale, not-actively-shopping, Medicaid/Medicare-shopping, and benefit-card information calls as NOT_SCORABLE unless the agent meaningfully attempts ACA, ancillary, marketplace, AOR, or enrollment assistance.
 - rubricType must be "ACA_SALE", "ANCILLARY_ONLY", or "UNKNOWN".
 - UNKNOWN is allowed when the transcript does not clearly identify ACA versus ancillary.
 
@@ -375,6 +376,7 @@ Red flags:
 - A red flag means the agent failed compliance.
 - If any red flag is violated, the final score will be overridden to 0 and the final result will be FAIL.
 - Marketplace and commission disclosures are mandatory on ACA sales/enrollment calls.
+- Commission disclosure is not an ancillary-only auto-fail unless an ACA marketplace sale/enrollment is also attempted.
 - Recorded-line disclosure is mandatory for every scorable call.
 - AOR disclosure is mandatory when AOR is attempted or completed.
 - HealthSherpa disclosure is mandatory when HealthSherpa is used for ACA enrollment.
