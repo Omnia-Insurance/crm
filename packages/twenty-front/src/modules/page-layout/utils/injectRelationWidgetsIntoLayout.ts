@@ -70,8 +70,32 @@ export const injectRelationWidgetsIntoLayout = (
     return layout;
   }
 
+  const explicitlyConfiguredFieldMetadataIds = new Set(
+    firstTab.widgets.flatMap((widget) => {
+      if (
+        widget.type !== WidgetType.FIELD ||
+        widget.configuration.configurationType !==
+          WidgetConfigurationType.FIELD ||
+        !('fieldMetadataId' in widget.configuration)
+      ) {
+        return [];
+      }
+
+      return [widget.configuration.fieldMetadataId];
+    }),
+  );
+
+  const boxedRelationFieldsToInject = boxedRelationFieldMetadataItems.filter(
+    (fieldMetadataItem) =>
+      !explicitlyConfiguredFieldMetadataIds.has(fieldMetadataItem.id),
+  );
+
+  if (boxedRelationFieldsToInject.length === 0) {
+    return layout;
+  }
+
   const relationWidgets = getRelationFieldWidgetsToInsert(
-    boxedRelationFieldMetadataItems,
+    boxedRelationFieldsToInject,
     firstTab.id,
   );
 

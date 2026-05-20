@@ -377,14 +377,17 @@ export const computeApplicationManifestAllUniversalFlatEntityMaps = ({
           allUniversalFlatEntityMaps.flatPageLayoutTabMaps,
       });
 
-      for (const pageLayoutWidgetManifest of pageLayoutTabManifest.widgets ??
-        []) {
+      for (const [pageLayoutWidgetIndex, pageLayoutWidgetManifest] of (
+        pageLayoutTabManifest.widgets ?? []
+      ).entries()) {
         addUniversalFlatEntityToUniversalFlatEntityMapsThroughMutationOrThrow({
           universalFlatEntity:
             fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget({
               pageLayoutWidgetManifest,
               pageLayoutTabUniversalIdentifier:
                 pageLayoutTabManifest.universalIdentifier,
+              pageLayoutTabLayoutMode: pageLayoutTabManifest.layoutMode,
+              pageLayoutWidgetIndex,
               applicationUniversalIdentifier,
               now,
             }),
@@ -415,14 +418,17 @@ export const computeApplicationManifestAllUniversalFlatEntityMaps = ({
         allUniversalFlatEntityMaps.flatPageLayoutTabMaps,
     });
 
-    for (const pageLayoutWidgetManifest of pageLayoutTabManifest.widgets ??
-      []) {
+    for (const [pageLayoutWidgetIndex, pageLayoutWidgetManifest] of (
+      pageLayoutTabManifest.widgets ?? []
+    ).entries()) {
       addUniversalFlatEntityToUniversalFlatEntityMapsThroughMutationOrThrow({
         universalFlatEntity:
           fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget({
             pageLayoutWidgetManifest,
             pageLayoutTabUniversalIdentifier:
               pageLayoutTabManifest.universalIdentifier,
+            pageLayoutTabLayoutMode: pageLayoutTabManifest.layoutMode,
+            pageLayoutWidgetIndex,
             applicationUniversalIdentifier,
             now,
           }),

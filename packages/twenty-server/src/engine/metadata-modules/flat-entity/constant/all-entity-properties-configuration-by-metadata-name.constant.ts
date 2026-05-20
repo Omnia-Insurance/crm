@@ -468,8 +468,9 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       toStringify: false,
       universalProperty: 'fieldMetadataUniversalIdentifier',
     },
+    // OMNIA-CUSTOM: app manifests must diff navigation target FKs when switching item types.
     viewId: {
-      toCompare: false,
+      toCompare: true,
       toStringify: false,
       universalProperty: 'viewUniversalIdentifier',
     },
@@ -1192,12 +1193,12 @@ export const ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME = {
       universalProperty: undefined,
     },
     targetObjectMetadataId: {
-      toCompare: false,
+      toCompare: true,
       toStringify: false,
       universalProperty: 'targetObjectMetadataUniversalIdentifier',
     },
     pageLayoutId: {
-      toCompare: false,
+      toCompare: true,
       toStringify: false,
       universalProperty: 'pageLayoutUniversalIdentifier',
     },
