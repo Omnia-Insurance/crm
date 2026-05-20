@@ -17,7 +17,9 @@ type ExistsRow = {
  * physical `_timeCard` table still had `agentId`, causing generated task
  * queries to select a non-existent column through TaskTarget morph relations.
  */
-export class ReconcileTimeCardAgentRelation1778000000000 implements MigrationInterface {
+export class ReconcileTimeCardAgentRelation1778000000000
+  implements MigrationInterface
+{
   name = 'ReconcileTimeCardAgentRelation1778000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

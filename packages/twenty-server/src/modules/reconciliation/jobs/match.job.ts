@@ -212,6 +212,7 @@ export class ReconciliationMatchJob {
             allPoliciesForNumber,
             today,
             statusEngineConfig,
+            decision.crmPolicyId,
           );
 
           if (statusResult) {

@@ -1578,6 +1578,13 @@ check_file_contains \
   "packages/twenty-front/src/modules/spreadsheet-import/types/SpreadsheetImportField.ts" \
   "isRelationUpdateField" \
   "Relation update field support for CSV import"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/resolve-import-relations.util.ts" \
+  "Assigning a missing relation should still enrich the matched record" \
+  "Import relation resolution must enrich matched leads when assigning a missing parent relation"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
+  "Regression test for import relation enrichment on missing parent relation"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 
@@ -2279,6 +2286,14 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/contexts/FieldContext.ts" \
   "note?: string | null" \
   "FieldDiffOverlay must carry note for per-field diff explanations (reconciliation status-change reason)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "decision.crmPolicyId" \
+  "Reconciliation status engine must receive matched policy id to avoid self-cancel previous-version writes"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "cancelId && cancelId !== policyId" \
+  "Reconciliation Apply all must not cancel the same policy it is updating"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \
