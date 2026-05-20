@@ -19,19 +19,28 @@ written to Notes on the scorecard:
 - `Score Details`
 - `Scoring Evidence`
 - `Transcript`
+- `Translated Transcript` when a Spanish transcript is translated before
+  scoring
+- `Transcript Language`
 - `Processing Error`
 
-The Files tab stores scorecard attachments for the S3 input recording and
-Amazon Transcribe JSON artifact. Those files duplicate the S3 artifacts, so the
-production S3 bucket and Twenty file storage both need encryption, access
-control, and retention policies that match PHI handling requirements.
+The Files tab stores small scorecard attachments for the Amazon Transcribe JSON
+artifact. The source recording stays on the linked Call and the copied S3 input
+path to avoid pushing large call audio through CRM file upload limits.
 
-Transcribe output is stored at a deterministic S3 key per Call. Retries check
-for an existing valid transcript JSON before starting a new Amazon Transcribe
-job, so scoring/task failures can be retried without paying to transcribe the
-same call again. The Amazon Transcribe job name is also deterministic by Call ID
-so concurrent starts converge on the same job instead of creating duplicate
-billable jobs.
+Transcribe output is stored at a deterministic S3 key per Call and transcription
+pipeline version. Retries check for an existing valid transcript JSON before
+starting a new Amazon Transcribe job, so scoring/task failures can be retried
+without paying to transcribe the same call again. The Amazon Transcribe job name
+is also deterministic by Call ID so concurrent starts converge on the same job
+instead of creating duplicate billable jobs.
+
+Amazon Transcribe uses English/Spanish language identification. When Spanish is
+detected, Compliance writes the source transcript to `Transcript`, translates
+the Spanish/Spanglish transcript to English with a context-aware Bedrock
+translation prompt, writes that English text to `Translated Transcript`, and
+scores the translated transcript. Amazon Translate remains available as a
+fallback for any segment the contextual translation does not return.
 
 ## Setup
 
@@ -47,15 +56,17 @@ billable jobs.
    - `COMPLIANCE_QA_ENABLED_AFTER` skips Calls before a rollout timestamp
    - `COMPLIANCE_QA_ALLOWED_DIRECTIONS`
    - `COMPLIANCE_QA_ALLOWED_STATUSES`
-   - `COMPLIANCE_QA_ALLOWED_STATUS_NAMES`
+   - `COMPLIANCE_QA_ALLOWED_STATUS_NAMES` defaults to sales dispositions:
+     `Sale - ACA Only`, `Sale - ACA + Private`, and `Sale - Private Only`.
+     Set it to `*` only when every status should be eligible for sales QA.
    - `COMPLIANCE_QA_ALLOWED_QUEUE_NAMES`
    - `COMPLIANCE_QA_ALLOWED_LEAD_SOURCE_IDS`
 5. Configure AWS credentials through IAM role in production, or
    `AWS_PROFILE`, `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, and optional
    `AWS_SESSION_TOKEN` for local development.
    Production uses the `twenty-bedrock-runtime` pod role with the
-   `ComplianceQaTranscribeS3Artifacts` inline policy for Transcribe and the
-   `compliance-qa/*` S3 prefixes.
+   `ComplianceQaTranscribeS3Artifacts` inline policy for Transcribe, Amazon
+   Translate, and the `compliance-qa/*` S3 prefixes.
 
 No manual CRM Workflow setup is required. The app post-install hook creates and
 activates a visible Workflow named `Compliance Call Pipeline`. It listens for
@@ -74,10 +85,14 @@ workflow before running the hook.
 The installed workflow owns the async Transcribe wait. It runs delayed polling
 steps with backoff, calls `complete-compliance-qa` for the specific scorecard,
 branches on `shouldPollAgain`, and stops when the transcript is scored or the
-final polling window expires. Follow-up tasks are created for an active QA
-Manager when the result is `FAIL` or `NEEDS_REVIEW`. The task has one assignee,
-the QA Manager, and is linked through Task Targets to the QA Scorecard, source
-Call, source Lead, and Agent Profile when those records are available.
+final polling window expires. If Convoso publishes a recording URL before the
+recording is actually available, the scorecard remains in `COPYING_RECORDING`
+instead of failing; later workflow-triggered or batch completion runs can retry
+the same URL and continue once it returns audio. Follow-up tasks are created for
+an active QA Manager only when the result is `FAIL` and a red flag is present.
+The task has one assignee, the QA Manager, and is linked through Task Targets to
+the QA Scorecard, source Call, source Lead, and Agent Profile when those records
+are available.
 
 ## Backfill
 

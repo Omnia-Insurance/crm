@@ -6,7 +6,7 @@ const COMPLIANCE_APP_ABOUT_DESCRIPTION = [
   '',
   '#### What this app does',
   '',
-  'Compliance listens to eligible Call records, copies the recording to S3, transcribes it with Amazon Transcribe, and scores the conversation against insurance sales compliance criteria.',
+  'Compliance listens to eligible Call records, copies the recording to S3, transcribes it with Amazon Transcribe, translates Spanish transcripts to English when detected, and scores the conversation against insurance sales compliance criteria.',
   '',
   'It turns the result into native CRM work your team can act on:',
   '- Scorecards linked to the source Call, Lead, and Agent',
@@ -16,7 +16,7 @@ const COMPLIANCE_APP_ABOUT_DESCRIPTION = [
   '',
   '#### How processing works',
   '',
-  'On install, Compliance creates a visible CRM Workflow named **Compliance Call Pipeline**. The workflow listens for eligible Call create/update events and runs the Start Compliance QA action. The app uses deterministic S3 output paths and deterministic Transcribe job names, so retries reuse a successful transcript instead of paying to transcribe the same call again.',
+  'On install, Compliance creates a visible CRM Workflow named **Compliance Call Pipeline**. The workflow listens for eligible Call create/update events and runs the Start Compliance QA action. The app uses deterministic S3 output paths and deterministic Transcribe job names, so retries reuse a successful transcript instead of paying to transcribe the same call again. Transcribe identifies English/Spanish audio; Spanish transcript segments are translated to English before scoring.',
   '',
   'Workflow-owned delayed completion steps poll Amazon Transcribe, score the transcript through Amazon Bedrock, write the audit trail back to the scorecard, and create one manager task when follow-up is required.',
   '',
@@ -40,7 +40,8 @@ export default defineApplication({
   applicationVariables: {
     AWS_REGION: {
       universalIdentifier: '926ad61c-7ad6-4b89-ab13-b4984fd28b1a',
-      description: 'AWS region used by Amazon Transcribe and S3.',
+      description:
+        'AWS region used by Amazon Transcribe, Amazon Translate, and S3.',
       isSecret: false,
     },
     COMPLIANCE_QA_TRANSCRIBE_BUCKET: {
@@ -96,8 +97,9 @@ export default defineApplication({
     COMPLIANCE_QA_ALLOWED_STATUS_NAMES: {
       universalIdentifier: '30bfae26-2a19-4a39-a053-9441e602da8d',
       description:
-        'Optional comma-separated Call status names that are eligible for Compliance QA.',
+        'Comma-separated Call status names eligible for sales QA. Use * to opt in to all status names.',
       isSecret: false,
+      value: 'Sale - ACA Only,Sale - ACA + Private,Sale - Private Only',
     },
     COMPLIANCE_QA_ALLOWED_QUEUE_NAMES: {
       universalIdentifier: 'd5d553d1-df06-41d6-b835-c0f9c0e329a7',

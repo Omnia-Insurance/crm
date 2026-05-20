@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
+// OMNIA-CUSTOM: Brokerage app adoption migrates existing Omnia workspace metadata to the app-owned package
+import { AdoptBrokerageAppCommand } from 'src/database/commands/custom/adopt-brokerage-app.command';
 // OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
 import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
 // OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
@@ -42,7 +44,9 @@ import { UpgradeStatusCommand } from 'src/engine/core-modules/upgrade/commands/u
 import { UpgradeModule } from 'src/engine/core-modules/upgrade/upgrade.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
+import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
+import { NavigationMenuItemEntity } from 'src/engine/metadata-modules/navigation-menu-item/entities/navigation-menu-item.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 // OMNIA-CUSTOM: needed by SeedReconciliationObjectsCommand to lock recon objects to admins
 import { ObjectPermissionModule } from 'src/engine/metadata-modules/object-permission/object-permission.module';
@@ -65,6 +69,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     UpgradeVersionCommandModule,
     TypeOrmModule.forFeature([
       ObjectMetadataEntity,
+      FieldMetadataEntity,
+      NavigationMenuItemEntity,
       RoleEntity,
       WorkspaceEntity,
       // OMNIA-CUSTOM: needed by SeedConvosoTimeCardPipelineCommand + BackfillTimeCardsCommand
@@ -121,6 +127,8 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
+    // OMNIA-CUSTOM: Brokerage app adoption for existing Omnia workspaces
+    AdoptBrokerageAppCommand,
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,

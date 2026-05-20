@@ -1,7 +1,7 @@
 server:
   replicaCount: 2
   # OMNIA-CUSTOM: Pod Identity Association maps this SA to the runtime IAM role
-  # for Bedrock, Amazon Transcribe, and S3 QA artifacts under AWS BAA (HIPAA).
+  # for Bedrock, Amazon Transcribe, Amazon Translate, and S3 QA artifacts under AWS BAA (HIPAA).
   serviceAccountName: twenty-bedrock
   persistence:
     enabled: false
@@ -66,8 +66,6 @@ server:
 
 worker:
   replicaCount: 2
-  # OMNIA-CUSTOM: Pod Identity Association maps this SA to the runtime IAM role
-  # for Bedrock, Amazon Transcribe, and S3 QA artifacts under AWS BAA (HIPAA).
   serviceAccountName: twenty-bedrock
   image:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm

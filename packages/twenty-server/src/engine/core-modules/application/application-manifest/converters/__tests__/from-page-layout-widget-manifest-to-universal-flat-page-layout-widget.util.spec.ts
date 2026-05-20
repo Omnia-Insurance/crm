@@ -1,3 +1,5 @@
+import { PageLayoutTabLayoutMode } from 'twenty-shared/types';
+
 import { WidgetType } from 'src/engine/metadata-modules/page-layout-widget/enums/widget-type.enum';
 import { fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget } from 'src/engine/core-modules/application/application-manifest/converters/from-page-layout-widget-manifest-to-universal-flat-page-layout-widget.util';
 
@@ -93,6 +95,31 @@ describe('fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget', () => {
       column: 6,
       rowSpan: 4,
       columnSpan: 6,
+    });
+  });
+
+  it('should derive vertical-list widget position from manifest order', () => {
+    const result = fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget({
+      pageLayoutWidgetManifest: {
+        universalIdentifier: 'widget-uuid-4',
+        title: 'Field Widget',
+        type: WidgetType.FIELD,
+        configuration: {
+          configurationType: 'FIELD',
+          fieldMetadataId: 'field-uuid-1',
+          fieldDisplayMode: 'CARD',
+        },
+      },
+      pageLayoutTabUniversalIdentifier,
+      pageLayoutTabLayoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      pageLayoutWidgetIndex: 2,
+      applicationUniversalIdentifier,
+      now,
+    });
+
+    expect(result.position).toEqual({
+      layoutMode: PageLayoutTabLayoutMode.VERTICAL_LIST,
+      index: 2,
     });
   });
 });
