@@ -13,7 +13,6 @@ import { Brackets, type ObjectLiteral } from 'typeorm';
 
 import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
-import { FileOutput } from 'src/engine/api/common/common-args-processors/data-arg-processor/types/file-item.type';
 import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
 import {
   decodeCursor,
@@ -85,44 +84,41 @@ export class SearchService {
   } & SearchArgs) {
     // OMNIA-CUSTOM: resolve role → object-level read permissions so the search
     // API never returns results for objects the user's role can't read.
-    const roleReadInfo = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const context = getWorkspaceContext();
-        const rolePermissionConfig = resolveRolePermissionConfig({
-          authContext: context.authContext,
-          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
-          apiKeyRoleMap: context.apiKeyRoleMap,
-        });
+    const roleReadInfo =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const context = getWorkspaceContext();
+          const rolePermissionConfig = resolveRolePermissionConfig({
+            authContext: context.authContext,
+            userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+            apiKeyRoleMap: context.apiKeyRoleMap,
+          });
 
-        if (!rolePermissionConfig || 'shouldBypassPermissionChecks' in rolePermissionConfig) {
-          return null; // admins/system — no filtering
-        }
+          if (
+            !rolePermissionConfig ||
+            'shouldBypassPermissionChecks' in rolePermissionConfig
+          ) {
+            return null; // admins/system — no filtering
+          }
 
-        const roleIds = 'unionOf' in rolePermissionConfig
-          ? rolePermissionConfig.unionOf
-          : rolePermissionConfig.intersectionOf;
+          const roleIds =
+            'unionOf' in rolePermissionConfig
+              ? rolePermissionConfig.unionOf
+              : rolePermissionConfig.intersectionOf;
 
-        if (roleIds.length === 0) return null;
+          if (roleIds.length === 0) return null;
 
-        const objectPermissions = context.permissionsPerRoleId?.[roleIds[0]] ?? {};
+          const objectPermissions =
+            context.permissionsPerRoleId?.[roleIds[0]] ?? {};
 
-        // Get the role entity to check canReadAllObjectRecords default
-        const flatRoleMaps = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-          async () => {
-            const ctx = getWorkspaceContext();
-            return ctx;
-          },
-        );
-
-        // Look up role's canReadAllObjectRecords from flatRoleMaps
-        // The rolesPermissions are keyed by roleId, each containing per-object overrides.
-        // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
-        // Since we can't easily get the role entity here, use a heuristic:
-        // if objectPermissions is sparse (few keys vs many objects), the role likely
-        // has canReadAllObjectRecords=false and only explicitly grants some objects.
-        return { objectPermissions, roleIds };
-      },
-    );
+          // The role permissions are keyed by roleId, each containing per-object overrides.
+          // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
+          // Since we can't easily get the role entity here, use a heuristic:
+          // if objectPermissions is sparse (few keys vs many objects), the role likely
+          // has canReadAllObjectRecords=false and only explicitly grants some objects.
+          return { objectPermissions, roleIds };
+        },
+      );
 
     const filteredObjectMetadataItems = this.filterObjectMetadataItems({
       flatObjectMetadatas,
@@ -160,17 +156,19 @@ export class SearchService {
 
                 return {
                   objectMetadataItem: flatObjectMetadata,
-                  records: await this.buildSearchQueryAndGetRecordsWithFallback({
-                    entityManager: repository,
-                    flatObjectMetadata,
-                    flatFieldMetadataMaps,
-                    searchInput,
-                    searchTerms: formatSearchTerms(searchInput, 'and'),
-                    searchTermsOr: formatSearchTerms(searchInput, 'or'),
-                    limit: limit as number,
-                    filter: filter ?? ({} as ObjectRecordFilter),
-                    after,
-                  }),
+                  records: await this.buildSearchQueryAndGetRecordsWithFallback(
+                    {
+                      entityManager: repository,
+                      flatObjectMetadata,
+                      flatFieldMetadataMaps,
+                      searchInput,
+                      searchTerms: formatSearchTerms(searchInput, 'and'),
+                      searchTermsOr: formatSearchTerms(searchInput, 'or'),
+                      limit: limit as number,
+                      filter: filter ?? ({} as ObjectRecordFilter),
+                      after,
+                    },
+                  ),
                 };
               },
             );

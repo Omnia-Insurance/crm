@@ -86,7 +86,7 @@ export class GroupByWithRecordsService {
       flatFieldMetadataMaps,
     });
 
-    applyRowLevelPermissionPredicates({
+    await applyRowLevelPermissionPredicates({
       queryBuilder: queryBuilderWithFiltersAndWithoutGroupBy,
       objectMetadata: flatObjectMetadata,
       internalContext: queryBuilderWithFiltersAndWithoutGroupBy.internalContext,
