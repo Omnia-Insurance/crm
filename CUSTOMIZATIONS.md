@@ -257,6 +257,8 @@ Full ingestion pipeline engine — configurable pull/push data pipelines with fi
 | `spreadsheet-import/types/SpreadsheetImportField.ts`                                                   | Added `isRelationUpdateField` and `targetFieldMetadataItem` properties                |
 | `object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields.ts`                            | Added relation update fields to import dropdown                                       |
 | `object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts`                | Execute relation updates after parent upsert; show import results summary dialog      |
+| `engine/core-modules/import-job/utils/resolve-import-relations.util.ts`                                | Server-side relation resolution enriches matched related records even when the parent record has no current relation |
+| `engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts`                 | Regression coverage for importing policy rows that assign and enrich an existing lead |
 | `object-record/hooks/useBatchCreateManyRecords.ts`                                                     | Handle IMPORT_PARTIAL_SUCCESS per-batch, collect warnings, continue remaining batches |
 | `object-record/spreadsheet-import/utils/buildRecordFromImportedStructuredRow.ts`                       | Explicit `isRelationConnectField` filter                                              |
 | `object-record/object-options-dropdown/hooks/useExportProcessRecordsForCSV.ts`                         | Added `skipRelationFieldNames` param for sub-field export                             |

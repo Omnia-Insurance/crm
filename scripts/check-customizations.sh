@@ -1589,6 +1589,13 @@ check_file_contains \
   "packages/twenty-front/src/modules/spreadsheet-import/types/SpreadsheetImportField.ts" \
   "isRelationUpdateField" \
   "Relation update field support for CSV import"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/resolve-import-relations.util.ts" \
+  "Assigning a missing relation should still enrich the matched record" \
+  "Import relation resolution must enrich matched leads when assigning a missing parent relation"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
+  "Regression test for import relation enrichment on missing parent relation"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 

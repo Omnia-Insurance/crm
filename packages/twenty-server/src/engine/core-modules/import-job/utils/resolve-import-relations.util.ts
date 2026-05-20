@@ -13,8 +13,6 @@ import { type ObjectLiteral, type Repository } from 'typeorm';
 
 import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
 
-import { FieldMetadataType } from 'twenty-shared/types';
-
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -22,6 +20,7 @@ import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object
 import {
   extractMatchDataFromRecord,
   isSamePerson,
+  type RecordMatchData,
 } from './score-record-match.util';
 import {
   type RelationBehavior,
@@ -72,9 +71,9 @@ function getJoinColumnName(
   );
 
   return (
-    (fieldMeta?.settings as Record<string, unknown> | undefined)
-      ?.joinColumnName as string | undefined
-  ) ?? `${relationFieldName}Id`;
+    ((fieldMeta?.settings as Record<string, unknown> | undefined)
+      ?.joinColumnName as string | undefined) ?? `${relationFieldName}Id`
+  );
 }
 
 function getRelationTargetObjectName(
@@ -95,9 +94,7 @@ function getRelationTargetObjectName(
 
   if (!fieldMeta?.relationTargetObjectMetadataId) return undefined;
 
-  const targetObject = Object.values(
-    objectMaps.byUniversalIdentifier,
-  ).find(
+  const targetObject = Object.values(objectMaps.byUniversalIdentifier).find(
     (m) => m?.id === fieldMeta.relationTargetObjectMetadataId,
   ) as FlatObjectMetadata | undefined;
 
@@ -113,9 +110,7 @@ function getLabelIdentifierFieldName(
 
   if (!objectMeta?.labelIdentifierFieldMetadataId) return undefined;
 
-  const labelField = Object.values(
-    fieldMaps.byUniversalIdentifier,
-  ).find(
+  const labelField = Object.values(fieldMaps.byUniversalIdentifier).find(
     (f) => f?.id === objectMeta.labelIdentifierFieldMetadataId,
   ) as FlatFieldMetadata | undefined;
 
@@ -180,8 +175,7 @@ function parseRows(
 
           // Normalize US state names to 2-letter codes
           const normalizedValue =
-            subFieldPath.endsWith('.addressState') &&
-            typeof value === 'string'
+            subFieldPath.endsWith('.addressState') && typeof value === 'string'
               ? normalizeUsState(value)
               : value;
 
@@ -369,9 +363,7 @@ async function buildLookupIndices(
         `"${targetObjectName}"."phonesPrimaryPhoneNumber"`,
       ])
       .where(`"${targetObjectName}"."deletedAt" IS NULL`)
-      .andWhere(
-        `"${targetObjectName}"."phonesPrimaryPhoneNumber" IS NOT NULL`,
-      )
+      .andWhere(`"${targetObjectName}"."phonesPrimaryPhoneNumber" IS NOT NULL`)
       .andWhere(`"${targetObjectName}"."phonesPrimaryPhoneNumber" != ''`)
       .getRawMany();
 
@@ -494,14 +486,12 @@ async function searchForRecordFromIndex(
     try {
       const byName = await targetRepo
         .createQueryBuilder(targetObjectName)
-        .where(
-          `"${targetObjectName}"."nameFirstName" ILIKE :firstName`,
-          { firstName: matchData.firstName },
-        )
-        .andWhere(
-          `"${targetObjectName}"."nameLastName" ILIKE :lastName`,
-          { lastName: matchData.lastName },
-        )
+        .where(`"${targetObjectName}"."nameFirstName" ILIKE :firstName`, {
+          firstName: matchData.firstName,
+        })
+        .andWhere(`"${targetObjectName}"."nameLastName" ILIKE :lastName`, {
+          lastName: matchData.lastName,
+        })
         .andWhere(`"${targetObjectName}"."deletedAt" IS NULL`)
         .limit(2)
         .getMany();
@@ -591,10 +581,7 @@ async function resolveSmartUpdate(
       ? existingRelated.get(currentRelatedId)
       : undefined;
 
-    const csvMatchData = buildMatchDataFromSubFields(
-      subFields ?? {},
-      csvLabel,
-    );
+    const csvMatchData = buildMatchDataFromSubFields(subFields ?? {}, csvLabel);
 
     if (currentRelated) {
       const existingMatchData = extractMatchDataFromRecord(currentRelated);
@@ -619,10 +606,7 @@ async function resolveSmartUpdate(
           });
         } else {
           // No conflicts — update the existing related record
-          const updates = buildSubFieldUpdates(
-            subFields ?? {},
-            currentRelated,
-          );
+          const updates = buildSubFieldUpdates(subFields ?? {}, currentRelated);
 
           if (updates && Object.keys(updates).length > 0) {
             relatedRecordUpdates.push({
@@ -697,6 +681,16 @@ async function resolveSmartUpdate(
           mainRecordId: mainId,
           joinColumnName,
           newRelatedRecordId: matchId,
+        });
+
+        // Assigning a missing relation should still enrich the matched record
+        // with CSV fields such as date of birth and address.
+        recordIdsToFetch.add(matchId);
+        deferredUpdates.push({
+          parsed,
+          matchId,
+          subFields: subFields ?? {},
+          mainId,
         });
       } else if (rb.onNotFound === 'CREATE') {
         const newData = buildNewRecordData(subFields ?? {}, csvLabel);
@@ -786,10 +780,9 @@ async function checkUniqueConstraints(
     try {
       const conflict = await targetRepo
         .createQueryBuilder(targetObjectName)
-        .where(
-          `"${targetObjectName}"."${searchColumn.column}" = :value`,
-          { value: searchColumn.value },
-        )
+        .where(`"${targetObjectName}"."${searchColumn.column}" = :value`, {
+          value: searchColumn.value,
+        })
         .andWhere(`"${targetObjectName}"."id" != :excludeId`, {
           excludeId: currentRelatedId,
         })
@@ -972,8 +965,6 @@ function buildNewRecordData(
   return record;
 }
 
-import { type RecordMatchData } from './score-record-match.util';
-
 function buildMatchDataFromSubFields(
   subFields: Record<string, unknown>,
   label?: string,
@@ -999,16 +990,18 @@ function buildMatchDataFromSubFields(
   const phonesObj = getCompositeOrScalar(subFields, 'phones');
 
   if (typeof phonesObj === 'object' && phonesObj !== null) {
-    result.phone = (phonesObj as Record<string, unknown>)
-      .primaryPhoneNumber as string | undefined;
+    result.phone = (phonesObj as Record<string, unknown>).primaryPhoneNumber as
+      | string
+      | undefined;
   }
 
   // Email
   const emailsObj = getCompositeOrScalar(subFields, 'emails');
 
   if (typeof emailsObj === 'object' && emailsObj !== null) {
-    result.email = (emailsObj as Record<string, unknown>)
-      .primaryEmail as string | undefined;
+    result.email = (emailsObj as Record<string, unknown>).primaryEmail as
+      | string
+      | undefined;
   }
 
   // Address
@@ -1036,10 +1029,9 @@ async function searchForRecord(
     try {
       const byEmail = await repository
         .createQueryBuilder(objectNameSingular)
-        .where(
-          `"${objectNameSingular}"."emailsPrimaryEmail" ILIKE :email`,
-          { email: matchData.email },
-        )
+        .where(`"${objectNameSingular}"."emailsPrimaryEmail" ILIKE :email`, {
+          email: matchData.email,
+        })
         .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
         .getOne();
 
@@ -1063,10 +1055,9 @@ async function searchForRecord(
     try {
       const byPhone = await repository
         .createQueryBuilder(objectNameSingular)
-        .where(
-          `"${objectNameSingular}"."phonesPrimaryPhoneNumber" = :phone`,
-          { phone: normalized },
-        )
+        .where(`"${objectNameSingular}"."phonesPrimaryPhoneNumber" = :phone`, {
+          phone: normalized,
+        })
         .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
         .getOne();
 
@@ -1088,14 +1079,12 @@ async function searchForRecord(
     try {
       const byName = await repository
         .createQueryBuilder(objectNameSingular)
-        .where(
-          `"${objectNameSingular}"."nameFirstName" ILIKE :firstName`,
-          { firstName: matchData.firstName },
-        )
-        .andWhere(
-          `"${objectNameSingular}"."nameLastName" ILIKE :lastName`,
-          { lastName: matchData.lastName },
-        )
+        .where(`"${objectNameSingular}"."nameFirstName" ILIKE :firstName`, {
+          firstName: matchData.firstName,
+        })
+        .andWhere(`"${objectNameSingular}"."nameLastName" ILIKE :lastName`, {
+          lastName: matchData.lastName,
+        })
         .andWhere(`"${objectNameSingular}"."deletedAt" IS NULL`)
         .limit(2)
         .getMany();
@@ -1135,10 +1124,7 @@ function detectConflicts(
     if (groupUpdates.length <= 1) continue;
 
     // Check each field for conflicting values — last row wins, log warning
-    const fieldValues = new Map<
-      string,
-      { value: unknown; rows: number[] }
-    >();
+    const fieldValues = new Map<string, { value: unknown; rows: number[] }>();
 
     for (const update of groupUpdates) {
       for (const [fieldName, value] of Object.entries(update.fields)) {
@@ -1159,9 +1145,7 @@ function detectConflicts(
             column: fieldName,
             errorType: 'CONFLICT',
             message: `Conflicting values for ${fieldName} on the same related record (last row wins)`,
-            conflictingRows: [
-              ...existing.rows,
-            ],
+            conflictingRows: [...existing.rows],
           });
         }
       }
@@ -1311,7 +1295,12 @@ export async function resolveImportRelations(
   for (const rb of relationBehaviors) {
     joinColumnsByRelation.set(
       rb.relationFieldName,
-      getJoinColumnName(mainObjectName, rb.relationFieldName, objectMaps, fieldMaps),
+      getJoinColumnName(
+        mainObjectName,
+        rb.relationFieldName,
+        objectMaps,
+        fieldMaps,
+      ),
     );
   }
 
