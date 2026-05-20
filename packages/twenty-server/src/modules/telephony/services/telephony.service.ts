@@ -27,6 +27,7 @@ import {
 } from 'src/modules/telephony/types/telephony.type';
 import { isWithinAllowedCallingWindow } from 'src/modules/telephony/utils/local-calling-window.util';
 import { normalizePhoneNumber } from 'src/modules/telephony/utils/normalize-phone-number.util';
+import { tryLockCampaignLead } from 'src/modules/telephony/utils/try-lock-campaign-lead.util';
 
 type DateValue = string | Date | null | undefined;
 
@@ -374,6 +375,8 @@ export class TelephonyService {
       throw new BadRequestException('Telephony session is required.');
     }
 
+    const sessionId = presence.sessionId;
+
     return this.runInWorkspace(workspace.id, async () => {
       const campaignLeadRepo =
         await this.getWorkspaceRepository<TelephonyCampaignLeadRecord>(
@@ -469,41 +472,17 @@ export class TelephonyService {
         }
 
         const lockExpiresAt = new Date(now.getTime() + LOCK_TTL_MS);
-        if (!candidate.status) {
-          continue;
-        }
+        const lockSucceeded = await tryLockCampaignLead({
+          campaignLead: candidate,
+          sessionId,
+          agentProfileId,
+          now,
+          lockExpiresAt,
+          updateCampaignLeadLock: (criteria, patch) =>
+            campaignLeadRepo.update(criteria, patch),
+        });
 
-        const previousLockOwnerToken = candidate.lockOwnerToken;
-        const lockCriteria = { id: candidate.id, status: candidate.status };
-
-        const updateResult =
-          candidate.status === 'LOCKED'
-            ? previousLockOwnerToken
-              ? await campaignLeadRepo.update(
-                  {
-                    ...lockCriteria,
-                    lockOwnerToken: previousLockOwnerToken,
-                  },
-                  {
-                    status: 'LOCKED',
-                    lockOwnerToken: presence.sessionId,
-                    lockedAt: now.toISOString(),
-                    lockExpiresAt: lockExpiresAt.toISOString(),
-                    lockedByAgentId: agentProfileId,
-                    blockedReason: null,
-                  },
-                )
-              : undefined
-            : await campaignLeadRepo.update(lockCriteria, {
-            status: 'LOCKED',
-            lockOwnerToken: presence.sessionId,
-            lockedAt: now.toISOString(),
-            lockExpiresAt: lockExpiresAt.toISOString(),
-            lockedByAgentId: agentProfileId,
-            blockedReason: null,
-          });
-
-        if (!updateResult?.affected) {
+        if (!lockSucceeded) {
           continue;
         }
 
@@ -513,7 +492,7 @@ export class TelephonyService {
           agentId: agentProfileId,
           payload: {
             route: 'requestNextCampaignLead',
-            sessionId: presence.sessionId,
+            sessionId,
           },
         });
 

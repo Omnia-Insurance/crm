@@ -18,6 +18,10 @@ This branch adds the first CRM-owned Telephony foundation:
   routing, release, and outbound call start
 - Typed routing service with DNC checks, lead-local calling-window enforcement,
   routing leases, audit Call Events, and disposition transitions
+- Routing lock claim logic is extracted into
+  `try-lock-campaign-lead.util.ts` and covered by focused in-memory
+  compare-and-swap tests for fresh lead double assignment, expired-lock
+  reclaim races, and missing previous-owner tokens.
 
 Telephony depends on Brokerage. Brokerage remains the source of truth for
 canonical Leads (`person`), final historical Calls (`call`), Agent Profiles,
@@ -57,8 +61,6 @@ The second command should return no matches in Telephony source.
   - signature validation matching the selected provider
 - Complete final Brokerage Call creation/linking after call completion and
   disposition.
-- Add focused concurrency coverage for expired-lock reclaim behavior and
-  double-assignment prevention.
 - Add frontend tests for the softphone workflow, blocked-call messaging, and
   disposition-required behavior.
 
