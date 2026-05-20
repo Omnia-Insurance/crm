@@ -14,6 +14,11 @@ type QaCallEligibilityOptions = {
 };
 
 const DEFAULT_MINIMUM_DURATION_SECONDS = 300;
+const DEFAULT_ALLOWED_STATUS_NAMES = new Set([
+  'Sale - ACA Only',
+  'Sale - ACA + Private',
+  'Sale - Private Only',
+]);
 
 const getNonEmptyEnvValue = (name: string): string | undefined => {
   const value = process.env[name]?.trim();
@@ -65,11 +70,17 @@ const getMinimumDurationSeconds = (
         fallback: DEFAULT_MINIMUM_DURATION_SECONDS,
       });
 
-const getDelimitedEnvValues = (name: string): Set<string> | null => {
+const getDelimitedEnvValues = ({
+  name,
+  defaultValues,
+}: {
+  name: string;
+  defaultValues?: Set<string>;
+}): Set<string> | null => {
   const value = getNonEmptyEnvValue(name);
 
   if (value === undefined) {
-    return null;
+    return defaultValues ?? null;
   }
 
   const values = value
@@ -100,14 +111,23 @@ const getStringEligibilityFailure = ({
   envName,
   fieldName,
   value,
+  defaultValues,
 }: {
   envName: string;
   fieldName: string;
   value?: string | null;
+  defaultValues?: Set<string>;
 }): string | null => {
-  const allowedValues = getDelimitedEnvValues(envName);
+  const allowedValues = getDelimitedEnvValues({
+    name: envName,
+    defaultValues,
+  });
 
   if (allowedValues === null) {
+    return null;
+  }
+
+  if (allowedValues.has('*')) {
     return null;
   }
 
@@ -189,6 +209,7 @@ export const isCallEligibleForComplianceQa = (
       envName: 'COMPLIANCE_QA_ALLOWED_STATUS_NAMES',
       fieldName: 'Call status name',
       value: call.statusName,
+      defaultValues: DEFAULT_ALLOWED_STATUS_NAMES,
     }),
     getStringEligibilityFailure({
       envName: 'COMPLIANCE_QA_ALLOWED_QUEUE_NAMES',

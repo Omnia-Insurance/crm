@@ -1,0 +1,162 @@
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+  STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
+} from 'twenty-sdk/define';
+
+import { CALL_DIRECTION_OPTIONS } from 'src/constants/field-options';
+import {
+  AGENT_CALLS_FIELD_ID,
+  AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER,
+  CALL_AGENT_FIELD_ID,
+  CALL_BILLABLE_FIELD_ID,
+  CALL_COST_FIELD_ID,
+  CALL_DATE_FIELD_ID,
+  CALL_DIRECTION_FIELD_ID,
+  CALL_DURATION_FIELD_ID,
+  CALL_LEAD_FIELD_ID,
+  CALL_LEAD_SOURCE_FIELD_ID,
+  CALL_NAME_FIELD_ID,
+  CALL_OBJECT_UNIVERSAL_IDENTIFIER,
+  CALL_QUEUE_NAME_FIELD_ID,
+  CALL_RECORDING_FIELD_ID,
+  CALL_STATUS_FIELD_ID,
+  CALL_STATUS_NAME_FIELD_ID,
+  LEAD_CALLS_FIELD_ID,
+  LEAD_SOURCE_CALLS_FIELD_ID,
+  LEAD_SOURCE_OBJECT_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/universal-identifiers';
+
+export default defineObject({
+  universalIdentifier: CALL_OBJECT_UNIVERSAL_IDENTIFIER,
+  nameSingular: 'call',
+  namePlural: 'calls',
+  labelSingular: 'Call',
+  labelPlural: 'Calls',
+  description: 'Brokerage call record.',
+  icon: 'IconPhoneCall',
+  labelIdentifierFieldMetadataUniversalIdentifier: CALL_NAME_FIELD_ID,
+  fields: [
+    {
+      universalIdentifier: CALL_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'name',
+      label: 'Name',
+      icon: 'IconAbc',
+    },
+    {
+      universalIdentifier: CALL_DIRECTION_FIELD_ID,
+      type: FieldType.SELECT,
+      name: 'direction',
+      label: 'Direction',
+      icon: 'IconPhone',
+      options: CALL_DIRECTION_OPTIONS,
+    },
+    {
+      universalIdentifier: CALL_DURATION_FIELD_ID,
+      type: FieldType.NUMBER,
+      name: 'duration',
+      label: 'Duration',
+      icon: 'IconClock',
+    },
+    {
+      universalIdentifier: CALL_DATE_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'callDate',
+      label: 'Call Date',
+      icon: 'IconCalendar',
+    },
+    {
+      universalIdentifier: CALL_COST_FIELD_ID,
+      type: FieldType.CURRENCY,
+      name: 'cost',
+      label: 'Cost',
+      icon: 'IconCurrencyDollar',
+    },
+    {
+      universalIdentifier: CALL_BILLABLE_FIELD_ID,
+      type: FieldType.BOOLEAN,
+      name: 'billable',
+      label: 'Billable',
+      icon: 'IconReceipt',
+      defaultValue: false,
+    },
+    {
+      universalIdentifier: CALL_STATUS_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'status',
+      label: 'Status',
+      icon: 'IconStatusChange',
+    },
+    {
+      universalIdentifier: CALL_STATUS_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'statusName',
+      label: 'Status Name',
+      icon: 'IconStatusChange',
+    },
+    {
+      universalIdentifier: CALL_QUEUE_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'queueName',
+      label: 'Queue Name',
+      icon: 'IconUsersGroup',
+    },
+    {
+      universalIdentifier: CALL_RECORDING_FIELD_ID,
+      type: FieldType.LINKS,
+      name: 'recording',
+      label: 'Recording',
+      icon: 'IconMicrophone',
+    },
+    {
+      universalIdentifier: CALL_AGENT_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'agent',
+      label: 'Agent',
+      icon: 'IconUser',
+      relationTargetObjectMetadataUniversalIdentifier:
+        AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier: AGENT_CALLS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'agentId',
+      },
+    },
+    {
+      universalIdentifier: CALL_LEAD_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'lead',
+      label: 'Lead',
+      icon: 'IconTargetArrow',
+      relationTargetObjectMetadataUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier: LEAD_CALLS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'leadId',
+      },
+    },
+    {
+      universalIdentifier: CALL_LEAD_SOURCE_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'leadSource',
+      label: 'Lead Source',
+      icon: 'IconRoute',
+      relationTargetObjectMetadataUniversalIdentifier:
+        LEAD_SOURCE_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        LEAD_SOURCE_CALLS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'leadSourceId',
+      },
+    },
+  ],
+});
+

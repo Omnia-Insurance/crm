@@ -86,6 +86,14 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/hooks/useFilteredSelectOptionsFromRLSPredicates.ts" \
   "RowLevelPermissionPredicateScope.WRITE" \
   "Editable select/picker option filtering must only use ALL + WRITE scoped predicates"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/AddressFieldInput.tsx" \
+  "normalizeAddressCoordinate" \
+  "Address input must not throw when persisted coordinates contain invalid strings"
+check_file_contains \
+  "packages/twenty-front/src/utils/normalize-address-coordinate.ts" \
+  "DECIMAL_NUMBER_PATTERN" \
+  "Address coordinate sanitizer must stay explicit and non-throwing"
 
 echo ""
 echo "--- Critical: Organization Plan Gate Removed ---"
@@ -190,6 +198,18 @@ check_file_contains \
   "workspaceCustomFlatApplication.id" \
   "App manifest sync must validate relations against workspace-custom CRM objects"
 check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-manifest/converters/from-page-layout-widget-manifest-to-universal-flat-page-layout-widget.util.ts" \
+  "pageLayoutWidgetIndex" \
+  "App manifest page-layout widgets must preserve vertical-list order from manifest order"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-manifest/utils/compute-application-manifest-all-universal-flat-entity-maps.util.ts" \
+  "pageLayoutWidgetIndex" \
+  "App manifest page-layout widget map computation must pass manifest order into widget conversion"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/flat-entity/constant/all-entity-properties-configuration-by-metadata-name.constant.ts" \
+  "OMNIA-CUSTOM: app manifests must diff navigation target FKs" \
+  "Navigation menu item target FKs must be included in app manifest diffs"
+check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-graphql-schema-sdl/workspace-graphql-schema-sdl.service.ts" \
   "workspaceCustomApplicationId" \
   "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
@@ -221,9 +241,24 @@ check_file_contains \
   "showInSidebar" \
   "Opened section must use showInSidebar permission to avoid duplicating workspace items"
 check_file_contains \
+  "packages/twenty-front/src/modules/navigation-menu-item/display/sections/components/NavigationDrawerOpenedSection.tsx" \
+  "workspaceNavigationMenuItemsSorted" \
+  "Opened section must use editable workspace navigation items to avoid admin sidebar duplicates"
+check_file_contains \
   "packages/twenty-front/src/modules/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems.tsx" \
   "ignoreShowInSidebar" \
   "NavigationDrawerSection must support bypassing showInSidebar for curated sections"
+
+echo ""
+echo "--- Critical: App-Owned Record Layouts ---"
+check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/utils/injectRelationWidgetsIntoLayout.ts" \
+  "explicitlyConfiguredFieldMetadataIds" \
+  "Dynamic relation widget injection must detect explicit app-provided relation widgets"
+check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/utils/injectRelationWidgetsIntoLayout.ts" \
+  "boxedRelationFieldsToInject" \
+  "Dynamic relation widget injection must skip relation fields already configured in app-owned layouts"
 
 echo ""
 echo "--- Critical: Signed-Out Lead Mock ---"
@@ -382,6 +417,14 @@ check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
   "Amazon Transcribe" \
   "twenty-bedrock service account comment must document Compliance QA Transcribe/S3 runtime access"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "Amazon Translate" \
+  "twenty-bedrock service account comment must document Compliance QA translation runtime access"
+check_file_contains \
+  "CUSTOMIZATIONS.md" \
+  "translate:TranslateText" \
+  "AWS runtime customization docs must include Compliance QA Translate permissions"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json" \
   '"@ai-sdk/amazon-bedrock"' \
@@ -561,6 +604,10 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"1." \
   "Compliance app production package version must stay on a 1.x production line"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "\"version\": \"1.0.11\"" \
+  "Compliance app production package version must include contextual Spanish transcript translation"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"0." \
@@ -698,6 +745,14 @@ check_file_contains \
   "COMPLIANCE_QA_ENABLED_AFTER" \
   "Compliance QA must support rollout-date filtering"
 check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "Sale - ACA Only,Sale - ACA + Private,Sale - Private Only" \
+  "Compliance QA must default to sale-disposition status-name eligibility"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "Amazon Translate" \
+  "Compliance QA app setup copy must mention translation runtime usage"
+check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
   "objectPermissions" \
   "Compliance QA app role must use granular object permissions"
@@ -713,13 +768,32 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "@aws-sdk/client-bedrock-runtime" \
   "Compliance QA must use AWS Bedrock Runtime directly for scoring"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/package.json" \
+  "@aws-sdk/client-translate" \
+  "Compliance QA must keep Amazon Translate available as transcript translation fallback"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/aws-config.ts" \
   "Compliance QA AWS clients must share one typed config helper"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "Compliance QA Spanish-to-English transcript translation helper must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "callAi" \
+  "Compliance QA transcript translation must use Bedrock context before literal segment fallback"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.ts" \
+  "TranslateTextCommand" \
+  "Compliance QA transcript translation must retain Amazon Translate fallback"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
   "BedrockRuntimeClient" \
   "Compliance QA scoring must use Amazon Bedrock directly"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
+  "escapeControlCharactersInJsonStrings" \
+  "Compliance QA scoring must tolerate raw control characters in AI JSON strings"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.ts" \
   "/rest/ai/generate-text" \
@@ -945,6 +1019,10 @@ check_file_contains \
   "Compliance QA retries must reuse cached Transcribe output before starting a new job"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
+  "isRecordingNotReadyError" \
+  "Compliance QA start worker must keep provider-not-ready recordings retryable"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "isCallEligibleForComplianceQa" \
   "Compliance QA start worker must filter calls before creating scorecards or Transcribe jobs"
 check_file_contains \
@@ -981,6 +1059,14 @@ check_file_contains \
   "Compliance QA completion worker must derive deterministic Transcribe job names from source Calls"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "startSampleRateFallbackTranscriptionJob" \
+  "Compliance QA must retry playable MP3s with an explicit Transcribe sample rate"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "translateTranscriptToEnglish" \
+  "Compliance QA must translate Spanish transcripts before scoring"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "title: 'Transcript'" \
   "Compliance QA transcript output must be written to Notes without a redundant QA prefix"
 check_file_contains \
@@ -991,6 +1077,10 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "linkTaskToComplianceContextIfSupported" \
   "Compliance QA follow-up tasks must be linked to scorecard, call, and agent context"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
+  "analysis.overallResult !== 'FAIL' || analysis.hasRedFlag !== true" \
+  "Compliance QA follow-up tasks must only be created for failed red-flag scorecards"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "No active QA Manager" \
@@ -1025,17 +1115,297 @@ check_file_contains \
   "Compliance QA must keep deterministic Transcribe output locations for retry cost control"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "IdentifyMultipleLanguages" \
+  "Compliance QA Transcribe jobs must identify English and Spanish audio"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "RecordingNotReadyError" \
+  "Compliance QA must classify provider recording-not-ready responses before paid Transcribe jobs"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
   "ConflictException" \
   "Compliance QA must converge duplicate Transcribe starts on the same deterministic job"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.ts" \
   "Compliance QA call eligibility filters must stay centralized"
 check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.test.ts" \
+  "Compliance QA status-name eligibility filters must stay covered"
+check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.test.ts" \
   "Compliance QA scoring thresholds and red-flag override tests must exist"
 check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.test.ts" \
+  "Compliance QA Transcribe caching and recording validation must stay covered"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.test.ts" \
+  "Compliance QA transcript translation must stay covered"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/call-ai.test.ts" \
+  "Compliance QA AI JSON extraction must stay covered"
+check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/error-message.ts" \
   "Compliance QA must use explicit unknown error narrowing helpers"
+
+echo ""
+echo "--- Brokerage App ---"
+check_file_exists \
+  "docs/brokerage-app-spec.md" \
+  "Brokerage app implementation spec must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/package.json" \
+  "Brokerage app package must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/package.json" \
+  "\"lint\": \"oxlint -c .oxlintrc.json .\"" \
+  "Brokerage app lint script must stay executable"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/application-config.ts" \
+  "displayName: 'Brokerage'" \
+  "Brokerage app must keep the user-facing app name"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/application-config.ts" \
+  "aboutDescription: BROKERAGE_ABOUT_DESCRIPTION" \
+  "Brokerage app must keep rich About-page markdown"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/application-config.ts" \
+  "defaultRoleUniversalIdentifier" \
+  "Brokerage app must keep the default function role binding"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/constants/universal-identifiers.ts" \
+  "Brokerage universal identifiers must stay stable"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/constants/field-options.ts" \
+  "Brokerage shared field options must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/objects/agent-profile.ts" \
+  "Brokerage Agent object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/objects/call.ts" \
+  "Brokerage Call object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/objects/policy.ts" \
+  "Brokerage Policy object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/objects/lead-source.ts" \
+  "Brokerage Lead Source object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/fields/assigned-agent-on-lead.field.ts" \
+  "Brokerage Lead must expose Assigned Agent"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/fields/policies-on-lead.field.ts" \
+  "Brokerage Lead must expose related Policies"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/fields/family-members-on-lead.field.ts" \
+  "Brokerage Lead must expose related Family Members"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/fields/calls-on-lead.field.ts" \
+  "Brokerage Lead must expose related Calls"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/fields/agent-profile-on-workspace-member.field.ts" \
+  "Brokerage Workspace Member must expose related Agent profile"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/call.ts" \
+  "convosoCallId" \
+  "Brokerage Call object must not include provider-specific Convoso IDs"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/call.ts" \
+  "convosoLeadId" \
+  "Brokerage Call object must not include provider-specific lead IDs"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/policy.ts" \
+  "oldCrmPolicyId" \
+  "Brokerage Policy object must not include legacy import IDs"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/policy.ts" \
+  "reviewItems" \
+  "Brokerage Policy object must not include reconciliation review relations"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/lead-source.ts" \
+  "convosoListId" \
+  "Brokerage Lead Source object must not include provider-specific list IDs"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/lead-source.ts" \
+  "queueKey" \
+  "Brokerage Lead Source object must not include provider-specific queue keys"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
+  "PermissionFlag.VIEWS" \
+  "Brokerage default function role must be able to normalize app-managed view sorts"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
+  "PermissionFlag.DATA_MODEL" \
+  "Brokerage default function role must be able to normalize Lead required-field metadata"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
+  "STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier" \
+  "Brokerage default function role must be able to update Lead status records"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "label: 'Agent'" \
+  "Brokerage Agent role template must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/manager.role.ts" \
+  "label: 'Manager'" \
+  "Brokerage Manager role template must exist"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "canReadAllObjectRecords: true" \
+  "Brokerage Agent role must not have blanket object read access"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/manager.role.ts" \
+  "canUpdateAllSettings: true" \
+  "Brokerage Manager role must not have workspace admin settings access"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/carriers-folder.navigation-menu-item.ts" \
+  "Brokerage Carrier/Product setup must stay grouped in the sidebar"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/leads.navigation-menu-item.ts" \
+  "targetObjectUniversalIdentifier:" \
+  "Brokerage Leads sidebar entry must open the locked default Leads object view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/policies.navigation-menu-item.ts" \
+  "targetObjectUniversalIdentifier: POLICY_OBJECT_UNIVERSAL_IDENTIFIER" \
+  "Brokerage Policies sidebar entry must open the locked default Policies object view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/calls.navigation-menu-item.ts" \
+  "targetObjectUniversalIdentifier: CALL_OBJECT_UNIVERSAL_IDENTIFIER" \
+  "Brokerage Calls sidebar entry must open the locked default Calls object view"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/leads.navigation-menu-item.ts" \
+  "NavigationMenuItemType.VIEW" \
+  "Brokerage Leads sidebar entry must not create a duplicate default view"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/policies.navigation-menu-item.ts" \
+  "NavigationMenuItemType.VIEW" \
+  "Brokerage Policies sidebar entry must not create a duplicate default view"
+check_file_not_contains \
+  "packages/twenty-apps/internal/brokerage/src/navigation-menu-items/calls.navigation-menu-item.ts" \
+  "NavigationMenuItemType.VIEW" \
+  "Brokerage Calls sidebar entry must not create a duplicate default view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/leads-today.view.ts" \
+  "Brokerage Leads must include a Today view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/leads-mtd.view.ts" \
+  "Brokerage Leads must include an MTD view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/policies-today.view.ts" \
+  "Brokerage Policies must include a Today view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/policies-mtd.view.ts" \
+  "Brokerage Policies must include an MTD view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/calls-today.view.ts" \
+  "Brokerage Calls must include a Today view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/calls-mtd.view.ts" \
+  "Brokerage Calls must include an MTD view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/lead-record-page-fields.view.ts" \
+  "Brokerage Lead record page must use a curated fields-widget view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/views/lead-record-page-fields.view.ts" \
+  "ViewType.FIELDS_WIDGET" \
+  "Brokerage Lead record page fields view must be a fields widget view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "createViewSort" \
+  "Brokerage post-install must add missing descending view sorts"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "updateViewSort" \
+  "Brokerage post-install must repair existing non-descending view sorts"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "shouldRunOnVersionUpgrade: true" \
+  "Brokerage post-install view sort normalization must run on app upgrades"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "VIEW_MODIFICATION_PERMISSION_ERROR_MESSAGE" \
+  "Brokerage post-install view sort normalization must not fail installs when locked views cannot be modified"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "REQUIRED_LEAD_FIELD_NAMES" \
+  "Brokerage post-install must keep required Lead field setup"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "requiredCondition: ALWAYS_REQUIRED_CONDITION" \
+  "Brokerage post-install must mark required Lead fields through metadata required conditions"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/set-lead-assigned-status-on-create.ts" \
+  "eventName: 'person.created'" \
+  "Brokerage Lead status creation automation must listen to Lead creation"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/set-lead-assigned-status-on-update.ts" \
+  "eventName: 'person.updated'" \
+  "Brokerage Lead status update automation must listen to Lead updates"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/set-lead-assigned-status-on-update.ts" \
+  "updatedFields: ['assignedAgentId']" \
+  "Brokerage Lead status update automation must only run when Assigned Agent changes"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/utils/lead-status.ts" \
+  "leadStatus: 'ASSIGNED'" \
+  "Brokerage Lead status automation must set Status to Assigned"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_RECORD_PAGE_FIELDS_VIEW_ID" \
+  "Brokerage Lead record page layout must use the curated production-style fields view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_POLICIES_FIELD_ID" \
+  "Brokerage Lead record page layout must expose Policies as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_SOURCE_FIELD_ID" \
+  "Brokerage Lead record page layout must expose Lead Source as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_ASSIGNED_AGENT_FIELD_ID" \
+  "Brokerage Lead record page layout must expose Assigned Agent as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_CALLS_FIELD_ID" \
+  "Brokerage Lead record page layout must expose Calls as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "LEAD_FAMILY_MEMBERS_FIELD_ID" \
+  "Brokerage Lead record page layout must expose Family Members as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "fieldDisplayMode: 'CARD'" \
+  "Brokerage Lead relation fields must render as record-page cards"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "configurationType: 'EMAILS'" \
+  "Brokerage Lead record page layout must expose the Emails tab"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
+  "configurationType: 'CALENDAR'" \
+  "Brokerage Lead record page layout must expose the Calendar tab"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "Brokerage metadata adoption command must exist for existing Omnia workspaces"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "workspace:adopt-brokerage-app" \
+  "Brokerage adoption command must stay registered under the expected name"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "options.dryRun === true" \
+  "Brokerage adoption command must remain dry-run safe"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/constants/brokerage-app-adoption.constants.ts" \
+  "Brokerage adoption constants must exist"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/constants/brokerage-app-adoption.constants.ts" \
+  "BROKERAGE_APP_UNIVERSAL_IDENTIFIER" \
+  "Brokerage adoption constants must keep the app universal identifier"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "AdoptBrokerageAppCommand" \
+  "Brokerage adoption command must be registered with nest-commander"
 
 echo ""
 echo "--- Policy Pre-Query Hook: agentId Assignment ---"

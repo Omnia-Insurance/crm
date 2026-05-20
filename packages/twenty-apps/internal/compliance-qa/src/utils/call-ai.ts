@@ -133,13 +133,77 @@ const findJsonEndIndex = ({
 };
 
 const parseJson = (text: string): unknown => {
-  const parsed: unknown = JSON.parse(text);
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    const escapedJson = escapeControlCharactersInJsonStrings(text);
+
+    if (escapedJson === text) {
+      throw error;
+    }
+
+    parsed = JSON.parse(escapedJson);
+  }
 
   if (!isRecord(parsed) && !Array.isArray(parsed)) {
     throw new Error('AI JSON response must be an object or array');
   }
 
   return parsed;
+};
+
+const escapeJsonControlCharacter = (character: string): string => {
+  switch (character) {
+    case '\b':
+      return '\\b';
+    case '\f':
+      return '\\f';
+    case '\n':
+      return '\\n';
+    case '\r':
+      return '\\r';
+    case '\t':
+      return '\\t';
+    default:
+      return `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`;
+  }
+};
+
+const escapeControlCharactersInJsonStrings = (text: string): string => {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (const character of text) {
+    if (escaped) {
+      result += character;
+      escaped = false;
+      continue;
+    }
+
+    if (inString && character === '\\') {
+      result += character;
+      escaped = true;
+      continue;
+    }
+
+    if (character === '"') {
+      result += character;
+      inString = !inString;
+      continue;
+    }
+
+    if (inString && character.charCodeAt(0) < 0x20) {
+      result += escapeJsonControlCharacter(character);
+      continue;
+    }
+
+    result += character;
+  }
+
+  return result;
 };
 
 // Extract JSON from AI response that may contain markdown code fences or trailing text.

@@ -1,14 +1,25 @@
 import { RED_FLAGS } from 'src/constants/compliance-rules';
+import { startComplianceQaHandler } from 'src/logic-functions/start-compliance-qa';
 import {
+  buildSampleRateFallbackTranscriptionJobName,
   buildTranscriptionJobName,
-  buildTranscriptionArtifactFilename,
+  findTranscriptionJobSnapshot,
+  getTranscriptLanguageCodes,
   getTranscriptionJobSnapshot,
+  isInvalidInputMediaFailure,
   normalizeAmazonTranscript,
   readCachedTranscribeOutputForCall,
-  readTranscriptionArtifactFileFromUri,
+  readMediaSampleRateHertzFromUri,
   readTranscribeOutputFromUri,
+  shouldTranslateTranscriptToEnglish,
+  startSampleRateFallbackTranscriptionJob,
   type AmazonTranscriptResult,
+  type TranscriptionJobSnapshot,
 } from 'src/utils/aws-transcribe';
+import {
+  translateTranscriptToEnglish,
+  type TranslatedTranscriptionResult,
+} from 'src/utils/aws-translate';
 import { getErrorMessage } from 'src/utils/error-message';
 import {
   formatFullName,
@@ -18,9 +29,8 @@ import {
 import {
   createFollowUpTask,
   findQaScorecardById,
-  findQaScorecardAttachmentFullPath,
   findProcessableQaScorecards,
-  hasQaScorecardAttachmentFile,
+  findTaskIdLinkedToQaScorecard,
   linkTaskToComplianceContextIfSupported,
   upsertQaScorecardAttachment,
   upsertQaScorecardNote,
@@ -59,6 +69,70 @@ type TranscriptionSource = {
   raw: AmazonTranscriptResult;
   transcriptFileUri: string;
   mediaFileUri?: string;
+};
+
+const upsertTranscriptionArtifactNote = async ({
+  scorecardId,
+  mediaFileUri,
+  transcriptFileUri,
+}: {
+  scorecardId: string;
+  mediaFileUri?: string;
+  transcriptFileUri: string;
+}): Promise<void> => {
+  const lines = [
+    'Amazon Transcribe artifacts for this QA run.',
+    '',
+    'The source recording remains on the linked Source Call record. Large call audio is not copied into scorecard Files.',
+  ];
+
+  if (mediaFileUri !== undefined && mediaFileUri.length > 0) {
+    lines.push('', `Input Recording S3: ${mediaFileUri}`);
+  }
+
+  lines.push(`Output Transcript JSON: ${transcriptFileUri}`);
+
+  try {
+    await upsertQaScorecardNote({
+      scorecardId,
+      title: 'Transcription Artifacts',
+      markdown: lines.join('\n'),
+    });
+  } catch (error) {
+    console.warn(
+      '[compliance-qa] Could not write transcription artifact note:',
+      getErrorMessage(error),
+    );
+  }
+};
+
+const upsertQaScorecardAttachmentIfPossible = async ({
+  scorecardId,
+  name,
+  filename,
+  content,
+  contentType,
+}: {
+  scorecardId: string;
+  name: string;
+  filename: string;
+  content: Uint8Array;
+  contentType: string;
+}): Promise<void> => {
+  try {
+    await upsertQaScorecardAttachment({
+      scorecardId,
+      name,
+      filename,
+      content,
+      contentType,
+    });
+  } catch (error) {
+    console.warn(
+      `[compliance-qa] Could not attach ${name} to QA scorecard Files:`,
+      getErrorMessage(error),
+    );
+  }
 };
 
 const getScorecardAgentLabel = (scorecard: QaScorecardRecord): string =>
@@ -117,6 +191,14 @@ const buildFollowUpTaskMarkdown = ({
     lines.push(`Convoso Call ID: ${scorecard.call.convosoCallId}`);
   }
 
+  const recordingUrl = scorecard.call?.recording?.primaryLinkUrl?.trim();
+
+  lines.push(
+    recordingUrl !== undefined && recordingUrl.length > 0
+      ? `Recording: ${recordingUrl}`
+      : 'Recording: open the linked Source Call record',
+  );
+
   lines.push(
     `Agent: ${getScorecardAgentLabel(scorecard)}`,
     `Result: ${analysis.overallResult}`,
@@ -145,6 +227,16 @@ const buildFollowUpTaskMarkdown = ({
   return lines.join('\n');
 };
 
+const isDuplicateTaskCreateError = (error: unknown): boolean => {
+  const errorMessage = getErrorMessage(error).toLowerCase();
+
+  return (
+    errorMessage.includes('duplicate') ||
+    errorMessage.includes('already exists') ||
+    errorMessage.includes('unique constraint')
+  );
+};
+
 const formatJsonMarkdown = (value: unknown): string =>
   ['```json', JSON.stringify(value, null, 2), '```'].join('\n');
 
@@ -152,10 +244,14 @@ const upsertAnalysisNotes = async ({
   scorecardId,
   analysis,
   transcriptMarkdown,
+  translatedTranscriptMarkdown,
+  transcriptLanguageMarkdown,
 }: {
   scorecardId: string;
   analysis: FinalScorecardAnalysis;
   transcriptMarkdown: string;
+  translatedTranscriptMarkdown?: string;
+  transcriptLanguageMarkdown?: string;
 }): Promise<void> => {
   await Promise.all([
     analysis.recommendationsMarkdown !== null &&
@@ -184,6 +280,22 @@ const upsertAnalysisNotes = async ({
       title: 'Scoring Evidence',
       markdown: formatJsonMarkdown(analysis.aiAnalysis),
     }),
+    translatedTranscriptMarkdown !== undefined &&
+    translatedTranscriptMarkdown.length > 0
+      ? upsertQaScorecardNote({
+          scorecardId,
+          title: 'Translated Transcript',
+          markdown: translatedTranscriptMarkdown,
+        })
+      : Promise.resolve(null),
+    transcriptLanguageMarkdown !== undefined &&
+    transcriptLanguageMarkdown.length > 0
+      ? upsertQaScorecardNote({
+          scorecardId,
+          title: 'Transcript Language',
+          markdown: transcriptLanguageMarkdown,
+        })
+      : Promise.resolve(null),
     upsertQaScorecardNote({
       scorecardId,
       title: 'Transcript',
@@ -192,41 +304,54 @@ const upsertAnalysisNotes = async ({
   ]);
 };
 
+const buildTranscriptLanguageMarkdown = ({
+  languageCodes,
+  translatedTranscription,
+}: {
+  languageCodes: string[];
+  translatedTranscription?: TranslatedTranscriptionResult;
+}): string => {
+  const lines = [
+    `Detected language(s): ${
+      languageCodes.length > 0 ? languageCodes.join(', ') : 'unknown'
+    }`,
+    `Scored transcript: ${
+      translatedTranscription !== undefined
+        ? 'Translated Transcript'
+        : 'Transcript'
+    }`,
+  ];
+
+  if (translatedTranscription !== undefined) {
+    lines.push(
+      `Translation: ${translatedTranscription.sourceLanguageCode} -> ${translatedTranscription.targetLanguageCode}`,
+      `Translation provider: ${translatedTranscription.translationProvider}`,
+      `Translated segments: ${translatedTranscription.translatedSegmentCount}`,
+    );
+  }
+
+  return lines.join('\n');
+};
+
 const upsertTranscriptionArtifactAttachments = async ({
   scorecardId,
   mediaFileUri,
+  transcriptFileUri,
   rawTranscript,
 }: {
   scorecardId: string;
   mediaFileUri?: string;
+  transcriptFileUri: string;
   rawTranscript: AmazonTranscriptResult;
 }): Promise<void> => {
-  const inputRecordingAttachmentName = 'Amazon Transcribe Input Recording';
-  const shouldAttachInputRecording =
-    mediaFileUri !== undefined &&
-    mediaFileUri.length > 0 &&
-    !(await hasQaScorecardAttachmentFile({
-      scorecardId,
-      name: inputRecordingAttachmentName,
-    }));
+  await upsertTranscriptionArtifactNote({
+    scorecardId,
+    mediaFileUri,
+    transcriptFileUri,
+  });
 
-  await Promise.all([
-    shouldAttachInputRecording
-      ? readTranscriptionArtifactFileFromUri(mediaFileUri).then((artifact) =>
-          upsertQaScorecardAttachment({
-            scorecardId,
-            name: inputRecordingAttachmentName,
-            filename: buildTranscriptionArtifactFilename({
-              uri: mediaFileUri,
-              prefix: 'amazon-transcribe-input',
-              fallbackExtension: 'mp3',
-            }),
-            content: artifact.content,
-            contentType: artifact.contentType,
-          }),
-        )
-      : Promise.resolve(null),
-    upsertQaScorecardAttachment({
+  await Promise.allSettled([
+    upsertQaScorecardAttachmentIfPossible({
       scorecardId,
       name: 'Amazon Transcribe Output JSON',
       filename: 'amazon-transcribe-output.json',
@@ -257,6 +382,29 @@ const failScorecard = async ({
   });
 };
 
+const keepRecordingRetryable = async ({
+  scorecard,
+  detail,
+}: {
+  scorecard: QaScorecardRecord;
+  detail: string;
+}): Promise<void> => {
+  await upsertQaScorecardNote({
+    scorecardId: scorecard.id,
+    title: 'Recording Pending',
+    markdown:
+      `${detail}\n\n` +
+      'The scorecard remains in Copying Recording so Compliance QA can retry when the provider finishes publishing the recording.',
+  });
+
+  await updateQaScorecard({
+    id: scorecard.id,
+    data: {
+      status: 'COPYING_RECORDING',
+    },
+  });
+};
+
 const createTaskIfNeeded = async ({
   scorecard,
   analysis,
@@ -267,10 +415,7 @@ const createTaskIfNeeded = async ({
   taskId?: string;
   qaManagerId?: string;
 }> => {
-  if (
-    analysis.overallResult !== 'FAIL' &&
-    analysis.overallResult !== 'NEEDS_REVIEW'
-  ) {
+  if (analysis.overallResult !== 'FAIL' || analysis.hasRedFlag !== true) {
     return {};
   }
 
@@ -290,6 +435,23 @@ const createTaskIfNeeded = async ({
     return { taskId: scorecard.taskId };
   }
 
+  const linkedTaskId = await findTaskIdLinkedToQaScorecard(scorecard.id);
+
+  if (linkedTaskId !== null) {
+    await linkTaskToComplianceContextIfSupported({
+      taskId: linkedTaskId,
+      scorecardId: scorecard.id,
+      callId: scorecard.callId,
+      leadId: scorecard.leadId,
+      agentId: scorecard.agentId,
+    });
+
+    return {
+      taskId: linkedTaskId,
+      qaManagerId: scorecard.qaManagerId ?? undefined,
+    };
+  }
+
   const qaManager = await resolveQaManager();
 
   if (
@@ -301,15 +463,26 @@ const createTaskIfNeeded = async ({
     );
   }
 
-  const taskId = await createFollowUpTask({
-    title: buildFollowUpTaskTitle({ scorecard, analysis }),
-    markdown: buildFollowUpTaskMarkdown({
-      scorecard,
-      analysis,
-      managerWarning: qaManager.warning,
-    }),
-    assigneeId: qaManager.workspaceMemberId,
-  });
+  let taskId: string;
+
+  try {
+    taskId = await createFollowUpTask({
+      id: scorecard.id,
+      title: buildFollowUpTaskTitle({ scorecard, analysis }),
+      markdown: buildFollowUpTaskMarkdown({
+        scorecard,
+        analysis,
+        managerWarning: qaManager.warning,
+      }),
+      assigneeId: qaManager.workspaceMemberId,
+    });
+  } catch (error) {
+    if (!isDuplicateTaskCreateError(error)) {
+      throw error;
+    }
+
+    taskId = scorecard.id;
+  }
 
   await linkTaskToComplianceContextIfSupported({
     taskId,
@@ -331,13 +504,41 @@ const createTaskIfNeeded = async ({
 
 const isProcessableScorecardStatus = (
   status: QaScorecardRecord['status'],
-): boolean => status === 'TRANSCRIBING' || status === 'SCORING';
+): boolean =>
+  status === 'COPYING_RECORDING' ||
+  status === 'TRANSCRIBING' ||
+  status === 'SCORING';
 
 const shouldPollAgainForStatus = (status: string): boolean =>
-  status === 'QUEUED' || status === 'IN_PROGRESS';
+  status === 'COPYING_RECORDING' ||
+  status === 'TRANSCRIBING' ||
+  status === 'SCORING' ||
+  status === 'QUEUED' ||
+  status === 'IN_PROGRESS';
 
 const buildTranscribePollingTimeoutMessage = (status: string): string =>
   `Amazon Transcribe job did not finish before the Compliance workflow polling window expired. Last status: ${status}`;
+
+const SAMPLE_RATE_FALLBACK_ATTEMPTS = [1, 2, 3];
+
+const getSampleRateFallbackHertz = async (
+  snapshot: TranscriptionJobSnapshot,
+): Promise<number | null> => {
+  if (
+    snapshot.mediaFileUri === undefined ||
+    snapshot.mediaFormat === undefined ||
+    snapshot.mediaFormat !== 'mp3'
+  ) {
+    return null;
+  }
+
+  return (
+    (await readMediaSampleRateHertzFromUri({
+      mediaFileUri: snapshot.mediaFileUri,
+      mediaFormat: snapshot.mediaFormat,
+    })) ?? null
+  );
+};
 
 const readCachedTranscriptionSource = async (
   scorecard: QaScorecardRecord,
@@ -355,15 +556,9 @@ const readCachedTranscriptionSource = async (
     return null;
   }
 
-  const mediaFileUri = await findQaScorecardAttachmentFullPath({
-    scorecardId: scorecard.id,
-    name: 'Amazon Transcribe Input Recording',
-  });
-
   return {
     raw: cachedTranscribeOutput.raw,
     transcriptFileUri: cachedTranscribeOutput.transcriptFileUri,
-    mediaFileUri: mediaFileUri ?? undefined,
   };
 };
 
@@ -380,7 +575,16 @@ const scoreTranscriptionSource = async ({
   });
 
   const transcription = normalizeAmazonTranscript(source.raw);
-  const analysis = await scoreTranscript(transcription.markdown);
+  const languageCodes = getTranscriptLanguageCodes(source.raw);
+  const translatedTranscription = shouldTranslateTranscriptToEnglish(source.raw)
+    ? await translateTranscriptToEnglish({
+        transcription,
+        languageCodes,
+      })
+    : undefined;
+  const scoringTranscriptMarkdown =
+    translatedTranscription?.markdown ?? transcription.markdown;
+  const analysis = await scoreTranscript(scoringTranscriptMarkdown);
   const completedStatus =
     analysis.overallResult === 'NOT_APPLICABLE' ? 'SKIPPED' : 'COMPLETED';
 
@@ -388,11 +592,17 @@ const scoreTranscriptionSource = async ({
     scorecardId: scorecard.id,
     analysis,
     transcriptMarkdown: transcription.markdown,
+    translatedTranscriptMarkdown: translatedTranscription?.markdown,
+    transcriptLanguageMarkdown: buildTranscriptLanguageMarkdown({
+      languageCodes,
+      translatedTranscription,
+    }),
   });
 
   await upsertTranscriptionArtifactAttachments({
     scorecardId: scorecard.id,
     mediaFileUri: source.mediaFileUri,
+    transcriptFileUri: source.transcriptFileUri,
     rawTranscript: source.raw,
   });
 
@@ -420,6 +630,124 @@ const scoreTranscriptionSource = async ({
   };
 };
 
+const processSampleRateFallback = async ({
+  scorecard,
+  callId,
+  failedSnapshot,
+}: {
+  scorecard: QaScorecardRecord;
+  callId: string;
+  failedSnapshot: TranscriptionJobSnapshot;
+}): Promise<ProcessedScorecard | null> => {
+  if (!isInvalidInputMediaFailure(failedSnapshot.failureReason)) {
+    return null;
+  }
+
+  if (
+    failedSnapshot.mediaFileUri === undefined ||
+    failedSnapshot.mediaFormat === undefined
+  ) {
+    return null;
+  }
+
+  const mediaSampleRateHertz =
+    await getSampleRateFallbackHertz(failedSnapshot);
+
+  if (mediaSampleRateHertz === null) {
+    return null;
+  }
+
+  let lastFallbackFailure: string | undefined;
+
+  for (const attempt of SAMPLE_RATE_FALLBACK_ATTEMPTS) {
+    const fallbackJobName = buildSampleRateFallbackTranscriptionJobName(
+      callId,
+      attempt,
+    );
+    const fallbackSnapshot =
+      await findTranscriptionJobSnapshot(fallbackJobName);
+
+    if (fallbackSnapshot === null) {
+      await startSampleRateFallbackTranscriptionJob({
+        callId,
+        attempt,
+        mediaFileUri: failedSnapshot.mediaFileUri,
+        mediaFormat: failedSnapshot.mediaFormat,
+        mediaSampleRateHertz,
+      });
+
+      await updateQaScorecard({
+        id: scorecard.id,
+        data: { status: 'TRANSCRIBING' },
+      });
+
+      await upsertQaScorecardNote({
+        scorecardId: scorecard.id,
+        title: 'Transcription Retry',
+        markdown:
+          `Amazon Transcribe rejected the first MP3 attempt. ` +
+          `Retrying with explicit ${mediaSampleRateHertz} Hz sample rate ` +
+          `(attempt ${attempt}).`,
+      });
+
+      return {
+        scorecardId: scorecard.id,
+        status: 'QUEUED',
+        shouldPollAgain: true,
+      };
+    }
+
+    if (
+      fallbackSnapshot.status === 'QUEUED' ||
+      fallbackSnapshot.status === 'IN_PROGRESS'
+    ) {
+      return {
+        scorecardId: scorecard.id,
+        status: fallbackSnapshot.status,
+        shouldPollAgain: true,
+      };
+    }
+
+    if (fallbackSnapshot.status === 'FAILED') {
+      lastFallbackFailure =
+        fallbackSnapshot.failureReason ??
+        'Amazon Transcribe sample-rate retry failed';
+      continue;
+    }
+
+    if (
+      fallbackSnapshot.transcriptFileUri === undefined ||
+      fallbackSnapshot.transcriptFileUri.length === 0
+    ) {
+      throw new Error('Missing Amazon Transcribe sample-rate retry output URI');
+    }
+
+    return scoreTranscriptionSource({
+      scorecard,
+      source: {
+        raw: await readTranscribeOutputFromUri(
+          fallbackSnapshot.transcriptFileUri,
+        ),
+        transcriptFileUri: fallbackSnapshot.transcriptFileUri,
+        mediaFileUri: fallbackSnapshot.mediaFileUri,
+      },
+    });
+  }
+
+  await failScorecard({
+    scorecard,
+    errorMessage:
+      lastFallbackFailure ?? 'Amazon Transcribe sample-rate retry failed',
+  });
+
+  return {
+    scorecardId: scorecard.id,
+    status: 'FAILED',
+    shouldPollAgain: false,
+    error: lastFallbackFailure ?? 'Amazon Transcribe sample-rate retry failed',
+  };
+};
+
 const processScorecard = async ({
   scorecard,
   isFinalAttempt,
@@ -427,6 +755,63 @@ const processScorecard = async ({
   scorecard: QaScorecardRecord;
   isFinalAttempt: boolean;
 }): Promise<ProcessedScorecard> => {
+  if (scorecard.status === 'COPYING_RECORDING') {
+    const callId = scorecard.callId ?? scorecard.sourceCallKey;
+
+    if (callId === undefined || callId === null || callId.length === 0) {
+      await failScorecard({
+        scorecard,
+        errorMessage: 'Missing source Call for recording retry',
+      });
+
+      return {
+        scorecardId: scorecard.id,
+        status: 'FAILED',
+        shouldPollAgain: false,
+        error: 'Missing source Call for recording retry',
+      };
+    }
+
+    const startResult = await startComplianceQaHandler({ callId });
+
+    if (!startResult.success) {
+      await failScorecard({
+        scorecard,
+        errorMessage: startResult.error,
+      });
+
+      return {
+        scorecardId: scorecard.id,
+        status: 'FAILED',
+        shouldPollAgain: false,
+        error: startResult.error,
+      };
+    }
+
+    if (startResult.status === 'COPYING_RECORDING' && isFinalAttempt) {
+      const detail =
+        'Recording URL did not return audio before the Compliance workflow polling window expired.';
+
+      await keepRecordingRetryable({
+        scorecard,
+        detail,
+      });
+
+      return {
+        scorecardId: scorecard.id,
+        status: 'COPYING_RECORDING',
+        shouldPollAgain: false,
+        error: detail,
+      };
+    }
+
+    return {
+      scorecardId: scorecard.id,
+      status: startResult.status,
+      shouldPollAgain: shouldPollAgainForStatus(startResult.status),
+    };
+  }
+
   if (scorecard.status === 'SCORING') {
     const cachedSource = await readCachedTranscriptionSource(scorecard);
 
@@ -517,6 +902,16 @@ const processScorecard = async ({
           ...cachedSource,
         },
       });
+    }
+
+    const sampleRateFallbackResult = await processSampleRateFallback({
+      scorecard,
+      callId,
+      failedSnapshot: snapshot,
+    });
+
+    if (sampleRateFallbackResult !== null) {
+      return sampleRateFallbackResult;
     }
 
     await failScorecard({

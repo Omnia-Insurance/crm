@@ -110,11 +110,26 @@ describe('Compliance QA scoring', () => {
       buildAnalysis({
         callQuality: 'NOT_SCORABLE',
         notScorableReason: 'Voicemail only',
+        redFlags: buildRedFlags('recordedLineDisclosure'),
         sections: {},
       }),
     );
 
     expect(result.overallResult).toBe('NOT_APPLICABLE');
+    expect(result.hasRedFlag).toBe(false);
+  });
+
+  it('does not auto-fail ancillary-only calls for commission disclosure', () => {
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        rubricType: 'ANCILLARY_ONLY',
+        redFlags: buildRedFlags('commissionDisclosure'),
+      }),
+    );
+
+    expect(result.overallScore).toBe(90);
+    expect(result.overallResult).toBe('PASS');
+    expect(result.hasRedFlag).toBe(false);
   });
 
   it('validates unknown AI JSON into a typed scorecard analysis', () => {
