@@ -55,7 +55,7 @@ import { arrayOfStringsOrVariablesSchema } from '@/utils/filter/utils/validation
 import { arrayOfUuidOrVariableSchema } from '@/utils/filter/utils/validation-schemas/arrayOfUuidsOrVariablesSchema';
 import { jsonRelationFilterValueSchema } from '@/utils/filter/utils/validation-schemas/jsonRelationFilterValueSchema';
 
-type FieldShared = {
+export type FieldShared = {
   id: string;
   name: string;
   type: FieldMetadataType;
@@ -63,22 +63,20 @@ type FieldShared = {
   relation?: { type: string } | null;
 };
 
-export type FindFieldMetadataItemById = (id: string) => FieldShared | undefined;
-
 type TurnRecordFilterIntoRecordGqlOperationFilterParams = {
   filterValueDependencies: RecordFilterValueDependencies;
   recordFilter: Omit<RecordFilter, 'id'>;
-  findFieldMetadataItemById: FindFieldMetadataItemById;
+  fieldMetadataItemById: Map<string, FieldShared>;
 };
 
 export const turnRecordFilterIntoRecordGqlOperationFilter = ({
   recordFilter,
-  findFieldMetadataItemById,
+  fieldMetadataItemById,
   filterValueDependencies,
 }: TurnRecordFilterIntoRecordGqlOperationFilterParams):
   | RecordGqlOperationFilter
   | undefined => {
-  const sourceFieldMetadataItem = findFieldMetadataItemById(
+  const sourceFieldMetadataItem = fieldMetadataItemById.get(
     recordFilter.fieldMetadataId,
   );
 
@@ -113,7 +111,7 @@ export const turnRecordFilterIntoRecordGqlOperationFilter = ({
     sourceFieldMetadataItem.type === FieldMetadataType.RELATION &&
     isDefined(recordFilter.relationTargetFieldMetadataId)
   ) {
-    const targetFieldMetadataItem = findFieldMetadataItemById(
+    const targetFieldMetadataItem = fieldMetadataItemById.get(
       recordFilter.relationTargetFieldMetadataId,
     );
 

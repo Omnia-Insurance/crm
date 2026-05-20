@@ -655,11 +655,9 @@ const buildRowLevelPermissionRecordFilterUncached = async ({
   return computeRecordGqlOperationFilter({
     recordFilters,
     recordFilterGroups,
-    findFieldMetadataItemById: (id) =>
-      findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: id,
-        flatEntityMaps: flatFieldMetadataMaps,
-      }),
+    fieldMetadataItems: Object.values(
+      flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined),
     filterValueDependencies: {
       currentWorkspaceMemberId: workspaceMember?.id,
     },
