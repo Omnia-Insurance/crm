@@ -130,7 +130,13 @@ purge_local_workspace_cache() {
       [[ -z "$cache_key" ]] && continue
       redis-cli -u "$redis_url" DEL "$cache_key" >/dev/null
       deleted_keys=$((deleted_keys + 1))
-    done < <(redis-cli -u "$redis_url" --scan --pattern "engine:workspace:*${workspace_id}*")
+    done < <(
+      {
+        redis-cli -u "$redis_url" --scan --pattern "engine:workspace:*${workspace_id}*"
+        # OMNIA-CUSTOM: core-entity workspace cache also stores Workspace rows.
+        redis-cli -u "$redis_url" --scan --pattern "engine:core-entity:*${workspace_id}*"
+      } | sort -u
+    )
   done < <(psql "$LOCAL_DATABASE_URL" -At -v ON_ERROR_STOP=1 -c 'SELECT id FROM core."workspace";')
 
   if [[ "$workspace_found" != "true" ]]; then
@@ -512,10 +518,13 @@ elif [[ -n "$PROD_APP_SECRET" ]] && [[ -z "$LOCAL_APP_SECRET" ]]; then
 fi
 
 if [[ "$RUN_LOCAL_MIGRATIONS" == "true" ]]; then
-  echo "==> Running local server migrations..."
+  echo "==> Running local server migrations and workspace upgrades..."
   (
     cd "$REPO_ROOT"
-    npx nx run twenty-server:database:migrate
+    npx nx run twenty-server:database:migrate -- --include-slow
+    # OMNIA-CUSTOM: local prod restores do not go through the Docker
+    # entrypoint, so run workspace upgrade commands explicitly.
+    npx nx run twenty-server:command-no-deps -- upgrade
   )
 fi
 

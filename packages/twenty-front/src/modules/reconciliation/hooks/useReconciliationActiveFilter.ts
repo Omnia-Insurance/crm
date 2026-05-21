@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 
-import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { currentRecordFilterGroupsComponentState } from '@/object-record/record-filter-group/states/currentRecordFilterGroupsComponentState';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
@@ -8,7 +7,6 @@ import { anyFieldFilterValueComponentState } from '@/object-record/record-filter
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { makeAndFilterVariables } from '@/object-record/utils/makeAndFilterVariables';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { type RecordGqlOperationFilter } from 'twenty-shared/types';
 import {
   computeRecordGqlOperationFilter,
@@ -50,14 +48,11 @@ export const useReconciliationActiveFilter = ({
   );
 
   const { filterValueDependencies } = useFilterValueDependencies();
-  const fieldMetadataItemByIdMap = useAtomStateValue(
-    fieldMetadataItemByIdMapSelector,
-  );
 
   return useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
+      fieldMetadataItems: reviewItemMetadata.fields,
       recordFilters: currentRecordFilters,
       recordFilterGroups: currentRecordFilterGroups,
     });
@@ -88,6 +83,5 @@ export const useReconciliationActiveFilter = ({
     reconciliationId,
     reviewItemMetadata.fields,
     filterValueDependencies,
-    fieldMetadataItemByIdMap,
   ]);
 };

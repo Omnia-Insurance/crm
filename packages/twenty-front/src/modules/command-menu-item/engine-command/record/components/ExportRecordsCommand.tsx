@@ -10,7 +10,7 @@ import { contextStoreFilterGroupsComponentState } from '@/context-store/states/c
 import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { computeContextStoreFilters } from '@/context-store/utils/computeContextStoreFilters';
-import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
+import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
 import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
@@ -69,8 +69,8 @@ const ExportIndexRecordsContent = ({
     contextStoreAnyFieldFilterValueComponentState,
   );
   const { filterValueDependencies } = useFilterValueDependencies();
-  const fieldMetadataItemByIdMap = useAtomStateValue(
-    fieldMetadataItemByIdMapSelector,
+  const flattenedFieldMetadataItems = useAtomStateValue(
+    flattenedFieldMetadataItemsSelector,
   );
 
   const queryFilter = computeContextStoreFilters({
@@ -78,7 +78,7 @@ const ExportIndexRecordsContent = ({
     contextStoreFilters,
     contextStoreFilterGroups,
     objectMetadataItem,
-    findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
+    fieldMetadataItems: flattenedFieldMetadataItems,
     filterValueDependencies,
     contextStoreAnyFieldFilterValue,
   });

@@ -2,7 +2,6 @@ import { findActivityTargetsOperationSignatureFactory } from '@/activities/graph
 import { type Task } from '@/activities/types/Task';
 import { type TaskTarget } from '@/activities/types/TaskTarget';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { fieldMetadataItemByIdMapSelector } from '@/object-metadata/states/fieldMetadataItemByIdMapSelector';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { generateDepthRecordGqlFieldsFromObject } from '@/object-record/graphql/record-gql-fields/utils/generateDepthRecordGqlFieldsFromObject';
@@ -61,10 +60,6 @@ export const useFilteredTasksForReviewItem = ({
   const objectMetadataItems = useAtomStateValue<EnrichedObjectMetadataItem[]>(
     objectMetadataItemsSelector,
   );
-  const fieldMetadataItemByIdMap = useAtomStateValue(
-    fieldMetadataItemByIdMapSelector,
-  );
-
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
     viewBarId,
@@ -83,7 +78,7 @@ export const useFilteredTasksForReviewItem = ({
   const { taskUserFilter, hasActiveFilters } = useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      findFieldMetadataItemById: (id) => fieldMetadataItemByIdMap.get(id),
+      fieldMetadataItems: taskMetadata.fields,
       recordFilters: currentRecordFilters,
       recordFilterGroups: currentRecordFilterGroups,
     });
@@ -115,7 +110,6 @@ export const useFilteredTasksForReviewItem = ({
     };
   }, [
     filterValueDependencies,
-    fieldMetadataItemByIdMap,
     taskMetadata.fields,
     currentRecordFilters,
     currentRecordFilterGroups,

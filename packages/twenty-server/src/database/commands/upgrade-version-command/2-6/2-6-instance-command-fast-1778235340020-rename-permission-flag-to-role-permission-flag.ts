@@ -30,17 +30,19 @@ export class RenamePermissionFlagToRolePermissionFlagFastInstanceCommand
       `ALTER INDEX "core"."IDX_PERMISSION_FLAG_ROLE_ID" RENAME TO "IDX_ROLE_PERMISSION_FLAG_ROLE_ID"`,
     );
 
+    // OMNIA-CUSTOM: production snapshots may already be missing some legacy
+    // permissionFlag constraint/index names from prior schema drift.
     await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT "FK_13f8ca9c517976733a1ce4c10eb"`,
+      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT IF EXISTS "FK_13f8ca9c517976733a1ce4c10eb"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT "FK_835bc9f7ef959debfc5cd268049"`,
+      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT IF EXISTS "FK_835bc9f7ef959debfc5cd268049"`,
     );
     await queryRunner.query(
-      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT "FK_b26a9d39a88d0e72373c677c6c5"`,
+      `ALTER TABLE "core"."rolePermissionFlag" DROP CONSTRAINT IF EXISTS "FK_b26a9d39a88d0e72373c677c6c5"`,
     );
     await queryRunner.query(
-      `DROP INDEX "core"."IDX_da8ffd3c24b4a819430a861067"`,
+      `DROP INDEX IF EXISTS "core"."IDX_da8ffd3c24b4a819430a861067"`,
     );
 
     await queryRunner.query(

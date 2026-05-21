@@ -180,10 +180,12 @@ export const useExportJobPoller = () => {
           normalizedStatus === 'failed' ||
           normalizedStatus === 'cancelled';
 
-        const downloadUrl =
+        const rawDownloadUrl =
           normalizedStatus === 'completed'
-            ? (job.result?.downloadUrl as string | undefined)
+            ? job.result?.downloadUrl
             : undefined;
+        const downloadUrl =
+          typeof rawDownloadUrl === 'string' ? rawDownloadUrl : undefined;
 
         const phase = job.result?.phase as string | undefined;
         const label = phase

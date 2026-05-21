@@ -362,6 +362,40 @@ check_file_contains \
   "Session-storage redis client must register an 'error' listener (without it a redis blip crashes the entire Node process)"
 
 echo ""
+echo "--- Critical: Permission Flag Upgrade Drift Tolerance ---"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  "OMNIA-CUSTOM: production snapshots may already be missing some legacy" \
+  "Permission-flag rename upgrade must tolerate missing legacy FK/index names from production schema drift"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  'DROP CONSTRAINT IF EXISTS "FK_b26a9d39a88d0e72373c677c6c5"' \
+  "Permission-flag rename upgrade must not fail when the old application FK is already absent"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  'DROP INDEX IF EXISTS "core"."IDX_da8ffd3c24b4a819430a861067"' \
+  "Permission-flag rename upgrade must not fail when the old workspace/universalIdentifier index is already absent"
+
+echo ""
+echo "--- Critical: Local Prod Restore Redis Purge ---"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "OMNIA-CUSTOM: core-entity workspace cache also stores Workspace rows." \
+  "Prod-to-local restore must clear core-entity workspace row caches"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  'engine:core-entity:*${workspace_id}*' \
+  "Prod-to-local restore must not leave stale Workspace rows in Redis"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "npx nx run twenty-server:database:migrate -- --include-slow" \
+  "Prod-to-local restore must run slow instance commands"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "npx nx run twenty-server:command-no-deps -- upgrade" \
+  "Prod-to-local restore must run workspace upgrade commands"
+
+echo ""
 echo "--- Critical: Cloudflare Stale Asset Fix ---"
 check_file_contains \
   "packages/twenty-server/src/app.module.ts" \
@@ -1653,6 +1687,10 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
   "Export job BullMQ processor (batched fetch, CSV gen, file storage)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "const downloadUrl = await this.fileUrlService.signFileByIdUrl" \
+  "Export job processor must await signed download URLs before storing result JSON"
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/export-job.resolver.ts" \
   "Export job GraphQL resolver (start/cancel mutations, query, subscription)"
@@ -1665,6 +1703,10 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
   "Frontend export job polling, recovery, and auto-download hooks"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
+  "typeof rawDownloadUrl === 'string'" \
+  "Export job poller must not fetch non-string download URLs"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/components/ExportJobRecoveryEffect.tsx" \
   "Export job recovery effect mounted in app root"
@@ -2115,8 +2157,8 @@ echo ""
 echo "--- Deployment ---"
 check_file_contains \
   ".github/workflows/deploy-eks.yaml" \
-  "APP_VERSION" \
-  "deploy-eks.yaml must pass APP_VERSION build arg for upgrade migrations"
+  "APP_VERSION=2.6.1" \
+  "deploy-eks.yaml must pass the current upstream APP_VERSION build arg for upgrade migrations"
 
 echo ""
 echo "--- Mock Data (Deactivated Objects) ---"
@@ -2213,6 +2255,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/views/utils/mapViewFieldsToColumnDefinitions.ts" \
   "buildRelationSubFieldColumnDefinition" \
   "mapViewFieldsToColumnDefinitions must handle sub-field ViewFields"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/graphql/fragments/viewFieldFragment.ts" \
+  "subFieldName" \
+  "ViewField GraphQL fragment must request subFieldName"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "export type ViewFieldFragmentFragment = { __typename?: 'ViewField', id: string, fieldMetadataId: string, viewId: string, isVisible: boolean, position: number, size: number, aggregateOperation?: AggregateOperations | null, viewFieldGroupId?: string | null, subFieldName?: string | null" \
+  "Generated metadata ViewField fragment type must include subFieldName"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  '{"kind":"Field","name":{"kind":"Name","value":"subFieldName"}},{"kind":"Field","name":{"kind":"Name","value":"isOverridden"}}' \
+  "Generated metadata ViewField GraphQL documents must request subFieldName"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/components/FieldDisplay.tsx" \
   "RelationSubFieldDisplay" \
