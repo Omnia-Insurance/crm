@@ -110,10 +110,16 @@ const applyObjectRecordFilterToQueryBuilder = <T extends ObjectLiteral>({
     return;
   }
 
+  // parseKeyFilter only uses the join surface, so widen back to ObjectLiteral
+  // here rather than threading the concrete T through every recursive call.
+  const outerQueryBuilderAsObjectLiteral =
+    queryBuilder as WorkspaceSelectQueryBuilder<ObjectLiteral>;
+
   const whereCondition = new Brackets((qb) => {
     Object.entries(recordFilter).forEach(([key, value], index) => {
       parseKeyFilter({
         queryBuilder: qb,
+        outerQueryBuilder: outerQueryBuilderAsObjectLiteral,
         objectNameSingular,
         key,
         value,
@@ -133,6 +139,7 @@ const applyObjectRecordFilterToQueryBuilder = <T extends ObjectLiteral>({
 
 const parseKeyFilter = ({
   queryBuilder,
+  outerQueryBuilder,
   objectNameSingular,
   key,
   value,
@@ -141,6 +148,7 @@ const parseKeyFilter = ({
   useDirectTableReference = false,
 }: {
   queryBuilder: WhereExpressionBuilder;
+  outerQueryBuilder: WorkspaceSelectQueryBuilder<ObjectLiteral>;
   objectNameSingular: string;
   key: string;
   // oxlint-disable-next-line @typescripttypescript/no-explicit-any
@@ -158,6 +166,7 @@ const parseKeyFilter = ({
               ([subFilterKey, subFilterValue], subIndex) => {
                 parseKeyFilter({
                   queryBuilder: qb2,
+                  outerQueryBuilder,
                   objectNameSingular,
                   key: subFilterKey,
                   value: subFilterValue,
@@ -192,6 +201,7 @@ const parseKeyFilter = ({
               ([subFilterKey, subFilterValue], subIndex) => {
                 parseKeyFilter({
                   queryBuilder: qb2,
+                  outerQueryBuilder,
                   objectNameSingular,
                   key: subFilterKey,
                   value: subFilterValue,
@@ -225,6 +235,7 @@ const parseKeyFilter = ({
           ([subFilterKey, subFilterValue], subIndex) => {
             parseKeyFilter({
               queryBuilder: qb,
+              outerQueryBuilder,
               objectNameSingular,
               key: subFilterKey,
               value: subFilterValue,
@@ -247,6 +258,7 @@ const parseKeyFilter = ({
     default:
       fieldParser.parse(
         queryBuilder,
+        outerQueryBuilder,
         objectNameSingular,
         key,
         value,

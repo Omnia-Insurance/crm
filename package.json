@@ -54,7 +54,7 @@
       "packages/twenty-ui",
       "packages/twenty-utils",
       "packages/twenty-zapier",
-      "packages/twenty-website-new",
+      "packages/twenty-website",
       "packages/twenty-docs",
       "packages/twenty-e2e-testing",
       "packages/twenty-shared",
@@ -64,7 +64,8 @@
       "packages/twenty-cli",
       "packages/create-twenty-app",
       "packages/twenty-oxlint-rules",
-      "packages/twenty-companion"
+      "packages/twenty-companion",
+      "packages/twenty-claude-skills"
     ]
   },
   "prettier": {

@@ -1,10 +1,9 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { PAGE_BAR_MIN_HEIGHT } from '@/ui/layout/page/constants/PageBarMinHeight';
 import { MultiWorkspaceDropdownButton } from '@/ui/navigation/navigation-drawer/components/MultiWorkspaceDropdown/MultiWorkspaceDropdownButton';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { NavigationDrawerCollapseButton } from './NavigationDrawerCollapseButton';
 
@@ -17,6 +16,11 @@ const StyledContainer = styled.div<{ isExpanded: boolean }>`
   padding-right: ${themeCssVariables.spacing[2]};
   transition: gap calc(${themeCssVariables.animation.duration.normal} * 1s) ease;
   user-select: none;
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    padding-left: ${themeCssVariables.spacing[5]};
+    padding-right: ${themeCssVariables.spacing[5]};
+  }
 `;
 
 const StyledRightActions = styled.div<{ isExpanded: boolean }>`
@@ -36,6 +40,14 @@ const StyledNavigationDrawerCollapseButtonContainer = styled.div`
     padding-right: ${themeCssVariables.spacing[1]};
     width: ${themeCssVariables.spacing[6]};
   }
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    > * {
+      height: ${themeCssVariables.spacing[8]};
+      padding-right: 0;
+      width: ${themeCssVariables.spacing[8]};
+    }
+  }
 `;
 
 const StyledWorkspaceDropdownContainer = styled.div`
@@ -53,7 +65,6 @@ type NavigationDrawerHeaderProps = {
 export const NavigationDrawerHeader = ({
   showCollapseButton,
 }: NavigationDrawerHeaderProps) => {
-  const isMobile = useIsMobile();
   const isNavigationDrawerExpanded = useAtomStateValue(
     isNavigationDrawerExpandedState,
   );
@@ -63,14 +74,14 @@ export const NavigationDrawerHeader = ({
       <StyledWorkspaceDropdownContainer>
         <MultiWorkspaceDropdownButton />
       </StyledWorkspaceDropdownContainer>
-      {!isMobile && isNavigationDrawerExpanded && showCollapseButton && (
-        <StyledRightActions isExpanded={isNavigationDrawerExpanded}>
-          {/* OMNIA-CUSTOM: keep search in the sidebar, not inline with the workspace switcher. */}
+      <StyledRightActions isExpanded={isNavigationDrawerExpanded}>
+        {/* OMNIA-CUSTOM: keep search in the sidebar, not inline with the workspace switcher. */}
+        {isNavigationDrawerExpanded && showCollapseButton && (
           <StyledNavigationDrawerCollapseButtonContainer>
             <NavigationDrawerCollapseButton direction="left" />
           </StyledNavigationDrawerCollapseButtonContainer>
-        </StyledRightActions>
-      )}
+        )}
+      </StyledRightActions>
     </StyledContainer>
   );
 };

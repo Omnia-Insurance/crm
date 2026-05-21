@@ -136,12 +136,6 @@ const SettingsWorkspaceEmailGroupChannelDetail = lazy(() =>
   })),
 );
 
-const SettingsDomains = lazy(() =>
-  import('~/pages/settings/domains/SettingsDomains').then((module) => ({
-    default: module.SettingsDomains,
-  })),
-);
-
 const SettingsSubdomainPage = lazy(() =>
   import('~/pages/settings/domains/SettingsSubdomainPage').then((module) => ({
     default: module.SettingsSubdomainPage,
@@ -574,32 +568,30 @@ const SettingsUpdates = lazy(() =>
   })),
 );
 
-const SettingsRoles = lazy(() =>
-  import('~/pages/settings/roles/SettingsRoles').then((module) => ({
-    default: module.SettingsRoles,
-  })),
-);
-
 const SettingsRoleCreate = lazy(() =>
-  import('~/pages/settings/roles/SettingsRoleCreate').then((module) => ({
-    default: module.SettingsRoleCreate,
-  })),
+  import('~/pages/settings/members/roles/SettingsRoleCreate').then(
+    (module) => ({
+      default: module.SettingsRoleCreate,
+    }),
+  ),
 );
 
 const SettingsRoleEdit = lazy(() =>
-  import('~/pages/settings/roles/SettingsRoleEdit').then((module) => ({
+  import('~/pages/settings/members/roles/SettingsRoleEdit').then((module) => ({
     default: module.SettingsRoleEdit,
   })),
 );
 
 const SettingsRoleObjectLevel = lazy(() =>
-  import('~/pages/settings/roles/SettingsRoleObjectLevel').then((module) => ({
-    default: module.SettingsRoleObjectLevel,
-  })),
+  import('~/pages/settings/members/roles/SettingsRoleObjectLevel').then(
+    (module) => ({
+      default: module.SettingsRoleObjectLevel,
+    }),
+  ),
 );
 
 const SettingsRoleAddObjectLevel = lazy(() =>
-  import('~/pages/settings/roles/SettingsRoleAddObjectLevel').then(
+  import('~/pages/settings/members/roles/SettingsRoleAddObjectLevel').then(
     (module) => ({
       default: module.SettingsRoleAddObjectLevel,
     }),
@@ -669,7 +661,6 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           path={SettingsPath.EmailGroupChannelDetail}
           element={<SettingsWorkspaceEmailGroupChannelDetail />}
         />
-        <Route path={SettingsPath.Domains} element={<SettingsDomains />} />
         <Route
           path={SettingsPath.ApiWebhooks}
           element={<SettingsApiWebhooks />}
@@ -800,7 +791,15 @@ export const SettingsRoutes = ({ isAdminPageEnabled }: SettingsRoutesProps) => (
           />
         }
       >
-        <Route path={SettingsPath.Roles} element={<SettingsRoles />} />
+        <Route
+          path={SettingsPath.Roles}
+          element={
+            <Navigate
+              to={`/settings/${SettingsPath.WorkspaceMembersPage}#roles`}
+              replace
+            />
+          }
+        />
         <Route path={SettingsPath.RoleDetail} element={<SettingsRoleEdit />} />
         <Route
           path={SettingsPath.RoleCreate}

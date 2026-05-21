@@ -21,9 +21,12 @@ import {
   VerifyEmailAndGetWorkspaceAgnosticTokenDocument,
 } from '~/generated-metadata/graphql';
 
+import { returnToPathState } from '@/auth/states/returnToPathState';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { clearSessionLocalStorageKeys } from '@/auth/utils/clearSessionLocalStorageKeys';
 import { broadcastSignOutToOtherTabs } from '@/auth/utils/crossTabSignOut';
+import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 
@@ -64,7 +67,7 @@ import { workspaceAuthProvidersState } from '@/workspace/states/workspaceAuthPro
 import { i18n } from '@lingui/core';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SOURCE_LOCALE } from 'twenty-shared/translations';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isExternalRedirectTrusted } from 'twenty-shared/utils';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
 import { useStore } from 'jotai';
@@ -572,7 +575,10 @@ export const useAuth = () => {
         workspaceInviteHash?: string;
         billingCheckoutSession?: BillingCheckoutSession;
         action?: string;
-        // OMNIA-CUSTOM: trusted external redirect target forwarded to OAuth
+        // OMNIA-CUSTOM: returnToPath may be a local app path or a trusted
+        // absolute URL. postSignInRedirect remains an input-only compatibility
+        // fallback for existing Omnia links.
+        returnToPath?: string;
         postSignInRedirect?: string;
       },
     ) => {
@@ -597,17 +603,26 @@ export const useAuth = () => {
         url.searchParams.set('action', params.action);
       }
 
-      if (isDefined(params.postSignInRedirect)) {
-        url.searchParams.set('postSignInRedirect', params.postSignInRedirect);
-      }
-
       if (isDefined(workspacePublicData)) {
         url.searchParams.set('workspaceId', workspacePublicData.id);
       }
 
+      const explicitReturnToPath =
+        params.returnToPath ?? params.postSignInRedirect;
+      const returnToPath =
+        explicitReturnToPath ?? store.get(returnToPathState.atom);
+
+      if (
+        isNonEmptyString(returnToPath) &&
+        (isValidReturnToPath(returnToPath) ||
+          isExternalRedirectTrusted(returnToPath, window.location.origin))
+      ) {
+        url.searchParams.set('returnToPath', returnToPath);
+      }
+
       return url.toString();
     },
-    [workspacePublicData],
+    [workspacePublicData, store],
   );
 
   const handleGoogleLogin = useCallback(
@@ -616,6 +631,7 @@ export const useAuth = () => {
       workspaceInviteHash?: string;
       billingCheckoutSession?: BillingCheckoutSession;
       action: string;
+      returnToPath?: string;
       postSignInRedirect?: string;
     }) => {
       redirect(buildRedirectUrl('/auth/google', params));
@@ -629,6 +645,7 @@ export const useAuth = () => {
       workspaceInviteHash?: string;
       billingCheckoutSession?: BillingCheckoutSession;
       action: string;
+      returnToPath?: string;
       postSignInRedirect?: string;
     }) => {
       redirect(buildRedirectUrl('/auth/microsoft', params));

@@ -24,6 +24,11 @@ import {
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 import { useRecordInlineCellContext } from './RecordInlineCellContext';
 
+const normalizeDiffComparableValue = (value: unknown): string | null =>
+  value === null || value === undefined || value === '' ? null : String(value);
+
+const formatDiffValue = (value: string | null) => value || '(empty)';
+
 const StyledIconContainer = styled.div`
   align-items: center;
   color: ${themeCssVariables.font.color.tertiary};
@@ -196,7 +201,8 @@ export const RecordInlineCellContainer = () => {
     fieldName: fieldDefinition?.metadata?.fieldName,
   })}`;
 
-  const hasDiff = fieldDiff && fieldDiff.newValue !== null;
+  const hasDiff =
+    fieldDiff !== undefined && fieldDiff.oldValue !== fieldDiff.newValue;
 
   // OMNIA-CUSTOM: Read current field value to derive accepted state from store
   const fieldName = fieldDefinition?.metadata?.fieldName;
@@ -217,9 +223,13 @@ export const RecordInlineCellContainer = () => {
             typeof currentFieldValue === 'object' && currentFieldValue !== null
               ? (currentFieldValue as Record<string, unknown>)[subField]
               : null;
-          return String(compositeValue ?? '') === fieldDiff.newValue;
+          return (
+            normalizeDiffComparableValue(compositeValue) === fieldDiff.newValue
+          );
         }
-        return String(currentFieldValue ?? '') === fieldDiff.newValue;
+        return (
+          normalizeDiffComparableValue(currentFieldValue) === fieldDiff.newValue
+        );
       })()
     : false;
 
@@ -229,8 +239,6 @@ export const RecordInlineCellContainer = () => {
 
   const buildUpdateValue = useCallback(
     (rawValue: string | null) => {
-      if (rawValue === null) return null;
-
       const crmFieldPath = fieldDiff?.crmFieldPath ?? '';
       const parts = crmFieldPath.split('.');
 
@@ -249,13 +257,13 @@ export const RecordInlineCellContainer = () => {
         // phones/emails composite, push the previous primary into the
         // additional bucket instead of overwriting it. Keeps both contacts
         // reachable. See twenty-shared/utils/composite/promotePrimaryToAdditional.
-        if (subField === 'primaryPhoneNumber') {
+        if (rawValue !== null && subField === 'primaryPhoneNumber') {
           return promotePrimaryPhoneToAdditional(
             existing as PhonesMetadata,
             rawValue,
           );
         }
-        if (subField === 'primaryEmail') {
+        if (rawValue !== null && subField === 'primaryEmail') {
           return promotePrimaryEmailToAdditional(
             existing as EmailsMetadata,
             rawValue,
@@ -275,7 +283,6 @@ export const RecordInlineCellContainer = () => {
   const handleAccept = useCallback(() => {
     if (!updateRecord || !fieldName || !fieldDiff) return;
     const value = buildUpdateValue(fieldDiff.newValue);
-    if (value === null) return;
     updateRecord({
       variables: {
         where: { id: recordId },
@@ -287,7 +294,6 @@ export const RecordInlineCellContainer = () => {
   const handleUndo = useCallback(() => {
     if (!updateRecord || !fieldName || !fieldDiff) return;
     const value = buildUpdateValue(fieldDiff.oldValue);
-    if (value === null) return;
     updateRecord({
       variables: {
         where: { id: recordId },
@@ -333,13 +339,15 @@ export const RecordInlineCellContainer = () => {
       {hasDiff ? (
         <StyledDiffValueDisplay>
           <StyledDiffOld>
-            {accepted
-              ? fieldDiff.newValue || '(empty)'
-              : fieldDiff.oldValue || '(empty)'}
+            {formatDiffValue(
+              accepted ? fieldDiff.newValue : fieldDiff.oldValue,
+            )}
           </StyledDiffOld>
           <StyledDiffArrow>→</StyledDiffArrow>
           <StyledDiffNew id={diffNoteId}>
-            {accepted ? fieldDiff.oldValue || '(empty)' : fieldDiff.newValue}
+            {formatDiffValue(
+              accepted ? fieldDiff.oldValue : fieldDiff.newValue,
+            )}
           </StyledDiffNew>
           <StyledDiffAcceptBtn
             accepted={accepted}

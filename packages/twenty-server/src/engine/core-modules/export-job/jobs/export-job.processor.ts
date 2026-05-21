@@ -763,7 +763,7 @@ export class ExportJobProcessor {
       });
 
       // Generate signed download URL
-      const downloadUrl = this.fileUrlService.signFileByIdUrl({
+      const downloadUrl = await this.fileUrlService.signFileByIdUrl({
         fileId: savedFile.id,
         workspaceId,
         fileFolder: FileFolder.Export,

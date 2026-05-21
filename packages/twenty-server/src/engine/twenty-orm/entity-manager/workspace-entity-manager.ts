@@ -1286,6 +1286,7 @@ export class WorkspaceEntityManager extends EntityManager {
       )
         .execute()
         .then(() => formattedEntityOrEntities as Entity[])
+        // oxlint-disable-next-line @typescripttypescript/no-misused-promises
         .finally(() => queryRunnerForEntityPersistExecutor.release());
 
       if (isDefined(filesFieldFileIds)) {
@@ -1512,6 +1513,7 @@ export class WorkspaceEntityManager extends EntityManager {
     )
       .execute()
       .then(() => formattedEntity as Entity | Entity[])
+      // oxlint-disable-next-line @typescripttypescript/no-misused-promises
       .finally(() => queryRunnerForEntityPersistExecutor.release());
 
     const formattedResult = formatResult<Entity[]>(
@@ -1667,6 +1669,7 @@ export class WorkspaceEntityManager extends EntityManager {
     )
       .execute()
       .then(() => formattedEntity as Entity)
+      // oxlint-disable-next-line @typescripttypescript/no-misused-promises
       .finally(() => queryRunnerForEntityPersistExecutor.release());
 
     const formattedResult = formatResult<Entity[]>(
@@ -1823,6 +1826,7 @@ export class WorkspaceEntityManager extends EntityManager {
     )
       .execute()
       .then(() => formattedEntity as Entity)
+      // oxlint-disable-next-line @typescripttypescript/no-misused-promises
       .finally(() => queryRunnerForEntityPersistExecutor.release());
 
     const formattedResult = formatResult<Entity[]>(

@@ -23,8 +23,8 @@ import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
 import {
-  type CreateViewFilterMutationVariables,
   ViewCalendarLayout,
+  type ViewFilterOperand as MetadataViewFilterOperand,
 } from '~/generated-metadata/graphql';
 import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 
@@ -165,7 +165,6 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
           size: viewField.size,
           aggregateOperation: viewField.aggregateOperation,
           viewFieldGroupId: viewField.viewFieldGroupId,
-          subFieldName: viewField.subFieldName ?? null,
           viewId: newViewId,
         })),
       });
@@ -207,20 +206,21 @@ export const useCreateViewFromCurrentView = (viewBarComponentId?: string) => {
         });
 
         const createViewFilterInputs = viewFiltersToCreate.map(
-          (viewFilter) =>
-            ({
-              input: {
-                id: viewFilter.id,
-                fieldMetadataId: viewFilter.fieldMetadataId,
-                viewId: newViewId,
-                value: viewFilter.value,
-                operand: viewFilter.operand,
-                viewFilterGroupId: viewFilter.viewFilterGroupId ?? null,
-                positionInViewFilterGroup:
-                  viewFilter.positionInViewFilterGroup ?? null,
-                subFieldName: viewFilter.subFieldName ?? null,
-              },
-            }) as CreateViewFilterMutationVariables,
+          (viewFilter) => ({
+            input: {
+              id: viewFilter.id,
+              fieldMetadataId: viewFilter.fieldMetadataId,
+              viewId: newViewId,
+              value: viewFilter.value,
+              operand:
+                viewFilter.operand as unknown as MetadataViewFilterOperand,
+              viewFilterGroupId: viewFilter.viewFilterGroupId,
+              positionInViewFilterGroup: viewFilter.positionInViewFilterGroup,
+              subFieldName: viewFilter.subFieldName ?? null,
+              relationTargetFieldMetadataId:
+                viewFilter.relationTargetFieldMetadataId ?? null,
+            },
+          }),
         );
 
         const filterResult = await performViewFilterAPICreate(
