@@ -2337,6 +2337,18 @@ check_file_contains \
   "fieldDiff.note" \
   "Inline diff must render note as a tooltip over the diff display (reconciliation review page)"
 check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "fieldDiff.oldValue !== fieldDiff.newValue" \
+  "Inline diff must render and allow Accept/Undo when either side of the diff is null"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "normalizeDiffComparableValue" \
+  "Inline diff accepted-state comparison must treat null/undefined/empty strings consistently"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/components/RecordFieldList.tsx" \
+  "d.bobValue === d.crmValue" \
+  "RecordFieldList must not drop reconciliation diffs whose proposed value is null"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/contexts/FieldContext.ts" \
   "note?: string | null" \
   "FieldDiffOverlay must carry note for per-field diff explanations (reconciliation status-change reason)"
@@ -2348,6 +2360,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
   "cancelId && cancelId !== policyId" \
   "Reconciliation Apply all must not cancel the same policy it is updating"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "normalizeDiffComparableValue(value) === d.bobValue" \
+  "Reconciliation Apply all / Undo all accepted-state detection must handle null target values"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \

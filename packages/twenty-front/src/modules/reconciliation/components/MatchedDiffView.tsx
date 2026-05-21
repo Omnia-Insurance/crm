@@ -59,6 +59,9 @@ const MATCH_LABELS: Record<string, string> = {
   OVERRIDE: 'Manual match',
 };
 
+const normalizeDiffComparableValue = (value: unknown): string | null =>
+  value === null || value === undefined || value === '' ? null : String(value);
+
 const StyledContainer = styled.div`
   display: flex;
   flex-direction: column;
@@ -302,8 +305,7 @@ export const MatchedDiffView = ({
 
     const groups = new Map<string, FieldDiff[]>();
     for (const d of fieldDiffs) {
-      if (!d.crmField || d.bobValue === null || d.bobValue === d.crmValue)
-        continue;
+      if (!d.crmField || d.bobValue === d.crmValue) continue;
       const dot = d.crmField.indexOf('.');
       if (dot <= 0) continue;
       const relName = d.crmField.slice(0, dot);
@@ -381,16 +383,9 @@ export const MatchedDiffView = ({
       const leadUpdates: Record<string, unknown> = {};
 
       for (const diff of fieldDiffs) {
-        if (
-          !diff.crmField ||
-          diff.bobValue === null ||
-          diff.bobValue === diff.crmValue
-        )
-          continue;
+        if (!diff.crmField || diff.bobValue === diff.crmValue) continue;
 
         const targetValue = target === 'bob' ? diff.bobValue : diff.crmValue;
-
-        if (targetValue === null) continue;
 
         const isLeadField =
           diff.crmObjectType === 'lead' || diff.crmField.startsWith('lead.');
@@ -427,25 +422,25 @@ export const MatchedDiffView = ({
                   return cloned;
                 })();
 
-          const valueStr = String(targetValue);
-
           if (
             target === 'bob' &&
+            targetValue !== null &&
             fieldName === 'phones' &&
             subField === 'primaryPhoneNumber'
           ) {
             updates[fieldName] = promotePrimaryPhoneToAdditional(
               seed as PhonesMetadata,
-              valueStr,
+              targetValue,
             );
           } else if (
             target === 'bob' &&
+            targetValue !== null &&
             fieldName === 'emails' &&
             subField === 'primaryEmail'
           ) {
             updates[fieldName] = promotePrimaryEmailToAdditional(
               seed as EmailsMetadata,
-              valueStr,
+              targetValue,
             );
           } else {
             // Undo path: just swap the sub-field back; leave additional* alone
@@ -548,8 +543,7 @@ export const MatchedDiffView = ({
   // changes. Used to flip the bottom button between "Accept all" / "Undo all".
   const allDiffsAccepted = useMemo(() => {
     const actionable = fieldDiffs.filter(
-      (d) =>
-        d.crmField !== null && d.bobValue !== null && d.bobValue !== d.crmValue,
+      (d) => d.crmField !== null && d.bobValue !== d.crmValue,
     );
 
     if (actionable.length === 0) return false;
@@ -573,11 +567,12 @@ export const MatchedDiffView = ({
         if (value && typeof value === 'object') {
           value = (value as Record<string, unknown>)[part];
         } else {
-          return false;
+          value = undefined;
+          break;
         }
       }
 
-      return value != null && String(value) === d.bobValue;
+      return normalizeDiffComparableValue(value) === d.bobValue;
     });
   }, [fieldDiffs, leadRecord, policyRecord]);
 
@@ -755,9 +750,7 @@ export const MatchedDiffView = ({
         <StyledSpacer />
         <Button
           title={
-            commentCount > 0
-              ? `Comments (${commentCount})`
-              : 'Leave comment'
+            commentCount > 0 ? `Comments (${commentCount})` : 'Leave comment'
           }
           variant="tertiary"
           accent="default"
