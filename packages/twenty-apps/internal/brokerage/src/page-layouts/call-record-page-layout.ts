@@ -1,6 +1,12 @@
 import { definePageLayout, PageLayoutTabLayoutMode } from 'twenty-sdk/define';
 
-import { CALL_OBJECT_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+import {
+  CALL_AGENT_FIELD_ID,
+  CALL_LEAD_FIELD_ID,
+  CALL_LEAD_SOURCE_FIELD_ID,
+  CALL_OBJECT_UNIVERSAL_IDENTIFIER,
+} from 'src/constants/universal-identifiers';
+import { CALL_RECORD_PAGE_FIELDS_VIEW_ID } from 'src/views/call-record-page-fields.view';
 
 export default definePageLayout({
   universalIdentifier: 'a140eed0-97c0-413d-9a25-d91a75dbbbc5',
@@ -21,6 +27,39 @@ export default definePageLayout({
           type: 'FIELDS',
           configuration: {
             configurationType: 'FIELDS',
+            viewUniversalIdentifier: CALL_RECORD_PAGE_FIELDS_VIEW_ID,
+            newFieldDefaultVisibility: false,
+            shouldAllowUserToSeeHiddenFields: false,
+          },
+        },
+        {
+          universalIdentifier: 'c77e4bda-3efc-4636-a67b-f7fddd9ad2bd',
+          title: 'Lead',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: CALL_LEAD_FIELD_ID,
+            fieldDisplayMode: 'CARD',
+          },
+        },
+        {
+          universalIdentifier: '94211876-7a9b-4e33-8e05-9ddca9a62ef4',
+          title: 'Agent',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: CALL_AGENT_FIELD_ID,
+            fieldDisplayMode: 'CARD',
+          },
+        },
+        {
+          universalIdentifier: '286b9cbf-c554-4fe2-a980-49e9a8704ac1',
+          title: 'Lead Source',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: CALL_LEAD_SOURCE_FIELD_ID,
+            fieldDisplayMode: 'CARD',
           },
         },
       ],

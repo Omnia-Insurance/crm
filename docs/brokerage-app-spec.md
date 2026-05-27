@@ -342,6 +342,23 @@ Current implementation:
 - It intentionally does not delete provider-specific fields; those remain
   workspace-custom until provider ingestion moves to separate apps.
 
+Install and uninstall safety:
+
+- A fresh workspace can install Brokerage directly. That path creates empty
+  Brokerage-owned objects, lead fields, roles, navigation, views, record page
+  layouts, and post-install normalization.
+- Do not use uninstall/reinstall to refresh or upgrade an existing Omnia
+  workspace after Brokerage ownership has been adopted. Uninstalling an
+  app-owned Brokerage install removes app-owned object metadata and drops the
+  physical workspace tables for Brokerage objects such as Policies, Calls,
+  Agents, Carriers, Products, Lead Sources, and related catalog objects.
+- Reinstalling after uninstall recreates those objects as fresh empty tables;
+  it does not preserve or reattach live Omnia data.
+- Safe existing-workspace rollout requires a database backup, app package
+  install/sync, adoption dry-run review, metadata-only adoption apply, and
+  later app upgrades/post-install syncs. Uninstall is not part of the live-data
+  migration or upgrade path.
+
 ## Implementation Phases
 
 1. Scaffold `packages/twenty-apps/internal/brokerage`.
@@ -352,5 +369,10 @@ Current implementation:
    policy edit window if app manifests cannot express them directly.
 5. Build local empty-workspace install tests.
 6. Build Omnia metadata adoption migration and dry-run metadata diff tooling.
-7. Install/adopt in staging, then production with database backup and rollback
+7. Validate uninstall/reinstall only on disposable or backed-up local data;
+   document that uninstall is destructive for adopted/live Brokerage data.
+8. Execute the full `docs/brokerage-app-test-plan.md` gate set, including
+   fresh install, existing Omnia adoption, upgrade, parity, permissions,
+   companion-app compatibility, rollback, and launch rehearsal.
+9. Install/adopt in staging, then production with database backup and rollback
    plan.

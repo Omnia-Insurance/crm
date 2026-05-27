@@ -17,6 +17,7 @@ type RequiredCondition =
 type ObjectFieldRecord = {
   id: string;
   name: string;
+  defaultValue?: unknown;
   requiredCondition?: RequiredCondition | null;
 };
 
@@ -104,6 +105,26 @@ const REQUIRED_LEAD_FIELD_NAMES = [
   'dateOfBirth',
 ];
 
+const LEAD_STATUS_FIELD_NAME = 'leadStatus';
+const LEAD_STATUS_DEFAULT_VALUE = "'ASSIGNED'";
+
+const REQUIRED_POLICY_FIELD_NAMES = [
+  'premium',
+  'carrier',
+  'lead',
+  'effectiveDate',
+  'agent',
+  'product',
+  'applicantCount',
+];
+
+const POLICY_APPLICATION_ID_FIELD_NAME = 'applicationId';
+const POLICY_APPLICATION_ID_DEPENDENCY_FIELD_NAME = 'policyNumber';
+const POLICY_POLICY_NUMBER_FIELD_NAME = 'policyNumber';
+const POLICY_POLICY_NUMBER_DEPENDENCY_FIELD_NAME = 'applicationId';
+const POLICY_STATUS_FIELD_NAME = 'status';
+const POLICY_STATUS_DEFAULT_VALUE = "'SUBMITTED'";
+
 const VIEW_MODIFICATION_PERMISSION_ERROR_MESSAGE =
   'You do not have permission to modify this view';
 
@@ -121,6 +142,7 @@ const FIND_VIEW_SORT_SETUP_QUERY = `
           fieldsList {
             id
             name
+            defaultValue
             requiredCondition
           }
         }
@@ -147,6 +169,7 @@ const UPDATE_FIELD_REQUIRED_CONDITION_MUTATION = `
   ) {
     updateOneField(input: $input) {
       id
+      defaultValue
       requiredCondition
     }
   }
@@ -245,9 +268,26 @@ const isFindViewSortSetupData = (
   Array.isArray(value.getViews) &&
   value.getViews.every(isViewRecord);
 
-const isAlwaysRequiredCondition = (
-  value: RequiredCondition | null | undefined,
-) => value?.type === 'always';
+const areRequiredConditionsEqual = ({
+  currentCondition,
+  targetCondition,
+}: {
+  currentCondition: RequiredCondition | null | undefined;
+  targetCondition: RequiredCondition;
+}) => {
+  if (currentCondition === null || currentCondition === undefined) {
+    return false;
+  }
+
+  if (targetCondition.type === 'always') {
+    return currentCondition.type === 'always';
+  }
+
+  return (
+    currentCondition.type === targetCondition.type &&
+    currentCondition.fieldId === targetCondition.fieldId
+  );
+};
 
 const isViewModificationPermissionError = (error: unknown): boolean =>
   error instanceof Error &&
@@ -377,14 +417,40 @@ const updateViewSortToDescending = async (viewSortId: string) => {
   });
 };
 
-const updateFieldRequiredConditionToAlways = async (fieldMetadataId: string) => {
+const updateFieldRequiredCondition = async ({
+  fieldMetadataId,
+  requiredCondition,
+}: {
+  fieldMetadataId: string;
+  requiredCondition: RequiredCondition;
+}) => {
   await metadataGraphqlRequest({
     query: UPDATE_FIELD_REQUIRED_CONDITION_MUTATION,
     variables: {
       input: {
         id: fieldMetadataId,
         update: {
-          requiredCondition: ALWAYS_REQUIRED_CONDITION,
+          requiredCondition,
+        },
+      },
+    },
+  });
+};
+
+const updateFieldDefaultValue = async ({
+  fieldMetadataId,
+  defaultValue,
+}: {
+  fieldMetadataId: string;
+  defaultValue: string;
+}) => {
+  await metadataGraphqlRequest({
+    query: UPDATE_FIELD_REQUIRED_CONDITION_MUTATION,
+    variables: {
+      input: {
+        id: fieldMetadataId,
+        update: {
+          defaultValue,
         },
       },
     },
@@ -516,7 +582,95 @@ const ensureBrokerageViewSorts = async ({
   return result;
 };
 
-const ensureLeadRequiredFields = async (
+const mergeRequiredFieldSetupResults = (
+  currentResult: RequiredFieldSetupResult,
+  nextResult: RequiredFieldSetupResult,
+): RequiredFieldSetupResult => ({
+  updated: currentResult.updated + nextResult.updated,
+  unchanged: currentResult.unchanged + nextResult.unchanged,
+  skipped: [...currentResult.skipped, ...nextResult.skipped],
+});
+
+const ensureRequiredConditionForField = async ({
+  objectMetadata,
+  fieldName,
+  requiredCondition,
+  result,
+}: {
+  objectMetadata: ObjectMetadataRecord;
+  fieldName: string;
+  requiredCondition: RequiredCondition;
+  result: RequiredFieldSetupResult;
+}) => {
+  const fieldMetadata = findObjectField({
+    objectMetadata,
+    fieldName,
+  });
+
+  if (fieldMetadata === undefined) {
+    result.skipped.push(
+      `${objectMetadata.nameSingular}.${fieldName}: field metadata was not found`,
+    );
+
+    return;
+  }
+
+  if (
+    areRequiredConditionsEqual({
+      currentCondition: fieldMetadata.requiredCondition,
+      targetCondition: requiredCondition,
+    })
+  ) {
+    result.unchanged += 1;
+
+    return;
+  }
+
+  await updateFieldRequiredCondition({
+    fieldMetadataId: fieldMetadata.id,
+    requiredCondition,
+  });
+  result.updated += 1;
+};
+
+const ensureAlwaysRequiredFieldsForObject = async ({
+  objects,
+  objectNameSingular,
+  fieldNames,
+}: {
+  objects: ObjectMetadataRecord[];
+  objectNameSingular: string;
+  fieldNames: string[];
+}): Promise<RequiredFieldSetupResult> => {
+  const result: RequiredFieldSetupResult = {
+    updated: 0,
+    unchanged: 0,
+    skipped: [],
+  };
+
+  const objectMetadata = objects.find(
+    (candidate) => candidate.nameSingular === objectNameSingular,
+  );
+
+  if (objectMetadata === undefined) {
+    result.skipped.push(`${objectNameSingular}: object metadata was not found`);
+
+    return result;
+  }
+
+  for (const fieldName of fieldNames) {
+    await ensureRequiredConditionForField({
+      objectMetadata,
+      fieldName,
+      requiredCondition: ALWAYS_REQUIRED_CONDITION,
+      result,
+    });
+  }
+
+  return result;
+};
+
+const ensurePolicyIdentifierRequiredConditions = async (
   objects: ObjectMetadataRecord[],
 ): Promise<RequiredFieldSetupResult> => {
   const result: RequiredFieldSetupResult = {
@@ -525,35 +679,171 @@ const ensureLeadRequiredFields = async (
     skipped: [],
   };
 
-  const personObject = objects.find(
-    (objectMetadata) => objectMetadata.nameSingular === 'person',
+  const policyObject = objects.find(
+    (objectMetadata) => objectMetadata.nameSingular === 'policy',
   );
 
-  if (personObject === undefined) {
-    result.skipped.push('person: object metadata was not found');
+  if (policyObject === undefined) {
+    result.skipped.push('policy: object metadata was not found');
 
     return result;
   }
 
-  for (const fieldName of REQUIRED_LEAD_FIELD_NAMES) {
-    const fieldMetadata = findObjectField({
-      objectMetadata: personObject,
-      fieldName,
-    });
+  const policyNumberFieldMetadata = findObjectField({
+    objectMetadata: policyObject,
+    fieldName: POLICY_APPLICATION_ID_DEPENDENCY_FIELD_NAME,
+  });
 
-    if (fieldMetadata === undefined) {
-      result.skipped.push(`person.${fieldName}: field metadata was not found`);
-      continue;
-    }
+  if (policyNumberFieldMetadata === undefined) {
+    result.skipped.push(
+      `policy.${POLICY_APPLICATION_ID_DEPENDENCY_FIELD_NAME}: field metadata was not found`,
+    );
 
-    if (isAlwaysRequiredCondition(fieldMetadata.requiredCondition)) {
-      result.unchanged += 1;
-      continue;
-    }
-
-    await updateFieldRequiredConditionToAlways(fieldMetadata.id);
-    result.updated += 1;
+    return result;
   }
+
+  const applicationIdFieldMetadata = findObjectField({
+    objectMetadata: policyObject,
+    fieldName: POLICY_POLICY_NUMBER_DEPENDENCY_FIELD_NAME,
+  });
+
+  if (applicationIdFieldMetadata === undefined) {
+    result.skipped.push(
+      `policy.${POLICY_POLICY_NUMBER_DEPENDENCY_FIELD_NAME}: field metadata was not found`,
+    );
+
+    return result;
+  }
+
+  await ensureRequiredConditionForField({
+    objectMetadata: policyObject,
+    fieldName: POLICY_APPLICATION_ID_FIELD_NAME,
+    requiredCondition: {
+      type: 'fieldEmpty',
+      fieldId: policyNumberFieldMetadata.id,
+    },
+    result,
+  });
+
+  await ensureRequiredConditionForField({
+    objectMetadata: policyObject,
+    fieldName: POLICY_POLICY_NUMBER_FIELD_NAME,
+    requiredCondition: {
+      type: 'fieldEmpty',
+      fieldId: applicationIdFieldMetadata.id,
+    },
+    result,
+  });
+
+  return result;
+};
+
+const ensureFieldDefaultValue = async ({
+  objects,
+  objectNameSingular,
+  fieldName,
+  defaultValue,
+}: {
+  objects: ObjectMetadataRecord[];
+  objectNameSingular: string;
+  fieldName: string;
+  defaultValue: string;
+}): Promise<RequiredFieldSetupResult> => {
+  const result: RequiredFieldSetupResult = {
+    updated: 0,
+    unchanged: 0,
+    skipped: [],
+  };
+
+  const objectMetadata = objects.find(
+    (candidate) => candidate.nameSingular === objectNameSingular,
+  );
+
+  if (objectMetadata === undefined) {
+    result.skipped.push(`${objectNameSingular}: object metadata was not found`);
+
+    return result;
+  }
+
+  const fieldMetadata = findObjectField({
+    objectMetadata,
+    fieldName,
+  });
+
+  if (fieldMetadata === undefined) {
+    result.skipped.push(
+      `${objectNameSingular}.${fieldName}: field metadata was not found`,
+    );
+
+    return result;
+  }
+
+  if (fieldMetadata.defaultValue === defaultValue) {
+    result.unchanged += 1;
+
+    return result;
+  }
+
+  await updateFieldDefaultValue({
+    fieldMetadataId: fieldMetadata.id,
+    defaultValue,
+  });
+  result.updated += 1;
+
+  return result;
+};
+
+const ensureBrokerageRequiredFields = async (
+  objects: ObjectMetadataRecord[],
+): Promise<RequiredFieldSetupResult> => {
+  let result: RequiredFieldSetupResult = {
+    updated: 0,
+    unchanged: 0,
+    skipped: [],
+  };
+
+  result = mergeRequiredFieldSetupResults(
+    result,
+    await ensureAlwaysRequiredFieldsForObject({
+      objects,
+      objectNameSingular: 'person',
+      fieldNames: REQUIRED_LEAD_FIELD_NAMES,
+    }),
+  );
+
+  result = mergeRequiredFieldSetupResults(
+    result,
+    await ensureAlwaysRequiredFieldsForObject({
+      objects,
+      objectNameSingular: 'policy',
+      fieldNames: REQUIRED_POLICY_FIELD_NAMES,
+    }),
+  );
+
+  result = mergeRequiredFieldSetupResults(
+    result,
+    await ensurePolicyIdentifierRequiredConditions(objects),
+  );
+
+  result = mergeRequiredFieldSetupResults(
+    result,
+    await ensureFieldDefaultValue({
+      objects,
+      objectNameSingular: 'person',
+      fieldName: LEAD_STATUS_FIELD_NAME,
+      defaultValue: LEAD_STATUS_DEFAULT_VALUE,
+    }),
+  );
+
+  result = mergeRequiredFieldSetupResults(
+    result,
+    await ensureFieldDefaultValue({
+      objects,
+      objectNameSingular: 'policy',
+      fieldName: POLICY_STATUS_FIELD_NAME,
+      defaultValue: POLICY_STATUS_DEFAULT_VALUE,
+    }),
+  );
 
   return result;
 };
@@ -574,7 +864,7 @@ const ensureBrokerageSetup = async (): Promise<BrokeragePostInstallResult> => {
       objects,
       views: data.getViews,
     }),
-    requiredFields: await ensureLeadRequiredFields(objects),
+    requiredFields: await ensureBrokerageRequiredFields(objects),
   };
 };
 
@@ -586,7 +876,7 @@ export default definePostInstallLogicFunction({
   universalIdentifier: 'b8ccd0f8-8497-463f-87c2-61b55b2ecf4a',
   name: 'post-install',
   description:
-    'Ensures Brokerage workspace views and lead required fields are normalized.',
+    'Ensures Brokerage workspace views and required fields are normalized.',
   timeoutSeconds: 60,
   shouldRunOnVersionUpgrade: true,
   shouldRunSynchronously: true,

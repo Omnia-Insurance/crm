@@ -51,3 +51,31 @@ npx nx command twenty-server -- workspace:adopt-brokerage-app --workspace-id <wo
 
 Only apply it after the dry-run reports the expected metadata-only object,
 field, and navigation ownership changes.
+
+## Install Safety
+
+Fresh workspaces can install Brokerage directly. The app creates the Brokerage
+objects, lead fields, roles, navigation, views, record layouts, and post-install
+required-field/view-sort normalization from an empty state.
+
+Existing Omnia-shaped workspaces with live data must not be refreshed by
+uninstalling and reinstalling Brokerage. Once Brokerage owns the workspace
+metadata, uninstalling the app removes the app-owned objects and their physical
+workspace tables, including records in objects such as Policies, Calls, Agents,
+Carriers, Products, Lead Sources, and related catalog objects. Reinstalling
+after that creates fresh empty app-owned tables; it does not reattach the
+deleted data.
+
+For live Omnia workspaces, treat Brokerage as a metadata adoption/upgrade path:
+take a database backup, install/sync the app package, run the adoption command
+in dry-run mode, apply only after reviewing the metadata-only plan, and use app
+upgrade/post-install syncs for later changes. Do not use uninstall/reinstall as
+an upgrade or migration strategy after adoption.
+
+## Production Readiness
+
+Use `docs/brokerage-app-test-plan.md` before considering Brokerage production
+ready. The plan gates fresh install, destructive uninstall characterization,
+existing Omnia adoption, post-adoption upgrade, production metadata parity,
+user-facing flows, permissions, companion-app compatibility, rollback, and
+launch rehearsal.

@@ -996,9 +996,28 @@ echo "--- Brokerage App ---"
 check_file_exists \
   "docs/brokerage-app-spec.md" \
   "Brokerage app implementation spec must exist"
+check_file_contains \
+  "docs/brokerage-app-spec.md" \
+  "Do not use uninstall/reinstall to refresh or upgrade an existing Omnia" \
+  "Brokerage app spec must document destructive uninstall behavior for adopted workspaces"
+check_file_exists \
+  "docs/brokerage-app-test-plan.md" \
+  "Brokerage production-readiness test plan must exist"
+check_file_contains \
+  "docs/brokerage-app-test-plan.md" \
+  "existing Omnia adoption path is the highest-risk area" \
+  "Brokerage test plan must prioritize existing Omnia adoption risk"
+check_file_contains \
+  "docs/brokerage-app-test-plan.md" \
+  "App Upgrade After Adoption" \
+  "Brokerage test plan must cover post-adoption upgrade"
 check_file_exists \
   "packages/twenty-apps/internal/brokerage/package.json" \
   "Brokerage app package must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/README.md" \
+  "Existing Omnia-shaped workspaces with live data must not be refreshed by" \
+  "Brokerage README must warn against uninstall/reinstall on live Omnia data"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/package.json" \
   "\"lint\": \"oxlint -c .oxlintrc.json .\"" \
@@ -1079,7 +1098,7 @@ check_file_contains \
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
   "PermissionFlag.DATA_MODEL" \
-  "Brokerage default function role must be able to normalize Lead required-field metadata"
+  "Brokerage default function role must be able to normalize Lead/Policy required-field metadata"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
   "STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier" \
@@ -1152,6 +1171,20 @@ check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/views/lead-record-page-fields.view.ts" \
   "ViewType.FIELDS_WIDGET" \
   "Brokerage Lead record page fields view must be a fields widget view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/policy-record-page-fields.view.ts" \
+  "Brokerage Policy record page must use a curated fields-widget view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/views/policy-record-page-fields.view.ts" \
+  "ViewType.FIELDS_WIDGET" \
+  "Brokerage Policy record page fields view must be a fields widget view"
+check_file_exists \
+  "packages/twenty-apps/internal/brokerage/src/views/call-record-page-fields.view.ts" \
+  "Brokerage Call record page must use a curated fields-widget view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/views/call-record-page-fields.view.ts" \
+  "ViewType.FIELDS_WIDGET" \
+  "Brokerage Call record page fields view must be a fields widget view"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
   "createViewSort" \
@@ -1176,6 +1209,34 @@ check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
   "requiredCondition: ALWAYS_REQUIRED_CONDITION" \
   "Brokerage post-install must mark required Lead fields through metadata required conditions"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "REQUIRED_POLICY_FIELD_NAMES" \
+  "Brokerage post-install must keep required Policy field setup"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "POLICY_APPLICATION_ID_DEPENDENCY_FIELD_NAME" \
+  "Brokerage post-install must require Application ID when Policy Number is empty"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "POLICY_POLICY_NUMBER_DEPENDENCY_FIELD_NAME" \
+  "Brokerage post-install must require Policy Number when Application ID is empty"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/fields/lead-status.field.ts" \
+  "defaultValue: \"'ASSIGNED'\"" \
+  "Brokerage Lead Status field must default new Leads to Assigned"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "LEAD_STATUS_DEFAULT_VALUE" \
+  "Brokerage post-install must repair existing Lead Status defaults"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/policy.ts" \
+  "defaultValue: \"'SUBMITTED'\"" \
+  "Brokerage Policy Status field must default new Policies to Submitted"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "POLICY_STATUS_DEFAULT_VALUE" \
+  "Brokerage post-install must repair existing Policy Status defaults"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/logic-functions/set-lead-assigned-status-on-create.ts" \
   "eventName: 'person.created'" \
@@ -1220,6 +1281,42 @@ check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
   "fieldDisplayMode: 'CARD'" \
   "Brokerage Lead relation fields must render as record-page cards"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/policy-record-page-layout.ts" \
+  "viewUniversalIdentifier: POLICY_RECORD_PAGE_FIELDS_VIEW_ID" \
+  "Brokerage Policy record page layout must use the curated fields view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/policy-record-page-layout.ts" \
+  "fieldMetadataId: POLICY_LEAD_FIELD_ID" \
+  "Brokerage Policy record page layout must expose Lead as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/policy-record-page-layout.ts" \
+  "fieldMetadataId: POLICY_AGENT_FIELD_ID" \
+  "Brokerage Policy record page layout must expose Agent as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/policy-record-page-layout.ts" \
+  "fieldMetadataId: POLICY_CARRIER_FIELD_ID" \
+  "Brokerage Policy record page layout must expose Carrier as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/policy-record-page-layout.ts" \
+  "fieldMetadataId: POLICY_PRODUCT_FIELD_ID" \
+  "Brokerage Policy record page layout must expose Product as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/call-record-page-layout.ts" \
+  "viewUniversalIdentifier: CALL_RECORD_PAGE_FIELDS_VIEW_ID" \
+  "Brokerage Call record page layout must use the curated fields view"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/call-record-page-layout.ts" \
+  "fieldMetadataId: CALL_LEAD_FIELD_ID" \
+  "Brokerage Call record page layout must expose Lead as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/call-record-page-layout.ts" \
+  "fieldMetadataId: CALL_AGENT_FIELD_ID" \
+  "Brokerage Call record page layout must expose Agent as a relation card"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/page-layouts/call-record-page-layout.ts" \
+  "fieldMetadataId: CALL_LEAD_SOURCE_FIELD_ID" \
+  "Brokerage Call record page layout must expose Lead Source as a relation card"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/page-layouts/lead-record-page-layout.ts" \
   "configurationType: 'EMAILS'" \
