@@ -9,7 +9,7 @@ import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBa
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { t } from '@lingui/core/macro';
 import { useSearchParams } from 'react-router-dom';
-import { SettingsPath, type ViewFilterOperand } from 'twenty-shared/types';
+import { SettingsPath } from 'twenty-shared/types';
 import {
   getSettingsPath,
   isDefined,
@@ -17,9 +17,7 @@ import {
 } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
 import { useQuery } from '@apollo/client/react';
-import {
-  FindOneAgentDocument,
-} from '~/generated-metadata/graphql';
+import { FindOneAgentDocument } from '~/generated-metadata/graphql';
 
 type SettingsRolePermissionsObjectLevelObjectFormProps = {
   roleId: string;

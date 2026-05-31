@@ -7,6 +7,8 @@ export type ObjectPermissionManifest = SyncableEntityOptions & {
   canUpdateObjectRecords?: boolean;
   canSoftDeleteObjectRecords?: boolean;
   canDestroyObjectRecords?: boolean;
+  showInSidebar?: boolean;
+  editWindowMinutes?: number | null;
 };
 
 export type FieldPermissionManifest = SyncableEntityOptions & {

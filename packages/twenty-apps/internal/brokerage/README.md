@@ -17,6 +17,8 @@ the brokerage foundation.
 - Policies linked to leads, agents, carriers, and products
 - Calls linked to leads, agents, and lead sources
 - Carrier/product catalog objects
+- Policy Product pickers filtered through Carrier Product offerings once a
+  Carrier is selected
 - Lead sources and family members
 - Agent and Manager role definitions
 - Brokerage sidebar navigation
@@ -25,6 +27,10 @@ the brokerage foundation.
 - Required Lead entry fields for name, address, email, phone, and date of birth
 - Lead status automation that sets Status to Assigned when an assigned Agent is
   present and the Lead is still idle
+- Agent role named `Agent`, aligned to Omnia's `Member` permissions and sidebar
+  visibility. Existing Omnia-shaped workspace adoption copies the current Member
+  role's object permissions, field restrictions, permission flags, and RLS rows
+  onto Agent.
 
 ## Excluded
 
@@ -42,15 +48,19 @@ production path is an adoption migration that preserves existing object IDs,
 field IDs, relation IDs, table names, record IDs, notes, tasks, files, views,
 and timeline activity while assigning the metadata to this application.
 
-After installing the app, run the server-side adoption command in dry-run mode
-first:
+Run the server-side adoption command in dry-run mode before a full app sync on
+an existing Omnia-shaped workspace:
 
 ```bash
 npx nx command twenty-server -- workspace:adopt-brokerage-app --workspace-id <workspace-id> --dry-run
 ```
 
 Only apply it after the dry-run reports the expected metadata-only object,
-field, and navigation ownership changes.
+field, and navigation ownership changes. On apply, the command creates an empty
+Brokerage app shell if the workspace does not have one yet, then repoints the
+existing Omnia metadata to that shell without recreating records or tables. Run
+the Brokerage app sync after the adoption apply so the manifest upgrades the
+adopted metadata instead of trying to create duplicate objects.
 
 ## Install Safety
 
@@ -67,10 +77,10 @@ after that creates fresh empty app-owned tables; it does not reattach the
 deleted data.
 
 For live Omnia workspaces, treat Brokerage as a metadata adoption/upgrade path:
-take a database backup, install/sync the app package, run the adoption command
-in dry-run mode, apply only after reviewing the metadata-only plan, and use app
-upgrade/post-install syncs for later changes. Do not use uninstall/reinstall as
-an upgrade or migration strategy after adoption.
+take a database backup, run the adoption command in dry-run mode before a full
+app sync, apply only after reviewing the metadata-only plan, sync the app
+package, and use app upgrade/post-install syncs for later changes. Do not use
+uninstall/reinstall as an upgrade or migration strategy after adoption.
 
 ## Production Readiness
 

@@ -214,6 +214,13 @@ check_file_contains \
   "workspaceCustomApplicationId" \
   "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
 check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/relation-field-metadata-gql-type.generator.ts" \
+  "relation-one-to-many-filter:" \
+  "One-to-many relation filter input types must be reused across create/update schema generation"
+check_file_exists \
+  "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/__tests__/relation-field-metadata-gql-type.generator.spec.ts" \
+  "One-to-many relation filter type reuse regression test must exist"
+check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "PermissionFlagType.LAYOUTS" \
   "Edit Record Page Layout must be gated behind LAYOUTS permission"
@@ -1075,6 +1082,14 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-apps/internal/brokerage/src/objects/lead-source.ts" \
   "Brokerage Lead Source object must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/carrier.ts" \
+  "junctionTargetFieldUniversalIdentifier:" \
+  "Brokerage Carrier Products relation must declare Product as its junction target for picker filtering"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/objects/product.ts" \
+  "junctionTargetFieldUniversalIdentifier:" \
+  "Brokerage Product Carriers relation must declare Carrier as its junction target for picker filtering"
 check_file_exists \
   "packages/twenty-apps/internal/brokerage/src/fields/assigned-agent-on-lead.field.ts" \
   "Brokerage Lead must expose Assigned Agent"
@@ -1124,8 +1139,24 @@ check_file_contains \
   "Brokerage default function role must be able to normalize Lead/Policy required-field metadata"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
+  "PermissionFlag.ROLES" \
+  "Brokerage default function role must be able to normalize Agent policy RLS"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/default-function.role.ts" \
   "STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier" \
   "Brokerage default function role must be able to update Lead status records"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "ensureAgentPolicyOwnershipRls" \
+  "Brokerage post-install must keep Agent policy ownership RLS setup"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "UPSERT_ROW_LEVEL_PERMISSION_PREDICATES_MUTATION" \
+  "Brokerage post-install must be able to upsert Agent policy RLS predicates"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/logic-functions/post-install.ts" \
+  "RowLevelPermissionPredicateInput" \
+  "Brokerage post-install must strip DTO-only objectMetadataId before RLS predicate upsert"
 check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
   "label: 'Agent'" \
@@ -1134,10 +1165,54 @@ check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/manager.role.ts" \
   "label: 'Manager'" \
   "Brokerage Manager role template must exist"
-check_file_not_contains \
+check_file_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
   "canReadAllObjectRecords: true" \
-  "Brokerage Agent role must not have blanket object read access"
+  "Brokerage Agent role must mirror Omnia Member broad read access"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "showAllObjectsInSidebar: false" \
+  "Brokerage Agent role must use Omnia Member sidebar gating"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "showInSidebar: true" \
+  "Brokerage Agent role must explicitly expose the Omnia Member sidebar objects"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.note" \
+  "Brokerage Agent role must expose Notes like Omnia Member"
+check_file_contains \
+  "packages/twenty-apps/internal/brokerage/src/roles/agent.role.ts" \
+  "STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.task" \
+  "Brokerage Agent role must expose Tasks like Omnia Member"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "syncAgentRoleFromMemberRole" \
+  "Brokerage adoption must copy Omnia Member permissions onto Agent"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "manifest_object_permissions" \
+  "Brokerage adoption must stamp copied Agent object permissions with manifest identities"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "manifest_field_permissions" \
+  "Brokerage adoption must stamp copied Agent field permissions with manifest identities"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/constants/brokerage-app-adoption.constants.ts" \
+  "junctionTargetFieldUniversalIdentifier:" \
+  "Brokerage adoption must preserve Carrier to Product junction picker metadata"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "mergeFieldSettingsPatch" \
+  "Brokerage adoption must patch relation field settings without recreating fields"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "showAllObjectsInSidebar" \
+  "Brokerage adoption must copy Omnia Member sidebar gating onto Agent"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "rowLevelPermissionPredicateGroup" \
+  "Brokerage adoption must copy Omnia Member RLS groups onto Agent"
 check_file_not_contains \
   "packages/twenty-apps/internal/brokerage/src/roles/manager.role.ts" \
   "canUpdateAllSettings: true" \
@@ -1359,6 +1434,25 @@ check_file_contains \
   "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
   "options.dryRun === true" \
   "Brokerage adoption command must remain dry-run safe"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "getOrCreateBrokerageApplicationId" \
+  "Brokerage adoption command must create an app shell on apply when missing"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "DRY_RUN_BROKERAGE_APPLICATION_ID" \
+  "Brokerage adoption dry-run must work before the app shell exists"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "sourceType: ApplicationRegistrationSourceType.LOCAL" \
+  "Brokerage adoption app shell must be local so later app sync can attach package metadata"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/adopt-brokerage-app.command.ts" \
+  "universalIdentifier: update.nextUniversalIdentifier" \
+  "Brokerage adoption must repoint metadata to stable app universal identifiers"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/__tests__/adopt-brokerage-app.command.spec.ts" \
+  "Brokerage adoption command must keep focused regression coverage"
 check_file_exists \
   "packages/twenty-server/src/database/commands/custom/constants/brokerage-app-adoption.constants.ts" \
   "Brokerage adoption constants must exist"
@@ -1804,6 +1898,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
   "typeof rawDownloadUrl === 'string'" \
   "Export job poller must not fetch non-string download URLs"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
+  "pollTimerId = setInterval" \
+  "Export job poller must use an effect-scoped timer that is cleared on cleanup"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/components/ExportJobRecoveryEffect.tsx" \
   "Export job recovery effect mounted in app root"
@@ -1914,6 +2012,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion.ts" \
   "scope," \
   "Record-level predicate conversion must stamp scope onto draft predicates/groups"
+check_file_contains \
+  "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectFieldMenu.tsx" \
+  "hasRelationToWorkspaceMember" \
+  "Record-level permission field picker must include relations that resolve to WorkspaceMember"
 
 echo ""
 echo "--- Required Fields: Frontend Core ---"
@@ -2001,6 +2103,52 @@ check_file_contains \
   "packages/twenty-front/src/generated-metadata/graphql.ts" \
   '"value":"scope"' \
   "Generated metadata GraphQL documents must request predicate scope"
+
+echo ""
+echo "--- App Manifest: Object Permission Fields ---"
+check_file_contains \
+  "packages/twenty-shared/src/application/roleManifestType.ts" \
+  "showInSidebar?: boolean" \
+  "Role manifests must expose per-object sidebar visibility"
+check_file_contains \
+  "packages/twenty-shared/src/application/roleManifestType.ts" \
+  "editWindowMinutes?: number | null" \
+  "Role manifests must expose per-object edit window overrides"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-manifest/converters/from-object-permission-manifest-to-universal-flat-object-permission.util.ts" \
+  "showInSidebar: objectPermissionManifest.showInSidebar" \
+  "App manifest object-permission conversion must keep sidebar visibility"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/application/application-manifest/converters/from-object-permission-manifest-to-universal-flat-object-permission.util.ts" \
+  "editWindowMinutes: objectPermissionManifest.editWindowMinutes" \
+  "App manifest object-permission conversion must keep edit window overrides"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/object-permission/object-permission.service.ts" \
+  "effectiveShowInSidebar" \
+  "Object-permission upsert must preserve sidebar visibility"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/object-permission/object-permission.service.ts" \
+  "effectiveEditWindowMinutes" \
+  "Object-permission upsert must preserve edit window overrides"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/object-permission/utils/from-flat-object-permission-to-object-permission-dto.util.ts" \
+  "showInSidebar: flatObjectPermission.showInSidebar" \
+  "ObjectPermission DTO conversion must return sidebar visibility"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/object-permission/utils/from-flat-object-permission-to-object-permission-dto.util.ts" \
+  "editWindowMinutes: flatObjectPermission.editWindowMinutes" \
+  "ObjectPermission DTO conversion must return edit window overrides"
+
+echo ""
+echo "--- Permission Flag Catalog and Assignment Entities ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/permission-flag/permission-flag.entity.ts" \
+  "@Entity('permissionFlag')" \
+  "PermissionFlagEntity must map to the permissionFlag catalog table"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/role-permission-flag/role-permission-flag.entity.ts" \
+  "@Entity('rolePermissionFlag')" \
+  "RolePermissionFlagEntity must map to the rolePermissionFlag assignment table"
 
 # ==========================================================
 # Unique Constraints & Field Uniqueness
@@ -2369,6 +2517,10 @@ check_file_contains \
   "RelationSubFieldDisplay" \
   "FieldDisplay must route sub-field columns to RelationSubFieldDisplay"
 check_file_contains \
+  "packages/twenty-server/src/engine/api/common/common-nested-relations-processor/process-nested-relations-v2.helper.ts" \
+  "policy.lead.leadSource" \
+  "Nested relation loading must preserve depth-2 relation sub-field columns"
+check_file_contains \
   "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
   "expandedRelationFieldId" \
   "Column picker must support relation sub-field expansion"
@@ -2441,6 +2593,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "normalizeDiffComparableValue" \
   "Inline diff accepted-state comparison must treat null/undefined/empty strings consistently"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "color: #fff" \
+  "Inline diff accept button must use theme colors, not hardcoded white"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationRecordFieldList.tsx" \
+  "diff !== undefined" \
+  "Reconciliation field list must keep null proposed values actionable"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationRecordFieldList.tsx" \
+  "StyledProposedValue" \
+  "Reconciliation field list must show the proposed BOB value inline"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field-list/components/RecordFieldList.tsx" \
   "d.bobValue === d.crmValue" \
@@ -2461,6 +2625,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
   "normalizeDiffComparableValue(value) === d.bobValue" \
   "Reconciliation Apply all / Undo all accepted-state detection must handle null target values"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "useRecordStoreValue" \
+  "Reconciliation review must read recordStoreFamilyState through the lint-compatible helper"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \

@@ -23,6 +23,8 @@ export const fromObjectPermissionManifestToUniversalFlatObjectPermission = ({
     canSoftDeleteObjectRecords:
       objectPermissionManifest.canSoftDeleteObjectRecords,
     canDestroyObjectRecords: objectPermissionManifest.canDestroyObjectRecords,
+    showInSidebar: objectPermissionManifest.showInSidebar,
+    editWindowMinutes: objectPermissionManifest.editWindowMinutes,
     createdAt: now,
     updatedAt: now,
   };

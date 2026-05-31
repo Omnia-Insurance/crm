@@ -27,7 +27,7 @@ P0 blockers:
 - Any direct uninstall/reinstall path proposed for an adopted or live Omnia
   workspace.
 - App sync that attempts to create duplicate Brokerage objects in an existing
-  Omnia workspace instead of adopting or updating existing metadata.
+  Omnia workspace because adoption was skipped or could not run first.
 - Required Lead or Policy fields/defaults that differ from production parity.
 - Lead, Policy, Call, Agent, Carrier, Product, Lead Source, task, note, file,
   export, or Compliance relation flows broken after adoption.
@@ -47,18 +47,22 @@ P2 follow-ups:
 - Cosmetic UI differences.
 - Performance improvements that do not affect data integrity or core workflows.
 - Additional automation around already-passing manual checks.
+- Legacy policy edit-window behavior, if the business decides to keep that
+  platform customization outside Brokerage readiness.
 
 ## Test Environments
 
 Use four environments. Do not reuse one environment for every scenario.
 
 1. Local fresh workspace
+
    - Empty or newly created workspace.
    - Used to validate first install and create-flow behavior.
    - Uninstall/reinstall testing is allowed here only because the data is
      disposable.
 
 2. Local prod-like Omnia snapshot
+
    - Database restored from a recent production or staging backup.
    - Used for dry-run adoption, apply adoption on a copy, upgrade, rollback, and
      parity checks.
@@ -66,6 +70,7 @@ Use four environments. Do not reuse one environment for every scenario.
      them.
 
 3. Staging Omnia
+
    - Production-like infrastructure and user roles.
    - Used for final adoption rehearsal and UI workflow validation.
    - Must start from a backup that can be restored.
@@ -395,11 +400,15 @@ Steps:
 5. Create a Policy with `applicationId` filled and `policyNumber` empty.
 6. Attempt to create a Policy with both `policyNumber` and `applicationId`
    empty.
-7. Create a Call linked to Lead, Agent, and Lead Source.
-8. Open each record page and verify relation cards render:
-   - Lead: Policies, Lead Source, Assigned Agent, Calls, Family Members
-   - Policy: Lead, Agent, Carrier, Product
-   - Call: Lead, Agent, Lead Source
+7. Select a Carrier on a Policy and open the Product picker.
+8. Verify the Product picker only shows Products offered through Carrier Product
+   records for that Carrier.
+9. Create a Call linked to Lead, Agent, and Lead Source.
+10. Open each record page and verify relation cards render:
+
+- Lead: Policies, Lead Source, Assigned Agent, Calls, Family Members
+- Policy: Lead, Agent, Carrier, Product
+- Call: Lead, Agent, Lead Source
 
 Expected result:
 
@@ -407,6 +416,8 @@ Expected result:
 - Policy can be created when either Policy Number or Application ID is present.
 - Policy creation is blocked when both identifiers are empty.
 - Policy Status defaults to `Submitted`.
+- Policy Product picker is filtered by the selected Carrier's Carrier Product
+  offerings.
 - Call creation succeeds and reverse relations are visible.
 - Record page Home tabs show curated field order instead of dumping every field.
 
@@ -486,7 +497,8 @@ Steps:
 1. Disable worker jobs and external ingestion for the test workspace.
 2. Create a database backup.
 3. Capture baseline evidence queries.
-4. Run the documented Brokerage install/adoption sequence in dry-run mode.
+4. Run the documented Brokerage adoption sequence in dry-run mode before any
+   full app package sync.
 5. Run:
 
    ```bash
@@ -501,6 +513,7 @@ Expected result:
 - Dry-run prints a metadata-only plan.
 - Dry-run does not change application ownership, object metadata, field metadata,
   navigation metadata, row counts, or workspace tables.
+- Dry-run works even if the Brokerage app shell does not exist yet.
 - The plan maps existing Omnia metadata to stable Brokerage universal
   identifiers.
 - The plan does not include table drops, record deletes, object recreation, or
@@ -509,16 +522,15 @@ Expected result:
 Fail conditions:
 
 - Any metadata or row count changes during dry-run.
-- App package sync attempts to create duplicate Brokerage objects before
-  adoption can run.
+- Dry-run requires a normal app package sync before adoption can run.
 - Dry-run cannot resolve expected objects, fields, or relations.
 - Dry-run proposes destructive operations.
 
 Note:
 
-- If the current sequence cannot get to dry-run without duplicate object-name
-  conflicts, that is a P0 rollout blocker. The adoption command or install
-  sequence must be adjusted before production.
+- If the current sequence cannot get to dry-run before app sync without
+  duplicate object-name conflicts, that is a P0 rollout blocker. The adoption
+  command or install sequence must be adjusted before production.
 
 ### T05 - Existing Omnia Adoption Apply On Copy
 
@@ -535,7 +547,8 @@ Environment:
 
 Steps:
 
-1. Complete T04 successfully.
+1. Complete T04 successfully. Do not run full Brokerage app sync before the
+   adoption apply on an existing Omnia-shaped workspace.
 2. Capture baseline evidence queries plus any object/field/relation ID exports
    needed for comparison.
 3. Apply adoption:
@@ -545,7 +558,7 @@ Steps:
    ```
 
 4. Clear workspace Redis keys and restart backend if the command does not do so.
-5. Run Brokerage app sync:
+5. Run Brokerage app sync after adoption apply:
 
    ```bash
    cd packages/twenty-apps/internal/brokerage
@@ -560,6 +573,8 @@ Steps:
 Expected result:
 
 - Existing Brokerage-shaped custom objects become Brokerage-owned.
+- If missing, an empty Brokerage application shell is created and reused by the
+  later app sync.
 - Existing object IDs, field IDs, relation IDs, target table names, and record
   IDs are unchanged.
 - Existing row counts are unchanged.
@@ -567,8 +582,8 @@ Expected result:
   remain attached.
 - Provider-specific fields remain workspace-custom until their owning app is
   ready.
-- App sync updates the existing Brokerage app instead of creating duplicate
-  objects.
+- App sync updates the adopted Brokerage app and attaches registration/package
+  metadata instead of creating duplicate objects.
 - First post-install may update required metadata; second post-install is
   idempotent.
 
@@ -687,9 +702,11 @@ Steps:
    layout.
 6. Create a related Policy from the Lead.
 7. Verify Policy required fields and reciprocal identifier behavior.
-8. Create a related Call.
-9. Use Timeline, Tasks, Notes, Files, Emails, and Calendar tabs on Lead.
-10. Refresh the page and repeat key checks to catch cache-only success.
+8. Select a Carrier and confirm the Product relation picker narrows to that
+   Carrier's Carrier Product offerings.
+9. Create a related Call.
+10. Use Timeline, Tasks, Notes, Files, Emails, and Calendar tabs on Lead.
+11. Refresh the page and repeat key checks to catch cache-only success.
 
 Expected result:
 
@@ -757,27 +774,30 @@ Personas:
 Steps:
 
 1. Assign each persona to a test user.
-2. For each persona, test list, read, create, update, and delete behavior for:
-   - Leads
-   - Policies
-   - Calls
-   - Agents
-   - Lead Sources
-   - Carriers
-   - Products
-3. Test Agent policy create/update ownership behavior.
-4. Test the policy edit window behavior.
-5. Confirm Manager can perform expected operational work without workspace admin
+2. Confirm Brokerage `Agent` is the role label shown to users, not `Member` or
+   `Brokerage Agent`.
+3. Compare Brokerage `Agent` against Omnia `Member` for role flags, object
+   permissions, field permissions, permission flags, and RLS predicates.
+4. For each persona, test list, read, create, update, and delete behavior for:
+   Leads, Policies, Calls, Agents, Lead Sources, Carriers, Products, Product
+   Types, Carrier Products, Family Members, Notes, and Tasks.
+5. Confirm Agent sidebar parity with Omnia `Member`: Leads, Policies, Notes, and
+   Tasks are visible; Calls and support/configuration objects are hidden.
+6. Test Agent policy create/update ownership behavior.
+7. Confirm Manager can perform expected operational work without workspace admin
    settings access.
-6. Confirm default function role is not assignable to users.
-7. Confirm relation pickers only show records the user can access.
+8. Confirm default function role is not assignable to users.
+9. Confirm relation pickers only show records the user can access.
 
 Expected result:
 
 - Agents can do expected sales work.
+- Brokerage Agent has zero permission-shape diffs from Omnia Member, except for
+  the visible role label/description.
 - Managers can manage Brokerage operations.
 - Users without Brokerage access do not see or mutate Brokerage data.
-- Policy edit window and ownership rules match the Omnia permission model.
+- Policy ownership rules prevent Agents from editing another Agent's policies
+- while preserving the exact Omnia Member read behavior.
 - No role gains broad workspace settings access accidentally.
 
 Fail conditions:
@@ -1057,28 +1077,28 @@ Use this template for each run.
 
 | Test | Priority | Result | Evidence | Notes |
 | ---- | -------- | ------ | -------- | ----- |
-| T00 | P0 |  |  |  |
-| T01 | P0 |  |  |  |
-| T02 | P0 |  |  |  |
-| T03 | P0 |  |  |  |
-| T04 | P0 |  |  |  |
-| T05 | P0 |  |  |  |
-| T06 | P0 |  |  |  |
-| T07 | P0 |  |  |  |
-| T08 | P1 |  |  |  |
-| T09 | P1 |  |  |  |
-| T10 | P0/P1 |  |  |  |
-| T11 | P0 |  |  |  |
-| T12 | P0 |  |  |  |
-| T13 | P0 |  |  |  |
-| T14 | P1 |  |  |  |
-| T15 | P0 |  |  |  |
+| T00  | P0       |        |          |       |
+| T01  | P0       |        |          |       |
+| T02  | P0       |        |          |       |
+| T03  | P0       |        |          |       |
+| T04  | P0       |        |          |       |
+| T05  | P0       |        |          |       |
+| T06  | P0       |        |          |       |
+| T07  | P0       |        |          |       |
+| T08  | P1       |        |          |       |
+| T09  | P1       |        |          |       |
+| T10  | P0/P1    |        |          |       |
+| T11  | P0       |        |          |       |
+| T12  | P0       |        |          |       |
+| T13  | P0       |        |          |       |
+| T14  | P1       |        |          |       |
+| T15  | P0       |        |          |       |
 
 ## Deviations
 
 | Area | Expected | Actual | Disposition | Owner |
 | ---- | -------- | ------ | ----------- | ----- |
-|  |  |  |  |  |
+|      |          |        |             |       |
 
 ## Rollback Evidence
 

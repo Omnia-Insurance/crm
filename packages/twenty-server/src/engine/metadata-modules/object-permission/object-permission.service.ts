@@ -135,6 +135,8 @@ export class ObjectPermissionService {
               canUpdateObjectRecords: desired.canUpdateObjectRecords,
               canSoftDeleteObjectRecords: desired.canSoftDeleteObjectRecords,
               canDestroyObjectRecords: desired.canDestroyObjectRecords,
+              showInSidebar: desired.showInSidebar,
+              editWindowMinutes: desired.editWindowMinutes,
             },
             flatApplication,
             flatRoleMaps,
@@ -158,12 +160,22 @@ export class ObjectPermissionService {
           desired.canDestroyObjectRecords !== undefined
             ? desired.canDestroyObjectRecords
             : current.canDestroyObjectRecords;
+        const effectiveShowInSidebar =
+          desired.showInSidebar !== undefined
+            ? desired.showInSidebar
+            : current.showInSidebar;
+        const effectiveEditWindowMinutes =
+          desired.editWindowMinutes !== undefined
+            ? desired.editWindowMinutes
+            : current.editWindowMinutes;
 
         const canChanged =
           effectiveCanRead !== current.canReadObjectRecords ||
           effectiveCanUpdate !== current.canUpdateObjectRecords ||
           effectiveCanSoftDelete !== current.canSoftDeleteObjectRecords ||
-          effectiveCanDestroy !== current.canDestroyObjectRecords;
+          effectiveCanDestroy !== current.canDestroyObjectRecords ||
+          effectiveShowInSidebar !== current.showInSidebar ||
+          effectiveEditWindowMinutes !== current.editWindowMinutes;
 
         if (canChanged) {
           const now = new Date().toISOString();
@@ -178,6 +190,8 @@ export class ObjectPermissionService {
             canUpdateObjectRecords: effectiveCanUpdate,
             canSoftDeleteObjectRecords: effectiveCanSoftDelete,
             canDestroyObjectRecords: effectiveCanDestroy,
+            showInSidebar: effectiveShowInSidebar,
+            editWindowMinutes: effectiveEditWindowMinutes,
             createdAt: current.createdAt,
             updatedAt: now,
           });
@@ -198,6 +212,8 @@ export class ObjectPermissionService {
           canUpdateObjectRecords: current.canUpdateObjectRecords,
           canSoftDeleteObjectRecords: current.canSoftDeleteObjectRecords,
           canDestroyObjectRecords: current.canDestroyObjectRecords,
+          showInSidebar: current.showInSidebar,
+          editWindowMinutes: current.editWindowMinutes,
           createdAt: current.createdAt,
           updatedAt: current.updatedAt,
         });

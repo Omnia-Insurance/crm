@@ -17,6 +17,7 @@ export type BrokerageAdoptionField = {
   description: string | null;
   isLabelSyncedWithName: boolean;
   isUnique: boolean;
+  settingsPatch?: Record<string, unknown>;
 };
 
 type BrokerageAdoptionFieldInput = Omit<
@@ -26,7 +27,7 @@ type BrokerageAdoptionFieldInput = Omit<
   Partial<
     Pick<
       BrokerageAdoptionField,
-      'description' | 'isLabelSyncedWithName' | 'isUnique'
+      'description' | 'isLabelSyncedWithName' | 'isUnique' | 'settingsPatch'
     >
   >;
 
@@ -40,9 +41,39 @@ export type BrokerageAdoptionNavigationMenuItem = {
 
 export const BROKERAGE_APP_UNIVERSAL_IDENTIFIER =
   'ddc5e4cf-d4d7-4fa6-ae1d-d86e878661c9';
+export const BROKERAGE_AGENT_ROLE_UNIVERSAL_IDENTIFIER =
+  '76007a24-574b-4b62-80f5-0299d808ad8b';
 
 const APPLICATION_GENERATED_FIELD_NAMESPACE =
   '142046f0-4d80-48b5-ad56-26ad410e895c';
+const ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE =
+  'b403ec59-4d80-4f22-85e6-717a192dc9cb';
+
+const getRoleObjectPermissionUniversalIdentifier = ({
+  roleUniversalIdentifier,
+  objectUniversalIdentifier,
+}: {
+  roleUniversalIdentifier: string;
+  objectUniversalIdentifier: string;
+}) =>
+  uuidV5(
+    `${roleUniversalIdentifier}:${objectUniversalIdentifier}`,
+    ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE,
+  );
+
+const getRoleFieldPermissionUniversalIdentifier = ({
+  roleUniversalIdentifier,
+  objectUniversalIdentifier,
+  fieldUniversalIdentifier,
+}: {
+  roleUniversalIdentifier: string;
+  objectUniversalIdentifier: string;
+  fieldUniversalIdentifier: string;
+}) =>
+  uuidV5(
+    `${roleUniversalIdentifier}:${objectUniversalIdentifier}:${fieldUniversalIdentifier}`,
+    ROLE_UNIVERSAL_IDENTIFIER_NAMESPACE,
+  );
 
 const generatedCustomObjectFieldNames = [
   'id',
@@ -120,6 +151,7 @@ const createBrokerageAdoptionField = ({
   isUnique = false,
   name,
   objectUniversalIdentifier,
+  settingsPatch,
   universalIdentifier,
 }: BrokerageAdoptionFieldInput): BrokerageAdoptionField => ({
   description,
@@ -127,6 +159,7 @@ const createBrokerageAdoptionField = ({
   isUnique,
   name,
   objectUniversalIdentifier,
+  settingsPatch,
   universalIdentifier,
 });
 
@@ -305,6 +338,11 @@ const brokerageBusinessFields = (
       objectUniversalIdentifier: '2a4b3f5b-3501-4903-9bb7-b494d58248da',
       name: 'productCarriers',
       universalIdentifier: '7cfa0a3a-3d10-4d61-bda3-16da5338370f',
+      settingsPatch: {
+        relationType: 'ONE_TO_MANY',
+        junctionTargetFieldUniversalIdentifier:
+          '889b623b-5127-4c18-9be8-6705567a2dce',
+      },
     },
     {
       objectUniversalIdentifier: '3a2a8707-b67f-4197-8f70-2016755da912',
@@ -480,6 +518,11 @@ const brokerageBusinessFields = (
       objectUniversalIdentifier: '5fc52fc5-9df2-42fe-81e0-77b4731dffd7',
       name: 'carrierProducts',
       universalIdentifier: '7f446417-3d8d-47e3-9d36-b87f1d08034c',
+      settingsPatch: {
+        relationType: 'ONE_TO_MANY',
+        junctionTargetFieldUniversalIdentifier:
+          '0f06e0be-7f1c-4af2-bb0f-22a295fecd2e',
+      },
     },
     {
       objectUniversalIdentifier: 'f3229aea-0da9-420a-94c8-2c7d55d1ea99',
@@ -595,7 +638,7 @@ const brokerageBusinessFields = (
   ] satisfies BrokerageAdoptionFieldInput[]
 ).map(createBrokerageAdoptionField);
 
-export const BROKERAGE_ADOPTION_FIELDS = [
+export const BROKERAGE_ADOPTION_FIELDS: BrokerageAdoptionField[] = [
   ...brokerageBusinessFields,
   ...BROKERAGE_ADOPTION_OBJECTS.flatMap((object) =>
     generatedCustomObjectFieldNames.map((fieldName) => ({
@@ -705,3 +748,120 @@ export const BROKERAGE_ADOPTION_NAVIGATION_MENU_ITEMS = [
     folderUniversalIdentifier: '5b41d8fd-53ac-4fc5-a883-e365fe23c1a4',
   },
 ] satisfies BrokerageAdoptionNavigationMenuItem[];
+
+const brokerageAgentRoleObjectPermissionObjectUniversalIdentifiers = [
+  STANDARD_OBJECTS.person.universalIdentifier,
+  '472de508-d9c1-4e5a-92f6-6820b7e56929',
+  STANDARD_OBJECTS.note.universalIdentifier,
+  STANDARD_OBJECTS.task.universalIdentifier,
+  '577cb4a1-6aaf-48c0-87c9-caf52653fbf2',
+  '07f196c2-1e42-47e8-a882-fcf00cd01b16',
+  'f63fe6ff-3334-4143-9ec1-67f491d8127c',
+  '5fc52fc5-9df2-42fe-81e0-77b4731dffd7',
+  '2a4b3f5b-3501-4903-9bb7-b494d58248da',
+  'f3229aea-0da9-420a-94c8-2c7d55d1ea99',
+  '4a2121e0-2b1c-4b1d-b82d-d8a9cbb71aa1',
+  '3a2a8707-b67f-4197-8f70-2016755da912',
+] satisfies string[];
+
+export const BROKERAGE_AGENT_ROLE_OBJECT_PERMISSION_ADOPTION = [
+  ...brokerageAgentRoleObjectPermissionObjectUniversalIdentifiers.map(
+    (objectUniversalIdentifier) => ({
+      objectUniversalIdentifier,
+      universalIdentifier: getRoleObjectPermissionUniversalIdentifier({
+        roleUniversalIdentifier: BROKERAGE_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
+        objectUniversalIdentifier,
+      }),
+    }),
+  ),
+] satisfies {
+  objectUniversalIdentifier: string;
+  universalIdentifier: string;
+}[];
+
+const brokerageAgentRoleFieldPermissionIdentifiers = [
+  {
+    objectUniversalIdentifier: 'f63fe6ff-3334-4143-9ec1-67f491d8127c',
+    fieldUniversalIdentifier: 'e1a24f7f-9048-4054-9ea2-183ba7a4af3c',
+  },
+  {
+    objectUniversalIdentifier: 'f63fe6ff-3334-4143-9ec1-67f491d8127c',
+    fieldUniversalIdentifier: 'b5148949-ee3e-4b77-8e58-f6a44a80e7b2',
+  },
+  {
+    objectUniversalIdentifier: 'f63fe6ff-3334-4143-9ec1-67f491d8127c',
+    fieldUniversalIdentifier: '5b1af864-781f-4f68-a2cb-cc8e983f00e1',
+  },
+  {
+    objectUniversalIdentifier: '07f196c2-1e42-47e8-a882-fcf00cd01b16',
+    fieldUniversalIdentifier: 'ee26af4b-fe5b-4a27-8e69-33975e14d995',
+  },
+  {
+    objectUniversalIdentifier: '07f196c2-1e42-47e8-a882-fcf00cd01b16',
+    fieldUniversalIdentifier: 'c2e3a279-9ed3-488d-9bd3-d4b6cfe833b0',
+  },
+  {
+    objectUniversalIdentifier: STANDARD_OBJECTS.company.universalIdentifier,
+    fieldUniversalIdentifier:
+      STANDARD_OBJECTS.company.fields.people.universalIdentifier,
+  },
+  {
+    objectUniversalIdentifier: '3a2a8707-b67f-4197-8f70-2016755da912',
+    fieldUniversalIdentifier: 'd3d9e638-8962-419f-8d5c-1db7a10b1a14',
+  },
+  {
+    objectUniversalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
+    fieldUniversalIdentifier:
+      STANDARD_OBJECTS.person.fields.avatarUrl.universalIdentifier,
+  },
+  {
+    objectUniversalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
+    fieldUniversalIdentifier:
+      STANDARD_OBJECTS.person.fields.company.universalIdentifier,
+  },
+  {
+    objectUniversalIdentifier: STANDARD_OBJECTS.person.universalIdentifier,
+    fieldUniversalIdentifier: '7ce3e06d-bd49-4162-b3e5-7535fd206614',
+  },
+  {
+    objectUniversalIdentifier: '472de508-d9c1-4e5a-92f6-6820b7e56929',
+    fieldUniversalIdentifier: '1e19fa45-edcf-4df6-bb3c-29ad46e5fa6e',
+  },
+  {
+    objectUniversalIdentifier: '472de508-d9c1-4e5a-92f6-6820b7e56929',
+    fieldUniversalIdentifier: '1004a042-afaa-457b-8a2c-b1b42a9bf476',
+  },
+  {
+    objectUniversalIdentifier: '472de508-d9c1-4e5a-92f6-6820b7e56929',
+    fieldUniversalIdentifier: '421bdead-7bde-483f-a0b2-570b32c5c639',
+  },
+  {
+    objectUniversalIdentifier: '472de508-d9c1-4e5a-92f6-6820b7e56929',
+    fieldUniversalIdentifier: '52a2e00d-0393-4122-9137-8db9d736919c',
+  },
+  {
+    objectUniversalIdentifier: '472de508-d9c1-4e5a-92f6-6820b7e56929',
+    fieldUniversalIdentifier: '62e9c34a-c39e-4d55-ac14-132663c02464',
+  },
+] satisfies {
+  objectUniversalIdentifier: string;
+  fieldUniversalIdentifier: string;
+}[];
+
+export const BROKERAGE_AGENT_ROLE_FIELD_PERMISSION_ADOPTION = [
+  ...brokerageAgentRoleFieldPermissionIdentifiers.map(
+    ({ objectUniversalIdentifier, fieldUniversalIdentifier }) => ({
+      objectUniversalIdentifier,
+      fieldUniversalIdentifier,
+      universalIdentifier: getRoleFieldPermissionUniversalIdentifier({
+        roleUniversalIdentifier: BROKERAGE_AGENT_ROLE_UNIVERSAL_IDENTIFIER,
+        objectUniversalIdentifier,
+        fieldUniversalIdentifier,
+      }),
+    }),
+  ),
+] satisfies {
+  objectUniversalIdentifier: string;
+  fieldUniversalIdentifier: string;
+  universalIdentifier: string;
+}[];

@@ -48,56 +48,69 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
   }) {
     if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
       const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
-      const oneToManyFilterType = new GraphQLInputObjectType({
-        name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
-        fields: () => {
-          const baseFields: GraphQLInputFieldConfigMap = {
-            is: { type: FilterIs },
-          };
+      const key = `relation-one-to-many-filter:${fieldMetadata.id}`;
+      const storedOneToManyFilterType =
+        this.gqlTypesStorage.getGqlTypeByKey(key);
+      const oneToManyFilterType =
+        isDefined(storedOneToManyFilterType) &&
+        isInputObjectType(storedOneToManyFilterType)
+          ? storedOneToManyFilterType
+          : new GraphQLInputObjectType({
+              name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
+              fields: () => {
+                const baseFields: GraphQLInputFieldConfigMap = {
+                  is: { type: FilterIs },
+                };
 
-          if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
-            return baseFields;
-          }
+                if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
+                  return baseFields;
+                }
 
-          const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
-            flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
-            flatEntityMaps: context.flatObjectMetadataMaps,
-          });
+                const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps(
+                  {
+                    flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+                    flatEntityMaps: context.flatObjectMetadataMaps,
+                  },
+                );
 
-          if (!isDefined(targetObjectMetadata)) {
-            return baseFields;
-          }
+                if (!isDefined(targetObjectMetadata)) {
+                  return baseFields;
+                }
 
-          const targetFilterType = this.gqlTypesStorage.getGqlTypeByKey(
-            computeObjectMetadataInputTypeKey(
-              targetObjectMetadata.nameSingular,
-              GqlInputTypeDefinitionKind.Filter,
-            ),
-          );
+                const targetFilterType = this.gqlTypesStorage.getGqlTypeByKey(
+                  computeObjectMetadataInputTypeKey(
+                    targetObjectMetadata.nameSingular,
+                    GqlInputTypeDefinitionKind.Filter,
+                  ),
+                );
 
-          if (
-            !isDefined(targetFilterType) ||
-            !isInputObjectType(targetFilterType)
-          ) {
-            return baseFields;
-          }
+                if (
+                  !isDefined(targetFilterType) ||
+                  !isInputObjectType(targetFilterType)
+                ) {
+                  return baseFields;
+                }
 
-          const targetFields = targetFilterType.getFields();
+                const targetFields = targetFilterType.getFields();
 
-          for (const [key, field] of Object.entries(targetFields)) {
-            if (['and', 'or', 'not'].includes(key)) {
-              continue;
-            }
+                for (const [key, field] of Object.entries(targetFields)) {
+                  if (['and', 'or', 'not'].includes(key)) {
+                    continue;
+                  }
 
-            baseFields[key] = {
-              type: field.type,
-              description: field.description,
-            };
-          }
+                  baseFields[key] = {
+                    type: field.type,
+                    description: field.description,
+                  };
+                }
 
-          return baseFields;
-        },
-      });
+                return baseFields;
+              },
+            });
+
+      if (!isDefined(storedOneToManyFilterType)) {
+        this.gqlTypesStorage.addGqlType(key, oneToManyFilterType);
+      }
 
       return {
         [fieldMetadata.name]: {
