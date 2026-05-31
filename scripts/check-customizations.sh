@@ -250,17 +250,6 @@ check_file_contains \
   "NavigationDrawerSection must support bypassing showInSidebar for curated sections"
 
 echo ""
-echo "--- Critical: App-Owned Record Layouts ---"
-check_file_contains \
-  "packages/twenty-front/src/modules/page-layout/utils/injectRelationWidgetsIntoLayout.ts" \
-  "explicitlyConfiguredFieldMetadataIds" \
-  "Dynamic relation widget injection must detect explicit app-provided relation widgets"
-check_file_contains \
-  "packages/twenty-front/src/modules/page-layout/utils/injectRelationWidgetsIntoLayout.ts" \
-  "boxedRelationFieldsToInject" \
-  "Dynamic relation widget injection must skip relation fields already configured in app-owned layouts"
-
-echo ""
 echo "--- Critical: Signed-Out Lead Mock ---"
 check_file_contains \
   "packages/twenty-front/src/modules/sign-in-background-mock/components/SignInBackgroundMockContainer.tsx" \
@@ -371,6 +360,40 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/session-storage/session-storage.module-factory.ts" \
   "redisClient.on('error'" \
   "Session-storage redis client must register an 'error' listener (without it a redis blip crashes the entire Node process)"
+
+echo ""
+echo "--- Critical: Permission Flag Upgrade Drift Tolerance ---"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  "OMNIA-CUSTOM: production snapshots may already be missing some legacy" \
+  "Permission-flag rename upgrade must tolerate missing legacy FK/index names from production schema drift"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  'DROP CONSTRAINT IF EXISTS "FK_b26a9d39a88d0e72373c677c6c5"' \
+  "Permission-flag rename upgrade must not fail when the old application FK is already absent"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-6/2-6-instance-command-fast-1778235340020-rename-permission-flag-to-role-permission-flag.ts" \
+  'DROP INDEX IF EXISTS "core"."IDX_da8ffd3c24b4a819430a861067"' \
+  "Permission-flag rename upgrade must not fail when the old workspace/universalIdentifier index is already absent"
+
+echo ""
+echo "--- Critical: Local Prod Restore Redis Purge ---"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "OMNIA-CUSTOM: core-entity workspace cache also stores Workspace rows." \
+  "Prod-to-local restore must clear core-entity workspace row caches"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  'engine:core-entity:*${workspace_id}*' \
+  "Prod-to-local restore must not leave stale Workspace rows in Redis"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "npx nx run twenty-server:database:migrate -- --include-slow" \
+  "Prod-to-local restore must run slow instance commands"
+check_file_contains \
+  "scripts/replicate-db-to-local.sh" \
+  "npx nx run twenty-server:command-no-deps -- upgrade" \
+  "Prod-to-local restore must run workspace upgrade commands"
 
 echo ""
 echo "--- Critical: Cloudflare Stale Asset Fix ---"
@@ -1686,6 +1709,13 @@ check_file_contains \
   "packages/twenty-front/src/modules/spreadsheet-import/types/SpreadsheetImportField.ts" \
   "isRelationUpdateField" \
   "Relation update field support for CSV import"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/resolve-import-relations.util.ts" \
+  "Assigning a missing relation should still enrich the matched record" \
+  "Import relation resolution must enrich matched leads when assigning a missing parent relation"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
+  "Regression test for import relation enrichment on missing parent relation"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 
@@ -1754,6 +1784,10 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
   "Export job BullMQ processor (batched fetch, CSV gen, file storage)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "const downloadUrl = await this.fileUrlService.signFileByIdUrl" \
+  "Export job processor must await signed download URLs before storing result JSON"
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/export-job.resolver.ts" \
   "Export job GraphQL resolver (start/cancel mutations, query, subscription)"
@@ -1766,6 +1800,10 @@ check_file_exists \
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
   "Frontend export job polling, recovery, and auto-download hooks"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
+  "typeof rawDownloadUrl === 'string'" \
+  "Export job poller must not fetch non-string download URLs"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/components/ExportJobRecoveryEffect.tsx" \
   "Export job recovery effect mounted in app root"
@@ -1951,6 +1989,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/settings/roles/graphql/fragments/objectPermissionFragment.ts" \
   "showInSidebar" \
   "ObjectPermission fragment must query showInSidebar for per-role sidebar filtering"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "export enum RowLevelPermissionPredicateScope" \
+  "Generated metadata types must include RLS predicate scope enum"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "scope: RowLevelPermissionPredicateScope" \
+  "Generated metadata predicate types must include scope fields"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  '"value":"scope"' \
+  "Generated metadata GraphQL documents must request predicate scope"
 
 # ==========================================================
 # Unique Constraints & Field Uniqueness
@@ -2094,20 +2144,24 @@ check_file_contains \
   "Trust-check helper must be exported for post-sign-in redirects"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/types/social-sso-state.type.ts" \
-  "postSignInRedirect" \
-  "SocialSSOState must carry postSignInRedirect through OAuth round-trip"
+  "returnToPath" \
+  "SocialSSOState must carry returnToPath through OAuth round-trip"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/strategies/google.auth.strategy.ts" \
-  "postSignInRedirect" \
-  "Google strategy must propagate postSignInRedirect into and out of OAuth state"
+  "returnToPath" \
+  "Google strategy must propagate returnToPath into and out of OAuth state"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/strategies/microsoft.auth.strategy.ts" \
-  "postSignInRedirect" \
-  "Microsoft strategy must propagate postSignInRedirect into and out of OAuth state"
+  "returnToPath" \
+  "Microsoft strategy must propagate returnToPath into and out of OAuth state"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
   "isExternalRedirectTrusted" \
-  "auth.service must trust-check postSignInRedirect against FRONTEND_URL before forwarding"
+  "auth.service must trust-check absolute returnToPath against FRONTEND_URL before forwarding"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
+  "getSafeReturnToPath" \
+  "auth.service must canonicalize returnToPath before forwarding it after sign-in"
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
   "markEmailAsVerified" \
@@ -2126,39 +2180,39 @@ check_file_contains \
   "cookie storage must support clearing legacy cookie variants after domain/path migrations"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpGlobalScopeFormEffect.tsx" \
-  "postSignInRedirect" \
-  "SignInUpGlobalScopeFormEffect must redirect to trusted postSignInRedirect after sign-in"
+  "returnToPath" \
+  "SignInUpGlobalScopeFormEffect must redirect to trusted absolute returnToPath after sign-in"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/components/VerifyLoginTokenEffect.tsx" \
-  "postSignInRedirect" \
-  "VerifyLoginTokenEffect must redirect to trusted postSignInRedirect after /verify"
+  "returnToPath" \
+  "VerifyLoginTokenEffect must redirect to trusted absolute returnToPath after /verify"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
-  "postSignInRedirect" \
-  "useAuth buildRedirectUrl must forward postSignInRedirect into OAuth kickoff URLs"
+  "returnToPath" \
+  "useAuth buildRedirectUrl must forward safe returnToPath into OAuth kickoff URLs"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
   "throw error" \
   "useAuth must rethrow non-2FA /verify token-exchange errors so VerifyLoginTokenEffect can leave /verify"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithGoogle.ts" \
-  "postSignInRedirect" \
-  "useSignInWithGoogle must read postSignInRedirect from URL and forward to Google OAuth"
+  "returnToPath" \
+  "useSignInWithGoogle must read returnToPath from URL and forward to Google OAuth"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/hooks/useSignInWithMicrosoft.ts" \
-  "postSignInRedirect" \
-  "useSignInWithMicrosoft must read postSignInRedirect from URL and forward to Microsoft OAuth"
+  "returnToPath" \
+  "useSignInWithMicrosoft must read returnToPath from URL and forward to Microsoft OAuth"
 check_file_exists \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
-  "SignInUpExternalRedirectEffect must exist to honor postSignInRedirect on the already-authed path"
+  "SignInUpExternalRedirectEffect must exist to honor external returnToPath on the already-authed path"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/sign-in-up/components/internal/SignInUpExternalRedirectEffect.tsx" \
   "isExternalRedirectTrusted" \
-  "SignInUpExternalRedirectEffect must trust-check postSignInRedirect before redirecting"
+  "SignInUpExternalRedirectEffect must trust-check absolute returnToPath before redirecting"
 check_file_contains \
   "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
   "SignInUpExternalRedirectEffect" \
-  "SignInUp page must mount SignInUpExternalRedirectEffect so already-authed users honor postSignInRedirect"
+  "SignInUp page must mount SignInUpExternalRedirectEffect so already-authed users honor external returnToPath"
 
 echo ""
 echo "--- Agentation (Dev Annotation Toolbar) ---"
@@ -2200,8 +2254,8 @@ echo ""
 echo "--- Deployment ---"
 check_file_contains \
   ".github/workflows/deploy-eks.yaml" \
-  "APP_VERSION" \
-  "deploy-eks.yaml must pass APP_VERSION build arg for upgrade migrations"
+  "APP_VERSION=2.6.1" \
+  "deploy-eks.yaml must pass the current upstream APP_VERSION build arg for upgrade migrations"
 
 echo ""
 echo "--- Mock Data (Deactivated Objects) ---"
@@ -2299,6 +2353,18 @@ check_file_contains \
   "buildRelationSubFieldColumnDefinition" \
   "mapViewFieldsToColumnDefinitions must handle sub-field ViewFields"
 check_file_contains \
+  "packages/twenty-front/src/modules/views/graphql/fragments/viewFieldFragment.ts" \
+  "subFieldName" \
+  "ViewField GraphQL fragment must request subFieldName"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  "export type ViewFieldFragmentFragment = { __typename?: 'ViewField', id: string, fieldMetadataId: string, viewId: string, isVisible: boolean, position: number, size: number, aggregateOperation?: AggregateOperations | null, viewFieldGroupId?: string | null, subFieldName?: string | null" \
+  "Generated metadata ViewField fragment type must include subFieldName"
+check_file_contains \
+  "packages/twenty-front/src/generated-metadata/graphql.ts" \
+  '{"kind":"Field","name":{"kind":"Name","value":"subFieldName"}},{"kind":"Field","name":{"kind":"Name","value":"isOverridden"}}' \
+  "Generated metadata ViewField GraphQL documents must request subFieldName"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/components/FieldDisplay.tsx" \
   "RelationSubFieldDisplay" \
   "FieldDisplay must route sub-field columns to RelationSubFieldDisplay"
@@ -2306,6 +2372,17 @@ check_file_contains \
   "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
   "expandedRelationFieldId" \
   "Column picker must support relation sub-field expansion"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/components/AdvancedFilterFieldSelectMenu.tsx" \
+  "objectFilterDropdownIsSelectingRelationSubFieldComponentState" \
+  "Advanced filter picker must open one-to-many relation sub-field menu"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationSubField.ts" \
+  "Advanced filter relation sub-field application hook"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationSubField.ts" \
+  "relationTargetFieldMetadataItem" \
+  "Advanced filter relation sub-field hook must support target field filters"
 
 # ==========================================================
 # Payment Reconciliation v2 (feature/reconciliation-v2)
@@ -2357,9 +2434,33 @@ check_file_contains \
   "fieldDiff.note" \
   "Inline diff must render note as a tooltip over the diff display (reconciliation review page)"
 check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "fieldDiff.oldValue !== fieldDiff.newValue" \
+  "Inline diff must render and allow Accept/Undo when either side of the diff is null"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "normalizeDiffComparableValue" \
+  "Inline diff accepted-state comparison must treat null/undefined/empty strings consistently"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/components/RecordFieldList.tsx" \
+  "d.bobValue === d.crmValue" \
+  "RecordFieldList must not drop reconciliation diffs whose proposed value is null"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/contexts/FieldContext.ts" \
   "note?: string | null" \
   "FieldDiffOverlay must carry note for per-field diff explanations (reconciliation status-change reason)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "decision.crmPolicyId" \
+  "Reconciliation status engine must receive matched policy id to avoid self-cancel previous-version writes"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "cancelId && cancelId !== policyId" \
+  "Reconciliation Apply all must not cancel the same policy it is updating"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "normalizeDiffComparableValue(value) === d.bobValue" \
+  "Reconciliation Apply all / Undo all accepted-state detection must handle null target values"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \

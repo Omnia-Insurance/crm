@@ -2,10 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { TypeOrmQueryService } from '@ptc-org/nestjs-query-typeorm';
-import { FeatureFlagKey } from 'twenty-shared/types';
+import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type FindOneOptions, type Repository } from 'typeorm';
-import { FieldMetadataType } from 'twenty-shared/types';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
@@ -38,7 +37,6 @@ import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/works
 import { EMPTY_ORCHESTRATOR_FAILURE_REPORT } from 'src/engine/workspace-manager/workspace-migration/constant/empty-orchestrator-failure-report.constant';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
-import { type UniversalFlatFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-field-metadata.type';
 import { UniversalFlatViewField } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-view-field.type';
 
 @Injectable()
@@ -451,7 +449,6 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
       flatViewFieldMaps: existingFlatViewFieldMaps,
       flatViewMaps: existingFlatViewMaps,
       flatViewFieldGroupMaps: existingFlatViewFieldGroupMaps,
-      featureFlagsMap: existingFeatureFlagsMap,
     } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
       'flatObjectMetadataMaps',
       'flatFieldMetadataMaps',
@@ -459,7 +456,6 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
       'flatViewFieldMaps',
       'flatViewMaps',
       'flatViewFieldGroupMaps',
-      'featureFlagsMap',
     ]);
 
     const allTranspiledTranspilationInputs: Awaited<
@@ -523,15 +519,8 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
       })
       .filter(isDefined);
 
-    let flatViewFieldsToCreate: UniversalFlatViewField[] = [];
-
-    if (
-      existingFeatureFlagsMap[
-        FeatureFlagKey.IS_RECORD_PAGE_LAYOUT_EDITING_ENABLED
-      ] ??
-      false
-    ) {
-      flatViewFieldsToCreate = computeFlatViewFieldsFromFieldsWidgets({
+    const flatViewFieldsToCreate: UniversalFlatViewField[] =
+      computeFlatViewFieldsFromFieldsWidgets({
         fieldsToCreate: flatFieldMetadatasToCreate.map((flatFieldMetadata) => ({
           objectMetadataUniversalIdentifier:
             flatFieldMetadata.objectMetadataUniversalIdentifier,
@@ -545,7 +534,6 @@ export class FieldMetadataService extends TypeOrmQueryService<FieldMetadataEntit
         applicationUniversalIdentifier:
           resolvedOwnerFlatApplication.universalIdentifier,
       });
-    }
 
     const validateAndBuildResult =
       await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(

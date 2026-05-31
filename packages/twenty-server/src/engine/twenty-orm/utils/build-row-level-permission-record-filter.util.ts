@@ -10,7 +10,6 @@ import {
   RowLevelPermissionPredicateGroupLogicalOperator,
   RowLevelPermissionPredicateScope,
   type CompositeFieldSubFieldName,
-  type PartialFieldMetadataItemOption,
   type RecordGqlOperationFilter,
   type RowLevelPermissionPredicateValue,
   ViewFilterOperand,
@@ -653,26 +652,12 @@ const buildRowLevelPermissionRecordFilterUncached = async ({
         predicateGroup.parentRowLevelPermissionPredicateGroupId,
     }));
 
-  const fieldMetadataItems = scopedPredicates
-    .map((predicate) =>
-      findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: predicate.fieldMetadataId,
-        flatEntityMaps: flatFieldMetadataMaps,
-      }),
-    )
-    .filter(isDefined)
-    .map((field) => ({
-      id: field.id,
-      name: field.name,
-      type: field.type,
-      label: field.label,
-      options: field.options as PartialFieldMetadataItemOption[],
-    }));
-
   return computeRecordGqlOperationFilter({
     recordFilters,
     recordFilterGroups,
-    fields: fieldMetadataItems,
+    fieldMetadataItems: Object.values(
+      flatFieldMetadataMaps.byUniversalIdentifier,
+    ).filter(isDefined),
     filterValueDependencies: {
       currentWorkspaceMemberId: workspaceMember?.id,
     },

@@ -26,6 +26,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { MessagingMonitoringService } from 'src/modules/messaging/monitoring/services/messaging-monitoring.service';
 import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 describe('MessagingMessagesImportService', () => {
   let service: MessagingMessagesImportService;
@@ -89,7 +90,7 @@ describe('MessagingMessagesImportService', () => {
       {
         provide: ConnectedAccountRefreshTokensService,
         useValue: {
-          refreshAndSaveTokens: jest.fn().mockResolvedValue({
+          resolveTokens: jest.fn().mockResolvedValue({
             accessToken: 'new-access-token',
             refreshToken: 'new-refresh-token',
           }),
@@ -184,6 +185,14 @@ describe('MessagingMessagesImportService', () => {
         },
       },
       {
+        provide: getRepositoryToken(WorkspaceEntity),
+        useValue: {
+          findOne: jest
+            .fn()
+            .mockResolvedValue({ isInternalMessagesImportEnabled: false }),
+        },
+      },
+      {
         provide: TwentyConfigService,
         useValue: {
           get: jest.fn().mockReturnValue(400),
@@ -237,7 +246,7 @@ describe('MessagingMessagesImportService', () => {
     mockMessageChannel.syncStage =
       MessageChannelSyncStage.MESSAGES_IMPORT_PENDING;
 
-    expect(
+    await expect(
       service.processMessageBatchImport(
         mockMessageChannel as MessageChannelEntity,
         mockConnectedAccount,
@@ -257,17 +266,12 @@ describe('MessagingMessagesImportService', () => {
     ).toHaveBeenCalledWith([mockMessageChannel.id], workspaceId);
 
     expect(
-      connectedAccountRefreshTokensService.refreshAndSaveTokens,
+      connectedAccountRefreshTokensService.resolveTokens,
     ).toHaveBeenCalledWith(mockConnectedAccount, workspaceId);
 
-    expect(emailAliasManagerService.refreshHandleAliases).toHaveBeenCalledWith(
-      {
-        ...mockConnectedAccount,
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      },
-      workspaceId,
-    );
+    expect(
+      emailAliasManagerService.refreshHandleAliases,
+    ).not.toHaveBeenCalled();
     expect(messagingGetMessagesService.getMessages).toHaveBeenCalledWith(
       ['message-id-1', 'message-id-2'],
       {

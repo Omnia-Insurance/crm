@@ -11,10 +11,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { GqlInputTypeDefinitionKind } from 'src/engine/api/graphql/workspace-schema-builder/enums/gql-input-type-definition-kind.enum';
 import { FilterIs } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/input/filter-is.input-type';
-import {
-  TypeMapperService,
-  TypeOptions,
-} from 'src/engine/api/graphql/workspace-schema-builder/services/type-mapper.service';
+import { TypeMapperService } from 'src/engine/api/graphql/workspace-schema-builder/services/type-mapper.service';
 import { GqlTypesStorage } from 'src/engine/api/graphql/workspace-schema-builder/storages/gql-types.storage';
 import { type SchemaGenerationContext } from 'src/engine/api/graphql/workspace-schema-builder/types/schema-generation-context.type';
 import {
@@ -41,14 +38,74 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
   public generateSimpleRelationFieldCreateOrUpdateInputType({
     fieldMetadata,
     typeOptions,
+    context,
   }: {
     fieldMetadata: FlatFieldMetadata<
       FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
     >;
     typeOptions: CreateInputTypeOptions;
+    context: SchemaGenerationContext;
   }) {
-    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
-      return {};
+    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
+      const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
+      const oneToManyFilterType = new GraphQLInputObjectType({
+        name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
+        fields: () => {
+          const baseFields: GraphQLInputFieldConfigMap = {
+            is: { type: FilterIs },
+          };
+
+          if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
+            return baseFields;
+          }
+
+          const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+            flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+            flatEntityMaps: context.flatObjectMetadataMaps,
+          });
+
+          if (!isDefined(targetObjectMetadata)) {
+            return baseFields;
+          }
+
+          const targetFilterType = this.gqlTypesStorage.getGqlTypeByKey(
+            computeObjectMetadataInputTypeKey(
+              targetObjectMetadata.nameSingular,
+              GqlInputTypeDefinitionKind.Filter,
+            ),
+          );
+
+          if (
+            !isDefined(targetFilterType) ||
+            !isInputObjectType(targetFilterType)
+          ) {
+            return baseFields;
+          }
+
+          const targetFields = targetFilterType.getFields();
+
+          for (const [key, field] of Object.entries(targetFields)) {
+            if (['and', 'or', 'not'].includes(key)) {
+              continue;
+            }
+
+            baseFields[key] = {
+              type: field.type,
+              description: field.description,
+            };
+          }
+
+          return baseFields;
+        },
+      });
+
+      return {
+        [fieldMetadata.name]: {
+          type: oneToManyFilterType,
+          description: fieldMetadata.description,
+        },
+      };
+    }
 
     const { joinColumnName } = extractGraphQLRelationFieldNames(fieldMetadata);
 
@@ -88,67 +145,11 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
     fieldMetadata: FlatFieldMetadata<
       FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
     >;
-    typeOptions: TypeOptions;
-    context?: SchemaGenerationContext;
+    typeOptions: { settings?: FlatFieldMetadata['settings'] };
+    context: SchemaGenerationContext;
   }) {
-    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
-      const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
-      const oneToManyFilterType = new GraphQLInputObjectType({
-        name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
-        fields: () => {
-          const baseFields: GraphQLInputFieldConfigMap = {
-            is: { type: FilterIs },
-          };
-
-          // Add target object's filterable fields for sub-field filtering
-          if (
-            isDefined(fieldMetadata.relationTargetObjectMetadataId) &&
-            isDefined(context)
-          ) {
-            const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
-              flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
-              flatEntityMaps: context.flatObjectMetadataMaps,
-            });
-
-            if (isDefined(targetObjectMetadata)) {
-              const targetFilterKey = computeObjectMetadataInputTypeKey(
-                targetObjectMetadata.nameSingular,
-                GqlInputTypeDefinitionKind.Filter,
-              );
-
-              const targetFilterType =
-                this.gqlTypesStorage.getGqlTypeByKey(targetFilterKey);
-
-              if (
-                isDefined(targetFilterType) &&
-                isInputObjectType(targetFilterType)
-              ) {
-                const targetFields = targetFilterType.getFields();
-
-                for (const [key, field] of Object.entries(targetFields)) {
-                  if (['and', 'or', 'not'].includes(key)) {
-                    continue;
-                  }
-                  baseFields[key] = {
-                    type: field.type,
-                    description: field.description,
-                  };
-                }
-              }
-            }
-          }
-
-          return baseFields;
-        },
-      });
-
-      return {
-        [fieldMetadata.name]: {
-          type: oneToManyFilterType,
-          description: fieldMetadata.description,
-        },
-      };
-    }
+    if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
+      return {};
 
     const { joinColumnName } = extractGraphQLRelationFieldNames(fieldMetadata);
 
@@ -172,6 +173,12 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
         type,
         description: fieldMetadata.description,
       },
+      ...this.getTargetRelationInputField({
+        fieldMetadata,
+        context,
+        kind: GqlInputTypeDefinitionKind.Filter,
+        descriptionPrefix: 'Filter on fields of the related',
+      }),
     };
   }
 
@@ -184,13 +191,12 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
       FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
     >;
     isForGroupBy?: boolean;
-    context?: SchemaGenerationContext;
+    context: SchemaGenerationContext;
   }) {
     if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
       return {};
 
-    const { joinColumnName, fieldMetadataName } =
-      extractGraphQLRelationFieldNames(fieldMetadata);
+    const { joinColumnName } = extractGraphQLRelationFieldNames(fieldMetadata);
 
     const type = this.typeMapperService.mapToOrderByType(fieldMetadata.type);
 
@@ -203,95 +209,88 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
       throw new Error(message);
     }
 
-    const fields: GraphQLInputFieldConfigMap = {
+    return {
       [joinColumnName]: {
         type,
         description: fieldMetadata.description,
       },
+      ...this.getTargetRelationInputField({
+        fieldMetadata,
+        context,
+        kind: isForGroupBy
+          ? GqlInputTypeDefinitionKind.OrderByWithGroupBy
+          : GqlInputTypeDefinitionKind.OrderBy,
+        descriptionPrefix: 'Order by fields of the related',
+      }),
     };
-
-    if (
-      isDefined(fieldMetadata.relationTargetObjectMetadataId) &&
-      isDefined(context)
-    ) {
-      const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
-        flatEntityMaps: context.flatObjectMetadataMaps,
-      });
-
-      if (isDefined(targetObjectMetadata)) {
-        const targetOrderByInputTypeKey = computeObjectMetadataInputTypeKey(
-          targetObjectMetadata.nameSingular,
-          isForGroupBy
-            ? GqlInputTypeDefinitionKind.OrderByWithGroupBy
-            : GqlInputTypeDefinitionKind.OrderBy,
-        );
-
-        const targetOrderByInputType = this.gqlTypesStorage.getGqlTypeByKey(
-          targetOrderByInputTypeKey,
-        );
-
-        if (
-          isDefined(targetOrderByInputType) &&
-          isInputObjectType(targetOrderByInputType)
-        ) {
-          fields[fieldMetadataName] = {
-            type: targetOrderByInputType,
-            description: `Order by fields of the related ${targetObjectMetadata.nameSingular}`,
-          };
-        }
-      }
-    }
-
-    return fields;
   }
 
   public generateSimpleRelationFieldGroupByInputType(
     fieldMetadata: FlatFieldMetadata<
       FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
     >,
-    context?: SchemaGenerationContext,
+    context: SchemaGenerationContext,
   ): GraphQLInputFieldConfigMap {
     if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY)
       return {};
 
+    return this.getTargetRelationInputField({
+      fieldMetadata,
+      context,
+      kind: GqlInputTypeDefinitionKind.GroupBy,
+      descriptionPrefix: 'Group by fields of the related',
+    });
+  }
+
+  // Returns a single-entry map keyed by the relation field's GraphQL name,
+  // or an empty map when any lookup misses — callers splat it alongside
+  // their own fields.
+  private getTargetRelationInputField({
+    fieldMetadata,
+    context,
+    kind,
+    descriptionPrefix,
+  }: {
+    fieldMetadata: FlatFieldMetadata<
+      FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
+    >;
+    context: SchemaGenerationContext;
+    kind: GqlInputTypeDefinitionKind;
+    descriptionPrefix: string;
+  }): GraphQLInputFieldConfigMap {
+    if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
+      return {};
+    }
+
+    const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+      flatEntityMaps: context.flatObjectMetadataMaps,
+    });
+
+    if (!isDefined(targetObjectMetadata)) {
+      return {};
+    }
+
+    const targetInputType = this.gqlTypesStorage.getGqlTypeByKey(
+      computeObjectMetadataInputTypeKey(
+        targetObjectMetadata.nameSingular,
+        kind,
+      ),
+    );
+
+    if (!isDefined(targetInputType) || !isInputObjectType(targetInputType)) {
+      return {};
+    }
+
     const { fieldMetadataName } =
       extractGraphQLRelationFieldNames(fieldMetadata);
 
-    const fields: GraphQLInputFieldConfigMap = {};
-
-    if (
-      isDefined(fieldMetadata.relationTargetObjectMetadataId) &&
-      isDefined(context)
-    ) {
-      const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
-        flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
-        flatEntityMaps: context.flatObjectMetadataMaps,
-      });
-
-      if (isDefined(targetObjectMetadata)) {
-        const targetGroupByInputTypeKey = computeObjectMetadataInputTypeKey(
-          targetObjectMetadata.nameSingular,
-          GqlInputTypeDefinitionKind.GroupBy,
-        );
-
-        const targetGroupByInputType = this.gqlTypesStorage.getGqlTypeByKey(
-          targetGroupByInputTypeKey,
-        );
-
-        if (
-          isDefined(targetGroupByInputType) &&
-          isInputObjectType(targetGroupByInputType)
-        ) {
-          fields[fieldMetadataName] = {
-            type: targetGroupByInputType,
-            description: `Group by fields of the related ${targetObjectMetadata.nameSingular}`,
-          };
-        }
-      }
-    }
-
-    return fields;
+    return {
+      [fieldMetadataName]: {
+        type: targetInputType,
+        description: `${descriptionPrefix} ${targetObjectMetadata.nameSingular}`,
+      },
+    };
   }
 
   public generateConnectRelationFieldInputType({

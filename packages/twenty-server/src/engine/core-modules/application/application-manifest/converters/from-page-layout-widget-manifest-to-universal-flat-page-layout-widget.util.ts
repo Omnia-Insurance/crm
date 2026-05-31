@@ -1,4 +1,5 @@
 import { type PageLayoutWidgetManifest } from 'twenty-shared/application';
+import { DEFAULT_WIDGET_SIZE } from 'twenty-shared/constants';
 import {
   PageLayoutTabLayoutMode,
   type PageLayoutWidgetVerticalListPosition,
@@ -48,8 +49,8 @@ export const fromPageLayoutWidgetManifestToUniversalFlatPageLayoutWidget = ({
     gridPosition: pageLayoutWidgetManifest.gridPosition ?? {
       row: 0,
       column: 0,
-      rowSpan: 1,
-      columnSpan: 1,
+      rowSpan: DEFAULT_WIDGET_SIZE.default.h,
+      columnSpan: DEFAULT_WIDGET_SIZE.default.w,
     },
     position,
     universalConfiguration:

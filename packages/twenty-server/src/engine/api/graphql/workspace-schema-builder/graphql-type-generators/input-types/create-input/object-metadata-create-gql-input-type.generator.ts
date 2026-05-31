@@ -42,13 +42,13 @@ export class ObjectMetadataCreateGqlInputTypeGenerator {
   public buildAndStore(
     flatObjectMetadata: FlatObjectMetadata,
     fields: FlatFieldMetadata[],
-    _context: SchemaGenerationContext,
+    context: SchemaGenerationContext,
   ) {
     const inputType = new GraphQLInputObjectType({
       name: `${pascalCase(flatObjectMetadata.nameSingular)}${GqlInputTypeDefinitionKind.Create.toString()}Input`,
       description: flatObjectMetadata.description,
       fields: () =>
-        this.generateFields(flatObjectMetadata.nameSingular, fields),
+        this.generateFields(flatObjectMetadata.nameSingular, fields, context),
     }) as GraphQLInputObjectType;
 
     const key = computeObjectMetadataInputTypeKey(
@@ -62,6 +62,7 @@ export class ObjectMetadataCreateGqlInputTypeGenerator {
   private generateFields(
     objectNameSingular: string,
     fields: FlatFieldMetadata[],
+    context: SchemaGenerationContext,
   ): GraphQLInputFieldConfigMap {
     const allGeneratedFields: GraphQLInputFieldConfigMap = {};
 
@@ -81,6 +82,7 @@ export class ObjectMetadataCreateGqlInputTypeGenerator {
             {
               fieldMetadata: relationFieldMetadata,
               typeOptions,
+              context,
             },
           ),
           ...this.relationFieldMetadataGqlInputTypeGenerator.generateConnectRelationFieldInputType(

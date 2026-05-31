@@ -98,7 +98,7 @@ export const RecordFieldList = ({
     if (!fieldDiffs) return null;
     const map = new Map<string, ReconciliationFieldDiff>();
     fieldDiffs.forEach((d) => {
-      if (d.bobValue === null || d.bobValue === d.crmValue) return;
+      if (d.bobValue === d.crmValue) return;
       if (d.crmField) {
         map.set(d.crmField, d);
         // Also by last segment for composite paths like "emails.primaryEmail" → "emails"

@@ -146,7 +146,7 @@ export class ApplicationInstallService {
       resolvedPackage.packageJson.engines?.['twenty'];
 
     const versionValidation =
-      this.applicationVersionValidationService.validateServerCompatibility(
+      await this.applicationVersionValidationService.validateServerCompatibility(
         requiredServerVersion,
       );
 

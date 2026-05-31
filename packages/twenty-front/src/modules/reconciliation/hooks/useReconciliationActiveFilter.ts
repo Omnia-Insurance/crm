@@ -34,11 +34,11 @@ export const useReconciliationActiveFilter = ({
   reconciliationId,
   reviewItemMetadata,
 }: Params): Result => {
-  const recordFilters = useAtomComponentStateValue(
+  const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
     viewBarId,
   );
-  const recordFilterGroups = useAtomComponentStateValue(
+  const currentRecordFilterGroups = useAtomComponentStateValue(
     currentRecordFilterGroupsComponentState,
     viewBarId,
   );
@@ -52,9 +52,9 @@ export const useReconciliationActiveFilter = ({
   return useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      fields: reviewItemMetadata.fields,
-      recordFilters,
-      recordFilterGroups,
+      fieldMetadataItems: reviewItemMetadata.fields,
+      recordFilters: currentRecordFilters,
+      recordFilterGroups: currentRecordFilterGroups,
     });
 
     const { recordGqlOperationFilter: anyFieldFilter } =
@@ -71,14 +71,14 @@ export const useReconciliationActiveFilter = ({
       ]) ?? {};
 
     const hasActiveFilters =
-      recordFilters.length > 0 ||
-      recordFilterGroups.length > 0 ||
+      currentRecordFilters.length > 0 ||
+      currentRecordFilterGroups.length > 0 ||
       anyFieldFilterValue.length > 0;
 
     return { filter: merged, hasActiveFilters };
   }, [
-    recordFilters,
-    recordFilterGroups,
+    currentRecordFilters,
+    currentRecordFilterGroups,
     anyFieldFilterValue,
     reconciliationId,
     reviewItemMetadata.fields,

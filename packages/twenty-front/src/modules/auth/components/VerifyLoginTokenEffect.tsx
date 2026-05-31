@@ -12,8 +12,11 @@ import { useNavigateApp } from '~/hooks/useNavigateApp';
 export const VerifyLoginTokenEffect = () => {
   const [searchParams] = useSearchParams();
   const loginToken = searchParams.get('loginToken');
-  // OMNIA-CUSTOM: trusted external destination carried through OAuth → /verify
-  const postSignInRedirect = searchParams.get('postSignInRedirect');
+  // OMNIA-CUSTOM: returnToPath may be a trusted external destination carried
+  // through OAuth. postSignInRedirect remains an input-only compatibility
+  // fallback.
+  const returnToPath =
+    searchParams.get('returnToPath') ?? searchParams.get('postSignInRedirect');
 
   const hasAccessTokenPair = useHasAccessTokenPair();
   const navigate = useNavigateApp();
@@ -37,19 +40,18 @@ export const VerifyLoginTokenEffect = () => {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [clientConfigLoaded]);
 
-  // OMNIA-CUSTOM: once verifyLoginToken has actually set the cookie (cookie
-  // state goes from absent → present), bounce to a trusted external
-  // postSignInRedirect if one was carried through. Gating on the reactive
-  // cookie state means failed verifications never trigger the redirect.
+  // OMNIA-CUSTOM: once verifyLoginToken has actually set the cookie, bounce to
+  // a trusted absolute returnToPath if one was carried through. Local
+  // returnToPath values are handled by the normal router flow.
   useEffect(() => {
     if (
       hasAccessTokenPair &&
-      isDefined(postSignInRedirect) &&
-      isExternalRedirectTrusted(postSignInRedirect, window.location.origin)
+      isDefined(returnToPath) &&
+      isExternalRedirectTrusted(returnToPath, window.location.origin)
     ) {
-      window.location.href = postSignInRedirect;
+      window.location.href = returnToPath;
     }
-  }, [hasAccessTokenPair, postSignInRedirect]);
+  }, [hasAccessTokenPair, returnToPath]);
 
   return <></>;
 };

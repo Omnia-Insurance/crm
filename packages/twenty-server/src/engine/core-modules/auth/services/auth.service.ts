@@ -10,6 +10,7 @@ import ms from 'ms';
 import { PasswordUpdateNotifyEmail } from 'twenty-emails';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { AppPath, ConnectedAccountProvider } from 'twenty-shared/types';
+import { isNonEmptyString } from '@sniptt/guards';
 import {
   assertIsDefinedOrThrow,
   isDefined,
@@ -436,7 +437,7 @@ export class AuthService {
       userId: _impersonatorUserId,
     });
 
-    analytics.insertWorkspaceEvent('Monitoring', {
+    await analytics.insertWorkspaceEvent('Monitoring', {
       eventName: 'workspace.impersonation.attempted',
       message: `correlationId=${correlationId}; impersonatorUserWorkspaceId=${impersonatorUserWorkspaceId}; targetUserWorkspaceId=${impersonatedUserWorkspaceId}; workspaceId=${workspaceId}`,
     });
@@ -462,7 +463,7 @@ export class AuthService {
       true,
     );
 
-    analytics.insertWorkspaceEvent('Monitoring', {
+    await analytics.insertWorkspaceEvent('Monitoring', {
       eventName: 'workspace.impersonation.issued',
       message: `correlationId=${correlationId}; impersonatorUserWorkspaceId=${impersonatorUserWorkspaceId}; targetUserWorkspaceId=${impersonatedUserWorkspaceId}; workspaceId=${workspaceId}`,
     });
@@ -765,25 +766,43 @@ export class AuthService {
     loginToken,
     workspace,
     billingCheckoutSessionState,
-    postSignInRedirect,
+    returnToPath,
   }: {
     loginToken: string;
     workspace: WorkspaceDomainConfig;
     billingCheckoutSessionState?: string;
-    // OMNIA-CUSTOM: trusted external redirect target threaded through /verify
-    postSignInRedirect?: string;
+    returnToPath?: string;
   }) {
+    const safeReturnToPath = this.getSafeReturnToPath(returnToPath);
+
     const url = this.workspaceDomainsService.buildWorkspaceURL({
       workspace,
       pathname: AppPath.Verify,
       searchParams: {
         loginToken,
         ...(billingCheckoutSessionState ? { billingCheckoutSessionState } : {}),
-        ...(postSignInRedirect ? { postSignInRedirect } : {}),
+        ...(safeReturnToPath ? { returnToPath: safeReturnToPath } : {}),
       },
     });
 
     return url.toString();
+  }
+
+  private getSafeReturnToPath(returnToPath?: string): string | undefined {
+    if (!isNonEmptyString(returnToPath)) {
+      return undefined;
+    }
+
+    if (returnToPath.startsWith('/') && !returnToPath.startsWith('//')) {
+      return returnToPath;
+    }
+
+    const frontendUrl = this.twentyConfigService.get('FRONTEND_URL');
+
+    return isDefined(frontendUrl) &&
+      isExternalRedirectTrusted(returnToPath, frontendUrl)
+      ? returnToPath
+      : undefined;
   }
 
   async findInvitationForSignInUp(
@@ -952,22 +971,15 @@ export class AuthService {
       billingCheckoutSessionState,
       action,
       locale,
-      postSignInRedirect,
+      returnToPath,
     }: MicrosoftRequest['user'] | GoogleRequest['user'],
     authProvider: AuthProviderEnum.Google | AuthProviderEnum.Microsoft,
   ): Promise<string> {
     const email = rawEmail.toLowerCase();
-
-    // OMNIA-CUSTOM: only propagate postSignInRedirect downstream if it points
-    // to a trusted host derived from FRONTEND_URL. Untrusted values are
-    // silently dropped so the frontend never sees them.
-    const frontendUrl = this.twentyConfigService.get('FRONTEND_URL');
-    const trustedPostSignInRedirect =
-      isDefined(postSignInRedirect) &&
-      isDefined(frontendUrl) &&
-      isExternalRedirectTrusted(postSignInRedirect, frontendUrl)
-        ? postSignInRedirect
-        : undefined;
+    // OMNIA-CUSTOM: returnToPath supports both app-relative paths and trusted
+    // absolute URLs. Untrusted absolute values are silently dropped so the
+    // frontend never sees them.
+    const safeReturnToPath = this.getSafeReturnToPath(returnToPath);
 
     const availableWorkspacesCount =
       action === 'list-available-workspaces'
@@ -1015,10 +1027,7 @@ export class AuthService {
               targetedTokenType: JwtTokenTypeEnum.WORKSPACE_AGNOSTIC,
             }),
           }),
-          // OMNIA-CUSTOM: forward trusted external redirect target to frontend
-          ...(trustedPostSignInRedirect
-            ? { postSignInRedirect: trustedPostSignInRedirect }
-            : {}),
+          ...(safeReturnToPath ? { returnToPath: safeReturnToPath } : {}),
         },
       });
 
@@ -1098,7 +1107,7 @@ export class AuthService {
         loginToken: loginToken.token,
         workspace,
         billingCheckoutSessionState,
-        postSignInRedirect: trustedPostSignInRedirect,
+        returnToPath: safeReturnToPath,
       });
     } catch (error) {
       return this.guardRedirectService.getRedirectErrorUrlAndCaptureExceptions({

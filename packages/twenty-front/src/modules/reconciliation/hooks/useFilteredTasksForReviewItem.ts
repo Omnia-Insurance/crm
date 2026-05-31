@@ -60,12 +60,11 @@ export const useFilteredTasksForReviewItem = ({
   const objectMetadataItems = useAtomStateValue<EnrichedObjectMetadataItem[]>(
     objectMetadataItemsSelector,
   );
-
-  const recordFilters = useAtomComponentStateValue(
+  const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
     viewBarId,
   );
-  const recordFilterGroups = useAtomComponentStateValue(
+  const currentRecordFilterGroups = useAtomComponentStateValue(
     currentRecordFilterGroupsComponentState,
     viewBarId,
   );
@@ -79,9 +78,9 @@ export const useFilteredTasksForReviewItem = ({
   const { taskUserFilter, hasActiveFilters } = useMemo(() => {
     const userFilter = computeRecordGqlOperationFilter({
       filterValueDependencies,
-      fields: taskMetadata.fields,
-      recordFilters,
-      recordFilterGroups,
+      fieldMetadataItems: taskMetadata.fields,
+      recordFilters: currentRecordFilters,
+      recordFilterGroups: currentRecordFilterGroups,
     });
 
     const { recordGqlOperationFilter: anyFieldFilter } =
@@ -105,15 +104,15 @@ export const useFilteredTasksForReviewItem = ({
     return {
       taskUserFilter: merged,
       hasActiveFilters:
-        recordFilters.length > 0 ||
-        recordFilterGroups.length > 0 ||
+        currentRecordFilters.length > 0 ||
+        currentRecordFilterGroups.length > 0 ||
         anyFieldFilterValue.length > 0,
     };
   }, [
     filterValueDependencies,
     taskMetadata.fields,
-    recordFilters,
-    recordFilterGroups,
+    currentRecordFilters,
+    currentRecordFilterGroups,
     anyFieldFilterValue,
   ]);
 
@@ -176,8 +175,7 @@ export const useFilteredTasksForReviewItem = ({
     return { and: [{ id: { in: taskIds } }, taskUserFilter] };
   }, [taskIds, taskUserFilter]);
 
-  const skipFilteredQuery =
-    !isDefined(taskUserFilter) || taskIds.length === 0;
+  const skipFilteredQuery = !isDefined(taskUserFilter) || taskIds.length === 0;
 
   const { records: filteredTasks, loading: filteredTasksLoading } =
     useFindManyRecords<Task>({

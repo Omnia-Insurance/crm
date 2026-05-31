@@ -186,7 +186,7 @@ export const ReconciliationRecordFieldList = ({
 
     fieldDiffs.forEach((d) => {
       // Only index diffs that have actual changes
-      const hasChange = d.bobValue !== null && d.bobValue !== d.crmValue;
+      const hasChange = d.bobValue !== d.crmValue;
       if (!hasChange) return;
 
       // Index by crmField (e.g., "effectiveDate")
@@ -214,9 +214,7 @@ export const ReconciliationRecordFieldList = ({
   }, [fieldDiffs]);
 
   return (
-    <RecordFieldListComponentInstanceContext.Provider
-      value={{ instanceId }}
-    >
+    <RecordFieldListComponentInstanceContext.Provider value={{ instanceId }}>
       <PropertyBox dataTestId="record-fields-list-container">
         {legacyActivityTargetFieldMetadataItems?.map(
           (fieldMetadataItem, index) => (
@@ -357,7 +355,9 @@ export const ReconciliationRecordFieldList = ({
                 {fieldCell}
                 <StyledProposedChange>
                   <StyledProposedLabel>BOB →</StyledProposedLabel>
-                  <StyledProposedValue>{diff.bobValue}</StyledProposedValue>
+                  <StyledProposedValue>
+                    {diff.bobValue || '(empty)'}
+                  </StyledProposedValue>
                 </StyledProposedChange>
               </StyledDiffWrapper>
             );

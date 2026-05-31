@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { isNonEmptyString } from '@sniptt/guards';
 import chunk from 'lodash.chunk';
@@ -13,12 +13,12 @@ import { Brackets, type ObjectLiteral } from 'typeorm';
 
 import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 
-import { FileOutput } from 'src/engine/api/common/common-args-processors/data-arg-processor/types/file-item.type';
 import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
 import {
   decodeCursor,
   encodeCursorData,
 } from 'src/engine/api/graphql/graphql-query-runner/utils/cursors.util';
+import { isQueryCanceledError } from 'src/engine/api/graphql/workspace-query-runner/utils/is-query-canceled-error.util';
 import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
 import { extractFileIdFromUrl } from 'src/engine/core-modules/file/files-field/utils/extract-file-id-from-url.util';
 import { STANDARD_OBJECTS_BY_PRIORITY_RANK } from 'src/engine/core-modules/search/constants/standard-objects-by-priority-rank';
@@ -59,6 +59,8 @@ const OBJECT_METADATA_ITEMS_CHUNK_SIZE = 5;
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly fileUrlService: FileUrlService,
@@ -82,44 +84,41 @@ export class SearchService {
   } & SearchArgs) {
     // OMNIA-CUSTOM: resolve role → object-level read permissions so the search
     // API never returns results for objects the user's role can't read.
-    const roleReadInfo = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const context = getWorkspaceContext();
-        const rolePermissionConfig = resolveRolePermissionConfig({
-          authContext: context.authContext,
-          userWorkspaceRoleMap: context.userWorkspaceRoleMap,
-          apiKeyRoleMap: context.apiKeyRoleMap,
-        });
+    const roleReadInfo =
+      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        async () => {
+          const context = getWorkspaceContext();
+          const rolePermissionConfig = resolveRolePermissionConfig({
+            authContext: context.authContext,
+            userWorkspaceRoleMap: context.userWorkspaceRoleMap,
+            apiKeyRoleMap: context.apiKeyRoleMap,
+          });
 
-        if (!rolePermissionConfig || 'shouldBypassPermissionChecks' in rolePermissionConfig) {
-          return null; // admins/system — no filtering
-        }
+          if (
+            !rolePermissionConfig ||
+            'shouldBypassPermissionChecks' in rolePermissionConfig
+          ) {
+            return null; // admins/system — no filtering
+          }
 
-        const roleIds = 'unionOf' in rolePermissionConfig
-          ? rolePermissionConfig.unionOf
-          : rolePermissionConfig.intersectionOf;
+          const roleIds =
+            'unionOf' in rolePermissionConfig
+              ? rolePermissionConfig.unionOf
+              : rolePermissionConfig.intersectionOf;
 
-        if (roleIds.length === 0) return null;
+          if (roleIds.length === 0) return null;
 
-        const objectPermissions = context.permissionsPerRoleId?.[roleIds[0]] ?? {};
+          const objectPermissions =
+            context.permissionsPerRoleId?.[roleIds[0]] ?? {};
 
-        // Get the role entity to check canReadAllObjectRecords default
-        const flatRoleMaps = await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-          async () => {
-            const ctx = getWorkspaceContext();
-            return ctx;
-          },
-        );
-
-        // Look up role's canReadAllObjectRecords from flatRoleMaps
-        // The rolesPermissions are keyed by roleId, each containing per-object overrides.
-        // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
-        // Since we can't easily get the role entity here, use a heuristic:
-        // if objectPermissions is sparse (few keys vs many objects), the role likely
-        // has canReadAllObjectRecords=false and only explicitly grants some objects.
-        return { objectPermissions, roleIds };
-      },
-    );
+          // The role permissions are keyed by roleId, each containing per-object overrides.
+          // Objects NOT in the map inherit the role's canReadAllObjectRecords default.
+          // Since we can't easily get the role entity here, use a heuristic:
+          // if objectPermissions is sparse (few keys vs many objects), the role likely
+          // has canReadAllObjectRecords=false and only explicitly grants some objects.
+          return { objectPermissions, roleIds };
+        },
+      );
 
     const filteredObjectMetadataItems = this.filterObjectMetadataItems({
       flatObjectMetadatas,
@@ -157,17 +156,19 @@ export class SearchService {
 
                 return {
                   objectMetadataItem: flatObjectMetadata,
-                  records: await this.buildSearchQueryAndGetRecordsWithFallback({
-                    entityManager: repository,
-                    flatObjectMetadata,
-                    flatFieldMetadataMaps,
-                    searchInput,
-                    searchTerms: formatSearchTerms(searchInput, 'and'),
-                    searchTermsOr: formatSearchTerms(searchInput, 'or'),
-                    limit: limit as number,
-                    filter: filter ?? ({} as ObjectRecordFilter),
-                    after,
-                  }),
+                  records: await this.buildSearchQueryAndGetRecordsWithFallback(
+                    {
+                      entityManager: repository,
+                      flatObjectMetadata,
+                      flatFieldMetadataMaps,
+                      searchInput,
+                      searchTerms: formatSearchTerms(searchInput, 'and'),
+                      searchTermsOr: formatSearchTerms(searchInput, 'or'),
+                      limit: limit as number,
+                      filter: filter ?? ({} as ObjectRecordFilter),
+                      after,
+                    },
+                  ),
                 };
               },
             );
@@ -421,64 +422,107 @@ export class SearchService {
     limit: number;
     filter: ObjectRecordFilterInput;
   }) {
-    const queryBuilder = entityManager.createQueryBuilder();
-
-    const { flatObjectMetadataMaps } = entityManager.internalContext;
-
-    const queryParser = new GraphqlQueryParser(
-      flatObjectMetadata,
-      flatObjectMetadataMaps,
-      flatFieldMetadataMaps,
+    const timeoutMs = this.twentyConfigService.get(
+      'SEARCH_ILIKE_FALLBACK_TIMEOUT_MS',
     );
 
-    queryParser.applyFilterToBuilder(
-      queryBuilder,
-      flatObjectMetadata.nameSingular,
-      filter,
-    );
+    // Must not run inside a caller transaction: SET LOCAL is transaction-scoped
+    // and would leak into the outer transaction.
+    try {
+      return await entityManager.manager.transaction(
+        async (transactionManager) => {
+          const { queryRunner } = transactionManager;
 
-    queryParser.applyDeletedAtToBuilder(queryBuilder, filter);
+          if (!isDefined(queryRunner)) {
+            throw new Error(
+              'Expected queryRunner to be defined within transaction',
+            );
+          }
 
-    const imageIdentifierField = this.getImageIdentifierColumn(
-      flatObjectMetadata,
-      flatFieldMetadataMaps,
-    );
+          await queryRunner.query(
+            `SELECT set_config('statement_timeout', $1, true)`,
+            [String(timeoutMs)],
+          );
 
-    const fieldsToSelect = [
-      'id',
-      ...this.getLabelIdentifierColumns(
-        flatObjectMetadata,
-        flatFieldMetadataMaps,
-      ),
-      ...(imageIdentifierField ? [imageIdentifierField] : []),
-    ].map((field) => `"${field}"`);
+          const queryBuilder = entityManager.createQueryBuilder(
+            undefined,
+            queryRunner,
+          );
 
-    queryBuilder.select(fieldsToSelect);
+          const { flatObjectMetadataMaps } = entityManager.internalContext;
 
-    const searchWords = searchInput
-      .trim()
-      .split(/\s+/)
-      .filter(isNonEmptyString);
+          const queryParser = new GraphqlQueryParser(
+            flatObjectMetadata,
+            flatObjectMetadataMaps,
+            flatFieldMetadataMaps,
+          );
 
-    searchWords.forEach((word, index) => {
-      const paramName = `ilikeFallback${index}`;
+          queryParser.applyFilterToBuilder(
+            queryBuilder,
+            flatObjectMetadata.nameSingular,
+            filter,
+          );
 
-      queryBuilder.andWhere(
-        `public.unaccent_immutable("${SEARCH_VECTOR_FIELD.name}"::text) ILIKE public.unaccent_immutable(:${paramName})`,
-        { [paramName]: `%${escapeForIlike(word)}%` },
+          queryParser.applyDeletedAtToBuilder(queryBuilder, filter);
+
+          const imageIdentifierField = this.getImageIdentifierColumn(
+            flatObjectMetadata,
+            flatFieldMetadataMaps,
+          );
+
+          const fieldsToSelect = [
+            'id',
+            ...this.getLabelIdentifierColumns(
+              flatObjectMetadata,
+              flatFieldMetadataMaps,
+            ),
+            ...(imageIdentifierField ? [imageIdentifierField] : []),
+          ].map((field) => `"${field}"`);
+
+          queryBuilder.select(fieldsToSelect);
+
+          const searchWords = searchInput
+            .trim()
+            .split(/\s+/)
+            .filter(isNonEmptyString);
+
+          searchWords.forEach((word, index) => {
+            const paramName = `ilikeFallback${index}`;
+
+            queryBuilder.andWhere(
+              `public.unaccent_immutable("${SEARCH_VECTOR_FIELD.name}"::text) ILIKE public.unaccent_immutable(:${paramName})`,
+              { [paramName]: `%${escapeForIlike(word)}%` },
+            );
+          });
+
+          const rawResults = await queryBuilder
+            .orderBy('"id"', 'ASC')
+            .take(limit)
+            .getRawMany();
+
+          return rawResults.map((record) => ({
+            ...record,
+            tsRankCD: 0,
+            tsRank: 0,
+          }));
+        },
       );
-    });
+    } catch (error) {
+      if (isQueryCanceledError(error)) {
+        this.logger.warn(
+          `Search ILIKE fallback exceeded ${timeoutMs}ms timeout`,
+          {
+            workspaceId: entityManager.internalContext.workspaceId,
+            objectNameSingular: flatObjectMetadata.nameSingular,
+            searchInputLength: searchInput.length,
+          },
+        );
 
-    const rawResults = await queryBuilder
-      .orderBy('"id"', 'ASC')
-      .take(limit)
-      .getRawMany();
+        return [];
+      }
 
-    return rawResults.map((record) => ({
-      ...record,
-      tsRankCD: 0,
-      tsRank: 0,
-    }));
+      throw error;
+    }
   }
 
   private async buildAllFieldIlikeFallbackQuery<Entity extends ObjectLiteral>({
@@ -763,11 +807,11 @@ export class SearchService {
     return imageIdentifierField.name;
   }
 
-  private getImageUrlWithToken(
+  private async getImageUrlWithToken(
     avatarFileId: string,
     fileFolder: FileFolder,
     workspaceId: string,
-  ): string {
+  ): Promise<string> {
     return this.fileUrlService.signFileByIdUrl({
       fileId: avatarFileId,
       workspaceId,
@@ -775,12 +819,12 @@ export class SearchService {
     });
   }
 
-  getImageIdentifierValue(
+  async getImageIdentifierValue(
     record: ObjectRecord,
     flatObjectMetadata: FlatObjectMetadata,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
     workspaceId: string,
-  ): string {
+  ): Promise<string> {
     const imageIdentifierField = this.getImageIdentifierColumn(
       flatObjectMetadata,
       flatFieldMetadataMaps,
@@ -872,7 +916,7 @@ export class SearchService {
     return recordEdges;
   }
 
-  computeSearchObjectResults({
+  async computeSearchObjectResults({
     recordsWithObjectMetadataItems,
     flatFieldMetadataMaps,
     workspaceId,
@@ -884,10 +928,10 @@ export class SearchService {
     workspaceId: string;
     limit: number;
     after?: string;
-  }): SearchResultConnectionDTO {
-    const searchRecords = recordsWithObjectMetadataItems.flatMap(
+  }): Promise<SearchResultConnectionDTO> {
+    const recordPromises = recordsWithObjectMetadataItems.flatMap(
       ({ objectMetadataItem, records }) => {
-        return records.map((record) => {
+        return records.map(async (record) => {
           return {
             recordId: record.id,
             objectNameSingular: objectMetadataItem.nameSingular,
@@ -899,7 +943,7 @@ export class SearchService {
               objectMetadataItem,
               flatFieldMetadataMaps,
             ),
-            imageUrl: this.getImageIdentifierValue(
+            imageUrl: await this.getImageIdentifierValue(
               record,
               objectMetadataItem,
               flatFieldMetadataMaps,
@@ -911,6 +955,7 @@ export class SearchService {
         });
       },
     );
+    const searchRecords = await Promise.all(recordPromises);
 
     const sortedRecords = this.sortSearchObjectResults(searchRecords).slice(
       0,
