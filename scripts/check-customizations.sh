@@ -214,6 +214,10 @@ check_file_contains \
   "workspaceCustomApplicationId" \
   "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
 check_file_contains \
+  "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/relation-field-metadata-gql-type.generator.ts" \
+  "oneToManyFilterTypesByFieldMetadataId" \
+  "App-scoped GraphQL schemas must reuse one-to-many relation filter input type instances"
+check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/contexts/CommandMenuContextProviderContent.tsx" \
   "PermissionFlagType.LAYOUTS" \
   "Edit Record Page Layout must be gated behind LAYOUTS permission"
