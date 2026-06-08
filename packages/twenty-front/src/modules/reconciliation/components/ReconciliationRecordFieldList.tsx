@@ -13,7 +13,6 @@ import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordF
 import { RecordFieldListCellEditModePortal } from '@/object-record/record-field-list/anchored-portal/components/RecordFieldListCellEditModePortal';
 import { RecordFieldListCellHoveredPortal } from '@/object-record/record-field-list/anchored-portal/components/RecordFieldListCellHoveredPortal';
 import { useFieldListFieldMetadataItems } from '@/object-record/record-field-list/hooks/useFieldListFieldMetadataItems';
-import { RecordDetailDuplicatesSection } from '@/object-record/record-field-list/record-detail-section/duplicate/components/RecordDetailDuplicatesSection';
 import { RecordDetailMorphRelationSection } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailMorphRelationSection';
 import { RecordDetailRelationSection } from '@/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationSection';
 import { RecordFieldListComponentInstanceContext } from '@/object-record/record-field-list/states/contexts/RecordFieldListComponentInstanceContext';
@@ -38,74 +37,26 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 
-// ── Lead diff overlay styled components ──
-
-const StyledLeadDiffOverlay = styled.div`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
-  background: ${themeCssVariables.background.secondary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.md};
-  margin: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[3]};
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledLeadDiffTitle = styled.div`
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  color: ${themeCssVariables.accent.primary};
-  margin-bottom: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledLeadDiffRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${themeCssVariables.spacing[1]};
-  height: 24px;
-  font-size: ${themeCssVariables.font.size.sm};
-`;
-
-const StyledLeadDiffLabel = styled.span`
-  color: ${themeCssVariables.font.color.tertiary};
-  min-width: 100px;
-  flex-shrink: 0;
-`;
-
-const StyledLeadDiffOld = styled.span`
-  color: ${themeCssVariables.font.color.tertiary};
-  text-decoration: line-through;
-`;
-
-const StyledLeadDiffArrow = styled.span`
-  color: ${themeCssVariables.font.color.light};
-`;
-
-const StyledLeadDiffNew = styled.span`
-  color: ${themeCssVariables.accent.primary};
-  font-weight: ${themeCssVariables.font.weight.medium};
-`;
-
 // ── Diff overlay styled components ──
 
 const StyledDiffWrapper = styled.div<{ hasChange: boolean }>`
+  background: ${({ hasChange }) =>
+    hasChange ? themeCssVariables.background.secondary : 'transparent'};
   border-left: 2px solid
     ${({ hasChange }) =>
       hasChange ? themeCssVariables.accent.primary : 'transparent'};
-  padding-left: ${themeCssVariables.spacing[1]};
-  background: ${({ hasChange }) =>
-    hasChange ? themeCssVariables.background.secondary : 'transparent'};
   border-radius: 0 ${themeCssVariables.border.radius.sm}
     ${themeCssVariables.border.radius.sm} 0;
+  padding-left: ${themeCssVariables.spacing[1]};
 `;
 
 const StyledProposedChange = styled.div`
-  display: flex;
   align-items: center;
-  gap: ${themeCssVariables.spacing[1]};
-  padding-left: 94px;
-  padding-bottom: ${themeCssVariables.spacing[1]};
+  display: flex;
   font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[1]};
+  padding-bottom: ${themeCssVariables.spacing[1]};
+  padding-left: 94px;
 `;
 
 const StyledProposedLabel = styled.span`
@@ -278,7 +229,6 @@ export const ReconciliationRecordFieldList = ({
           const diff =
             diffByFieldName.byName.get(fieldMetadataItem.name) ??
             diffByFieldName.byLabel.get(fieldMetadataItem.label.toLowerCase());
-          const hasChange = diff !== undefined;
 
           const fieldCell = (
             <FieldContext.Provider
@@ -346,11 +296,11 @@ export const ReconciliationRecordFieldList = ({
           );
 
           // OMNIA-CUSTOM: Wrap changed fields with diff highlight
-          if (hasChange && diff) {
+          if (diff !== undefined) {
             return (
               <StyledDiffWrapper
                 key={objectRecordId + fieldMetadataItem.id}
-                hasChange
+                hasChange={true}
               >
                 {fieldCell}
                 <StyledProposedChange>

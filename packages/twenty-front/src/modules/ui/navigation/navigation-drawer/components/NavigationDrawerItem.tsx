@@ -261,8 +261,9 @@ export const NavigationDrawerItem = ({
   const { theme } = useContext(ThemeContext);
   const isMobile = useIsMobile();
   const isExpanded = useNavigationDrawerExpanded();
-  const [isNavigationDrawerExpanded, setIsNavigationDrawerExpanded] =
-    useAtomState(isNavigationDrawerExpandedState);
+  const [, setIsNavigationDrawerExpanded] = useAtomState(
+    isNavigationDrawerExpandedState,
+  );
 
   const { navigationItemId } = useNavigationDrawerTooltip(label, to);
 

@@ -69,8 +69,8 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectF
             fieldMetadataItem.type,
           ) ||
             (fieldMetadataItem.type === FieldMetadataType.RELATION &&
-              (fieldMetadataItem.relation?.targetObjectMetadata
-                .nameSingular === CoreObjectNameSingular.WorkspaceMember ||
+              (fieldMetadataItem.relation?.targetObjectMetadata.nameSingular ===
+                CoreObjectNameSingular.WorkspaceMember ||
                 hasRelationToWorkspaceMember(
                   fieldMetadataItem.relation?.targetObjectMetadata
                     .nameSingular ?? '',

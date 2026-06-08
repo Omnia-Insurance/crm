@@ -239,22 +239,11 @@ export class ProcessNestedRelationsV2Helper {
         targetObjectNameSingular,
       });
 
-    this.assignRelationResults({
-      parentRecords: parentObjectRecords,
-      parentObjectRecordsAggregatedValues,
-      relationResults,
-      relationAggregatedFieldsResult,
-      sourceFieldName,
-      joinField:
-        relationType === RelationType.ONE_TO_MANY
-          ? `${fieldMetadataTargetRelationColumnName}`
-          : 'id',
-      joinColumnName,
-      relationType,
-      selectedFields,
-    });
-
     if (Object.keys(nestedRelations).length > 0) {
+      // OMNIA-CUSTOM: Load nested relation data before assigning relation rows
+      // back to parents. assignRelationResults copies many-to-one rows without
+      // deletedAt, so assigning first would drop recursively populated fields
+      // such as policy.lead.leadSource.
       await this.processNestedRelations({
         flatObjectMetadataMaps,
         flatFieldMetadataMaps,
@@ -273,6 +262,21 @@ export class ProcessNestedRelationsV2Helper {
         selectedFields,
       });
     }
+
+    this.assignRelationResults({
+      parentRecords: parentObjectRecords,
+      parentObjectRecordsAggregatedValues,
+      relationResults,
+      relationAggregatedFieldsResult,
+      sourceFieldName,
+      joinField:
+        relationType === RelationType.ONE_TO_MANY
+          ? `${fieldMetadataTargetRelationColumnName}`
+          : 'id',
+      joinColumnName,
+      relationType,
+      selectedFields,
+    });
   }
 
   private getTargetObjectMetadata({

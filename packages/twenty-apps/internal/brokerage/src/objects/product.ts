@@ -6,6 +6,7 @@ import {
 } from 'twenty-sdk/define';
 
 import {
+  CARRIER_PRODUCT_CARRIER_FIELD_ID,
   CARRIER_PRODUCT_OBJECT_UNIVERSAL_IDENTIFIER,
   CARRIER_PRODUCT_PRODUCT_FIELD_ID,
   POLICY_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -86,8 +87,9 @@ export default defineObject({
         CARRIER_PRODUCT_PRODUCT_FIELD_ID,
       universalSettings: {
         relationType: RelationType.ONE_TO_MANY,
+        junctionTargetFieldUniversalIdentifier:
+          CARRIER_PRODUCT_CARRIER_FIELD_ID,
       },
     },
   ],
 });
-

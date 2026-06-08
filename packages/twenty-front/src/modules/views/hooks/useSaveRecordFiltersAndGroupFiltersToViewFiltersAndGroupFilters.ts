@@ -18,7 +18,7 @@ import { mapRecordFilterToViewFilter } from '@/views/utils/mapRecordFilterToView
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { ViewFilterOperand as GqlViewFilterOperand } from '~/generated-metadata/graphql';
+import { type ViewFilterOperand as GqlViewFilterOperand } from '~/generated-metadata/graphql';
 
 export const useSaveRecordFiltersAndGroupFiltersToViewFiltersAndGroupFilters =
   () => {

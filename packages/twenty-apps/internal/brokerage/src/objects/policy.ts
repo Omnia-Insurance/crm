@@ -70,6 +70,7 @@ export default defineObject({
       name: 'status',
       label: 'Status',
       icon: 'IconStatusChange',
+      defaultValue: "'SUBMITTED'",
       options: POLICY_STATUS_OPTIONS,
     },
     {
@@ -183,4 +184,3 @@ export default defineObject({
     },
   ],
 });
-

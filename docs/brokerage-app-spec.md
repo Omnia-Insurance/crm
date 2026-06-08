@@ -108,7 +108,9 @@ Fields:
 
 - `name`: text
 - `active`: boolean
-- `carrierProducts`: one-to-many Carrier Product
+- `carrierProducts`: one-to-many Carrier Product, marked with Product as the
+  junction target so Policy Product pickers filter to products offered by the
+  selected Carrier
 
 ### Product Type
 
@@ -125,7 +127,9 @@ Fields:
 - `active`: boolean
 - `productType`: many-to-one Product Type
 - `policies`: one-to-many Policy
-- `carrierProducts`: one-to-many Carrier Product
+- `productCarriers`: one-to-many Carrier Product, marked with Carrier as the
+  junction target so reverse Carrier pickers can use the same Carrier Product
+  join metadata
 
 ### Carrier Product
 
@@ -239,29 +243,36 @@ Purpose:
 
 Recommended permissions:
 
-- Read: Leads, Policies, Calls, Agents, Carriers, Products, Product Types,
-  Carrier Products, Lead Sources, Family Members.
-- Update: Leads, Policies, Family Members.
-- Delete/destroy: disabled by default.
-- Sidebar: show Leads and Policies by default; Calls can be shown if the
-  brokerage wants agents reviewing calls directly.
+- Broad read access enabled, matching Omnia `Member`.
+- Update: Leads, Policies, Family Members, Notes, and Tasks.
+- Soft delete: Notes and Tasks only.
+- Destroy: disabled.
+- Field restrictions: mirror Omnia `Member` for hidden/locked operational
+  fields such as Agent email/NPN, Call cost/billable/Convoso fields, Lead
+  avatar/legacy/source relations, and Policy LTV/import/review/status fields.
+- Sidebar: `showAllObjectsInSidebar` disabled; explicit sidebar visibility only
+  for Leads, Policies, Notes, and Tasks. Support objects such as Calls, Agents,
+  Lead Sources, Carriers, Products, Product Types, Carrier Products, Family
+  Members, Carrier Configs, Reconciliations, and Review Items remain hidden
+  when present.
 
 Required row-level behavior:
 
 - Policy write scope should be limited to policies where `policy.agent` resolves
   to the current user's Agent record through `agent.workspaceMember`.
-- The existing 15-minute policy edit window should continue to be enforced by
-  platform permission logic.
 - Reads are intentionally shared for v1; agents should not be limited to only
   records tied to their own Agent record.
 
-Implementation note:
+Implementation notes:
 
-- Current app role manifests support broad role flags plus object/field
-  permissions. They do not model row-level predicates or scoped write-only RLS.
-  Agent policy-write ownership and edit-window enforcement therefore need a
-  Brokerage post-install/adoption step or an app manifest extension before this
-  can be fully bolt-on.
+- Fresh Brokerage installs declare the Member-equivalent Agent role for the
+  Brokerage/standard objects that exist in a fresh workspace.
+- Existing Omnia-shaped adoption copies the current Omnia `Member` role's
+  object permissions, field permissions, permission flags, and RLS rows onto the
+  Brokerage `Agent` role while keeping the role label `Agent`.
+- Current app role manifests still do not model row-level predicates directly;
+  Agent policy-write ownership remains normalized by Brokerage post-install
+  setup and by the adoption command for existing Omnia workspaces.
 
 ### Manager Role
 
@@ -327,8 +338,8 @@ Risks:
 - Duplicate object names if app install creates instead of adopts.
 - Existing GraphQL names and relation field IDs are depended on by Compliance,
   tasks, notes, exports, and ingestion.
-- Agent policy-write ownership and the policy edit window need permission
-  adoption, not just new role creation.
+- Agent policy-write ownership needs permission adoption, not just new role
+  creation.
 - Current server query hooks for lead, call, and policy still live in platform
   code and must keep working against the adopted app-owned objects.
 
@@ -336,11 +347,31 @@ Current implementation:
 
 - `workspace:adopt-brokerage-app` is the metadata-only adoption command for
   existing Omnia workspaces.
-- The command requires the Brokerage app to be installed first, supports
-  `--dry-run`, updates matching object/field/navigation metadata ownership, and
-  refreshes workspace metadata caches.
+- The command can run `--dry-run` before a Brokerage app shell exists. Dry-run
+  prints the metadata adoption plan without writing workspace metadata.
+- On apply, the command creates an empty Brokerage app shell if the workspace
+  does not have one yet, then updates matching object/field/navigation metadata
+  ownership and stable universal identifiers before the full app manifest sync
+  runs.
 - It intentionally does not delete provider-specific fields; those remain
   workspace-custom until provider ingestion moves to separate apps.
+
+Install and uninstall safety:
+
+- A fresh workspace can install Brokerage directly. That path creates empty
+  Brokerage-owned objects, lead fields, roles, navigation, views, record page
+  layouts, and post-install normalization.
+- Do not use uninstall/reinstall to refresh or upgrade an existing Omnia
+  workspace after Brokerage ownership has been adopted. Uninstalling an
+  app-owned Brokerage install removes app-owned object metadata and drops the
+  physical workspace tables for Brokerage objects such as Policies, Calls,
+  Agents, Carriers, Products, Lead Sources, and related catalog objects.
+- Reinstalling after uninstall recreates those objects as fresh empty tables;
+  it does not preserve or reattach live Omnia data.
+- Safe existing-workspace rollout requires a database backup, adoption dry-run
+  review before full app sync, metadata-only adoption apply, app package sync,
+  and later app upgrades/post-install syncs. Uninstall is not part of the
+  live-data migration or upgrade path.
 
 ## Implementation Phases
 
@@ -348,9 +379,14 @@ Current implementation:
 2. Define Brokerage objects, fields, relations, views, navigation, and rich app
    About content.
 3. Define the default app function role plus Agent and Manager role manifests.
-4. Add post-install/adoption logic for Agent policy-write ownership and the
-   policy edit window if app manifests cannot express them directly.
+4. Add post-install/adoption logic for Agent policy-write ownership if app
+   manifests cannot express it directly.
 5. Build local empty-workspace install tests.
 6. Build Omnia metadata adoption migration and dry-run metadata diff tooling.
-7. Install/adopt in staging, then production with database backup and rollback
+7. Validate uninstall/reinstall only on disposable or backed-up local data;
+   document that uninstall is destructive for adopted/live Brokerage data.
+8. Execute the full `docs/brokerage-app-test-plan.md` gate set, including
+   fresh install, existing Omnia adoption, upgrade, parity, permissions,
+   companion-app compatibility, rollback, and launch rehearsal.
+9. Install/adopt in staging, then production with database backup and rollback
    plan.

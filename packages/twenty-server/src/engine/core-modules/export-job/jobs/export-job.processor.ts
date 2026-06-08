@@ -1,5 +1,4 @@
 import { Logger, Scope } from '@nestjs/common';
-import { In } from 'typeorm';
 
 import {
   FieldMetadataType,
@@ -225,8 +224,7 @@ function getLabelIdentifierFieldName(
   if (!objectMeta?.labelIdentifierFieldMetadataId) return undefined;
 
   if (metadataIndex) {
-    const fields =
-      metadataIndex.fieldsByObjectId.get(objectMeta.id) ?? [];
+    const fields = metadataIndex.fieldsByObjectId.get(objectMeta.id) ?? [];
 
     return fields.find(
       (f) => f.id === objectMeta.labelIdentifierFieldMetadataId,
@@ -277,7 +275,11 @@ function getNestedValue(
   let current: unknown = record;
 
   for (const part of parts) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (
+      current === null ||
+      current === undefined ||
+      typeof current !== 'object'
+    ) {
       return undefined;
     }
 
@@ -439,7 +441,8 @@ export class ExportJobProcessor {
     });
 
     const columns = exportJob.columns as ExportColumn[];
-    const relationConfigs = (exportJob.relationConfigs ?? []) as RelationConfig[];
+    const relationConfigs = (exportJob.relationConfigs ??
+      []) as RelationConfig[];
 
     try {
       const authContext = buildSystemAuthContext(workspaceId);
@@ -460,12 +463,11 @@ export class ExportJobProcessor {
 
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
-          const repository =
-            await this.globalWorkspaceOrmManager.getRepository(
-              workspaceId,
-              exportJob.objectNameSingular,
-              { shouldBypassPermissionChecks: true },
-            );
+          const repository = await this.globalWorkspaceOrmManager.getRepository(
+            workspaceId,
+            exportJob.objectNameSingular,
+            { shouldBypassPermissionChecks: true },
+          );
 
           const flatObjectMetadata = Object.values(
             flatObjectMetadataMaps.byUniversalIdentifier,
@@ -523,10 +525,7 @@ export class ExportJobProcessor {
 
             const qb = buildFilteredQb();
 
-            qb.orderBy(
-              `"${exportJob.objectNameSingular}"."createdAt"`,
-              'DESC',
-            );
+            qb.orderBy(`"${exportJob.objectNameSingular}"."createdAt"`, 'DESC');
             qb.skip(offset);
             qb.take(BATCH_SIZE);
 
@@ -580,15 +579,15 @@ export class ExportJobProcessor {
                 continue;
               }
 
-              const colRelSettings =
-                colFieldMeta.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null;
+              const colRelSettings = colFieldMeta.settings as
+                | FieldMetadataSettingsMapping[FieldMetadataType.RELATION]
+                | null;
 
               if (colRelSettings?.relationType === 'ONE_TO_MANY') {
                 continue;
               }
 
-              const targetObjId =
-                colFieldMeta.relationTargetObjectMetadataId;
+              const targetObjId = colFieldMeta.relationTargetObjectMetadataId;
               const targetObj = targetObjId
                 ? metadataIndex.objectById.get(targetObjId)
                 : undefined;
@@ -596,8 +595,7 @@ export class ExportJobProcessor {
               if (!targetObj) continue;
 
               const joinCol =
-                colRelSettings?.joinColumnName ??
-                `${col.fieldName}Id`;
+                colRelSettings?.joinColumnName ?? `${col.fieldName}Id`;
 
               const relatedIds = [
                 ...new Set(
@@ -623,12 +621,11 @@ export class ExportJobProcessor {
               relatedIds,
             }: (typeof relationCols)[number]) => {
               try {
-                const repo =
-                  await this.globalWorkspaceOrmManager.getRepository(
-                    workspaceId,
-                    targetObj.nameSingular,
-                    { shouldBypassPermissionChecks: true },
-                  );
+                const repo = await this.globalWorkspaceOrmManager.getRepository(
+                  workspaceId,
+                  targetObj.nameSingular,
+                  { shouldBypassPermissionChecks: true },
+                );
 
                 const lookup = new Map<string, string>();
 
@@ -637,16 +634,12 @@ export class ExportJobProcessor {
                   i < relatedIds.length;
                   i += RELATION_BATCH_SIZE
                 ) {
-                  const batchIds = relatedIds.slice(
-                    i,
-                    i + RELATION_BATCH_SIZE,
-                  );
+                  const batchIds = relatedIds.slice(i, i + RELATION_BATCH_SIZE);
                   const related = await repo
                     .createQueryBuilder(targetObj.nameSingular)
-                    .where(
-                      `"${targetObj.nameSingular}"."id" IN (:...ids)`,
-                      { ids: batchIds },
-                    )
+                    .where(`"${targetObj.nameSingular}"."id" IN (:...ids)`, {
+                      ids: batchIds,
+                    })
                     .getMany();
 
                   for (const r of related as Record<string, unknown>[]) {
@@ -790,8 +783,7 @@ export class ExportJobProcessor {
       await this.exportJobService.updateProgress(exportJobId, {
         status: ExportJobStatus.FAILED,
         result: {
-          error:
-            error instanceof Error ? error.message : 'Unexpected error',
+          error: error instanceof Error ? error.message : 'Unexpected error',
         },
       });
     }
@@ -830,8 +822,7 @@ export class ExportJobProcessor {
           records
             .map((r) => r[joinColumnName])
             .filter(
-              (id): id is string =>
-                typeof id === 'string' && id.length > 0,
+              (id): id is string => typeof id === 'string' && id.length > 0,
             ),
         ),
       ];
@@ -967,7 +958,8 @@ export class ExportJobProcessor {
                 const flatKey = `${getRelationFieldFlatKey(rc.relationFieldName, fieldPath)}__${compositeKey}`;
 
                 expanded[flatKey] =
-                  normalizeCompositeValue(compositeKey, obj[compositeKey]) ?? '';
+                  normalizeCompositeValue(compositeKey, obj[compositeKey]) ??
+                  '';
               }
             }
           } else if (
@@ -1094,7 +1086,11 @@ export class ExportJobProcessor {
       {
         targetObjectName,
         subPaths,
-      }: { targetObjectName: string; subPaths: string[]; isBareRelation: boolean },
+      }: {
+        targetObjectName: string;
+        subPaths: string[];
+        isBareRelation: boolean;
+      },
     ) => {
       // Determine if this is a MANY_TO_ONE or ONE_TO_MANY relation
       const fieldMeta = findFieldMetadata(
@@ -1105,11 +1101,12 @@ export class ExportJobProcessor {
         metadataIndex,
       );
 
-      const fieldRelSettings =
-        fieldMeta?.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null | undefined;
+      const fieldRelSettings = fieldMeta?.settings as
+        | FieldMetadataSettingsMapping[FieldMetadataType.RELATION]
+        | null
+        | undefined;
 
-      const relationType =
-        fieldRelSettings?.relationType ?? 'MANY_TO_ONE';
+      const relationType = fieldRelSettings?.relationType ?? 'MANY_TO_ONE';
 
       const isOneToMany = relationType === 'ONE_TO_MANY';
 
@@ -1126,24 +1123,21 @@ export class ExportJobProcessor {
           // parent FK and attach as array.
           const parentObjectMeta = metadataIndex
             ? metadataIndex.objectByName.get(rc.targetObjectNameSingular)
-            : Object.values(
-                flatObjectMetadataMaps.byUniversalIdentifier,
-              ).find((m) => m?.nameSingular === rc.targetObjectNameSingular);
+            : Object.values(flatObjectMetadataMaps.byUniversalIdentifier).find(
+                (m) => m?.nameSingular === rc.targetObjectNameSingular,
+              );
 
           const targetObjMeta = metadataIndex
             ? metadataIndex.objectByName.get(targetObjectName)
-            : Object.values(
-                flatObjectMetadataMaps.byUniversalIdentifier,
-              ).find((m) => m?.nameSingular === targetObjectName);
+            : Object.values(flatObjectMetadataMaps.byUniversalIdentifier).find(
+                (m) => m?.nameSingular === targetObjectName,
+              );
 
           const childFkField =
             parentObjectMeta && targetObjMeta
-              ? (
-                  metadataIndex
-                    ? metadataIndex.fieldsByObjectId.get(targetObjMeta.id) ?? []
-                    : Object.values(
-                        flatFieldMetadataMaps.byUniversalIdentifier,
-                      )
+              ? (metadataIndex
+                  ? (metadataIndex.fieldsByObjectId.get(targetObjMeta.id) ?? [])
+                  : Object.values(flatFieldMetadataMaps.byUniversalIdentifier)
                 ).find(
                   (f) =>
                     f?.objectMetadataId === targetObjMeta.id &&
@@ -1152,8 +1146,10 @@ export class ExportJobProcessor {
                 )
               : undefined;
 
-          const childFkRelSettings =
-            childFkField?.settings as FieldMetadataSettingsMapping[FieldMetadataType.RELATION] | null | undefined;
+          const childFkRelSettings = childFkField?.settings as
+            | FieldMetadataSettingsMapping[FieldMetadataType.RELATION]
+            | null
+            | undefined;
 
           const parentFk =
             childFkRelSettings?.joinColumnName ??
@@ -1168,19 +1164,14 @@ export class ExportJobProcessor {
             Record<string, unknown>[]
           >();
 
-          for (
-            let i = 0;
-            i < parentIds.length;
-            i += RELATION_BATCH_SIZE
-          ) {
+          for (let i = 0; i < parentIds.length; i += RELATION_BATCH_SIZE) {
             const batchIds = parentIds.slice(i, i + RELATION_BATCH_SIZE);
 
             const childRecords = await nestedRepository
               .createQueryBuilder(targetObjectName)
-              .where(
-                `"${targetObjectName}"."${parentFk}" IN (:...ids)`,
-                { ids: batchIds },
-              )
+              .where(`"${targetObjectName}"."${parentFk}" IN (:...ids)`, {
+                ids: batchIds,
+              })
               .getMany();
 
             for (const child of childRecords as Record<string, unknown>[]) {
@@ -1209,8 +1200,7 @@ export class ExportJobProcessor {
               [...lookupMap.values()]
                 .map((r) => r[joinColumnName])
                 .filter(
-                  (id): id is string =>
-                    typeof id === 'string' && id.length > 0,
+                  (id): id is string => typeof id === 'string' && id.length > 0,
                 ),
             ),
           ];
@@ -1219,11 +1209,7 @@ export class ExportJobProcessor {
 
           const nestedLookup = new Map<string, Record<string, unknown>>();
 
-          for (
-            let i = 0;
-            i < nestedIds.length;
-            i += RELATION_BATCH_SIZE
-          ) {
+          for (let i = 0; i < nestedIds.length; i += RELATION_BATCH_SIZE) {
             const batchIds = nestedIds.slice(i, i + RELATION_BATCH_SIZE);
 
             const nestedRecords = await nestedRepository
@@ -1233,10 +1219,7 @@ export class ExportJobProcessor {
               })
               .getMany();
 
-            for (const nested of nestedRecords as Record<
-              string,
-              unknown
-            >[]) {
+            for (const nested of nestedRecords as Record<string, unknown>[]) {
               if (typeof nested.id === 'string') {
                 nestedLookup.set(nested.id, nested);
               }
@@ -1286,17 +1269,11 @@ export class ExportJobProcessor {
     // Resolve all nested relation groups in parallel
     const groupEntries = [...nestedRelationGroups.entries()];
 
-    for (
-      let i = 0;
-      i < groupEntries.length;
-      i += RELATION_FETCH_CONCURRENCY
-    ) {
+    for (let i = 0; i < groupEntries.length; i += RELATION_FETCH_CONCURRENCY) {
       const chunk = groupEntries.slice(i, i + RELATION_FETCH_CONCURRENCY);
 
       await Promise.all(
-        chunk.map(([fieldName, group]) =>
-          resolveNestedGroup(fieldName, group),
-        ),
+        chunk.map(([fieldName, group]) => resolveNestedGroup(fieldName, group)),
       );
     }
   }

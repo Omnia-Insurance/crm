@@ -6,6 +6,7 @@ import {
   CARRIER_OBJECT_UNIVERSAL_IDENTIFIER,
   CARRIER_POLICIES_FIELD_ID,
   CARRIER_PRODUCT_CARRIER_FIELD_ID,
+  CARRIER_PRODUCT_PRODUCT_FIELD_ID,
   CARRIER_PRODUCT_OBJECT_UNIVERSAL_IDENTIFIER,
   CARRIER_PRODUCTS_FIELD_ID,
   POLICY_CARRIER_FIELD_ID,
@@ -62,8 +63,9 @@ export default defineObject({
         CARRIER_PRODUCT_CARRIER_FIELD_ID,
       universalSettings: {
         relationType: RelationType.ONE_TO_MANY,
+        junctionTargetFieldUniversalIdentifier:
+          CARRIER_PRODUCT_PRODUCT_FIELD_ID,
       },
     },
   ],
 });
-

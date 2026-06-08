@@ -71,13 +71,6 @@ const StyledInlineCellBaseContainer = styled.div<{
   diffState?: 'none' | 'pending' | 'accepted';
 }>`
   align-items: center;
-  box-sizing: border-box;
-  cursor: ${({ readonly }) => (readonly ? 'default' : 'pointer')};
-  display: flex;
-  gap: ${themeCssVariables.spacing[1]};
-  height: fit-content;
-  user-select: none;
-  width: 100%;
   background: ${({ diffState }) => {
     if (diffState === 'accepted')
       return themeCssVariables.color.transparent.red2;
@@ -96,8 +89,15 @@ const StyledInlineCellBaseContainer = styled.div<{
     diffState && diffState !== 'none'
       ? `0 ${themeCssVariables.border.radius.sm} ${themeCssVariables.border.radius.sm} 0`
       : '0'};
+  box-sizing: border-box;
+  cursor: ${({ readonly }) => (readonly ? 'default' : 'pointer')};
+  display: flex;
+  gap: ${themeCssVariables.spacing[1]};
+  height: fit-content;
   padding-left: ${({ diffState }) =>
     diffState && diffState !== 'none' ? themeCssVariables.spacing[1] : '0'};
+  user-select: none;
+  width: 100%;
 `;
 
 export const StyledSkeletonDiv = styled.div`
@@ -106,18 +106,18 @@ export const StyledSkeletonDiv = styled.div`
 
 // OMNIA-CUSTOM: Inline diff value display (replaces standard value when diff exists)
 const StyledDiffValueDisplay = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
+  font-size: ${themeCssVariables.font.size.md};
   gap: ${themeCssVariables.spacing[1]};
   min-width: 0;
   width: 100%;
-  font-size: ${themeCssVariables.font.size.md};
 `;
 
 const StyledDiffOld = styled.span`
   color: ${themeCssVariables.font.color.tertiary};
-  text-decoration: line-through;
   overflow: hidden;
+  text-decoration: line-through;
   text-overflow: ellipsis;
   white-space: nowrap;
 `;
@@ -136,21 +136,21 @@ const StyledDiffNew = styled.span`
 `;
 
 const StyledDiffAcceptBtn = styled.button<{ accepted: boolean }>`
-  flex-shrink: 0;
-  padding: 0 ${themeCssVariables.spacing[2]};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  font-family: inherit;
-  cursor: pointer;
-  height: 20px;
+  background: ${({ accepted }) =>
+    accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
   border: 1px solid
     ${({ accepted }) =>
       accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
-  background: ${({ accepted }) =>
-    accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
-  color: #fff;
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.inverted};
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  height: 20px;
   opacity: 0.75;
+  padding: 0 ${themeCssVariables.spacing[2]};
 
   &:hover {
     opacity: 1;

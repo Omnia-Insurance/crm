@@ -1,12 +1,9 @@
 import { useApolloClient } from '@apollo/client/react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { GET_EXPORT_JOB } from '@/object-record/record-index/export/graphql/queries/exportJob';
 import { CANCEL_EXPORT_JOB } from '@/object-record/record-index/export/graphql/mutations/cancelExportJob';
-import {
-  activeExportJobState,
-  type ActiveExportJob,
-} from '@/object-record/record-index/export/states/activeExportJobState';
+import { activeExportJobState } from '@/object-record/record-index/export/states/activeExportJobState';
 import { useBackgroundJob } from '@/ui/feedback/background-job-indicator/hooks/useBackgroundJob';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -46,9 +43,7 @@ type ExportJobQueryResponse = {
   exportJob?: ExportJobData;
 };
 
-function isExportJobResponse(
-  data: unknown,
-): data is ExportJobQueryResponse {
+function isExportJobResponse(data: unknown): data is ExportJobQueryResponse {
   if (!data || typeof data !== 'object') return false;
 
   if (!('exportJob' in data)) return false;
@@ -87,7 +82,7 @@ function isStoredExportJob(value: unknown): value is StoredExportJob {
  * Sets the global atom + localStorage so the always-mounted poller picks it up.
  */
 export const useExportJobProgress = () => {
-  const setActiveJob = useSetAtomState(activeExportJobState);
+  const setActiveExportJob = useSetAtomState(activeExportJobState);
   const { upsertJob } = useBackgroundJob();
 
   const startTracking = useCallback(
@@ -120,9 +115,13 @@ export const useExportJobProgress = () => {
         failureCount: 0,
       });
 
-      setActiveJob({ exportJobId, objectNameSingular, objectNamePlural });
+      setActiveExportJob({
+        exportJobId,
+        objectNameSingular,
+        objectNamePlural,
+      });
     },
-    [upsertJob, setActiveJob],
+    [upsertJob, setActiveExportJob],
   );
 
   return { startTracking };
@@ -134,32 +133,24 @@ export const useExportJobProgress = () => {
  */
 export const useExportJobPoller = () => {
   const apolloClient = useApolloClient();
-  const activeJob = useAtomStateValue(activeExportJobState);
-  const setActiveJob = useSetAtomState(activeExportJobState);
+  const activeExportJob = useAtomStateValue(activeExportJobState);
+  const setActiveExportJob = useSetAtomState(activeExportJobState);
   const { upsertJob } = useBackgroundJob();
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const activeJobRef = useRef<ActiveExportJob>(null);
-
-  activeJobRef.current = activeJob;
-
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }, []);
 
   useEffect(() => {
-    if (!activeJob) {
-      stopPolling();
+    if (!activeExportJob) return;
 
-      return;
-    }
+    let pollTimerId: ReturnType<typeof setInterval> | undefined;
+
+    const stopPolling = () => {
+      if (pollTimerId === undefined) return;
+
+      clearInterval(pollTimerId);
+      pollTimerId = undefined;
+    };
 
     const poll = async () => {
-      const current = activeJobRef.current;
-
-      if (!current) return;
+      const current = activeExportJob;
 
       try {
         const { data } = await apolloClient.query({
@@ -206,7 +197,7 @@ export const useExportJobPoller = () => {
 
         if (isTerminal) {
           stopPolling();
-          setActiveJob(null);
+          setActiveExportJob(null);
 
           // Auto-download on completion via fetch + blob
           if (normalizedStatus === 'completed' && downloadUrl) {
@@ -240,13 +231,12 @@ export const useExportJobPoller = () => {
     };
 
     poll();
-    pollTimerRef.current = setInterval(poll, POLL_INTERVAL_MS);
+    pollTimerId = setInterval(poll, POLL_INTERVAL_MS);
 
     return () => {
       stopPolling();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeJob?.exportJobId]);
+  }, [activeExportJob, apolloClient, setActiveExportJob, upsertJob]);
 
   return null;
 };
@@ -256,7 +246,7 @@ export const useExportJobPoller = () => {
  * in-progress export from a previous session.
  */
 export const useExportJobRecovery = () => {
-  const setActiveJob = useSetAtomState(activeExportJobState);
+  const setActiveExportJob = useSetAtomState(activeExportJobState);
   const { upsertJob } = useBackgroundJob();
 
   useEffect(() => {
@@ -282,12 +272,11 @@ export const useExportJobRecovery = () => {
         failureCount: 0,
       });
 
-      setActiveJob(stored);
+      setActiveExportJob(stored);
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setActiveExportJob, upsertJob]);
 };
 
 /**

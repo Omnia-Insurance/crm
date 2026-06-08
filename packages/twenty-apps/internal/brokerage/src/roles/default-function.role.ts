@@ -33,5 +33,9 @@ export default defineRole({
     ),
   ],
   fieldPermissions: [],
-  permissionFlags: [PermissionFlag.DATA_MODEL, PermissionFlag.VIEWS],
+  permissionFlags: [
+    PermissionFlag.DATA_MODEL,
+    PermissionFlag.ROLES,
+    PermissionFlag.VIEWS,
+  ],
 });

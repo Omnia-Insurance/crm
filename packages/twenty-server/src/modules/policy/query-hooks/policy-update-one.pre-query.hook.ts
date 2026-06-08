@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { msg } from '@lingui/core/macro';
+import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
@@ -13,6 +14,7 @@ import { ForbiddenError } from 'src/engine/core-modules/graphql/utils/graphql-er
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
+import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
 import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
 import { formatDuration } from 'src/modules/policy/utils/format-duration.util';
 
@@ -24,6 +26,7 @@ export class PolicyUpdateOnePreQueryHook
   constructor(
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly agentProfileResolverService: AgentProfileResolverService,
   ) {}
 
   async execute(
@@ -48,6 +51,15 @@ export class PolicyUpdateOnePreQueryHook
         where: { id: payload.id },
       })) as Record<string, unknown> | null;
 
+      const isAdmin = await this.isUserAdmin(authContext, workspace.id);
+
+      await this.assertPolicyAgentOwnership({
+        authContext,
+        workspaceId: workspace.id,
+        existing,
+        isAdmin,
+      });
+
       // Block edits to policies older than the configured edit window for non-admin users
       if (isDefined(existing?.createdAt)) {
         const editWindowMinutes = await this.getEditWindowMinutes(
@@ -61,8 +73,6 @@ export class PolicyUpdateOnePreQueryHook
           const editWindowMs = editWindowMinutes * 60 * 1000;
 
           if (ageMs > editWindowMs) {
-            const isAdmin = await this.isUserAdmin(authContext, workspace.id);
-
             if (!isAdmin) {
               const window = formatDuration(editWindowMs);
 
@@ -106,6 +116,116 @@ export class PolicyUpdateOnePreQueryHook
     }, authContext as WorkspaceAuthContext);
 
     return payload;
+  }
+
+  private async assertPolicyAgentOwnership({
+    authContext,
+    workspaceId,
+    existing,
+    isAdmin,
+  }: {
+    authContext: AuthContext;
+    workspaceId: string;
+    existing: Record<string, unknown> | null;
+    isAdmin: boolean;
+  }) {
+    if (
+      isAdmin ||
+      !isDefined(existing?.agentId) ||
+      !isDefined(authContext.workspaceMemberId)
+    ) {
+      return;
+    }
+
+    const shouldEnforceAgentOwnership = await this.shouldEnforceAgentOwnership(
+      authContext,
+      workspaceId,
+    );
+
+    if (!shouldEnforceAgentOwnership) {
+      return;
+    }
+
+    const agentProfileId =
+      await this.agentProfileResolverService.resolveAgentProfileId(
+        workspaceId,
+        authContext.workspaceMemberId,
+        authContext,
+      );
+
+    if (agentProfileId === existing.agentId) {
+      return;
+    }
+
+    throw new ForbiddenError(
+      `Editing this record violates row-level security`,
+      {
+        userFriendlyMessage: msg`Editing this record violates row-level security.`,
+      },
+    );
+  }
+
+  private async shouldEnforceAgentOwnership(
+    authContext: AuthContext,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const userWorkspaceId = authContext.userWorkspaceId;
+
+    if (!isDefined(userWorkspaceId)) {
+      return false;
+    }
+
+    const {
+      userWorkspaceRoleMap,
+      rolesPermissions,
+      flatObjectMetadataMaps,
+      flatFieldMetadataMaps,
+    } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
+      'userWorkspaceRoleMap',
+      'rolesPermissions',
+      'flatObjectMetadataMaps',
+      'flatFieldMetadataMaps',
+    ]);
+
+    const roleId = userWorkspaceRoleMap[userWorkspaceId];
+
+    if (!isDefined(roleId)) {
+      return false;
+    }
+
+    const policyFlatObjectMetadata = Object.values(
+      flatObjectMetadataMaps.byUniversalIdentifier,
+    ).find((meta) => meta?.nameSingular === 'policy');
+
+    if (!isDefined(policyFlatObjectMetadata)) {
+      return false;
+    }
+
+    const objectPermissions =
+      rolesPermissions[roleId]?.[policyFlatObjectMetadata.id];
+
+    return (
+      objectPermissions?.rowLevelPermissionPredicates?.some((predicate) => {
+        if (predicate.scope !== RowLevelPermissionPredicateScope.WRITE) {
+          return false;
+        }
+
+        const fieldUniversalIdentifier =
+          flatFieldMetadataMaps.universalIdentifierById[
+            predicate.fieldMetadataId
+          ];
+        const fieldMetadata = isDefined(fieldUniversalIdentifier)
+          ? flatFieldMetadataMaps.byUniversalIdentifier[
+              fieldUniversalIdentifier
+            ]
+          : undefined;
+
+        return (
+          fieldMetadata?.name === 'agent' &&
+          isDefined(predicate.workspaceMemberFieldMetadataId)
+        );
+      }) ?? false
+    );
   }
 
   private async getEditWindowMinutes(

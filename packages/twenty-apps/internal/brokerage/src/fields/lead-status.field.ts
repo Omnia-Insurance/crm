@@ -16,5 +16,5 @@ export default defineField({
   label: 'Status',
   icon: 'IconStatusChange',
   options: LEAD_STATUS_OPTIONS,
+  defaultValue: "'ASSIGNED'",
 });
-

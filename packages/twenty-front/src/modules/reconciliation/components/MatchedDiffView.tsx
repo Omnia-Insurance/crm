@@ -1,5 +1,5 @@
 import { styled } from '@linaria/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button, LightIconButton } from 'twenty-ui/input';
 import {
@@ -36,7 +36,7 @@ import {
   promotePrimaryPhoneToAdditional,
 } from 'twenty-shared/utils';
 
-type Props = {
+type MatchedDiffViewProps = {
   item: ReviewItemRecord;
   reconciliationId: string;
   onDecisionMade?: (itemId: string) => void;
@@ -46,6 +46,12 @@ type ColumnMappingEntry = {
   crmField: string;
   fieldType: string;
   fieldKey: string;
+};
+
+const useRecordStoreValue = (recordId: string) => {
+  const recordStore = useAtomFamilyStateValue(recordStoreFamilyState, recordId);
+
+  return recordStore;
 };
 
 const MATCH_LABELS: Record<string, string> = {
@@ -69,13 +75,13 @@ const StyledContainer = styled.div`
 `;
 
 const StyledHeader = styled.div`
-  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
 `;
 
 const StyledHeaderRow = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
 `;
 
@@ -85,14 +91,14 @@ const StyledRecordName = styled.span`
 `;
 
 const StyledPolicyBadge = styled.span`
-  display: inline-flex;
   align-items: center;
+  color: ${themeCssVariables.font.color.secondary};
+  display: inline-flex;
+  font-size: ${themeCssVariables.font.size.xs};
+  font-variant-numeric: tabular-nums;
+  font-weight: ${themeCssVariables.font.weight.medium};
   gap: ${themeCssVariables.spacing[1]};
   height: 24px;
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  color: ${themeCssVariables.font.color.secondary};
-  font-variant-numeric: tabular-nums;
 `;
 
 const StyledSpacer = styled.div`
@@ -100,11 +106,11 @@ const StyledSpacer = styled.div`
 `;
 
 const StyledMatchLabel = styled.div`
-  display: flex;
   align-items: center;
-  gap: ${themeCssVariables.spacing[1]};
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
+  font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[1]};
 
   svg {
     color: ${themeCssVariables.color.orange};
@@ -172,12 +178,12 @@ const StyledInfoCalloutValue = styled.span`
 `;
 
 const StyledFooter = styled.div`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
+  align-items: center;
   border-top: 1px solid ${themeCssVariables.border.color.medium};
   display: flex;
-  align-items: center;
-  gap: ${themeCssVariables.spacing[2]};
   flex-shrink: 0;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
 `;
 
 /**
@@ -222,15 +228,12 @@ export const MatchedDiffView = ({
   item,
   reconciliationId,
   onDecisionMade,
-}: Props) => {
+}: MatchedDiffViewProps) => {
   const rawFieldDiffs = item.fieldDiffs as FieldDiff[];
   const policyId = item.policy?.id;
 
   // Read reconciliation record from store to get column mapping
-  const reconciliationRecord = useAtomFamilyStateValue(
-    recordStoreFamilyState,
-    reconciliationId,
-  );
+  const reconciliationRecord = useRecordStoreValue(reconciliationId);
 
   const rawColumnMapping = reconciliationRecord
     ? (reconciliationRecord as Record<string, unknown>)['columnMapping']
@@ -283,10 +286,7 @@ export const MatchedDiffView = ({
   );
 
   // Read policy record from store to get lead relation ID
-  const policyRecord = useAtomFamilyStateValue(
-    recordStoreFamilyState,
-    policyId ?? '',
-  );
+  const policyRecord = useRecordStoreValue(policyId ?? '');
 
   const leadId = policyRecord
     ? (
@@ -343,10 +343,7 @@ export const MatchedDiffView = ({
   }, [fieldDiffs, policyRecord]);
 
   // Read lead record from store for batch composite merging
-  const leadRecord = useAtomFamilyStateValue(
-    recordStoreFamilyState,
-    leadId ?? '',
-  );
+  const leadRecord = useRecordStoreValue(leadId ?? '');
 
   // ── Decision actions ──
   const { updateOneRecord } = useUpdateOneRecord();
@@ -626,12 +623,18 @@ export const MatchedDiffView = ({
 
   // ── Copy policy number ──
   const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (!copied) return;
+
+    const copyTimerId = setTimeout(() => setCopied(false), 1500);
+
+    return () => clearTimeout(copyTimerId);
+  }, [copied]);
+
   const handleCopyPolicyNumber = useCallback(() => {
     navigator.clipboard.writeText(policyNumber);
     setCopied(true);
-    clearTimeout(copyTimerRef.current);
-    copyTimerRef.current = setTimeout(() => setCopied(false), 1500);
   }, [policyNumber]);
 
   return (

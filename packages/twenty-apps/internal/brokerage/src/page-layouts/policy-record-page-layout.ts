@@ -1,6 +1,13 @@
 import { definePageLayout, PageLayoutTabLayoutMode } from 'twenty-sdk/define';
 
-import { POLICY_OBJECT_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+import {
+  POLICY_AGENT_FIELD_ID,
+  POLICY_CARRIER_FIELD_ID,
+  POLICY_LEAD_FIELD_ID,
+  POLICY_OBJECT_UNIVERSAL_IDENTIFIER,
+  POLICY_PRODUCT_FIELD_ID,
+} from 'src/constants/universal-identifiers';
+import { POLICY_RECORD_PAGE_FIELDS_VIEW_ID } from 'src/views/policy-record-page-fields.view';
 
 export default definePageLayout({
   universalIdentifier: 'c639d6c3-e839-488c-bb0c-52ae014ae40e',
@@ -21,6 +28,49 @@ export default definePageLayout({
           type: 'FIELDS',
           configuration: {
             configurationType: 'FIELDS',
+            viewUniversalIdentifier: POLICY_RECORD_PAGE_FIELDS_VIEW_ID,
+            newFieldDefaultVisibility: false,
+            shouldAllowUserToSeeHiddenFields: false,
+          },
+        },
+        {
+          universalIdentifier: '00a082ff-9a21-4a33-8bdb-c573bc997bcd',
+          title: 'Lead',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: POLICY_LEAD_FIELD_ID,
+            fieldDisplayMode: 'CARD',
+          },
+        },
+        {
+          universalIdentifier: '2f466fd8-52fe-4c51-a375-502352d8e985',
+          title: 'Agent',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: POLICY_AGENT_FIELD_ID,
+            fieldDisplayMode: 'CARD',
+          },
+        },
+        {
+          universalIdentifier: '9d0bed87-52de-4908-a343-8cb855db7f1b',
+          title: 'Carrier',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: POLICY_CARRIER_FIELD_ID,
+            fieldDisplayMode: 'CARD',
+          },
+        },
+        {
+          universalIdentifier: 'aa163046-9d6d-4c24-81a9-e47ad5546c59',
+          title: 'Product',
+          type: 'FIELD',
+          configuration: {
+            configurationType: 'FIELD',
+            fieldMetadataId: POLICY_PRODUCT_FIELD_ID,
+            fieldDisplayMode: 'CARD',
           },
         },
       ],
