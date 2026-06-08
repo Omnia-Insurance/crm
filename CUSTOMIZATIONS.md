@@ -123,8 +123,10 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `query-hooks/policy-create-many.pre-query.hook.ts` — Same for bulk create
 - `query-hooks/policy-create-one.post-query.hook.ts` — Sets submittedDate, LTV after insert
 - `query-hooks/policy-create-many.post-query.hook.ts` — Same for bulk
-- `query-hooks/policy-update-one.pre-query.hook.ts` — Re-derives name on carrier/product change + **configurable edit window enforcement** (reads `editWindowMinutes` from `rolesPermissions` cache per role/object, null = no restriction; admins always bypass)
-- `query-hooks/policy-update-many.pre-query.hook.ts` — Same for bulk update + same edit window enforcement
+- `query-hooks/policy-update-one.pre-query.hook.ts` — Re-derives name on carrier/product change + **configurable edit window enforcement** (reads `editWindowMinutes` from `rolesPermissions` cache per role/object, null = no restriction; admins always bypass); roles with `policy.agent` WRITE RLS check Agent Profile ownership before the edit-window check so users get a generic RLS denial first
+- `query-hooks/policy-update-many.pre-query.hook.ts` — Same for bulk update + same edit window and `policy.agent` RLS denial precedence
+- `query-hooks/__tests__/policy-edit-window.pre-query.hook.spec.ts` — Regression coverage that role-configured Brokerage Agent policy edit windows block non-admin updates, allow admin bypasses, and return the generic RLS message before the edit-window message when an agent edits another agent's policy
+- `query-hooks/__tests__/policy-agent-ownership-rls.spec.ts` — Regression coverage that Brokerage Agent policy WRITE RLS resolves `policy.agent` through the linked Agent Profile before filtering updates
 - `utils/format-duration.util.ts` — Human-readable duration formatting for edit window error messages
 - `query-hooks/policy-update-one.post-query.hook.ts` — Recalculates LTV on update
 - `query-hooks/policy-update-many.post-query.hook.ts` — Same for bulk

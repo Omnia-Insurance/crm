@@ -576,6 +576,28 @@ check_file_exists \
   "packages/twenty-server/src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts" \
   "Policy update pre-query hook (edit window enforcement)"
 check_file_exists \
+  "packages/twenty-server/src/modules/policy/query-hooks/__tests__/policy-edit-window.pre-query.hook.spec.ts" \
+  "Policy edit window hook regression tests"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/__tests__/policy-edit-window.pre-query.hook.spec.ts" \
+  "editWindowMinutes: 15" \
+  "Policy edit window tests must cover role-configured edit windows"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts" \
+  "Editing this record violates row-level security." \
+  "Policy updateOne hook must show RLS denial before edit-window denial"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/policy-update-many.pre-query.hook.ts" \
+  "Editing this record violates row-level security." \
+  "Policy updateMany hook must show RLS denial before edit-window denial"
+check_file_exists \
+  "packages/twenty-server/src/modules/policy/query-hooks/__tests__/policy-agent-ownership-rls.spec.ts" \
+  "Policy Agent ownership RLS regression tests"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/__tests__/policy-agent-ownership-rls.spec.ts" \
+  "agentProfile" \
+  "Policy Agent ownership RLS must resolve through Agent Profile"
+check_file_exists \
   "packages/twenty-server/src/modules/policy/query-hooks/policy-query-hook.module.ts" \
   "Policy query hook module registration"
 check_file_exists \
