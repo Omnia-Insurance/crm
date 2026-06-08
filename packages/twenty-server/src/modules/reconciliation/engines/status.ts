@@ -7,6 +7,7 @@ export type OmniaStatus =
   | 'ACTIVE_APPROVED'
   | 'PAYMENT_ERROR_ACTIVE_PLACED'
   | 'PAYMENT_ERROR_ACTIVE_APPROVED'
+  | 'PAYMENT_ERROR_CANCELED'
   | 'CANCELED';
 
 /**
@@ -178,6 +179,26 @@ const findPreviousVersion = (
   return candidates.length > 0 ? candidates[0].id : null;
 };
 
+const getCurrentCrmStatus = (
+  allCrmPoliciesForNumber: CrmPolicy[],
+  currentPolicyId?: string | null,
+): string | null => {
+  if (!currentPolicyId) return null;
+
+  return (
+    allCrmPoliciesForNumber.find((policy) => policy.id === currentPolicyId)
+      ?.status ?? null
+  );
+};
+
+const deriveCanceledStatus = (currentCrmStatus: string | null): OmniaStatus =>
+  currentCrmStatus?.startsWith('PAYMENT_ERROR')
+    ? 'PAYMENT_ERROR_CANCELED'
+    : 'CANCELED';
+
+const formatCanceledStatusReasonLabel = (status: OmniaStatus): string =>
+  status === 'PAYMENT_ERROR_CANCELED' ? 'Payment Error-Canceled' : 'Canceled';
+
 const deriveAmbetterStatus: StatusEngineFn = (
   bobRow,
   allCrmPoliciesForNumber,
@@ -201,30 +222,38 @@ const deriveAmbetterStatus: StatusEngineFn = (
   const termDate = bobRow.termDate;
   const eligible = bobRow.eligibleForCommission;
   const todayStr = toDateString(today);
+  const currentCrmStatus = getCurrentCrmStatus(
+    allCrmPoliciesForNumber,
+    currentPolicyId,
+  );
 
   // --- CANCELED cases ---
 
   if (eligible === false) {
     const expireDate =
       paidThrough && paidThrough >= effectiveDate ? paidThrough : effectiveDate;
+    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
+    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
 
     return {
-      derivedStatus: 'CANCELED',
+      derivedStatus,
       derivedExpireDate: expireDate,
       cancelPreviousPolicyId: null,
-      statusChangeReason: `Not eligible for commission → Canceled (expire: ${expireDate})`,
+      statusChangeReason: `Not eligible for commission → ${reasonLabel} (expire: ${expireDate})`,
     };
   }
 
   if (termDate && termDate < todayStr) {
     const expireDate =
       paidThrough && paidThrough >= effectiveDate ? paidThrough : termDate;
+    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
+    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
 
     return {
-      derivedStatus: 'CANCELED',
+      derivedStatus,
       derivedExpireDate: expireDate,
       cancelPreviousPolicyId: null,
-      statusChangeReason: `Term date ${termDate} is in the past → Canceled (expire: ${expireDate})`,
+      statusChangeReason: `Term date ${termDate} is in the past → ${reasonLabel} (expire: ${expireDate})`,
     };
   }
 

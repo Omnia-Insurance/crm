@@ -2369,6 +2369,14 @@ check_file_contains \
   "normalizeDiffComparableValue(value) === d.bobValue" \
   "Reconciliation Apply all / Undo all accepted-state detection must handle null target values"
 check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "deriveCanceledStatus" \
+  "Reconciliation status engine must preserve payment-error cancellation descriptors"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/field-config.ts" \
+  "derivedStatus === 'PAYMENT_ERROR_CANCELED'" \
+  "Broker-effective audit must treat Payment Error-Canceled as canceled"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \
   "RichTextFieldEditor must skip updateOneRecord for draft records (body lives in store until Create)"

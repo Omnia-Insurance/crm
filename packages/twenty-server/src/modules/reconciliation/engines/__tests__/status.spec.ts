@@ -10,6 +10,28 @@ const today = new Date('2026-04-13');
 
 describe('status engine (ambetter-bob-v1)', () => {
   const parserId = 'ambetter-bob-v1';
+  const makeCrmPolicy = (overrides: Partial<CrmPolicy>): CrmPolicy => ({
+    id: 'policy-id',
+    policyNumber: 'U94692964',
+    applicationId: null,
+    effectiveDate: '2026-01-01',
+    expirationDate: null,
+    paidThroughDate: null,
+    status: 'ACTIVE_PLACED',
+    applicantCount: null,
+    'premium.amountMicros': null,
+    'lead.name.firstName': 'John',
+    'lead.name.lastName': 'Smith',
+    'lead.dateOfBirth': null,
+    'lead.addressCustom.addressState': null,
+    'agent.name': null,
+    'agent.npn': null,
+    planIdentifier: null,
+    'lead.phones.primaryPhoneNumber': null,
+    'lead.emails.primaryEmail': null,
+    'lead.id': null,
+    ...overrides,
+  });
 
   describe('canceled cases', () => {
     it('4.1.1: eligible=false → CANCELED with paid_through as expire', () => {
@@ -28,6 +50,30 @@ describe('status engine (ambetter-bob-v1)', () => {
 
       expect(result?.derivedStatus).toBe('CANCELED');
       expect(result?.derivedExpireDate).toBe('2026-03-01');
+    });
+
+    it('4.1.1: eligible=false preserves payment-error context when CRM was active payment-error', () => {
+      const currentPolicy = makeCrmPolicy({
+        id: 'payment-error-policy',
+        status: 'PAYMENT_ERROR_ACTIVE_PLACED',
+      });
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-03-01',
+          termDate: null,
+          eligibleForCommission: false,
+        },
+        [currentPolicy],
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+        currentPolicy.id,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_CANCELED');
+      expect(result?.derivedExpireDate).toBe('2026-03-01');
+      expect(result?.statusChangeReason).toContain('Payment Error-Canceled');
     });
 
     it('4.1.1: eligible=false with paid_through before effective → expire=effective', () => {
@@ -63,6 +109,29 @@ describe('status engine (ambetter-bob-v1)', () => {
       );
 
       expect(result?.derivedStatus).toBe('CANCELED');
+    });
+
+    it('4.1.2: term date in past preserves payment-error context when CRM was approved payment-error', () => {
+      const currentPolicy = makeCrmPolicy({
+        id: 'payment-error-policy',
+        status: 'PAYMENT_ERROR_ACTIVE_APPROVED',
+      });
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-03-01',
+          termDate: '2026-03-15',
+          eligibleForCommission: true,
+        },
+        [currentPolicy],
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+        currentPolicy.id,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_CANCELED');
+      expect(result?.statusChangeReason).toContain('Payment Error-Canceled');
     });
   });
 

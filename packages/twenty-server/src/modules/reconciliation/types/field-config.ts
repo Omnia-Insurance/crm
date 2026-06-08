@@ -210,7 +210,9 @@ export const deriveFlags = (
 
     // Precondition: broker effective exists and is later than policy effective
     if (brokerEffVal && policyEffVal && brokerEffVal > policyEffVal) {
-      const isCanceled = derivedStatus === 'CANCELED';
+      const isCanceled =
+        derivedStatus === 'CANCELED' ||
+        derivedStatus === 'PAYMENT_ERROR_CANCELED';
       let paidBeforeBrokerEff = false;
       let daysBefore = 0;
 
