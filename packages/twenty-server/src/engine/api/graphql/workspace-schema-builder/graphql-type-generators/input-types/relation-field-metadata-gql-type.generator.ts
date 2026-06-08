@@ -29,6 +29,13 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
   private readonly logger = new Logger(
     RelationFieldMetadataGqlInputTypeGenerator.name,
   );
+  // OMNIA-CUSTOM: app-scoped schemas can reference the same generated
+  // one-to-many relation filter from create and update inputs; GraphQL requires
+  // one named type instance per schema build.
+  private readonly oneToManyFilterTypesByFieldMetadataId = new Map<
+    string,
+    GraphQLInputObjectType
+  >();
 
   constructor(
     private readonly typeMapperService: TypeMapperService,
@@ -47,70 +54,10 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
     context: SchemaGenerationContext;
   }) {
     if (fieldMetadata.settings?.relationType === RelationType.ONE_TO_MANY) {
-      const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
-      const key = `relation-one-to-many-filter:${fieldMetadata.id}`;
-      const storedOneToManyFilterType =
-        this.gqlTypesStorage.getGqlTypeByKey(key);
-      const oneToManyFilterType =
-        isDefined(storedOneToManyFilterType) &&
-        isInputObjectType(storedOneToManyFilterType)
-          ? storedOneToManyFilterType
-          : new GraphQLInputObjectType({
-              name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
-              fields: () => {
-                const baseFields: GraphQLInputFieldConfigMap = {
-                  is: { type: FilterIs },
-                };
-
-                if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
-                  return baseFields;
-                }
-
-                const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps(
-                  {
-                    flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
-                    flatEntityMaps: context.flatObjectMetadataMaps,
-                  },
-                );
-
-                if (!isDefined(targetObjectMetadata)) {
-                  return baseFields;
-                }
-
-                const targetFilterType = this.gqlTypesStorage.getGqlTypeByKey(
-                  computeObjectMetadataInputTypeKey(
-                    targetObjectMetadata.nameSingular,
-                    GqlInputTypeDefinitionKind.Filter,
-                  ),
-                );
-
-                if (
-                  !isDefined(targetFilterType) ||
-                  !isInputObjectType(targetFilterType)
-                ) {
-                  return baseFields;
-                }
-
-                const targetFields = targetFilterType.getFields();
-
-                for (const [key, field] of Object.entries(targetFields)) {
-                  if (['and', 'or', 'not'].includes(key)) {
-                    continue;
-                  }
-
-                  baseFields[key] = {
-                    type: field.type,
-                    description: field.description,
-                  };
-                }
-
-                return baseFields;
-              },
-            });
-
-      if (!isDefined(storedOneToManyFilterType)) {
-        this.gqlTypesStorage.addGqlType(key, oneToManyFilterType);
-      }
+      const oneToManyFilterType = this.getOrCreateOneToManyFilterType({
+        fieldMetadata,
+        context,
+      });
 
       return {
         [fieldMetadata.name]: {
@@ -148,6 +95,83 @@ export class RelationFieldMetadataGqlInputTypeGenerator {
         description: fieldMetadata.description,
       },
     };
+  }
+
+  private getOrCreateOneToManyFilterType({
+    fieldMetadata,
+    context,
+  }: {
+    fieldMetadata: FlatFieldMetadata<
+      FieldMetadataType.RELATION | FieldMetadataType.MORPH_RELATION
+    >;
+    context: SchemaGenerationContext;
+  }): GraphQLInputObjectType {
+    const existingType = this.oneToManyFilterTypesByFieldMetadataId.get(
+      fieldMetadata.id,
+    );
+
+    if (isDefined(existingType)) {
+      return existingType;
+    }
+
+    const uniqueSuffix = fieldMetadata.id.replace(/-/g, '').slice(0, 8);
+    const oneToManyFilterType = new GraphQLInputObjectType({
+      name: `${fieldMetadata.name}OneToManyFilter_${uniqueSuffix}`,
+      fields: () => {
+        const baseFields: GraphQLInputFieldConfigMap = {
+          is: { type: FilterIs },
+        };
+
+        if (!isDefined(fieldMetadata.relationTargetObjectMetadataId)) {
+          return baseFields;
+        }
+
+        const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+          flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+          flatEntityMaps: context.flatObjectMetadataMaps,
+        });
+
+        if (!isDefined(targetObjectMetadata)) {
+          return baseFields;
+        }
+
+        const targetFilterType = this.gqlTypesStorage.getGqlTypeByKey(
+          computeObjectMetadataInputTypeKey(
+            targetObjectMetadata.nameSingular,
+            GqlInputTypeDefinitionKind.Filter,
+          ),
+        );
+
+        if (
+          !isDefined(targetFilterType) ||
+          !isInputObjectType(targetFilterType)
+        ) {
+          return baseFields;
+        }
+
+        const targetFields = targetFilterType.getFields();
+
+        for (const [key, field] of Object.entries(targetFields)) {
+          if (['and', 'or', 'not'].includes(key)) {
+            continue;
+          }
+
+          baseFields[key] = {
+            type: field.type,
+            description: field.description,
+          };
+        }
+
+        return baseFields;
+      },
+    });
+
+    this.oneToManyFilterTypesByFieldMetadataId.set(
+      fieldMetadata.id,
+      oneToManyFilterType,
+    );
+
+    return oneToManyFilterType;
   }
 
   public generateSimpleRelationFieldFilterInputType({

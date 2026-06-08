@@ -215,8 +215,8 @@ check_file_contains \
   "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/relation-field-metadata-gql-type.generator.ts" \
-  "relation-one-to-many-filter:" \
-  "One-to-many relation filter input types must be reused across create/update schema generation"
+  "oneToManyFilterTypesByFieldMetadataId" \
+  "App-scoped GraphQL schemas must reuse one-to-many relation filter input type instances"
 check_file_exists \
   "packages/twenty-server/src/engine/api/graphql/workspace-schema-builder/graphql-type-generators/input-types/__tests__/relation-field-metadata-gql-type.generator.spec.ts" \
   "One-to-many relation filter type reuse regression test must exist"
@@ -2651,6 +2651,14 @@ check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
   "useRecordStoreValue" \
   "Reconciliation review must read recordStoreFamilyState through the lint-compatible helper"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "deriveCanceledStatus" \
+  "Reconciliation status engine must preserve payment-error cancellation descriptors"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/field-config.ts" \
+  "derivedStatus === 'PAYMENT_ERROR_CANCELED'" \
+  "Broker-effective audit must treat Payment Error-Canceled as canceled"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \
