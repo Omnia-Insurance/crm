@@ -1829,9 +1829,17 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/import-job/utils/resolve-import-relations.util.ts" \
   "Assigning a missing relation should still enrich the matched record" \
   "Import relation resolution must enrich matched leads when assigning a missing parent relation"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/resolve-import-relations.util.ts" \
+  "getExplicitRelationId" \
+  "Import relation resolution must turn relation UUID values into FK assignments"
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
   "Regression test for import relation enrichment on missing parent relation"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
+  "assigns lookup and smart-update relations by id sub-field" \
+  "Regression test must cover relation ID assignment for imported rows"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 

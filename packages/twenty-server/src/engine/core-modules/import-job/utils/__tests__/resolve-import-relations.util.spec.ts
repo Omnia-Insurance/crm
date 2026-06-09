@@ -82,6 +82,10 @@ const fieldMaps = {
 } as unknown as FlatEntityMaps<FlatFieldMetadata>;
 
 describe('resolveImportRelations', () => {
+  const commissionCarrierId = '11111111-1111-4111-8111-111111111111';
+  const commissionPolicyId = '22222222-2222-4222-8222-222222222222';
+  const commissionLeadId = '33333333-3333-4333-8333-333333333333';
+
   it('updates an existing matched related record when the main record has no current relation', async () => {
     const mainRepository = makeRepository({
       manyRecords: [
@@ -175,6 +179,197 @@ describe('resolveImportRelations', () => {
       {
         id: 'policy-1',
         leadId: 'person-1',
+      },
+    ]);
+  });
+
+  it('assigns a lookup relation by UUID label on a new main record', async () => {
+    const mainRepository = makeRepository({});
+    const carrierRepository = makeRepository({
+      manyRecords: [
+        {
+          id: commissionCarrierId,
+          name: 'Ambetter',
+        },
+      ],
+    });
+
+    const commissionObjectMaps = {
+      byUniversalIdentifier: {
+        commission: {
+          id: 'commission-object-id',
+          nameSingular: 'commission',
+        },
+        carrier: {
+          id: 'carrier-object-id',
+          nameSingular: 'carrier',
+        },
+      },
+    } as unknown as FlatEntityMaps<FlatObjectMetadata>;
+
+    const commissionFieldMaps = {
+      byUniversalIdentifier: {
+        carrier: {
+          id: 'carrier-field-id',
+          objectMetadataId: 'commission-object-id',
+          name: 'carrier',
+          relationTargetObjectMetadataId: 'carrier-object-id',
+          settings: {
+            joinColumnName: 'carrierId',
+          },
+        },
+      },
+    } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+
+    const plan = await resolveImportRelations(
+      [
+        {
+          carrier: commissionCarrierId,
+          amountReceived: 123.45,
+        },
+      ],
+      [
+        {
+          relationFieldName: 'carrier',
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        },
+      ],
+      'commission',
+      commissionObjectMaps,
+      commissionFieldMaps,
+      async (objectName) =>
+        objectName === 'commission' ? mainRepository : carrierRepository,
+    );
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.reassignments).toEqual([]);
+    expect(plan.processedRows).toEqual([
+      {
+        amountReceived: 123.45,
+        carrierId: commissionCarrierId,
+      },
+    ]);
+  });
+
+  it('assigns lookup and smart-update relations by id sub-field on a new main record', async () => {
+    const mainRepository = makeRepository({});
+    const policyRepository = makeRepository({
+      manyRecords: [
+        {
+          id: commissionPolicyId,
+          name: 'Policy 1',
+        },
+      ],
+    });
+    const personRepository = makeRepository({
+      manyRecords: [
+        {
+          id: commissionLeadId,
+          name: { firstName: 'Thomas', lastName: 'Anderson' },
+          phones: { primaryPhoneNumber: '8649325438' },
+          emails: { primaryEmail: 'cheetchanderson238@gmail.com' },
+        },
+      ],
+      rawPhoneRecords: [
+        {
+          id: commissionLeadId,
+          phonesPrimaryPhoneNumber: '8649325438',
+        },
+      ],
+      rawEmailRecords: [
+        {
+          id: commissionLeadId,
+          emailsPrimaryEmail: 'cheetchanderson238@gmail.com',
+        },
+      ],
+    });
+
+    const commissionObjectMaps = {
+      byUniversalIdentifier: {
+        commission: {
+          id: 'commission-object-id',
+          nameSingular: 'commission',
+        },
+        person: {
+          id: 'person-object-id',
+          nameSingular: 'person',
+        },
+        policy: {
+          id: 'policy-object-id',
+          nameSingular: 'policy',
+        },
+      },
+    } as unknown as FlatEntityMaps<FlatObjectMetadata>;
+
+    const commissionFieldMaps = {
+      byUniversalIdentifier: {
+        lead: {
+          id: 'lead-field-id',
+          objectMetadataId: 'commission-object-id',
+          name: 'lead',
+          relationTargetObjectMetadataId: 'person-object-id',
+          settings: {
+            joinColumnName: 'leadId',
+          },
+        },
+        policy: {
+          id: 'policy-field-id',
+          objectMetadataId: 'commission-object-id',
+          name: 'policy',
+          relationTargetObjectMetadataId: 'policy-object-id',
+          settings: {
+            joinColumnName: 'policyId',
+          },
+        },
+      },
+    } as unknown as FlatEntityMaps<FlatFieldMetadata>;
+
+    const plan = await resolveImportRelations(
+      [
+        {
+          'lead.id': commissionLeadId,
+          'policy.id': commissionPolicyId,
+          amountReceived: 123.45,
+        },
+      ],
+      [
+        {
+          relationFieldName: 'lead',
+          behavior: 'SMART_UPDATE',
+          onNotFound: 'CREATE',
+          uniqueConstraintFields: ['phones'],
+        },
+        {
+          relationFieldName: 'policy',
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        },
+      ],
+      'commission',
+      commissionObjectMaps,
+      commissionFieldMaps,
+      async (objectName) => {
+        if (objectName === 'commission') {
+          return mainRepository;
+        }
+
+        if (objectName === 'policy') {
+          return policyRepository;
+        }
+
+        return personRepository;
+      },
+    );
+
+    expect(plan.errors).toEqual([]);
+    expect(plan.reassignments).toEqual([]);
+    expect(plan.relatedRecordUpdates).toEqual([]);
+    expect(plan.processedRows).toEqual([
+      {
+        amountReceived: 123.45,
+        leadId: commissionLeadId,
+        policyId: commissionPolicyId,
       },
     ]);
   });

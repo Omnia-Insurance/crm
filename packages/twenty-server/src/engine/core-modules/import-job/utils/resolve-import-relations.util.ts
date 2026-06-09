@@ -10,6 +10,7 @@
  */
 
 import { type ObjectLiteral, type Repository } from 'typeorm';
+import { isValidUuid } from 'twenty-shared/utils';
 
 import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
 
@@ -144,6 +145,68 @@ type ParsedRow = {
   relationLabels: Map<string, string>;
 };
 
+const getExplicitRelationId = (
+  parsed: ParsedRow,
+  relationFieldName: string,
+): string | null => {
+  const relationLabel = parsed.relationLabels.get(relationFieldName);
+
+  if (relationLabel && isValidUuid(relationLabel)) {
+    return relationLabel;
+  }
+
+  const relationData = parsed.relationData.get(relationFieldName);
+  const relationDataId = relationData?.id;
+
+  return typeof relationDataId === 'string' && isValidUuid(relationDataId)
+    ? relationDataId
+    : null;
+};
+
+const applyResolvedRelationId = ({
+  parsed,
+  existingMainRecords,
+  joinColumnName,
+  relatedRecordId,
+  reassignments,
+}: {
+  parsed: ParsedRow;
+  existingMainRecords: Map<string, Record<string, unknown>>;
+  joinColumnName: string;
+  relatedRecordId: string;
+  reassignments: RelationReassignment[];
+}) => {
+  parsed.directFields[joinColumnName] = relatedRecordId;
+
+  const mainRecordId = parsed.directFields.id;
+
+  if (typeof mainRecordId !== 'string') {
+    return;
+  }
+
+  const existingMain = existingMainRecords.get(mainRecordId);
+  const currentFk = existingMain?.[joinColumnName] as string | undefined;
+
+  if (currentFk !== relatedRecordId) {
+    reassignments.push({
+      mainRecordId,
+      joinColumnName,
+      newRelatedRecordId: relatedRecordId,
+    });
+  }
+};
+
+const collectExplicitRelationIds = (
+  parsedRows: ParsedRow[],
+  relationFieldName: string,
+) => [
+  ...new Set(
+    parsedRows
+      .map((parsed) => getExplicitRelationId(parsed, relationFieldName))
+      .filter((id): id is string => id !== null),
+  ),
+];
+
 /**
  * Separate direct fields from relation sub-field data in each row.
  * Relation sub-fields use dot notation: "lead.phones.primaryPhoneNumber"
@@ -248,12 +311,57 @@ async function resolveLookupAssign(
   errors: RelationResolutionError[],
   reassignments: RelationReassignment[],
 ): Promise<void> {
+  const explicitRelationIds = collectExplicitRelationIds(
+    parsedRows,
+    rb.relationFieldName,
+  );
+  const explicitlyMatchedRecordsById = await batchLoadRecords(
+    targetRepo,
+    targetObjectName,
+    explicitRelationIds,
+  );
+
+  for (const parsed of parsedRows) {
+    const explicitRelationId = getExplicitRelationId(
+      parsed,
+      rb.relationFieldName,
+    );
+
+    if (!explicitRelationId) {
+      continue;
+    }
+
+    if (!explicitlyMatchedRecordsById.has(explicitRelationId)) {
+      errors.push({
+        rowIndex: parsed.rowIndex,
+        column: rb.relationFieldName,
+        errorType: 'NOT_FOUND',
+        message: `${rb.relationFieldName} id "${explicitRelationId}" not found`,
+        searchedValue: explicitRelationId,
+      });
+
+      continue;
+    }
+
+    applyResolvedRelationId({
+      parsed,
+      existingMainRecords,
+      joinColumnName,
+      relatedRecordId: explicitRelationId,
+      reassignments,
+    });
+  }
+
   // Collect unique label values from both relation labels and sub-field data.
   // Product uses connect fields (product.name), carrier uses relation labels.
   const searchField = labelFieldName ?? 'name';
   const labelsToRowIndices = new Map<string, number[]>();
 
   for (const parsed of parsedRows) {
+    if (getExplicitRelationId(parsed, rb.relationFieldName)) {
+      continue;
+    }
+
     let label = parsed.relationLabels.get(rb.relationFieldName);
 
     // Fallback: extract label identifier from sub-field data
@@ -324,17 +432,13 @@ async function resolveLookupAssign(
 
     // Queue reassignments only where the FK actually changed
     for (const rowIndex of rowIndices) {
-      const mainRecordId = parsedRows[rowIndex].directFields.id as string;
-      const existingMain = existingMainRecords.get(mainRecordId);
-      const currentFk = existingMain?.[joinColumnName] as string | undefined;
-
-      if (currentFk !== matchedId) {
-        reassignments.push({
-          mainRecordId,
-          joinColumnName,
-          newRelatedRecordId: matchedId,
-        });
-      }
+      applyResolvedRelationId({
+        parsed: parsedRows[rowIndex],
+        existingMainRecords,
+        joinColumnName,
+        relatedRecordId: matchedId,
+        reassignments,
+      });
     }
   }
 }
@@ -565,6 +669,15 @@ async function resolveSmartUpdate(
   // Collect IDs of records we need to fetch for sub-field updates.
   const recordIdsToFetch = new Set<string>();
   const deferredUpdates: DeferredReassignUpdate[] = [];
+  const explicitRelationIds = collectExplicitRelationIds(
+    parsedRows,
+    rb.relationFieldName,
+  );
+  const explicitlyMatchedRecordsById = await batchLoadRecords(
+    targetRepo,
+    targetObjectName,
+    explicitRelationIds,
+  );
 
   for (const parsed of parsedRows) {
     const subFields = parsed.relationData.get(rb.relationFieldName);
@@ -573,6 +686,57 @@ async function resolveSmartUpdate(
     if (!subFields && !csvLabel) continue;
 
     const mainId = parsed.directFields.id as string;
+    const explicitRelationId = getExplicitRelationId(
+      parsed,
+      rb.relationFieldName,
+    );
+
+    if (explicitRelationId) {
+      const explicitRelatedRecord =
+        explicitlyMatchedRecordsById.get(explicitRelationId);
+
+      if (!explicitRelatedRecord) {
+        errors.push({
+          rowIndex: parsed.rowIndex,
+          column: rb.relationFieldName,
+          errorType: 'NOT_FOUND',
+          message: `${rb.relationFieldName} id "${explicitRelationId}" not found`,
+          searchedValue: explicitRelationId,
+        });
+
+        continue;
+      }
+
+      applyResolvedRelationId({
+        parsed,
+        existingMainRecords,
+        joinColumnName,
+        relatedRecordId: explicitRelationId,
+        reassignments,
+      });
+
+      const subFieldUpdates = buildSubFieldUpdates(
+        Object.fromEntries(
+          Object.entries(subFields ?? {}).filter(
+            ([fieldName]) => fieldName !== 'id',
+          ),
+        ),
+        explicitRelatedRecord,
+        rb.uniqueConstraintFields,
+      );
+
+      if (subFieldUpdates && Object.keys(subFieldUpdates).length > 0) {
+        relatedRecordUpdates.push({
+          recordId: explicitRelationId,
+          objectNameSingular: targetObjectName,
+          fields: subFieldUpdates,
+          sourceRowIndices: [parsed.rowIndex],
+        });
+      }
+
+      continue;
+    }
+
     const existingMain = existingMainRecords.get(mainId);
     const currentRelatedId = existingMain?.[joinColumnName] as
       | string
@@ -599,10 +763,12 @@ async function resolveSmartUpdate(
 
         if (conflictId) {
           // Constraint conflict → REASSIGN only (no sub-field edits)
-          reassignments.push({
-            mainRecordId: mainId,
+          applyResolvedRelationId({
+            parsed,
+            existingMainRecords,
             joinColumnName,
-            newRelatedRecordId: conflictId,
+            relatedRecordId: conflictId,
+            reassignments,
           });
         } else {
           // No conflicts — update the existing related record
@@ -628,10 +794,12 @@ async function resolveSmartUpdate(
         );
 
         if (matchId) {
-          reassignments.push({
-            mainRecordId: mainId,
+          applyResolvedRelationId({
+            parsed,
+            existingMainRecords,
             joinColumnName,
-            newRelatedRecordId: matchId,
+            relatedRecordId: matchId,
+            reassignments,
           });
 
           // Defer sub-field updates — need full record (fetched in pass 2)
@@ -677,10 +845,12 @@ async function resolveSmartUpdate(
       );
 
       if (matchId) {
-        reassignments.push({
-          mainRecordId: mainId,
+        applyResolvedRelationId({
+          parsed,
+          existingMainRecords,
           joinColumnName,
-          newRelatedRecordId: matchId,
+          relatedRecordId: matchId,
+          reassignments,
         });
 
         // Assigning a missing relation should still enrich the matched record
