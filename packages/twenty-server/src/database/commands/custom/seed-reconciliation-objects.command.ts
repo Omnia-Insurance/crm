@@ -34,6 +34,7 @@ const ADMIN_ONLY_OBJECT_NAMES = [
   'reconciliation',
   'carrierConfig',
   'reviewItem',
+  'reconciliationDecisionRule',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +56,8 @@ const RECONCILIATION_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     type: FieldMetadataType.TEXT,
     name: 'sheetName',
     label: 'Sheet Name',
-    description: 'Which sheet of the uploaded workbook was used (for multi-sheet BOBs)',
+    description:
+      'Which sheet of the uploaded workbook was used (for multi-sheet BOBs)',
     icon: 'IconTable',
   },
   {
@@ -166,7 +168,8 @@ const CARRIER_CONFIG_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     type: FieldMetadataType.RAW_JSON,
     name: 'matchingConfig',
     label: 'Matching Config',
-    description: 'Tier thresholds, multipliers, and toggles for the matching engine',
+    description:
+      'Tier thresholds, multipliers, and toggles for the matching engine',
     icon: 'IconTarget',
   },
   {
@@ -263,7 +266,12 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
       { label: 'Approved', value: 'APPROVED', position: 1, color: 'green' },
       { label: 'Rejected', value: 'REJECTED', position: 2, color: 'red' },
       { label: 'Skipped', value: 'SKIPPED', position: 3, color: 'blue' },
-      { label: 'Flag Audit', value: 'FLAG_AUDIT', position: 4, color: 'orange' },
+      {
+        label: 'Flag Audit',
+        value: 'FLAG_AUDIT',
+        position: 4,
+        color: 'orange',
+      },
     ],
   },
   {
@@ -273,12 +281,42 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     description: 'Overlay flags for special conditions',
     icon: 'IconFlag',
     options: [
-      { label: 'Status Change', value: 'STATUS_CHANGE', position: 0, color: 'orange' },
-      { label: 'Payment Error', value: 'PAYMENT_ERROR', position: 1, color: 'red' },
-      { label: 'Reinstatement', value: 'REINSTATEMENT', position: 2, color: 'purple' },
-      { label: 'Broker Eff Audit', value: 'BROKER_EFF_AUDIT', position: 3, color: 'yellow' },
-      { label: 'Multi Match', value: 'MULTI_MATCH', position: 4, color: 'yellow' },
-      { label: 'Name Mismatch', value: 'NAME_MISMATCH', position: 5, color: 'blue' },
+      {
+        label: 'Status Change',
+        value: 'STATUS_CHANGE',
+        position: 0,
+        color: 'orange',
+      },
+      {
+        label: 'Payment Error',
+        value: 'PAYMENT_ERROR',
+        position: 1,
+        color: 'red',
+      },
+      {
+        label: 'Reinstatement',
+        value: 'REINSTATEMENT',
+        position: 2,
+        color: 'purple',
+      },
+      {
+        label: 'Broker Eff Audit',
+        value: 'BROKER_EFF_AUDIT',
+        position: 3,
+        color: 'yellow',
+      },
+      {
+        label: 'Multi Match',
+        value: 'MULTI_MATCH',
+        position: 4,
+        color: 'yellow',
+      },
+      {
+        label: 'Name Mismatch',
+        value: 'NAME_MISMATCH',
+        position: 5,
+        color: 'blue',
+      },
     ],
   },
   {
@@ -289,15 +327,60 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     icon: 'IconLink',
     options: [
       { label: 'Override', value: 'OVERRIDE', position: 0, color: 'green' },
-      { label: 'Policy#+Date+Agent', value: 'POLICY_NUMBER_DATE_AGENT', position: 1, color: 'green' },
-      { label: 'Policy#+Date', value: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE', position: 2, color: 'turquoise' },
-      { label: 'Policy#+Agent', value: 'POLICY_NUMBER_PLUS_AGENT', position: 3, color: 'blue' },
-      { label: 'Policy# Single', value: 'POLICY_NUMBER_SINGLE', position: 4, color: 'blue' },
-      { label: 'Policy# Multi', value: 'POLICY_NUMBER_MULTI_BEST', position: 5, color: 'yellow' },
-      { label: 'NPN+Date+Name', value: 'NPN_DATE_NAME', position: 6, color: 'orange' },
-      { label: 'Name+DOB+Date', value: 'NAME_DOB_DATE', position: 7, color: 'orange' },
-      { label: 'Missing from BOB', value: 'MISSING_FROM_BOB', position: 8, color: 'purple' },
-      { label: 'Discovery', value: 'POLICY_NUMBER_DISCOVERY', position: 9, color: 'sky' },
+      {
+        label: 'Policy#+Date+Agent',
+        value: 'POLICY_NUMBER_DATE_AGENT',
+        position: 1,
+        color: 'green',
+      },
+      {
+        label: 'Policy#+Date',
+        value: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE',
+        position: 2,
+        color: 'turquoise',
+      },
+      {
+        label: 'Policy#+Agent',
+        value: 'POLICY_NUMBER_PLUS_AGENT',
+        position: 3,
+        color: 'blue',
+      },
+      {
+        label: 'Policy# Single',
+        value: 'POLICY_NUMBER_SINGLE',
+        position: 4,
+        color: 'blue',
+      },
+      {
+        label: 'Policy# Multi',
+        value: 'POLICY_NUMBER_MULTI_BEST',
+        position: 5,
+        color: 'yellow',
+      },
+      {
+        label: 'NPN+Date+Name',
+        value: 'NPN_DATE_NAME',
+        position: 6,
+        color: 'orange',
+      },
+      {
+        label: 'Name+DOB+Date',
+        value: 'NAME_DOB_DATE',
+        position: 7,
+        color: 'orange',
+      },
+      {
+        label: 'Missing from BOB',
+        value: 'MISSING_FROM_BOB',
+        position: 8,
+        color: 'purple',
+      },
+      {
+        label: 'Discovery',
+        value: 'POLICY_NUMBER_DISCOVERY',
+        position: 9,
+        color: 'sky',
+      },
       { label: 'Unmatched', value: 'UNMATCHED', position: 10, color: 'red' },
     ],
   },
@@ -358,6 +441,52 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     icon: 'IconCalendarEvent',
   },
   {
+    type: FieldMetadataType.SELECT,
+    name: 'decisionSource',
+    label: 'Decision Source',
+    description:
+      'Whether the decision was made directly by a user, by a batch user action, or by a learned reconciliation rule',
+    icon: 'IconGitBranch',
+    isNullable: true,
+    options: [
+      { label: 'User', value: 'USER', position: 0, color: 'blue' },
+      {
+        label: 'Batch User',
+        value: 'BATCH_USER',
+        position: 1,
+        color: 'purple',
+      },
+      { label: 'Auto Rule', value: 'AUTO_RULE', position: 2, color: 'green' },
+    ],
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'decisionRuleSignatureHash',
+    label: 'Decision Rule Signature Hash',
+    description:
+      'Signature hash of the learned rule that governed this decision, when applicable',
+    icon: 'IconFingerprint',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'decisionRuleId',
+    label: 'Decision Rule ID',
+    description:
+      'Workspace record id of the learned reconciliation rule that governed this decision, when applicable',
+    icon: 'IconLink',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    name: 'autoAppliedAt',
+    label: 'Auto Applied At',
+    description:
+      'When a learned reconciliation rule automatically applied this item',
+    icon: 'IconCalendarBolt',
+    isNullable: true,
+  },
+  {
     type: FieldMetadataType.RAW_JSON,
     name: 'fieldDiffs',
     label: 'Field Diffs',
@@ -378,6 +507,139 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     label: 'BOB Row Snapshot',
     description: 'Snapshot of the parsed BOB row data at match time',
     icon: 'IconDatabase',
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReconciliationDecisionRule object + fields (learned auto-apply rules)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DECISION_RULE_OBJECT: ObjectMetadataSeed = {
+  nameSingular: 'reconciliationDecisionRule',
+  namePlural: 'reconciliationDecisionRules',
+  labelSingular: 'Reconciliation Decision Rule',
+  labelPlural: 'Reconciliation Decision Rules',
+  description:
+    'Learned reconciliation decisions. A user-applied status update creates a strict signature that can auto-apply equivalent future review items.',
+  icon: 'IconBrain',
+};
+
+const DECISION_RULE_CUSTOM_FIELDS: FieldMetadataSeed[] = [
+  {
+    type: FieldMetadataType.SELECT,
+    name: 'ruleType',
+    label: 'Rule Type',
+    description: 'Kind of reconciliation decision this rule can automate',
+    icon: 'IconGitBranch',
+    options: [
+      {
+        label: 'Status Update',
+        value: 'STATUS_UPDATE',
+        position: 0,
+        color: 'green',
+      },
+    ],
+  },
+  {
+    type: FieldMetadataType.BOOLEAN,
+    name: 'isActive',
+    label: 'Active',
+    description: 'Inactive rules are retained for audit but never auto-apply',
+    icon: 'IconCircleCheck',
+    defaultValue: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'signatureHash',
+    label: 'Signature Hash',
+    description: 'Stable hash of the rule signature used for exact matching',
+    icon: 'IconFingerprint',
+    isUnique: true,
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'signature',
+    label: 'Signature',
+    description:
+      'Structured status-rule signature: carrier, from/to status, match method, status-reason class, and payment-state bucket',
+    icon: 'IconCodeDots',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'carrierName',
+    label: 'Carrier Name',
+    description: 'Carrier this learned decision applies to',
+    icon: 'IconBuildingSkyscraper',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'fromStatus',
+    label: 'From Status',
+    description: 'CRM status before the learned decision was applied',
+    icon: 'IconArrowLeft',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'toStatus',
+    label: 'To Status',
+    description: 'CRM status written by the learned decision',
+    icon: 'IconArrowRight',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'sourceReviewItemId',
+    label: 'Source Review Item ID',
+    description:
+      'Review item whose user-applied decision created or refreshed this rule',
+    icon: 'IconChecklist',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'sourceReconciliationId',
+    label: 'Source Reconciliation ID',
+    description: 'Reconciliation run where the source decision was made',
+    icon: 'IconFileImport',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'createdByUserWorkspaceId',
+    label: 'Created By User Workspace ID',
+    description: 'User workspace id that created the rule when known',
+    icon: 'IconUser',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.NUMBER,
+    name: 'approvedCount',
+    label: 'Approved Count',
+    description: 'Number of user-applied decisions observed for this signature',
+    icon: 'IconCheck',
+    defaultValue: 0,
+  },
+  {
+    type: FieldMetadataType.NUMBER,
+    name: 'autoAppliedCount',
+    label: 'Auto Applied Count',
+    description: 'Number of review items automatically applied by this rule',
+    icon: 'IconPlayerPlay',
+    defaultValue: 0,
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    name: 'lastSeenAt',
+    label: 'Last Seen At',
+    description: 'Last time a user-applied decision refreshed this rule',
+    icon: 'IconCalendarEvent',
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    name: 'lastAppliedAt',
+    label: 'Last Applied At',
+    description: 'Last time this rule auto-applied a review item',
+    icon: 'IconCalendarBolt',
+    isNullable: true,
   },
 ];
 
@@ -436,6 +698,12 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       dryRun: isDryRun,
     });
 
+    await this.ensureObjectExists({
+      workspaceId,
+      seed: DECISION_RULE_OBJECT,
+      dryRun: isDryRun,
+    });
+
     // 2. Create custom fields on each object
     await this.ensureFieldsExist({
       workspaceId,
@@ -463,6 +731,13 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       workspaceId,
       objectNameSingular: REVIEW_ITEM_OBJECT.nameSingular,
       fieldSeeds: REVIEW_ITEM_CUSTOM_FIELDS,
+      dryRun: isDryRun,
+    });
+
+    await this.ensureFieldsExist({
+      workspaceId,
+      objectNameSingular: DECISION_RULE_OBJECT.nameSingular,
+      fieldSeeds: DECISION_RULE_CUSTOM_FIELDS,
       dryRun: isDryRun,
     });
 
@@ -637,9 +912,7 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     }
 
     if (dryRun) {
-      this.logger.log(
-        `  [DRY RUN] would create object "${seed.nameSingular}"`,
-      );
+      this.logger.log(`  [DRY RUN] would create object "${seed.nameSingular}"`);
 
       return;
     }
@@ -711,7 +984,11 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
     // Update SELECT/MULTI_SELECT options on existing fields if they've changed.
     // This ensures Postgres enums stay in sync with the seed definition.
-    const fieldsToUpdateOptions: { id: string; name: string; options: unknown[] }[] = [];
+    const fieldsToUpdateOptions: {
+      id: string;
+      name: string;
+      options: unknown[];
+    }[] = [];
 
     for (const seed of fieldSeeds) {
       if (
@@ -734,7 +1011,9 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
       // Check if options differ (new values added, old removed, or count changed)
       const hasNewValues = [...seedValues].some((v) => !existingValues.has(v));
-      const hasRemovedValues = [...existingValues].some((v) => !seedValues.has(v));
+      const hasRemovedValues = [...existingValues].some(
+        (v) => !seedValues.has(v),
+      );
 
       if (hasNewValues || hasRemovedValues) {
         fieldsToUpdateOptions.push({

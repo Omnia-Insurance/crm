@@ -5,6 +5,7 @@ import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/w
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
 // OMNIA-CUSTOM: Brokerage app adoption migrates existing Omnia workspace metadata to the app-owned package
 import { AdoptBrokerageAppCommand } from 'src/database/commands/custom/adopt-brokerage-app.command';
+import { BackfillReconciliationDecisionRulesCommand } from 'src/database/commands/custom/backfill-reconciliation-decision-rules.command';
 // OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
 import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
 // OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
@@ -64,6 +65,8 @@ import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
+import { ReconciliationDecisionRuleService } from 'src/modules/reconciliation/services/decision-rule.service';
+import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
 
 @Module({
   imports: [
@@ -134,6 +137,9 @@ import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/au
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,
+    BackfillReconciliationDecisionRulesCommand,
+    ReconciliationDecisionRuleService,
+    ReviewItemService,
     // OMNIA-CUSTOM: Time Card ingestion seed + backfill
     SeedConvosoTimeCardPipelineCommand,
     BackfillTimeCardsCommand,

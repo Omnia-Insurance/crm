@@ -9,6 +9,7 @@ import { ReconciliationResolver } from 'src/modules/reconciliation/reconciliatio
 import { ReconciliationAttachmentService } from 'src/modules/reconciliation/services/attachment.service';
 import { ReconciliationDataService } from 'src/modules/reconciliation/services/data.service';
 import { ReconciliationMutationService } from 'src/modules/reconciliation/services/mutation.service';
+import { ReconciliationDecisionRuleService } from 'src/modules/reconciliation/services/decision-rule.service';
 import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
 import { ReconciliationStateMachineService } from 'src/modules/reconciliation/services/state-machine.service';
 
@@ -22,6 +23,7 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     // Services
     ReconciliationDataService,
     ReconciliationMutationService,
+    ReconciliationDecisionRuleService,
     ReconciliationAttachmentService,
     ReconciliationStateMachineService,
     ReviewItemService,
@@ -30,6 +32,10 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     ReconciliationParseJob,
     ReconciliationMatchJob,
   ],
-  exports: [ReconciliationOrchestratorService],
+  exports: [
+    ReconciliationOrchestratorService,
+    ReconciliationDecisionRuleService,
+    ReviewItemService,
+  ],
 })
 export class ReconciliationModule {}

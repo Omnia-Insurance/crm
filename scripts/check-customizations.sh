@@ -2584,6 +2584,14 @@ check_file_contains \
   "SeedReconciliationObjectsCommand" \
   "DatabaseCommandModule must register SeedReconciliationObjectsCommand"
 check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "BackfillReconciliationDecisionRulesCommand" \
+  "DatabaseCommandModule must register learned reconciliation rule backfill command"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "reconciliationDecisionRule" \
+  "Seed command must create the learned reconciliation decision rule object"
+check_file_contains \
   "packages/twenty-front/package.json" \
   "@pierre/diffs" \
   "@pierre/diffs dependency required for review UI unified-diff rendering"
@@ -2710,6 +2718,52 @@ check_file_contains \
 check_file_exists \
   "packages/twenty-shared/src/utils/composite/promotePrimaryToAdditional.ts" \
   "Shared helper used by frontend + backend reconciliation Accept paths"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/reconciliation.resolver.ts" \
+  "batchApplyReviewItems" \
+  "Reconciliation toolbar batch action must call a mutation that applies/undoes CRM writes"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "buildUpdatesForTarget" \
+  "Reconciliation batch apply/undo must mirror individual Apply all / Undo all field patch semantics"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "cancelPreviousPolicyIfRequested" \
+  "Reconciliation batch apply must preserve previous-policy cancellation behavior"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/services/decision-rule.service.ts" \
+  "Learned reconciliation decision rule service"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/decision-rule.service.ts" \
+  "buildStatusRuleSignature" \
+  "Learned reconciliation rule service must build strict status signatures"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/decision-rule.service.ts" \
+  "RECONCILIATION_AUTO_RULE_BLOCKING_FLAGS" \
+  "Learned reconciliation rules must centralize risky flag blocking"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "applyLearnedRulesForReconciliation" \
+  "Reconciliation match job must auto-apply active learned status rules"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/backfill-reconciliation-decision-rules.command.ts" \
+  "Backfill command for learned reconciliation decision rules"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewBody.tsx" \
+  "BATCH_APPLY_REVIEW_ITEMS" \
+  "Reconciliation review body must use the CRM-mutating batch apply/undo mutation"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewBody.tsx" \
+  "NAME_MISMATCH" \
+  "Reconciliation default batch apply must exclude name-mismatch review items"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationToolbar.tsx" \
+  "batchUndoCount" \
+  "Reconciliation toolbar must expose batch undo alongside batch apply"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "syncReviewItemDecisionWithServer" \
+  "Individual reconciliation Apply all must sync through the server mutation for learned rules"
 
 echo ""
 

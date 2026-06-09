@@ -1,3 +1,4 @@
+import { useMutation } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -26,6 +27,7 @@ import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { useTasks } from '@/activities/tasks/hooks/useTasks';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
+import { BATCH_APPLY_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
 import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
 import { useOpenReviewItemCommentsInSidePanel } from '@/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
@@ -347,6 +349,10 @@ export const MatchedDiffView = ({
 
   // ── Decision actions ──
   const { updateOneRecord } = useUpdateOneRecord();
+  const [batchApplyMutation] = useMutation(BATCH_APPLY_REVIEW_ITEMS);
+  const [serverSyncedApplyItemIds, setServerSyncedApplyItemIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
 
   const updateDecision = useCallback(
     async (decision: string, note?: string | null) => {
@@ -367,6 +373,47 @@ export const MatchedDiffView = ({
       onDecisionMade?.(item.id);
     },
     [item.id, updateOneRecord, onDecisionMade],
+  );
+
+  const syncReviewItemDecisionWithServer = useCallback(
+    async (action: 'APPLY' | 'UNDO') => {
+      if (action === 'APPLY') {
+        setServerSyncedApplyItemIds((currentIds) =>
+          new Set(currentIds).add(item.id),
+        );
+      } else {
+        setServerSyncedApplyItemIds((currentIds) => {
+          const nextIds = new Set(currentIds);
+
+          nextIds.delete(item.id);
+
+          return nextIds;
+        });
+      }
+
+      try {
+        await batchApplyMutation({
+          variables: {
+            reconciliationId,
+            action,
+            reviewItemIds: [item.id],
+          },
+        });
+      } catch (error) {
+        if (action === 'APPLY') {
+          setServerSyncedApplyItemIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+
+            nextIds.delete(item.id);
+
+            return nextIds;
+          });
+        }
+
+        throw error;
+      }
+    },
+    [batchApplyMutation, item.id, reconciliationId],
   );
 
   /**
@@ -456,6 +503,8 @@ export const MatchedDiffView = ({
   );
 
   const handleAcceptAll = useCallback(async () => {
+    await syncReviewItemDecisionWithServer('APPLY');
+
     const { policyUpdates, leadUpdates } = buildUpdatesForTarget('bob');
 
     if (Object.keys(policyUpdates).length > 0 && policyId) {
@@ -502,9 +551,12 @@ export const MatchedDiffView = ({
     item.bobRowSnapshot,
     updateOneRecord,
     updateDecision,
+    syncReviewItemDecisionWithServer,
   ]);
 
   const handleUndoAll = useCallback(async () => {
+    await syncReviewItemDecisionWithServer('UNDO');
+
     const { policyUpdates, leadUpdates } = buildUpdatesForTarget('crm');
 
     if (Object.keys(policyUpdates).length > 0 && policyId) {
@@ -533,6 +585,7 @@ export const MatchedDiffView = ({
     leadId,
     updateOneRecord,
     updateDecision,
+    syncReviewItemDecisionWithServer,
   ]);
 
   // True when every actionable diff currently matches its proposed BOB value
@@ -580,9 +633,31 @@ export const MatchedDiffView = ({
   // the Undo all / Reject buttons.)
   useEffect(() => {
     if (allDiffsAccepted && item.decision === 'PENDING') {
-      void updateDecision('APPROVED');
+      if (serverSyncedApplyItemIds.has(item.id)) return;
+
+      void (async () => {
+        try {
+          await syncReviewItemDecisionWithServer('APPLY');
+          await updateDecision('APPROVED');
+        } catch {
+          setServerSyncedApplyItemIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+
+            nextIds.delete(item.id);
+
+            return nextIds;
+          });
+        }
+      })();
     }
-  }, [allDiffsAccepted, item.decision, updateDecision]);
+  }, [
+    allDiffsAccepted,
+    item.decision,
+    item.id,
+    serverSyncedApplyItemIds,
+    syncReviewItemDecisionWithServer,
+    updateDecision,
+  ]);
 
   const handleReject = useCallback(
     () => updateDecision('SKIPPED'),

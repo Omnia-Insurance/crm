@@ -1,7 +1,12 @@
 // OMNIA-CUSTOM: GraphQL resolver for reconciliation pipeline operations.
 // Exposes mutations to trigger parsing and matching from the frontend.
 
-import { UseFilters, UseGuards, UsePipes } from '@nestjs/common';
+import {
+  BadRequestException,
+  UseFilters,
+  UseGuards,
+  UsePipes,
+} from '@nestjs/common';
 import { Args, Float, Mutation } from '@nestjs/graphql';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
@@ -9,6 +14,7 @@ import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorato
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
@@ -32,10 +38,7 @@ export class ReconciliationResolver {
     reconciliationId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<StartReconciliationResultDTO> {
-    await this.orchestratorService.startParsing(
-      workspace.id,
-      reconciliationId,
-    );
+    await this.orchestratorService.startParsing(workspace.id, reconciliationId);
 
     return {
       success: true,
@@ -71,17 +74,62 @@ export class ReconciliationResolver {
     @Args('reviewItemIds', { type: () => [UUIDScalarType], nullable: true })
     reviewItemIds: string[] | undefined,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId({ allowUndefined: true })
+    userWorkspaceId: string | undefined,
   ): Promise<StartReconciliationResultDTO> {
     const result = await this.reviewItemService.batchApprove(
       workspace.id,
       reconciliationId,
       { minConfidence, reviewItemIds },
+      { userWorkspaceId },
     );
 
     return {
       success: true,
       reconciliationId,
       status: `APPROVED_${result.updatedCount}`,
+    };
+  }
+
+  @Mutation(() => StartReconciliationResultDTO)
+  async batchApplyReviewItems(
+    @Args('reconciliationId', { type: () => UUIDScalarType })
+    reconciliationId: string,
+    @Args('action', { type: () => String })
+    action: string,
+    @Args('minConfidence', { type: () => Float, nullable: true })
+    minConfidence: number | undefined,
+    @Args('reviewItemIds', { type: () => [UUIDScalarType], nullable: true })
+    reviewItemIds: string[] | undefined,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+    @AuthUserWorkspaceId({ allowUndefined: true })
+    userWorkspaceId: string | undefined,
+  ): Promise<StartReconciliationResultDTO> {
+    const normalizedAction = action.toUpperCase();
+
+    if (normalizedAction !== 'APPLY' && normalizedAction !== 'UNDO') {
+      throw new BadRequestException(
+        `Unsupported batch review item action: ${action}`,
+      );
+    }
+
+    const result = await this.reviewItemService.batchApply(
+      workspace.id,
+      reconciliationId,
+      normalizedAction,
+      { minConfidence, reviewItemIds },
+      {
+        userWorkspaceId,
+      },
+    );
+
+    return {
+      success: true,
+      reconciliationId,
+      status:
+        normalizedAction === 'APPLY'
+          ? `APPLIED_${result.updatedCount}`
+          : `UNDONE_${result.updatedCount}`,
     };
   }
 }

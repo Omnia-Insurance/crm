@@ -9,20 +9,30 @@ import { ReconciliationToolbar } from '@/reconciliation/components/Reconciliatio
 import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { ReviewItemDetail } from '@/reconciliation/components/ReviewItemDetail';
 import { ReviewItemSidebar } from '@/reconciliation/components/ReviewItemSidebar';
-import { BATCH_APPROVE_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
+import { BATCH_APPLY_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
 import { useReconciliationActiveFilter } from '@/reconciliation/hooks/useReconciliationActiveFilter';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 
 const StyledSplitLayout = styled.div`
   display: flex;
   flex: 1;
-  overflow: hidden;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 `;
 
 const AUTO_MATCH_THRESHOLD = 85;
+const BATCH_APPLY_BLOCKING_FLAGS = new Set([
+  'REINSTATEMENT',
+  'BROKER_EFF_AUDIT',
+  'MULTI_MATCH',
+  'NAME_MISMATCH',
+]);
 
-type Props = {
+const hasBatchApplyBlockingFlag = (item: ReviewItemRecord) =>
+  item.flags?.some((flag) => BATCH_APPLY_BLOCKING_FLAGS.has(flag)) ?? false;
+
+type ReconciliationReviewBodyProps = {
   objectRecordId: string;
   viewBarId: string;
   reviewItemMetadata: EnrichedObjectMetadataItem;
@@ -32,8 +42,9 @@ export const ReconciliationReviewBody = ({
   objectRecordId,
   viewBarId,
   reviewItemMetadata,
-}: Props) => {
+}: ReconciliationReviewBodyProps) => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const { enqueueErrorSnackBar } = useSnackBar();
 
   const handleSelectItem = useCallback((id: string) => {
     setSelectedItemId(id);
@@ -45,32 +56,35 @@ export const ReconciliationReviewBody = ({
     reviewItemMetadata,
   });
 
-  const { records: reviewItems, loading: reviewItemsLoading } =
-    useFindManyRecords<ReviewItemRecord>({
-      objectNameSingular: 'reviewItem',
-      filter,
-      orderBy: [{ confidence: 'DescNullsLast' }],
-      limit: 1000,
-      recordGqlFields: {
-        id: true,
-        name: true,
-        category: true,
-        decision: true,
-        flags: true,
-        flagReasons: true,
-        confidence: true,
-        matchMethod: true,
-        summary: true,
-        matchNotes: true,
-        derivedStatus: true,
-        currentCrmStatus: true,
-        statusChangeReason: true,
-        note: true,
-        fieldDiffs: true,
-        bobRowSnapshot: true,
-        policy: { id: true, name: true },
-      },
-    });
+  const {
+    records: reviewItems,
+    loading: reviewItemsLoading,
+    refetch: refetchReviewItems,
+  } = useFindManyRecords<ReviewItemRecord>({
+    objectNameSingular: 'reviewItem',
+    filter,
+    orderBy: [{ confidence: 'DescNullsLast' }],
+    limit: 1000,
+    recordGqlFields: {
+      id: true,
+      name: true,
+      category: true,
+      decision: true,
+      flags: true,
+      flagReasons: true,
+      confidence: true,
+      matchMethod: true,
+      summary: true,
+      matchNotes: true,
+      derivedStatus: true,
+      currentCrmStatus: true,
+      statusChangeReason: true,
+      note: true,
+      fieldDiffs: true,
+      bobRowSnapshot: true,
+      policy: { id: true, name: true },
+    },
+  });
 
   const selectedItem =
     reviewItems.find((item) => item.id === selectedItemId) ??
@@ -92,67 +106,114 @@ export const ReconciliationReviewBody = ({
       if (firstPending) {
         setSelectedItemId(firstPending.id);
       }
+      void refetchReviewItems();
     },
-    [reviewItems],
+    [reviewItems, refetchReviewItems],
   );
 
-  // ── Batch approve mutation ──
+  // ── Batch apply / undo mutation ──
 
-  const batchApproveCandidates = useMemo(
+  const batchApplyCandidates = useMemo(
     () =>
       reviewItems.filter(
         (i) =>
           i.decision === 'PENDING' &&
           i.category !== 'UNMATCHED' &&
-          (hasActiveFilters || i.confidence >= AUTO_MATCH_THRESHOLD),
+          (hasActiveFilters ||
+            (i.confidence >= AUTO_MATCH_THRESHOLD &&
+              !hasBatchApplyBlockingFlag(i))),
       ),
     [reviewItems, hasActiveFilters],
   );
 
-  const batchApproveCount = batchApproveCandidates.length;
-
-  const [batchApproveMutation, { loading: batchApproveLoading }] = useMutation(
-    BATCH_APPROVE_REVIEW_ITEMS,
+  const batchUndoCandidates = useMemo(
+    () =>
+      reviewItems.filter(
+        (i) => i.decision === 'APPROVED' && i.category !== 'UNMATCHED',
+      ),
+    [reviewItems],
   );
 
-  const handleBatchApproveClick = useCallback(async () => {
+  const batchApplyCount = batchApplyCandidates.length;
+  const batchUndoCount = batchUndoCandidates.length;
+
+  const [batchApplyMutation, { loading: batchApplyLoading }] = useMutation(
+    BATCH_APPLY_REVIEW_ITEMS,
+  );
+
+  const handleBatchApplyClick = useCallback(async () => {
     const description = hasActiveFilters
-      ? `Accept ${batchApproveCount} pending items in the current filter?`
-      : `Accept ${batchApproveCount} high-confidence items (confidence >= ${AUTO_MATCH_THRESHOLD}%)?`;
+      ? `Apply ${batchApplyCount} pending items in the current filter to CRM?`
+      : `Apply ${batchApplyCount} high-confidence items (confidence >= ${AUTO_MATCH_THRESHOLD}%) to CRM?`;
 
     if (!window.confirm(description)) {
       return;
     }
 
     try {
-      await batchApproveMutation({
+      await batchApplyMutation({
         variables: hasActiveFilters
           ? {
               reconciliationId: objectRecordId,
-              reviewItemIds: batchApproveCandidates.map((i) => i.id),
+              action: 'APPLY',
+              reviewItemIds: batchApplyCandidates.map((i) => i.id),
             }
           : {
               reconciliationId: objectRecordId,
+              action: 'APPLY',
               minConfidence: AUTO_MATCH_THRESHOLD,
             },
       });
-    } catch (error) {
-      console.error('Batch approve failed:', error);
+      await refetchReviewItems();
+    } catch {
+      enqueueErrorSnackBar({ message: 'Batch apply failed.' });
     }
   }, [
-    batchApproveMutation,
+    batchApplyMutation,
     objectRecordId,
-    batchApproveCandidates,
-    batchApproveCount,
+    batchApplyCandidates,
+    batchApplyCount,
+    enqueueErrorSnackBar,
     hasActiveFilters,
+    refetchReviewItems,
+  ]);
+
+  const handleBatchUndoClick = useCallback(async () => {
+    const description = `Undo ${batchUndoCount} applied items in the current results?`;
+
+    if (!window.confirm(description)) {
+      return;
+    }
+
+    try {
+      await batchApplyMutation({
+        variables: {
+          reconciliationId: objectRecordId,
+          action: 'UNDO',
+          reviewItemIds: batchUndoCandidates.map((i) => i.id),
+        },
+      });
+      await refetchReviewItems();
+    } catch {
+      enqueueErrorSnackBar({ message: 'Batch undo failed.' });
+    }
+  }, [
+    batchApplyMutation,
+    objectRecordId,
+    batchUndoCandidates,
+    batchUndoCount,
+    enqueueErrorSnackBar,
+    refetchReviewItems,
   ]);
 
   return (
     <>
       <ReconciliationToolbar
-        batchApproveCount={batchApproveCount}
-        onBatchApproveClick={handleBatchApproveClick}
-        batchApproveLoading={batchApproveLoading}
+        batchApplyCount={batchApplyCount}
+        onBatchApplyClick={handleBatchApplyClick}
+        batchUndoCount={batchUndoCount}
+        onBatchUndoClick={handleBatchUndoClick}
+        batchActionLoading={batchApplyLoading}
         filterBar={<ReconciliationFilterBar viewBarId={viewBarId} />}
       />
       <StyledSplitLayout>

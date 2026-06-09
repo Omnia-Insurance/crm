@@ -113,7 +113,6 @@ export class ReconciliationMatchJob {
         policyNumberPattern,
         columnMapping,
         statusFieldMapping,
-        computedFields,
         computedFieldCrmFields,
         parsedRows,
         matchIndexes,
@@ -343,6 +342,7 @@ export class ReconciliationMatchJob {
         workspaceId,
         reconciliationId,
         reviewItems,
+        carrierName,
         {
           totalBobRows: parsedRows.length,
           autoMatched,
@@ -376,6 +376,7 @@ export class ReconciliationMatchJob {
     workspaceId: string,
     reconciliationId: string,
     reviewItems: Record<string, unknown>[],
+    carrierName: string,
     counts: {
       totalBobRows: number;
       autoMatched: number;
@@ -397,6 +398,13 @@ export class ReconciliationMatchJob {
 
     await this.reviewItemService.batchCreate(workspaceId, reviewItems);
 
+    const learnedRuleApplyResult =
+      await this.reviewItemService.applyLearnedRulesForReconciliation(
+        workspaceId,
+        reconciliationId,
+        { carrierName },
+      );
+
     await this.stateMachine.transition(
       workspaceId,
       reconciliationId,
@@ -407,9 +415,10 @@ export class ReconciliationMatchJob {
         stats: {
           ...counts,
           missingFromBob: 0,
-          applied: 0,
+          applied: learnedRuleApplyResult.updatedCount,
+          autoRuleApplied: learnedRuleApplyResult.updatedCount,
           failed: 0,
-          skipped: 0,
+          skipped: learnedRuleApplyResult.skippedCount,
         },
       },
     );
