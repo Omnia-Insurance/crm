@@ -2696,6 +2696,10 @@ check_file_contains \
   "draftRecordIdsState" \
   "FieldWidgetRichTextEditor must skip the loading skeleton for draft records (no server fetch — body is just empty)"
 check_file_contains \
+  "packages/twenty-front/src/modules/ui/layout/show-page/components/FieldRichTextCard.tsx" \
+  "draftRecordIdsState" \
+  "FieldRichTextCard must skip the loading skeleton for draft task/note records (no server fetch — body is just empty)"
+check_file_contains \
   "packages/twenty-shared/src/types/SidePanelPages.ts" \
   "ReviewItemComments" \
   "SidePanelPages enum must include ReviewItemComments for the audit-comments side panel"

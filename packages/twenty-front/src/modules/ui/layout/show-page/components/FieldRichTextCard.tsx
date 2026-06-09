@@ -1,5 +1,6 @@
 import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
 import { type CoreObjectNameSingular } from 'twenty-shared/types';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { useTargetRecord } from '@/ui/layout/contexts/useTargetRecord';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
@@ -7,6 +8,7 @@ import { styled } from '@linaria/react';
 import { lazy, Suspense, useContext } from 'react';
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { isDefined } from 'twenty-shared/utils';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -51,12 +53,16 @@ export const FieldRichTextCard = () => {
     recordId: targetRecord.id,
     fieldName: 'bodyV2',
   });
+  const draftRecordIds = useAtomStateValue(draftRecordIdsState);
+  const isDraft = draftRecordIds.has(targetRecord.id);
 
   const activityObjectNameSingular = targetRecord.targetObjectNameSingular as
     | CoreObjectNameSingular.Note
     | CoreObjectNameSingular.Task;
 
-  if (!isDefined(activityBodyV2)) {
+  // Draft activities have no server-side body fetch; an undefined body is
+  // simply an empty editor until the reviewer types and creates the task.
+  if (!isDefined(activityBodyV2) && !isDraft) {
     return <LoadingSkeleton />;
   }
 
