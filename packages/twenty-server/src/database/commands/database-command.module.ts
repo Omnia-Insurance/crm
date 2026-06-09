@@ -51,6 +51,7 @@ import { NavigationMenuItemEntity } from 'src/engine/metadata-modules/navigation
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
 // OMNIA-CUSTOM: needed by SeedReconciliationObjectsCommand to lock recon objects to admins
+import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
 import { ObjectPermissionModule } from 'src/engine/metadata-modules/object-permission/object-permission.module';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
@@ -76,6 +77,7 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
       FieldMetadataEntity,
       NavigationMenuItemEntity,
       RoleEntity,
+      ObjectPermissionEntity,
       WorkspaceEntity,
       // OMNIA-CUSTOM: needed by SeedConvosoTimeCardPipelineCommand + BackfillTimeCardsCommand
       IngestionPipelineEntity,

@@ -2588,6 +2588,10 @@ check_file_contains \
   "BackfillReconciliationDecisionRulesCommand" \
   "DatabaseCommandModule must register learned reconciliation rule backfill command"
 check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "ObjectPermissionEntity" \
+  "DatabaseCommandModule must register the object permission repository for reconciliation seed command DI"
+check_file_contains \
   "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
   "reconciliationDecisionRule" \
   "Seed command must create the learned reconciliation decision rule object"
