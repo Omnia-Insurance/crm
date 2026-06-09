@@ -22,6 +22,7 @@ import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
 import { ObjectPermissionService } from 'src/engine/metadata-modules/object-permission/object-permission.service';
 import { ADMIN_ROLE_LABEL } from 'src/engine/metadata-modules/permissions/constants/admin-role-label.constants';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
@@ -659,6 +660,8 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
     @InjectRepository(RoleEntity)
     private readonly roleRepository: Repository<RoleEntity>,
+    @InjectRepository(ObjectPermissionEntity)
+    private readonly objectPermissionRepository: Repository<ObjectPermissionEntity>,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly objectPermissionService: ObjectPermissionService,
@@ -864,23 +867,53 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       return;
     }
 
-    const objectPermissions = objects.map((o) => ({
-      objectMetadataId: o.id,
-      canReadObjectRecords: false,
-      canUpdateObjectRecords: false,
-      canSoftDeleteObjectRecords: false,
-      canDestroyObjectRecords: false,
-    }));
-
     for (const role of nonAdminRoles) {
       this.logger.log(
         `  + Locking ${objects.length} object(s) from role "${role.label}"`,
       );
+
+      const existingObjectPermissions =
+        await this.objectPermissionRepository.find({
+          where: {
+            roleId: role.id,
+            workspaceId,
+          },
+        });
+
+      const adminOnlyObjectMetadataIds = new Set(objects.map((o) => o.id));
+      const preservedObjectPermissions = existingObjectPermissions
+        .filter(
+          (permission) =>
+            !adminOnlyObjectMetadataIds.has(permission.objectMetadataId),
+        )
+        .map((permission) => ({
+          objectMetadataId: permission.objectMetadataId,
+          canReadObjectRecords: permission.canReadObjectRecords,
+          canUpdateObjectRecords: permission.canUpdateObjectRecords,
+          canSoftDeleteObjectRecords: permission.canSoftDeleteObjectRecords,
+          canDestroyObjectRecords: permission.canDestroyObjectRecords,
+          showInSidebar: permission.showInSidebar,
+          editWindowMinutes: permission.editWindowMinutes,
+        }));
+
+      const adminOnlyDenyPermissions = objects.map((object) => ({
+        objectMetadataId: object.id,
+        canReadObjectRecords: false,
+        canUpdateObjectRecords: false,
+        canSoftDeleteObjectRecords: false,
+        canDestroyObjectRecords: false,
+        showInSidebar: false,
+        editWindowMinutes: null,
+      }));
+
       await this.objectPermissionService.upsertObjectPermissions({
         workspaceId,
         input: {
           roleId: role.id,
-          objectPermissions,
+          objectPermissions: [
+            ...preservedObjectPermissions,
+            ...adminOnlyDenyPermissions,
+          ],
         },
       });
     }

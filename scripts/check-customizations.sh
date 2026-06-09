@@ -2592,6 +2592,10 @@ check_file_contains \
   "reconciliationDecisionRule" \
   "Seed command must create the learned reconciliation decision rule object"
 check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "preservedObjectPermissions" \
+  "Seed command must preserve existing role object permissions while locking reconciliation objects"
+check_file_contains \
   "packages/twenty-front/package.json" \
   "@pierre/diffs" \
   "@pierre/diffs dependency required for review UI unified-diff rendering"
