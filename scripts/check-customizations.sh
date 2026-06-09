@@ -2639,6 +2639,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "normalizeDiffComparableValue" \
   "Inline diff accepted-state comparison must treat null/undefined/empty strings consistently"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
+  "coerceFieldDiffValueForRecordUpdate" \
+  "Inline diff Accept/Undo must coerce numeric diff strings before record updates"
 check_file_not_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "color: #fff" \
@@ -2684,9 +2688,33 @@ check_file_contains \
   "isPaidThroughCurrentMonth" \
   "Ambetter active payment error must require paid-through coverage through current month end"
 check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "No payment data for active effective date" \
+  "Ambetter active policies with missing paid-through data must stay in payment error"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "normalizePaidThroughDateForEffectiveDate" \
+  "Ambetter status input must ignore paid-through dates before the policy effective date"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/diff.ts" \
+  "isInvalidPaidThroughDateMove" \
+  "Ambetter reconciliation diffs must not propose stale pre-effective paid-through dates"
+check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/utils/buildSyntheticPolicyRecord.ts" \
   "current-month payment coverage" \
   "Frontend synthetic reconciliation status derivation must mirror Ambetter current-month payment coverage"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/utils/buildSyntheticPolicyRecord.ts" \
+  "Missing paid-through data is not current" \
+  "Frontend synthetic reconciliation status derivation must keep missing paid-through active policies in payment error"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/utils/buildSyntheticPolicyRecord.ts" \
+  "normalizePaidThroughDateForEffectiveDate" \
+  "Frontend synthetic reconciliation must blank paid-through dates before the policy effective date"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/UnmatchedView.tsx" \
+  "normalizePaidThroughDateForEffectiveDate" \
+  "Unmatched reconciliation create flow must blank stale pre-effective paid-through dates"
 check_file_contains \
   "packages/twenty-server/src/modules/reconciliation/types/field-config.ts" \
   "derivedStatus === 'PAYMENT_ERROR_CANCELED'" \
@@ -2738,6 +2766,9 @@ check_file_contains \
 check_file_exists \
   "packages/twenty-shared/src/utils/composite/promotePrimaryToAdditional.ts" \
   "Shared helper used by frontend + backend reconciliation Accept paths"
+check_file_exists \
+  "packages/twenty-shared/src/utils/reconciliation/coerceFieldDiffValueForRecordUpdate.ts" \
+  "Shared helper must coerce reconciliation diff strings before numeric record updates"
 check_file_contains \
   "packages/twenty-server/src/modules/reconciliation/reconciliation.resolver.ts" \
   "batchApplyReviewItems" \
@@ -2746,6 +2777,10 @@ check_file_contains \
   "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
   "buildUpdatesForTarget" \
   "Reconciliation batch apply/undo must mirror individual Apply all / Undo all field patch semantics"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "buildFieldTypeByCrmField" \
+  "Reconciliation batch apply/undo must use column mapping field types for numeric diff coercion"
 check_file_contains \
   "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
   "cancelPreviousPolicyIfRequested" \
@@ -2784,6 +2819,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
   "syncReviewItemDecisionWithServer" \
   "Individual reconciliation Apply all must sync through the server mutation for learned rules"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
+  "fieldTypeByCrmField" \
+  "Individual reconciliation Apply all local mirror must coerce numeric diff strings"
 
 echo ""
 

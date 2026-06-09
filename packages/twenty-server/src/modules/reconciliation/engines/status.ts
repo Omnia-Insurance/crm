@@ -49,6 +49,14 @@ export type StatusInput = {
   eligibleForCommission: boolean | null;
 };
 
+export const normalizePaidThroughDateForEffectiveDate = (
+  paidThroughDate: string | null,
+  effectiveDate: string | null,
+): string | null =>
+  paidThroughDate && effectiveDate && paidThroughDate < effectiveDate
+    ? null
+    : paidThroughDate;
+
 export const buildStatusInput = (
   row: Record<string, unknown>,
   fieldConfig: FieldConfigEntry[],
@@ -56,10 +64,16 @@ export const buildStatusInput = (
   const byRole = new Map(
     fieldConfig.filter((f) => f.statusRole).map((f) => [f.statusRole, f.name]),
   );
+  const effectiveDate = (row[byRole.get('effectiveDate')!] as string) ?? null;
+  const paidThroughDate =
+    (row[byRole.get('paidThroughDate')!] as string) ?? null;
 
   return {
-    effectiveDate: (row[byRole.get('effectiveDate')!] as string) ?? null,
-    paidThroughDate: (row[byRole.get('paidThroughDate')!] as string) ?? null,
+    effectiveDate,
+    paidThroughDate: normalizePaidThroughDateForEffectiveDate(
+      paidThroughDate,
+      effectiveDate,
+    ),
     termDate: (row[byRole.get('termDate')!] as string) ?? null,
     eligibleForCommission:
       (row[byRole.get('eligibleForCommission')!] as boolean) ?? null,
@@ -77,20 +91,28 @@ export const buildStatusInput = (
 export const buildStatusInputFromMapping = (
   row: Record<string, unknown>,
   fieldMapping: Record<string, string>,
-): StatusInput => ({
-  effectiveDate: fieldMapping.effectiveDate
+): StatusInput => {
+  const effectiveDate = fieldMapping.effectiveDate
     ? ((row[fieldMapping.effectiveDate] as string) ?? null)
-    : null,
-  paidThroughDate: fieldMapping.paidThroughDate
+    : null;
+  const paidThroughDate = fieldMapping.paidThroughDate
     ? ((row[fieldMapping.paidThroughDate] as string) ?? null)
-    : null,
-  termDate: fieldMapping.termDate
-    ? ((row[fieldMapping.termDate] as string) ?? null)
-    : null,
-  eligibleForCommission: fieldMapping.eligibleForCommission
-    ? ((row[fieldMapping.eligibleForCommission] as boolean) ?? null)
-    : null,
-});
+    : null;
+
+  return {
+    effectiveDate,
+    paidThroughDate: normalizePaidThroughDateForEffectiveDate(
+      paidThroughDate,
+      effectiveDate,
+    ),
+    termDate: fieldMapping.termDate
+      ? ((row[fieldMapping.termDate] as string) ?? null)
+      : null,
+    eligibleForCommission: fieldMapping.eligibleForCommission
+      ? ((row[fieldMapping.eligibleForCommission] as boolean) ?? null)
+      : null,
+  };
+};
 
 export type StatusEngineConfig = {
   /** Days since effective to consider a policy "placed". Default: 30 */
@@ -229,7 +251,10 @@ const deriveAmbetterStatus: StatusEngineFn = (
     };
   }
 
-  const paidThrough = bobRow.paidThroughDate;
+  const paidThrough = normalizePaidThroughDateForEffectiveDate(
+    bobRow.paidThroughDate,
+    effectiveDate,
+  );
   const termDate = bobRow.termDate;
   const eligible = bobRow.eligibleForCommission;
   const todayStr = toDateString(today);
@@ -289,32 +314,10 @@ const deriveAmbetterStatus: StatusEngineFn = (
   // effectiveDate is in the past or today
   if (!paidThrough) {
     return {
-      derivedStatus: 'ACTIVE_APPROVED',
+      derivedStatus: 'PAYMENT_ERROR_ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: 'No payment data → Active-Approved',
-    };
-  }
-
-  // Renewal edge case: paidThrough predates the new effective date (e.g.,
-  // paid through Jan 31, renewed effective Apr 1). Ambetter invoices the month
-  // ahead, so active policies need paid-through coverage through the current
-  // month end with no grace buffer.
-  if (paidThrough < effectiveDate) {
-    if (!isPaidThroughCurrentMonth(paidThrough, todayStr)) {
-      return {
-        derivedStatus: 'PAYMENT_ERROR_ACTIVE_APPROVED',
-        derivedExpireDate: null,
-        cancelPreviousPolicyId: cancelPrev,
-        statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} and does not cover current month end ${currentMonthEnd} → Payment Error`,
-      };
-    }
-
-    return {
-      derivedStatus: 'ACTIVE_APPROVED',
-      derivedExpireDate: null,
-      cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} but covers current month end ${currentMonthEnd} → Active-Approved`,
+      statusChangeReason: `No payment data for active effective date ${effectiveDate}; does not cover current month end ${currentMonthEnd} → Payment Error`,
     };
   }
 

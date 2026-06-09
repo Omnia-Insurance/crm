@@ -62,6 +62,69 @@ describe('diff engine', () => {
     expect(diffs).toHaveLength(0);
   });
 
+  it('suppresses paid-through diffs when BOB paid-through predates effective date', () => {
+    const columnMapping: ColumnMapping = {
+      eff_date: {
+        crmField: 'effectiveDate',
+        fieldType: 'DATE',
+        fieldKey: 'effectiveDate',
+      },
+      paid_through: {
+        crmField: 'paidThroughDate',
+        fieldType: 'DATE',
+        fieldKey: 'paidThroughDate',
+      },
+    };
+
+    const diffs = computeFieldDiffsFromMapping(
+      {
+        eff_date: '2026-06-01',
+        paid_through: '2026-01-31',
+      },
+      {
+        effectiveDate: '2026-06-01',
+        paidThroughDate: '2026-06-01',
+      },
+      null,
+      columnMapping,
+    );
+
+    expect(diffs.find((d) => d.crmField === 'paidThroughDate')).toBeUndefined();
+  });
+
+  it('keeps paid-through diffs when BOB paid-through is on or after effective date', () => {
+    const columnMapping: ColumnMapping = {
+      eff_date: {
+        crmField: 'effectiveDate',
+        fieldType: 'DATE',
+        fieldKey: 'effectiveDate',
+      },
+      paid_through: {
+        crmField: 'paidThroughDate',
+        fieldType: 'DATE',
+        fieldKey: 'paidThroughDate',
+      },
+    };
+
+    const diffs = computeFieldDiffsFromMapping(
+      {
+        eff_date: '2026-06-01',
+        paid_through: '2026-06-30',
+      },
+      {
+        effectiveDate: '2026-06-01',
+        paidThroughDate: '2026-06-01',
+      },
+      null,
+      columnMapping,
+    );
+
+    expect(diffs.find((d) => d.crmField === 'paidThroughDate')).toMatchObject({
+      bobValue: '2026-06-30',
+      crmValue: '2026-06-01',
+    });
+  });
+
   it('detects status change from status engine', () => {
     const statusDecision = {
       derivedStatus: 'CANCELED' as const,
@@ -107,16 +170,19 @@ describe('diff engine', () => {
       ['DECLINED'],
       ['INCOMPLETE'],
       ['CANCELED'],
-    ])('suppresses status diff when CRM is %s and engine derives CANCELED', (crmStatus) => {
-      const diffs = computeFieldDiffsFromMapping(
-        baseBobRow,
-        { ...baseCrmPolicy, status: crmStatus },
-        canceledDecision,
-        baseColumnMapping,
-      );
+    ])(
+      'suppresses status diff when CRM is %s and engine derives CANCELED',
+      (crmStatus) => {
+        const diffs = computeFieldDiffsFromMapping(
+          baseBobRow,
+          { ...baseCrmPolicy, status: crmStatus },
+          canceledDecision,
+          baseColumnMapping,
+        );
 
-      expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
-    });
+        expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
+      },
+    );
 
     it('still emits a status diff when CRM is a negative terminal but engine derives ACTIVE_*', () => {
       // Sanity check: going from a terminal state back to active still
@@ -432,9 +498,7 @@ describe('diff engine', () => {
 
       // Subscriber-mismatch suppression is scoped to lead identity —
       // policy-level fields still surface normally.
-      expect(
-        diffs.find((d) => d.crmField === 'effectiveDate'),
-      ).toBeDefined();
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeDefined();
     });
 
     it('safety-net detector still fires when applicantCount is missing (legacy policies)', () => {

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
+  coerceFieldDiffValueForRecordUpdate,
   promotePrimaryEmailToAdditional,
   promotePrimaryPhoneToAdditional,
 } from 'twenty-shared/utils';
@@ -18,7 +19,10 @@ import {
   RECONCILIATION_AUTO_RULE_BLOCKING_FLAGS,
   type ReviewItemForDecisionRule,
 } from 'src/modules/reconciliation/services/decision-rule.service';
-import { sleep } from 'src/modules/reconciliation/types/reconciliation';
+import {
+  type ColumnMapping,
+  sleep,
+} from 'src/modules/reconciliation/types/reconciliation';
 
 const BATCH_SIZE = 200;
 const BATCH_DELAY_MS = 500;
@@ -53,6 +57,11 @@ type FieldDiffForApply = FieldDiffForDecisionRule & {
 };
 
 type WorkspaceRecord = Record<string, unknown> & { id: string };
+
+type ReconciliationRecordForApply = {
+  id: string;
+  columnMapping: ColumnMapping | null;
+};
 
 type BatchReviewItemAction = 'APPLY' | 'UNDO';
 
@@ -217,6 +226,18 @@ export class ReviewItemService {
               'person',
               { shouldBypassPermissionChecks: true },
             );
+          const reconciliationRepo =
+            await this.globalWorkspaceOrmManager.getRepository<ReconciliationRecordForApply>(
+              workspaceId,
+              'reconciliation',
+              { shouldBypassPermissionChecks: true },
+            );
+          const reconciliation = await reconciliationRepo.findOne({
+            where: { id: reconciliationId },
+          });
+          const fieldTypeByCrmField = this.buildFieldTypeByCrmField(
+            reconciliation?.columnMapping ?? null,
+          );
 
           const sourceDecision = action === 'APPLY' ? 'PENDING' : 'APPROVED';
           const allDecisionItems = await reviewItemRepo.find({
@@ -240,6 +261,7 @@ export class ReviewItemService {
               reviewItemRepo,
               policyRepo,
               personRepo,
+              fieldTypeByCrmField,
               options: { decisionSource: source },
             });
 
@@ -366,6 +388,18 @@ export class ReviewItemService {
               'person',
               { shouldBypassPermissionChecks: true },
             );
+          const reconciliationRepo =
+            await this.globalWorkspaceOrmManager.getRepository<ReconciliationRecordForApply>(
+              workspaceId,
+              'reconciliation',
+              { shouldBypassPermissionChecks: true },
+            );
+          const reconciliation = await reconciliationRepo.findOne({
+            where: { id: reconciliationId },
+          });
+          const fieldTypeByCrmField = this.buildFieldTypeByCrmField(
+            reconciliation?.columnMapping ?? null,
+          );
           const pendingItems = await reviewItemRepo.find({
             where: { reconciliationId, decision: 'PENDING' },
           });
@@ -397,6 +431,7 @@ export class ReviewItemService {
               reviewItemRepo,
               policyRepo,
               personRepo,
+              fieldTypeByCrmField,
               options: {
                 decisionSource: 'AUTO_RULE',
                 decisionRule: rule,
@@ -481,6 +516,7 @@ export class ReviewItemService {
     reviewItemRepo,
     policyRepo,
     personRepo,
+    fieldTypeByCrmField,
     options,
   }: {
     action: BatchReviewItemAction;
@@ -488,6 +524,7 @@ export class ReviewItemService {
     reviewItemRepo: WorkspaceRepository<ReviewItem>;
     policyRepo: WorkspaceRepository<WorkspaceRecord>;
     personRepo: WorkspaceRepository<WorkspaceRecord>;
+    fieldTypeByCrmField: ReadonlyMap<string, string>;
     options: ApplyOneOptions;
   }): Promise<boolean> {
     if (!item.policyId) {
@@ -525,6 +562,7 @@ export class ReviewItemService {
       fieldDiffs: item.fieldDiffs,
       policyRecord,
       leadRecord,
+      fieldTypeByCrmField,
     });
 
     if (Object.keys(policyUpdates).length > 0) {
@@ -578,11 +616,13 @@ export class ReviewItemService {
     fieldDiffs,
     policyRecord,
     leadRecord,
+    fieldTypeByCrmField,
   }: {
     target: 'bob' | 'crm';
     fieldDiffs: FieldDiffForApply[] | null;
     policyRecord: WorkspaceRecord;
     leadRecord: WorkspaceRecord | null;
+    fieldTypeByCrmField: ReadonlyMap<string, string>;
   }): {
     policyUpdates: Partial<WorkspaceRecord>;
     leadUpdates: Partial<WorkspaceRecord>;
@@ -607,15 +647,32 @@ export class ReviewItemService {
 
       const updates = isLeadField ? leadUpdates : policyUpdates;
       const sourceRecord = isLeadField ? leadRecord : policyRecord;
+      const fieldType =
+        fieldTypeByCrmField.get(diff.crmField) ??
+        fieldTypeByCrmField.get(crmPath);
 
       if (parts.length >= 2) {
         const subField = parts[parts.length - 1];
 
         if (!subField) continue;
 
+        const currentComposite = sourceRecord?.[fieldName];
+        const currentSubFieldValue =
+          currentComposite !== null &&
+          currentComposite !== undefined &&
+          typeof currentComposite === 'object'
+            ? (currentComposite as Record<string, unknown>)[subField]
+            : undefined;
         const seed = this.seedCompositeUpdate(
           updates[fieldName],
-          sourceRecord?.[fieldName],
+          currentComposite,
+        );
+        const coercedTargetValue = coerceFieldDiffValueForRecordUpdate(
+          targetValue,
+          {
+            fieldType,
+            currentValue: currentSubFieldValue,
+          },
         );
 
         if (
@@ -639,15 +696,39 @@ export class ReviewItemService {
             targetValue,
           );
         } else {
-          seed[subField] = targetValue;
+          seed[subField] = coercedTargetValue;
           updates[fieldName] = seed;
         }
       } else {
-        updates[fieldName] = targetValue;
+        updates[fieldName] = coerceFieldDiffValueForRecordUpdate(targetValue, {
+          fieldType,
+          currentValue: sourceRecord?.[fieldName],
+        });
       }
     }
 
     return { policyUpdates, leadUpdates };
+  }
+
+  private buildFieldTypeByCrmField(
+    columnMapping: ColumnMapping | null,
+  ): ReadonlyMap<string, string> {
+    const fieldTypeByCrmField = new Map<string, string>();
+
+    for (const entry of Object.values(columnMapping ?? {})) {
+      if (!entry.crmField || !entry.fieldType) continue;
+
+      fieldTypeByCrmField.set(entry.crmField, entry.fieldType);
+
+      if (entry.crmField.startsWith('lead.')) {
+        fieldTypeByCrmField.set(
+          entry.crmField.replace(/^lead\./, ''),
+          entry.fieldType,
+        );
+      }
+    }
+
+    return fieldTypeByCrmField;
   }
 
   private toWorkspaceUpdate(

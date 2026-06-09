@@ -34,6 +34,7 @@ import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
+  coerceFieldDiffValueForRecordUpdate,
   promotePrimaryEmailToAdditional,
   promotePrimaryPhoneToAdditional,
 } from 'twenty-shared/utils';
@@ -267,6 +268,21 @@ export const MatchedDiffView = ({
         : d,
     );
   }, [rawFieldDiffs, columnMapping, item.statusChangeReason]);
+  const fieldTypeByCrmField = useMemo(() => {
+    const fieldTypes = new Map<string, string>();
+
+    for (const entry of Object.values(columnMapping ?? {})) {
+      if (!entry.crmField || !entry.fieldType) continue;
+
+      fieldTypes.set(entry.crmField, entry.fieldType);
+
+      if (entry.crmField.startsWith('lead.')) {
+        fieldTypes.set(entry.crmField.replace(/^lead\./, ''), entry.fieldType);
+      }
+    }
+
+    return fieldTypes;
+  }, [columnMapping]);
 
   const matchLabel = MATCH_LABELS[item.matchMethod] ?? item.matchMethod;
   const matchLabelId = `match-label-${item.id}`;
@@ -440,6 +456,9 @@ export const MatchedDiffView = ({
         const fieldName = parts[0];
         const updates = isLeadField ? leadUpdates : policyUpdates;
         const sourceRecord = isLeadField ? leadRecord : policyRecord;
+        const fieldType =
+          fieldTypeByCrmField.get(diff.crmField) ??
+          fieldTypeByCrmField.get(crmPath);
 
         if (parts.length >= 2) {
           // Composite sub-field: merge into existing composite object.
@@ -450,13 +469,13 @@ export const MatchedDiffView = ({
           // Seed the in-progress composite from prior in-loop writes if any,
           // otherwise from the live record store. JSON deep clone strips
           // __typename and detaches from the read-only record store.
+          const currentComposite = sourceRecord
+            ? (sourceRecord as Record<string, unknown>)[fieldName]
+            : null;
           const seed: Record<string, unknown> =
             updates[fieldName] && typeof updates[fieldName] === 'object'
               ? (updates[fieldName] as Record<string, unknown>)
               : (() => {
-                  const currentComposite = sourceRecord
-                    ? (sourceRecord as Record<string, unknown>)[fieldName]
-                    : null;
                   const cloned: Record<string, unknown> =
                     typeof currentComposite === 'object' &&
                     currentComposite !== null
@@ -465,6 +484,19 @@ export const MatchedDiffView = ({
                   delete cloned.__typename;
                   return cloned;
                 })();
+          const currentSubFieldValue =
+            currentComposite !== null &&
+            currentComposite !== undefined &&
+            typeof currentComposite === 'object'
+              ? (currentComposite as Record<string, unknown>)[subField]
+              : undefined;
+          const coercedTargetValue = coerceFieldDiffValueForRecordUpdate(
+            targetValue,
+            {
+              fieldType,
+              currentValue: currentSubFieldValue,
+            },
+          );
 
           if (
             target === 'bob' &&
@@ -489,17 +521,25 @@ export const MatchedDiffView = ({
           } else {
             // Undo path: just swap the sub-field back; leave additional* alone
             // (perfect reversal would require pre-accept snapshot we don't keep).
-            seed[subField] = targetValue;
+            seed[subField] = coercedTargetValue;
             updates[fieldName] = seed;
           }
         } else {
-          updates[fieldName] = targetValue;
+          updates[fieldName] = coerceFieldDiffValueForRecordUpdate(
+            targetValue,
+            {
+              fieldType,
+              currentValue: sourceRecord
+                ? (sourceRecord as Record<string, unknown>)[fieldName]
+                : undefined,
+            },
+          );
         }
       }
 
       return { policyUpdates, leadUpdates };
     },
-    [fieldDiffs, leadRecord, policyRecord],
+    [fieldDiffs, fieldTypeByCrmField, leadRecord, policyRecord],
   );
 
   const handleAcceptAll = useCallback(async () => {

@@ -1,6 +1,9 @@
 import { jaroWinkler } from 'jaro-winkler-typescript';
 
-import type { StatusDecision } from 'src/modules/reconciliation/engines/status';
+import {
+  normalizePaidThroughDateForEffectiveDate,
+  type StatusDecision,
+} from 'src/modules/reconciliation/engines/status';
 import { daysBetweenUTC } from 'src/modules/reconciliation/parsers/transforms';
 import type {
   ColumnMapping,
@@ -472,8 +475,7 @@ const detectLeadNameDivergence = (
     jaroWinkler(bobFirstLower, crmFirstLower) >=
     SAFETY_NET_SIMILARITY_THRESHOLD;
   const lastSimilar =
-    jaroWinkler(bobLastLower, crmLastLower) >=
-    SAFETY_NET_SIMILARITY_THRESHOLD;
+    jaroWinkler(bobLastLower, crmLastLower) >= SAFETY_NET_SIMILARITY_THRESHOLD;
 
   if (firstSimilar && lastSimilar) return null;
 
@@ -537,18 +539,14 @@ const formatSubscriberMismatchNote = (mismatch: SubscriberMismatch): string => {
   }
 
   return mismatch.reason.sharedLastName
-    ? (
-      `BOB row's first name doesn't match the CRM primary lead's, but the ` +
-      `last name does — likely a spouse or family-member subscriber swap. ` +
-      `Lead identity not auto-updated; verify which household member ` +
-      `should remain linked before applying.`
-    )
-    : (
-      `BOB row's name doesn't match the CRM primary lead at all — likely ` +
-      `a legacy mis-linking from the prior CRM, or this policy belongs ` +
-      `to a different person. Lead identity not auto-updated; verify ` +
-      `the linked lead before applying.`
-    );
+    ? `BOB row's first name doesn't match the CRM primary lead's, but the ` +
+        `last name does — likely a spouse or family-member subscriber swap. ` +
+        `Lead identity not auto-updated; verify which household member ` +
+        `should remain linked before applying.`
+    : `BOB row's name doesn't match the CRM primary lead at all — likely ` +
+        `a legacy mis-linking from the prior CRM, or this policy belongs ` +
+        `to a different person. Lead identity not auto-updated; verify ` +
+        `the linked lead before applying.`;
 };
 
 /** Infer compare method from CRM field metadata type. */
@@ -577,6 +575,41 @@ const toMicrosString = (s: string | null): string | null => {
   const num = Number(s);
   if (!Number.isFinite(num)) return null;
   return String(Math.round(num * 1_000_000));
+};
+
+const readBobStringByCrmField = (
+  bobRow: Record<string, unknown>,
+  columnMapping: ColumnMapping,
+  crmField: string,
+): string | null => {
+  const matchingColumn = Object.entries(columnMapping).find(
+    ([, columnMappingEntry]) => columnMappingEntry.crmField === crmField,
+  );
+
+  if (!matchingColumn) return null;
+
+  const value = bobRow[matchingColumn[0]];
+
+  return value != null ? String(value) : null;
+};
+
+const isInvalidPaidThroughDateMove = (
+  crmField: string,
+  bobValue: string | null,
+  bobRow: Record<string, unknown>,
+  columnMapping: ColumnMapping,
+): boolean => {
+  if (crmField !== 'paidThroughDate' || !bobValue) return false;
+
+  const effectiveDate = readBobStringByCrmField(
+    bobRow,
+    columnMapping,
+    'effectiveDate',
+  );
+
+  return (
+    normalizePaidThroughDateForEffectiveDate(bobValue, effectiveDate) === null
+  );
 };
 
 // Statuses that all represent some form of "this policy is over." Moving
@@ -741,6 +774,19 @@ export const computeFieldDiffsFromMapping = (
 
     // Don't suggest moving effectiveDate backwards (renewal carry-forward)
     if (isBackwardsEffectiveDateMove(entry.crmField, bobStr, crmStr)) continue;
+
+    // Carrier BOB can carry a stale pre-enrollment paid-through date. Treat it
+    // as missing instead of proposing a CRM write to an impossible date.
+    if (
+      isInvalidPaidThroughDateMove(
+        entry.crmField,
+        bobStr,
+        bobRow,
+        columnMapping,
+      )
+    ) {
+      continue;
+    }
 
     // Use fuzzyName for name-related fields regardless of inferred type
     const compareMethod = isNameLikeCrmField(entry.crmField)

@@ -111,6 +111,27 @@ const isFullEffectiveMonthPaid = (
   paidThroughDate: Date,
 ): boolean => paidThroughDate >= lastDayOfMonth(effectiveDate);
 
+export const normalizePaidThroughDateForEffectiveDate = (
+  paidThroughDate: unknown,
+  effectiveDate: unknown,
+): string | null => {
+  if (paidThroughDate === null || paidThroughDate === undefined) return null;
+  if (paidThroughDate === '') return null;
+
+  const paidThroughDateString = String(paidThroughDate);
+
+  if (
+    effectiveDate !== null &&
+    effectiveDate !== undefined &&
+    effectiveDate !== '' &&
+    paidThroughDateString < String(effectiveDate)
+  ) {
+    return null;
+  }
+
+  return paidThroughDateString;
+};
+
 /**
  * Derive a policy status from BOB fields. Mirrors the Ambetter status engine:
  * eligible=false → CANCELED, term past → CANCELED, otherwise compute from
@@ -124,7 +145,11 @@ export const deriveStatusFromBob = (
   const effectiveDate =
     parseDate(snapshot['True Effective Date']) ??
     parseDate(snapshot.policy_effective_date);
-  const paidThroughDate = parseDate(snapshot.paid_through_date);
+  const normalizedPaidThroughDate = normalizePaidThroughDateForEffectiveDate(
+    snapshot.paid_through_date,
+    snapshot['True Effective Date'] ?? snapshot.policy_effective_date,
+  );
+  const paidThroughDate = parseDate(normalizedPaidThroughDate);
   const now = new Date();
 
   // Rule 1: not eligible → CANCELED
@@ -142,14 +167,20 @@ export const deriveStatusFromBob = (
     return 'ACTIVE_APPROVED';
   }
 
-  // Rule 4: missing payment/status anchor → ACTIVE_APPROVED
-  if (!effectiveDate || !paidThroughDate) {
+  // Rule 4: missing effective date anchor → ACTIVE_APPROVED
+  if (!effectiveDate) {
     return 'ACTIVE_APPROVED';
   }
 
   // Rule 5: compute from gaps. Ambetter bills the month ahead, so the
   // current month is late as soon as paid-through is before this month end.
   const currentMonthEnd = lastDayOfMonth(now);
+
+  // Missing paid-through data is not current for an active/effective policy.
+  if (!paidThroughDate) {
+    return 'PAYMENT_ERROR_ACTIVE_APPROVED';
+  }
+
   const hasPaymentError = paidThroughDate < currentMonthEnd;
 
   if (paidThroughDate < effectiveDate) {
@@ -239,7 +270,10 @@ export const buildSyntheticPolicyRecord = ({
   const effectiveDate =
     val('effectiveDate') ?? snap['True Effective Date'] ?? null;
   const expirationDate = val('expirationDate') ?? null;
-  const paidThroughDate = val('paidThroughDate') ?? null;
+  const paidThroughDate = normalizePaidThroughDateForEffectiveDate(
+    val('paidThroughDate'),
+    effectiveDate,
+  );
   const applicantCount = Number(
     val('applicantCount') ?? snap.number_of_members ?? 0,
   );

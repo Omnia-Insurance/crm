@@ -18,15 +18,17 @@ import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
 import type { RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 
 import {
   buildSyntheticPolicyRecord,
   resolveProductFromPlanName,
   deriveStatusFromBob,
+  normalizePaidThroughDateForEffectiveDate,
 } from '@/reconciliation/utils/buildSyntheticPolicyRecord';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
-type Props = {
+type UnmatchedViewProps = {
   item: ReviewItemRecord;
   reconciliationId: string;
   onDecisionMade?: (itemId: string) => void;
@@ -47,11 +49,11 @@ const StyledContainer = styled.div`
 `;
 
 const StyledHeader = styled.div`
-  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
+  align-items: center;
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
   display: flex;
-  align-items: center;
   gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
 `;
 
 const StyledName = styled.span`
@@ -64,19 +66,23 @@ const StyledSpacer = styled.div`
 `;
 
 const StyledPlanName = styled.span`
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
 `;
 
 const StyledCallout = styled.div`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+  background: color-mix(
+    in srgb,
+    ${themeCssVariables.color.green} 6%,
+    transparent
+  );
   border-left: 3px solid ${themeCssVariables.color.green};
-  background: color-mix(in srgb, ${themeCssVariables.color.green} 6%, transparent);
-  margin: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
   border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.secondary};
+  font-size: ${themeCssVariables.font.size.sm};
   line-height: 1.5;
+  margin: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
 `;
 
 const StyledBody = styled.div`
@@ -86,12 +92,12 @@ const StyledBody = styled.div`
 `;
 
 const StyledFooter = styled.div`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
+  align-items: center;
   border-top: 1px solid ${themeCssVariables.border.color.medium};
   display: flex;
-  align-items: center;
-  gap: ${themeCssVariables.spacing[2]};
   flex-shrink: 0;
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
 `;
 
 // ── Component ──
@@ -100,9 +106,13 @@ export const UnmatchedView = ({
   item,
   reconciliationId,
   onDecisionMade,
-}: Props) => {
+}: UnmatchedViewProps) => {
   const store = useStore();
-  const snapshot = item.bobRowSnapshot ?? {};
+  const { enqueueErrorSnackBar } = useSnackBar();
+  const snapshot = useMemo(
+    () => item.bobRowSnapshot ?? {},
+    [item.bobRowSnapshot],
+  );
 
   // Stable temporary IDs derived from review item ID
   const tempPolicyId = useMemo(() => `preview-${item.id}`, [item.id]);
@@ -110,13 +120,13 @@ export const UnmatchedView = ({
 
   // ── Read reconciliation record from store ──
 
-  const reconciliationRecord = useAtomFamilyStateValue(
+  const recordStore = useAtomFamilyStateValue(
     recordStoreFamilyState,
     reconciliationId,
   );
 
-  const rawColumnMapping = reconciliationRecord
-    ? (reconciliationRecord as Record<string, unknown>)['columnMapping']
+  const rawColumnMapping = recordStore
+    ? (recordStore as Record<string, unknown>)['columnMapping']
     : null;
 
   const columnMapping = useMemo<Record<
@@ -136,11 +146,11 @@ export const UnmatchedView = ({
   }, [rawColumnMapping]);
 
   // Get carrierConfig relation from reconciliation
-  const carrierConfigRelation = reconciliationRecord
-    ? (
-        (reconciliationRecord as Record<string, unknown>)
-          .carrierConfig as Record<string, unknown> | null
-      )
+  const carrierConfigRelation = recordStore
+    ? ((recordStore as Record<string, unknown>).carrierConfig as Record<
+        string,
+        unknown
+      > | null)
     : null;
   const carrierConfigId = carrierConfigRelation?.id as string | undefined;
 
@@ -179,12 +189,10 @@ export const UnmatchedView = ({
   // ── Resolve carrier ──
 
   const carrierRelation = carrierConfigRecord
-    ? (
-        (carrierConfigRecord as Record<string, unknown>).carrier as Record<
-          string,
-          unknown
-        > | null
-      )
+    ? ((carrierConfigRecord as Record<string, unknown>).carrier as Record<
+        string,
+        unknown
+      > | null)
     : null;
   const resolvedCarrier = useMemo(
     () =>
@@ -202,16 +210,14 @@ export const UnmatchedView = ({
   const brokerNpn = snapshot.broker_npn as string | null;
   const { records: agentResults } = useFindManyRecords({
     objectNameSingular: 'agentProfile',
-    filter: brokerNpn
-      ? { npn: { eq: String(brokerNpn) } }
-      : undefined,
+    filter: brokerNpn ? { npn: { eq: String(brokerNpn) } } : undefined,
     skip: !brokerNpn,
     limit: 1,
   });
   const resolvedAgent = useMemo(() => {
     const agent = agentResults?.[0];
 
-    if (!agent) return null;
+    if (agent === undefined) return null;
 
     return {
       id: agent.id as string,
@@ -239,9 +245,7 @@ export const UnmatchedView = ({
     const cp = carrierProducts?.[0] as Record<string, unknown> | undefined;
 
     if (!cp) return null;
-    const commission = cp.commission as
-      | { amountMicros: number }
-      | undefined;
+    const commission = cp.commission as { amountMicros: number } | undefined;
 
     return commission?.amountMicros ?? null;
   }, [carrierProducts]);
@@ -309,9 +313,10 @@ export const UnmatchedView = ({
 
   // ── Pre-fetch existing lead by phone number ──
 
-  const phoneNumber = String(
-    snapshot.member_phone_number ?? '',
-  ).replace(/\D/g, '');
+  const phoneNumber = String(snapshot.member_phone_number ?? '').replace(
+    /\D/g,
+    '',
+  );
   const { records: existingLeadsByPhone } = useFindManyRecords({
     objectNameSingular: 'person',
     filter: phoneNumber
@@ -329,9 +334,7 @@ export const UnmatchedView = ({
   );
   const lastName = String(snapshot.insured_last_name ?? '');
   const displayName =
-    firstName || lastName
-      ? `${firstName} ${lastName}`.trim()
-      : item.name;
+    firstName || lastName ? `${firstName} ${lastName}`.trim() : item.name;
 
   // ── Create hooks ──
 
@@ -370,7 +373,7 @@ export const UnmatchedView = ({
       // 1. Resolve or create lead
       let leadId: string;
 
-      if (existingLead) {
+      if (existingLead !== null) {
         leadId = existingLead.id;
       } else {
         const email = String(snapshot.member_email ?? '');
@@ -387,9 +390,7 @@ export const UnmatchedView = ({
             primaryPhoneCallingCode: '+1',
           },
           ...(dob ? { dateOfBirth: dob } : {}),
-          ...(state
-            ? { addressCustom: { addressState: state } }
-            : {}),
+          ...(state ? { addressCustom: { addressState: state } } : {}),
         });
 
         leadId = personRecord.id;
@@ -401,7 +402,10 @@ export const UnmatchedView = ({
         snapshot.policy_effective_date ??
         null;
       const expirationDate = snapshot.policy_term_date ?? null;
-      const paidThroughDate = snapshot.paid_through_date ?? null;
+      const paidThroughDate = normalizePaidThroughDateForEffectiveDate(
+        snapshot.paid_through_date,
+        effectiveDate,
+      );
       const policyNumber = String(snapshot.policy_number ?? '');
       const applicantCount = Number(snapshot.number_of_members ?? 0) || null;
       // member_responsibility is the member's out-of-pocket (post-subsidy) amount
@@ -420,7 +424,9 @@ export const UnmatchedView = ({
         leadId,
         ...(effectiveDate ? { effectiveDate: String(effectiveDate) } : {}),
         ...(expirationDate ? { expirationDate: String(expirationDate) } : {}),
-        ...(paidThroughDate ? { paidThroughDate: String(paidThroughDate) } : {}),
+        ...(paidThroughDate
+          ? { paidThroughDate: String(paidThroughDate) }
+          : {}),
         ...(applicantCount ? { applicantCount } : {}),
         ...(premiumMicros !== null
           ? { premium: { amountMicros: premiumMicros, currencyCode: 'USD' } }
@@ -438,8 +444,8 @@ export const UnmatchedView = ({
 
       // 3. Mark review item as approved and link to new policy
       await updateDecision('APPROVED', newPolicy.id);
-    } catch (err) {
-      console.error('Failed to create policy:', err);
+    } catch {
+      enqueueErrorSnackBar({ message: 'Failed to create policy' });
     } finally {
       setCreating(false);
     }
@@ -458,6 +464,7 @@ export const UnmatchedView = ({
     createPerson,
     createPolicy,
     updateDecision,
+    enqueueErrorSnackBar,
   ]);
 
   const handleDismiss = useCallback(
@@ -481,8 +488,20 @@ export const UnmatchedView = ({
         <StyledName>{displayName}</StyledName>
         {isDecided ? (
           <Tag
-            color={item.decision === 'APPROVED' ? 'green' : item.decision === 'REJECTED' ? 'red' : 'orange'}
-            text={item.decision === 'APPROVED' ? 'Created' : item.decision === 'REJECTED' ? 'Dismissed' : 'Flagged'}
+            color={
+              item.decision === 'APPROVED'
+                ? 'green'
+                : item.decision === 'REJECTED'
+                  ? 'red'
+                  : 'orange'
+            }
+            text={
+              item.decision === 'APPROVED'
+                ? 'Created'
+                : item.decision === 'REJECTED'
+                  ? 'Dismissed'
+                  : 'Flagged'
+            }
           />
         ) : (
           <Tag color="green" text="New Policy" />
@@ -500,7 +519,7 @@ export const UnmatchedView = ({
 
       {!isDecided && (
         <StyledCallout>
-          {existingLead
+          {existingLead !== null
             ? `Existing lead found: ${(existingLead as Record<string, any>).name?.firstName ?? ''} ${(existingLead as Record<string, any>).name?.lastName ?? ''}. The new policy will be linked to this lead.`
             : 'Preview of the policy record that will be created. A new lead will also be created.'}
         </StyledCallout>

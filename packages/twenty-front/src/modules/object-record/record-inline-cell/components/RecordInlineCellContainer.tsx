@@ -18,6 +18,7 @@ import {
 } from 'twenty-ui/display';
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
+  coerceFieldDiffValueForRecordUpdate,
   promotePrimaryEmailToAdditional,
   promotePrimaryPhoneToAdditional,
 } from 'twenty-shared/utils';
@@ -271,13 +272,19 @@ export const RecordInlineCellContainer = () => {
         }
 
         // Set the changed sub-field
-        existing[subField] = rawValue;
+        existing[subField] = coerceFieldDiffValueForRecordUpdate(rawValue, {
+          fieldType: fieldDefinition.type,
+          currentValue: existing[subField],
+        });
         return existing;
       }
 
-      return rawValue;
+      return coerceFieldDiffValueForRecordUpdate(rawValue, {
+        fieldType: fieldDefinition.type,
+        currentValue: currentFieldValue,
+      });
     },
-    [fieldDiff?.crmFieldPath, currentFieldValue],
+    [fieldDefinition.type, fieldDiff?.crmFieldPath, currentFieldValue],
   );
 
   const handleAccept = useCallback(() => {

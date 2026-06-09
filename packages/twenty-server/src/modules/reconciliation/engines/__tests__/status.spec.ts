@@ -1,4 +1,5 @@
 import {
+  buildStatusInputFromMapping,
   deriveStatus,
   getCancelExpireDate,
   isFullEffectiveMonthPaid,
@@ -151,6 +152,46 @@ describe('status engine (ambetter-bob-v1)', () => {
       );
 
       expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+    });
+
+    it('active effective date with no payment data → PAYMENT_ERROR_ACTIVE_APPROVED', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-05-01',
+          paidThroughDate: null,
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-09'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
+      expect(result?.statusChangeReason).toContain('No payment data');
+      expect(result?.statusChangeReason).toContain(
+        'current month end 2026-06-30',
+      );
+    });
+
+    it('active effective date with paid-through before effective date treats payment as missing', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-06-01',
+          paidThroughDate: '2026-01-31',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-09'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
+      expect(result?.statusChangeReason).toContain('No payment data');
+      expect(result?.statusChangeReason).not.toContain('predates effective');
     });
 
     it('4.1.4.3: placed (30+ days) with current payment → ACTIVE_PLACED', () => {
@@ -307,6 +348,24 @@ describe('status engine (ambetter-bob-v1)', () => {
   });
 
   describe('edge cases', () => {
+    it('normalizes status input paid-through to null when it predates effective', () => {
+      expect(
+        buildStatusInputFromMapping(
+          {
+            policy_effective_date: '2026-06-01',
+            paid_through_date: '2026-01-31',
+          },
+          {
+            effectiveDate: 'policy_effective_date',
+            paidThroughDate: 'paid_through_date',
+          },
+        ),
+      ).toMatchObject({
+        effectiveDate: '2026-06-01',
+        paidThroughDate: null,
+      });
+    });
+
     it('no effective date → defaults to ACTIVE_APPROVED', () => {
       const result = deriveStatus(
         parserId,
