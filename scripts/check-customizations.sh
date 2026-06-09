@@ -2680,6 +2680,14 @@ check_file_contains \
   "deriveCanceledStatus" \
   "Reconciliation status engine must preserve payment-error cancellation descriptors"
 check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "isPaidThroughCurrentMonth" \
+  "Ambetter active payment error must require paid-through coverage through current month end"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/utils/buildSyntheticPolicyRecord.ts" \
+  "current-month payment coverage" \
+  "Frontend synthetic reconciliation status derivation must mirror Ambetter current-month payment coverage"
+check_file_contains \
   "packages/twenty-server/src/modules/reconciliation/types/field-config.ts" \
   "derivedStatus === 'PAYMENT_ERROR_CANCELED'" \
   "Broker-effective audit must treat Payment Error-Canceled as canceled"

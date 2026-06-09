@@ -92,7 +92,6 @@ const toCurrencyMicros = (
 // ---------------------------------------------------------------------------
 
 const PLACED_THRESHOLD_DAYS = 30;
-const PAYMENT_ERROR_AGE_DAYS = 10;
 
 const parseDate = (value: unknown): Date | null => {
   if (!value) return null;
@@ -104,10 +103,18 @@ const parseDate = (value: unknown): Date | null => {
 const daysBetween = (a: Date, b: Date): number =>
   Math.floor((b.getTime() - a.getTime()) / 86_400_000);
 
+const lastDayOfMonth = (date: Date): Date =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+
+const isFullEffectiveMonthPaid = (
+  effectiveDate: Date,
+  paidThroughDate: Date,
+): boolean => paidThroughDate >= lastDayOfMonth(effectiveDate);
+
 /**
  * Derive a policy status from BOB fields. Mirrors the Ambetter status engine:
  * eligible=false → CANCELED, term past → CANCELED, otherwise compute from
- * effective↔paidThrough gap.
+ * effective↔paidThrough gap and current-month payment coverage.
  */
 export const deriveStatusFromBob = (
   snapshot: Record<string, unknown>,
@@ -135,18 +142,26 @@ export const deriveStatusFromBob = (
     return 'ACTIVE_APPROVED';
   }
 
-  // Rule 4: no paid through, or before effective → ACTIVE_APPROVED
-  if (!paidThroughDate || (effectiveDate && paidThroughDate < effectiveDate)) {
+  // Rule 4: missing payment/status anchor → ACTIVE_APPROVED
+  if (!effectiveDate || !paidThroughDate) {
     return 'ACTIVE_APPROVED';
   }
 
-  // Rule 5: compute from gaps
-  const daysSinceEffective = effectiveDate
-    ? daysBetween(effectiveDate, paidThroughDate)
-    : 0;
-  const paidThroughAge = daysBetween(paidThroughDate, now);
-  const isPlaced = daysSinceEffective >= PLACED_THRESHOLD_DAYS;
-  const hasPaymentError = paidThroughAge > PAYMENT_ERROR_AGE_DAYS;
+  // Rule 5: compute from gaps. Ambetter bills the month ahead, so the
+  // current month is late as soon as paid-through is before this month end.
+  const currentMonthEnd = lastDayOfMonth(now);
+  const hasPaymentError = paidThroughDate < currentMonthEnd;
+
+  if (paidThroughDate < effectiveDate) {
+    return hasPaymentError
+      ? 'PAYMENT_ERROR_ACTIVE_APPROVED'
+      : 'ACTIVE_APPROVED';
+  }
+
+  const daysSinceEffective = daysBetween(effectiveDate, paidThroughDate);
+  const isPlaced =
+    isFullEffectiveMonthPaid(effectiveDate, paidThroughDate) ||
+    daysSinceEffective >= PLACED_THRESHOLD_DAYS;
 
   if (hasPaymentError && isPlaced) return 'PAYMENT_ERROR_ACTIVE_PLACED';
   if (hasPaymentError) return 'PAYMENT_ERROR_ACTIVE_APPROVED';
@@ -177,7 +192,7 @@ export const buildSyntheticPolicyRecord = ({
   const val = (crmField: string): unknown => {
     const entry = crmLookup.get(crmField);
 
-    return entry ? snap[entry.bobKey] ?? null : null;
+    return entry ? (snap[entry.bobKey] ?? null) : null;
   };
 
   // ── Lead (person) ──
@@ -189,7 +204,9 @@ export const buildSyntheticPolicyRecord = ({
   const email = String(val('lead.emails.primaryEmail') ?? '');
   const phone = String(val('lead.phones.primaryPhoneNumber') ?? '');
   const dob = val('lead.dateOfBirth') ?? null;
-  const state = String(val('lead.addressCustom.addressState') ?? snap.state ?? '');
+  const state = String(
+    val('lead.addressCustom.addressState') ?? snap.state ?? '',
+  );
 
   const lead: ObjectRecord = {
     id: tempLeadId,
@@ -219,12 +236,17 @@ export const buildSyntheticPolicyRecord = ({
   // ── Policy ──
 
   const policyNumber = String(val('policyNumber') ?? snap.policy_number ?? '');
-  const effectiveDate = val('effectiveDate') ?? snap['True Effective Date'] ?? null;
+  const effectiveDate =
+    val('effectiveDate') ?? snap['True Effective Date'] ?? null;
   const expirationDate = val('expirationDate') ?? null;
   const paidThroughDate = val('paidThroughDate') ?? null;
-  const applicantCount = Number(val('applicantCount') ?? snap.number_of_members ?? 0);
+  const applicantCount = Number(
+    val('applicantCount') ?? snap.number_of_members ?? 0,
+  );
   const premium = toCurrencyMicros(
-    val('premium.amountMicros') ?? snap.member_responsibility ?? snap.monthly_premium_amount,
+    val('premium.amountMicros') ??
+      snap.member_responsibility ??
+      snap.monthly_premium_amount,
   );
 
   // Policy display name follows CRM convention: "Carrier - Product"

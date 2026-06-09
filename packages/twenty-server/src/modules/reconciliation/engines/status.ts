@@ -95,7 +95,7 @@ export const buildStatusInputFromMapping = (
 export type StatusEngineConfig = {
   /** Days since effective to consider a policy "placed". Default: 30 */
   placedThresholdDays: number;
-  /** Days past paid-through to flag payment error. Default: 10 */
+  /** Legacy carrier-config field; Ambetter active payment error uses current-month coverage. */
   paymentErrorAgeDays: number;
 };
 
@@ -162,6 +162,17 @@ export const isFullEffectiveMonthPaid = (
   return paidThroughDate >= eom;
 };
 
+const isPaidThroughCurrentMonth = (
+  paidThroughDate: string,
+  todayStr: string,
+): boolean => {
+  const currentMonthEnd = lastDayOfMonth(todayStr);
+
+  if (!currentMonthEnd) return false;
+
+  return paidThroughDate >= currentMonthEnd;
+};
+
 const findPreviousVersion = (
   allCrmPoliciesForNumber: CrmPolicy[],
   newEffectiveDate: string,
@@ -222,6 +233,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
   const termDate = bobRow.termDate;
   const eligible = bobRow.eligibleForCommission;
   const todayStr = toDateString(today);
+  const currentMonthEnd = lastDayOfMonth(todayStr) ?? todayStr;
   const currentCrmStatus = getCurrentCrmStatus(
     allCrmPoliciesForNumber,
     currentPolicyId,
@@ -285,17 +297,16 @@ const deriveAmbetterStatus: StatusEngineFn = (
   }
 
   // Renewal edge case: paidThrough predates the new effective date (e.g.,
-  // paid through Jan 31, renewed effective Apr 1). If paidThrough is stale,
-  // the member hasn't paid on the new policy year — that's a payment error.
+  // paid through Jan 31, renewed effective Apr 1). Ambetter invoices the month
+  // ahead, so active policies need paid-through coverage through the current
+  // month end with no grace buffer.
   if (paidThrough < effectiveDate) {
-    const paidThroughAge = daysBetween(paidThrough, todayStr);
-
-    if (paidThroughAge > config.paymentErrorAgeDays) {
+    if (!isPaidThroughCurrentMonth(paidThrough, todayStr)) {
       return {
         derivedStatus: 'PAYMENT_ERROR_ACTIVE_APPROVED',
         derivedExpireDate: null,
         cancelPreviousPolicyId: cancelPrev,
-        statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} and is ${paidThroughAge} days stale → Payment Error`,
+        statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} and does not cover current month end ${currentMonthEnd} → Payment Error`,
       };
     }
 
@@ -303,12 +314,11 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} but is recent → Active-Approved`,
+      statusChangeReason: `Paid-through ${paidThrough} predates effective ${effectiveDate} but covers current month end ${currentMonthEnd} → Active-Approved`,
     };
   }
 
   const daysSinceEffective = daysBetween(effectiveDate, paidThrough);
-  const paidThroughAge = daysBetween(paidThrough, todayStr);
 
   // "Placed" fires under EITHER rule:
   //   1. Calendar-month rule (Jackie): paid-through covers the full
@@ -320,7 +330,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
   const fullMonthPaid = isFullEffectiveMonthPaid(effectiveDate, paidThrough);
   const isPlaced =
     fullMonthPaid || daysSinceEffective >= config.placedThresholdDays;
-  const hasPaymentError = paidThroughAge > config.paymentErrorAgeDays;
+  const hasPaymentError = !isPaidThroughCurrentMonth(paidThrough, todayStr);
 
   const placementReason = fullMonthPaid
     ? `paid through end of effective month (${paidThrough})`
@@ -331,7 +341,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'PAYMENT_ERROR_ACTIVE_PLACED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Placed (${placementReason}) with payment error (paid-through ${paidThroughAge} days ago)`,
+      statusChangeReason: `Placed (${placementReason}) with payment error (paid-through ${paidThrough} before current month end ${currentMonthEnd})`,
     };
   }
 
@@ -340,7 +350,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'PAYMENT_ERROR_ACTIVE_APPROVED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Approved (${daysSinceEffective} days since effective, no full month yet) with payment error (paid-through ${paidThroughAge} days ago)`,
+      statusChangeReason: `Approved (${daysSinceEffective} days since effective, no full month yet) with payment error (paid-through ${paidThrough} before current month end ${currentMonthEnd})`,
     };
   }
 
@@ -349,7 +359,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
       derivedStatus: 'ACTIVE_PLACED',
       derivedExpireDate: null,
       cancelPreviousPolicyId: cancelPrev,
-      statusChangeReason: `Placed: ${placementReason}, payment current`,
+      statusChangeReason: `Placed: ${placementReason}, payment current through ${currentMonthEnd}`,
     };
   }
 
@@ -357,7 +367,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
     derivedStatus: 'ACTIVE_APPROVED',
     derivedExpireDate: null,
     cancelPreviousPolicyId: cancelPrev,
-    statusChangeReason: `Approved: ${daysSinceEffective} days between effective and paid-through (no full month yet), payment current`,
+    statusChangeReason: `Approved: ${daysSinceEffective} days between effective and paid-through (no full month yet), payment current through ${currentMonthEnd}`,
   };
 };
 

@@ -158,7 +158,7 @@ describe('status engine (ambetter-bob-v1)', () => {
         parserId,
         {
           effectiveDate: '2026-01-01',
-          paidThroughDate: '2026-04-10',
+          paidThroughDate: '2026-04-30',
           termDate: null,
           eligibleForCommission: true,
         },
@@ -170,21 +170,21 @@ describe('status engine (ambetter-bob-v1)', () => {
       expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
     });
 
-    it('4.1.4.4: approved (<30 days) with current payment → ACTIVE_APPROVED', () => {
+    it('4.1.4.4: approved (<30 days) without current-month coverage → PAYMENT_ERROR_ACTIVE_APPROVED', () => {
       const result = deriveStatus(
         parserId,
         {
-          effectiveDate: '2026-04-01',
-          paidThroughDate: '2026-04-10',
+          effectiveDate: '2026-04-20',
+          paidThroughDate: '2026-04-25',
           termDate: null,
           eligibleForCommission: true,
         },
         [],
-        today,
+        new Date('2026-04-30'),
         DEFAULT_STATUS_ENGINE_CONFIG,
       );
 
-      expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
     });
 
     it('4.1.4.1: placed with payment error → PAYMENT_ERROR_ACTIVE_PLACED', () => {
@@ -206,7 +206,7 @@ describe('status engine (ambetter-bob-v1)', () => {
 
     it('4.1.4.2: approved with payment error → PAYMENT_ERROR_ACTIVE_APPROVED', () => {
       // effective 2026-03-20, paid through 2026-03-25 → 5 days (< 30 = approved)
-      // paid through age = 19 days ago (> 10 = payment error)
+      // paid through doesn't cover current month end 2026-04-30 → payment error
       const result = deriveStatus(
         parserId,
         {
@@ -402,7 +402,7 @@ describe('status engine (ambetter-bob-v1)', () => {
           eligibleForCommission: true,
         },
         [],
-        new Date('2026-03-01'),
+        new Date('2026-02-28'),
         DEFAULT_STATUS_ENGINE_CONFIG,
       );
 
@@ -420,14 +420,14 @@ describe('status engine (ambetter-bob-v1)', () => {
           eligibleForCommission: true,
         },
         [],
-        new Date('2026-04-01'),
+        new Date('2026-03-31'),
         DEFAULT_STATUS_ENGINE_CONFIG,
       );
 
       expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
     });
 
-    it('eff 3/1, paid 3/29 → ACTIVE_APPROVED (March not fully paid)', () => {
+    it('eff 3/1, paid 3/29 → PAYMENT_ERROR_ACTIVE_APPROVED (March not fully paid)', () => {
       const result = deriveStatus(
         parserId,
         {
@@ -437,11 +437,11 @@ describe('status engine (ambetter-bob-v1)', () => {
           eligibleForCommission: true,
         },
         [],
-        new Date('2026-04-01'),
+        new Date('2026-03-31'),
         DEFAULT_STATUS_ENGINE_CONFIG,
       );
 
-      expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
     });
 
     it('eff 1/15, paid 2/14 → ACTIVE_PLACED (30-day fallback still works)', () => {
@@ -457,7 +457,7 @@ describe('status engine (ambetter-bob-v1)', () => {
           eligibleForCommission: true,
         },
         [],
-        new Date('2026-02-15'),
+        new Date('2026-01-31'),
         DEFAULT_STATUS_ENGINE_CONFIG,
       );
 
@@ -465,8 +465,8 @@ describe('status engine (ambetter-bob-v1)', () => {
     });
 
     it('full-month paid + payment error → PAYMENT_ERROR_ACTIVE_PLACED', () => {
-      // Eff 2/1, paid 2/28, but today is 4/13 → paid-through is 44d old
-      // (> 10) → payment error. Still placed via calendar-month rule.
+      // Eff 2/1, paid 2/28, but today is 4/13 → paid-through does not
+      // cover current month end 4/30. Still placed via calendar-month rule.
       const result = deriveStatus(
         parserId,
         {
@@ -481,6 +481,79 @@ describe('status engine (ambetter-bob-v1)', () => {
       );
 
       expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
+    });
+  });
+
+  describe('Ambetter month-ahead payment rule', () => {
+    it('paid through prior month on the 1st → PAYMENT_ERROR_ACTIVE_PLACED', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-05-01',
+          paidThroughDate: '2026-05-31',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
+      expect(result?.statusChangeReason).toContain(
+        'current month end 2026-06-30',
+      );
+    });
+
+    it('paid through prior month during the current month stays payment error', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-05-01',
+          paidThroughDate: '2026-05-31',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-09'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
+    });
+
+    it('paid through current month end → ACTIVE_PLACED', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-05-01',
+          paidThroughDate: '2026-06-30',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('ACTIVE_PLACED');
+    });
+
+    it('payment error before first full month paid → PAYMENT_ERROR_ACTIVE_APPROVED', () => {
+      const result = deriveStatus(
+        parserId,
+        {
+          effectiveDate: '2026-05-01',
+          paidThroughDate: '2026-05-15',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        [],
+        new Date('2026-06-01'),
+        DEFAULT_STATUS_ENGINE_CONFIG,
+      );
+
+      expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
     });
   });
 });
