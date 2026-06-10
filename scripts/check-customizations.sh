@@ -384,6 +384,12 @@ check_file_contains \
   "Permission-flag rename upgrade must not fail when the old workspace/universalIdentifier index is already absent"
 
 echo ""
+echo "--- Critical: Convoso Recording Export (telephony replacement) ---"
+check_file_exists \
+  "scripts/export-convoso-recordings.mjs" \
+  "Convoso recording exporter must exist until the telephony cutover completes (recordings are CMS 10-yr retention artifacts; Convoso purges audio on a ~155-day rolling window)"
+
+echo ""
 echo "--- Critical: Local Prod Restore Redis Purge ---"
 check_file_contains \
   "scripts/replicate-db-to-local.sh" \
