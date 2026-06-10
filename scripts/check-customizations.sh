@@ -2700,6 +2700,10 @@ check_file_contains \
   "isInvalidPaidThroughDateMove" \
   "Ambetter reconciliation diffs must not propose stale pre-effective paid-through dates"
 check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/diff.ts" \
+  "isJanuaryFirstRolloverEffectiveDateMove" \
+  "Ambetter reconciliation diffs must suppress ACA January 1 rollover effective-date writes"
+check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/utils/buildSyntheticPolicyRecord.ts" \
   "current-month payment coverage" \
   "Frontend synthetic reconciliation status derivation must mirror Ambetter current-month payment coverage"

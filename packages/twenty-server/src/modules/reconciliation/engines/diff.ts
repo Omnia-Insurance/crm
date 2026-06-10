@@ -238,6 +238,43 @@ const isBackwardsEffectiveDateMove = (
   return bob < crm;
 };
 
+const parseIsoDateParts = (
+  value: string,
+): { year: number; month: number; day: number } | null => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return null;
+
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+};
+
+const isJanuaryFirstRolloverEffectiveDateMove = (
+  crmField: string,
+  bobValue: string | null,
+  crmValue: string | null,
+): boolean => {
+  if (crmField !== 'effectiveDate') return false;
+  if (!bobValue || !crmValue) return false;
+
+  const bobDate = parseIsoDateParts(bobValue);
+  const crmDate = parseIsoDateParts(crmValue);
+
+  if (!bobDate || !crmDate) return false;
+
+  // ACA carriers often report the annual renewal as Jan 1 even when the CRM
+  // policy is continuous from the prior year. Keep the earlier commission
+  // window while still allowing other forward effective-date corrections.
+  return (
+    bobDate.month === 1 &&
+    bobDate.day === 1 &&
+    bobDate.year === crmDate.year + 1
+  );
+};
+
 /**
  * Lead identity fields. On multi-member policies, these describe a
  * specific person — overwriting them when the BOB row's subscriber
@@ -775,6 +812,16 @@ export const computeFieldDiffsFromMapping = (
     // Don't suggest moving effectiveDate backwards (renewal carry-forward)
     if (isBackwardsEffectiveDateMove(entry.crmField, bobStr, crmStr)) continue;
 
+    if (
+      isJanuaryFirstRolloverEffectiveDateMove(
+        entry.crmField,
+        bobStr,
+        crmStr,
+      )
+    ) {
+      continue;
+    }
+
     // Carrier BOB can carry a stale pre-enrollment paid-through date. Treat it
     // as missing instead of proposing a CRM write to an impossible date.
     if (
@@ -831,6 +878,16 @@ export const computeFieldDiffsFromMapping = (
 
       // Don't suggest moving effectiveDate backwards (renewal carry-forward)
       if (isBackwardsEffectiveDateMove(cf.crmField, bobStr, crmStr)) continue;
+
+      if (
+        isJanuaryFirstRolloverEffectiveDateMove(
+          cf.crmField,
+          bobStr,
+          crmStr,
+        )
+      ) {
+        continue;
+      }
 
       const compareMethod = inferCompareMethod(
         cf.type === 'date' ? 'DATE_TIME' : 'TEXT',

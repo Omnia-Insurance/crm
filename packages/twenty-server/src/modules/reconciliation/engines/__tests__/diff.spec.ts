@@ -274,7 +274,7 @@ describe('diff engine', () => {
     });
   });
 
-  describe('backwards effectiveDate suppression', () => {
+  describe('effectiveDate suppression', () => {
     // Carriers like Ambetter carry forward the original enrollment date in
     // policy_effective_date even after a renewal. Without this suppression
     // the diff engine would propose moving the renewal CRM record's
@@ -296,6 +296,28 @@ describe('diff engine', () => {
       const diffs = computeFieldDiffsFromMapping(
         { ...baseBobRow, eff_date: '2026-03-01' },
         { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeDefined();
+    });
+
+    it('suppresses January rollover effectiveDate moves from the prior year', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, eff_date: '2026-01-01' },
+        { ...baseCrmPolicy, effectiveDate: '2025-10-08' },
+        null,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+
+    it('still emits non-January forward effectiveDate corrections from the prior year', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, eff_date: '2026-03-01' },
+        { ...baseCrmPolicy, effectiveDate: '2025-10-08' },
         null,
         baseColumnMapping,
       );
@@ -331,6 +353,38 @@ describe('diff engine', () => {
           trueEffectiveDate: '2025-10-01',
         },
         { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        columnMapping,
+        computedFields,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+
+    it('suppresses January rollover effectiveDate moves on computed-field diffs', () => {
+      const columnMapping: ColumnMapping = {
+        policy_no: {
+          crmField: 'policyNumber',
+          fieldType: 'TEXT',
+          fieldKey: 'policyNumber',
+        },
+      };
+      const computedFields = [
+        {
+          outputKey: 'True Effective Date',
+          method: 'maxDate',
+          inputs: ['brokerEffectiveDate', 'policyEffectiveDate'],
+          type: 'date',
+          crmField: 'effectiveDate',
+        },
+      ];
+
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          policy_no: 'U73285978',
+          'True Effective Date': '2026-01-01',
+        },
+        { ...baseCrmPolicy, effectiveDate: '2025-10-08' },
         null,
         columnMapping,
         computedFields,
