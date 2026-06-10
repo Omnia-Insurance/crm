@@ -8,6 +8,7 @@ import {
   isValidAmbetterPolicyNumber,
   selectByActiveStatus,
   selectByActiveTerm,
+  selectByMostRecentEffectiveDate,
   DEFAULT_MATCHING_CONFIG,
   type CrmPolicy,
   type MatchInput,
@@ -409,6 +410,92 @@ describe('matching engine', () => {
         expect(result.notes).toContain('paid-through');
       });
     });
+
+    describe('both-versions-canceled disambiguation (most recent wins)', () => {
+      // Regression for U90998628: member re-enrolled Feb 1 after a Jan
+      // cancel; BOTH CRM versions sat CANCELED when the BOB landed, and the
+      // BOB carried the original Jan 1 effective date with a paid-through
+      // (12-31) outside both term windows. Active-status and term-window
+      // narrowing both punt, and tier 2 latched onto the OLDER policy via
+      // exact effective date. Ops rule: anytime we have multiples, update
+      // the most recent one.
+      const canceledJanTerm = makePolicy({
+        id: 'policy-jan',
+        effectiveDate: '2026-01-01',
+        expirationDate: '2026-01-01',
+        status: 'CANCELED',
+      });
+      const canceledFebTerm = makePolicy({
+        id: 'policy-feb',
+        effectiveDate: '2026-02-01',
+        expirationDate: '2026-03-10',
+        status: 'CANCELED',
+      });
+
+      it('picks the most recent policy even when BOB effective date exactly matches the older one', () => {
+        const indexes = buildMatchIndexes([canceledJanTerm, canceledFebTerm]);
+        const row = makeMatchInput({
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-12-31',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.crmPolicyId).toBe('policy-feb');
+        expect(result.notes).toContain('most recent effective date');
+      });
+
+      it('falls back to weighted multi-match when effective dates tie', () => {
+        const indexes = buildMatchIndexes([
+          { ...canceledJanTerm, effectiveDate: '2026-01-01' },
+          { ...canceledFebTerm, id: 'policy-twin', effectiveDate: '2026-01-01' },
+        ]);
+        const row = makeMatchInput({
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-12-31',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_MULTI_BEST');
+      });
+
+      it('does not preempt active-status narrowing when one candidate is live', () => {
+        const indexes = buildMatchIndexes([
+          // The OLDER policy is the active one — recency must not override
+          // the stronger active-status signal.
+          { ...canceledJanTerm, status: 'ACTIVE_PLACED', expirationDate: null },
+          canceledFebTerm,
+        ]);
+        const row = makeMatchInput({
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-12-31',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.crmPolicyId).toBe('policy-jan');
+        expect(result.notes).toContain('active status');
+      });
+    });
   });
 
   describe('selectByActiveStatus', () => {
@@ -546,6 +633,48 @@ describe('matching engine', () => {
       expect(
         selectByActiveTerm([broken, active()], '2026-04-30'),
       ).toMatchObject({ id: 'p-active' });
+    });
+  });
+
+  describe('selectByMostRecentEffectiveDate', () => {
+    const older = (): CrmPolicy =>
+      makePolicy({ id: 'p-older', effectiveDate: '2026-01-01' });
+    const newer = (): CrmPolicy =>
+      makePolicy({ id: 'p-newer', effectiveDate: '2026-02-01' });
+
+    it('returns null when fewer than 2 candidates (no need to narrow)', () => {
+      expect(selectByMostRecentEffectiveDate([newer()])).toBeNull();
+      expect(selectByMostRecentEffectiveDate([])).toBeNull();
+    });
+
+    it('picks the candidate with the latest effective date', () => {
+      const winner = selectByMostRecentEffectiveDate([older(), newer()]);
+
+      expect(winner?.id).toBe('p-newer');
+    });
+
+    it('returns null when the latest effective date is tied', () => {
+      expect(
+        selectByMostRecentEffectiveDate([
+          older(),
+          { ...newer(), effectiveDate: '2026-01-01' },
+        ]),
+      ).toBeNull();
+    });
+
+    it('returns null when any candidate has a missing or malformed effective date', () => {
+      expect(
+        selectByMostRecentEffectiveDate([
+          older(),
+          { ...newer(), effectiveDate: null },
+        ]),
+      ).toBeNull();
+      expect(
+        selectByMostRecentEffectiveDate([
+          older(),
+          { ...newer(), effectiveDate: 'not a date' },
+        ]),
+      ).toBeNull();
     });
   });
 

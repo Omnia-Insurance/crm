@@ -521,6 +521,37 @@ export const selectByActiveTerm = (
   return matches.length === 1 ? matches[0] : null;
 };
 
+/**
+ * Last-resort narrowing for multi-policy-number candidates: pick the most
+ * recently effective policy. Encodes the ops rule "anytime we have
+ * multiples, update the most recent one" — when neither status nor term
+ * window disambiguates (e.g. the member re-enrolled mid-year and BOTH
+ * versions sit CANCELED in the CRM), the BOB row describes the member's
+ * current relationship with the carrier, and the latest policy is the one
+ * to update. Without this, the proximity tiers latch onto the OLDER
+ * policy because the BOB carries the original effective date.
+ *
+ * Returns null when any candidate lacks a parseable effectiveDate or when
+ * the latest date is shared by more than one candidate (true tie — caller
+ * falls back to weighted multi-match scoring).
+ */
+export const selectByMostRecentEffectiveDate = (
+  candidates: CrmPolicy[],
+): CrmPolicy | null => {
+  if (candidates.length < 2) return null;
+
+  const dated = candidates.map((p) => ({
+    policy: p,
+    time: p.effectiveDate ? new Date(p.effectiveDate).getTime() : NaN,
+  }));
+
+  if (dated.some(({ time }) => Number.isNaN(time))) return null;
+
+  dated.sort((a, b) => b.time - a.time);
+
+  return dated[0].time > dated[1].time ? dated[0].policy : null;
+};
+
 export const matchRow = (
   input: MatchInput,
   indexes: MatchIndexes,
@@ -559,7 +590,7 @@ export const matchRow = (
     : [];
 
   // Disambiguate multi-policy-number candidates BEFORE running proximity-
-  // based tiers. Two narrowing strategies, in priority order:
+  // based tiers. Three narrowing strategies, in priority order:
   //
   //   1. Active-status: when exactly one candidate isn't in a terminal
   //      state (CANCELED / DECLINED / etc.), pick it. Re-enrollments add
@@ -571,25 +602,31 @@ export const matchRow = (
   //      candidate whose [effectiveDate, expirationDate] contains the
   //      BOB paid-through date — handles renewals where the BOB carries
   //      forward the old policy_effective_date.
+  //   3. Most-recent: when neither status nor term window decides (e.g.
+  //      both versions canceled in the CRM), pick the latest effective
+  //      date — "anytime we have multiples, update the most recent one".
   let narrowedWinner: CrmPolicy | null = null;
   let narrowReason: string | null = null;
 
   if (allPolicyNumberMatches.length > 1) {
     const activeWinner = selectByActiveStatus(allPolicyNumberMatches);
+    const termWinner = activeWinner
+      ? null
+      : selectByActiveTerm(allPolicyNumberMatches, input.paidThroughDate);
+    const recentWinner =
+      activeWinner || termWinner
+        ? null
+        : selectByMostRecentEffectiveDate(allPolicyNumberMatches);
 
     if (activeWinner) {
       narrowedWinner = activeWinner;
       narrowReason = 'active status';
-    } else {
-      const termWinner = selectByActiveTerm(
-        allPolicyNumberMatches,
-        input.paidThroughDate,
-      );
-
-      if (termWinner) {
-        narrowedWinner = termWinner;
-        narrowReason = `paid-through ${input.paidThroughDate}`;
-      }
+    } else if (termWinner) {
+      narrowedWinner = termWinner;
+      narrowReason = `paid-through ${input.paidThroughDate}`;
+    } else if (recentWinner) {
+      narrowedWinner = recentWinner;
+      narrowReason = 'most recent effective date';
     }
   }
 
