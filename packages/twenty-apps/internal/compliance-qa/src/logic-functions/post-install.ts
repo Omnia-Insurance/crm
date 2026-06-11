@@ -979,7 +979,7 @@ const buildConfiguredShouldPollAgainStep = ({
 
   return {
     ...step,
-    name: 'Transcribe still running?',
+    name: 'Transcription still running?',
     type: 'IF_ELSE',
     valid: true,
     position,
@@ -1223,7 +1223,7 @@ const configureComplianceWorkflow = async (): Promise<PostInstallResult> => {
       status: 'updated',
       message:
         `${COMPLIANCE_QA_WORKFLOW_NAME} was updated to use workflow-owned ` +
-        'Transcribe polling and activated.',
+        'transcription polling and activated.',
     };
   }
 

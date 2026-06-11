@@ -6,19 +6,19 @@ const COMPLIANCE_APP_ABOUT_DESCRIPTION = [
   '',
   '#### What this app does',
   '',
-  'Compliance listens to eligible Call records, copies the recording to S3, transcribes it with Amazon Transcribe, translates Spanish transcripts to English when detected, and scores the conversation against insurance sales compliance criteria.',
+  'Compliance listens to eligible Call records, copies the recording to S3, transcribes it with Deepgram, translates Spanish transcripts to English when detected, and scores the conversation against insurance sales compliance criteria.',
   '',
   'It turns the result into native CRM work your team can act on:',
   '- Scorecards linked to the source Call, Lead, and Agent',
   '- Notes for recommendations, red flags, score details, evidence, and transcript text',
-  '- Files for the copied audio and Amazon Transcribe JSON artifact',
+  '- Files for the Deepgram transcript JSON artifact',
   '- Follow-up Tasks assigned to configured QA Managers when a call fails or needs review',
   '',
   '#### How processing works',
   '',
-  'On install, Compliance creates a visible CRM Workflow named **Compliance Call Pipeline**. The workflow listens for eligible Call create/update events and runs the Start Compliance QA action. The app uses deterministic S3 output paths and deterministic Transcribe job names, so retries reuse a successful transcript instead of paying to transcribe the same call again. Transcribe identifies English/Spanish audio; Spanish transcript segments are translated to English before scoring.',
+  'On install, Compliance creates a visible CRM Workflow named **Compliance Call Pipeline**. The workflow listens for eligible Call create/update events and runs the Start Compliance QA action. The app caches transcripts at deterministic S3 output paths, so retries reuse a successful transcript instead of paying to transcribe the same call again. Deepgram tags English/Spanish per word; calls with a meaningful Spanish share are translated to English before scoring.',
   '',
-  'Workflow-owned delayed completion steps poll Amazon Transcribe, score the transcript through Amazon Bedrock, write the audit trail back to the scorecard, and create one manager task when follow-up is required.',
+  'Workflow-owned delayed completion steps transcribe pending recordings with Deepgram, score the transcript through Amazon Bedrock, write the audit trail back to the scorecard, and create one manager task when follow-up is required.',
   '',
   '#### Included objects',
   '- **Scorecards**: processing status, score, result, red flag, source Call, Lead, Agent, QA Manager, and follow-up Task',
@@ -41,13 +41,13 @@ export default defineApplication({
     AWS_REGION: {
       universalIdentifier: '926ad61c-7ad6-4b89-ab13-b4984fd28b1a',
       description:
-        'AWS region used by Amazon Transcribe, Amazon Translate, and S3.',
+        'AWS region used by Amazon Bedrock, Amazon Translate, and S3.',
       isSecret: false,
     },
     COMPLIANCE_QA_TRANSCRIBE_BUCKET: {
       universalIdentifier: 'cae40270-079a-4603-beda-2a2710c0eb4e',
       description:
-        'S3 bucket where Compliance QA copies recordings and stores Amazon Transcribe output.',
+        'S3 bucket where Compliance QA copies recordings and caches transcript JSON output.',
       isSecret: false,
     },
     COMPLIANCE_QA_TRANSCRIBE_INPUT_PREFIX: {
@@ -58,7 +58,7 @@ export default defineApplication({
     },
     COMPLIANCE_QA_TRANSCRIBE_OUTPUT_PREFIX: {
       universalIdentifier: 'eb6fde59-d378-4a99-af12-c388c5dc0d5e',
-      description: 'S3 key prefix for Amazon Transcribe JSON output.',
+      description: 'S3 key prefix for cached transcript JSON output.',
       isSecret: false,
       value: 'compliance-qa/output',
     },
@@ -121,6 +121,12 @@ export default defineApplication({
     },
   },
   serverVariables: {
+    DEEPGRAM_API_KEY: {
+      description:
+        'Deepgram API key used for call transcription. Must belong to the BAA-covered Deepgram Enterprise project because call audio contains PHI. In production the key can also arrive via pod env (deepgram-credentials secret).',
+      isSecret: true,
+      isRequired: false,
+    },
     AWS_ACCESS_KEY_ID: {
       description:
         'Optional AWS access key for local/self-hosted deployments. Prefer an IAM role in production.',

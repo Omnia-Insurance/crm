@@ -15,9 +15,8 @@ import {
 import {
   copyRecordingToS3,
   isRecordingNotReadyError,
-  readCachedTranscribeOutputForCall,
-  startTranscriptionJob,
-} from 'src/utils/aws-transcribe';
+  readCachedTranscriptForCall,
+} from 'src/utils/recording-storage';
 import { defineLogicFunction } from 'twenty-sdk/define';
 
 export type StartComplianceQaInput = {
@@ -92,7 +91,7 @@ const upsertTranscriptionArtifactNote = async ({
   outputTranscriptUri?: string;
   detail?: string;
 }): Promise<void> => {
-  const lines = ['Amazon Transcribe artifacts for this QA run.'];
+  const lines = ['Transcription artifacts for this QA run.'];
 
   if (detail !== undefined && detail.length > 0) {
     lines.push('', detail);
@@ -162,8 +161,8 @@ const upsertTranscriptionArtifactAttachments = async ({
     transcriptOutput !== undefined
       ? upsertQaScorecardAttachmentIfPossible({
           scorecardId,
-          name: 'Amazon Transcribe Output JSON',
-          filename: 'amazon-transcribe-output.json',
+          name: 'Deepgram Transcript JSON',
+          filename: 'deepgram-transcript.json',
           content: transcriptOutput.content,
           contentType: 'application/json',
         })
@@ -297,12 +296,10 @@ export const startComplianceQaHandler = async (
   let scorecard: QaScorecardRecord | null = null;
 
   try {
-    const cachedTranscribeOutput = await readCachedTranscribeOutputForCall(
-      call.id,
-    );
+    const cachedTranscript = await readCachedTranscriptForCall(call.id);
     const recordingUrl = getRecordingUrl(call);
 
-    if (cachedTranscribeOutput === null && recordingUrl === undefined) {
+    if (cachedTranscript === null && recordingUrl === undefined) {
       return {
         success: false,
         skipped: true,
@@ -312,7 +309,7 @@ export const startComplianceQaHandler = async (
 
     scorecard = existingScorecard ?? (await createScorecardForCall({ call }));
 
-    if (cachedTranscribeOutput !== null) {
+    if (cachedTranscript !== null) {
       await updateQaScorecard({
         id: scorecard.id,
         data: {
@@ -322,15 +319,15 @@ export const startComplianceQaHandler = async (
 
       await upsertTranscriptionArtifactNote({
         scorecardId: scorecard.id,
-        outputTranscriptUri: cachedTranscribeOutput.transcriptFileUri,
-        detail: 'Cached transcript reused; no new Transcribe job was started.',
+        outputTranscriptUri: cachedTranscript.transcriptFileUri,
+        detail: 'Cached transcript reused; no new paid transcription was started.',
       });
 
       await upsertTranscriptionArtifactAttachments({
         scorecardId: scorecard.id,
         transcriptOutput: {
           content: Buffer.from(
-            JSON.stringify(cachedTranscribeOutput.raw, null, 2),
+            JSON.stringify(cachedTranscript.raw, null, 2),
             'utf-8',
           ),
         },
@@ -358,18 +355,13 @@ export const startComplianceQaHandler = async (
       callId: call.id,
       recordingUrl,
     });
-
-    const transcriptionJob = await startTranscriptionJob({
-      callId: call.id,
-      recording: copiedRecording,
-    });
     const inputRecordingUri = formatS3Uri({
-      bucket: transcriptionJob.bucket,
-      key: transcriptionJob.inputKey,
+      bucket: copiedRecording.bucket,
+      key: copiedRecording.inputKey,
     });
     const outputTranscriptUri = formatS3Uri({
-      bucket: transcriptionJob.bucket,
-      key: transcriptionJob.outputKey,
+      bucket: copiedRecording.bucket,
+      key: copiedRecording.outputKey,
     });
 
     await updateQaScorecard({
@@ -384,7 +376,7 @@ export const startComplianceQaHandler = async (
       inputRecordingUri,
       outputTranscriptUri,
       detail:
-        'Input audio remains in S3 because native Files uploads are limited by CRM ingress size and MIME validation.',
+        'Deepgram transcription runs during workflow polling. Input audio remains in S3 because native Files uploads are limited by CRM ingress size and MIME validation.',
     });
 
     return {
@@ -444,7 +436,7 @@ export default defineLogicFunction({
   universalIdentifier: '3fbf987a-8a7d-4ead-aef8-5e89a36555e7',
   name: 'start-compliance-qa',
   description:
-    'Starts Compliance QA for a Call by copying the recording to S3 and starting Amazon Transcribe.',
+    'Starts Compliance QA for a Call by validating and copying the recording to S3 for Deepgram transcription.',
   timeoutSeconds: 120,
   handler: startComplianceQaHandler,
   workflowActionTriggerSettings: {

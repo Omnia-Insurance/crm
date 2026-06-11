@@ -451,8 +451,8 @@ check_file_contains \
   "omnia-values must point server+worker at the twenty-bedrock service account"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
-  "Amazon Transcribe" \
-  "twenty-bedrock service account comment must document Compliance QA Transcribe/S3 runtime access"
+  "S3 QA artifacts" \
+  "twenty-bedrock service account comment must document Compliance QA S3 artifact runtime access"
 check_file_contains \
   "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
   "Amazon Translate" \
@@ -664,8 +664,8 @@ check_file_contains \
   "Compliance app production package version must stay on a 1.x production line"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
-  "\"version\": \"1.0.11\"" \
-  "Compliance app production package version must include contextual Spanish transcript translation"
+  "\"version\": \"1.1.0\"" \
+  "Compliance app production package version must include Deepgram transcription"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"0." \
@@ -789,7 +789,11 @@ check_file_contains \
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
   "COMPLIANCE_QA_TRANSCRIBE_BUCKET" \
-  "Compliance QA must keep S3 bucket configuration for Amazon Transcribe"
+  "Compliance QA must keep S3 bucket configuration for recording and transcript artifacts"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
+  "DEEPGRAM_API_KEY" \
+  "Compliance QA must declare the Deepgram API key as a secret server variable"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
   "COMPLIANCE_QA_BEDROCK_MODEL_ID" \
@@ -797,7 +801,7 @@ check_file_contains \
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
   "COMPLIANCE_QA_MIN_DURATION_SECONDS" \
-  "Compliance QA must keep a duration gate to control Transcribe spend"
+  "Compliance QA must keep a duration gate to control transcription spend"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
   "COMPLIANCE_QA_ENABLED_AFTER" \
@@ -890,11 +894,11 @@ check_file_contains \
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
   "DELAY" \
-  "Compliance QA workflow must own async Transcribe polling with delay steps"
+  "Compliance QA workflow must own delayed completion polling with delay steps"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
   "shouldPollAgain" \
-  "Compliance QA workflow must branch Transcribe polling based on action output"
+  "Compliance QA workflow must branch completion polling based on action output"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/post-install.ts" \
   "createDraftFromWorkflowVersion" \
@@ -917,8 +921,8 @@ check_file_contains \
   "App upgrades must forward user context to post-install hooks"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
-  "readCachedTranscribeOutputForCall" \
-  "Compliance QA retries must reuse cached Transcribe output before starting a new job"
+  "readCachedTranscriptForCall" \
+  "Compliance QA retries must reuse cached transcript output before paying to transcribe again"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "isRecordingNotReadyError" \
@@ -926,7 +930,7 @@ check_file_contains \
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "isCallEligibleForComplianceQa" \
-  "Compliance QA start worker must filter calls before creating scorecards or Transcribe jobs"
+  "Compliance QA start worker must filter calls before creating scorecards or paid transcription work"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "upsertTranscriptionArtifactAttachments" \
@@ -941,28 +945,28 @@ check_file_contains \
   "Compliance QA backfill must require explicit confirmation before queueing live work"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
-  "Amazon Transcribe" \
-  "Compliance QA completion worker must poll Amazon Transcribe, not Deepgram"
+  "transcribeRecording" \
+  "Compliance QA completion worker must transcribe synchronously with Deepgram (BAA-covered), not Amazon Transcribe jobs"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "cronTriggerSettings" \
-  "Compliance QA async Transcribe polling must be owned by Workflow delay steps, not cron"
+  "Compliance QA completion polling must be owned by Workflow delay steps, not cron"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "isFinalAttempt" \
-  "Compliance QA workflow polling must fail visibly when Transcribe never finishes"
+  "Compliance QA workflow polling must fail visibly when transcription never succeeds"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "findProcessableQaScorecards" \
   "Compliance QA completion worker must process cached SCORING scorecards"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
-  "buildTranscriptionJobName" \
-  "Compliance QA completion worker must derive deterministic Transcribe job names from source Calls"
+  "writeTranscriptForCall" \
+  "Compliance QA must cache the raw transcript to S3 before scoring so scoring failures never re-bill transcription"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
-  "startSampleRateFallbackTranscriptionJob" \
-  "Compliance QA must retry playable MP3s with an explicit Transcribe sample rate"
+  "isTranscriptionRetryableError" \
+  "Compliance QA must keep retryable Deepgram errors in TRANSCRIBING for the next polling attempt"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
   "translateTranscriptToEnglish" \
@@ -973,7 +977,7 @@ check_file_contains \
   "Compliance QA transcript output must be written to Notes without a redundant QA prefix"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
-  "Amazon Transcribe Output JSON" \
+  "Deepgram Transcript JSON" \
   "Compliance QA completion worker must attach transcription artifacts to scorecard Files"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/complete-compliance-qa.ts" \
@@ -1007,26 +1011,42 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/graphql-client.ts" \
   "graphqlMultipartRequest" \
   "Compliance QA must keep multipart GraphQL uploads for FilesField-backed attachments"
-check_file_not_contains \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/deepgram.ts" \
   "DEEPGRAM_API_KEY" \
-  "Compliance QA must not regress to Deepgram transcription"
+  "Compliance QA transcription must run on Deepgram under the Enterprise BAA"
 check_file_contains \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
-  "getTranscribeOutputLocation" \
-  "Compliance QA must keep deterministic Transcribe output locations for retry cost control"
+  "packages/twenty-apps/internal/compliance-qa/src/utils/deepgram.ts" \
+  "mip_opt_out: 'true'" \
+  "Compliance QA must opt PHI call audio out of Deepgram model-improvement retention (BAA requirement)"
 check_file_contains \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
-  "IdentifyMultipleLanguages" \
-  "Compliance QA Transcribe jobs must identify English and Spanish audio"
+  "packages/twenty-apps/internal/compliance-qa/src/utils/deepgram.ts" \
+  "language: 'multi'" \
+  "Compliance QA Deepgram requests must use word-level English/Spanish code-switching"
 check_file_contains \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/deepgram.ts" \
+  "diarize: 'true'" \
+  "Compliance QA Deepgram requests must keep speaker diarization for transcript speaker labels"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/recording-storage.ts" \
+  "getTranscriptOutputLocation" \
+  "Compliance QA must keep deterministic transcript output locations for retry cost control"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/recording-storage.ts" \
+  "dg-v1" \
+  "Compliance QA transcript cache keys must be versioned so Amazon Transcribe artifacts are never parsed as Deepgram output"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/recording-storage.ts" \
   "RecordingNotReadyError" \
-  "Compliance QA must classify provider recording-not-ready responses before paid Transcribe jobs"
+  "Compliance QA must classify provider recording-not-ready responses before paid transcription"
 check_file_contains \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.ts" \
-  "ConflictException" \
-  "Compliance QA must converge duplicate Transcribe starts on the same deterministic job"
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "DEEPGRAM_API_KEY" \
+  "Server and worker pods must receive DEEPGRAM_API_KEY for Compliance QA transcription"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "deepgram-credentials" \
+  "DEEPGRAM_API_KEY must come from the deepgram-credentials Kubernetes secret, not an inline value"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/qa-call-eligibility.ts" \
   "Compliance QA call eligibility filters must stay centralized"
@@ -1037,8 +1057,15 @@ check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.test.ts" \
   "Compliance QA scoring thresholds and red-flag override tests must exist"
 check_file_exists \
-  "packages/twenty-apps/internal/compliance-qa/src/utils/aws-transcribe.test.ts" \
-  "Compliance QA Transcribe caching and recording validation must stay covered"
+  "packages/twenty-apps/internal/compliance-qa/src/utils/deepgram.test.ts" \
+  "Compliance QA Deepgram normalization and translation gating must stay covered"
+check_file_exists \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/transcript.ts" \
+  "Compliance QA provider-neutral transcript domain (types/formatting/language helpers) must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/recording-storage.ts" \
+  "claimTranscriptionForCall" \
+  "Compliance QA must claim a call before transcribing so overlapping polls never double-bill Deepgram"
 check_file_exists \
   "packages/twenty-apps/internal/compliance-qa/src/utils/aws-translate.test.ts" \
   "Compliance QA transcript translation must stay covered"

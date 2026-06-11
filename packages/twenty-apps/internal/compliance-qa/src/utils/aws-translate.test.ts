@@ -5,7 +5,7 @@ import {
   chunkSegmentsForContextualTranslation,
   translateTranscriptToEnglish,
 } from 'src/utils/aws-translate';
-import { type TranscriptionResult } from 'src/utils/aws-transcribe';
+import { type TranscriptionResult } from 'src/utils/transcript';
 
 const buildTranscription = (): TranscriptionResult => ({
   segments: [
@@ -28,7 +28,6 @@ const buildTranscription = (): TranscriptionResult => ({
     'Hola, necesito ayuda con mi plan. This segment is already English.',
   markdown: '',
   durationSeconds: 4,
-  raw: { results: { transcripts: [] } },
 });
 
 describe('Compliance QA transcript translation helpers', () => {

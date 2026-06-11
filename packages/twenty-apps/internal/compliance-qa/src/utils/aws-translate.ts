@@ -8,7 +8,7 @@ import {
   isSpanishLanguageCode,
   type TranscriptSegment,
   type TranscriptionResult,
-} from 'src/utils/aws-transcribe';
+} from 'src/utils/transcript';
 import { getAwsClientConfig } from 'src/utils/aws-config';
 
 const MAX_TRANSLATE_TEXT_LENGTH = 4_500;
@@ -168,7 +168,7 @@ const translateTextToEnglishWithAws = async ({
 
 const TRANSLATION_SYSTEM_PROMPT = [
   'You translate Spanish and Spanglish US health-insurance call transcripts into natural English for compliance QA.',
-  'The input is Amazon Transcribe ASR, so it may include literal artifacts, filler words, repeated words, bad punctuation, and imperfect names.',
+  'The input is automatic speech recognition (ASR) output, so it may include literal artifacts, filler words, repeated words, bad punctuation, and imperfect names.',
   'Translate the customer and agent meaning faithfully. Clean obvious ASR artifacts only when the intended meaning is clear.',
   'Do not summarize, omit, invent, or add compliance conclusions.',
   'Preserve names, dates, dollar amounts, email addresses, policy terms, carrier/product names, and numbers.',
