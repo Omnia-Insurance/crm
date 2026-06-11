@@ -1,11 +1,21 @@
 import {
+  buildBrokerEffAuditInput,
   buildStatusInputFromMapping,
+  deriveBrokerEffAudit,
   deriveStatus,
   getCancelExpireDate,
   isFullEffectiveMonthPaid,
+  isKnownStatusEngine,
+  resolveEffectiveDateHeader,
   DEFAULT_STATUS_ENGINE_CONFIG,
+  STATUS_ENGINE_IDS,
 } from 'src/modules/reconciliation/engines/status';
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
+import {
+  deriveCategory,
+  deriveFlags,
+} from 'src/modules/reconciliation/types/field-config';
+import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
 const today = new Date('2026-04-13');
 
@@ -366,7 +376,7 @@ describe('status engine (ambetter-bob-v1)', () => {
       });
     });
 
-    it('no effective date → defaults to ACTIVE_APPROVED', () => {
+    it('no effective date and no cancel signal → defaults to ACTIVE_APPROVED', () => {
       const result = deriveStatus(
         parserId,
         {
@@ -381,6 +391,146 @@ describe('status engine (ambetter-bob-v1)', () => {
       );
 
       expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+    });
+
+    // Remediation 3.13: the cancel checks (eligibleForCommission=false, past
+    // termDate) don't need an effective date — they must run BEFORE the
+    // missing-effective-date ACTIVE_APPROVED default. Previously a row that
+    // explicitly said "canceled" but had a blank/unparseable effective-date
+    // cell derived ACTIVE_APPROVED, the opposite of what the row said.
+    describe('missing effective date with cancel signals (3.13)', () => {
+      it('eligible=false, no effective date → CANCELED with paidThrough as expire', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: '2026-03-01',
+            termDate: null,
+            eligibleForCommission: false,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('CANCELED');
+        expect(result?.derivedExpireDate).toBe('2026-03-01');
+      });
+
+      it('eligible=false, no effective date, no paidThrough → falls back to termDate', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: null,
+            termDate: '2026-02-28',
+            eligibleForCommission: false,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('CANCELED');
+        expect(result?.derivedExpireDate).toBe('2026-02-28');
+      });
+
+      it('eligible=false, no dates at all → CANCELED with null expire', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: null,
+            termDate: null,
+            eligibleForCommission: false,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('CANCELED');
+        expect(result?.derivedExpireDate).toBeNull();
+        expect(result?.statusChangeReason).toContain(
+          'Not eligible for commission',
+        );
+      });
+
+      it('eligible=false, no effective date, CRM payment-error → PAYMENT_ERROR_CANCELED', () => {
+        const currentPolicy = makeCrmPolicy({
+          id: 'payment-error-policy',
+          status: 'PAYMENT_ERROR_ACTIVE_PLACED',
+        });
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: null,
+            termDate: null,
+            eligibleForCommission: false,
+          },
+          [currentPolicy],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+          currentPolicy.id,
+        );
+
+        expect(result?.derivedStatus).toBe('PAYMENT_ERROR_CANCELED');
+      });
+
+      it('past termDate, no effective date → CANCELED with paidThrough as expire', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: '2026-03-31',
+            termDate: '2026-03-15',
+            eligibleForCommission: true,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('CANCELED');
+        expect(result?.derivedExpireDate).toBe('2026-03-31');
+      });
+
+      it('past termDate, no effective date, no paidThrough → expire=termDate', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: null,
+            termDate: '2026-03-15',
+            eligibleForCommission: null,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('CANCELED');
+        expect(result?.derivedExpireDate).toBe('2026-03-15');
+      });
+
+      it('future termDate, no effective date → still defaults to ACTIVE_APPROVED', () => {
+        const result = deriveStatus(
+          parserId,
+          {
+            effectiveDate: null,
+            paidThroughDate: null,
+            termDate: '2026-12-31',
+            eligibleForCommission: true,
+          },
+          [],
+          today,
+          DEFAULT_STATUS_ENGINE_CONFIG,
+        );
+
+        expect(result?.derivedStatus).toBe('ACTIVE_APPROVED');
+        expect(result?.derivedExpireDate).toBeNull();
+      });
     });
 
     it('unknown parser returns null', () => {
@@ -405,6 +555,90 @@ describe('status engine (ambetter-bob-v1)', () => {
     it('returns day before the new effective date', () => {
       expect(getCancelExpireDate('2026-01-01')).toBe('2025-12-31');
       expect(getCancelExpireDate('2026-03-15')).toBe('2026-03-14');
+    });
+
+    // Remediation 3.15: subtraction previously mixed UTC parsing with
+    // local-time setDate/getDate, so under a DST-observing server timezone
+    // the day before 2026-11-02 came back as 2026-10-31 (US DST ends
+    // 2026-11-01). All arithmetic is now UTC, matching lastDayOfMonth.
+    it('is not off by one across a DST fall-back boundary', () => {
+      const originalTz = process.env.TZ;
+
+      try {
+        process.env.TZ = 'America/New_York';
+
+        expect(getCancelExpireDate('2026-11-02')).toBe('2026-11-01');
+        // Spring-forward boundary (US DST starts 2026-03-08) for symmetry.
+        expect(getCancelExpireDate('2026-03-09')).toBe('2026-03-08');
+      } finally {
+        if (originalTz === undefined) {
+          delete process.env.TZ;
+        } else {
+          process.env.TZ = originalTz;
+        }
+      }
+    });
+
+    it('crosses month boundaries in UTC regardless of timezone', () => {
+      expect(getCancelExpireDate('2026-11-01')).toBe('2026-10-31');
+      expect(getCancelExpireDate('2026-03-01')).toBe('2026-02-28');
+    });
+  });
+
+  // Remediation 3.14: REINSTATEMENT must fire for EVERY terminal→active
+  // transition, not just exact CRM 'CANCELED'. The flag blocks batch approval
+  // and learned-rule auto-apply, so PAYMENT_ERROR_CANCELED/DECLINED/INCOMPLETE
+  // → active transitions previously bypassed the human-review gate.
+  // Intentional behavior change called out: terminal→terminal moves (e.g.
+  // CANCELED → PAYMENT_ERROR_CANCELED) used to flag REINSTATEMENT under the
+  // old exact-'CANCELED' check; they no longer do, consistent with the
+  // negative-to-negative suppression in the diff engine and STATUS_CHANGE.
+  describe('deriveFlags REINSTATEMENT (terminal → active)', () => {
+    it.each([
+      // [crm status, derived status, expects flag]
+      ['CANCELED', 'ACTIVE_PLACED', true],
+      ['CANCELED', 'ACTIVE_APPROVED', true],
+      ['PAYMENT_ERROR_CANCELED', 'ACTIVE_PLACED', true],
+      ['PAYMENT_ERROR_CANCELED', 'ACTIVE_APPROVED', true],
+      ['PAYMENT_ERROR_CANCELED', 'PAYMENT_ERROR_ACTIVE_PLACED', true],
+      ['DECLINED', 'ACTIVE_PLACED', true],
+      ['INCOMPLETE', 'PAYMENT_ERROR_ACTIVE_APPROVED', true],
+      // terminal → terminal: outcome unchanged, not a reinstatement
+      ['CANCELED', 'PAYMENT_ERROR_CANCELED', false],
+      ['PAYMENT_ERROR_CANCELED', 'CANCELED', false],
+      ['DECLINED', 'CANCELED', false],
+      // active → anything: not a reinstatement
+      ['ACTIVE_PLACED', 'CANCELED', false],
+      ['ACTIVE_APPROVED', 'ACTIVE_PLACED', false],
+    ] as const)(
+      'CRM %s → BOB %s: flag=%s',
+      (currentCrmStatus, derivedStatus, expectsFlag) => {
+        const { flags, reasons } = deriveFlags(
+          derivedStatus,
+          currentCrmStatus,
+          'POLICY_NUMBER_EXACT',
+          [],
+        );
+
+        expect(flags.includes('REINSTATEMENT')).toBe(expectsFlag);
+
+        if (expectsFlag) {
+          expect(reasons.REINSTATEMENT).toBe(
+            `CRM ${currentCrmStatus} → BOB ${derivedStatus}`,
+          );
+        } else {
+          expect(reasons.REINSTATEMENT).toBeUndefined();
+        }
+      },
+    );
+
+    it('does not flag when either side is missing', () => {
+      expect(
+        deriveFlags(null, 'CANCELED', 'POLICY_NUMBER_EXACT', []).flags,
+      ).not.toContain('REINSTATEMENT');
+      expect(
+        deriveFlags('ACTIVE_PLACED', null, 'POLICY_NUMBER_EXACT', []).flags,
+      ).not.toContain('REINSTATEMENT');
     });
   });
 
@@ -614,5 +848,326 @@ describe('status engine (ambetter-bob-v1)', () => {
 
       expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
     });
+  });
+});
+
+// Remediation 4.3: the registry is exported so loadMatchContext can fail
+// fast at MATCH on unknown engine ids instead of silently deriving null
+// statuses for every row.
+describe('status engine registry (4.3)', () => {
+  it('knows the ambetter engine', () => {
+    expect(isKnownStatusEngine('ambetter-bob-v1')).toBe(true);
+    expect(STATUS_ENGINE_IDS).toContain('ambetter-bob-v1');
+  });
+
+  it('rejects unknown ids', () => {
+    expect(isKnownStatusEngine('oscar-bob-v1')).toBe(false);
+    expect(isKnownStatusEngine('')).toBe(false);
+    expect(isKnownStatusEngine('hasOwnProperty')).toBe(false);
+  });
+
+  it('every registered id passes the guard', () => {
+    for (const id of STATUS_ENGINE_IDS) {
+      expect(isKnownStatusEngine(id)).toBe(true);
+    }
+  });
+});
+
+// Remediation 4.3 (deferred 3.13): a null derivedStatus means "no status
+// assertion", not "status changed". The old `derivedStatus !==
+// currentCrmStatus` comparison promoted every null-status row with a real
+// CRM status to an empty UPDATE review item (no diffs, no STATUS_CHANGE
+// flag, nothing to apply) — the queue-flooding pathology. No existing test
+// encoded the old behavior; these lock in the fix.
+describe('deriveCategory (4.3 null = no status assertion)', () => {
+  it('null derivedStatus + real CRM status + no diffs → confirmed (null), not UPDATE', () => {
+    expect(deriveCategory(false, [], null, 'ACTIVE_PLACED')).toBeNull();
+  });
+
+  it('null derivedStatus + null CRM status + no diffs → confirmed (null)', () => {
+    expect(deriveCategory(false, [], null, null)).toBeNull();
+  });
+
+  it('null derivedStatus with diffs still promotes to UPDATE', () => {
+    const diff = {
+      field: 'effectiveDate',
+      label: 'Effective Date',
+      bobValue: '2026-01-01',
+      crmValue: '2025-01-01',
+      action: 'UPDATE',
+      severity: 'WARNING',
+      approval: 'PENDING',
+      crmField: 'effectiveDate',
+      crmObjectType: 'policy',
+      note: null,
+    } as const;
+
+    expect(deriveCategory(false, [diff], null, 'ACTIVE_PLACED')).toBe(
+      'UPDATE',
+    );
+  });
+
+  it('real status disagreement still promotes to UPDATE', () => {
+    expect(deriveCategory(false, [], 'CANCELED', 'ACTIVE_PLACED')).toBe(
+      'UPDATE',
+    );
+  });
+
+  it('asserted status over a null CRM status promotes to UPDATE', () => {
+    expect(deriveCategory(false, [], 'ACTIVE_PLACED', null)).toBe('UPDATE');
+  });
+
+  it('negative-to-negative status change does not promote', () => {
+    expect(deriveCategory(false, [], 'CANCELED', 'DECLINED')).toBeNull();
+  });
+
+  it('agreeing statuses with no diffs → confirmed (null)', () => {
+    expect(
+      deriveCategory(false, [], 'ACTIVE_PLACED', 'ACTIVE_PLACED'),
+    ).toBeNull();
+  });
+
+  it('unmatched rows are always UNMATCHED', () => {
+    expect(deriveCategory(true, [], null, null)).toBe('UNMATCHED');
+  });
+});
+
+// Remediation 4.5: Jackie's broker-eff audit rule — single implementation
+// shared by deriveFlags and the match job's unmatched branch.
+describe('deriveBrokerEffAudit (4.5)', () => {
+  const base = {
+    brokerEffectiveDate: '2025-09-01',
+    policyEffectiveDate: '2025-08-01',
+    paidThroughDate: null,
+    eligibleForCommission: null,
+    derivedStatus: null,
+  };
+
+  describe('table-driven', () => {
+    it.each([
+      // [name, input overrides, expected flagged, expected reason fragment]
+      [
+        'canceled via derivedStatus CANCELED',
+        { derivedStatus: 'CANCELED' },
+        true,
+        'Status CANCELED, broker effective 2025-09-01 > policy effective 2025-08-01',
+      ],
+      [
+        'canceled via derivedStatus PAYMENT_ERROR_CANCELED',
+        { derivedStatus: 'PAYMENT_ERROR_CANCELED' },
+        true,
+        'Status CANCELED',
+      ],
+      [
+        'canceled via eligibleForCommission=false (unmatched path — no derived status)',
+        { eligibleForCommission: false },
+        true,
+        'Status CANCELED',
+      ],
+      [
+        'paid-thru lapsed >1 day before broker effective',
+        { paidThroughDate: '2025-08-15', derivedStatus: 'ACTIVE_PLACED' },
+        true,
+        'Paid-thru 2025-08-15, broker effective 2025-09-01 (17d after lapse; policy eff 2025-08-01)',
+      ],
+      [
+        'paid-before takes precedence over the cancel reason',
+        { paidThroughDate: '2025-08-15', derivedStatus: 'CANCELED' },
+        true,
+        'Paid-thru 2025-08-15',
+      ],
+      [
+        'paid-thru exactly 1 day before broker effective does NOT flag',
+        { paidThroughDate: '2025-08-31', derivedStatus: 'ACTIVE_PLACED' },
+        false,
+        '',
+      ],
+      [
+        'paid-thru 2 days before broker effective flags',
+        { paidThroughDate: '2025-08-30', derivedStatus: 'ACTIVE_PLACED' },
+        true,
+        '2d after lapse',
+      ],
+      [
+        'active, paid current, eligible → no flag',
+        { paidThroughDate: '2025-12-31', derivedStatus: 'ACTIVE_PLACED' },
+        false,
+        '',
+      ],
+      // Precondition: brokerEffective > policyEffective ("dead before we
+      // started"). Without it, nothing flags — even canceled rows.
+      [
+        'no broker effective date → never flags',
+        { brokerEffectiveDate: null, derivedStatus: 'CANCELED' },
+        false,
+        '',
+      ],
+      [
+        'no policy effective date → never flags',
+        { policyEffectiveDate: null, derivedStatus: 'CANCELED' },
+        false,
+        '',
+      ],
+      [
+        'broker effective equal to policy effective → never flags',
+        { brokerEffectiveDate: '2025-08-01', derivedStatus: 'CANCELED' },
+        false,
+        '',
+      ],
+      [
+        'broker effective before policy effective → never flags',
+        {
+          brokerEffectiveDate: '2025-07-01',
+          eligibleForCommission: false,
+        },
+        false,
+        '',
+      ],
+    ] as const)('%s', (_name, overrides, expectedFlagged, reasonFragment) => {
+      const result = deriveBrokerEffAudit({ ...base, ...overrides });
+
+      expect(result.flagged).toBe(expectedFlagged);
+
+      if (expectedFlagged) {
+        expect(result.reason).toContain(reasonFragment);
+      } else {
+        expect(result.reason).toBe('');
+      }
+    });
+  });
+
+  it('produces the exact same reason as deriveFlags for the same row (parity)', () => {
+    const statusFieldMapping = {
+      brokerEffectiveDate: 'Broker Effective Date',
+      policyEffectiveDate: 'Policy Effective Date',
+      paidThroughDate: 'Paid Through Date',
+      eligibleForCommission: 'Eligible for Commission',
+    };
+    const row = {
+      'Broker Effective Date': '2025-09-01',
+      'Policy Effective Date': '2025-08-01',
+      'Paid Through Date': '2025-08-15',
+      'Eligible for Commission': false,
+    };
+
+    const direct = deriveBrokerEffAudit(
+      buildBrokerEffAuditInput(row, statusFieldMapping, null),
+    );
+    const viaFlags = deriveFlags(
+      null,
+      null,
+      'UNMATCHED',
+      [],
+      statusFieldMapping,
+      row,
+    );
+
+    expect(direct.flagged).toBe(true);
+    expect(viaFlags.flags).toContain('BROKER_EFF_AUDIT');
+    expect(viaFlags.reasons.BROKER_EFF_AUDIT).toBe(direct.reason);
+  });
+
+  describe('buildBrokerEffAuditInput', () => {
+    it('maps roles through statusFieldMapping', () => {
+      const input = buildBrokerEffAuditInput(
+        {
+          'Broker Effective Date': '2025-09-01',
+          'Policy Effective Date': '2025-08-01',
+          'Paid Through Date': '2025-08-15',
+          'Eligible for Commission': true,
+        },
+        {
+          brokerEffectiveDate: 'Broker Effective Date',
+          policyEffectiveDate: 'Policy Effective Date',
+          paidThroughDate: 'Paid Through Date',
+          eligibleForCommission: 'Eligible for Commission',
+        },
+        'ACTIVE_PLACED',
+      );
+
+      expect(input).toEqual({
+        brokerEffectiveDate: '2025-09-01',
+        policyEffectiveDate: '2025-08-01',
+        paidThroughDate: '2025-08-15',
+        eligibleForCommission: true,
+        derivedStatus: 'ACTIVE_PLACED',
+      });
+    });
+
+    it('returns nulls for unmapped roles and non-boolean eligibility', () => {
+      const input = buildBrokerEffAuditInput(
+        { 'Eligible for Commission': 'No' },
+        { eligibleForCommission: 'Eligible for Commission' },
+        null,
+      );
+
+      expect(input.brokerEffectiveDate).toBeNull();
+      expect(input.policyEffectiveDate).toBeNull();
+      expect(input.paidThroughDate).toBeNull();
+      // Raw (untransformed) cell values must not be misread as booleans.
+      expect(input.eligibleForCommission).toBeNull();
+    });
+  });
+});
+
+// Remediation 4.5: one effective-date resolution for the start-date cutoff,
+// dedup ordering, and cancel-expire stamping.
+describe('resolveEffectiveDateHeader (4.5)', () => {
+  const columnMapping: ColumnMapping = {
+    'Policy Effective Date': {
+      crmField: 'effectiveDate',
+      fieldType: 'DATE_TIME',
+      fieldKey: 'effectiveDate',
+    },
+    'Policy Number': {
+      crmField: 'policyNumber',
+      fieldType: 'TEXT',
+      fieldKey: 'policyNumber',
+    },
+  };
+
+  it('prefers the computed field mapped to effectiveDate (Ambetter True Effective Date)', () => {
+    expect(
+      resolveEffectiveDateHeader(columnMapping, [
+        {
+          outputKey: 'True Effective Date',
+          method: 'maxDate',
+          inputs: ['brokerEffectiveDate', 'policyEffectiveDate'],
+          type: 'date',
+          crmField: 'effectiveDate',
+        },
+      ]),
+    ).toBe('True Effective Date');
+  });
+
+  it('falls back to the columnMapping header for carriers without a computed date', () => {
+    expect(resolveEffectiveDateHeader(columnMapping, null)).toBe(
+      'Policy Effective Date',
+    );
+    expect(
+      resolveEffectiveDateHeader(columnMapping, [
+        {
+          outputKey: 'Some Other Field',
+          method: 'coalesce',
+          inputs: ['a', 'b'],
+          type: 'text',
+        },
+      ]),
+    ).toBe('Policy Effective Date');
+  });
+
+  it('returns undefined when nothing maps to effectiveDate', () => {
+    expect(
+      resolveEffectiveDateHeader(
+        {
+          'Policy Number': {
+            crmField: 'policyNumber',
+            fieldType: 'TEXT',
+            fieldKey: 'policyNumber',
+          },
+        },
+        null,
+      ),
+    ).toBeUndefined();
   });
 });

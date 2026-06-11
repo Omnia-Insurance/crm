@@ -1,6 +1,9 @@
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
 import { daysBetweenUTC } from 'src/modules/reconciliation/parsers/transforms';
-import type { FieldConfigEntry } from 'src/modules/reconciliation/types/field-config';
+import type {
+  ColumnMapping,
+  ComputedFieldDef,
+} from 'src/modules/reconciliation/types/reconciliation';
 
 export type OmniaStatus =
   | 'ACTIVE_PLACED'
@@ -57,31 +60,8 @@ export const normalizePaidThroughDateForEffectiveDate = (
     ? null
     : paidThroughDate;
 
-export const buildStatusInput = (
-  row: Record<string, unknown>,
-  fieldConfig: FieldConfigEntry[],
-): StatusInput => {
-  const byRole = new Map(
-    fieldConfig.filter((f) => f.statusRole).map((f) => [f.statusRole, f.name]),
-  );
-  const effectiveDate = (row[byRole.get('effectiveDate')!] as string) ?? null;
-  const paidThroughDate =
-    (row[byRole.get('paidThroughDate')!] as string) ?? null;
-
-  return {
-    effectiveDate,
-    paidThroughDate: normalizePaidThroughDateForEffectiveDate(
-      paidThroughDate,
-      effectiveDate,
-    ),
-    termDate: (row[byRole.get('termDate')!] as string) ?? null,
-    eligibleForCommission:
-      (row[byRole.get('eligibleForCommission')!] as boolean) ?? null,
-  };
-};
-
 // ---------------------------------------------------------------------------
-// Column-mapping-driven status input (no FieldConfigEntry dependency)
+// Column-mapping-driven status input
 // ---------------------------------------------------------------------------
 
 /**
@@ -138,10 +118,20 @@ const daysBetween = daysBetweenUTC;
 
 const toDateString = (d: Date): string => d.toISOString().split('T')[0];
 
+/**
+ * Subtract `days` from a date-only string, entirely in UTC.
+ *
+ * `new Date('YYYY-MM-DD')` parses as UTC midnight, so the mutation must use
+ * setUTCDate/getUTCDate (consistent with lastDayOfMonth below). Mixing in
+ * local-time setDate/getDate made the result off by one UTC day when the
+ * subtraction crossed a DST fall-back boundary in the server's timezone
+ * (e.g. TZ=America/New_York: '2026-11-02' - 1 day returned '2026-10-31'
+ * instead of '2026-11-01').
+ */
 const subtractDays = (dateStr: string, days: number): string => {
   const d = new Date(dateStr);
 
-  d.setDate(d.getDate() - days);
+  d.setUTCDate(d.getUTCDate() - days);
 
   return toDateString(d);
 };
@@ -240,6 +230,67 @@ const deriveAmbetterStatus: StatusEngineFn = (
   currentPolicyId,
 ) => {
   const effectiveDate = bobRow.effectiveDate;
+  const paidThrough = normalizePaidThroughDateForEffectiveDate(
+    bobRow.paidThroughDate,
+    effectiveDate,
+  );
+  const termDate = bobRow.termDate;
+  const eligible = bobRow.eligibleForCommission;
+  const todayStr = toDateString(today);
+  const currentCrmStatus = getCurrentCrmStatus(
+    allCrmPoliciesForNumber,
+    currentPolicyId,
+  );
+
+  // --- CANCELED cases ---
+  // Neither cancel signal requires an effective date, so both run BEFORE the
+  // missing-effective-date default below. (Previously the default returned
+  // ACTIVE_APPROVED first, so an explicitly-canceled row whose effective-date
+  // cell was blank or unparseable derived the opposite of what it said.)
+  // effectiveDate is only used to pick the expire date; when it's absent,
+  // fall back through paidThrough → termDate → null.
+
+  if (eligible === false) {
+    const expireDate = effectiveDate
+      ? paidThrough && paidThrough >= effectiveDate
+        ? paidThrough
+        : effectiveDate
+      : (paidThrough ?? termDate ?? null);
+    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
+    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
+
+    return {
+      derivedStatus,
+      derivedExpireDate: expireDate,
+      cancelPreviousPolicyId: null,
+      statusChangeReason: `Not eligible for commission → ${reasonLabel} (expire: ${expireDate ?? 'unknown'})`,
+    };
+  }
+
+  if (termDate && termDate < todayStr) {
+    const expireDate = effectiveDate
+      ? paidThrough && paidThrough >= effectiveDate
+        ? paidThrough
+        : termDate
+      : (paidThrough ?? termDate);
+    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
+    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
+
+    return {
+      derivedStatus,
+      derivedExpireDate: expireDate,
+      cancelPreviousPolicyId: null,
+      statusChangeReason: `Term date ${termDate} is in the past → ${reasonLabel} (expire: ${expireDate})`,
+    };
+  }
+
+  // --- No usable effective date (and no cancel signal): default assertion ---
+  // deriveCategory (types/field-config.ts) now treats a null derivedStatus
+  // as "no status assertion" (Phase 4.3), so returning null here would no
+  // longer flood review with empty UPDATE items — but we keep asserting
+  // ACTIVE_APPROVED deliberately: a BOB row with no cancel signal describes
+  // a policy the carrier considers live, and reviewers want the status
+  // engine's read (with its reason string) rather than silence.
 
   if (!effectiveDate) {
     return {
@@ -251,48 +302,7 @@ const deriveAmbetterStatus: StatusEngineFn = (
     };
   }
 
-  const paidThrough = normalizePaidThroughDateForEffectiveDate(
-    bobRow.paidThroughDate,
-    effectiveDate,
-  );
-  const termDate = bobRow.termDate;
-  const eligible = bobRow.eligibleForCommission;
-  const todayStr = toDateString(today);
   const currentMonthEnd = lastDayOfMonth(todayStr) ?? todayStr;
-  const currentCrmStatus = getCurrentCrmStatus(
-    allCrmPoliciesForNumber,
-    currentPolicyId,
-  );
-
-  // --- CANCELED cases ---
-
-  if (eligible === false) {
-    const expireDate =
-      paidThrough && paidThrough >= effectiveDate ? paidThrough : effectiveDate;
-    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
-    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
-
-    return {
-      derivedStatus,
-      derivedExpireDate: expireDate,
-      cancelPreviousPolicyId: null,
-      statusChangeReason: `Not eligible for commission → ${reasonLabel} (expire: ${expireDate})`,
-    };
-  }
-
-  if (termDate && termDate < todayStr) {
-    const expireDate =
-      paidThrough && paidThrough >= effectiveDate ? paidThrough : termDate;
-    const derivedStatus = deriveCanceledStatus(currentCrmStatus);
-    const reasonLabel = formatCanceledStatusReasonLabel(derivedStatus);
-
-    return {
-      derivedStatus,
-      derivedExpireDate: expireDate,
-      cancelPreviousPolicyId: null,
-      statusChangeReason: `Term date ${termDate} is in the past → ${reasonLabel} (expire: ${expireDate})`,
-    };
-  }
 
   // --- ACTIVE cases (eligible=Yes or null, termDate future or null) ---
 
@@ -374,9 +384,24 @@ const deriveAmbetterStatus: StatusEngineFn = (
   };
 };
 
-const STATUS_ENGINES: Record<string, StatusEngineFn> = {
+const STATUS_ENGINES = {
   'ambetter-bob-v1': deriveAmbetterStatus,
-};
+} satisfies Record<string, StatusEngineFn>;
+
+export type StatusEngineId = keyof typeof STATUS_ENGINES;
+
+/**
+ * Registered status-engine ids. `loadMatchContext` validates the configured
+ * `statusConfig.engineId` against this list and fails the run at MATCH with
+ * an actionable error instead of silently deriving null statuses (audit
+ * 2026-06-10 §"Unknown parserVersion silently disables the status engine").
+ */
+export const STATUS_ENGINE_IDS = Object.keys(
+  STATUS_ENGINES,
+) as StatusEngineId[];
+
+export const isKnownStatusEngine = (id: string): id is StatusEngineId =>
+  Object.prototype.hasOwnProperty.call(STATUS_ENGINES, id);
 
 export const deriveStatus = (
   parserId: string,
@@ -386,14 +411,182 @@ export const deriveStatus = (
   config: StatusEngineConfig = DEFAULT_STATUS_ENGINE_CONFIG,
   currentPolicyId?: string | null,
 ): StatusDecision | null => {
-  const engine = STATUS_ENGINES[parserId];
-
-  if (!engine) {
+  // Returns null for unknown engine ids (legacy contract — some callers
+  // probe engines speculatively). The match job never relies on this:
+  // loadMatchContext fail-fasts on `isKnownStatusEngine` before any row
+  // reaches deriveStatus.
+  if (!isKnownStatusEngine(parserId)) {
     return null;
   }
+
+  const engine = STATUS_ENGINES[parserId];
 
   return engine(input, allCrmPoliciesForNumber, today, config, currentPolicyId);
 };
 
 export const getCancelExpireDate = (newEffectiveDate: string): string =>
   subtractDays(newEffectiveDate, 1);
+
+// ---------------------------------------------------------------------------
+// Jackie's broker-effective audit rule (single implementation — Phase 4.5)
+// ---------------------------------------------------------------------------
+
+export type BrokerEffAuditInput = {
+  brokerEffectiveDate: string | null;
+  policyEffectiveDate: string | null;
+  paidThroughDate: string | null;
+  eligibleForCommission: boolean | null;
+  derivedStatus: string | null;
+};
+
+export type BrokerEffAuditResult = {
+  flagged: boolean;
+  reason: string;
+};
+
+/**
+ * Jackie's rule: flag a policy for audit research when EITHER:
+ *   1. it is canceled, OR
+ *   2. its paid-through date lapsed more than 1 day before the broker
+ *      effective date ("paid before broker effective").
+ *
+ * Precondition for both triggers: brokerEffectiveDate > policyEffectiveDate
+ * (OMNIA came on as broker after the original enrollment — "dead before we
+ * started"). Rows where broker-effective is missing or not later than
+ * policy-effective never flag.
+ *
+ * This is THE single implementation. It previously existed twice with
+ * divergent logic (deriveFlags in types/field-config.ts — the reviewed
+ * version whose semantics this preserves — and an inline copy in
+ * match.job.ts's unmatched branch that read the wrong column and skipped
+ * the precondition; audit 2026-06-10 §"Jackie's broker-eff audit rule
+ * duplicated").
+ *
+ * The cancel predicate accepts two signals:
+ *   - derivedStatus CANCELED / PAYMENT_ERROR_CANCELED (matched rows, where
+ *     the status engine ran), and
+ *   - eligibleForCommission === false (unmatched rows, where it didn't).
+ * For matched Ambetter rows these are equivalent — eligible=false always
+ * derives a *_CANCELED status — so folding the raw signal in here changes
+ * nothing for the matched path while giving unmatched rows the same rule.
+ */
+export const deriveBrokerEffAudit = (
+  input: BrokerEffAuditInput,
+): BrokerEffAuditResult => {
+  const {
+    brokerEffectiveDate,
+    policyEffectiveDate,
+    paidThroughDate,
+    eligibleForCommission,
+    derivedStatus,
+  } = input;
+
+  if (
+    !brokerEffectiveDate ||
+    !policyEffectiveDate ||
+    brokerEffectiveDate <= policyEffectiveDate
+  ) {
+    return { flagged: false, reason: '' };
+  }
+
+  const isCanceled =
+    derivedStatus === 'CANCELED' ||
+    derivedStatus === 'PAYMENT_ERROR_CANCELED' ||
+    eligibleForCommission === false;
+
+  let paidBeforeBrokerEff = false;
+  let daysBefore = 0;
+
+  if (paidThroughDate) {
+    daysBefore =
+      (new Date(brokerEffectiveDate).getTime() -
+        new Date(paidThroughDate).getTime()) /
+      (1000 * 60 * 60 * 24);
+
+    paidBeforeBrokerEff = daysBefore > 1;
+  }
+
+  // Paid-before-broker-effective takes precedence over the cancel reason —
+  // mirrors the reviewed deriveFlags ternary exactly.
+  if (paidBeforeBrokerEff) {
+    return {
+      flagged: true,
+      reason: `Paid-thru ${paidThroughDate}, broker effective ${brokerEffectiveDate} (${Math.round(daysBefore)}d after lapse; policy eff ${policyEffectiveDate})`,
+    };
+  }
+
+  if (isCanceled) {
+    return {
+      flagged: true,
+      reason: `Status CANCELED, broker effective ${brokerEffectiveDate} > policy effective ${policyEffectiveDate}`,
+    };
+  }
+
+  return { flagged: false, reason: '' };
+};
+
+/**
+ * Extract `deriveBrokerEffAudit` inputs from a parsed BOB row via
+ * statusConfig.fieldMapping (role → row key). Shared by deriveFlags and the
+ * match job's unmatched branch so both feed the rule the same columns.
+ */
+export const buildBrokerEffAuditInput = (
+  row: Record<string, unknown>,
+  statusFieldMapping: Record<string, string>,
+  derivedStatus: string | null,
+): BrokerEffAuditInput => {
+  const readString = (key: string | undefined): string | null =>
+    key ? ((row[key] as string | null | undefined) ?? null) : null;
+
+  const eligibleKey =
+    statusFieldMapping.eligibleForCommission ?? 'eligibleForCommission';
+  const eligibleVal = row[eligibleKey];
+
+  return {
+    brokerEffectiveDate: readString(statusFieldMapping.brokerEffectiveDate),
+    policyEffectiveDate: readString(statusFieldMapping.policyEffectiveDate),
+    paidThroughDate: readString(
+      statusFieldMapping.paidThroughDate ?? 'paidThroughDate',
+    ),
+    eligibleForCommission:
+      typeof eligibleVal === 'boolean' ? eligibleVal : null,
+    derivedStatus,
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Effective-date header resolution (single implementation — Phase 4.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve THE row key that carries a BOB row's effective date.
+ *
+ * The match job previously resolved "effective date" two different ways
+ * (audit 2026-06-10): the start-date cutoff used the columnMapping header
+ * whose crmField === 'effectiveDate', while dedup and cancel-expire stamping
+ * used statusFieldMapping.effectiveDate — two different columns for Ambetter
+ * (raw policy/broker column vs the computed 'True Effective Date'). All
+ * phases now agree on this resolution:
+ *
+ *   1. The computed field mapped to crmField 'effectiveDate' (Ambetter's
+ *      'True Effective Date' = maxDate(brokerEff, policyEff)) — the value
+ *      the status engine and diff already consume.
+ *   2. Otherwise the columnMapping header mapped to crmField 'effectiveDate'
+ *      (carriers without a computed effective date).
+ */
+export const resolveEffectiveDateHeader = (
+  columnMapping: ColumnMapping,
+  computedFields: ComputedFieldDef[] | null,
+): string | undefined => {
+  const computed = computedFields?.find(
+    (cf) => cf.crmField === 'effectiveDate',
+  );
+
+  if (computed) {
+    return computed.outputKey;
+  }
+
+  return Object.entries(columnMapping).find(
+    ([, entry]) => entry.crmField === 'effectiveDate',
+  )?.[0];
+};

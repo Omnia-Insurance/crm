@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { Args, Float, Mutation } from '@nestjs/graphql';
 
+import { PermissionFlagType } from 'twenty-shared/constants';
+
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
@@ -16,7 +18,8 @@ import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/re
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
+import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
+import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { StartReconciliationResultDTO } from 'src/modules/reconciliation/dtos/start-reconciliation.dto';
 import { ReconciliationOrchestratorService } from 'src/modules/reconciliation/orchestrator.service';
@@ -25,7 +28,10 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
 @MetadataResolver()
 @UsePipes(ResolverValidationPipe)
 @UseFilters(AuthGraphqlApiExceptionFilter)
-@UseGuards(WorkspaceAuthGuard, NoPermissionGuard)
+@UseGuards(
+  WorkspaceAuthGuard,
+  SettingsPermissionGuard(PermissionFlagType.RECONCILIATION),
+)
 export class ReconciliationResolver {
   constructor(
     private readonly orchestratorService: ReconciliationOrchestratorService,
@@ -76,12 +82,13 @@ export class ReconciliationResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId({ allowUndefined: true })
     userWorkspaceId: string | undefined,
+    @AuthWorkspaceMemberId() workspaceMemberId: string | undefined,
   ): Promise<StartReconciliationResultDTO> {
     const result = await this.reviewItemService.batchApprove(
       workspace.id,
       reconciliationId,
       { minConfidence, reviewItemIds },
-      { userWorkspaceId },
+      { userWorkspaceId, workspaceMemberId },
     );
 
     return {
@@ -104,6 +111,7 @@ export class ReconciliationResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId({ allowUndefined: true })
     userWorkspaceId: string | undefined,
+    @AuthWorkspaceMemberId() workspaceMemberId: string | undefined,
   ): Promise<StartReconciliationResultDTO> {
     const normalizedAction = action.toUpperCase();
 
@@ -120,6 +128,7 @@ export class ReconciliationResolver {
       { minConfidence, reviewItemIds },
       {
         userWorkspaceId,
+        workspaceMemberId,
       },
     );
 

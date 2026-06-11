@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
+import { PolicyQueryHookModule } from 'src/modules/policy/query-hooks/policy-query-hook.module';
 import { ReconciliationMatchJob } from 'src/modules/reconciliation/jobs/match.job';
 import { ReconciliationParseJob } from 'src/modules/reconciliation/jobs/parse.job';
 import { ReconciliationOrchestratorService } from 'src/modules/reconciliation/orchestrator.service';
@@ -16,7 +17,7 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
 // OMNIA-CUSTOM: Payment Reconciliation v2 — native NestJS module for
 // BOB ingestion, matching, status derivation, and field diff pipeline.
 @Module({
-  imports: [GlobalWorkspaceDataSourceModule, FileModule],
+  imports: [GlobalWorkspaceDataSourceModule, FileModule, PolicyQueryHookModule],
   providers: [
     // Resolver (GraphQL mutations for triggering pipeline stages)
     ReconciliationResolver,

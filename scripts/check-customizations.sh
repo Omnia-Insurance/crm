@@ -2602,9 +2602,9 @@ check_file_contains \
   "reconciliationDecisionRule" \
   "Seed command must create the learned reconciliation decision rule object"
 check_file_contains \
-  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "packages/twenty-server/src/modules/reconciliation/services/object-lockdown.service.ts" \
   "preservedObjectPermissions" \
-  "Seed command must preserve existing role object permissions while locking reconciliation objects"
+  "Object lockdown service must preserve existing role object permissions while locking reconciliation objects (logic moved out of the seed command 2026-06-10)"
 check_file_contains \
   "packages/twenty-front/package.json" \
   "@pierre/diffs" \
@@ -2653,14 +2653,8 @@ check_file_not_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "color: #fff" \
   "Inline diff accept button must use theme colors, not hardcoded white"
-check_file_contains \
-  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationRecordFieldList.tsx" \
-  "diff !== undefined" \
-  "Reconciliation field list must keep null proposed values actionable"
-check_file_contains \
-  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationRecordFieldList.tsx" \
-  "StyledProposedValue" \
-  "Reconciliation field list must show the proposed BOB value inline"
+# ReconciliationRecordFieldList.tsx was deleted 2026-06-10 (audit remediation
+# 2.8 dead-code sweep): unreferenced since the review UI moved to MatchedDiffView.
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field-list/components/RecordFieldList.tsx" \
   "d.bobValue === d.crmValue" \
@@ -2726,9 +2720,9 @@ check_file_contains \
   "normalizePaidThroughDateForEffectiveDate" \
   "Unmatched reconciliation create flow must blank stale pre-effective paid-through dates"
 check_file_contains \
-  "packages/twenty-server/src/modules/reconciliation/types/field-config.ts" \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
   "derivedStatus === 'PAYMENT_ERROR_CANCELED'" \
-  "Broker-effective audit must treat Payment Error-Canceled as canceled"
+  "Broker-effective audit must treat Payment Error-Canceled as canceled (logic unified into deriveBrokerEffAudit 2026-06-11, audit item 4.5)"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor.tsx" \
   "draftRecordIdsState" \
@@ -2818,9 +2812,13 @@ check_file_contains \
   "BATCH_APPLY_REVIEW_ITEMS" \
   "Reconciliation review body must use the CRM-mutating batch apply/undo mutation"
 check_file_contains \
-  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewBody.tsx" \
+  "packages/twenty-shared/src/constants/ReconciliationAutoApplyBlockingFlags.ts" \
   "NAME_MISMATCH" \
-  "Reconciliation default batch apply must exclude name-mismatch review items"
+  "Shared blocking-flag list must exclude name-mismatch items from default batch apply (moved from ReconciliationReviewBody 2026-06-11, audit item 2.7)"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationReviewBody.tsx" \
+  "RECONCILIATION_AUTO_APPLY_BLOCKING_FLAGS" \
+  "Reconciliation review body must use the shared blocking-flag list (client/server parity)"
 check_file_contains \
   "packages/twenty-front/src/modules/reconciliation/components/ReconciliationToolbar.tsx" \
   "batchUndoCount" \
@@ -2830,9 +2828,9 @@ check_file_contains \
   "syncReviewItemDecisionWithServer" \
   "Individual reconciliation Apply all must sync through the server mutation for learned rules"
 check_file_contains \
-  "packages/twenty-front/src/modules/reconciliation/components/MatchedDiffView.tsx" \
-  "fieldTypeByCrmField" \
-  "Individual reconciliation Apply all local mirror must coerce numeric diff strings"
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "coerceFieldDiffValueForRecordUpdate" \
+  "Server batch apply must coerce numeric diff strings (client write mirror deleted 2026-06-11, audit item 2.1 — server is the only CRM write path)"
 
 echo ""
 
@@ -2910,6 +2908,142 @@ check_file_contains \
   "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiffContainer.tsx" \
   "diffBeforeArtificialRecordStoreId" \
   "EventFieldDiffContainer must build a separate before-value record store id"
+
+echo ""
+echo "--- Reconciliation audit remediation: Phase 0 security (2026-06-10) ---"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/reconciliation.resolver.ts" \
+  "SettingsPermissionGuard(PermissionFlagType.RECONCILIATION)" \
+  "Reconciliation resolver must gate mutations behind the RECONCILIATION permission flag"
+check_file_not_contains \
+  "packages/twenty-server/src/modules/reconciliation/reconciliation.resolver.ts" \
+  "NoPermissionGuard" \
+  "Reconciliation resolver must never regress to NoPermissionGuard (any member could trigger CRM writes)"
+check_file_contains \
+  "packages/twenty-shared/src/constants/PermissionFlagType.ts" \
+  "RECONCILIATION = 'RECONCILIATION'" \
+  "PermissionFlagType must include the OMNIA RECONCILIATION settings flag"
+check_file_contains \
+  "packages/twenty-shared/src/constants/SystemPermissionFlag.ts" \
+  "RECONCILIATION:" \
+  "SystemPermissionFlag must map the RECONCILIATION flag to its universal identifier"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/permission-flag/constants/standard-permission-flag-definitions.constant.ts" \
+  "PermissionFlagType.RECONCILIATION" \
+  "Standard permission flag definitions must include RECONCILIATION metadata (exhaustive Record over the enum)"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/permissions/permissions.service.ts" \
+  "PermissionFlagType.RECONCILIATION" \
+  "Default user workspace permissions must include the RECONCILIATION flag (default deny)"
+check_file_exists \
+  "packages/twenty-server/src/modules/policy/services/policy-write-authorization.service.ts" \
+  "Shared policy agent-ownership/edit-window authorization service (used by query hook + reconciliation batch apply)"
+check_file_contains \
+  "packages/twenty-server/src/modules/policy/query-hooks/policy-update-one.pre-query.hook.ts" \
+  "PolicyWriteAuthorizationService" \
+  "Policy updateOne pre-query hook must delegate to the shared write-authorization service"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "resolveCancelTargetPolicy" \
+  "Batch apply must validate the snapshot-supplied cancel target against the matched policy (lead/carrier) before canceling"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "assertUserMayWritePolicy" \
+  "User-initiated batch apply must enforce policy agent-ownership RLS before issuing writes"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/parsers/xlsx.ts" \
+  "MAX_PARSED_ROWS" \
+  "XLSX parse must enforce a row cap (blast-radius bound for unpatched xlsx CVEs)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/attachment.service.ts" \
+  "MAX_SOURCE_FILE_BYTES" \
+  "Reconciliation source file reads must enforce a byte cap before parsing"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/services/object-lockdown.service.ts" \
+  "Shared reconciliation object lockdown service (seed command + role creation)"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/role/role.service.ts" \
+  "ReconciliationObjectLockdownService" \
+  "RoleService.createRole must apply the reconciliation object lockdown to newly created roles"
+
+echo ""
+echo "--- Reconciliation audit remediation: Phases 1-4 (2026-06-11) ---"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item-reconcile.util.ts" \
+  "Non-destructive re-run reconcile planner (decided review items must survive match re-runs)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "reconcileMatchResults" \
+  "Match job must reconcile review items by identity, never delete-all-recreate"
+check_file_not_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "deleteByReconciliation" \
+  "The delete-all-review-items path must stay deleted (re-runs destroyed reviewer decisions)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "carrierPolicyNumber" \
+  "fetchOverrides must read policy numbers from the first-class column, not snapshot key guessing"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/review-item.service.ts" \
+  "cancelPriorStatus" \
+  "Cancel-previous-policy must capture prior state so UNDO can restore it"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/decision-rule.service.ts" \
+  "hasCancelAction" \
+  "Learned rules must never be built from or applied to cancel-bearing review items"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/decision-rule.service.ts" \
+  "deactivateRuleForUndoneAutoApply" \
+  "Undoing an auto-applied item must deactivate the rule that applied it"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/backfill-reconciliation-decision-rules.command.ts" \
+  "isHumanApprovedReviewItem" \
+  "Backfill must learn rules only from human approvals, never machine ones"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/state-machine.service.ts" \
+  "TransitionConflictError" \
+  "State machine transitions must be compare-and-swap (concurrent jobs must conflict, not clobber)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/mutation.service.ts" \
+  "updateReconciliationIfStatus" \
+  "Mutation service must expose the conditional status update backing CAS transitions"
+check_file_exists \
+  "packages/twenty-shared/src/constants/ReconciliationAutoApplyBlockingFlags.ts" \
+  "Shared blocking-flag list (client/server parity for batch apply scope)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/matching.ts" \
+  "POLICY_NUMBER_NARROWED_RECENT" \
+  "Recency-narrowed match winners must carry a distinct method with capped confidence"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/services/data.service.ts" \
+  "MAX_POLICIES_FOR_MATCHING" \
+  "Policy corpus fetch must be capped and carrier-scoped (null carrierId is a hard error)"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/types/carrier-config.ts" \
+  "Validated carrier pipeline config boundary (parseCarrierPipelineConfig)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "parseCarrierPipelineConfig" \
+  "Match job must load carrier config through the validated boundary, not raw casts"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/parse.job.ts" \
+  "parseCarrierPipelineConfig" \
+  "Parse job must load carrier config through the validated boundary, not raw casts"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/parsers/transforms.ts" \
+  "buildTransforms" \
+  "Transform vocabulary must be a per-carrier factory (DD/MM carriers are pure config)"
+check_file_not_exists() { if [ -e "$1" ]; then echo -e "${RED}PRESENT${NC} $1 — $2"; ERRORS=$((ERRORS+1)); else echo -e "${GREEN}OK${NC} $1 absent"; fi; }
+check_file_not_exists \
+  "packages/twenty-server/src/modules/reconciliation/parsers/generic.ts" \
+  "Dead config-driven parser stack must stay deleted (audit 4.1)"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/seed-ambetter-carrier-config.command.ts" \
+  "buildCarrierConfigUpdate" \
+  "Carrier seed must merge (never overwrite) user-captured column/status mappings"
+check_file_exists \
+  "packages/twenty-front/src/modules/reconciliation/utils/invertColumnMapping.ts" \
+  "Frontend must resolve BOB values via inverted columnMapping, not hardcoded Ambetter headers"
 
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"

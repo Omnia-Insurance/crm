@@ -5,6 +5,7 @@
 // npx nx run twenty-server:command workspace:backfill-reconciliation-decision-rules
 
 import { Command, Option } from 'nest-commander';
+import { IsNull } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -134,6 +135,24 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
     }
   }
 
+  /**
+   * Backfill learns ONLY from human approvals (audit 1.7): items the
+   * auto-rule engine approved itself (decisionSource AUTO_RULE / autoAppliedAt
+   * set) must never feed rule learning — that would be a self-reinforcing
+   * feedback loop that can also resurrect rules a human deactivated.
+   * Items with a null decisionSource predate the column and were necessarily
+   * decided by a human, so they stay eligible.
+   */
+  static isHumanApprovedReviewItem(item: ReviewItemForDecisionRule): boolean {
+    if (item.autoAppliedAt != null) return false;
+
+    return (
+      item.decisionSource === 'USER' ||
+      item.decisionSource === 'BATCH_USER' ||
+      item.decisionSource == null
+    );
+  }
+
   private async fetchApprovedReviewItems(
     workspaceId: string,
   ): Promise<ReviewItemForDecisionRule[]> {
@@ -148,12 +167,34 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
             { shouldBypassPermissionChecks: true },
           );
 
-        return reviewItemRepo.find({
-          where: {
-            decision: 'APPROVED',
-            category: 'UPDATE',
-          },
+        const items = await reviewItemRepo.find({
+          where: [
+            {
+              decision: 'APPROVED',
+              category: 'UPDATE',
+              decisionSource: 'USER',
+            },
+            {
+              decision: 'APPROVED',
+              category: 'UPDATE',
+              decisionSource: 'BATCH_USER',
+            },
+            {
+              decision: 'APPROVED',
+              category: 'UPDATE',
+              decisionSource: IsNull(),
+            },
+          ],
         });
+
+        // Belt and braces on top of the query filter: drop anything that
+        // still looks machine-decided (e.g. legacy rows with a stale
+        // decisionSource but a populated autoAppliedAt).
+        return items.filter((item) =>
+          BackfillReconciliationDecisionRulesCommand.isHumanApprovedReviewItem(
+            item,
+          ),
+        );
       },
       authContext,
     );

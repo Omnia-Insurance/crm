@@ -4,7 +4,10 @@ import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
+import {
+  normalizeDateOnly,
+  type CrmPolicy,
+} from 'src/modules/reconciliation/engines/matching';
 import type {
   CarrierConfigRecord,
   EnrichedPolicyData,
@@ -12,6 +15,14 @@ import type {
 } from 'src/modules/reconciliation/types/reconciliation';
 
 const PAGE_SIZE = 500;
+
+/**
+ * Hard cap on the CRM policy corpus loaded into memory for matching
+ * (remediation 4.9). The whole carrier book is held in RAM while the match
+ * job runs; past this size the right fix is chunked matching, not a bigger
+ * heap — so we fail fast with a clear error instead of OOMing the worker.
+ */
+export const MAX_POLICIES_FOR_MATCHING = 200_000;
 
 /**
  * Merge the phase-1 matched policy with phase-2 enrichment into the snapshot
@@ -96,7 +107,26 @@ export class ReconciliationDataService {
   async fetchPoliciesForMatching(
     workspaceId: string,
     carrierId?: string | null,
+    options?: { maxPolicies?: number },
   ): Promise<CrmPolicy[]> {
+    // A missing carrierId is a hard error (remediation 4.9): matching would
+    // otherwise run against EVERY policy in the workspace, silently
+    // mis-matching rows across carriers. The only production caller is the
+    // match job, which passes carrierConfig.carrierId — null there means the
+    // carrier-config seed could not find the carrier record (it warns about
+    // this), a misconfiguration the operator must fix, not a mode we support.
+    // The match job's catch routes this to FAILED with the message visible.
+    if (!carrierId) {
+      throw new Error(
+        'fetchPoliciesForMatching requires a carrierId: the carrier config is ' +
+          'not linked to a carrier record, and matching without one would ' +
+          'compare BOB rows against every policy in the workspace ' +
+          '(cross-carrier matching corrupts results). Link the carrier record ' +
+          'on the carrier config (carrierConfig.carrierId) and re-run.',
+      );
+    }
+
+    const maxPolicies = options?.maxPolicies ?? MAX_POLICIES_FOR_MATCHING;
     const authContext = buildSystemAuthContext(workspaceId);
 
     return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
@@ -110,18 +140,20 @@ export class ReconciliationDataService {
         const policies: CrmPolicy[] = [];
         let offset = 0;
         let hasMore = true;
+        let pages = 0;
 
         while (hasMore) {
-          const where: Record<string, unknown> = {};
-
-          if (carrierId) {
-            where.carrierId = carrierId;
-          }
+          const where: Record<string, unknown> = { carrierId };
 
           const batch = await repo.find({
             where,
             take: PAGE_SIZE,
             skip: offset,
+            // Deterministic order is required for LIMIT/OFFSET pagination:
+            // without it, Postgres gives no ordering guarantee between
+            // pages, so concurrent writes (or synchronized seq scans) can
+            // skip policies or return them twice across page boundaries.
+            order: { id: 'ASC' },
             relations: ['lead', 'agent'],
           });
 
@@ -152,7 +184,12 @@ export class ReconciliationDataService {
               'premium.amountMicros': premium?.amountMicros ?? null,
               'lead.name.firstName': name?.firstName ?? null,
               'lead.name.lastName': name?.lastName ?? null,
-              'lead.dateOfBirth': (lead?.dateOfBirth as string) ?? null,
+              // Normalized to 'YYYY-MM-DD' so DOB matching (Tiers 6/8)
+              // compares like-for-like with the BOB side, which the parse
+              // transforms already emit as a plain date.
+              'lead.dateOfBirth': normalizeDateOnly(
+                lead?.dateOfBirth as string | Date | null,
+              ),
               'lead.addressCustom.addressState':
                 addressCustom?.addressState ?? null,
               'agent.name': (agent?.name as string) ?? null,
@@ -164,11 +201,28 @@ export class ReconciliationDataService {
             });
           }
 
+          pages += 1;
+
+          // Scale guard (remediation 4.9): fail fast instead of OOMing the
+          // worker when a carrier's book outgrows in-memory matching.
+          if (policies.length > maxPolicies) {
+            throw new Error(
+              `Policy corpus for carrier ${carrierId} exceeds the in-memory ` +
+                `matching cap of ${maxPolicies} (fetched ${policies.length} ` +
+                `across ${pages} pages). Matching aborted — chunked matching ` +
+                'is required for books this size.',
+            );
+          }
+
           hasMore = batch.length === PAGE_SIZE;
           offset += PAGE_SIZE;
         }
 
-        this.logger.log(`Fetched ${policies.length} CRM policies for matching`);
+        // INFO-level corpus stats so operators can see per-run corpus sizes.
+        this.logger.log(
+          `Fetched ${policies.length} CRM policies for matching ` +
+            `(carrierId=${carrierId}, pages=${pages}, pageSize=${PAGE_SIZE})`,
+        );
 
         return policies;
       },

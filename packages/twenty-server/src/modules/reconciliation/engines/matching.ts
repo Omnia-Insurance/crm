@@ -1,6 +1,7 @@
 import { jaroWinkler } from 'jaro-winkler-typescript';
+import { RECONCILIATION_DEFAULT_AUTO_MATCH_THRESHOLD } from 'twenty-shared/constants';
 
-import type { FieldConfigEntry } from 'src/modules/reconciliation/types/field-config';
+import { NEGATIVE_TERMINAL_STATUSES } from 'src/modules/reconciliation/types/policy-statuses';
 
 export type MatchMethod =
   | 'OVERRIDE'
@@ -9,6 +10,7 @@ export type MatchMethod =
   | 'POLICY_NUMBER_PLUS_AGENT'
   | 'POLICY_NUMBER_SINGLE'
   | 'POLICY_NUMBER_MULTI_BEST'
+  | 'POLICY_NUMBER_NARROWED_RECENT'
   | 'NPN_DATE_NAME'
   | 'NAME_DOB_DATE'
   | 'MISSING_FROM_BOB'
@@ -78,30 +80,64 @@ type _UncoveredMatchInputRoles = Exclude<
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _MatchingRoleCoverageGuard = _Assert<_UncoveredMatchInputRoles>;
 
-export const buildMatchInput = (
-  row: Record<string, unknown>,
-  fieldConfig: FieldConfigEntry[],
-): MatchInput => {
-  const byRole = new Map(
-    fieldConfig
-      .filter((f) => f.matchingRole)
-      .map((f) => [f.matchingRole, f.name]),
-  );
+/**
+ * Canonical form for policy-number comparison: trimmed + uppercased,
+ * mirroring what `isValidAmbetterPolicyNumber` already does for validation.
+ * CRM policy numbers are hand-entered ('u94692964', trailing spaces), so
+ * both the `policyByNumber` index keys and the BOB-side `MatchInput` value
+ * must be normalized or exact-identifier matches silently miss.
+ */
+export const normalizePolicyNumber = (
+  value: string | null | undefined,
+): string | null => {
+  if (!value) return null;
 
-  return {
-    policyNumber: (row[byRole.get('policyNumber')!] as string) ?? null,
-    effectiveDate: (row[byRole.get('effectiveDate')!] as string) ?? null,
-    paidThroughDate: (row[byRole.get('paidThroughDate')!] as string) ?? null,
-    agentName: (row[byRole.get('agentName')!] as string) ?? null,
-    agentNpn: (row[byRole.get('agentNpn')!] as string) ?? null,
-    memberFirstName: (row[byRole.get('memberFirstName')!] as string) ?? null,
-    memberLastName: (row[byRole.get('memberLastName')!] as string) ?? null,
-    memberDob: (row[byRole.get('memberDob')!] as string) ?? null,
-  };
+  const normalized = value.trim().toUpperCase();
+
+  return normalized.length > 0 ? normalized : null;
+};
+
+/**
+ * Canonical 'YYYY-MM-DD' form for DOB comparison. The BOB side is already
+ * normalized to a plain date by the parse transforms, but the CRM side is
+ * whatever the ORM returns for `lead.dateOfBirth` — possibly an ISO
+ * timestamp ('1990-05-15T00:00:00.000Z') or a Date instance. Tier 8 and
+ * the Tier 6/7 DOB corroboration compare normalized values so a format
+ * difference can't produce silent false negatives.
+ */
+export const normalizeDateOnly = (
+  value: string | Date | null | undefined,
+): string | null => {
+  if (value === null || value === undefined) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? null
+      : value.toISOString().slice(0, 10);
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) return null;
+
+  // ISO date or timestamp — take the date part directly (no TZ math).
+  const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})(?:[T\s].*)?$/);
+
+  if (isoMatch) return isoMatch[1];
+
+  const parsed = new Date(trimmed);
+
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const yyyy = String(parsed.getFullYear()).padStart(4, '0');
+  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+  const dd = String(parsed.getDate()).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}`;
 };
 
 // ---------------------------------------------------------------------------
-// Column-mapping-driven match input (no FieldConfigEntry dependency)
+// Column-mapping-driven match input
 // ---------------------------------------------------------------------------
 
 import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
@@ -170,6 +206,8 @@ export const buildMatchInputFromMapping = (
     }
   }
 
+  result.policyNumber = normalizePolicyNumber(result.policyNumber);
+
   return result;
 };
 
@@ -232,12 +270,14 @@ export type MatchingConfig = {
   tier7ConfidenceScores: { high: number; medium: number; low: number };
   /** Minimum name score for Tier 7 to trigger. Default: 0.85 */
   tier7MinNameScore: number;
-  /** Days since effective to consider a policy "placed". Default: 30 */
-  placedThresholdDays: number;
-  /** Days past paid-through to flag payment error. Default: 10 */
-  paymentErrorAgeDays: number;
-  /** Exclude BOB rows with effective dates before this date. Default: '2025-07-09' */
-  startDate: string;
+  // Status-engine thresholds (placedThresholdDays / paymentErrorAgeDays)
+  // were removed from MatchingConfig in Phase 4.3 — their single home is
+  // StatusConfig (types/reconciliation.ts), resolved through
+  // parseCarrierPipelineConfig. Legacy keys still stored in matchingConfig
+  // JSON are ignored by the boundary.
+  /** Exclude BOB rows with effective dates before this date.
+   *  Per-carrier; null = no cutoff. */
+  startDate: string | null;
   /** Minimum name score for policy number discovery. Default: 0.95 */
   discoveryNameThreshold: number;
   /** Name score above which discovery auto-matches. Default: 0.98 */
@@ -255,7 +295,8 @@ export const DEFAULT_MATCHING_CONFIG: MatchingConfig = {
     'NPN_DATE_NAME',
     'NAME_DOB_DATE',
   ],
-  autoMatchThreshold: 85,
+  // Shared with the review UI's high-confidence batch-apply scope (2.7).
+  autoMatchThreshold: RECONCILIATION_DEFAULT_AUTO_MATCH_THRESHOLD,
   autoRejectThreshold: 30,
   dateToleranceDays: 30,
   nameMatchThreshold: 0.88,
@@ -264,8 +305,13 @@ export const DEFAULT_MATCHING_CONFIG: MatchingConfig = {
   tier7NameBands: { high: 0.98, medium: 0.93, low: 0.85 },
   tier7ConfidenceScores: { high: 92, medium: 88, low: 65 },
   tier7MinNameScore: 0.85,
-  placedThresholdDays: 30,
-  paymentErrorAgeDays: 10,
+  // Omnia/Ambetter onboarding date — the day Omnia became broker of record.
+  // THE single source for the legacy default (formerly duplicated as
+  // DEFAULT_START_DATE in match.job.ts and types/reconciliation.ts, both
+  // deleted in Phase 4.4). It is an Omnia business-history constant, not a
+  // sensible cutoff for any other carrier: new carrier configs should seed
+  // their own startDate (null = no cutoff). Rows skipped by this cutoff are
+  // counted in stats.skippedBeforeStartDate.
   startDate: '2025-07-09',
   discoveryNameThreshold: 0.95,
   discoveryAutoThreshold: 0.98,
@@ -283,6 +329,14 @@ const normalizeAgentName = (name: string): string =>
     .replace(PUNCTUATION_RE, '')
     .trim();
 
+/**
+ * Minimum normalized length for agent/broker name comparison. Suffix-only
+ * names ('LLC', 'Inc.', 'Co') normalize to '' and the substring fallback
+ * would match every broker ('anything'.includes('') === true); very short
+ * names ('AB') substring-match far too many unrelated brokers.
+ */
+const MIN_AGENT_NAME_LENGTH = 3;
+
 export const agentNameMatches = (
   brokerName: string | null,
   agentName: string | null,
@@ -294,6 +348,13 @@ export const agentNameMatches = (
 
   const broker = normalizeAgentName(brokerName);
   const agent = normalizeAgentName(agentName);
+
+  if (
+    broker.length < MIN_AGENT_NAME_LENGTH ||
+    agent.length < MIN_AGENT_NAME_LENGTH
+  ) {
+    return false;
+  }
 
   if (jaroWinkler(broker, agent) >= threshold) {
     return true;
@@ -403,6 +464,13 @@ export const combinedNameFuzzyMatch = (
 const isTierEnabled = (tier: string, config: MatchingConfig): boolean =>
   config.enabledTiers.includes(tier);
 
+/**
+ * Two Tier-7 candidates whose name scores differ by less than this are
+ * "effectively tied" — identical names produce bit-identical doubles, so
+ * a tiny epsilon only guards against floating-point noise.
+ */
+const TIER7_TIE_EPSILON = 1e-9;
+
 export type MatchIndexes = {
   policyByNumber: Map<string, CrmPolicy[]>;
   policyByNpn: Map<string, CrmPolicy[]>;
@@ -419,11 +487,16 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
   for (const p of policies) {
     policyById.set(p.id, p);
 
-    if (p.policyNumber) {
-      const existing = policyByNumber.get(p.policyNumber) ?? [];
+    // Index keys are normalized (trim + uppercase / date-only) so
+    // hand-entered CRM variants still hit exact-identifier lookups. The
+    // policy snapshots themselves keep their raw values.
+    const policyNumberKey = normalizePolicyNumber(p.policyNumber);
+
+    if (policyNumberKey) {
+      const existing = policyByNumber.get(policyNumberKey) ?? [];
 
       existing.push(p);
-      policyByNumber.set(p.policyNumber, existing);
+      policyByNumber.set(policyNumberKey, existing);
     }
 
     const agentNpn = p['agent.npn'];
@@ -435,7 +508,7 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
       policyByNpn.set(agentNpn, existing);
     }
 
-    const leadDob = p['lead.dateOfBirth'];
+    const leadDob = normalizeDateOnly(p['lead.dateOfBirth']);
 
     if (leadDob) {
       const existing = policyByDob.get(leadDob) ?? [];
@@ -448,19 +521,12 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
   return { policyByNumber, policyByNpn, policyByDob, policyById };
 };
 
-/**
- * Statuses that mean "this policy is over." When narrowing multi-policy-
- * number candidates, prefer the unique non-terminal candidate over a
- * terminal one — re-enrollments add a new active policy alongside the
- * canceled prior version, and the BOB row almost always describes the
- * active one.
- */
-const NEGATIVE_TERMINAL_STATUSES_FOR_MATCHING: ReadonlySet<string> = new Set([
-  'CANCELED',
-  'PAYMENT_ERROR_CANCELED',
-  'DECLINED',
-  'INCOMPLETE',
-]);
+// Statuses that mean "this policy is over" — shared home in
+// types/policy-statuses.ts (Phase 4.4 consolidated the three previously
+// drift-prone copies). When narrowing multi-policy-number candidates,
+// prefer the unique non-terminal candidate over a terminal one —
+// re-enrollments add a new active policy alongside the canceled prior
+// version, and the BOB row almost always describes the active one.
 
 /**
  * When multiple CRM policies share a policyNumber and exactly one is in a
@@ -477,7 +543,7 @@ export const selectByActiveStatus = (
   if (candidates.length < 2) return null;
 
   const active = candidates.filter(
-    (p) => !p.status || !NEGATIVE_TERMINAL_STATUSES_FOR_MATCHING.has(p.status),
+    (p) => !p.status || !NEGATIVE_TERMINAL_STATUSES.has(p.status),
   );
 
   return active.length === 1 ? active[0] : null;
@@ -531,14 +597,27 @@ export const selectByActiveTerm = (
  * to update. Without this, the proximity tiers latch onto the OLDER
  * policy because the BOB carries the original effective date.
  *
- * Returns null when any candidate lacks a parseable effectiveDate or when
- * the latest date is shared by more than one candidate (true tie — caller
- * falls back to weighted multi-match scoring).
+ * Restricted to candidate sets where ALL candidates are in terminal
+ * states — the case that motivated the heuristic. When any candidate is
+ * still live (e.g. a current ACTIVE term plus a future-dated renewal
+ * record), recency must NOT preempt the effective-date/agent evidence the
+ * proximity tiers evaluate, or the newer record shadows the active term
+ * the BOB row actually describes.
+ *
+ * Returns null when any candidate is non-terminal, lacks a parseable
+ * effectiveDate, or when the latest date is shared by more than one
+ * candidate (true tie — caller falls back to weighted multi-match scoring).
  */
 export const selectByMostRecentEffectiveDate = (
   candidates: CrmPolicy[],
 ): CrmPolicy | null => {
   if (candidates.length < 2) return null;
+
+  const allTerminal = candidates.every(
+    (p) => p.status !== null && NEGATIVE_TERMINAL_STATUSES.has(p.status),
+  );
+
+  if (!allTerminal) return null;
 
   const dated = candidates.map((p) => ({
     policy: p,
@@ -560,13 +639,18 @@ export const matchRow = (
   config: MatchingConfig = DEFAULT_MATCHING_CONFIG,
 ): MatchDecision => {
   const tolerance = config.dateToleranceDays;
+  // Comparison forms — index keys are normalized the same way (see
+  // buildMatchIndexes), so exact-identifier lookups survive case/format
+  // variance in hand-entered CRM data.
+  const inputPolicyNumber = normalizePolicyNumber(input.policyNumber);
+  const inputDob = normalizeDateOnly(input.memberDob);
 
   // Tier 1: Override check
-  if (isTierEnabled('OVERRIDE', config) && input.policyNumber) {
+  if (isTierEnabled('OVERRIDE', config) && inputPolicyNumber) {
     const override = overrides.find(
       (o) =>
         o.isActive &&
-        o.carrierPolicyNumber === input.policyNumber &&
+        normalizePolicyNumber(o.carrierPolicyNumber) === inputPolicyNumber &&
         o.carrierName.toLowerCase() === carrierName.toLowerCase(),
     );
 
@@ -579,14 +663,14 @@ export const matchRow = (
         confidence: 100,
         method: 'OVERRIDE',
         status: 'AUTO_MATCHED',
-        notes: `Manual override: carrier policy ${input.policyNumber} → CRM policy ${override.crmPolicyId}`,
+        notes: `Manual override: carrier policy ${inputPolicyNumber} → CRM policy ${override.crmPolicyId}`,
       };
     }
   }
 
   // Find all policies with matching policy number
-  const allPolicyNumberMatches = input.policyNumber
-    ? (indexes.policyByNumber.get(input.policyNumber) ?? [])
+  const allPolicyNumberMatches = inputPolicyNumber
+    ? (indexes.policyByNumber.get(inputPolicyNumber) ?? [])
     : [];
 
   // Disambiguate multi-policy-number candidates BEFORE running proximity-
@@ -607,6 +691,7 @@ export const matchRow = (
   //      date — "anytime we have multiples, update the most recent one".
   let narrowedWinner: CrmPolicy | null = null;
   let narrowReason: string | null = null;
+  let narrowedByRecency = false;
 
   if (allPolicyNumberMatches.length > 1) {
     const activeWinner = selectByActiveStatus(allPolicyNumberMatches);
@@ -627,6 +712,7 @@ export const matchRow = (
     } else if (recentWinner) {
       narrowedWinner = recentWinner;
       narrowReason = 'most recent effective date';
+      narrowedByRecency = true;
     }
   }
 
@@ -636,6 +722,24 @@ export const matchRow = (
   const narrowSuffix = narrowedWinner
     ? ` (disambiguated from ${allPolicyNumberMatches.length} candidates by ${narrowReason})`
     : '';
+
+  // A recency-narrowed winner is an ops heuristic ("update the most recent
+  // one"), not an identifier match — yet it would otherwise inherit Tier
+  // 2-5 confidence (85-98) and their methods. Tag it with a distinct
+  // method and cap confidence below the auto-match threshold so review
+  // filters, batch approval, and learned rules can tell heuristic
+  // narrowing apart from a genuinely unique match.
+  const finalizeNarrowedDecision = (decision: MatchDecision): MatchDecision => {
+    if (!narrowedByRecency) return decision;
+
+    return {
+      ...decision,
+      confidence: Math.min(decision.confidence, config.autoMatchThreshold - 1),
+      method: 'POLICY_NUMBER_NARROWED_RECENT',
+      status: 'NEEDS_REVIEW',
+      notes: `${decision.notes} — recency narrowing is heuristic; confidence capped below auto-match threshold`,
+    };
+  };
 
   if (policyNumberMatches.length > 0) {
     // Tier 2: Policy number + effective date + agent name (3-signal)
@@ -657,14 +761,14 @@ export const matchRow = (
       if (tripleMatches.length === 1) {
         const match = tripleMatches[0];
 
-        return {
+        return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
           confidence: 98,
           method: 'POLICY_NUMBER_DATE_AGENT',
           status: classifyConfidence(98, config),
           notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"${narrowSuffix}`,
-        };
+        });
       }
     }
 
@@ -677,14 +781,14 @@ export const matchRow = (
       if (dateMatches.length === 1) {
         const match = dateMatches[0];
 
-        return {
+        return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
           confidence: 95,
           method: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE',
           status: classifyConfidence(95, config),
           notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${narrowSuffix}`,
-        };
+        });
       }
     }
 
@@ -701,14 +805,14 @@ export const matchRow = (
       if (agentMatches.length === 1) {
         const match = agentMatches[0];
 
-        return {
+        return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
           confidence: 85,
           method: 'POLICY_NUMBER_PLUS_AGENT',
           status: classifyConfidence(85, config),
           notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"${narrowSuffix}`,
-        };
+        });
       }
     }
 
@@ -721,14 +825,14 @@ export const matchRow = (
     ) {
       const match = policyNumberMatches[0];
 
-      return {
+      return finalizeNarrowedDecision({
         crmPolicyId: match.id,
         crmPolicyNumber: match.policyNumber,
         confidence: 90,
         method: 'POLICY_NUMBER_SINGLE',
         status: classifyConfidence(90, config),
-        notes: `Single CRM policy matched by policy number "${input.policyNumber}"${narrowSuffix}`,
-      };
+        notes: `Single CRM policy matched by policy number "${inputPolicyNumber}"${narrowSuffix}`,
+      });
     }
 
     // Tier 6: Multi-match disambiguation
@@ -760,9 +864,9 @@ export const matchRow = (
 
         score += nameScore * 20;
 
-        const leadDob = p['lead.dateOfBirth'];
+        const leadDob = normalizeDateOnly(p['lead.dateOfBirth']);
 
-        if (input.memberDob && leadDob && input.memberDob === leadDob) {
+        if (inputDob && leadDob && inputDob === leadDob) {
           score += 10;
         }
 
@@ -798,37 +902,84 @@ export const matchRow = (
       datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
     );
 
-    for (const p of npnMatches) {
-      const nameScore = memberNameScore(
-        input.memberFirstName,
-        input.memberLastName,
-        p['lead.name.firstName'],
-        p['lead.name.lastName'],
+    // The NPN covers the whole agency book and the date filter spans the
+    // enrollment window, so many members can qualify. Score ALL candidates
+    // and pick the best name match (deterministic tie-break: higher score,
+    // then exact DOB corroboration, then lowest policy id) — first-match-
+    // wins attached one member's BOB data to a near-name neighbor's policy.
+    const scored = npnMatches
+      .map((p) => ({
+        policy: p,
+        nameScore: memberNameScore(
+          input.memberFirstName,
+          input.memberLastName,
+          p['lead.name.firstName'],
+          p['lead.name.lastName'],
+        ),
+        dobConfirmed:
+          inputDob !== null &&
+          normalizeDateOnly(p['lead.dateOfBirth']) === inputDob,
+      }))
+      .filter((c) => c.nameScore >= config.tier7MinNameScore)
+      .sort(
+        (a, b) =>
+          b.nameScore - a.nameScore ||
+          Number(b.dobConfirmed) - Number(a.dobConfirmed) ||
+          a.policy.id.localeCompare(b.policy.id),
       );
 
-      if (nameScore >= config.tier7MinNameScore) {
-        // Dynamic confidence based on name quality:
-        // NPN confirms same agent, date confirms same enrollment window.
-        // Name similarity is the remaining signal — high similarity means
-        // this is almost certainly the same person.
-        const bands = config.tier7NameBands;
-        const scores = config.tier7ConfidenceScores;
-        const confidence =
-          nameScore >= bands.high
-            ? scores.high
-            : nameScore >= bands.medium
-              ? scores.medium
-              : scores.low;
+    if (scored.length > 0) {
+      const best = scored[0];
+      const runnerUp = scored.length > 1 ? scored[1] : null;
 
+      // Dynamic confidence based on name quality:
+      // NPN confirms same agent, date confirms same enrollment window.
+      // Name similarity is the remaining signal — high similarity means
+      // this is almost certainly the same person.
+      const bands = config.tier7NameBands;
+      const bandScores = config.tier7ConfidenceScores;
+      let confidence =
+        best.nameScore >= bands.high
+          ? bandScores.high
+          : best.nameScore >= bands.medium
+            ? bandScores.medium
+            : bandScores.low;
+
+      // memberDob corroboration: NPN + enrollment window + name similarity
+      // + exact DOB is strong identity evidence — lift the confidence to
+      // at least the medium band.
+      if (best.dobConfirmed) {
+        confidence = Math.max(confidence, bandScores.medium);
+      }
+
+      const tied =
+        runnerUp !== null &&
+        Math.abs(best.nameScore - runnerUp.nameScore) < TIER7_TIE_EPSILON;
+      const dobBreaksTie =
+        best.dobConfirmed && runnerUp?.dobConfirmed === false;
+
+      if (tied && !dobBreaksTie) {
+        // Two candidates the engine cannot tell apart (same name score, DOB
+        // doesn't single one out) — never auto-attach one member's BOB data
+        // to a same-named neighbor's policy.
         return {
-          crmPolicyId: p.id,
-          crmPolicyNumber: p.policyNumber,
-          confidence,
+          crmPolicyId: best.policy.id,
+          crmPolicyNumber: best.policy.policyNumber,
+          confidence: Math.min(confidence, config.autoMatchThreshold - 1),
           method: 'NPN_DATE_NAME',
-          status: classifyConfidence(confidence, config),
-          notes: `NPN-based match: broker NPN ${input.agentNpn}, name similarity ${nameScore.toFixed(2)}, effective date within ${tolerance} days`,
+          status: 'NEEDS_REVIEW',
+          notes: `NPN-based match ambiguous: top candidates tied on name similarity ${best.nameScore.toFixed(2)} (broker NPN ${input.agentNpn}, ${scored.length} candidates above threshold) with no DOB tie-breaker — picked lowest policy id, needs review`,
         };
       }
+
+      return {
+        crmPolicyId: best.policy.id,
+        crmPolicyNumber: best.policy.policyNumber,
+        confidence,
+        method: 'NPN_DATE_NAME',
+        status: classifyConfidence(confidence, config),
+        notes: `NPN-based match: broker NPN ${input.agentNpn}, name similarity ${best.nameScore.toFixed(2)}${best.dobConfirmed ? ', DOB corroborated' : ''}, effective date within ${tolerance} days (best of ${scored.length} candidate${scored.length === 1 ? '' : 's'} above threshold)`,
+      };
     }
   }
 
@@ -837,36 +988,48 @@ export const matchRow = (
     isTierEnabled('NAME_DOB_DATE', config) &&
     input.memberFirstName &&
     input.memberLastName &&
-    input.memberDob &&
+    inputDob &&
     input.effectiveDate
   ) {
-    const dobCandidates = indexes.policyByDob.get(input.memberDob) ?? [];
+    const dobCandidates = indexes.policyByDob.get(inputDob) ?? [];
 
-    for (const p of dobCandidates) {
-      const leadDob = p['lead.dateOfBirth'];
-
-      if (leadDob && leadDob === input.memberDob) {
-        const nameScore = memberNameScore(
+    // Same best-of selection as Tier 7: multiple leads can share a DOB, so
+    // score every candidate instead of returning the first one above the
+    // threshold (deterministic tie-break: higher name score, then lowest
+    // policy id). DOB comparison is normalized to 'YYYY-MM-DD' on both
+    // sides so ISO-timestamp CRM values still match plain dates.
+    const qualified = dobCandidates
+      .filter(
+        (p) =>
+          normalizeDateOnly(p['lead.dateOfBirth']) === inputDob &&
+          datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
+      )
+      .map((p) => ({
+        policy: p,
+        nameScore: memberNameScore(
           input.memberFirstName,
           input.memberLastName,
           p['lead.name.firstName'],
           p['lead.name.lastName'],
-        );
+        ),
+      }))
+      .filter((c) => c.nameScore >= config.nameMatchThreshold)
+      .sort(
+        (a, b) =>
+          b.nameScore - a.nameScore || a.policy.id.localeCompare(b.policy.id),
+      );
 
-        if (
-          nameScore >= config.nameMatchThreshold &&
-          datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance)
-        ) {
-          return {
-            crmPolicyId: p.id,
-            crmPolicyNumber: p.policyNumber,
-            confidence: 60,
-            method: 'NAME_DOB_DATE',
-            status: classifyConfidence(60, config),
-            notes: `Identity-based match: name similarity ${nameScore.toFixed(2)}, DOB ${input.memberDob} exact match, effective date within ${tolerance} days`,
-          };
-        }
-      }
+    if (qualified.length > 0) {
+      const best = qualified[0];
+
+      return {
+        crmPolicyId: best.policy.id,
+        crmPolicyNumber: best.policy.policyNumber,
+        confidence: 60,
+        method: 'NAME_DOB_DATE',
+        status: classifyConfidence(60, config),
+        notes: `Identity-based match: name similarity ${best.nameScore.toFixed(2)}, DOB ${inputDob} exact match, effective date within ${tolerance} days (best of ${qualified.length} candidate${qualified.length === 1 ? '' : 's'} above threshold)`,
+      };
     }
   }
 
@@ -875,7 +1038,7 @@ export const matchRow = (
 
   if (policyNumberMatches.length > 0) {
     candidates.push(
-      `${policyNumberMatches.length} policies share policy number "${input.policyNumber}" but could not be disambiguated`,
+      `${policyNumberMatches.length} policies share policy number "${inputPolicyNumber}" but could not be disambiguated`,
     );
   }
 
@@ -888,6 +1051,6 @@ export const matchRow = (
     notes:
       candidates.length > 0
         ? `Unmatched. ${candidates.join('. ')}`
-        : `No CRM policy found for carrier policy "${input.policyNumber}"`,
+        : `No CRM policy found for carrier policy "${inputPolicyNumber}"`,
   };
 };

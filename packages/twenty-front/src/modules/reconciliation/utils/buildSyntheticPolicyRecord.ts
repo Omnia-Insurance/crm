@@ -1,5 +1,13 @@
 import type { ObjectRecord } from '@/object-record/types/ObjectRecord';
 
+import {
+  invertColumnMapping,
+  resolveBobValue,
+  type ColumnMapping,
+  type ComputedFieldDef,
+  type CrmFieldLookup,
+} from '@/reconciliation/utils/invertColumnMapping';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -10,14 +18,6 @@ type ProductMappingEntry = {
   productName: string;
 };
 
-type ColumnMappingEntry = {
-  crmField: string;
-  fieldType: string;
-  fieldKey: string;
-};
-
-type ColumnMapping = Record<string, ColumnMappingEntry>;
-
 type ResolvedRelations = {
   product: { id: string; name: string } | null;
   carrier: { id: string; name: string } | null;
@@ -27,6 +27,8 @@ type ResolvedRelations = {
 type BuildInput = {
   bobSnapshot: Record<string, unknown>;
   columnMapping: ColumnMapping | null;
+  /** Computed-field defs from carrierConfig.fieldConfig (outputKey → crmField) */
+  computedFields?: ComputedFieldDef[] | null;
   resolvedRelations: ResolvedRelations;
   derivedStatus: string | null;
   ltvAmountMicros: number | null;
@@ -58,21 +60,6 @@ export const resolveProductFromPlanName = (
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Invert columnMapping: group BOB snapshot keys by their CRM object type. */
-const buildCrmFieldLookup = (
-  columnMapping: ColumnMapping,
-): Map<string, { bobKey: string; fieldType: string }> => {
-  const lookup = new Map<string, { bobKey: string; fieldType: string }>();
-
-  for (const [bobKey, entry] of Object.entries(columnMapping)) {
-    if (entry.crmField) {
-      lookup.set(entry.crmField, { bobKey, fieldType: entry.fieldType });
-    }
-  }
-
-  return lookup;
-};
 
 /** Convert a dollar amount (e.g., "1234.67" or 1234.67) to amountMicros. */
 const toCurrencyMicros = (
@@ -136,18 +123,30 @@ export const normalizePaidThroughDateForEffectiveDate = (
  * Derive a policy status from BOB fields. Mirrors the Ambetter status engine:
  * eligible=false → CANCELED, term past → CANCELED, otherwise compute from
  * effective↔paidThrough gap and current-month payment coverage.
+ *
+ * Pass the inverted columnMapping `lookup` so date fields resolve through the
+ * carrier's actual headers; without it the legacy Ambetter literals apply.
  */
 export const deriveStatusFromBob = (
   snapshot: Record<string, unknown>,
+  lookup?: CrmFieldLookup,
 ): string => {
+  const resolve = (crmField: string, legacyKeys: string[]) =>
+    resolveBobValue(snapshot, lookup ?? new Map(), crmField, legacyKeys);
+
+  // 'Eligible for Commission' is a status-engine input role, not a CRM field,
+  // so it has no columnMapping entry to invert — the parsed-row key from the
+  // Ambetter export is the only handle the client has on it.
   const eligible = snapshot.eligible_for_commission;
-  const termDate = parseDate(snapshot.policy_term_date);
-  const effectiveDate =
-    parseDate(snapshot['True Effective Date']) ??
-    parseDate(snapshot.policy_effective_date);
+  const termDate = parseDate(resolve('expirationDate', ['policy_term_date']));
+  const effectiveDateRaw = resolve('effectiveDate', [
+    'True Effective Date',
+    'policy_effective_date',
+  ]);
+  const effectiveDate = parseDate(effectiveDateRaw);
   const normalizedPaidThroughDate = normalizePaidThroughDateForEffectiveDate(
-    snapshot.paid_through_date,
-    snapshot['True Effective Date'] ?? snapshot.policy_effective_date,
+    resolve('paidThroughDate', ['paid_through_date']),
+    effectiveDateRaw,
   );
   const paidThroughDate = parseDate(normalizedPaidThroughDate);
   const now = new Date();
@@ -208,6 +207,7 @@ export const deriveStatusFromBob = (
 export const buildSyntheticPolicyRecord = ({
   bobSnapshot,
   columnMapping,
+  computedFields,
   resolvedRelations,
   derivedStatus,
   ltvAmountMicros,
@@ -215,28 +215,35 @@ export const buildSyntheticPolicyRecord = ({
   tempLeadId,
 }: BuildInput): { policy: ObjectRecord; lead: ObjectRecord } => {
   const snap = bobSnapshot;
-  const crmLookup = columnMapping
-    ? buildCrmFieldLookup(columnMapping)
-    : new Map();
+  const crmLookup = invertColumnMapping(columnMapping, computedFields);
 
-  // Helper: get BOB value for a CRM field path
-  const val = (crmField: string): unknown => {
-    const entry = crmLookup.get(crmField);
-
-    return entry ? (snap[entry.bobKey] ?? null) : null;
-  };
+  // Helper: get BOB value for a CRM field path, with legacy Ambetter header
+  // literals as the last resort (only when the mapping has no entry — see
+  // resolveBobValue for the rationale).
+  const val = (crmField: string, legacyKeys: string[] = []): unknown =>
+    resolveBobValue(snap, crmLookup, crmField, legacyKeys);
 
   // ── Lead (person) ──
 
   const firstName = String(
-    snap.inusred_first_name ?? snap.insured_first_name ?? '',
+    val('lead.name.firstName', [
+      // 'inusred' is Ambetter's own header typo, preserved verbatim
+      'inusred_first_name',
+      'insured_first_name',
+    ]) ?? '',
   );
-  const lastName = String(snap.insured_last_name ?? '');
-  const email = String(val('lead.emails.primaryEmail') ?? '');
-  const phone = String(val('lead.phones.primaryPhoneNumber') ?? '');
-  const dob = val('lead.dateOfBirth') ?? null;
+  const lastName = String(
+    val('lead.name.lastName', ['insured_last_name']) ?? '',
+  );
+  const email = String(
+    val('lead.emails.primaryEmail', ['member_email']) ?? '',
+  );
+  const phone = String(
+    val('lead.phones.primaryPhoneNumber', ['member_phone_number']) ?? '',
+  );
+  const dob = val('lead.dateOfBirth', ['member_date_of_birth']) ?? null;
   const state = String(
-    val('lead.addressCustom.addressState') ?? snap.state ?? '',
+    val('lead.addressCustom.addressState', ['state']) ?? '',
   );
 
   const lead: ObjectRecord = {
@@ -266,21 +273,28 @@ export const buildSyntheticPolicyRecord = ({
 
   // ── Policy ──
 
-  const policyNumber = String(val('policyNumber') ?? snap.policy_number ?? '');
+  const policyNumber = String(val('policyNumber', ['policy_number']) ?? '');
+  // effectiveDate resolves the computed output key (e.g. Ambetter's
+  // 'True Effective Date') ahead of the raw mapped column when the snapshot
+  // carries it — same precedence the server diff engine uses.
   const effectiveDate =
-    val('effectiveDate') ?? snap['True Effective Date'] ?? null;
-  const expirationDate = val('expirationDate') ?? null;
+    val('effectiveDate', ['True Effective Date', 'policy_effective_date']) ??
+    null;
+  const expirationDate = val('expirationDate', ['policy_term_date']) ?? null;
   const paidThroughDate = normalizePaidThroughDateForEffectiveDate(
-    val('paidThroughDate'),
+    val('paidThroughDate', ['paid_through_date']),
     effectiveDate,
   );
   const applicantCount = Number(
-    val('applicantCount') ?? snap.number_of_members ?? 0,
+    val('applicantCount', ['number_of_members']) ?? 0,
   );
   const premium = toCurrencyMicros(
-    val('premium.amountMicros') ??
-      snap.member_responsibility ??
-      snap.monthly_premium_amount,
+    val('premium.amountMicros', [
+      // member_responsibility is the member's out-of-pocket (post-subsidy)
+      // amount — preferred over the gross monthly premium, as before.
+      'member_responsibility',
+      'monthly_premium_amount',
+    ]),
   );
 
   // Policy display name follows CRM convention: "Carrier - Product"
@@ -301,7 +315,7 @@ export const buildSyntheticPolicyRecord = ({
     paidThroughDate: paidThroughDate ?? null,
     applicantCount: applicantCount || null,
     premium: premium ?? { amountMicros: null, currencyCode: 'USD' },
-    status: derivedStatus ?? deriveStatusFromBob(snap),
+    status: derivedStatus ?? deriveStatusFromBob(snap, crmLookup),
     // Relations — nested objects for display
     product: resolvedRelations.product ?? null,
     productId: resolvedRelations.product?.id ?? null,

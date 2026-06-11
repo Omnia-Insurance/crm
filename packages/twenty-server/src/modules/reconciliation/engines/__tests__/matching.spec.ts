@@ -6,6 +6,8 @@ import {
   memberNameScore,
   datesWithinDays,
   isValidAmbetterPolicyNumber,
+  normalizeDateOnly,
+  normalizePolicyNumber,
   selectByActiveStatus,
   selectByActiveTerm,
   selectByMostRecentEffectiveDate,
@@ -83,6 +85,56 @@ describe('matching engine', () => {
     it('handles nulls', () => {
       expect(agentNameMatches(null, 'Omnia')).toBe(false);
       expect(agentNameMatches('Omnia', null)).toBe(false);
+    });
+
+    // 3.5: suffix-only names normalize to '' and the substring fallback
+    // ('anything'.includes('')) matched every broker.
+    it('rejects names that normalize to empty (suffix/punctuation only)', () => {
+      expect(agentNameMatches('LLC', 'Omnia Insurance')).toBe(false);
+      expect(agentNameMatches('Omnia Insurance', 'Inc.')).toBe(false);
+      expect(agentNameMatches('Co.', 'Co.')).toBe(false);
+    });
+
+    it('rejects names shorter than 3 chars after normalization', () => {
+      expect(agentNameMatches('AB', 'AB Insurance Brokers')).toBe(false);
+      expect(agentNameMatches('AB Insurance Brokers', 'AB LLC')).toBe(false);
+    });
+  });
+
+  describe('normalizePolicyNumber', () => {
+    it('trims and uppercases', () => {
+      expect(normalizePolicyNumber(' u94692964 ')).toBe('U94692964');
+      expect(normalizePolicyNumber('U94692964')).toBe('U94692964');
+    });
+
+    it('returns null for null/empty/whitespace', () => {
+      expect(normalizePolicyNumber(null)).toBeNull();
+      expect(normalizePolicyNumber('')).toBeNull();
+      expect(normalizePolicyNumber('   ')).toBeNull();
+    });
+  });
+
+  describe('normalizeDateOnly', () => {
+    it('passes through plain YYYY-MM-DD dates', () => {
+      expect(normalizeDateOnly('1990-05-15')).toBe('1990-05-15');
+    });
+
+    it('strips the time component from ISO timestamps without TZ math', () => {
+      expect(normalizeDateOnly('1990-05-15T00:00:00.000Z')).toBe('1990-05-15');
+      expect(normalizeDateOnly('1990-05-15 00:00:00')).toBe('1990-05-15');
+    });
+
+    it('formats Date instances as UTC date-only', () => {
+      expect(normalizeDateOnly(new Date(Date.UTC(1990, 4, 15)))).toBe(
+        '1990-05-15',
+      );
+    });
+
+    it('returns null for null/empty/garbage', () => {
+      expect(normalizeDateOnly(null)).toBeNull();
+      expect(normalizeDateOnly(undefined)).toBeNull();
+      expect(normalizeDateOnly('')).toBeNull();
+      expect(normalizeDateOnly('not a date')).toBeNull();
     });
   });
 
@@ -449,12 +501,24 @@ describe('matching engine', () => {
 
         expect(result.crmPolicyId).toBe('policy-feb');
         expect(result.notes).toContain('most recent effective date');
+        // 3.4: recency narrowing is an ops heuristic, not an identifier
+        // match — it must carry its own method and stay out of auto-match
+        // (it previously inherited POLICY_NUMBER_* methods at 85-98).
+        expect(result.method).toBe('POLICY_NUMBER_NARROWED_RECENT');
+        expect(result.status).toBe('NEEDS_REVIEW');
+        expect(result.confidence).toBeLessThan(
+          DEFAULT_MATCHING_CONFIG.autoMatchThreshold,
+        );
       });
 
       it('falls back to weighted multi-match when effective dates tie', () => {
         const indexes = buildMatchIndexes([
           { ...canceledJanTerm, effectiveDate: '2026-01-01' },
-          { ...canceledFebTerm, id: 'policy-twin', effectiveDate: '2026-01-01' },
+          {
+            ...canceledFebTerm,
+            id: 'policy-twin',
+            effectiveDate: '2026-01-01',
+          },
         ]);
         const row = makeMatchInput({
           effectiveDate: '2026-01-01',
@@ -495,6 +559,424 @@ describe('matching engine', () => {
         expect(result.crmPolicyId).toBe('policy-jan');
         expect(result.notes).toContain('active status');
       });
+
+      // 3.4 regression: when neither narrowing strategy applies (both
+      // candidates live, no paid-through/date/agent evidence), the engine
+      // must refuse to guess — recency previously narrowed to the newer
+      // record and Tier 5 auto-matched it at 90.
+      it('two non-terminal same-number policies with no narrowing inputs land in NEEDS_REVIEW, not auto-match', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-old',
+            effectiveDate: '2026-01-01',
+            status: 'ACTIVE_PLACED',
+          }),
+          makePolicy({
+            id: 'policy-new',
+            effectiveDate: '2026-02-01',
+            status: 'ACTIVE_PLACED',
+          }),
+        ]);
+        const row = makeMatchInput({
+          effectiveDate: null,
+          paidThroughDate: null,
+          agentName: null,
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_MULTI_BEST');
+        expect(result.status).toBe('NEEDS_REVIEW');
+        expect(result.confidence).toBeLessThan(
+          DEFAULT_MATCHING_CONFIG.autoMatchThreshold,
+        );
+      });
+    });
+
+    // 3.3: CRM policy numbers are hand-entered; case/whitespace variants
+    // previously missed the policyByNumber Map and fell to NPN/name tiers
+    // or UNMATCHED (inviting duplicate CRM records).
+    describe('policy number normalization', () => {
+      it('matches a lower-cased, padded CRM policy number against the BOB row', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({ policyNumber: ' u94692964 ' }),
+        ]);
+        const row = makeMatchInput({ policyNumber: 'U94692964' });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
+        expect(result.crmPolicyId).toBe('policy-1');
+      });
+
+      it('matches a lower-cased BOB policy number against the CRM record', () => {
+        const indexes = buildMatchIndexes([makePolicy()]);
+        const row = makeMatchInput({ policyNumber: 'u94692964' });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
+        expect(result.crmPolicyId).toBe('policy-1');
+      });
+
+      it('compares override carrier policy numbers normalized', () => {
+        const indexes = buildMatchIndexes([makePolicy()]);
+        const row = makeMatchInput({ policyNumber: 'U94692964' });
+        const overrides = [
+          {
+            carrierPolicyNumber: ' u94692964',
+            carrierName: 'Ambetter',
+            crmPolicyId: 'policy-1',
+            isActive: true,
+          },
+        ];
+
+        const result = matchRow(
+          row,
+          indexes,
+          overrides,
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('OVERRIDE');
+        expect(result.crmPolicyId).toBe('policy-1');
+      });
+    });
+
+    // 3.6: Tier 6's DOB bonus must compare normalized dates — an ISO
+    // timestamp on the CRM side previously never earned the +10.
+    it('Tier 6: DOB bonus fires for ISO-timestamp CRM DOBs (normalized comparison)', () => {
+      const indexes = buildMatchIndexes([
+        makePolicy({
+          id: 'policy-wrong-dob',
+          effectiveDate: '2025-06-01',
+          'lead.dateOfBirth': '1985-01-01',
+        }),
+        makePolicy({
+          id: 'policy-iso-dob',
+          effectiveDate: '2025-06-01',
+          'lead.dateOfBirth': '1990-05-15T00:00:00.000Z',
+        }),
+      ]);
+      // No date proximity (BOB date far from both), no agent signal, equal
+      // names — only the DOB bonus separates the candidates.
+      const row = makeMatchInput({
+        effectiveDate: '2026-01-01',
+        agentName: null,
+        memberDob: '1990-05-15',
+      });
+
+      const result = matchRow(
+        row,
+        indexes,
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+      );
+
+      expect(result.method).toBe('POLICY_NUMBER_MULTI_BEST');
+      expect(result.crmPolicyId).toBe('policy-iso-dob');
+    });
+
+    // 3.1: Tier 7 previously returned the FIRST candidate above the name
+    // threshold in index order — the NPN keys an entire agency book, so
+    // near-name neighbors could shadow the actual member.
+    describe('Tier 7 (NPN + date + name) best-candidate selection', () => {
+      // policyNumber null so the policy-number tiers are skipped entirely.
+      const tier7Input = (overrides: Partial<MatchInput> = {}): MatchInput =>
+        makeMatchInput({ policyNumber: null, ...overrides });
+
+      it('picks the exact-name candidate even when a fuzzy near-name candidate comes first', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-fuzzy',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Josue',
+            'lead.name.lastName': 'Garcia',
+            'lead.dateOfBirth': '1980-01-01',
+          }),
+          makePolicy({
+            id: 'policy-exact',
+            policyNumber: 'U2',
+            'lead.name.firstName': 'Jose',
+            'lead.name.lastName': 'Garcia',
+            'lead.dateOfBirth': '1985-02-02',
+          }),
+        ]);
+        const row = tier7Input({
+          memberFirstName: 'Jose',
+          memberLastName: 'Garcia',
+          memberDob: null,
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NPN_DATE_NAME');
+        expect(result.crmPolicyId).toBe('policy-exact');
+        expect(result.status).toBe('AUTO_MATCHED');
+      });
+
+      it('demotes to NEEDS_REVIEW when the top two candidates tie with no DOB tie-breaker', () => {
+        const indexes = buildMatchIndexes([
+          // Reverse id order on purpose: the deterministic tie-break must
+          // pick the lowest id regardless of index order.
+          makePolicy({
+            id: 'policy-b',
+            policyNumber: 'U2',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1980-01-01',
+          }),
+          makePolicy({
+            id: 'policy-a',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1975-06-06',
+          }),
+        ]);
+        const row = tier7Input({
+          memberFirstName: 'Maria',
+          memberLastName: 'Rodriguez',
+          memberDob: '1999-09-09', // matches neither candidate
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NPN_DATE_NAME');
+        expect(result.status).toBe('NEEDS_REVIEW');
+        expect(result.confidence).toBeLessThan(
+          DEFAULT_MATCHING_CONFIG.autoMatchThreshold,
+        );
+        expect(result.crmPolicyId).toBe('policy-a');
+        expect(result.notes).toContain('tied');
+      });
+
+      it('uses exact DOB to break a name-score tie', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-a',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1975-06-06',
+          }),
+          makePolicy({
+            id: 'policy-b',
+            policyNumber: 'U2',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1980-01-01',
+          }),
+        ]);
+        const row = tier7Input({
+          memberFirstName: 'Maria',
+          memberLastName: 'Rodriguez',
+          memberDob: '1980-01-01', // singles out policy-b
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NPN_DATE_NAME');
+        expect(result.crmPolicyId).toBe('policy-b');
+        expect(result.status).toBe('AUTO_MATCHED');
+        expect(result.notes).toContain('DOB corroborated');
+      });
+
+      it('stays NEEDS_REVIEW when candidates tie and BOTH match the input DOB (likely duplicate leads)', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-a',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1980-01-01',
+          }),
+          makePolicy({
+            id: 'policy-b',
+            policyNumber: 'U2',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Rodriguez',
+            'lead.dateOfBirth': '1980-01-01',
+          }),
+        ]);
+        const row = tier7Input({
+          memberFirstName: 'Maria',
+          memberLastName: 'Rodriguez',
+          memberDob: '1980-01-01',
+        });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.status).toBe('NEEDS_REVIEW');
+        expect(result.crmPolicyId).toBe('policy-a');
+      });
+
+      it('boosts a low-band name score into auto-match when DOB corroborates', () => {
+        // 'Mario Lopes' vs 'Maria Lopez' scores ~0.92: above the 0.85 floor
+        // but below the 0.93 medium band → confidence 65 (NEEDS_REVIEW)
+        // on name alone.
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-1',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Maria',
+            'lead.name.lastName': 'Lopez',
+            'lead.dateOfBirth': '1990-05-15',
+          }),
+        ]);
+        const withDob = matchRow(
+          tier7Input({
+            memberFirstName: 'Mario',
+            memberLastName: 'Lopes',
+            memberDob: '1990-05-15',
+          }),
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+        const withoutDob = matchRow(
+          tier7Input({
+            memberFirstName: 'Mario',
+            memberLastName: 'Lopes',
+            memberDob: null,
+          }),
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(withoutDob.method).toBe('NPN_DATE_NAME');
+        expect(withoutDob.confidence).toBe(
+          DEFAULT_MATCHING_CONFIG.tier7ConfidenceScores.low,
+        );
+        expect(withoutDob.status).toBe('NEEDS_REVIEW');
+
+        expect(withDob.method).toBe('NPN_DATE_NAME');
+        expect(withDob.confidence).toBe(
+          DEFAULT_MATCHING_CONFIG.tier7ConfidenceScores.medium,
+        );
+        expect(withDob.status).toBe('AUTO_MATCHED');
+        expect(withDob.notes).toContain('DOB corroborated');
+      });
+    });
+
+    // 3.1: Tier 8 had the same first-match-wins pattern; 3.6: the DOB index
+    // and re-check must normalize ISO timestamps to plain dates.
+    describe('Tier 8 (name + DOB + date) best-candidate selection', () => {
+      // policyNumber and agentNpn null so Tiers 1-7 are skipped.
+      const tier8Input = (overrides: Partial<MatchInput> = {}): MatchInput =>
+        makeMatchInput({ policyNumber: null, agentNpn: null, ...overrides });
+
+      it('picks the best-name candidate among several sharing a DOB, not the first', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            id: 'policy-fuzzy',
+            policyNumber: 'U1',
+            'lead.name.firstName': 'Jon',
+          }),
+          makePolicy({ id: 'policy-exact', policyNumber: 'U2' }),
+        ]);
+        const row = tier8Input();
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NAME_DOB_DATE');
+        expect(result.crmPolicyId).toBe('policy-exact');
+        expect(result.confidence).toBe(60);
+        expect(result.status).toBe('NEEDS_REVIEW');
+      });
+
+      it('breaks exact ties by lowest policy id regardless of index order', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({ id: 'policy-b', policyNumber: 'U2' }),
+          makePolicy({ id: 'policy-a', policyNumber: 'U1' }),
+        ]);
+        const row = tier8Input();
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NAME_DOB_DATE');
+        expect(result.crmPolicyId).toBe('policy-a');
+      });
+
+      it('matches when the CRM DOB is an ISO timestamp (3.6)', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            policyNumber: 'U1',
+            'lead.dateOfBirth': '1990-05-15T00:00:00.000Z',
+          }),
+        ]);
+        const row = tier8Input({ memberDob: '1990-05-15' });
+
+        const result = matchRow(
+          row,
+          indexes,
+          [],
+          'Ambetter',
+          DEFAULT_MATCHING_CONFIG,
+        );
+
+        expect(result.method).toBe('NAME_DOB_DATE');
+        expect(result.crmPolicyId).toBe('policy-1');
+      });
     });
   });
 
@@ -515,19 +997,14 @@ describe('matching engine', () => {
       expect(winner?.id).toBe('p-active');
     });
 
-    it.each([
-      'CANCELED',
-      'PAYMENT_ERROR_CANCELED',
-      'DECLINED',
-      'INCOMPLETE',
-    ])('treats %s as terminal', (status) => {
-      const winner = selectByActiveStatus([
-        cancelled({ status }),
-        active(),
-      ]);
+    it.each(['CANCELED', 'PAYMENT_ERROR_CANCELED', 'DECLINED', 'INCOMPLETE'])(
+      'treats %s as terminal',
+      (status) => {
+        const winner = selectByActiveStatus([cancelled({ status }), active()]);
 
-      expect(winner?.id).toBe('p-active');
-    });
+        expect(winner?.id).toBe('p-active');
+      },
+    );
 
     it('returns null when all candidates are terminal', () => {
       expect(
@@ -540,10 +1017,7 @@ describe('matching engine', () => {
 
     it('returns null when more than one candidate is non-terminal', () => {
       expect(
-        selectByActiveStatus([
-          active({ id: 'a' }),
-          active({ id: 'b' }),
-        ]),
+        selectByActiveStatus([active({ id: 'a' }), active({ id: 'b' })]),
       ).toBeNull();
     });
 
@@ -637,10 +1111,23 @@ describe('matching engine', () => {
   });
 
   describe('selectByMostRecentEffectiveDate', () => {
+    // Fixtures are terminal-status: since item 3.4 the recency heuristic is
+    // restricted to all-terminal candidate sets (the both-canceled case that
+    // motivated it). Earlier versions of these tests used the default
+    // ACTIVE_PLACED status, encoding the buggy behavior where recency could
+    // preempt date/agent evidence between live policies.
     const older = (): CrmPolicy =>
-      makePolicy({ id: 'p-older', effectiveDate: '2026-01-01' });
+      makePolicy({
+        id: 'p-older',
+        effectiveDate: '2026-01-01',
+        status: 'CANCELED',
+      });
     const newer = (): CrmPolicy =>
-      makePolicy({ id: 'p-newer', effectiveDate: '2026-02-01' });
+      makePolicy({
+        id: 'p-newer',
+        effectiveDate: '2026-02-01',
+        status: 'PAYMENT_ERROR_CANCELED',
+      });
 
     it('returns null when fewer than 2 candidates (no need to narrow)', () => {
       expect(selectByMostRecentEffectiveDate([newer()])).toBeNull();
@@ -651,6 +1138,22 @@ describe('matching engine', () => {
       const winner = selectByMostRecentEffectiveDate([older(), newer()]);
 
       expect(winner?.id).toBe('p-newer');
+    });
+
+    it('returns null when any candidate is non-terminal (heuristic restricted to all-terminal sets)', () => {
+      expect(
+        selectByMostRecentEffectiveDate([
+          older(),
+          { ...newer(), status: 'ACTIVE_PLACED' },
+        ]),
+      ).toBeNull();
+      // Missing status counts as non-terminal (legacy data).
+      expect(
+        selectByMostRecentEffectiveDate([
+          older(),
+          { ...newer(), status: null },
+        ]),
+      ).toBeNull();
     });
 
     it('returns null when the latest effective date is tied', () => {

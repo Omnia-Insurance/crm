@@ -94,6 +94,12 @@ const STANDARD_PERMISSION_FLAG_METADATA: Record<
     description: 'Create and configure AI agents',
     icon: 'IconSparkles',
   },
+  // OMNIA-CUSTOM: gates the reconciliation pipeline mutations
+  [PermissionFlagType.RECONCILIATION]: {
+    label: 'Reconciliation',
+    description: 'Run carrier reconciliation and apply review decisions',
+    icon: 'IconReportMoney',
+  },
   [PermissionFlagType.AI]: {
     label: 'Ask AI',
     description: 'Chat with AI agents and use AI features',

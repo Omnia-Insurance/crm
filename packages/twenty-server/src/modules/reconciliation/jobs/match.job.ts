@@ -12,13 +12,18 @@ import {
   buildMatchIndexes,
   buildMatchInputFromMapping,
   matchRow,
-  DEFAULT_MATCHING_CONFIG,
   type MatchingConfig,
+  type Override,
 } from 'src/modules/reconciliation/engines/matching';
 import {
+  buildBrokerEffAuditInput,
   buildStatusInputFromMapping,
+  deriveBrokerEffAudit,
   deriveStatus,
   getCancelExpireDate,
+  isKnownStatusEngine,
+  resolveEffectiveDateHeader,
+  STATUS_ENGINE_IDS,
   type OmniaStatus,
   type StatusEngineConfig,
 } from 'src/modules/reconciliation/engines/status';
@@ -26,22 +31,23 @@ import {
   deriveCategory,
   deriveFlags,
 } from 'src/modules/reconciliation/types/field-config';
+import { parseCarrierPipelineConfig } from 'src/modules/reconciliation/types/carrier-config';
 import { resolveFieldMapping } from 'src/modules/reconciliation/parsers/transforms';
 import { ReconciliationAttachmentService } from 'src/modules/reconciliation/services/attachment.service';
 import {
   buildPolicyForDiff,
   ReconciliationDataService,
 } from 'src/modules/reconciliation/services/data.service';
-import { ReconciliationStateMachineService } from 'src/modules/reconciliation/services/state-machine.service';
+import {
+  ReconciliationStateMachineService,
+  TransitionConflictError,
+} from 'src/modules/reconciliation/services/state-machine.service';
 import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
 import type {
   ColumnMapping,
   ReconciliationJobData,
-  StatusConfig,
   ComputedFieldDef,
 } from 'src/modules/reconciliation/types/reconciliation';
-
-const DEFAULT_START_DATE = '2025-07-09';
 
 type PendingItem = {
   row: Record<string, unknown>;
@@ -55,23 +61,24 @@ type PendingItem = {
   record: Record<string, unknown>;
 };
 
-type Override = {
-  carrierPolicyNumber: string;
-  carrierName: string;
-  crmPolicyId: string;
-  isActive: boolean;
-};
-
 /**
  * Bundled config + indexed data needed by every phase of the match job.
  * Built once by `loadMatchContext`; passed by reference to the per-row
  * loop, the dedup phase, and the diff-enrichment phase.
+ *
+ * Config fields come from the validated `parseCarrierPipelineConfig`
+ * boundary (types/carrier-config.ts) — no raw carrier-config casts here.
  */
 type MatchContext = {
   reconciliationId: string;
   carrierName: string;
-  parserId: string;
+  /** Validated against the engine registry in loadMatchContext (fail-fast). */
+  statusEngineId: string;
   matchingConfig: MatchingConfig;
+  /** Status-engine thresholds — read from statusConfig only (Phase 4.3). */
+  statusEngineConfig: StatusEngineConfig;
+  /** Effective-date cutoff; null = no cutoff (Phase 4.4). */
+  startDate: string | null;
   policyNumberPattern: RegExp | null;
   columnMapping: ColumnMapping;
   statusFieldMapping: Record<string, string>;
@@ -80,7 +87,11 @@ type MatchContext = {
   parsedRows: Record<string, unknown>[];
   matchIndexes: ReturnType<typeof buildMatchIndexes>;
   overrides: Override[];
+  /** THE row key for a BOB row's effective date — single resolution shared
+   *  by the start-date cutoff, dedup ordering, and cancel-expire stamping
+   *  (resolveEffectiveDateHeader, Phase 4.5). */
   effDateHeader: string | undefined;
+  policyNumberHeader: string | undefined;
 };
 
 @Processor({
@@ -105,11 +116,32 @@ export class ReconciliationMatchJob {
     this.logger.log(`Starting match for reconciliation ${reconciliationId}`);
 
     try {
+      // Status re-read guard (audit §"State machine is not compare-and-swap"):
+      // only a run currently in MATCHING — set by the orchestrator or the
+      // parse job's auto-chain just before enqueueing us — is ours to
+      // process. Anything else means a stale or duplicate delivery; exit
+      // cleanly so we never stomp a newer run's review items.
+      const reconciliation = await this.dataService.getReconciliation(
+        workspaceId,
+        reconciliationId,
+      );
+
+      if (reconciliation.status !== 'MATCHING') {
+        this.logger.warn(
+          `Skipping match job for reconciliation ${reconciliationId}: ` +
+            `status is ${reconciliation.status}, expected MATCHING (stale or duplicate delivery)`,
+        );
+
+        return;
+      }
+
       const ctx = await this.loadMatchContext(workspaceId, reconciliationId);
       const {
         carrierName,
-        parserId,
+        statusEngineId,
         matchingConfig,
+        statusEngineConfig,
+        startDate,
         policyNumberPattern,
         columnMapping,
         statusFieldMapping,
@@ -118,6 +150,7 @@ export class ReconciliationMatchJob {
         matchIndexes,
         overrides,
         effDateHeader,
+        policyNumberHeader,
       } = ctx;
       const policyNumberMap = matchIndexes.policyByNumber;
       const today = new Date();
@@ -132,19 +165,23 @@ export class ReconciliationMatchJob {
       let unmatched = 0;
       let confirmed = 0;
       let discrepanciesFound = 0;
+      let skippedBeforeStartDate = 0;
+      let skippedInvalidPolicyNumber = 0;
       const reviewItems: Record<string, unknown>[] = [];
       const pendingItems: PendingItem[] = [];
 
       for (let i = 0; i < parsedRows.length; i++) {
         const row = parsedRows[i] as Record<string, unknown>;
 
-        // Skip rows before the configured start date
-        const startDate = matchingConfig.startDate ?? DEFAULT_START_DATE;
+        // Skip rows before the per-carrier start-date cutoff (null = no
+        // cutoff). Counted into stats so operators can see why totals
+        // diverge from processed rows.
         const policyEffDate = effDateHeader
           ? (row[effDateHeader] as string | null)
           : null;
 
-        if (policyEffDate && policyEffDate < startDate) {
+        if (startDate && policyEffDate && policyEffDate < startDate) {
+          skippedBeforeStartDate++;
           continue;
         }
 
@@ -159,12 +196,14 @@ export class ReconciliationMatchJob {
             ),
         );
 
-        // Skip rows with invalid policy numbers (carrier-configurable pattern)
+        // Skip rows with invalid policy numbers (carrier-configurable
+        // pattern). Counted into stats — see skippedBeforeStartDate.
         if (
           policyNumberPattern &&
           matchInput.policyNumber &&
           !policyNumberPattern.test(matchInput.policyNumber)
         ) {
+          skippedInvalidPolicyNumber++;
           continue;
         }
 
@@ -195,18 +234,16 @@ export class ReconciliationMatchJob {
             ? (policyNumberMap.get(policyNumber) ?? [])
             : [];
 
-          const statusEngineConfig: StatusEngineConfig = {
-            placedThresholdDays: matchingConfig.placedThresholdDays ?? 30,
-            paymentErrorAgeDays: matchingConfig.paymentErrorAgeDays ?? 10,
-          };
-
           const statusInputData = buildStatusInputFromMapping(
             row,
             statusFieldMapping,
           );
 
+          // Engine id + thresholds come from the validated statusConfig
+          // boundary only (Phase 4.3 — no more matchingConfig duplicates /
+          // hardcoded 30/10 fallbacks).
           const statusResult = deriveStatus(
-            parserId,
+            statusEngineId,
             statusInputData,
             allPoliciesForNumber,
             today,
@@ -227,35 +264,31 @@ export class ReconciliationMatchJob {
 
         if (decision.status === 'UNMATCHED') {
           // --- UNMATCHED: create review item immediately ---
+          // Jackie's-rule audit notes come from the SAME implementation as
+          // deriveFlags' BROKER_EFF_AUDIT (deriveBrokerEffAudit, Phase 4.5),
+          // so note text and flag can no longer contradict each other. The
+          // old inline copy read statusFieldMapping.effectiveDate (Ambetter:
+          // the computed True Effective Date) while labeling it "broker
+          // eff", and skipped the brokerEff > policyEff precondition.
           let enrichedNotes = decision.notes;
-          const brokerEffDateKey =
-            statusFieldMapping.effectiveDate ?? 'effectiveDate';
-          const paidThruKey =
-            statusFieldMapping.paidThroughDate ?? 'paidThroughDate';
-          const eligibleKey =
-            statusFieldMapping.eligibleForCommission ?? 'eligibleForCommission';
-          const brokerEffDate = row[brokerEffDateKey] as string | null;
+          const auditInput = buildBrokerEffAuditInput(
+            row,
+            statusFieldMapping,
+            derivedStatus,
+          );
+          const audit = deriveBrokerEffAudit(auditInput);
 
-          if (brokerEffDate) {
-            const brokerEff = new Date(brokerEffDate);
-            const paidThruVal = row[paidThruKey];
-            const paidThru = paidThruVal
-              ? new Date(paidThruVal as string)
-              : null;
-            const oneDayBefore = new Date(brokerEff);
-
-            oneDayBefore.setDate(oneDayBefore.getDate() - 1);
-
-            if (row[eligibleKey] === false) {
-              enrichedNotes += '. CANCELED — flag for audit research';
-            } else if (
-              paidThru &&
-              paidThru.getTime() < oneDayBefore.getTime()
-            ) {
-              enrichedNotes += `. PAID BEFORE BROKER EFFECTIVE (paid thru ${paidThruVal}, broker eff ${brokerEffDate}) — flag for audit research`;
-            } else {
-              enrichedNotes += `. ACTIVE policy not in CRM (broker eff ${brokerEffDate}) — needs CRM record`;
-            }
+          if (audit.flagged) {
+            enrichedNotes += `. ${audit.reason} — flag for audit research`;
+          } else if (auditInput.eligibleForCommission === false) {
+            // Preserved special case from the pre-4.5 unmatched branch: an
+            // ineligible (carrier-canceled) row that does NOT meet Jackie's
+            // precondition (brokerEff > policyEff) is still worth calling
+            // out to reviewers — but it is informational, not an audit flag
+            // (the reviewed deriveFlags semantics require the precondition).
+            enrichedNotes += '. CANCELED in BOB — no CRM match';
+          } else if (auditInput.brokerEffectiveDate) {
+            enrichedNotes += `. ACTIVE policy not in CRM (broker eff ${auditInput.brokerEffectiveDate}) — needs CRM record`;
           }
 
           const unmatchedFlags = deriveFlags(
@@ -284,6 +317,12 @@ export class ReconciliationMatchJob {
             flags: unmatchedFlags.flags,
             flagReasons: unmatchedFlags.reasons,
             summary: '',
+            // First-class identity columns (audit 1.2): policy number is
+            // already resolved through columnMapping by
+            // buildMatchInputFromMapping — no snapshot key guessing later.
+            carrierPolicyNumber: matchInput.policyNumber ?? null,
+            carrierName,
+            cancelPreviousPolicyId,
           });
 
           unmatched++;
@@ -315,6 +354,12 @@ export class ReconciliationMatchJob {
               flags: [] as string[],
               flagReasons: {} as Record<string, string>,
               summary: '',
+              // First-class identity + cancel columns (audit 1.2). The
+              // snapshot keeps its __cancel* stamps for backward compat with
+              // items created before these columns existed.
+              carrierPolicyNumber: matchInput.policyNumber ?? null,
+              carrierName,
+              cancelPreviousPolicyId,
             },
           });
 
@@ -325,7 +370,7 @@ export class ReconciliationMatchJob {
 
       const dedupedItems = this.dedupPendingByPolicyId(
         pendingItems,
-        statusFieldMapping,
+        effDateHeader,
       );
 
       const enrichResult = await this.enrichAndDiffMatchedItems(
@@ -343,19 +388,34 @@ export class ReconciliationMatchJob {
         reconciliationId,
         reviewItems,
         carrierName,
+        policyNumberHeader,
         {
           totalBobRows: parsedRows.length,
           autoMatched,
           needsReview,
           unmatched,
           discrepanciesFound,
+          skippedBeforeStartDate,
+          skippedInvalidPolicyNumber,
         },
       );
 
       this.logger.log(
-        `Match complete for ${reconciliationId}: ${autoMatched} auto-matched, ${needsReview} needs review, ${unmatched} unmatched, ${confirmed} confirmed (skipped), ${discrepanciesFound} updates out of ${parsedRows.length}`,
+        `Match complete for ${reconciliationId}: ${autoMatched} auto-matched, ${needsReview} needs review, ${unmatched} unmatched, ${confirmed} confirmed (skipped), ${discrepanciesFound} updates out of ${parsedRows.length} ` +
+          `(${skippedBeforeStartDate} skipped before start date, ${skippedInvalidPolicyNumber} skipped by policy-number pattern)`,
       );
     } catch (error) {
+      if (error instanceof TransitionConflictError) {
+        // A concurrent writer won a CAS transition (manual restart, stuck-run
+        // recovery, or duplicate delivery) — the run belongs to someone else
+        // now. Exit cleanly: calling setFailed here would stomp their state.
+        this.logger.warn(
+          `Match job for reconciliation ${reconciliationId} exiting cleanly on transition conflict: ${error.message}`,
+        );
+
+        return;
+      }
+
       await this.stateMachine.setFailed(
         workspaceId,
         reconciliationId,
@@ -368,35 +428,37 @@ export class ReconciliationMatchJob {
   }
 
   /**
-   * Idempotent: delete any existing review items for this reconciliation,
-   * batch-create the new ones, then transition the reconciliation to REVIEW.
-   * Stats counters get folded into the reconciliation record's `stats` JSON.
+   * Idempotent and non-destructive: reconcile the new match output against
+   * existing review items by stable row identity (decided items survive
+   * re-runs untouched, PENDING ones are refreshed or removed — see
+   * ReviewItemService.reconcileMatchResults), then transition the
+   * reconciliation to REVIEW. Stats counters get folded into the
+   * reconciliation record's `stats` JSON.
    */
   private async persistMatchResults(
     workspaceId: string,
     reconciliationId: string,
     reviewItems: Record<string, unknown>[],
     carrierName: string,
+    policyNumberHeader: string | undefined,
     counts: {
       totalBobRows: number;
       autoMatched: number;
       needsReview: number;
       unmatched: number;
       discrepanciesFound: number;
+      skippedBeforeStartDate: number;
+      skippedInvalidPolicyNumber: number;
     },
   ): Promise<void> {
-    const existingCount = await this.reviewItemService.deleteByReconciliation(
+    // policyNumberHeader lets the reconcile derive identities for legacy
+    // items that predate the carrierPolicyNumber column (snapshot lookup).
+    await this.reviewItemService.reconcileMatchResults(
       workspaceId,
       reconciliationId,
+      reviewItems,
+      { policyNumberHeader: policyNumberHeader ?? null },
     );
-
-    if (existingCount > 0) {
-      this.logger.warn(
-        `Deleted ${existingCount} existing review items (re-run)`,
-      );
-    }
-
-    await this.reviewItemService.batchCreate(workspaceId, reviewItems);
 
     const learnedRuleApplyResult =
       await this.reviewItemService.applyLearnedRulesForReconciliation(
@@ -459,7 +521,9 @@ export class ReconciliationMatchJob {
       uniqueMatchedIds,
     );
 
-    const effKey = ctx.statusFieldMapping.effectiveDate ?? 'effectiveDate';
+    // Single effective-date resolution shared with the start-date cutoff
+    // and dedup (resolveEffectiveDateHeader, Phase 4.5).
+    const effKey = ctx.effDateHeader;
 
     for (const pending of dedupedItems) {
       const matchedPolicy = ctx.matchIndexes.policyById.get(
@@ -505,7 +569,9 @@ export class ReconciliationMatchJob {
       // Synthetic diff for UI visibility when an older policy version needs
       // to be canceled. Apply step reads the same metadata off the snapshot.
       if (pending.cancelPreviousPolicyId) {
-        const effDateVal = pending.row[effKey] as string | undefined;
+        const effDateVal = effKey
+          ? (pending.row[effKey] as string | undefined)
+          : undefined;
         const cancelExpireDate = effDateVal
           ? getCancelExpireDate(effDateVal)
           : null;
@@ -555,7 +621,9 @@ export class ReconciliationMatchJob {
       pending.record.flagReasons = flagsResult.reasons;
 
       if (pending.cancelPreviousPolicyId) {
-        const effDateVal = pending.row[effKey] as string | undefined;
+        const effDateVal = effKey
+          ? (pending.row[effKey] as string | undefined)
+          : undefined;
 
         pending.record.bobRowSnapshot = {
           ...pending.row,
@@ -584,7 +652,7 @@ export class ReconciliationMatchJob {
    */
   private dedupPendingByPolicyId(
     pendingItems: PendingItem[],
-    statusFieldMapping: Record<string, string>,
+    effDateHeader: string | undefined,
   ): PendingItem[] {
     const byPolicyId = new Map<string, PendingItem[]>();
 
@@ -595,7 +663,6 @@ export class ReconciliationMatchJob {
       byPolicyId.set(item.matchedPolicyId, existing);
     }
 
-    const effKey = statusFieldMapping.effectiveDate ?? 'effectiveDate';
     const dedupedItems: PendingItem[] = [];
 
     for (const [, items] of byPolicyId) {
@@ -605,8 +672,8 @@ export class ReconciliationMatchJob {
       }
 
       items.sort((a, b) => {
-        const aEff = (a.row[effKey] as string) ?? '';
-        const bEff = (b.row[effKey] as string) ?? '';
+        const aEff = effDateHeader ? ((a.row[effDateHeader] as string) ?? '') : '';
+        const bEff = effDateHeader ? ((b.row[effDateHeader] as string) ?? '') : '';
 
         return bEff.localeCompare(aEff);
       });
@@ -625,7 +692,11 @@ export class ReconciliationMatchJob {
    * Load the reconciliation + carrier config, parsed rows, CRM policy index,
    * and match overrides into a single typed context. Throws if the
    * reconciliation has no carrier config or no column mapping (the import
-   * dialog must capture these before the pipeline can run).
+   * dialog must capture these before the pipeline can run), if the carrier
+   * config JSON fails validation (`CarrierConfigValidationError` from the
+   * `parseCarrierPipelineConfig` boundary), or if the configured status
+   * engine id is not registered — the run fails fast at MATCH with an
+   * actionable message instead of deriving garbage review items.
    */
   private async loadMatchContext(
     workspaceId: string,
@@ -654,22 +725,28 @@ export class ReconciliationMatchJob {
     }
 
     const carrierName = carrierConfig.name ?? 'Unknown';
-    const parserId = carrierConfig.parserVersion ?? 'ambetter-bob-v1';
-    const matchingConfig: MatchingConfig =
-      (carrierConfig.matchingConfig as MatchingConfig) ??
-      DEFAULT_MATCHING_CONFIG;
 
-    // Policy number validation pattern from carrier config (e.g., "^U" for Ambetter)
-    const policyNumberPattern = carrierConfig.policyNumberPattern
-      ? new RegExp(carrierConfig.policyNumberPattern as string, 'i')
-      : null;
+    // Single validated config boundary (Phase 4.2): partial JSON merges over
+    // defaults, malformed JSON throws with the offending key, the policy-
+    // number regex is compiled exactly once.
+    const pipelineConfig = parseCarrierPipelineConfig(carrierConfig, {
+      onWarning: (message) => this.logger.warn(message),
+    });
 
-    const statusConfig = carrierConfig.statusConfig as StatusConfig | null;
-    const rawStatusFieldMapping = statusConfig?.fieldMapping ?? {};
+    // Fail fast on unknown status engines (Phase 4.3): an unregistered id
+    // would derive null statuses for every row — silently disabling status
+    // reconciliation — or, before deriveCategory's null guard, flood review
+    // with empty UPDATE items.
+    if (!isKnownStatusEngine(pipelineConfig.statusEngineId)) {
+      throw new Error(
+        `Carrier config "${carrierName}" selects unknown status engine ` +
+          `"${pipelineConfig.statusEngineId}". Known engines: ${STATUS_ENGINE_IDS.join(', ')}. ` +
+          `Set statusConfig.engineId to a registered engine (or register a new ` +
+          `engine in engines/status.ts) and re-run.`,
+      );
+    }
 
-    // fieldConfig stores ComputedFieldDef[] directly (or null)
-    const computedFields =
-      (carrierConfig.fieldConfig as ComputedFieldDef[] | null) ?? null;
+    const computedFields = pipelineConfig.computedFields;
     const computedFieldCrmFields = computedFields
       ? Object.fromEntries(
           computedFields
@@ -688,7 +765,7 @@ export class ReconciliationMatchJob {
     const sampleRow =
       parsedRows.length > 0 ? (parsedRows[0] as Record<string, unknown>) : {};
     const statusFieldMapping = resolveFieldMapping(
-      rawStatusFieldMapping,
+      pipelineConfig.statusFieldMapping,
       Object.keys(sampleRow),
     );
 
@@ -710,16 +787,27 @@ export class ReconciliationMatchJob {
       isActive: true,
     }));
 
-    const effDateHeader = Object.entries(columnMapping).find(
-      ([, e]) => e.crmField === 'effectiveDate',
+    // ONE effective-date resolution for the start-date cutoff, dedup
+    // ordering, and cancel-expire stamping (Phase 4.5 — previously the
+    // cutoff used the raw mapped column while dedup/cancel used the
+    // computed True Effective Date).
+    const effDateHeader = resolveEffectiveDateHeader(
+      columnMapping,
+      computedFields,
+    );
+
+    const policyNumberHeader = Object.entries(columnMapping).find(
+      ([, e]) => e.crmField === 'policyNumber',
     )?.[0];
 
     return {
       reconciliationId,
       carrierName,
-      parserId,
-      matchingConfig,
-      policyNumberPattern,
+      statusEngineId: pipelineConfig.statusEngineId,
+      matchingConfig: pipelineConfig.matching,
+      statusEngineConfig: pipelineConfig.status,
+      startDate: pipelineConfig.startDate,
+      policyNumberPattern: pipelineConfig.policyNumberPattern,
       columnMapping,
       statusFieldMapping,
       computedFields,
@@ -728,6 +816,7 @@ export class ReconciliationMatchJob {
       matchIndexes,
       overrides,
       effDateHeader,
+      policyNumberHeader,
     };
   }
 }

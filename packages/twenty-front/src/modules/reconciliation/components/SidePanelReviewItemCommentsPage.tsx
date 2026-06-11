@@ -1,7 +1,9 @@
 import { type Task } from '@/activities/types/Task';
 import { getFirstNonEmptyLineOfRichText } from '@/blocknote-editor/utils/getFirstNonEmptyLineOfRichText';
 import { parseInitialBlocknote } from '@/blocknote-editor/utils/parseInitialBlocknote';
+import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { ObjectFilterDropdownComponentInstanceContext } from '@/object-record/object-filter-dropdown/states/contexts/ObjectFilterDropdownComponentInstanceContext';
 import { ReviewItemCommentsFilterProviders } from '@/reconciliation/components/ReviewItemCommentsFilterProviders';
 import { useFilteredTasksForReviewItem } from '@/reconciliation/hooks/useFilteredTasksForReviewItem';
@@ -173,14 +175,38 @@ const PageContent = ({ reviewItemId }: { reviewItemId: string }) => {
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
   const { updateOneRecord } = useUpdateOneRecord();
 
+  // The side panel only knows the reviewItem id, so re-read the current
+  // decision (network-only — the cached copy may predate an apply) before
+  // flagging.
+  const { findOneRecord: findOneReviewItem } = useLazyFindOneRecord<
+    ObjectRecord & { decision: string }
+  >({
+    objectNameSingular: 'reviewItem',
+    recordGqlFields: { id: true, decision: true },
+    fetchPolicy: 'network-only',
+  });
+
   const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
+    // Only flag PENDING items: commenting on an APPROVED item must not
+    // clobber the decision, or the applied CRM writes lose batch-undo
+    // eligibility (both client and server undo select decision ===
+    // 'APPROVED') — reconciliation remediation item 2.3.
     onTaskCreated: async () => {
-      await updateOneRecord({
-        objectNameSingular: 'reviewItem',
-        idToUpdate: reviewItemId,
-        updateOneRecordInput: {
-          decision: 'FLAG_AUDIT',
-          decidedAt: new Date().toISOString(),
+      await findOneReviewItem({
+        objectRecordId: reviewItemId,
+        onCompleted: (reviewItem) => {
+          if (reviewItem.decision !== 'PENDING') {
+            return;
+          }
+
+          void updateOneRecord({
+            objectNameSingular: 'reviewItem',
+            idToUpdate: reviewItemId,
+            updateOneRecordInput: {
+              decision: 'FLAG_AUDIT',
+              decidedAt: new Date().toISOString(),
+            },
+          });
         },
       });
     },

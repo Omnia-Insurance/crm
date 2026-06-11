@@ -5,6 +5,7 @@ import {
   type StatusDecision,
 } from 'src/modules/reconciliation/engines/status';
 import { daysBetweenUTC } from 'src/modules/reconciliation/parsers/transforms';
+import { NEGATIVE_TERMINAL_STATUSES } from 'src/modules/reconciliation/types/policy-statuses';
 import type {
   ColumnMapping,
   ComputedFieldDef,
@@ -99,6 +100,13 @@ const normalizeState = (s: string | null): string | null => {
 
   return STATE_CODE_BY_NAME[trimmed.toLowerCase()] ?? trimmed.toUpperCase();
 };
+
+// Whitespace-only cells are semantically empty. The parse pipeline can emit
+// '' (or ' ') for mapped text cells, while the CRM stores null — normalize
+// both sides so an empty/blank BOB cell never reads as "different" from an
+// empty CRM field.
+const normalizeEmptyToNull = (s: string | null): string | null =>
+  s != null && s.trim() === '' ? null : s;
 
 const caseInsensitiveMatch = (a: string | null, b: string | null): boolean => {
   if (a == null && b == null) return true;
@@ -268,10 +276,11 @@ const isJanuaryFirstRolloverEffectiveDateMove = (
   // ACA carriers often report the annual renewal as Jan 1 even when the CRM
   // policy is continuous from the prior year. Keep the earlier commission
   // window while still allowing other forward effective-date corrections.
+  // Any later-year Jan 1 (not just year+1) is the same rollover pattern —
+  // the CRM date intentionally never advances, so year+2, year+3, … reports
+  // of the same continuous policy must stay suppressed too.
   return (
-    bobDate.month === 1 &&
-    bobDate.day === 1 &&
-    bobDate.year === crmDate.year + 1
+    bobDate.month === 1 && bobDate.day === 1 && bobDate.year > crmDate.year
   );
 };
 
@@ -281,11 +290,19 @@ const isJanuaryFirstRolloverEffectiveDateMove = (
  * differs from the CRM's primary lead destroys data for whichever person
  * happens to be linked. Treated as a unit by the subscriber-mismatch
  * suppression below.
+ *
+ * Contact fields (phone, email, state) belong to the set too: the original
+ * incident re-pointed a lead at the spouse's identity *including email* —
+ * suppressing only name/DOB still let Accept-All write the other person's
+ * contact info onto the linked lead.
  */
 const LEAD_IDENTITY_CRM_FIELDS: ReadonlySet<string> = new Set([
   'lead.name.firstName',
   'lead.name.lastName',
   'lead.dateOfBirth',
+  'lead.phones.primaryPhoneNumber',
+  'lead.emails.primaryEmail',
+  'lead.addressCustom.addressState',
 ]);
 
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
@@ -604,16 +621,6 @@ const inferCompareMethod = (fieldType: string): string => {
   }
 };
 
-// BOB currency columns are dollars (e.g. "156.50"); CRM stores integer micros.
-// Convert to micros for comparison so 156.50 ↔ 156500000 isn't a false diff,
-// and so the FieldDiff carries the value in the unit Apply will write back.
-const toMicrosString = (s: string | null): string | null => {
-  if (s == null || s === '') return null;
-  const num = Number(s);
-  if (!Number.isFinite(num)) return null;
-  return String(Math.round(num * 1_000_000));
-};
-
 const readBobStringByCrmField = (
   bobRow: Record<string, unknown>,
   columnMapping: ColumnMapping,
@@ -630,18 +637,45 @@ const readBobStringByCrmField = (
   return value != null ? String(value) : null;
 };
 
+/**
+ * Resolve the BOB row's effective date the same way the status engine does:
+ * a computed field claiming `effectiveDate` (Ambetter's 'True Effective
+ * Date' = maxDate(broker, policy)) wins over a raw mapped column. Without
+ * this the paid-through guard below compares against the carry-forward raw
+ * column (or nothing at all) and disagrees with the status engine about
+ * whether the paid-through date is valid.
+ */
+const resolveBobEffectiveDate = (
+  bobRow: Record<string, unknown>,
+  columnMapping: ColumnMapping,
+  computedFields: ComputedFieldDef[] | null | undefined,
+): string | null => {
+  if (computedFields) {
+    for (const cf of computedFields) {
+      if (cf.crmField !== 'effectiveDate') continue;
+
+      const value = bobRow[cf.outputKey];
+
+      if (value != null && String(value).trim() !== '') return String(value);
+    }
+  }
+
+  return readBobStringByCrmField(bobRow, columnMapping, 'effectiveDate');
+};
+
 const isInvalidPaidThroughDateMove = (
   crmField: string,
   bobValue: string | null,
   bobRow: Record<string, unknown>,
   columnMapping: ColumnMapping,
+  computedFields: ComputedFieldDef[] | null | undefined,
 ): boolean => {
   if (crmField !== 'paidThroughDate' || !bobValue) return false;
 
-  const effectiveDate = readBobStringByCrmField(
+  const effectiveDate = resolveBobEffectiveDate(
     bobRow,
     columnMapping,
-    'effectiveDate',
+    computedFields,
   );
 
   return (
@@ -653,12 +687,9 @@ const isInvalidPaidThroughDateMove = (
 // between them (e.g. PAYMENT_ERROR_CANCELED → CANCELED, DECLINED → CANCELED)
 // doesn't change the underlying outcome and usually strips useful context
 // the legacy CRM carried. Reviewers were rejecting those diffs by hand.
-const NEGATIVE_TERMINAL_STATUSES: ReadonlySet<string> = new Set([
-  'CANCELED',
-  'PAYMENT_ERROR_CANCELED',
-  'DECLINED',
-  'INCOMPLETE',
-]);
+// Single home is types/policy-statuses.ts (Phase 4.4 consolidated three
+// drifting copies); re-exported here for backward compatibility.
+export { NEGATIVE_TERMINAL_STATUSES };
 
 export const isNegativeToNegativeStatusChange = (
   derivedStatus: string | null,
@@ -668,6 +699,107 @@ export const isNegativeToNegativeStatusChange = (
   typeof crmStatus === 'string' &&
   NEGATIVE_TERMINAL_STATUSES.has(crmStatus) &&
   NEGATIVE_TERMINAL_STATUSES.has(derivedStatus);
+
+type SharedFieldGuardParams = {
+  crmField: string;
+  rawBobValue: unknown;
+  bobRow: Record<string, unknown>;
+  crmPolicy: Record<string, unknown>;
+  columnMapping: ColumnMapping;
+  computedFields: ComputedFieldDef[] | null | undefined;
+  subscriberMismatch: SubscriberMismatch | null;
+};
+
+/**
+ * Shared guard chain for BOTH diff loops (column-mapping and computed
+ * fields). The two loops drifting apart was a recurring bug class — the
+ * computed loop shipped without the "don't clear CRM when BOB is empty",
+ * "skip unpopulated CRM fields", currency, and stale-paid-through guards,
+ * and Ambetter's effectiveDate flows exclusively through the computed path.
+ * Every value-level suppression lives here so a guard added for one loop
+ * automatically protects the other.
+ *
+ * Returns null when the field must be skipped (no diff), otherwise the
+ * normalized BOB/CRM string pair to hand to the compare method.
+ */
+const runSharedFieldGuards = ({
+  crmField,
+  rawBobValue,
+  bobRow,
+  crmPolicy,
+  columnMapping,
+  computedFields,
+  subscriberMismatch,
+}: SharedFieldGuardParams): {
+  bobStr: string | null;
+  crmStr: string | null;
+} | null => {
+  // Agent identity is never synced from BOB. Some agents sell under
+  // another agent's NPN (the agent-of-record arrangement), so the BOB
+  // describes the AOR while CRM tracks the actual selling agent. Any
+  // diff here would propose overwriting the selling agent with the AOR.
+  if (crmField.startsWith('agent.')) return null;
+
+  // Currency diffs are suppressed until we settle the semantics. CRM
+  // `premium` currently holds the member's post-subsidy responsibility
+  // (from the legacy `total_premium` backfill), while carrier BOBs ship
+  // both gross premium and a frequently-zero member responsibility
+  // column. Neither maps cleanly without a second field, so don't
+  // propose any currency change.
+  if (crmField.endsWith('.amountMicros')) return null;
+
+  // When the BOB row describes a different person than the CRM's primary
+  // lead, don't touch lead identity or contact fields. Surfaced via the
+  // synthetic INFO_ONLY diff pushed by the caller.
+  if (subscriberMismatch && LEAD_IDENTITY_CRM_FIELDS.has(crmField)) {
+    return null;
+  }
+
+  // Skip fields the data service didn't populate (e.g. premium.amountMicros)
+  if (!(crmField in crmPolicy)) return null;
+
+  let bobStr = rawBobValue != null ? String(rawBobValue) : null;
+  let crmStr = readCrmValue(crmPolicy, crmField);
+
+  // Normalize US state values so "FL" and "Florida" compare equal
+  if (crmField.endsWith('.addressState')) {
+    bobStr = normalizeState(bobStr);
+    crmStr = normalizeState(crmStr);
+  }
+
+  // Treat whitespace-only values as null on BOTH sides so a blank BOB cell
+  // never proposes writing '' over an empty CRM field (and vice versa).
+  bobStr = normalizeEmptyToNull(bobStr);
+  crmStr = normalizeEmptyToNull(crmStr);
+
+  if (bobStr == null && crmStr == null) return null;
+
+  // Don't suggest clearing CRM data when BOB has no value
+  if (bobStr == null && crmStr != null) return null;
+
+  // Don't suggest moving effectiveDate backwards (renewal carry-forward)
+  if (isBackwardsEffectiveDateMove(crmField, bobStr, crmStr)) return null;
+
+  if (isJanuaryFirstRolloverEffectiveDateMove(crmField, bobStr, crmStr)) {
+    return null;
+  }
+
+  // Carrier BOB can carry a stale pre-enrollment paid-through date. Treat it
+  // as missing instead of proposing a CRM write to an impossible date.
+  if (
+    isInvalidPaidThroughDateMove(
+      crmField,
+      bobStr,
+      bobRow,
+      columnMapping,
+      computedFields,
+    )
+  ) {
+    return null;
+  }
+
+  return { bobStr, crmStr };
+};
 
 /**
  * Compute field diffs using the column mapping (XLSX header → CRM field)
@@ -690,12 +822,14 @@ export const computeFieldDiffsFromMapping = (
 
   // Status diffs (COMPUTED from the status engine — not driven by columnMapping)
   if (statusDecision) {
+    const negativeToNegative = isNegativeToNegativeStatusChange(
+      statusDecision.derivedStatus,
+      crmPolicy.status,
+    );
+
     if (
       statusDecision.derivedStatus !== crmPolicy.status &&
-      !isNegativeToNegativeStatusChange(
-        statusDecision.derivedStatus,
-        crmPolicy.status,
-      )
+      !negativeToNegative
     ) {
       diffs.push({
         field: 'status',
@@ -711,7 +845,13 @@ export const computeFieldDiffsFromMapping = (
       });
     }
 
+    // The expirationDate diff is the companion of the status change above
+    // (its note is statusChangeReason). When the status change is suppressed
+    // as negative→negative, suppress the date move too — otherwise the ghost
+    // review row returns, proposing an expiration move between two already-
+    // terminal states with a note explaining a hidden status change.
     if (
+      !negativeToNegative &&
       statusDecision.derivedExpireDate &&
       statusDecision.derivedExpireDate !== crmPolicy.expirationDate
     ) {
@@ -762,78 +902,19 @@ export const computeFieldDiffsFromMapping = (
     // Skip if a computed field (or status engine) already covers this CRM field
     if (computedCrmFields.has(entry.crmField)) continue;
 
-    // Agent identity is never synced from BOB. Some agents sell under
-    // another agent's NPN (the agent-of-record arrangement), so the BOB
-    // describes the AOR while CRM tracks the actual selling agent. Any
-    // diff here would propose overwriting the selling agent with the AOR.
-    if (entry.crmField.startsWith('agent.')) continue;
+    const guarded = runSharedFieldGuards({
+      crmField: entry.crmField,
+      rawBobValue: bobRow[xlsxHeader],
+      bobRow,
+      crmPolicy,
+      columnMapping,
+      computedFields,
+      subscriberMismatch,
+    });
 
-    // Currency diffs are suppressed until we settle the semantics. CRM
-    // `premium` currently holds the member's post-subsidy responsibility
-    // (from the legacy `total_premium` backfill), while carrier BOBs ship
-    // both gross premium and a frequently-zero member responsibility
-    // column. Neither maps cleanly without a second field, so don't
-    // propose any currency change.
-    if (entry.crmField.endsWith('.amountMicros')) continue;
+    if (!guarded) continue;
 
-    // On multi-member policies where BOB describes a different person,
-    // don't touch lead identity. Surfaced via the synthetic INFO_ONLY
-    // diff pushed below.
-    if (subscriberMismatch && LEAD_IDENTITY_CRM_FIELDS.has(entry.crmField)) {
-      continue;
-    }
-
-    const bobValue = bobRow[xlsxHeader];
-    let bobStr = bobValue != null ? String(bobValue) : null;
-
-    // Skip fields the data service didn't populate (e.g. premium.amountMicros)
-    if (!(entry.crmField in crmPolicy)) continue;
-
-    let crmStr = readCrmValue(crmPolicy, entry.crmField);
-
-    // Normalize US state values so "FL" and "Florida" compare equal
-    if (entry.crmField.endsWith('.addressState')) {
-      bobStr = normalizeState(bobStr);
-      crmStr = normalizeState(crmStr);
-    }
-
-    // BOB stores currency in dollars; CRM stores integer micros.
-    // Convert so the diff record (and the Apply payload it produces) is
-    // already in CRM's unit.
-    if (entry.crmField.endsWith('.amountMicros')) {
-      bobStr = toMicrosString(bobStr);
-    }
-
-    if (bobStr == null && crmStr == null) continue;
-
-    // Don't suggest clearing CRM data when BOB has no value
-    if ((bobStr == null || bobStr === '') && crmStr != null) continue;
-
-    // Don't suggest moving effectiveDate backwards (renewal carry-forward)
-    if (isBackwardsEffectiveDateMove(entry.crmField, bobStr, crmStr)) continue;
-
-    if (
-      isJanuaryFirstRolloverEffectiveDateMove(
-        entry.crmField,
-        bobStr,
-        crmStr,
-      )
-    ) {
-      continue;
-    }
-
-    // Carrier BOB can carry a stale pre-enrollment paid-through date. Treat it
-    // as missing instead of proposing a CRM write to an impossible date.
-    if (
-      isInvalidPaidThroughDateMove(
-        entry.crmField,
-        bobStr,
-        bobRow,
-        columnMapping,
-      )
-    ) {
-      continue;
-    }
+    const { bobStr, crmStr } = guarded;
 
     // Use fuzzyName for name-related fields regardless of inferred type
     const compareMethod = isNameLikeCrmField(entry.crmField)
@@ -857,37 +938,28 @@ export const computeFieldDiffsFromMapping = (
     });
   }
 
-  // Diffs from computed fields that map to CRM fields
+  // Diffs from computed fields that map to CRM fields. Runs the SAME guard
+  // chain as the column-mapping loop above — this is the live path for
+  // Ambetter's effectiveDate ('True Effective Date'), and it historically
+  // drifted: missing the empty-BOB and unpopulated-CRM-field guards meant a
+  // blank Broker+Policy effective date proposed clearing the CRM date.
   if (computedFields) {
     for (const cf of computedFields) {
       if (!cf.crmField) continue;
 
-      // Same agent suppression on the computed-fields path
-      if (cf.crmField.startsWith('agent.')) continue;
+      const guarded = runSharedFieldGuards({
+        crmField: cf.crmField,
+        rawBobValue: bobRow[cf.outputKey],
+        bobRow,
+        crmPolicy,
+        columnMapping,
+        computedFields,
+        subscriberMismatch,
+      });
 
-      // Same lead-identity suppression on the computed-fields path
-      if (subscriberMismatch && LEAD_IDENTITY_CRM_FIELDS.has(cf.crmField)) {
-        continue;
-      }
+      if (!guarded) continue;
 
-      const bobValue = bobRow[cf.outputKey];
-      const bobStr = bobValue != null ? String(bobValue) : null;
-      const crmStr = readCrmValue(crmPolicy, cf.crmField);
-
-      if (bobStr == null && crmStr == null) continue;
-
-      // Don't suggest moving effectiveDate backwards (renewal carry-forward)
-      if (isBackwardsEffectiveDateMove(cf.crmField, bobStr, crmStr)) continue;
-
-      if (
-        isJanuaryFirstRolloverEffectiveDateMove(
-          cf.crmField,
-          bobStr,
-          crmStr,
-        )
-      ) {
-        continue;
-      }
+      const { bobStr, crmStr } = guarded;
 
       const compareMethod = inferCompareMethod(
         cf.type === 'date' ? 'DATE_TIME' : 'TEXT',

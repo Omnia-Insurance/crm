@@ -31,6 +31,10 @@ export type ReviewItemForDecisionRule = {
   decisionRuleId?: string | null;
   decisionRuleSignatureHash?: string | null;
   autoAppliedAt?: string | null;
+  // Cancel-action signals (audit 1.5): first-class column stamped by
+  // match.job, plus the legacy snapshot stamp for items that predate it.
+  cancelPreviousPolicyId?: string | null;
+  bobRowSnapshot?: Record<string, unknown> | null;
 };
 
 export type StatusRuleSignature = {
@@ -69,6 +73,11 @@ export type ReconciliationDecisionRuleRecord = {
   autoAppliedCount: number | null;
   lastSeenAt: string | null;
   lastAppliedAt: string | null;
+  // Human-deactivation marker (audit 1.6/1.7): set whenever a user undo
+  // deactivates the rule. Rules carrying this marker (or isActive false)
+  // are never reactivated by learning/backfill.
+  deactivatedAt?: string | null;
+  deactivationReason?: string | null;
 };
 
 type WorkspaceRecord = Record<string, unknown> & { id: string };
@@ -100,6 +109,11 @@ export class ReconciliationDecisionRuleService {
     if (!carrierName) return null;
     if (item.category === 'UNMATCHED') return null;
     if (this.hasAutoRuleBlockingFlag(item)) return null;
+    // Cancel-previous-policy actions are invisible to the diff-based
+    // status-only check (the synthetic cancel diff has crmField null), so an
+    // explicit guard keeps cancel-bearing items out of rule learning AND out
+    // of rule matching: a rule must never silently cancel another policy.
+    if (this.hasCancelAction(item)) return null;
     if (!this.isStatusOnlyReviewItem(item)) return null;
 
     const statusDiff = this.findStatusDiff(item);
@@ -137,6 +151,32 @@ export class ReconciliationDecisionRuleService {
       RECONCILIATION_AUTO_RULE_BLOCKING_FLAGS.includes(
         flag as (typeof RECONCILIATION_AUTO_RULE_BLOCKING_FLAGS)[number],
       ),
+    );
+  }
+
+  /**
+   * Whether applying this item would also cancel a previous policy version.
+   * Checks the first-class column (stamped by match.job), the legacy
+   * bobRowSnapshot stamp for items that predate it, and the synthetic
+   * `__cancelPreviousPolicy` field diff as a belt-and-braces signal.
+   * Cancel-bearing items must never feed rule learning or be auto-applied.
+   */
+  hasCancelAction(item: ReviewItemForDecisionRule): boolean {
+    if (
+      typeof item.cancelPreviousPolicyId === 'string' &&
+      item.cancelPreviousPolicyId.length > 0
+    ) {
+      return true;
+    }
+
+    const legacyCancelId = item.bobRowSnapshot?.__cancelPreviousPolicyId;
+
+    if (typeof legacyCancelId === 'string' && legacyCancelId.length > 0) {
+      return true;
+    }
+
+    return (item.fieldDiffs ?? []).some(
+      (diff) => diff.field === '__cancelPreviousPolicy',
     );
   }
 
@@ -231,17 +271,29 @@ export class ReconciliationDecisionRuleService {
 
           if (!signatureResult) continue;
 
+          // An item already linked to this signature was counted by a
+          // previous pass (live learning or backfill) — skip the
+          // approvedCount increment so reruns are idempotent (audit 1.7).
+          const alreadyCountedForSignature =
+            item.decisionRuleSignatureHash === signatureResult.signatureHash;
+
           const rule = await this.upsertRule({
             ruleRepo,
             item,
             signatureResult,
             createdByUserWorkspaceId,
+            countApproval: !alreadyCountedForSignature,
           });
 
-          await reviewItemRepo.update(item.id, {
-            decisionRuleId: rule.id,
-            decisionRuleSignatureHash: rule.signatureHash,
-          });
+          if (
+            item.decisionRuleId !== rule.id ||
+            item.decisionRuleSignatureHash !== rule.signatureHash
+          ) {
+            await reviewItemRepo.update(item.id, {
+              decisionRuleId: rule.id,
+              decisionRuleSignatureHash: rule.signatureHash,
+            });
+          }
 
           rules.push(rule);
         }
@@ -303,10 +355,14 @@ export class ReconciliationDecisionRuleService {
           },
         });
 
+        const now = new Date().toISOString();
+
         for (const rule of activeSourceRules) {
           await ruleRepo.update(rule.id, {
             isActive: false,
-            lastSeenAt: new Date().toISOString(),
+            deactivatedAt: now,
+            deactivationReason: `Source review item ${sourceReviewItemId} was undone by a user`,
+            lastSeenAt: now,
           });
         }
 
@@ -317,6 +373,58 @@ export class ReconciliationDecisionRuleService {
         }
 
         return activeSourceRules.length;
+      },
+      authContext,
+    );
+  }
+
+  /**
+   * Undo of an auto-applied review item is an explicit human veto of the
+   * rule's judgment, not just of the one item (audit 1.6) — deactivate the
+   * rule that applied it so the next applyLearnedRulesForReconciliation pass
+   * cannot re-apply the decision the user just reverted. Falls back to the
+   * signature hash when the rule id is missing (legacy items).
+   */
+  async deactivateRuleForUndoneAutoApply({
+    workspaceId,
+    ruleId,
+    signatureHash,
+    undoneReviewItemId,
+  }: {
+    workspaceId: string;
+    ruleId: string | null;
+    signatureHash: string | null;
+    undoneReviewItemId: string;
+  }): Promise<number> {
+    if (!ruleId && !signatureHash) return 0;
+
+    const authContext = buildSystemAuthContext(workspaceId);
+
+    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+      async () => {
+        const ruleRepo = await this.getRuleRepo(workspaceId);
+        const rule = ruleId
+          ? await ruleRepo.findOne({ where: { id: ruleId } })
+          : await ruleRepo.findOne({
+              where: { signatureHash: signatureHash as string },
+            });
+
+        if (!rule || rule.isActive === false) return 0;
+
+        const now = new Date().toISOString();
+
+        await ruleRepo.update(rule.id, {
+          isActive: false,
+          deactivatedAt: now,
+          deactivationReason: `Auto-applied review item ${undoneReviewItemId} was undone by a user`,
+          lastSeenAt: now,
+        });
+
+        this.logger.warn(
+          `Deactivated learned reconciliation rule ${rule.id} after user undid auto-applied review item ${undoneReviewItemId}`,
+        );
+
+        return 1;
       },
       authContext,
     );
@@ -337,11 +445,13 @@ export class ReconciliationDecisionRuleService {
     item,
     signatureResult,
     createdByUserWorkspaceId,
+    countApproval = true,
   }: {
     ruleRepo: WorkspaceRepository<ReconciliationDecisionRuleRecord>;
     item: ReviewItemForDecisionRule;
     signatureResult: StatusRuleSignatureResult;
     createdByUserWorkspaceId?: string | null;
+    countApproval?: boolean;
   }): Promise<ReconciliationDecisionRuleRecord> {
     const now = new Date().toISOString();
     const existing = await ruleRepo.findOne({
@@ -350,7 +460,10 @@ export class ReconciliationDecisionRuleService {
 
     if (existing) {
       const update = {
-        isActive: true,
+        // Never resurrect a rule a human deactivated (undo of its source
+        // item or of an auto-applied item, audit 1.7): re-learning refreshes
+        // counts/signature but only a deliberate human toggle reactivates.
+        isActive: existing.isActive !== false,
         signature: signatureResult.signature,
         carrierName: signatureResult.signature.carrierName,
         fromStatus: signatureResult.signature.fromStatus,
@@ -360,7 +473,7 @@ export class ReconciliationDecisionRuleService {
           existing.sourceReconciliationId ?? item.reconciliationId,
         createdByUserWorkspaceId:
           existing.createdByUserWorkspaceId ?? createdByUserWorkspaceId ?? null,
-        approvedCount: (existing.approvedCount ?? 0) + 1,
+        approvedCount: (existing.approvedCount ?? 0) + (countApproval ? 1 : 0),
         lastSeenAt: now,
       };
 
@@ -394,6 +507,11 @@ export class ReconciliationDecisionRuleService {
   }
 
   private isStatusOnlyReviewItem(item: ReviewItemForDecisionRule): boolean {
+    // A cancel action is a destructive write to ANOTHER policy — by
+    // definition not "status only", even though its synthetic diff carries
+    // crmField null and is invisible to the filter below (audit 1.5).
+    if (this.hasCancelAction(item)) return false;
+
     const actionableDiffs = (item.fieldDiffs ?? []).filter(
       (diff) =>
         diff.crmField !== null &&
