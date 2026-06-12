@@ -176,6 +176,13 @@ export class ReconciliationDataService {
               id: record.id as string,
               policyNumber: (record.policyNumber as string) ?? null,
               applicationId: (record.applicationId as string) ?? null,
+              // Identifier-bearing policy fields (OMN-12 identity): fetched
+              // phase-1 so matchingConfig.identifierRoles can index them.
+              // planIdentifier is ALSO re-fetched by phase-2 enrichment,
+              // whose value wins in buildPolicyForDiff — diff output is
+              // unchanged.
+              externalPolicyId: (record.externalPolicyId as string) ?? null,
+              planIdentifier: (record.planIdentifier as string) ?? null,
               effectiveDate: (record.effectiveDate as string) ?? null,
               expirationDate: (record.expirationDate as string) ?? null,
               paidThroughDate: (record.paidThroughDate as string) ?? null,
@@ -194,7 +201,6 @@ export class ReconciliationDataService {
                 addressCustom?.addressState ?? null,
               'agent.name': (agent?.name as string) ?? null,
               'agent.npn': (agent?.npn as string) ?? null,
-              planIdentifier: null,
               'lead.phones.primaryPhoneNumber': null,
               'lead.emails.primaryEmail': null,
               'lead.id': null,

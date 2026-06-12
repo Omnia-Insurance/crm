@@ -48,6 +48,24 @@ const existingItem = (
   ...overrides,
 });
 
+// The shape match.job's missing-from-BOB phase emits (OMN-12): UNMATCHED
+// category (no MISSING_FROM_BOB SELECT option), MISSING_FROM_BOB matchMethod,
+// the CRM policy id, the CRM policy's own number, and NO bobRowSnapshot.
+const newMissingFromBobItem = (
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> => ({
+  name: 'MISSING: U123',
+  category: 'UNMATCHED',
+  matchMethod: 'MISSING_FROM_BOB',
+  decision: 'PENDING',
+  policyId: POLICY_ID,
+  carrierPolicyNumber: 'U123',
+  carrierName: 'Ambetter',
+  fieldDiffs: null,
+  bobRowSnapshot: null,
+  ...overrides,
+});
+
 describe('buildReviewItemIdentity', () => {
   it('combines carrier policy number and matched CRM policy id for UPDATE items', () => {
     expect(buildReviewItemIdentity(newMatchedItem())).toBe(
@@ -105,6 +123,35 @@ describe('buildReviewItemIdentity', () => {
     );
 
     expect(legacyIdentity).toBe(buildReviewItemIdentity(newMatchedItem()));
+  });
+
+  it('keys missing-from-BOB items off the CRM policy id (OMN-12)', () => {
+    expect(buildReviewItemIdentity(newMissingFromBobItem())).toBe(
+      `MISSING_FROM_BOB:${POLICY_ID}`,
+    );
+  });
+
+  it('never collides a missing-from-BOB item with an UNMATCHED row carrying the same number', () => {
+    // The undisambiguated-multi-candidate case: the file row goes UNMATCHED
+    // with number U123 while its candidate policies (also numbered U123)
+    // are flagged missing — three items, three identities.
+    const rowIdentity = buildReviewItemIdentity(
+      newUnmatchedItem({ carrierPolicyNumber: 'U123' }),
+    );
+    const missingIdentityA = buildReviewItemIdentity(newMissingFromBobItem());
+    const missingIdentityB = buildReviewItemIdentity(
+      newMissingFromBobItem({ policyId: OTHER_POLICY_ID }),
+    );
+
+    expect(missingIdentityA).not.toBe(rowIdentity);
+    expect(missingIdentityB).not.toBe(rowIdentity);
+    expect(missingIdentityA).not.toBe(missingIdentityB);
+  });
+
+  it('falls back to UNMATCHED-style identity for a missing-from-BOB item without a policyId', () => {
+    expect(
+      buildReviewItemIdentity(newMissingFromBobItem({ policyId: null })),
+    ).toBe('UNMATCHED:U123');
   });
 });
 
@@ -218,5 +265,71 @@ describe('planReviewItemReconcile', () => {
 
     expect(plan.toUpdate).toHaveLength(1);
     expect(plan.toCreate).toHaveLength(1);
+  });
+
+  it('preserves a decided missing-from-BOB item across re-runs and skips its duplicate (OMN-12)', () => {
+    const decidedMissing = existingItem({
+      id: 'decided-missing-id',
+      decision: 'APPROVED',
+      category: 'UNMATCHED',
+      matchMethod: 'MISSING_FROM_BOB',
+      policyId: POLICY_ID,
+      carrierPolicyNumber: 'U123',
+      bobRowSnapshot: null,
+    });
+
+    const plan = planReviewItemReconcile({
+      existingItems: [decidedMissing],
+      newItems: [newMissingFromBobItem()],
+    });
+
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.toDeleteIds).toEqual([]);
+    expect(plan.preservedDecidedCount).toBe(1);
+    expect(plan.skippedDecidedDuplicateCount).toBe(1);
+  });
+
+  it('refreshes a pending missing-from-BOB item in place when the policy is still missing', () => {
+    const pendingMissing = existingItem({
+      id: 'pending-missing-id',
+      decision: 'PENDING',
+      category: 'UNMATCHED',
+      matchMethod: 'MISSING_FROM_BOB',
+      policyId: POLICY_ID,
+      carrierPolicyNumber: 'U123',
+      bobRowSnapshot: null,
+    });
+    const reEmitted = newMissingFromBobItem();
+
+    const plan = planReviewItemReconcile({
+      existingItems: [pendingMissing],
+      newItems: [reEmitted],
+    });
+
+    expect(plan.toUpdate).toEqual([
+      { id: 'pending-missing-id', updates: reEmitted },
+    ]);
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toDeleteIds).toEqual([]);
+  });
+
+  it('deletes a stale pending missing-from-BOB item when the knob is off (or the policy reappeared) next run', () => {
+    const pendingMissing = existingItem({
+      id: 'pending-missing-id',
+      decision: 'PENDING',
+      category: 'UNMATCHED',
+      matchMethod: 'MISSING_FROM_BOB',
+      policyId: POLICY_ID,
+      carrierPolicyNumber: 'U123',
+      bobRowSnapshot: null,
+    });
+
+    const plan = planReviewItemReconcile({
+      existingItems: [pendingMissing],
+      newItems: [],
+    });
+
+    expect(plan.toDeleteIds).toEqual(['pending-missing-id']);
   });
 });

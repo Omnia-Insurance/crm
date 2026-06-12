@@ -46,6 +46,14 @@ export const POST_STEP_STATUSES: ReconciliationStatus[] = [
  * - COMPLETED is a real terminal state reached via REVIEW → COMPLETED when
  *   all review items are decided (trigger wired by the review-item flow);
  *   COMPLETED → MATCHING allows a deliberate re-run.
+ * - REVIEW → PARSING allows a deliberate re-parse of the same uploaded file
+ *   (OMN-11; audit 2026-06-11 §"restartReconciliationParsing"), making
+ *   parse-time knobs (transformRules, computed fields, hand-edited
+ *   columnMapping snapshot) tunable without a re-upload. Triggered through
+ *   the existing startReconciliationParsing mutation / orchestrator
+ *   startParsing (same CAS semantics); downstream is already re-run-safe:
+ *   sourceAttachmentId pins the file, writeParsedData overwrites the JSON
+ *   attachment, and reconcileMatchResults preserves decided review items.
  */
 export const VALID_TRANSITIONS: Record<
   ReconciliationStatus,
@@ -55,7 +63,7 @@ export const VALID_TRANSITIONS: Record<
   PARSING: ['PARSED', 'FAILED'],
   PARSED: ['MATCHING', 'FAILED'],
   MATCHING: ['REVIEW', 'FAILED'],
-  REVIEW: ['MATCHING', 'COMPLETED', 'FAILED'],
+  REVIEW: ['MATCHING', 'COMPLETED', 'FAILED', 'PARSING'],
   APPLYING: [],
   COMPLETED: ['MATCHING'],
   FAILED: ['PARSING', 'MATCHING'],

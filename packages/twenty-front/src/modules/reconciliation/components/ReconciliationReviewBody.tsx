@@ -7,6 +7,7 @@ import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { isFetchingMoreRecordsFamilyState } from '@/object-record/states/isFetchingMoreRecordsFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { ReconciliationFilterBar } from '@/reconciliation/components/ReconciliationFilterBar';
+import { ReconciliationRunSummaryBanner } from '@/reconciliation/components/ReconciliationRunSummaryBanner';
 import { ReconciliationToolbar } from '@/reconciliation/components/ReconciliationToolbar';
 import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { ReviewItemDetail } from '@/reconciliation/components/ReviewItemDetail';
@@ -302,6 +303,7 @@ export const ReconciliationReviewBody = ({
 
   return (
     <>
+      <ReconciliationRunSummaryBanner reconciliationId={objectRecordId} />
       <ReconciliationToolbar
         batchApplyCount={batchApplyCount}
         onBatchApplyClick={handleBatchApplyClick}

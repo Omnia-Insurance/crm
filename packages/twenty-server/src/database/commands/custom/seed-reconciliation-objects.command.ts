@@ -205,8 +205,32 @@ const CARRIER_CONFIG_V2_FIELDS: FieldMetadataSeed[] = [
     name: 'statusConfig',
     label: 'Status Config',
     description:
-      'Status engine parameters: placedThresholdDays, paymentErrorAgeDays, etc.',
+      'Status engine selection + inputs: engineId, fieldMapping (role -> header), placedThresholdDays, engineParams (engine-specific knobs)',
     icon: 'IconBrain',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'parseSettings',
+    label: 'Parse Settings',
+    description:
+      'File-shape settings: headerRow (1-based), rowFilters (skip footer/junk rows), skipFooterRows',
+    icon: 'IconFilter',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'diffConfig',
+    label: 'Diff Config',
+    description:
+      'Per-carrier diff suppression policy: suppressAgentFields, suppressPremiumDiffs, leadIdentityFields, rollover/backwards effective-date and negative-to-negative toggles',
+    icon: 'IconGitCompare',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'statusVocabulary',
+    label: 'Status Vocabulary',
+    description:
+      'Per-carrier CRM status sets: negativeTerminalStatuses, activeStatuses (defaults = Omnia ACA vocabulary)',
+    icon: 'IconListCheck',
   },
   {
     type: FieldMetadataType.TEXT,
@@ -385,6 +409,12 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
         value: 'POLICY_NUMBER_NARROWED_RECENT',
         position: 11,
         color: 'yellow',
+      },
+      {
+        label: 'Identifier Exact',
+        value: 'IDENTIFIER_EXACT',
+        position: 12,
+        color: 'turquoise',
       },
     ],
   },

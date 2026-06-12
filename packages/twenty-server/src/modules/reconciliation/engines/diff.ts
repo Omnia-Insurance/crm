@@ -305,6 +305,66 @@ const LEAD_IDENTITY_CRM_FIELDS: ReadonlySet<string> = new Set([
   'lead.addressCustom.addressState',
 ]);
 
+// ---------------------------------------------------------------------------
+// Per-carrier diff suppression policy (OMN-12 tuning depth — multi-carrier
+// audit 2026-06-11 §"Per-carrier diffConfig block for the hardcoded
+// suppression policies")
+// ---------------------------------------------------------------------------
+
+/**
+ * The previously-hardcoded suppression policies of `runSharedFieldGuards`
+ * and the status-diff block, exposed as per-carrier knobs. Resolved from the
+ * `carrierConfig.diffConfig` JSON by `parseCarrierPipelineConfig`
+ * (types/carrier-config.ts) — stored partial merged over
+ * `DEFAULT_DIFF_POLICY`, so an absent block reproduces today's behavior
+ * bit-for-bit. Threaded through MatchContext into
+ * `computeFieldDiffsFromMapping` by the match job.
+ *
+ * NOT exposed (deliberately — they are data-integrity guards or pipeline
+ * capabilities, not carrier policy):
+ *   - the stale paid-through guard (`isInvalidPaidThroughDateMove`) — it
+ *     mirrors the status engine's `normalizePaidThroughDateForEffectiveDate`
+ *     semantics and must stay in lockstep with it;
+ *   - the empty-BOB / unpopulated-CRM-field / blank-normalization guards —
+ *     turning those off proposes destructive writes for every carrier;
+ *   - the fuzzy-name thresholds (NAME_THRESHOLD 0.98 / safety-net 0.85) —
+ *     a per-carrier threshold needs the static COMPARE_METHODS registry
+ *     restructured first (audit judge note on the diffConfig proposal).
+ *
+ * CAVEAT on `suppressAgentFields` / `suppressPremiumDiffs`: relaxing them
+ * surfaces UPDATE diffs, but the apply path still writes `agent.*` as if it
+ * were a composite (it is a relation) and coerces currency with a bare
+ * Number() into amountMicros. Until an agent-relink / currency-normalization
+ * apply path exists, flipping these is review-surface only — do not batch-
+ * approve the resulting diffs (audit §"Per-carrier diffRules knobs", the
+ * rejected duplicate, documents the failure mode).
+ */
+export type DiffPolicy = {
+  /** Skip every `agent.*` diff (agent-of-record arrangement). Default true. */
+  suppressAgentFields: boolean;
+  /** Skip every `*.amountMicros` diff (premium semantics unsettled). Default true. */
+  suppressPremiumDiffs: boolean;
+  /** Skip effectiveDate moves backwards in time (renewal carry-forward). Default true. */
+  suppressBackwardsEffectiveDate: boolean;
+  /** Skip later-year Jan-1 effectiveDate moves (ACA rollover). Default true. */
+  suppressAcaRolloverEffectiveDate: boolean;
+  /** CRM dot-paths protected by the subscriber-mismatch suppression.
+   *  Default: the LEAD_IDENTITY_CRM_FIELDS set above. */
+  leadIdentityFields: readonly string[];
+  /** Suppress status (+ companion expirationDate) diffs between two
+   *  negative-terminal statuses. Default true. */
+  suppressNegativeToNegativeStatus: boolean;
+};
+
+export const DEFAULT_DIFF_POLICY: DiffPolicy = {
+  suppressAgentFields: true,
+  suppressPremiumDiffs: true,
+  suppressBackwardsEffectiveDate: true,
+  suppressAcaRolloverEffectiveDate: true,
+  leadIdentityFields: [...LEAD_IDENTITY_CRM_FIELDS],
+  suppressNegativeToNegativeStatus: true,
+};
+
 const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
@@ -694,11 +754,14 @@ export { NEGATIVE_TERMINAL_STATUSES };
 export const isNegativeToNegativeStatusChange = (
   derivedStatus: string | null,
   crmStatus: unknown,
+  // Per-carrier override (statusVocabulary knob, OMN-12); the default is
+  // today's shared set, so existing callers are bit-for-bit unchanged.
+  negativeTerminalStatuses: ReadonlySet<string> = NEGATIVE_TERMINAL_STATUSES,
 ): boolean =>
   typeof derivedStatus === 'string' &&
   typeof crmStatus === 'string' &&
-  NEGATIVE_TERMINAL_STATUSES.has(crmStatus) &&
-  NEGATIVE_TERMINAL_STATUSES.has(derivedStatus);
+  negativeTerminalStatuses.has(crmStatus) &&
+  negativeTerminalStatuses.has(derivedStatus);
 
 type SharedFieldGuardParams = {
   crmField: string;
@@ -708,6 +771,8 @@ type SharedFieldGuardParams = {
   columnMapping: ColumnMapping;
   computedFields: ComputedFieldDef[] | null | undefined;
   subscriberMismatch: SubscriberMismatch | null;
+  /** Per-carrier suppression knobs; DEFAULT_DIFF_POLICY = today's behavior. */
+  policy: DiffPolicy;
 };
 
 /**
@@ -730,15 +795,17 @@ const runSharedFieldGuards = ({
   columnMapping,
   computedFields,
   subscriberMismatch,
+  policy,
 }: SharedFieldGuardParams): {
   bobStr: string | null;
   crmStr: string | null;
 } | null => {
-  // Agent identity is never synced from BOB. Some agents sell under
-  // another agent's NPN (the agent-of-record arrangement), so the BOB
+  // Agent identity is not synced from BOB by default. Some agents sell
+  // under another agent's NPN (the agent-of-record arrangement), so the BOB
   // describes the AOR while CRM tracks the actual selling agent. Any
   // diff here would propose overwriting the selling agent with the AOR.
-  if (crmField.startsWith('agent.')) return null;
+  // Per-carrier knob: diffConfig.suppressAgentFields (default true).
+  if (policy.suppressAgentFields && crmField.startsWith('agent.')) return null;
 
   // Currency diffs are suppressed until we settle the semantics. CRM
   // `premium` currently holds the member's post-subsidy responsibility
@@ -746,12 +813,17 @@ const runSharedFieldGuards = ({
   // both gross premium and a frequently-zero member responsibility
   // column. Neither maps cleanly without a second field, so don't
   // propose any currency change.
-  if (crmField.endsWith('.amountMicros')) return null;
+  // Per-carrier knob: diffConfig.suppressPremiumDiffs (default true).
+  if (policy.suppressPremiumDiffs && crmField.endsWith('.amountMicros')) {
+    return null;
+  }
 
   // When the BOB row describes a different person than the CRM's primary
   // lead, don't touch lead identity or contact fields. Surfaced via the
-  // synthetic INFO_ONLY diff pushed by the caller.
-  if (subscriberMismatch && LEAD_IDENTITY_CRM_FIELDS.has(crmField)) {
+  // synthetic INFO_ONLY diff pushed by the caller. The protected field set
+  // is per-carrier (diffConfig.leadIdentityFields, default
+  // LEAD_IDENTITY_CRM_FIELDS).
+  if (subscriberMismatch && policy.leadIdentityFields.includes(crmField)) {
     return null;
   }
 
@@ -777,10 +849,21 @@ const runSharedFieldGuards = ({
   // Don't suggest clearing CRM data when BOB has no value
   if (bobStr == null && crmStr != null) return null;
 
-  // Don't suggest moving effectiveDate backwards (renewal carry-forward)
-  if (isBackwardsEffectiveDateMove(crmField, bobStr, crmStr)) return null;
+  // Don't suggest moving effectiveDate backwards (renewal carry-forward).
+  // Per-carrier knob: diffConfig.suppressBackwardsEffectiveDate.
+  if (
+    policy.suppressBackwardsEffectiveDate &&
+    isBackwardsEffectiveDateMove(crmField, bobStr, crmStr)
+  ) {
+    return null;
+  }
 
-  if (isJanuaryFirstRolloverEffectiveDateMove(crmField, bobStr, crmStr)) {
+  // Per-carrier knob: diffConfig.suppressAcaRolloverEffectiveDate — wrong
+  // for non-calendar-year lines, so it is finally a knob.
+  if (
+    policy.suppressAcaRolloverEffectiveDate &&
+    isJanuaryFirstRolloverEffectiveDateMove(crmField, bobStr, crmStr)
+  ) {
     return null;
   }
 
@@ -809,6 +892,12 @@ const runSharedFieldGuards = ({
  * as the matched policy. Used by the cross-term namesake detector to
  * suppress lead identity diffs when the BOB row's name matches a lead
  * already linked to a different policy under the same number.
+ *
+ * `diffPolicy` / `negativeTerminalStatuses` (optional, OMN-12): the
+ * per-carrier suppression knobs (carrierConfig.diffConfig) and the resolved
+ * negative-terminal status set (carrierConfig.statusVocabulary), threaded by
+ * the match job. The defaults reproduce the previously-hardcoded behavior
+ * bit-for-bit, so direct callers (tests, legacy paths) are untouched.
  */
 export const computeFieldDiffsFromMapping = (
   bobRow: Record<string, unknown>,
@@ -817,15 +906,20 @@ export const computeFieldDiffsFromMapping = (
   columnMapping: ColumnMapping,
   computedFields?: ComputedFieldDef[] | null,
   namesakes?: readonly Record<string, unknown>[],
+  diffPolicy: DiffPolicy = DEFAULT_DIFF_POLICY,
+  negativeTerminalStatuses: ReadonlySet<string> = NEGATIVE_TERMINAL_STATUSES,
 ): FieldDiff[] => {
   const diffs: FieldDiff[] = [];
 
   // Status diffs (COMPUTED from the status engine — not driven by columnMapping)
   if (statusDecision) {
-    const negativeToNegative = isNegativeToNegativeStatusChange(
-      statusDecision.derivedStatus,
-      crmPolicy.status,
-    );
+    const negativeToNegative =
+      diffPolicy.suppressNegativeToNegativeStatus &&
+      isNegativeToNegativeStatusChange(
+        statusDecision.derivedStatus,
+        crmPolicy.status,
+        negativeTerminalStatuses,
+      );
 
     if (
       statusDecision.derivedStatus !== crmPolicy.status &&
@@ -910,6 +1004,7 @@ export const computeFieldDiffsFromMapping = (
       columnMapping,
       computedFields,
       subscriberMismatch,
+      policy: diffPolicy,
     });
 
     if (!guarded) continue;
@@ -955,6 +1050,7 @@ export const computeFieldDiffsFromMapping = (
         columnMapping,
         computedFields,
         subscriberMismatch,
+        policy: diffPolicy,
       });
 
       if (!guarded) continue;

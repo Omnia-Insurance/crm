@@ -8,10 +8,23 @@ export const MAX_PARSED_ROWS = 50_000;
 
 export type ParsedRow = Record<string, unknown>;
 
+export type ParseXlsxSheetOptions = {
+  /**
+   * 1-based header row (carrierConfig parseSettings.headerRow, OMN-12).
+   * Rows ABOVE it are ignored entirely; the row itself becomes the header
+   * row of the parsed output. Values ≤ 1 (and absent) keep the historical
+   * no-range behavior bit-identical — `range: 0` is deliberately never
+   * passed, because on sheets whose !ref does not start at A1 it is not
+   * equivalent to omitting the option.
+   */
+  headerRow?: number;
+};
+
 // Parse an XLSX buffer, returning rows from the specified sheet as header-keyed objects.
 export const parseXlsxSheet = (
   buffer: Buffer | ArrayBuffer,
   sheetName?: string,
+  options: ParseXlsxSheetOptions = {},
 ): ParsedRow[] => {
   const type = buffer instanceof ArrayBuffer ? 'array' : 'buffer';
   // raw: true on READ — critical. Without it, xlsx converts CSV date-like
@@ -45,9 +58,15 @@ export const parseXlsxSheet = (
 
   // With raw: true on read, cells are preserved as raw strings (CSV) or
   // serials (XLSX date cells). raw: true here keeps them as-is.
+  //
+  // headerRow > 1 passes a numeric `range` (0-based start row): sheet_to_json
+  // then keys rows by THAT row's cells and ignores everything above it —
+  // banner/title rows in BCBS-style exports never become headers or data.
+  const headerRow = options.headerRow ?? 1;
   const rows = XLSX.utils.sheet_to_json<ParsedRow>(sheet, {
     defval: null,
     raw: true,
+    ...(headerRow > 1 ? { range: headerRow - 1 } : {}),
   });
 
   if (rows.length > MAX_PARSED_ROWS) {

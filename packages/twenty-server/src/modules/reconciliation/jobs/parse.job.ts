@@ -9,6 +9,8 @@ import {
   isKnownStatusEngine,
   STATUS_ENGINE_IDS,
   STATUS_ENGINE_ROLE_TYPES,
+  STATUS_ENGINES,
+  validateStatusEngineParams,
 } from 'src/modules/reconciliation/engines/status';
 import { parseXlsxSheet } from 'src/modules/reconciliation/parsers/xlsx';
 import {
@@ -24,6 +26,10 @@ import {
   TransitionConflictError,
 } from 'src/modules/reconciliation/services/state-machine.service';
 import { parseCarrierPipelineConfig } from 'src/modules/reconciliation/types/carrier-config';
+import {
+  computeConfigFingerprint,
+  mergeRunWarnings,
+} from 'src/modules/reconciliation/utils/config-fingerprint.util';
 import type {
   ColumnMapping,
   ReconciliationJobData,
@@ -95,21 +101,34 @@ export class ReconciliationParseJob {
         reconciliationId,
       );
 
-      // 3. Parse xlsx into raw rows (keys = XLSX column headers)
+      // 3. Validated carrier-config boundary (types/carrier-config.ts) — no
+      // raw fieldConfig/statusConfig casts. A malformed config throws
+      // CarrierConfigValidationError, which the catch below routes to
+      // setFailed with the exact key and problem. Runs BEFORE the sheet
+      // parse because parseSettings.headerRow (OMN-12) feeds parseXlsxSheet.
+      //
+      // Boundary warnings (legacy fallbacks, ignored keys) are collected and
+      // persisted into stats.warnings at the PARSED stats write below, so
+      // operators see them in the run-summary banner instead of only in
+      // worker logs (OMN-11; audit 2026-06-11 §operability).
+      const runWarnings: string[] = [];
+      const pipelineConfig = parseCarrierPipelineConfig(carrierConfig, {
+        onWarning: (message) => {
+          this.logger.warn(message);
+          runWarnings.push(message);
+        },
+      });
+
+      // 4. Parse xlsx into raw rows (keys = cells of the configured header
+      // row — parseSettings.headerRow, default 1 = today's behavior; rows
+      // above it are ignored entirely).
       const rawRows = parseXlsxSheet(
         fileBuffer,
         reconciliation.sheetName ?? undefined,
+        { headerRow: pipelineConfig.parseSettings.headerRow },
       );
 
       this.logger.log(`Parsed ${rawRows.length} raw rows from xlsx`);
-
-      // 4. Validated carrier-config boundary (types/carrier-config.ts) — no
-      // raw fieldConfig/statusConfig casts. A malformed config throws
-      // CarrierConfigValidationError, which the catch below routes to
-      // setFailed with the exact key and problem.
-      const pipelineConfig = parseCarrierPipelineConfig(carrierConfig, {
-        onWarning: (message) => this.logger.warn(message),
-      });
 
       // Fail fast at PARSE on an unknown status engine id (Phase 4.3): an
       // unknown engine would otherwise surface only at MATCH (or worse,
@@ -122,6 +141,14 @@ export class ReconciliationParseJob {
             `Fix statusConfig.engineId on the carrier config and re-run.`,
         );
       }
+
+      const statusEngine = STATUS_ENGINES[pipelineConfig.statusEngineId];
+
+      // Fail fast on engineParams the selected engine's schema rejects —
+      // a typo'd or mistyped param must kill the run here, not be silently
+      // ignored at derive time. (match.job re-validates and threads the
+      // result into the engine config; parse only gates.)
+      validateStatusEngineParams(statusEngine, pipelineConfig.engineParams);
 
       const computedFields = pipelineConfig.computedFields;
       const rawStatusFieldMapping = pipelineConfig.statusFieldMapping;
@@ -136,18 +163,33 @@ export class ReconciliationParseJob {
         actualHeaders,
       );
 
-      // Validate status-role resolution: a configured header that matches
-      // neither a file header nor a computed-field output silently feeds
-      // null into the status engine (blanket PAYMENT_ERROR / default
-      // ACTIVE_APPROVED derivations for the whole book). Warn for optional
-      // roles; fail the run for roles the engine requires.
-      if (rawRows.length > 0) {
-        const roleValidation = validateStatusRoleMapping(
-          statusFieldMapping,
-          actualHeaders,
-          computedFields,
-        );
+      // Validate status-role mapping against the SELECTED ENGINE's declared
+      // requirements (its descriptor's requiredRoles — no more global,
+      // Ambetter-tuned constant):
+      //   - presence: a required role missing from statusConfig.fieldMapping
+      //     entirely silently feeds null into the engine (blanket
+      //     PAYMENT_ERROR / default ACTIVE_APPROVED derivations for the
+      //     whole book) — fail the run, no rows needed to detect it;
+      //   - resolvability: a configured header matching neither a file
+      //     header nor a computed-field output does the same — warn for
+      //     optional roles, fail the run for required ones.
+      const roleValidation = validateStatusRoleMapping(
+        statusFieldMapping,
+        actualHeaders,
+        computedFields,
+        statusEngine.requiredRoles,
+      );
 
+      if (roleValidation.missingRequired.length > 0) {
+        throw new Error(
+          `Status engine "${statusEngine.id}" requires role(s) not present in ` +
+            `statusConfig.fieldMapping: ${roleValidation.missingRequired.join(', ')}. ` +
+            `Map each required role to a file header or computed-field output ` +
+            `on the carrier config and re-run.`,
+        );
+      }
+
+      if (rawRows.length > 0) {
         for (const {
           role,
           configuredHeader,
@@ -193,15 +235,25 @@ export class ReconciliationParseJob {
       // Per-cell transforms + computed fields, using the carrier's validated
       // transform vocabulary (Phase 4.8; defaults merge in buildTransforms).
       // Cells that fail their transform keep their raw value and are counted
-      // in parseErrors (surfaced below as stats.parseErrors).
-      const { normalized, parseErrors } = transformRows(
+      // in parseErrors (surfaced below as stats.parseErrors). Row filters +
+      // skipFooterRows (parseSettings, OMN-12) drop footer/junk rows here,
+      // counted in skippedByRowFilter (surfaced as stats.skippedByRowFilter).
+      const { normalized, parseErrors, skippedByRowFilter } = transformRows(
         rawRows,
         headerTypes,
         computedFields,
         statusFieldMapping,
         policyNumberHeader,
         pipelineConfig.transformRules,
+        pipelineConfig.parseSettings,
       );
+
+      if (skippedByRowFilter > 0) {
+        this.logger.log(
+          `Row filters skipped ${skippedByRowFilter} of ${rawRows.length} raw rows ` +
+            `(parseSettings.rowFilters / skipFooterRows)`,
+        );
+      }
 
       if (parseErrors.length > 0) {
         const sample = parseErrors
@@ -224,7 +276,10 @@ export class ReconciliationParseJob {
         normalized,
       );
 
-      // 6. Transition PARSING → PARSED
+      // 6. Transition PARSING → PARSED. warnings + configFingerprint are
+      // stamped here (and carried into the auto-chain write below) so the
+      // match job can detect a config edit landing between the chained
+      // parse and match reads (OMN-11).
       const parseStats = {
         totalBobRows: normalized.length,
         autoMatched: 0,
@@ -236,6 +291,9 @@ export class ReconciliationParseJob {
         failed: 0,
         skipped: 0,
         parseErrors: parseErrors.length,
+        skippedByRowFilter,
+        warnings: mergeRunWarnings(runWarnings),
+        configFingerprint: computeConfigFingerprint(pipelineConfig),
       };
 
       await this.stateMachine.transition(

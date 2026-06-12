@@ -227,6 +227,50 @@ describe('ReconciliationDecisionRuleService', () => {
       ).toBeNull();
     });
 
+    it('returns null for missing-from-BOB items — never learned, never auto-applied (OMN-12)', () => {
+      const { service } = createService();
+
+      // The exact shape match.job's missing-from-BOB phase emits: category
+      // UNMATCHED (the SELECT has no MISSING_FROM_BOB option), no fieldDiffs,
+      // no status diff. Two independent gates exclude it from rule learning:
+      // the category bail-out and the missing status diff.
+      const missingFromBobItem = createStatusOnlyItem({
+        category: 'UNMATCHED',
+        matchMethod: 'MISSING_FROM_BOB',
+        fieldDiffs: null,
+        flags: [],
+        statusChangeReason: null,
+      });
+
+      expect(
+        service.buildStatusRuleSignature(missingFromBobItem, CARRIER_NAME),
+      ).toBeNull();
+    });
+
+    it('returns null for policy-number discovery items — the policyNumber diff is not a status diff (OMN-12)', () => {
+      const { service } = createService();
+
+      const discoveryItem = createStatusOnlyItem({
+        category: 'UPDATE',
+        matchMethod: 'POLICY_NUMBER_DISCOVERY',
+        flags: [],
+        statusChangeReason: null,
+        fieldDiffs: [
+          {
+            field: 'policyNumber',
+            crmField: 'policyNumber',
+            bobValue: 'U999',
+            crmValue: null,
+            note: null,
+          },
+        ],
+      });
+
+      expect(
+        service.buildStatusRuleSignature(discoveryItem, CARRIER_NAME),
+      ).toBeNull();
+    });
+
     // Hash-drift guard (audit test-gap #1): these hashes are persisted on
     // rules and review items, so ANY change to the signature shape,
     // normalization, or stable stringification silently orphans every

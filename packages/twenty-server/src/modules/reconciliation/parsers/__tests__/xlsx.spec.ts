@@ -108,6 +108,77 @@ describe('parseXlsxSheet', () => {
       'Sheet "Missing" not found. Available sheets: Sheet1',
     );
   });
+
+  describe('headerRow option (OMN-12 — parseSettings.headerRow)', () => {
+    const bannerSheet = [
+      ['ACME Health — Book of Business', null, null],
+      ['Generated 2026-06-01', null, null],
+      ['Policy Number', 'Effective Date', 'Premium'],
+      ['U123', '01/01/2026', 42.5],
+      ['U456', '12/31/2025', 0],
+    ];
+
+    it('keys rows by the configured 1-based header row, ignoring rows above', () => {
+      const rows = parseXlsxSheet(buildXlsxBuffer(bannerSheet), undefined, {
+        headerRow: 3,
+      });
+
+      expect(rows).toEqual([
+        {
+          'Policy Number': 'U123',
+          'Effective Date': '01/01/2026',
+          Premium: 42.5,
+        },
+        {
+          'Policy Number': 'U456',
+          'Effective Date': '12/31/2025',
+          Premium: 0,
+        },
+      ]);
+    });
+
+    it('without the option, banner cells become headers (legacy behavior, bit-identical)', () => {
+      const rows = parseXlsxSheet(buildXlsxBuffer(bannerSheet));
+
+      // First sheet row is the header row — the historical default.
+      expect(Object.keys(rows[0])[0]).toBe('ACME Health — Book of Business');
+    });
+
+    it('headerRow: 1 is identical to omitting the option (no range passed)', () => {
+      const buffer = buildXlsxBuffer([
+        ['Policy Number', 'Effective Date'],
+        ['U123', '01/01/2026'],
+      ]);
+
+      expect(parseXlsxSheet(buffer, undefined, { headerRow: 1 })).toEqual(
+        parseXlsxSheet(buffer),
+      );
+      expect(parseXlsxSheet(buffer, undefined, {})).toEqual(
+        parseXlsxSheet(buffer),
+      );
+    });
+
+    it('works for CSV buffers too', () => {
+      const buffer = Buffer.from(
+        'Some banner line\nPolicy Number,Effective Date\nU123,01/01/2026\n',
+      );
+
+      expect(parseXlsxSheet(buffer, undefined, { headerRow: 2 })).toEqual([
+        { 'Policy Number': 'U123', 'Effective Date': '01/01/2026' },
+      ]);
+    });
+
+    it('honors headerRow together with an explicit sheet name', () => {
+      const rows = parseXlsxSheet(
+        buildXlsxBuffer(bannerSheet, 'BOB Export'),
+        'BOB Export',
+        { headerRow: 3 },
+      );
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0]['Policy Number']).toBe('U123');
+    });
+  });
 });
 
 describe('ReconciliationAttachmentService.readSourceFile', () => {

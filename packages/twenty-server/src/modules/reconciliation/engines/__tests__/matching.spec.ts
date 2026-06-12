@@ -1,5 +1,6 @@
 import {
   matchRow,
+  buildIdentifierCanonicalizer,
   buildMatchIndexes,
   buildMatchInputFromMapping,
   agentNameMatches,
@@ -8,19 +9,26 @@ import {
   isValidAmbetterPolicyNumber,
   normalizeDateOnly,
   normalizePolicyNumber,
+  resolveCarrierIdentifier,
   selectByActiveStatus,
   selectByActiveTerm,
   selectByMostRecentEffectiveDate,
   DEFAULT_MATCHING_CONFIG,
+  DEFAULT_TIER_TUNING,
+  MATCH_TIER_IDS,
   type CrmPolicy,
   type MatchInput,
+  type MatchingConfig,
+  type Override,
 } from 'src/modules/reconciliation/engines/matching';
+import { NEGATIVE_TERMINAL_STATUSES } from 'src/modules/reconciliation/types/policy-statuses';
 import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
 const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   id: 'policy-1',
   policyNumber: 'U94692964',
   applicationId: null,
+  externalPolicyId: null,
   effectiveDate: '2026-01-01',
   expirationDate: null,
   paidThroughDate: null,
@@ -49,6 +57,9 @@ const makeMatchInput = (overrides: Partial<MatchInput> = {}): MatchInput => ({
   memberFirstName: 'John',
   memberLastName: 'Smith',
   memberDob: '1990-05-15',
+  memberId: null,
+  subscriberId: null,
+  groupNumber: null,
   ...overrides,
 });
 
@@ -1181,6 +1192,568 @@ describe('matching engine', () => {
     });
   });
 
+  describe('tierTuning (OMN-12 — tier internals as knobs)', () => {
+    it("DEFAULT_TIER_TUNING pins today's constants exactly", () => {
+      // These ARE the literals matchRow used before OMN-12 — changing any
+      // of them changes Ambetter behavior and is a breaking change.
+      expect(DEFAULT_TIER_TUNING).toEqual({
+        tierConfidences: {
+          POLICY_NUMBER_DATE_AGENT: 98,
+          POLICY_NUMBER_DATE: 95,
+          POLICY_NUMBER_AGENT: 85,
+          POLICY_NUMBER_SINGLE: 90,
+          // IDENTIFIER_EXACT is NEW in OMN-12 (no pre-knob literal to pin);
+          // it is only read when identifierRoles is configured.
+          IDENTIFIER_EXACT: 90,
+          NAME_DOB_DATE: 60,
+        },
+        tier6Weights: {
+          dateProximity: 40,
+          agentMatch: 30,
+          memberName: 20,
+          dobExact: 10,
+          confidenceCap: 70,
+        },
+        dateProximityBands: [
+          { maxDays: 0, score: 1 },
+          { maxDays: 7, score: 0.9 },
+          { maxDays: 30, score: 0.7 },
+          { maxDays: 60, score: 0.4 },
+        ],
+        dateProximityFloor: 0.1,
+      });
+    });
+
+    it('MATCH_TIER_IDS is the canonical 9-tier vocabulary and the default tier list', () => {
+      expect(MATCH_TIER_IDS).toEqual([
+        'OVERRIDE',
+        'POLICY_NUMBER_DATE_AGENT',
+        'POLICY_NUMBER_DATE',
+        'POLICY_NUMBER_AGENT',
+        'POLICY_NUMBER_SINGLE',
+        'POLICY_NUMBER_MULTI_BEST',
+        'IDENTIFIER_EXACT',
+        'NPN_DATE_NAME',
+        'NAME_DOB_DATE',
+      ]);
+      expect(DEFAULT_MATCHING_CONFIG.enabledTiers).toEqual([
+        ...MATCH_TIER_IDS,
+      ]);
+      expect(DEFAULT_MATCHING_CONFIG.tierTuning).toEqual({});
+      // OMN-12 identity/strategy knobs default to today's behavior.
+      expect(DEFAULT_MATCHING_CONFIG.identifierRoles).toEqual({});
+      expect(DEFAULT_MATCHING_CONFIG.identifierNormalization).toEqual({});
+      expect(DEFAULT_MATCHING_CONFIG.dedupStrategy).toBe(
+        'keepNewestEffectiveDate',
+      );
+      expect(DEFAULT_MATCHING_CONFIG.narrowingStrategies).toEqual([
+        'activeStatus',
+        'activeTerm',
+        'mostRecentEffectiveDate',
+      ]);
+    });
+
+    describe('parity: tierTuning unset ≡ tierTuning set to the defaults (full corpus)', () => {
+      type Scenario = {
+        name: string;
+        policies: CrmPolicy[];
+        input: MatchInput;
+        overrides?: Override[];
+      };
+
+      // One scenario per decision path matchRow can take — every tier,
+      // both tier-6 band regions, and both narrowing pre-passes.
+      const corpus: Scenario[] = [
+        {
+          name: 'tier1-override',
+          policies: [makePolicy()],
+          input: makeMatchInput(),
+          overrides: [
+            {
+              carrierPolicyNumber: 'U94692964',
+              carrierName: 'Ambetter',
+              crmPolicyId: 'policy-1',
+              isActive: true,
+            },
+          ],
+        },
+        {
+          name: 'tier2-date-agent',
+          policies: [makePolicy()],
+          input: makeMatchInput(),
+        },
+        {
+          name: 'tier3-date',
+          policies: [makePolicy({ 'agent.name': 'Different Agency' })],
+          input: makeMatchInput(),
+        },
+        {
+          name: 'tier4-agent',
+          policies: [makePolicy({ effectiveDate: '2025-01-01' })],
+          input: makeMatchInput(),
+        },
+        {
+          name: 'tier5-single',
+          policies: [
+            makePolicy({
+              'agent.name': 'Different Agency',
+              effectiveDate: '2025-01-01',
+            }),
+          ],
+          input: makeMatchInput(),
+        },
+        {
+          name: 'tier6-multi-dob-decides',
+          policies: [
+            makePolicy({
+              id: 'policy-wrong-dob',
+              effectiveDate: '2025-06-01',
+              'lead.dateOfBirth': '1985-01-01',
+            }),
+            makePolicy({
+              id: 'policy-right-dob',
+              effectiveDate: '2025-06-01',
+            }),
+          ],
+          input: makeMatchInput({ effectiveDate: '2026-01-01', agentName: null }),
+        },
+        {
+          name: 'tier6-no-signals',
+          policies: [
+            makePolicy({ id: 'policy-old', effectiveDate: '2026-01-01' }),
+            makePolicy({ id: 'policy-new', effectiveDate: '2026-02-01' }),
+          ],
+          input: makeMatchInput({
+            effectiveDate: null,
+            paidThroughDate: null,
+            agentName: null,
+          }),
+        },
+        {
+          name: 'tier7-npn-name',
+          policies: [
+            makePolicy({
+              id: 'policy-fuzzy',
+              policyNumber: 'U1',
+              'lead.name.firstName': 'Josue',
+            }),
+            makePolicy({ id: 'policy-exact', policyNumber: 'U2' }),
+          ],
+          input: makeMatchInput({ policyNumber: null, memberDob: null }),
+        },
+        {
+          name: 'tier8-name-dob-date',
+          policies: [makePolicy({ policyNumber: 'U1' })],
+          input: makeMatchInput({ policyNumber: null, agentNpn: null }),
+        },
+        {
+          name: 'tier9-unmatched',
+          policies: [
+            makePolicy({
+              policyNumber: 'U99999999',
+              'agent.npn': '00000000',
+              'lead.dateOfBirth': '1970-01-01',
+              'lead.name.firstName': 'Alice',
+              'lead.name.lastName': 'Wonderland',
+            }),
+          ],
+          input: makeMatchInput(),
+        },
+        {
+          name: 'narrow-active-status',
+          policies: [
+            makePolicy({
+              id: 'policy-2025',
+              effectiveDate: '2025-10-01',
+              expirationDate: '2025-12-31',
+              status: 'CANCELED',
+            }),
+            makePolicy({
+              id: 'policy-2026',
+              effectiveDate: '2026-01-01',
+              expirationDate: null,
+              status: 'ACTIVE_PLACED',
+            }),
+          ],
+          input: makeMatchInput({
+            effectiveDate: '2025-10-01',
+            paidThroughDate: '2026-04-30',
+          }),
+        },
+        {
+          name: 'narrow-recency',
+          policies: [
+            makePolicy({
+              id: 'policy-jan',
+              effectiveDate: '2026-01-01',
+              expirationDate: '2026-01-01',
+              status: 'CANCELED',
+            }),
+            makePolicy({
+              id: 'policy-feb',
+              effectiveDate: '2026-02-01',
+              expirationDate: '2026-03-10',
+              status: 'CANCELED',
+            }),
+          ],
+          input: makeMatchInput({
+            effectiveDate: '2026-01-01',
+            paidThroughDate: '2026-12-31',
+          }),
+        },
+      ];
+
+      it('produces byte-identical decisions across the corpus', () => {
+        const explicitDefaults: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          tierTuning: {
+            tierConfidences: { ...DEFAULT_TIER_TUNING.tierConfidences },
+            tier6Weights: { ...DEFAULT_TIER_TUNING.tier6Weights },
+            dateProximityBands: DEFAULT_TIER_TUNING.dateProximityBands.map(
+              (band) => ({ ...band }),
+            ),
+            dateProximityFloor: DEFAULT_TIER_TUNING.dateProximityFloor,
+          },
+        };
+
+        for (const scenario of corpus) {
+          const indexes = buildMatchIndexes(scenario.policies);
+          const unset = matchRow(
+            scenario.input,
+            indexes,
+            scenario.overrides ?? [],
+            'Ambetter',
+            DEFAULT_MATCHING_CONFIG,
+          );
+          const explicit = matchRow(
+            scenario.input,
+            indexes,
+            scenario.overrides ?? [],
+            'Ambetter',
+            explicitDefaults,
+          );
+
+          // Byte-identical: same JSON, key order included.
+          expect(`${scenario.name}: ${JSON.stringify(explicit)}`).toBe(
+            `${scenario.name}: ${JSON.stringify(unset)}`,
+          );
+        }
+      });
+
+      it('tierTuning unset reproduces the historical constants across the corpus', () => {
+        const decisions = corpus.map((scenario) => {
+          const decision = matchRow(
+            scenario.input,
+            buildMatchIndexes(scenario.policies),
+            scenario.overrides ?? [],
+            'Ambetter',
+            DEFAULT_MATCHING_CONFIG,
+          );
+
+          return `${scenario.name}: ${decision.method}@${decision.confidence}→${decision.status}`;
+        });
+
+        expect(decisions).toEqual([
+          'tier1-override: OVERRIDE@100→AUTO_MATCHED',
+          'tier2-date-agent: POLICY_NUMBER_DATE_AGENT@98→AUTO_MATCHED',
+          'tier3-date: POLICY_NUMBER_PLUS_EFFECTIVE_DATE@95→AUTO_MATCHED',
+          'tier4-agent: POLICY_NUMBER_PLUS_AGENT@85→AUTO_MATCHED',
+          'tier5-single: POLICY_NUMBER_SINGLE@90→AUTO_MATCHED',
+          // 0.1 (>60d) * 40 + name 20 + DOB 10 = 34
+          'tier6-multi-dob-decides: POLICY_NUMBER_MULTI_BEST@34→NEEDS_REVIEW',
+          // name 20 + DOB 10 = 30
+          'tier6-no-signals: POLICY_NUMBER_MULTI_BEST@30→NEEDS_REVIEW',
+          // exact name ≥ 0.98 high band
+          'tier7-npn-name: NPN_DATE_NAME@92→AUTO_MATCHED',
+          'tier8-name-dob-date: NAME_DOB_DATE@60→NEEDS_REVIEW',
+          'tier9-unmatched: UNMATCHED@0→UNMATCHED',
+          'narrow-active-status: POLICY_NUMBER_PLUS_AGENT@85→AUTO_MATCHED',
+          `narrow-recency: POLICY_NUMBER_NARROWED_RECENT@${DEFAULT_MATCHING_CONFIG.autoMatchThreshold - 1}→NEEDS_REVIEW`,
+        ]);
+      });
+    });
+
+    describe('each knob moves behavior', () => {
+      const withTuning = (
+        tierTuning: NonNullable<MatchingConfig['tierTuning']>,
+      ): MatchingConfig => ({ ...DEFAULT_MATCHING_CONFIG, tierTuning });
+
+      it('tierConfidences.POLICY_NUMBER_DATE_AGENT rescores Tier 2', () => {
+        const indexes = buildMatchIndexes([makePolicy()]);
+        const result = matchRow(
+          makeMatchInput(),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { POLICY_NUMBER_DATE_AGENT: 70 } }),
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
+        expect(result.confidence).toBe(70);
+        expect(result.status).toBe('NEEDS_REVIEW');
+      });
+
+      it('tierConfidences.POLICY_NUMBER_DATE rescores Tier 3', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({ 'agent.name': 'Different Agency' }),
+        ]);
+        const result = matchRow(
+          makeMatchInput(),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { POLICY_NUMBER_DATE: 50 } }),
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_PLUS_EFFECTIVE_DATE');
+        expect(result.confidence).toBe(50);
+        expect(result.status).toBe('NEEDS_REVIEW');
+      });
+
+      it('tierConfidences.POLICY_NUMBER_AGENT rescores Tier 4', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({ effectiveDate: '2025-01-01' }),
+        ]);
+        const result = matchRow(
+          makeMatchInput(),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { POLICY_NUMBER_AGENT: 40 } }),
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_PLUS_AGENT');
+        expect(result.confidence).toBe(40);
+        expect(result.status).toBe('NEEDS_REVIEW');
+      });
+
+      it('tierConfidences.POLICY_NUMBER_SINGLE demotes identifier-only matches (the shared-member-ID case)', () => {
+        const indexes = buildMatchIndexes([
+          makePolicy({
+            'agent.name': 'Different Agency',
+            effectiveDate: '2025-01-01',
+          }),
+        ]);
+        const result = matchRow(
+          makeMatchInput(),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { POLICY_NUMBER_SINGLE: 50 } }),
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_SINGLE');
+        expect(result.confidence).toBe(50);
+        expect(result.status).toBe('NEEDS_REVIEW');
+      });
+
+      it('tierConfidences.NAME_DOB_DATE promotes Tier 8 into auto-match', () => {
+        const indexes = buildMatchIndexes([makePolicy({ policyNumber: 'U1' })]);
+        const result = matchRow(
+          makeMatchInput({ policyNumber: null, agentNpn: null }),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { NAME_DOB_DATE: 90 } }),
+        );
+
+        expect(result.method).toBe('NAME_DOB_DATE');
+        expect(result.confidence).toBe(90);
+        expect(result.status).toBe('AUTO_MATCHED');
+      });
+
+      it('a partial tierConfidences leaves the other tiers at the constants', () => {
+        const indexes = buildMatchIndexes([makePolicy()]);
+        const result = matchRow(
+          makeMatchInput(),
+          indexes,
+          [],
+          'Ambetter',
+          withTuning({ tierConfidences: { NAME_DOB_DATE: 90 } }),
+        );
+
+        expect(result.method).toBe('POLICY_NUMBER_DATE_AGENT');
+        expect(result.confidence).toBe(98);
+      });
+
+      // --- Tier 6 weight/band knobs. The dummy candidate keeps the tier in
+      // multi-match mode while staying far behind on every score variant. ---
+      const dummyCandidate = makePolicy({
+        id: 'dummy-far',
+        effectiveDate: '2024-01-01',
+        'agent.name': 'Zeta Brokers',
+        'lead.name.firstName': 'Zed',
+        'lead.name.lastName': 'Quux',
+        'lead.dateOfBirth': '1970-01-01',
+      });
+
+      it('tier6Weights.agentMatch=0 removes the +30 agent bonus (winner flips)', () => {
+        const policies = [
+          makePolicy({ id: 'with-agent', effectiveDate: '2025-12-15' }),
+          makePolicy({
+            id: 'no-agent',
+            effectiveDate: '2026-01-08',
+            'agent.name': 'Zeta Brokers',
+          }),
+        ];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput(); // eff 2026-01-01, agent matches 'with-agent'
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        // Default weights: with-agent = 0.7*40 + 30 + 20 + 10 = 88 (cap 70);
+        // no-agent = 0.9*40 + 20 + 10 = 66.
+        const withBonus = matchRow(input, indexes, [], 'Ambetter', tier6Only);
+
+        expect(withBonus.crmPolicyId).toBe('with-agent');
+        expect(withBonus.confidence).toBe(70); // capped
+
+        // Zeroed bonus: with-agent = 58, no-agent = 66 — winner flips.
+        const withoutBonus = matchRow(input, indexes, [], 'Ambetter', {
+          ...tier6Only,
+          tierTuning: { tier6Weights: { agentMatch: 0 } },
+        });
+
+        expect(withoutBonus.crmPolicyId).toBe('no-agent');
+        expect(withoutBonus.confidence).toBe(66);
+      });
+
+      it('tier6Weights.confidenceCap lifts the 70 ceiling', () => {
+        const policies = [makePolicy({ id: 'perfect' }), dummyCandidate];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput(); // exact date + agent + name + DOB = 100
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        const capped = matchRow(input, indexes, [], 'Ambetter', tier6Only);
+
+        expect(capped.confidence).toBe(70);
+        expect(capped.status).toBe('NEEDS_REVIEW');
+
+        const uncapped = matchRow(input, indexes, [], 'Ambetter', {
+          ...tier6Only,
+          tierTuning: { tier6Weights: { confidenceCap: 100 } },
+        });
+
+        expect(uncapped.crmPolicyId).toBe('perfect');
+        expect(uncapped.confidence).toBe(100);
+        expect(uncapped.status).toBe('AUTO_MATCHED');
+      });
+
+      it('tier6Weights.dateProximity rescales the date signal', () => {
+        const policies = [
+          makePolicy({ id: 'near-date', effectiveDate: '2026-01-08' }),
+          dummyCandidate,
+        ];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput({ agentName: null });
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        // Default: 0.9*40 + 20 + 10 = 66.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', tier6Only).confidence,
+        ).toBe(66);
+        // Weight 10: 0.9*10 + 20 + 10 = 39.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', {
+            ...tier6Only,
+            tierTuning: { tier6Weights: { dateProximity: 10 } },
+          }).confidence,
+        ).toBe(39);
+      });
+
+      it('tier6Weights.memberName and dobExact are independently tunable', () => {
+        const policies = [
+          makePolicy({ id: 'near-date', effectiveDate: '2026-01-08' }),
+          dummyCandidate,
+        ];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput({ agentName: null });
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        // Default 66; zeroing the name weight drops exactly its 20…
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', {
+            ...tier6Only,
+            tierTuning: { tier6Weights: { memberName: 0 } },
+          }).confidence,
+        ).toBe(46);
+        // …and zeroing the DOB bonus drops exactly its 10.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', {
+            ...tier6Only,
+            tierTuning: { tier6Weights: { dobExact: 0 } },
+          }).confidence,
+        ).toBe(56);
+      });
+
+      it('dateProximityBands replaces the band table (tighter carriers score 7-day gaps at the floor)', () => {
+        const policies = [
+          makePolicy({ id: 'near-date', effectiveDate: '2026-01-08' }),
+          dummyCandidate,
+        ];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput({ agentName: null });
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        // Default bands: 7 days → 0.9 → 36 + 20 + 10 = 66.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', tier6Only).confidence,
+        ).toBe(66);
+        // Tight bands (≤3 days only): 7 days → floor 0.1 → 4 + 20 + 10 = 34.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', {
+            ...tier6Only,
+            tierTuning: {
+              dateProximityBands: [
+                { maxDays: 0, score: 1 },
+                { maxDays: 3, score: 0.5 },
+              ],
+            },
+          }).confidence,
+        ).toBe(34);
+      });
+
+      it('dateProximityFloor lifts the beyond-every-band score', () => {
+        const policies = [
+          makePolicy({ id: 'stale-date', effectiveDate: '2025-06-01' }),
+          dummyCandidate,
+        ];
+        const indexes = buildMatchIndexes(policies);
+        const input = makeMatchInput({ agentName: null });
+        const tier6Only: MatchingConfig = {
+          ...DEFAULT_MATCHING_CONFIG,
+          enabledTiers: ['POLICY_NUMBER_MULTI_BEST'],
+        };
+
+        // Default floor 0.1 (>60 days): 4 + 20 + 10 = 34.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', tier6Only).confidence,
+        ).toBe(34);
+        // Floor 1: 40 + 20 + 10 = 70.
+        expect(
+          matchRow(input, indexes, [], 'Ambetter', {
+            ...tier6Only,
+            tierTuning: { dateProximityFloor: 1 },
+          }).confidence,
+        ).toBe(70);
+      });
+    });
+  });
+
   describe('buildMatchInputFromMapping', () => {
     const columnMapping: ColumnMapping = {
       policy_no: {
@@ -1242,6 +1815,618 @@ describe('matching engine', () => {
         'member_email',
         'lead.emails.primaryEmail',
       );
+    });
+
+    it('feeds configured identifier roles from columnMapping (and stays inert without the knob)', () => {
+      const mapping: ColumnMapping = {
+        'Member ID': {
+          crmField: 'applicationId',
+          fieldType: 'TEXT',
+          fieldKey: 'applicationId',
+        },
+      };
+
+      const withoutKnob = buildMatchInputFromMapping(
+        { 'Member ID': 'app-1' },
+        mapping,
+      );
+
+      expect(withoutKnob.memberId).toBeNull();
+
+      const withKnob = buildMatchInputFromMapping(
+        { 'Member ID': 'app-1' },
+        mapping,
+        undefined,
+        undefined,
+        { memberId: 'applicationId' },
+      );
+
+      expect(withKnob.memberId).toBe('app-1');
+      expect(withKnob.subscriberId).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // OMN-12 identity: per-carrier identifier canonicalization
+  // -------------------------------------------------------------------------
+
+  describe('buildIdentifierCanonicalizer (OMN-12 identity)', () => {
+    it('returns normalizePolicyNumber ITSELF when no knob is active (the bit-for-bit signal)', () => {
+      expect(buildIdentifierCanonicalizer(null, undefined)).toBe(
+        normalizePolicyNumber,
+      );
+      // Ambetter's '^U' has no capture group; {} normalization is a no-op.
+      expect(buildIdentifierCanonicalizer(/^u/i, {})).toBe(
+        normalizePolicyNumber,
+      );
+    });
+
+    it('extracts the first capture group when the pattern matches, falls back symmetrically when it does not', () => {
+      const canonicalize = buildIdentifierCanonicalizer(/^ABC(.+)$/i, {});
+
+      expect(canonicalize('abc123')).toBe('123');
+      // CRM side often stores the bare identifier — no capture, but the
+      // same trim+uppercase path keeps lookups symmetric.
+      expect(canonicalize(' 123 ')).toBe('123');
+    });
+
+    it('applies prefix, suffix-pattern, and leading-zero strips after trim+uppercase', () => {
+      const canonicalize = buildIdentifierCanonicalizer(null, {
+        stripPrefix: 'xyz',
+        stripSuffixPattern: '-\\d+$',
+        stripLeadingZeros: true,
+      });
+
+      expect(canonicalize(' xyz00123-01 ')).toBe('123');
+      expect(canonicalize('00123')).toBe('123');
+      // Leading-zero strip keeps at least one character.
+      expect(canonicalize('0')).toBe('0');
+    });
+
+    it("BCBS-style: 'ABC00123456-01' (file) and '123456' (CRM) canonicalize to the same key", () => {
+      const canonicalize = buildIdentifierCanonicalizer(/^ABC(.+)$/i, {
+        stripSuffixPattern: '-\\d+$',
+        stripLeadingZeros: true,
+      });
+
+      expect(canonicalize('ABC00123456-01')).toBe('123456');
+      expect(canonicalize('123456')).toBe('123456');
+    });
+
+    it('returns null for empty/emptied values', () => {
+      const canonicalize = buildIdentifierCanonicalizer(null, {
+        stripPrefix: 'ABC',
+      });
+
+      expect(canonicalize('ABC')).toBeNull();
+      expect(canonicalize('   ')).toBeNull();
+      expect(canonicalize(null)).toBeNull();
+    });
+
+    it('matchRow + buildMatchIndexes with one canonicalizer match BCBS file values to bare CRM policy numbers', () => {
+      const canonicalize = buildIdentifierCanonicalizer(/^ABC(.+)$/i, {
+        stripSuffixPattern: '-\\d+$',
+        stripLeadingZeros: true,
+      });
+      const indexes = buildMatchIndexes(
+        [makePolicy({ id: 'bcbs-policy', policyNumber: '123456' })],
+        { canonicalize },
+      );
+
+      const result = matchRow(
+        makeMatchInput({
+          policyNumber: 'ABC00123456-01',
+          effectiveDate: null,
+          agentName: null,
+          agentNpn: null,
+          memberDob: null,
+        }),
+        indexes,
+        [],
+        'BCBS',
+        DEFAULT_MATCHING_CONFIG,
+        { canonicalize },
+      );
+
+      expect(result.method).toBe('POLICY_NUMBER_SINGLE');
+      expect(result.crmPolicyId).toBe('bcbs-policy');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // OMN-12 identity: identifier roles + the IDENTIFIER_EXACT tier
+  // -------------------------------------------------------------------------
+
+  describe('identifier roles + IDENTIFIER_EXACT tier (OMN-12 identity)', () => {
+    const identifierConfig: MatchingConfig = {
+      ...DEFAULT_MATCHING_CONFIG,
+      identifierRoles: { memberId: 'applicationId' },
+    };
+
+    // No policy number / agent / DOB / date signals — only the member ID —
+    // so every other tier provably stays out of the way.
+    const memberInput = (overrides: Partial<MatchInput> = {}): MatchInput =>
+      makeMatchInput({
+        policyNumber: null,
+        effectiveDate: null,
+        agentName: null,
+        agentNpn: null,
+        memberDob: null,
+        memberId: 'app-001',
+        ...overrides,
+      });
+
+    const memberIndexes = (policies: CrmPolicy[]) =>
+      buildMatchIndexes(policies, {
+        identifierRoles: identifierConfig.identifierRoles,
+      });
+
+    it('buildMatchIndexes builds one canonical-key index per CONFIGURED role only', () => {
+      const policies = [makePolicy({ applicationId: ' app-001 ' })];
+
+      expect(buildMatchIndexes(policies).policyByIdentifier.size).toBe(0);
+
+      const indexes = memberIndexes(policies);
+
+      expect(indexes.policyByIdentifier.get('memberId')?.get('APP-001')).toHaveLength(1);
+      expect(indexes.policyByIdentifier.has('subscriberId')).toBe(false);
+      expect(indexes.policyByIdentifier.has('groupNumber')).toBe(false);
+    });
+
+    it('matches a member-ID row to the CRM policy holding it in applicationId (unique hit)', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'member-policy',
+            policyNumber: null,
+            applicationId: 'APP-001',
+          }),
+          makePolicy({
+            id: 'other-policy',
+            policyNumber: null,
+            applicationId: 'APP-999',
+          }),
+        ]),
+        [],
+        'BCBS',
+        identifierConfig,
+      );
+
+      expect(result.method).toBe('IDENTIFIER_EXACT');
+      expect(result.crmPolicyId).toBe('member-policy');
+      expect(result.confidence).toBe(90);
+      expect(result.status).toBe('AUTO_MATCHED');
+      expect(result.notes).toContain('memberId "APP-001"');
+    });
+
+    it('is gated on identifierRoles, NOT enabledTiers — a default config never enters the tier', () => {
+      // enabledTiers includes IDENTIFIER_EXACT by default (MATCH_TIER_IDS
+      // wholesale), so the gate must be the identifierRoles knob itself.
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'member-policy',
+            policyNumber: null,
+            applicationId: 'APP-001',
+          }),
+        ]),
+        [],
+        'BCBS',
+        DEFAULT_MATCHING_CONFIG,
+      );
+
+      expect(result.method).toBe('UNMATCHED');
+    });
+
+    it('enabledTiers can still disable the tier once identifierRoles is configured', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'member-policy',
+            policyNumber: null,
+            applicationId: 'APP-001',
+          }),
+        ]),
+        [],
+        'BCBS',
+        {
+          ...identifierConfig,
+          enabledTiers: identifierConfig.enabledTiers.filter(
+            (tier) => tier !== 'IDENTIFIER_EXACT',
+          ),
+        },
+      );
+
+      expect(result.method).toBe('UNMATCHED');
+    });
+
+    it('date-corroborates a shared identifier (mirrors Tier 3)', () => {
+      const result = matchRow(
+        memberInput({ effectiveDate: '2026-01-01' }),
+        memberIndexes([
+          makePolicy({
+            id: 'term-2025',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            effectiveDate: '2025-01-01',
+          }),
+          makePolicy({
+            id: 'term-2026',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            effectiveDate: '2026-01-01',
+          }),
+        ]),
+        [],
+        'BCBS',
+        identifierConfig,
+      );
+
+      expect(result.method).toBe('IDENTIFIER_EXACT');
+      expect(result.crmPolicyId).toBe('term-2026');
+      expect(result.status).toBe('AUTO_MATCHED');
+      expect(result.notes).toContain('effective dates within');
+    });
+
+    it('shared identifier with no date signal falls to best-name and NEEDS_REVIEW (never auto-attach)', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'dep-john',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            'lead.name.firstName': 'John',
+            'lead.name.lastName': 'Smith',
+          }),
+          makePolicy({
+            id: 'dep-jane',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            'lead.name.firstName': 'Jane',
+            'lead.name.lastName': 'Smith',
+          }),
+        ]),
+        [],
+        'BCBS',
+        identifierConfig,
+      );
+
+      expect(result.method).toBe('IDENTIFIER_EXACT');
+      expect(result.crmPolicyId).toBe('dep-john');
+      expect(result.status).toBe('NEEDS_REVIEW');
+      expect(result.confidence).toBe(
+        Math.min(90, DEFAULT_MATCHING_CONFIG.autoMatchThreshold - 1),
+      );
+      expect(result.notes).toContain('shared by 2 CRM policies');
+    });
+
+    it('runs the narrowing chain on identifier candidates (re-enrollment: active beats canceled)', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'canceled-term',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            status: 'CANCELED',
+          }),
+          makePolicy({
+            id: 'active-term',
+            policyNumber: null,
+            applicationId: 'APP-001',
+            status: 'ACTIVE_PLACED',
+          }),
+        ]),
+        [],
+        'BCBS',
+        identifierConfig,
+      );
+
+      expect(result.method).toBe('IDENTIFIER_EXACT');
+      expect(result.crmPolicyId).toBe('active-term');
+      expect(result.notes).toContain(
+        'disambiguated from 2 candidates by active status',
+      );
+    });
+
+    it('tierTuning.tierConfidences.IDENTIFIER_EXACT rescores the tier', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'member-policy',
+            policyNumber: null,
+            applicationId: 'APP-001',
+          }),
+        ]),
+        [],
+        'BCBS',
+        {
+          ...identifierConfig,
+          tierTuning: { tierConfidences: { IDENTIFIER_EXACT: 70 } },
+        },
+      );
+
+      expect(result.method).toBe('IDENTIFIER_EXACT');
+      expect(result.confidence).toBe(70);
+      expect(result.status).toBe('NEEDS_REVIEW');
+    });
+
+    it('Tier 1 honors overrides keyed on the stamped identifier value', () => {
+      const result = matchRow(
+        memberInput(),
+        memberIndexes([
+          makePolicy({
+            id: 'pinned-policy',
+            policyNumber: null,
+            applicationId: 'APP-OTHER',
+          }),
+        ]),
+        [
+          {
+            carrierPolicyNumber: 'APP-001',
+            carrierName: 'BCBS',
+            crmPolicyId: 'pinned-policy',
+            isActive: true,
+          },
+        ],
+        'BCBS',
+        identifierConfig,
+      );
+
+      expect(result.method).toBe('OVERRIDE');
+      expect(result.crmPolicyId).toBe('pinned-policy');
+      expect(result.confidence).toBe(100);
+    });
+
+    it('resolveCarrierIdentifier: policy number first, then configured roles by priority, inert without the knob', () => {
+      expect(resolveCarrierIdentifier(makeMatchInput(), undefined)).toBe(
+        'U94692964',
+      );
+      expect(
+        resolveCarrierIdentifier(
+          makeMatchInput({
+            policyNumber: null,
+            memberId: ' app-1 ',
+            groupNumber: 'GRP-9',
+          }),
+          { memberId: 'applicationId', groupNumber: 'planIdentifier' },
+        ),
+      ).toBe('APP-1');
+      expect(
+        resolveCarrierIdentifier(
+          makeMatchInput({ policyNumber: null, groupNumber: 'GRP-9' }),
+          { memberId: 'applicationId', groupNumber: 'planIdentifier' },
+        ),
+      ).toBe('GRP-9');
+      // Without identifierRoles the helper is exactly policyNumber ?? null.
+      expect(
+        resolveCarrierIdentifier(
+          makeMatchInput({ policyNumber: null, memberId: 'app-1' }),
+          undefined,
+        ),
+      ).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // OMN-12 post-match strategies: configurable narrowing chain
+  // -------------------------------------------------------------------------
+
+  describe('narrowingStrategies (OMN-12 post-match strategies)', () => {
+    const reEnrollmentPair = [
+      makePolicy({
+        id: 'canceled-term',
+        status: 'CANCELED',
+        effectiveDate: '2025-01-01',
+      }),
+      makePolicy({
+        id: 'active-term',
+        status: 'ACTIVE_PLACED',
+        effectiveDate: '2025-02-01',
+      }),
+    ];
+    const noSignalInput = makeMatchInput({
+      effectiveDate: null,
+      agentName: null,
+      agentNpn: null,
+      memberDob: null,
+    });
+
+    it('the default list reproduces the fixed chain (active-status winner)', () => {
+      const result = matchRow(
+        noSignalInput,
+        buildMatchIndexes(reEnrollmentPair),
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+      );
+
+      expect(result.crmPolicyId).toBe('active-term');
+      expect(result.method).toBe('POLICY_NUMBER_SINGLE');
+      expect(result.notes).toContain(
+        'disambiguated from 2 candidates by active status',
+      );
+    });
+
+    it('an empty list disables narrowing (multi-candidate sets fall to Tier 6)', () => {
+      const result = matchRow(
+        noSignalInput,
+        buildMatchIndexes(reEnrollmentPair),
+        [],
+        'Ambetter',
+        { ...DEFAULT_MATCHING_CONFIG, narrowingStrategies: [] },
+      );
+
+      expect(result.method).toBe('POLICY_NUMBER_MULTI_BEST');
+    });
+
+    it('a subset without activeStatus skips status narrowing', () => {
+      const result = matchRow(
+        noSignalInput,
+        buildMatchIndexes(reEnrollmentPair),
+        [],
+        'Ambetter',
+        { ...DEFAULT_MATCHING_CONFIG, narrowingStrategies: ['activeTerm'] },
+      );
+
+      // paidThroughDate is null, so activeTerm cannot decide either.
+      expect(result.method).toBe('POLICY_NUMBER_MULTI_BEST');
+    });
+
+    it('order matters: recency listed first preempts the term window for all-terminal pairs', () => {
+      const canceledPair = [
+        makePolicy({
+          id: 'jan-term',
+          status: 'CANCELED',
+          effectiveDate: '2026-01-01',
+          expirationDate: '2026-01-31',
+        }),
+        makePolicy({
+          id: 'feb-term',
+          status: 'CANCELED',
+          effectiveDate: '2026-02-01',
+          expirationDate: '2026-12-31',
+        }),
+      ];
+      const input = makeMatchInput({
+        effectiveDate: null,
+        agentName: null,
+        agentNpn: null,
+        memberDob: null,
+        paidThroughDate: '2026-01-15',
+      });
+
+      const defaultResult = matchRow(
+        input,
+        buildMatchIndexes(canceledPair),
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+      );
+
+      // Default order: activeTerm decides (paid-through inside jan window).
+      expect(defaultResult.crmPolicyId).toBe('jan-term');
+      expect(defaultResult.method).toBe('POLICY_NUMBER_SINGLE');
+
+      const recencyFirst = matchRow(
+        input,
+        buildMatchIndexes(canceledPair),
+        [],
+        'Ambetter',
+        {
+          ...DEFAULT_MATCHING_CONFIG,
+          narrowingStrategies: ['mostRecentEffectiveDate', 'activeTerm'],
+        },
+      );
+
+      // Recency wins AND keeps its heuristic finalizer under reordering.
+      expect(recencyFirst.crmPolicyId).toBe('feb-term');
+      expect(recencyFirst.method).toBe('POLICY_NUMBER_NARROWED_RECENT');
+      expect(recencyFirst.status).toBe('NEEDS_REVIEW');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Wave-5 handoff: per-carrier negativeTerminalStatuses in the narrowing
+  // chain
+  // -------------------------------------------------------------------------
+
+  describe('negativeTerminalStatuses threading (Wave-5 handoff)', () => {
+    const customSet: ReadonlySet<string> = new Set([
+      ...NEGATIVE_TERMINAL_STATUSES,
+      'LAPSED',
+    ]);
+    const lapsedPair = [
+      makePolicy({ id: 'lapsed-term', status: 'LAPSED' }),
+      makePolicy({ id: 'active-term', status: 'ACTIVE_PLACED' }),
+    ];
+    const noSignalInput = makeMatchInput({
+      effectiveDate: null,
+      agentName: null,
+      agentNpn: null,
+      memberDob: null,
+    });
+
+    it('selectByActiveStatus honors a custom terminal set (default treats LAPSED as live)', () => {
+      expect(selectByActiveStatus(lapsedPair)).toBeNull();
+      expect(selectByActiveStatus(lapsedPair, customSet)?.id).toBe(
+        'active-term',
+      );
+    });
+
+    it('selectByMostRecentEffectiveDate honors a custom terminal set', () => {
+      const pair = [
+        makePolicy({
+          id: 'older',
+          status: 'LAPSED',
+          effectiveDate: '2026-01-01',
+        }),
+        makePolicy({
+          id: 'newer',
+          status: 'CANCELED',
+          effectiveDate: '2026-02-01',
+        }),
+      ];
+
+      // LAPSED is not terminal by default → not all-terminal → null.
+      expect(selectByMostRecentEffectiveDate(pair)).toBeNull();
+      expect(selectByMostRecentEffectiveDate(pair, customSet)?.id).toBe(
+        'newer',
+      );
+    });
+
+    it('matchRow options.negativeTerminalStatuses reaches the narrowing chain', () => {
+      const defaultResult = matchRow(
+        noSignalInput,
+        buildMatchIndexes(lapsedPair),
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+      );
+
+      // Default set: LAPSED counts as live → 2 "active" → no narrowing.
+      expect(defaultResult.method).toBe('POLICY_NUMBER_MULTI_BEST');
+
+      const customResult = matchRow(
+        noSignalInput,
+        buildMatchIndexes(lapsedPair),
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+        { negativeTerminalStatuses: customSet },
+      );
+
+      expect(customResult.crmPolicyId).toBe('active-term');
+      expect(customResult.notes).toContain('by active status');
+    });
+
+    it('parity: explicit default options ≡ no options', () => {
+      const indexes = buildMatchIndexes(lapsedPair);
+      const bare = matchRow(
+        noSignalInput,
+        indexes,
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+      );
+      const explicit = matchRow(
+        noSignalInput,
+        indexes,
+        [],
+        'Ambetter',
+        DEFAULT_MATCHING_CONFIG,
+        {
+          canonicalize: normalizePolicyNumber,
+          negativeTerminalStatuses: NEGATIVE_TERMINAL_STATUSES,
+        },
+      );
+
+      expect(JSON.stringify(explicit)).toBe(JSON.stringify(bare));
     });
   });
 });

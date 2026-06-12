@@ -11,6 +11,7 @@ import { isNonEmptyString } from '@sniptt/guards';
 // freshly built match records and by persisted reviewItem rows.
 export type ReviewItemIdentitySource = {
   category?: string | null;
+  matchMethod?: string | null;
   policyId?: string | null;
   carrierPolicyNumber?: string | null;
   name?: string | null;
@@ -46,6 +47,15 @@ const normalizePolicyNumber = (value: unknown): string | null => {
 //   carrier number (the diff engine's "namesakes" case). A re-match to a
 //   different CRM term is intentionally a NEW identity: the new proposal is
 //   created and the old pending one goes stale.
+// - MISSING_FROM_BOB items (OMN-12 two-way reconciliation): the CRM policy
+//   id. These items have no BOB row at all — their carrierPolicyNumber is
+//   the CRM policy's own number, which can COLLIDE with a genuine UNMATCHED
+//   file row carrying the same number (the undisambiguated-multi-candidate
+//   case flags both the row AND its candidate policies). The policy id is
+//   unique per item within a run and stable across re-runs, so decided
+//   items survive exactly like UNMATCHED ones. They reuse the UNMATCHED
+//   category (the reviewItem category SELECT has no MISSING_FROM_BOB
+//   option), hence the matchMethod discriminator.
 // - UNMATCHED items: carrier policy number alone (there is no CRM id). Rows
 //   without a usable policy number fall back to the parse job's __rowNumber
 //   snapshot stamp, then to the record name — both stable for a given
@@ -63,6 +73,13 @@ export const buildReviewItemIdentity = (
     (isNonEmptyString(policyNumberHeader)
       ? normalizePolicyNumber(snapshot?.[policyNumberHeader])
       : null);
+
+  if (
+    item.matchMethod === 'MISSING_FROM_BOB' &&
+    isNonEmptyString(item.policyId)
+  ) {
+    return `MISSING_FROM_BOB:${item.policyId}`;
+  }
 
   if (item.category === 'UNMATCHED') {
     if (carrierPolicyNumber !== null) {

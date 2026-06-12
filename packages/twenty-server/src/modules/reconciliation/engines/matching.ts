@@ -11,6 +11,11 @@ export type MatchMethod =
   | 'POLICY_NUMBER_SINGLE'
   | 'POLICY_NUMBER_MULTI_BEST'
   | 'POLICY_NUMBER_NARROWED_RECENT'
+  // Identifier-role tier (OMN-12 identity): only emitted when
+  // matchingConfig.identifierRoles is configured. The matching reviewItem
+  // matchMethod SELECT option is seeded by seed-reconciliation-objects;
+  // re-run the seed before enabling identifierRoles on a workspace.
+  | 'IDENTIFIER_EXACT'
   | 'NPN_DATE_NAME'
   | 'NAME_DOB_DATE'
   | 'MISSING_FROM_BOB'
@@ -41,7 +46,79 @@ export type MatchInput = {
   memberFirstName: string | null;
   memberLastName: string | null;
   memberDob: string | null;
+  // Identifier roles (OMN-12 identity, audit 2026-06-11 §"Identity is
+  // single-role and policy-number-shaped"): carriers whose files key people
+  // by member/subscriber/group IDs feed these via the per-carrier
+  // matchingConfig.identifierRoles knob (role → CrmPolicy snapshot path) —
+  // NOT via MATCHING_ROLE_BY_CRM_FIELD, which only carries the static
+  // CRM-path roles. Null (and inert) unless identifierRoles is configured.
+  memberId: string | null;
+  subscriberId: string | null;
+  groupNumber: string | null;
 };
+
+// ---------------------------------------------------------------------------
+// Identifier roles (OMN-12 identity)
+// ---------------------------------------------------------------------------
+
+/**
+ * The identifier-role vocabulary, in PRIORITY order: when a row carries more
+ * than one configured identifier, `matchRow`'s IDENTIFIER_EXACT tier and
+ * `resolveCarrierIdentifier` try memberId first, then subscriberId, then
+ * groupNumber.
+ */
+export const IDENTIFIER_ROLES = [
+  'memberId',
+  'subscriberId',
+  'groupNumber',
+] as const;
+
+export type IdentifierRole = (typeof IDENTIFIER_ROLES)[number];
+
+/**
+ * CRM snapshot paths an identifier role may target. Restricted to the real
+ * identifier-bearing policy fields `fetchPoliciesForMatching` provides on
+ * `CrmPolicy` (data.service.ts) — an arbitrary dot-path would silently index
+ * nothing, so the config boundary validates against this list.
+ * `policyNumber` is deliberately excluded: it is already the policyNumber
+ * role; aliasing it through identifierRoles would just duplicate the
+ * existing tiers.
+ */
+export const IDENTIFIER_ROLE_CRM_FIELDS = [
+  'applicationId',
+  'planIdentifier',
+  'externalPolicyId',
+] as const;
+
+export type IdentifierRoleCrmField =
+  (typeof IDENTIFIER_ROLE_CRM_FIELDS)[number];
+
+/**
+ * Per-carrier identifier-role wiring (matchingConfig.identifierRoles):
+ * role → CrmPolicy snapshot path. `{}` (the default) keeps the engine
+ * policy-number-only — the IDENTIFIER_EXACT tier never runs and the new
+ * MatchInput fields stay null, preserving existing behavior bit-for-bit.
+ */
+export type IdentifierRolesConfig = Partial<
+  Record<IdentifierRole, IdentifierRoleCrmField>
+>;
+
+/**
+ * Configured (role, crmField) pairs in IDENTIFIER_ROLES priority order.
+ * Single home for the iteration used by `buildMatchIndexes`,
+ * `buildMatchInputFromMapping`, `resolveCarrierIdentifier`, and the
+ * IDENTIFIER_EXACT tier so they can never disagree on priority.
+ */
+export const configuredIdentifierRoleEntries = (
+  identifierRoles: IdentifierRolesConfig | undefined,
+): [IdentifierRole, IdentifierRoleCrmField][] =>
+  IDENTIFIER_ROLES.flatMap((role) => {
+    const crmField = identifierRoles?.[role];
+
+    return crmField
+      ? [[role, crmField] as [IdentifierRole, IdentifierRoleCrmField]]
+      : [];
+  });
 
 /**
  * Schema: which CRM dot-paths feed which matching role.
@@ -70,12 +147,16 @@ export const MATCHING_ROLE_BY_CRM_FIELD = {
 } as const satisfies Record<string, keyof MatchInput>;
 
 // Compile-time guard: every role in MatchInput must appear as a value in the
-// registry above. If you add a role without an entry, this line errors with
-// "Type 'X' does not satisfy the constraint 'never'".
+// registry above — EXCEPT the identifier roles, which are deliberately not
+// static registry entries: their CRM path is per-carrier configuration
+// (matchingConfig.identifierRoles), so `buildMatchInputFromMapping` resolves
+// them from that knob instead. If you add any other role without an entry,
+// this line errors with "Type 'X' does not satisfy the constraint 'never'".
 type _Assert<T extends never> = T;
 type _UncoveredMatchInputRoles = Exclude<
   keyof MatchInput,
-  (typeof MATCHING_ROLE_BY_CRM_FIELD)[keyof typeof MATCHING_ROLE_BY_CRM_FIELD]
+  | (typeof MATCHING_ROLE_BY_CRM_FIELD)[keyof typeof MATCHING_ROLE_BY_CRM_FIELD]
+  | IdentifierRole
 >;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _MatchingRoleCoverageGuard = _Assert<_UncoveredMatchInputRoles>;
@@ -95,6 +176,146 @@ export const normalizePolicyNumber = (
   const normalized = value.trim().toUpperCase();
 
   return normalized.length > 0 ? normalized : null;
+};
+
+// ---------------------------------------------------------------------------
+// Per-carrier identifier canonicalization (OMN-12 identity; audit 2026-06-11
+// §"policyNumberPattern is gate-only; normalization fixed at trim+uppercase")
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-carrier normalization applied AFTER trim+uppercase, on BOTH the
+ * file side and the CRM side (index keys, lookups, override compares) so
+ * exact-identifier matches stay symmetric. All knobs default to no-ops.
+ */
+export type IdentifierNormalization = {
+  /** Strip leading '0's (always keeping at least one character). Applied
+   *  last, after prefix/suffix strips. Default: false. */
+  stripLeadingZeros?: boolean;
+  /** Literal prefix removed when present (compared case-insensitively —
+   *  values are uppercased first). */
+  stripPrefix?: string;
+  /** Regex (validated at the config boundary, compiled case-insensitive)
+   *  whose first match is removed — anchor with `$` for true suffixes,
+   *  e.g. '-\\d+$' for BCBS member suffixes ('…-01'). */
+  stripSuffixPattern?: string;
+};
+
+export type IdentifierCanonicalizer = (
+  value: string | null | undefined,
+) => string | null;
+
+/** Number of capturing groups in a regex (the empty-alternation trick:
+ *  `(re|)` matches '' at position 0 with every group undefined, so the
+ *  result length reveals the group count without parsing the source). */
+const countCaptureGroups = (pattern: RegExp): number =>
+  (new RegExp(`${pattern.source}|`).exec('') as RegExpExecArray).length - 1;
+
+/**
+ * Build the per-carrier canonical-identifier function:
+ *
+ *   1. trim + uppercase (`normalizePolicyNumber` — today's behavior),
+ *   2. when `pattern` (the carrier's compiled policyNumberPattern) contains
+ *      a capture group and matches the value, the FIRST group's match
+ *      replaces the value ("compare on the digits after the plan prefix");
+ *      non-matching values — typically the CRM side, which often stores the
+ *      bare identifier — skip extraction but still get step 3, keeping both
+ *      sides symmetric,
+ *   3. `identifierNormalization` strips: prefix, then suffix pattern, then
+ *      leading zeros.
+ *
+ * When no knob is active (a pattern without capture groups — Ambetter's
+ * '^U', Oscar's '^OSC-' — and default normalization) this returns
+ * `normalizePolicyNumber` ITSELF, so callers can detect "canonicalization
+ * active" by reference comparison and existing carriers stay bit-for-bit.
+ *
+ * NOTE: the match-job gate (skip rows failing policyNumberPattern) keeps
+ * testing the UN-canonicalized trim+uppercase value — extraction happens
+ * after the gate, so gate semantics are unchanged.
+ */
+export const buildIdentifierCanonicalizer = (
+  pattern: RegExp | null,
+  normalization: IdentifierNormalization | null | undefined,
+): IdentifierCanonicalizer => {
+  const capturePattern =
+    pattern !== null && countCaptureGroups(pattern) > 0 ? pattern : null;
+  const stripPrefix = normalization?.stripPrefix
+    ? normalization.stripPrefix.trim().toUpperCase()
+    : null;
+  const stripSuffixPattern = normalization?.stripSuffixPattern
+    ? new RegExp(normalization.stripSuffixPattern, 'i')
+    : null;
+  const stripLeadingZeros = normalization?.stripLeadingZeros === true;
+
+  if (
+    capturePattern === null &&
+    stripPrefix === null &&
+    stripSuffixPattern === null &&
+    !stripLeadingZeros
+  ) {
+    // No knob active — the exact pre-knob function, by reference.
+    return normalizePolicyNumber;
+  }
+
+  return (value) => {
+    const normalized = normalizePolicyNumber(value);
+
+    if (normalized === null) return null;
+
+    let canonical = normalized;
+
+    if (capturePattern) {
+      const match = canonical.match(capturePattern);
+
+      if (match && match[1] !== undefined && match[1].length > 0) {
+        canonical = match[1].toUpperCase();
+      }
+    }
+
+    if (stripPrefix && canonical.startsWith(stripPrefix)) {
+      canonical = canonical.slice(stripPrefix.length);
+    }
+
+    if (stripSuffixPattern) {
+      canonical = canonical.replace(stripSuffixPattern, '');
+    }
+
+    if (stripLeadingZeros) {
+      canonical = canonical.replace(/^0+(?=.)/, '');
+    }
+
+    canonical = canonical.trim();
+
+    return canonical.length > 0 ? canonical : null;
+  };
+};
+
+/**
+ * The value stamped into review items' `carrierPolicyNumber` (the stable
+ * row-identity column — see review-item-reconcile.util.ts) and tested by the
+ * match-job's policyNumberPattern gate: the row's policy number when present,
+ * otherwise the first configured identifier-role value (IDENTIFIER_ROLES
+ * priority order), trim+uppercased. RAW (un-canonicalized) on purpose — the
+ * stamped identity must be stable for a given uploaded file regardless of
+ * later canonicalization-knob edits, and override learning round-trips
+ * through `matchRow`'s canonicalize-both-sides compare.
+ *
+ * With identifierRoles unset this is exactly `input.policyNumber ?? null` —
+ * existing carriers are untouched.
+ */
+export const resolveCarrierIdentifier = (
+  input: MatchInput,
+  identifierRoles: IdentifierRolesConfig | undefined,
+): string | null => {
+  if (input.policyNumber) return input.policyNumber;
+
+  for (const [role] of configuredIdentifierRoleEntries(identifierRoles)) {
+    const value = normalizePolicyNumber(input[role]);
+
+    if (value) return value;
+  }
+
+  return null;
 };
 
 /**
@@ -167,6 +388,7 @@ export const buildMatchInputFromMapping = (
   columnMapping: ColumnMapping,
   computedFieldCrmFields?: Record<string, string>,
   onUnmappedField?: (xlsxHeader: string, crmField: string) => void,
+  identifierRoles?: IdentifierRolesConfig,
 ): MatchInput => {
   const result: MatchInput = {
     policyNumber: null,
@@ -177,11 +399,31 @@ export const buildMatchInputFromMapping = (
     memberFirstName: null,
     memberLastName: null,
     memberDob: null,
+    memberId: null,
+    subscriberId: null,
+    groupNumber: null,
   };
+
+  // Identifier roles resolve per-carrier (config), not via the static
+  // registry: a columnMapping entry whose crmField is a configured
+  // identifier path feeds that role. When two roles target the same path,
+  // the first in IDENTIFIER_ROLES priority order wins (deterministic).
+  const identifierRoleByCrmField = new Map<string, IdentifierRole>();
+
+  for (const [role, crmField] of configuredIdentifierRoleEntries(
+    identifierRoles,
+  )) {
+    if (!identifierRoleByCrmField.has(crmField)) {
+      identifierRoleByCrmField.set(crmField, role);
+    }
+  }
+
+  const resolveRole = (crmField: string): keyof MatchInput | undefined =>
+    lookupMatchingRole(crmField) ?? identifierRoleByCrmField.get(crmField);
 
   // Map from column mapping entries (XLSX header → CRM field → matching role)
   for (const [xlsxHeader, entry] of Object.entries(columnMapping)) {
-    const role = lookupMatchingRole(entry.crmField);
+    const role = resolveRole(entry.crmField);
 
     if (role) {
       result[role] = (row[xlsxHeader] as string) ?? null;
@@ -198,7 +440,7 @@ export const buildMatchInputFromMapping = (
     for (const [outputKey, crmField] of Object.entries(
       computedFieldCrmFields,
     )) {
-      const role = lookupMatchingRole(crmField);
+      const role = resolveRole(crmField);
 
       if (role && result[role] === null) {
         result[role] = (row[outputKey] as string) ?? null;
@@ -225,6 +467,9 @@ export type CrmPolicy = {
   // Top-level (no dot)
   policyNumber: string | null;
   applicationId: string | null;
+  /** External-system policy id (healthsherpa et al.) — identifier-bearing,
+   *  so it is a valid identifierRoles target (OMN-12 identity). */
+  externalPolicyId: string | null;
   effectiveDate: string | null;
   expirationDate: string | null;
   paidThroughDate: string | null;
@@ -232,6 +477,10 @@ export type CrmPolicy = {
   applicantCount: number | null;
   // Currency is stored as integer micros on the CRM (1 USD = 1_000_000)
   'premium.amountMicros': number | null;
+  /** Fetched phase-1 since OMN-12 (identifierRoles target); ALSO re-fetched
+   *  by phase-2 enrichment, whose value wins in buildPolicyForDiff — diff
+   *  output is unchanged. */
+  planIdentifier: string | null;
   // Lead (path-keyed)
   'lead.name.firstName': string | null;
   'lead.name.lastName': string | null;
@@ -241,11 +490,20 @@ export type CrmPolicy = {
   'agent.name': string | null;
   'agent.npn': string | null;
   // Phase-2 enrichment (defaulted null on initial fetch)
-  planIdentifier: string | null;
   'lead.phones.primaryPhoneNumber': string | null;
   'lead.emails.primaryEmail': string | null;
   'lead.id': string | null;
 };
+
+// Compile-time guard: every identifier-role CRM path must be a real
+// CrmPolicy snapshot field (data.service's fetchPoliciesForMatching must
+// provide it phase-1, or the identifier index would be built over nulls).
+type _UnknownIdentifierRoleCrmFields = Exclude<
+  IdentifierRoleCrmField,
+  keyof CrmPolicy
+>;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _IdentifierRoleCrmFieldsGuard = _Assert<_UnknownIdentifierRoleCrmFields>;
 
 export type Override = {
   carrierPolicyNumber: string;
@@ -254,14 +512,218 @@ export type Override = {
   isActive: boolean;
 };
 
+// ---------------------------------------------------------------------------
+// Canonical tier ids + per-tier tuning (audit 2026-06-11 §"enabledTiers is an
+// unvalidated free-string list", §"Tier internals hardcoded")
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical match-tier ids — the EXACT strings the `isTierEnabled` gates in
+ * `matchRow` check `matchingConfig.enabledTiers` against. Single source of
+ * truth for the boundary validation in types/carrier-config.ts (unknown
+ * entries fail the run loudly instead of silently disabling a tier) and for
+ * `DEFAULT_MATCHING_CONFIG.enabledTiers`.
+ *
+ * NOTE: tier ids deliberately differ from some `MatchMethod` values — the
+ * 'POLICY_NUMBER_DATE' tier returns method 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE'
+ * and 'POLICY_NUMBER_AGENT' returns 'POLICY_NUMBER_PLUS_AGENT'. Pasting a
+ * method name into enabledTiers is a validation error, not a tier.
+ */
+export const MATCH_TIER_IDS = [
+  'OVERRIDE',
+  'POLICY_NUMBER_DATE_AGENT',
+  'POLICY_NUMBER_DATE',
+  'POLICY_NUMBER_AGENT',
+  'POLICY_NUMBER_SINGLE',
+  'POLICY_NUMBER_MULTI_BEST',
+  // Identifier-role tier (OMN-12 identity). In MATCH_TIER_IDS (so
+  // enabledTiers validates and can disable it) but ADDITIONALLY gated on
+  // matchingConfig.identifierRoles being configured — see the gating note
+  // in matchRow.
+  'IDENTIFIER_EXACT',
+  'NPN_DATE_NAME',
+  'NAME_DOB_DATE',
+] as const;
+
+export type MatchTierId = (typeof MATCH_TIER_IDS)[number];
+
+/**
+ * Tiers whose base confidence is a flat per-tier constant and therefore
+ * tunable via `tierTuning.tierConfidences`. Excluded by design:
+ * OVERRIDE (always 100 — manual pin must stay above every heuristic),
+ * POLICY_NUMBER_MULTI_BEST (weighted score, governed by `tier6Weights`),
+ * NPN_DATE_NAME (already banded via `tier7ConfidenceScores`).
+ */
+export type TierConfidenceId = Exclude<
+  MatchTierId,
+  'OVERRIDE' | 'POLICY_NUMBER_MULTI_BEST' | 'NPN_DATE_NAME'
+>;
+
+export const TIER_CONFIDENCE_IDS = [
+  'POLICY_NUMBER_DATE_AGENT',
+  'POLICY_NUMBER_DATE',
+  'POLICY_NUMBER_AGENT',
+  'POLICY_NUMBER_SINGLE',
+  'IDENTIFIER_EXACT',
+  'NAME_DOB_DATE',
+] as const satisfies readonly TierConfidenceId[];
+
+// Compile-time guard: TIER_CONFIDENCE_IDS must cover every TierConfidenceId
+// (adding a tier to MATCH_TIER_IDS without classifying it here errors).
+type _UncoveredTierConfidenceIds = Exclude<
+  TierConfidenceId,
+  (typeof TIER_CONFIDENCE_IDS)[number]
+>;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _TierConfidenceIdsCoverageGuard = _Assert<_UncoveredTierConfidenceIds>;
+
+/** Tier-6 (POLICY_NUMBER_MULTI_BEST) weighted-score knobs. */
+export type Tier6Weights = {
+  /** Multiplier on the date-proximity score (0..1). Default: 40 */
+  dateProximity: number;
+  /** Flat bonus when the BOB broker fuzzy-matches the CRM agent. Default: 30 */
+  agentMatch: number;
+  /** Multiplier on the member-name score (0..1). Default: 20 */
+  memberName: number;
+  /** Flat bonus for an exact (normalized) DOB match. Default: 10 */
+  dobExact: number;
+  /** Hard cap on Tier-6 confidence. Default: 70 (kept below the default
+   *  auto-match threshold by design — multi-match is a heuristic). */
+  confidenceCap: number;
+};
+
+/** One date-proximity band: score credited when the effective-date diff is
+ *  <= maxDays (bands are evaluated in ascending maxDays order). */
+export type DateProximityBand = {
+  maxDays: number;
+  score: number;
+};
+
+/**
+ * Optional per-carrier overrides for the previously hardcoded tier internals
+ * (OMN-12). Every knob defaults to today's constants (DEFAULT_TIER_TUNING) —
+ * a missing key keeps Ambetter behavior bit-for-bit. Stored configs are
+ * validated at the boundary (types/carrier-config.ts).
+ */
+export type TierTuning = {
+  /** Per-tier base confidence overrides; missing keys keep the constants. */
+  tierConfidences?: Partial<Record<TierConfidenceId, number>>;
+  /** Tier-6 weighted-score overrides; missing keys keep the constants. */
+  tier6Weights?: Partial<Tier6Weights>;
+  /** Tier-6 date-proximity bands (replaces the whole table when set). */
+  dateProximityBands?: DateProximityBand[];
+  /** Score when the date diff exceeds every band. Default: 0.1 */
+  dateProximityFloor?: number;
+};
+
+/**
+ * Today's hardcoded tier internals, now the single named home for the
+ * constants `matchRow` used as literals (98/95/85/90/60, the 40/30/20/10
+ * tier-6 weights with the 70 cap, and the 0/7/30/60-day proximity bands).
+ * `tierTuning` knobs fall back to these per key, so an unset or partial
+ * tierTuning is bit-for-bit identical to the pre-knob behavior.
+ */
+export const DEFAULT_TIER_TUNING: {
+  tierConfidences: Record<TierConfidenceId, number>;
+  tier6Weights: Tier6Weights;
+  dateProximityBands: readonly DateProximityBand[];
+  dateProximityFloor: number;
+} = {
+  tierConfidences: {
+    POLICY_NUMBER_DATE_AGENT: 98,
+    POLICY_NUMBER_DATE: 95,
+    POLICY_NUMBER_AGENT: 85,
+    POLICY_NUMBER_SINGLE: 90,
+    // Mirrors POLICY_NUMBER_SINGLE's rationale: a unique exact-identifier
+    // hit is definitive. Only read when identifierRoles is configured.
+    IDENTIFIER_EXACT: 90,
+    NAME_DOB_DATE: 60,
+  },
+  tier6Weights: {
+    dateProximity: 40,
+    agentMatch: 30,
+    memberName: 20,
+    dobExact: 10,
+    confidenceCap: 70,
+  },
+  dateProximityBands: [
+    { maxDays: 0, score: 1 },
+    { maxDays: 7, score: 0.9 },
+    { maxDays: 30, score: 0.7 },
+    { maxDays: 60, score: 0.4 },
+  ],
+  dateProximityFloor: 0.1,
+};
+
+// ---------------------------------------------------------------------------
+// Post-match strategies (OMN-12; audit 2026-06-11 §"Multi-candidate narrowing
+// chain and dedup keep-newest policy encode Ambetter renewal/payment
+// semantics")
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-carrier dedup policy for multiple BOB rows matching one CRM policy
+ * (match.job dedupPendingByPolicyId):
+ *   - keepNewestEffectiveDate (default — today's behavior): keep the row
+ *     with the newest effective date; older rows are handled by the
+ *     cancel-previous-version logic on the kept row (Ambetter renewals),
+ *   - keepAll: every row becomes its own review item (member-level files —
+ *     one row per covered dependent). Review-item identity is kept unique
+ *     by a '#ROW<n>' suffix on the stamped carrierPolicyNumber,
+ *   - keepFirst: keep the first row in file order.
+ */
+export const DEDUP_STRATEGIES = [
+  'keepNewestEffectiveDate',
+  'keepAll',
+  'keepFirst',
+] as const;
+
+export type DedupStrategy = (typeof DEDUP_STRATEGIES)[number];
+
+/**
+ * The multi-candidate narrowing strategies `matchRow` may run, by id:
+ *   - activeStatus → selectByActiveStatus (unique non-terminal candidate),
+ *   - activeTerm → selectByActiveTerm (term window contains BOB
+ *     paid-through),
+ *   - mostRecentEffectiveDate → selectByMostRecentEffectiveDate (all
+ *     candidates terminal → latest effective date; the winner is finalized
+ *     as heuristic: POLICY_NUMBER_NARROWED_RECENT + capped confidence).
+ *
+ * `matchingConfig.narrowingStrategies` is an ordered subset; the default
+ * reproduces today's fixed chain (activeStatus → activeTerm →
+ * mostRecentEffectiveDate). An empty array disables narrowing entirely
+ * (multi-candidate sets fall through to the proximity tiers).
+ */
+export const NARROWING_STRATEGY_IDS = [
+  'activeStatus',
+  'activeTerm',
+  'mostRecentEffectiveDate',
+] as const;
+
+export type NarrowingStrategyId = (typeof NARROWING_STRATEGY_IDS)[number];
+
 export type MatchingConfig = {
-  enabledTiers: string[];
+  enabledTiers: MatchTierId[];
   autoMatchThreshold: number;
   autoRejectThreshold: number;
   dateToleranceDays: number;
   nameMatchThreshold: number;
-  /** When true, detect active CRM policies missing from the BOB (2-way reconciliation). Default: false (1-way). */
+  /** When true, detect active CRM policies missing from the BOB (2-way
+   *  reconciliation — the match job's missing-from-BOB phase, scoped by
+   *  statusVocabulary.activeStatuses). Default: false (1-way).
+   *  CAUTION: keep this OFF for carriers that deliver one period as multiple
+   *  files (per-state extracts, active+termed splits) — each reconciliation
+   *  pins exactly ONE source file, so policies living in the other file(s)
+   *  would all be flagged missing. See docs/reconciliation/
+   *  carrier-onboarding.md §"Two-way reconciliation". */
   enableMissingFromBob: boolean;
+  /** When true, run the policy-number discovery phase after matching:
+   *  unmatched BOB rows are paired to CRM policies that lack a carrier-shaped
+   *  policy number, by exact DOB + fuzzy name (combinedNameFuzzyMatch),
+   *  emitting POLICY_NUMBER_DISCOVERY review items that propose the row's
+   *  policy number as a field diff. Default: false (ported from the legacy
+   *  payment-reconciliation app, where the phase always ran). */
+  enableDiscovery: boolean;
   /** Jaro-Winkler threshold for agent/broker name fuzzy matching. Default: 0.85 */
   agentNameThreshold: number;
   /** Confidence bands for Tier 7 (NPN+Date+Name). Default: { high: 0.98, medium: 0.93, low: 0.85 } */
@@ -278,29 +740,42 @@ export type MatchingConfig = {
   /** Exclude BOB rows with effective dates before this date.
    *  Per-carrier; null = no cutoff. */
   startDate: string | null;
-  /** Minimum name score for policy number discovery. Default: 0.95 */
+  /** Minimum combined-name score (0–1 Jaro-Winkler scale) for the discovery
+   *  phase to SUGGEST a policy number. Only read when enableDiscovery is
+   *  true. Default: 0.95 (the legacy app's hardcoded literal). */
   discoveryNameThreshold: number;
-  /** Name score above which discovery auto-matches. Default: 0.98 */
+  /** Name score (0–1) at or above which a discovery item keeps its full
+   *  confidence (legacy AUTO_MATCHED); below it, confidence is capped under
+   *  autoMatchThreshold so batch approval never sweeps a mere suggestion.
+   *  Only read when enableDiscovery is true. Default: 0.98 (legacy literal). */
   discoveryAutoThreshold: number;
+  /** Per-tier confidence/weight overrides (OMN-12). `{}` (the default) =
+   *  today's hardcoded constants — see DEFAULT_TIER_TUNING. */
+  tierTuning?: TierTuning;
+  /** Identifier role → CrmPolicy snapshot path (OMN-12 identity). `{}`
+   *  (the default) keeps matching policy-number-only — the
+   *  IDENTIFIER_EXACT tier never runs. */
+  identifierRoles?: IdentifierRolesConfig;
+  /** Per-carrier identifier canonicalization knobs applied after
+   *  trim+uppercase on BOTH sides (OMN-12 identity). `{}` = no-ops. */
+  identifierNormalization?: IdentifierNormalization;
+  /** Dedup policy for multiple BOB rows matching one CRM policy.
+   *  Default: 'keepNewestEffectiveDate' (today's behavior). */
+  dedupStrategy: DedupStrategy;
+  /** Ordered multi-candidate narrowing chain. Default: today's fixed
+   *  activeStatus → activeTerm → mostRecentEffectiveDate order. */
+  narrowingStrategies: NarrowingStrategyId[];
 };
 
 export const DEFAULT_MATCHING_CONFIG: MatchingConfig = {
-  enabledTiers: [
-    'OVERRIDE',
-    'POLICY_NUMBER_DATE_AGENT',
-    'POLICY_NUMBER_DATE',
-    'POLICY_NUMBER_AGENT',
-    'POLICY_NUMBER_SINGLE',
-    'POLICY_NUMBER_MULTI_BEST',
-    'NPN_DATE_NAME',
-    'NAME_DOB_DATE',
-  ],
+  enabledTiers: [...MATCH_TIER_IDS],
   // Shared with the review UI's high-confidence batch-apply scope (2.7).
   autoMatchThreshold: RECONCILIATION_DEFAULT_AUTO_MATCH_THRESHOLD,
   autoRejectThreshold: 30,
   dateToleranceDays: 30,
   nameMatchThreshold: 0.88,
   enableMissingFromBob: false,
+  enableDiscovery: false,
   agentNameThreshold: 0.85,
   tier7NameBands: { high: 0.98, medium: 0.93, low: 0.85 },
   tier7ConfidenceScores: { high: 92, medium: 88, low: 65 },
@@ -315,6 +790,15 @@ export const DEFAULT_MATCHING_CONFIG: MatchingConfig = {
   startDate: '2025-07-09',
   discoveryNameThreshold: 0.95,
   discoveryAutoThreshold: 0.98,
+  // Empty = read every knob from DEFAULT_TIER_TUNING (today's constants).
+  tierTuning: {},
+  // Empty = policy-number-only identity (the IDENTIFIER_EXACT tier and the
+  // identifier MatchInput roles stay inert) — today's behavior.
+  identifierRoles: {},
+  // Empty = trim+uppercase only — today's behavior.
+  identifierNormalization: {},
+  dedupStrategy: 'keepNewestEffectiveDate',
+  narrowingStrategies: ['activeStatus', 'activeTerm', 'mostRecentEffectiveDate'],
 };
 
 // --- Fuzzy matching helpers ---
@@ -399,9 +883,17 @@ export const datesWithinDays = (
   return diffDays <= days;
 };
 
+/**
+ * Tier-6 date-proximity score. `bands` must be sorted ascending by maxDays
+ * (the caller sorts once per row); the first band whose maxDays covers the
+ * diff wins, otherwise `floor`. Defaults (DEFAULT_TIER_TUNING) reproduce the
+ * historical literals: 0d→1, ≤7d→0.9, ≤30d→0.7, ≤60d→0.4, else 0.1.
+ */
 const dateProximityScore = (
   dateA: string | null,
   dateB: string | null,
+  bands: readonly DateProximityBand[],
+  floor: number,
 ): number => {
   if (!dateA || !dateB) {
     return 0;
@@ -411,12 +903,11 @@ const dateProximityScore = (
   const b = new Date(dateB).getTime();
   const diffDays = Math.abs(a - b) / (1000 * 60 * 60 * 24);
 
-  if (diffDays === 0) return 1;
-  if (diffDays <= 7) return 0.9;
-  if (diffDays <= 30) return 0.7;
-  if (diffDays <= 60) return 0.4;
+  for (const band of bands) {
+    if (diffDays <= band.maxDays) return band.score;
+  }
 
-  return 0.1;
+  return floor;
 };
 
 const classifyConfidence = (
@@ -461,8 +952,21 @@ export const combinedNameFuzzyMatch = (
   return jaroWinkler(full1, full2);
 };
 
-const isTierEnabled = (tier: string, config: MatchingConfig): boolean =>
+const isTierEnabled = (tier: MatchTierId, config: MatchingConfig): boolean =>
   config.enabledTiers.includes(tier);
+
+/**
+ * Per-tier base confidence: the carrier's tierTuning override when set,
+ * otherwise today's constant (DEFAULT_TIER_TUNING.tierConfidences). The
+ * per-key fallback is load-bearing — stored tierTuning is a partial object
+ * merged shallowly at the config boundary.
+ */
+const tierConfidence = (
+  tier: TierConfidenceId,
+  config: MatchingConfig,
+): number =>
+  config.tierTuning?.tierConfidences?.[tier] ??
+  DEFAULT_TIER_TUNING.tierConfidences[tier];
 
 /**
  * Two Tier-7 candidates whose name scores differ by less than this are
@@ -476,27 +980,67 @@ export type MatchIndexes = {
   policyByNpn: Map<string, CrmPolicy[]>;
   policyByDob: Map<string, CrmPolicy[]>;
   policyById: Map<string, CrmPolicy>;
+  /** One exact-match index per CONFIGURED identifier role (OMN-12 identity),
+   *  keyed by the canonical identifier. Empty unless
+   *  matchingConfig.identifierRoles is set. */
+  policyByIdentifier: Map<IdentifierRole, Map<string, CrmPolicy[]>>;
 };
 
-export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
+export type BuildMatchIndexesOptions = {
+  /** Per-carrier canonicalizer (buildIdentifierCanonicalizer) applied to
+   *  policy-number AND identifier index keys. Defaults to trim+uppercase
+   *  (normalizePolicyNumber) — today's behavior. */
+  canonicalize?: IdentifierCanonicalizer;
+  /** Identifier roles to index (matchingConfig.identifierRoles). */
+  identifierRoles?: IdentifierRolesConfig;
+};
+
+export const buildMatchIndexes = (
+  policies: CrmPolicy[],
+  options: BuildMatchIndexesOptions = {},
+): MatchIndexes => {
+  const canonicalize = options.canonicalize ?? normalizePolicyNumber;
+  const identifierRoleEntries = configuredIdentifierRoleEntries(
+    options.identifierRoles,
+  );
   const policyByNumber = new Map<string, CrmPolicy[]>();
   const policyByNpn = new Map<string, CrmPolicy[]>();
   const policyByDob = new Map<string, CrmPolicy[]>();
   const policyById = new Map<string, CrmPolicy>();
+  const policyByIdentifier = new Map<IdentifierRole, Map<string, CrmPolicy[]>>();
+
+  for (const [role] of identifierRoleEntries) {
+    policyByIdentifier.set(role, new Map());
+  }
 
   for (const p of policies) {
     policyById.set(p.id, p);
 
-    // Index keys are normalized (trim + uppercase / date-only) so
-    // hand-entered CRM variants still hit exact-identifier lookups. The
+    // Index keys are canonicalized (default: trim + uppercase / date-only)
+    // so hand-entered CRM variants still hit exact-identifier lookups. The
     // policy snapshots themselves keep their raw values.
-    const policyNumberKey = normalizePolicyNumber(p.policyNumber);
+    const policyNumberKey = canonicalize(p.policyNumber);
 
     if (policyNumberKey) {
       const existing = policyByNumber.get(policyNumberKey) ?? [];
 
       existing.push(p);
       policyByNumber.set(policyNumberKey, existing);
+    }
+
+    for (const [role, crmField] of identifierRoleEntries) {
+      const identifierKey = canonicalize(p[crmField]);
+
+      if (identifierKey) {
+        const roleIndex = policyByIdentifier.get(role) as Map<
+          string,
+          CrmPolicy[]
+        >;
+        const existing = roleIndex.get(identifierKey) ?? [];
+
+        existing.push(p);
+        roleIndex.set(identifierKey, existing);
+      }
     }
 
     const agentNpn = p['agent.npn'];
@@ -518,7 +1062,13 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
     }
   }
 
-  return { policyByNumber, policyByNpn, policyByDob, policyById };
+  return {
+    policyByNumber,
+    policyByNpn,
+    policyByDob,
+    policyById,
+    policyByIdentifier,
+  };
 };
 
 // Statuses that mean "this policy is over" — shared home in
@@ -539,11 +1089,15 @@ export const buildMatchIndexes = (policies: CrmPolicy[]): MatchIndexes => {
  */
 export const selectByActiveStatus = (
   candidates: CrmPolicy[],
+  // Per-carrier statusVocabulary set when threaded by the match job
+  // (MatchContext.negativeTerminalStatuses); the static default keeps
+  // direct callers/tests bit-for-bit (Wave-5 handoff).
+  negativeTerminalStatuses: ReadonlySet<string> = NEGATIVE_TERMINAL_STATUSES,
 ): CrmPolicy | null => {
   if (candidates.length < 2) return null;
 
   const active = candidates.filter(
-    (p) => !p.status || !NEGATIVE_TERMINAL_STATUSES.has(p.status),
+    (p) => !p.status || !negativeTerminalStatuses.has(p.status),
   );
 
   return active.length === 1 ? active[0] : null;
@@ -610,11 +1164,14 @@ export const selectByActiveTerm = (
  */
 export const selectByMostRecentEffectiveDate = (
   candidates: CrmPolicy[],
+  // See selectByActiveStatus — per-carrier set threaded by the match job,
+  // static default preserves direct-caller behavior (Wave-5 handoff).
+  negativeTerminalStatuses: ReadonlySet<string> = NEGATIVE_TERMINAL_STATUSES,
 ): CrmPolicy | null => {
   if (candidates.length < 2) return null;
 
   const allTerminal = candidates.every(
-    (p) => p.status !== null && NEGATIVE_TERMINAL_STATUSES.has(p.status),
+    (p) => p.status !== null && negativeTerminalStatuses.has(p.status),
   );
 
   if (!allTerminal) return null;
@@ -631,31 +1188,126 @@ export const selectByMostRecentEffectiveDate = (
   return dated[0].time > dated[1].time ? dated[0].policy : null;
 };
 
+export type MatchRowOptions = {
+  /** Per-carrier identifier canonicalizer (buildIdentifierCanonicalizer),
+   *  applied to the BOB policy number, the identifier-role values, and
+   *  override keys — MUST be the same function the index keys were built
+   *  with (buildMatchIndexes options) or exact lookups go asymmetric.
+   *  Defaults to trim+uppercase (today's behavior). */
+  canonicalize?: IdentifierCanonicalizer;
+  /** Per-carrier statusVocabulary terminal set for the narrowing chain
+   *  (MatchContext.negativeTerminalStatuses). Defaults to the static
+   *  NEGATIVE_TERMINAL_STATUSES (today's behavior). */
+  negativeTerminalStatuses?: ReadonlySet<string>;
+};
+
+/** Outcome of the configurable narrowing chain (matchRow internal). */
+type NarrowedCandidate = {
+  winner: CrmPolicy;
+  reason: string;
+  byRecency: boolean;
+};
+
 export const matchRow = (
   input: MatchInput,
   indexes: MatchIndexes,
   overrides: Override[],
   carrierName: string,
   config: MatchingConfig = DEFAULT_MATCHING_CONFIG,
+  options: MatchRowOptions = {},
 ): MatchDecision => {
   const tolerance = config.dateToleranceDays;
-  // Comparison forms — index keys are normalized the same way (see
+  const canonicalize = options.canonicalize ?? normalizePolicyNumber;
+  const negativeTerminalStatuses =
+    options.negativeTerminalStatuses ?? NEGATIVE_TERMINAL_STATUSES;
+  // Comparison forms — index keys are canonicalized the same way (see
   // buildMatchIndexes), so exact-identifier lookups survive case/format
   // variance in hand-entered CRM data.
-  const inputPolicyNumber = normalizePolicyNumber(input.policyNumber);
+  const inputPolicyNumber = canonicalize(input.policyNumber);
   const inputDob = normalizeDateOnly(input.memberDob);
+  const identifierRoleEntries = configuredIdentifierRoleEntries(
+    config.identifierRoles,
+  );
+
+  // Configurable multi-candidate narrowing (OMN-12): the same ordered chain
+  // serves the policy-number tiers and the IDENTIFIER_EXACT tier. The
+  // default strategy list reproduces the previously fixed activeStatus →
+  // activeTerm → mostRecentEffectiveDate cascade bit-for-bit.
+  const narrowingStrategies =
+    config.narrowingStrategies ?? DEFAULT_MATCHING_CONFIG.narrowingStrategies;
+  const narrowCandidates = (
+    candidates: CrmPolicy[],
+  ): NarrowedCandidate | null => {
+    if (candidates.length < 2) return null;
+
+    for (const strategy of narrowingStrategies) {
+      if (strategy === 'activeStatus') {
+        const winner = selectByActiveStatus(
+          candidates,
+          negativeTerminalStatuses,
+        );
+
+        if (winner) return { winner, reason: 'active status', byRecency: false };
+      } else if (strategy === 'activeTerm') {
+        const winner = selectByActiveTerm(candidates, input.paidThroughDate);
+
+        if (winner) {
+          return {
+            winner,
+            reason: `paid-through ${input.paidThroughDate}`,
+            byRecency: false,
+          };
+        }
+      } else {
+        const winner = selectByMostRecentEffectiveDate(
+          candidates,
+          negativeTerminalStatuses,
+        );
+
+        if (winner) {
+          return { winner, reason: 'most recent effective date', byRecency: true };
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // Override keys: the canonical policy number plus — for identifier-role
+  // carriers only — the canonical configured identifier values, because
+  // their review items stamp the identifier into carrierPolicyNumber and
+  // override learning keys off that column (review-item identity contract).
+  // With identifierRoles unset this set is exactly {inputPolicyNumber}.
+  const overrideKeys = new Set<string>();
+
+  if (inputPolicyNumber) overrideKeys.add(inputPolicyNumber);
+
+  for (const [role] of identifierRoleEntries) {
+    const canonicalIdentifier = canonicalize(input[role]);
+
+    if (canonicalIdentifier) overrideKeys.add(canonicalIdentifier);
+  }
 
   // Tier 1: Override check
-  if (isTierEnabled('OVERRIDE', config) && inputPolicyNumber) {
-    const override = overrides.find(
-      (o) =>
-        o.isActive &&
-        normalizePolicyNumber(o.carrierPolicyNumber) === inputPolicyNumber &&
-        o.carrierName.toLowerCase() === carrierName.toLowerCase(),
-    );
+  if (isTierEnabled('OVERRIDE', config) && overrideKeys.size > 0) {
+    const override = overrides.find((o) => {
+      if (!o.isActive) return false;
+      if (o.carrierName.toLowerCase() !== carrierName.toLowerCase()) {
+        return false;
+      }
+
+      const overrideKey = canonicalize(o.carrierPolicyNumber);
+
+      return overrideKey !== null && overrideKeys.has(overrideKey);
+    });
 
     if (override) {
       const policy = indexes.policyById.get(override.crmPolicyId);
+      // With identifierRoles unset, a hit implies inputPolicyNumber matched
+      // — the note text is unchanged for existing carriers. The identifier
+      // fallback label only renders for identifier-keyed overrides.
+      const overrideLabel =
+        inputPolicyNumber ?? canonicalize(override.carrierPolicyNumber);
 
       return {
         crmPolicyId: override.crmPolicyId,
@@ -663,7 +1315,7 @@ export const matchRow = (
         confidence: 100,
         method: 'OVERRIDE',
         status: 'AUTO_MATCHED',
-        notes: `Manual override: carrier policy ${inputPolicyNumber} → CRM policy ${override.crmPolicyId}`,
+        notes: `Manual override: carrier policy ${overrideLabel} → CRM policy ${override.crmPolicyId}`,
       };
     }
   }
@@ -674,7 +1326,7 @@ export const matchRow = (
     : [];
 
   // Disambiguate multi-policy-number candidates BEFORE running proximity-
-  // based tiers. Three narrowing strategies, in priority order:
+  // based tiers, via the configurable narrowing chain (default order:
   //
   //   1. Active-status: when exactly one candidate isn't in a terminal
   //      state (CANCELED / DECLINED / etc.), pick it. Re-enrollments add
@@ -689,38 +1341,21 @@ export const matchRow = (
   //   3. Most-recent: when neither status nor term window decides (e.g.
   //      both versions canceled in the CRM), pick the latest effective
   //      date — "anytime we have multiples, update the most recent one".
-  let narrowedWinner: CrmPolicy | null = null;
-  let narrowReason: string | null = null;
-  let narrowedByRecency = false;
-
-  if (allPolicyNumberMatches.length > 1) {
-    const activeWinner = selectByActiveStatus(allPolicyNumberMatches);
-    const termWinner = activeWinner
-      ? null
-      : selectByActiveTerm(allPolicyNumberMatches, input.paidThroughDate);
-    const recentWinner =
-      activeWinner || termWinner
-        ? null
-        : selectByMostRecentEffectiveDate(allPolicyNumberMatches);
-
-    if (activeWinner) {
-      narrowedWinner = activeWinner;
-      narrowReason = 'active status';
-    } else if (termWinner) {
-      narrowedWinner = termWinner;
-      narrowReason = `paid-through ${input.paidThroughDate}`;
-    } else if (recentWinner) {
-      narrowedWinner = recentWinner;
-      narrowReason = 'most recent effective date';
-      narrowedByRecency = true;
-    }
-  }
+  //
+  // matchingConfig.narrowingStrategies reorders/trims the chain per carrier;
+  // the default list reproduces this exact cascade.)
+  const narrowed =
+    allPolicyNumberMatches.length > 1
+      ? narrowCandidates(allPolicyNumberMatches)
+      : null;
+  const narrowedWinner = narrowed?.winner ?? null;
+  const narrowedByRecency = narrowed?.byRecency ?? false;
 
   const policyNumberMatches = narrowedWinner
     ? [narrowedWinner]
     : allPolicyNumberMatches;
-  const narrowSuffix = narrowedWinner
-    ? ` (disambiguated from ${allPolicyNumberMatches.length} candidates by ${narrowReason})`
+  const narrowSuffix = narrowed
+    ? ` (disambiguated from ${allPolicyNumberMatches.length} candidates by ${narrowed.reason})`
     : '';
 
   // A recency-narrowed winner is an ops heuristic ("update the most recent
@@ -760,13 +1395,14 @@ export const matchRow = (
 
       if (tripleMatches.length === 1) {
         const match = tripleMatches[0];
+        const confidence = tierConfidence('POLICY_NUMBER_DATE_AGENT', config);
 
         return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
-          confidence: 98,
+          confidence,
           method: 'POLICY_NUMBER_DATE_AGENT',
-          status: classifyConfidence(98, config),
+          status: classifyConfidence(confidence, config),
           notes: `3-signal match: policy number + effective date (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate}) + agent "${input.agentName}"→"${match['agent.name']}"${narrowSuffix}`,
         });
       }
@@ -780,13 +1416,14 @@ export const matchRow = (
 
       if (dateMatches.length === 1) {
         const match = dateMatches[0];
+        const confidence = tierConfidence('POLICY_NUMBER_DATE', config);
 
         return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
-          confidence: 95,
+          confidence,
           method: 'POLICY_NUMBER_PLUS_EFFECTIVE_DATE',
-          status: classifyConfidence(95, config),
+          status: classifyConfidence(confidence, config),
           notes: `Policy number matched, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${narrowSuffix}`,
         });
       }
@@ -804,13 +1441,14 @@ export const matchRow = (
 
       if (agentMatches.length === 1) {
         const match = agentMatches[0];
+        const confidence = tierConfidence('POLICY_NUMBER_AGENT', config);
 
         return finalizeNarrowedDecision({
           crmPolicyId: match.id,
           crmPolicyNumber: match.policyNumber,
-          confidence: 85,
+          confidence,
           method: 'POLICY_NUMBER_PLUS_AGENT',
-          status: classifyConfidence(85, config),
+          status: classifyConfidence(confidence, config),
           notes: `Policy number matched, broker "${input.agentName}" matched agent "${match['agent.name']}"${narrowSuffix}`,
         });
       }
@@ -824,13 +1462,14 @@ export const matchRow = (
       policyNumberMatches.length === 1
     ) {
       const match = policyNumberMatches[0];
+      const confidence = tierConfidence('POLICY_NUMBER_SINGLE', config);
 
       return finalizeNarrowedDecision({
         crmPolicyId: match.id,
         crmPolicyNumber: match.policyNumber,
-        confidence: 90,
+        confidence,
         method: 'POLICY_NUMBER_SINGLE',
-        status: classifyConfidence(90, config),
+        status: classifyConfidence(confidence, config),
         notes: `Single CRM policy matched by policy number "${inputPolicyNumber}"${narrowSuffix}`,
       });
     }
@@ -840,10 +1479,29 @@ export const matchRow = (
       isTierEnabled('POLICY_NUMBER_MULTI_BEST', config) &&
       policyNumberMatches.length > 1
     ) {
+      // Per-key fallback to today's constants — stored tierTuning is partial.
+      const tier6Weights: Tier6Weights = {
+        ...DEFAULT_TIER_TUNING.tier6Weights,
+        ...config.tierTuning?.tier6Weights,
+      };
+      const proximityBands = [
+        ...(config.tierTuning?.dateProximityBands ??
+          DEFAULT_TIER_TUNING.dateProximityBands),
+      ].sort((a, b) => a.maxDays - b.maxDays);
+      const proximityFloor =
+        config.tierTuning?.dateProximityFloor ??
+        DEFAULT_TIER_TUNING.dateProximityFloor;
+
       const scored = policyNumberMatches.map((p) => {
         let score = 0;
 
-        score += dateProximityScore(p.effectiveDate, input.effectiveDate) * 40;
+        score +=
+          dateProximityScore(
+            p.effectiveDate,
+            input.effectiveDate,
+            proximityBands,
+            proximityFloor,
+          ) * tier6Weights.dateProximity;
 
         if (
           agentNameMatches(
@@ -852,7 +1510,7 @@ export const matchRow = (
             config.agentNameThreshold,
           )
         ) {
-          score += 30;
+          score += tier6Weights.agentMatch;
         }
 
         const nameScore = memberNameScore(
@@ -862,12 +1520,12 @@ export const matchRow = (
           p['lead.name.lastName'],
         );
 
-        score += nameScore * 20;
+        score += nameScore * tier6Weights.memberName;
 
         const leadDob = normalizeDateOnly(p['lead.dateOfBirth']);
 
         if (inputDob && leadDob && inputDob === leadDob) {
-          score += 10;
+          score += tier6Weights.dobExact;
         }
 
         return { policy: p, score };
@@ -876,7 +1534,10 @@ export const matchRow = (
       scored.sort((a, b) => b.score - a.score);
 
       const best = scored[0];
-      const confidence = Math.min(Math.round(best.score), 70);
+      const confidence = Math.min(
+        Math.round(best.score),
+        tier6Weights.confidenceCap,
+      );
 
       return {
         crmPolicyId: best.policy.id,
@@ -886,6 +1547,140 @@ export const matchRow = (
         status: classifyConfidence(confidence, config),
         notes: `Multiple CRM policies (${policyNumberMatches.length}) matched. Best by weighted score (${best.score.toFixed(1)}): date proximity + agent + member identity`,
       };
+    }
+  }
+
+  // Tier IDENTIFIER_EXACT: exact canonical-identifier match for carriers
+  // whose files key people by member/subscriber/group IDs instead of policy
+  // numbers (BCBS-class; audit 2026-06-11 §"Identity is single-role and
+  // policy-number-shaped"). Mirrors the policy-number tiers' shape: exact
+  // index hit → narrowing chain → date corroboration → best-name heuristic.
+  //
+  // GATING CHOICE (bit-for-bit preservation): the tier requires
+  // matchingConfig.identifierRoles to be configured, NOT merely an
+  // enabledTiers entry. DEFAULT_MATCHING_CONFIG.enabledTiers spreads
+  // MATCH_TIER_IDS wholesale, so every existing config (and every stored
+  // config restating the default list) implicitly "enables" the new id —
+  // gating on enabledTiers alone could therefore change existing carriers.
+  // identifierRoles defaults to {} and no existing config sets it, so the
+  // tier is provably inert until a carrier opts in; enabledTiers can then
+  // still disable it like any other tier.
+  if (
+    identifierRoleEntries.length > 0 &&
+    isTierEnabled('IDENTIFIER_EXACT', config)
+  ) {
+    for (const [role, crmField] of identifierRoleEntries) {
+      const canonicalIdentifier = canonicalize(input[role]);
+
+      if (!canonicalIdentifier) continue;
+
+      const allIdentifierMatches =
+        indexes.policyByIdentifier.get(role)?.get(canonicalIdentifier) ?? [];
+
+      if (allIdentifierMatches.length === 0) continue;
+
+      const identifierLabel = `${role} "${canonicalIdentifier}" (CRM ${crmField})`;
+      const idNarrowed = narrowCandidates(allIdentifierMatches);
+      const identifierCandidates = idNarrowed
+        ? [idNarrowed.winner]
+        : allIdentifierMatches;
+      const idNarrowSuffix = idNarrowed
+        ? ` (disambiguated from ${allIdentifierMatches.length} candidates by ${idNarrowed.reason})`
+        : '';
+      const baseConfidence = tierConfidence('IDENTIFIER_EXACT', config);
+
+      // Recency narrowing is the same ops heuristic here as in the policy-
+      // number tiers — cap below auto-match and route to review. The method
+      // stays IDENTIFIER_EXACT (POLICY_NUMBER_NARROWED_RECENT would
+      // misdescribe the evidence).
+      const finalizeIdentifierDecision = (
+        decision: MatchDecision,
+      ): MatchDecision => {
+        if (!idNarrowed?.byRecency) return decision;
+
+        return {
+          ...decision,
+          confidence: Math.min(
+            decision.confidence,
+            config.autoMatchThreshold - 1,
+          ),
+          status: 'NEEDS_REVIEW',
+          notes: `${decision.notes} — recency narrowing is heuristic; confidence capped below auto-match threshold`,
+        };
+      };
+
+      // Unique hit (directly, or after narrowing) — mirrors Tier 5.
+      if (identifierCandidates.length === 1) {
+        const match = identifierCandidates[0];
+
+        return finalizeIdentifierDecision({
+          crmPolicyId: match.id,
+          crmPolicyNumber: match.policyNumber,
+          confidence: baseConfidence,
+          method: 'IDENTIFIER_EXACT',
+          status: classifyConfidence(baseConfidence, config),
+          notes: `Exact identifier match: ${identifierLabel}${idNarrowSuffix}`,
+        });
+      }
+
+      // Date corroboration — mirrors Tier 3.
+      if (input.effectiveDate) {
+        const dateMatches = identifierCandidates.filter((p) =>
+          datesWithinDays(p.effectiveDate, input.effectiveDate, tolerance),
+        );
+
+        if (dateMatches.length === 1) {
+          const match = dateMatches[0];
+
+          return finalizeIdentifierDecision({
+            crmPolicyId: match.id,
+            crmPolicyNumber: match.policyNumber,
+            confidence: baseConfidence,
+            method: 'IDENTIFIER_EXACT',
+            status: classifyConfidence(baseConfidence, config),
+            notes: `Exact identifier match: ${identifierLabel}, effective dates within ${tolerance} days (BOB: ${input.effectiveDate}, CRM: ${match.effectiveDate})${idNarrowSuffix}`,
+          });
+        }
+      }
+
+      // Shared identifier (e.g. a subscriber id covering every dependent):
+      // best member-name candidate, never auto-matched — mirrors the
+      // Tier 7/8 best-of selection with deterministic tie-breaks.
+      const scored = identifierCandidates
+        .map((p) => ({
+          policy: p,
+          nameScore: memberNameScore(
+            input.memberFirstName,
+            input.memberLastName,
+            p['lead.name.firstName'],
+            p['lead.name.lastName'],
+          ),
+        }))
+        .filter((c) => c.nameScore >= config.nameMatchThreshold)
+        .sort(
+          (a, b) =>
+            b.nameScore - a.nameScore || a.policy.id.localeCompare(b.policy.id),
+        );
+
+      if (scored.length > 0) {
+        const best = scored[0];
+        const confidence = Math.min(
+          baseConfidence,
+          config.autoMatchThreshold - 1,
+        );
+
+        return {
+          crmPolicyId: best.policy.id,
+          crmPolicyNumber: best.policy.policyNumber,
+          confidence,
+          method: 'IDENTIFIER_EXACT',
+          status: 'NEEDS_REVIEW',
+          notes: `Identifier ${identifierLabel} shared by ${identifierCandidates.length} CRM policies; best member-name similarity ${best.nameScore.toFixed(2)} — needs review`,
+        };
+      }
+
+      // No corroborating signal singles a candidate out — try the next
+      // configured role rather than guessing among shared-identifier rows.
     }
   }
 
@@ -1021,13 +1816,14 @@ export const matchRow = (
 
     if (qualified.length > 0) {
       const best = qualified[0];
+      const confidence = tierConfidence('NAME_DOB_DATE', config);
 
       return {
         crmPolicyId: best.policy.id,
         crmPolicyNumber: best.policy.policyNumber,
-        confidence: 60,
+        confidence,
         method: 'NAME_DOB_DATE',
-        status: classifyConfidence(60, config),
+        status: classifyConfidence(confidence, config),
         notes: `Identity-based match: name similarity ${best.nameScore.toFixed(2)}, DOB ${inputDob} exact match, effective date within ${tolerance} days (best of ${qualified.length} candidate${qualified.length === 1 ? '' : 's'} above threshold)`,
       };
     }
@@ -1042,6 +1838,18 @@ export const matchRow = (
     );
   }
 
+  // Identifier-role carriers usually have no policy number at all — label
+  // the unmatched note with the canonical primary identifier instead of
+  // 'null'. With identifierRoles unset this is exactly inputPolicyNumber.
+  let unmatchedLabel: string | null = inputPolicyNumber;
+
+  if (unmatchedLabel === null) {
+    for (const [role] of identifierRoleEntries) {
+      unmatchedLabel = canonicalize(input[role]);
+      if (unmatchedLabel !== null) break;
+    }
+  }
+
   return {
     crmPolicyId: null,
     crmPolicyNumber: null,
@@ -1051,6 +1859,6 @@ export const matchRow = (
     notes:
       candidates.length > 0
         ? `Unmatched. ${candidates.join('. ')}`
-        : `No CRM policy found for carrier policy "${inputPolicyNumber}"`,
+        : `No CRM policy found for carrier policy "${unmatchedLabel}"`,
   };
 };

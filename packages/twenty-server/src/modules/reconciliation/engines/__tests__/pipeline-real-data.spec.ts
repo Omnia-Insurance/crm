@@ -59,6 +59,8 @@ import {
   resolveEffectiveDateHeader,
   STATUS_ENGINE_IDS,
   STATUS_ENGINE_ROLE_TYPES,
+  STATUS_ENGINES,
+  validateStatusEngineParams,
   type OmniaStatus,
 } from 'src/modules/reconciliation/engines/status';
 import {
@@ -156,6 +158,12 @@ const runPipeline = ({
     );
   }
 
+  const statusEngine = STATUS_ENGINES[pipelineConfig.statusEngineId];
+
+  // Fail fast at PARSE on engineParams the engine's schema rejects (same
+  // call as parse.job.ts; match.job.ts re-validates and threads the result).
+  validateStatusEngineParams(statusEngine, pipelineConfig.engineParams);
+
   // The jobs read the per-reconciliation columnMapping snapshot; the import
   // dialog prefills that snapshot from the carrier config, so for these
   // fixtures the snapshot IS the carrier's seeded mapping.
@@ -171,7 +179,19 @@ const runPipeline = ({
     parseStatusFieldMapping,
     actualHeaders,
     computedFields,
+    statusEngine.requiredRoles,
   );
+
+  // Presence: required roles absent from the mapping entirely fail the run
+  // (same message as parse.job.ts; needs no rows to detect).
+  if (roleValidation.missingRequired.length > 0) {
+    throw new Error(
+      `Status engine "${statusEngine.id}" requires role(s) not present in ` +
+        `statusConfig.fieldMapping: ${roleValidation.missingRequired.join(', ')}. ` +
+        `Map each required role to a file header or computed-field output ` +
+        `on the carrier config and re-run.`,
+    );
+  }
 
   if (roleValidation.unresolvedRequired.length > 0) {
     throw new Error(
@@ -238,10 +258,19 @@ const runPipeline = ({
   const {
     statusEngineId,
     matching: matchingConfig,
-    status: statusEngineConfig,
     startDate,
     policyNumberPattern,
   } = pipelineConfig;
+
+  // match.job.ts loadMatchContext: validated engineParams threaded into the
+  // engine config (re-validated at MATCH — re-runs pick up live edits).
+  const statusEngineConfig = {
+    ...pipelineConfig.status,
+    engineParams: validateStatusEngineParams(
+      statusEngine,
+      pipelineConfig.engineParams,
+    ),
+  };
 
   let autoMatched = 0;
   let needsReview = 0;
@@ -590,6 +619,7 @@ const makePolicy = (overrides: Partial<CrmPolicy> = {}): CrmPolicy => ({
   id: 'policy-x',
   policyNumber: null,
   applicationId: null,
+  externalPolicyId: null,
   effectiveDate: null,
   expirationDate: null,
   paidThroughDate: null,
@@ -1410,6 +1440,169 @@ describe('pipeline e2e — second-carrier acceptance (4.10)', () => {
           TODAY,
         ),
       ).toBeNull();
+    });
+  });
+
+  describe('per-engine required-role PRESENCE (multi-carrier audit 2026-06-11)', () => {
+    it('a config omitting a required role mapping fails the run naming the role', () => {
+      // Oscar without the paidThroughDate mapping: previously this passed
+      // validation (only RESOLVABILITY was checked) and blanket-derived
+      // PAYMENT_ERROR_* for every active row.
+      const { paidThroughDate: _omitted, ...incompleteMapping } =
+        OSCAR_STATUS_FIELD_MAPPING;
+
+      const badConfig: CarrierConfigRecord = {
+        ...oscarCarrierConfig(),
+        statusConfig: {
+          engineId: AMBETTER_STATUS_ENGINE_ID,
+          fieldMapping: incompleteMapping,
+        },
+      };
+
+      expect(() =>
+        runPipeline({
+          carrierConfig: badConfig,
+          rawRows: OSCAR_ROWS,
+          crmPolicies: OSCAR_CRM_POLICIES,
+        }),
+      ).toThrow(
+        'Status engine "ambetter-bob-v1" requires role(s) not present in ' +
+          'statusConfig.fieldMapping: paidThroughDate. ' +
+          'Map each required role to a file header or computed-field output ' +
+          'on the carrier config and re-run.',
+      );
+    });
+
+    it('the requirement set comes from the engine descriptor, not a global', () => {
+      const ambetter = STATUS_ENGINES[AMBETTER_STATUS_ENGINE_ID];
+
+      expect(ambetter.requiredRoles).toEqual([
+        'effectiveDate',
+        'paidThroughDate',
+      ]);
+      // Every required role must also be a known role of the engine.
+      for (const role of ambetter.requiredRoles) {
+        expect(ambetter.knownRoles).toContain(role);
+      }
+    });
+  });
+
+  describe('engineParams channel (statusConfig.engineParams)', () => {
+    // A row whose placement depends on the threshold: eff 2/20, paid 2/25 —
+    // 5 days, no full effective month (2/25 < 2/28), paid-through short of
+    // the current month end (TODAY 2026-03-10 → 2026-03-31), so payment
+    // error either way; placement decides PLACED vs APPROVED.
+    const thresholdRow: ParsedRow = {
+      'Broker Name': 'Alexandria Marrero',
+      'Broker NPN': '21340394',
+      'Policy Number': 'U55667788',
+      'Plan Name': 'Everyday Bronze',
+      'Insured First Name': 'Tom',
+      'Insured Last Name': 'Threshold',
+      'Broker Effective Date': '2/20/2026',
+      'Policy Effective Date': '2/20/2026',
+      'Policy Term Date': '',
+      'Paid Through Date': '2/25/2026',
+      'Member Date Of Birth': '1/1/1990',
+      'Eligible for Commission': 'Yes',
+      'Member Phone Number': '',
+      'Member Email': '',
+    };
+
+    const thresholdCrmPolicies: CrmPolicy[] = [
+      makePolicy({
+        id: 'crm-threshold',
+        policyNumber: 'U55667788',
+        effectiveDate: '2026-02-20',
+        status: 'ACTIVE_APPROVED',
+        'lead.name.firstName': 'Tom',
+        'lead.name.lastName': 'Threshold',
+        'agent.name': 'Alexandria Marrero',
+      }),
+    ];
+
+    const ambetterWithStatusConfig = (
+      statusConfigExtra: Record<string, unknown>,
+    ): CarrierConfigRecord => ({
+      ...AMBETTER_CARRIER_CONFIG,
+      statusConfig: {
+        ...(AMBETTER_CARRIER_CONFIG.statusConfig as Record<string, unknown>),
+        ...statusConfigExtra,
+      } as CarrierConfigRecord['statusConfig'],
+    });
+
+    it('rejected engineParams fail the run at PARSE with the actionable message', () => {
+      expect(() =>
+        runPipeline({
+          carrierConfig: ambetterWithStatusConfig({
+            engineParams: { placedThresholdDays: 'thirty' },
+          }),
+          rawRows: [thresholdRow],
+          crmPolicies: thresholdCrmPolicies,
+        }),
+      ).toThrow(
+        /Invalid statusConfig\.engineParams for status engine "ambetter-bob-v1": placedThresholdDays:/,
+      );
+    });
+
+    it('unknown engineParams keys fail the run (typo protection)', () => {
+      expect(() =>
+        runPipeline({
+          carrierConfig: ambetterWithStatusConfig({
+            engineParams: { placedThresholdDay: 5 },
+          }),
+          rawRows: [thresholdRow],
+          crmPolicies: thresholdCrmPolicies,
+        }),
+      ).toThrow(/Invalid statusConfig\.engineParams/);
+    });
+
+    it('validated engineParams reach the engine and override the legacy knob', () => {
+      // Seeded Ambetter statusConfig carries placedThresholdDays: 30; the
+      // engineParams override must win.
+      const result = runPipeline({
+        carrierConfig: ambetterWithStatusConfig({
+          engineParams: { placedThresholdDays: 5 },
+        }),
+        rawRows: [thresholdRow],
+        crmPolicies: thresholdCrmPolicies,
+      });
+
+      expect(itemFor(result, 'U55667788').derivedStatus).toBe(
+        'PAYMENT_ERROR_ACTIVE_PLACED',
+      );
+    });
+
+    it('parity: engineParams override ≡ the legacy statusConfig.placedThresholdDays knob', () => {
+      const viaEngineParams = runPipeline({
+        carrierConfig: ambetterWithStatusConfig({
+          engineParams: { placedThresholdDays: 5 },
+        }),
+        rawRows: [thresholdRow],
+        crmPolicies: thresholdCrmPolicies,
+      });
+      const viaLegacyKnob = runPipeline({
+        carrierConfig: ambetterWithStatusConfig({
+          placedThresholdDays: 5,
+        }),
+        rawRows: [thresholdRow],
+        crmPolicies: thresholdCrmPolicies,
+      });
+
+      expect(viaEngineParams.reviewItems).toEqual(viaLegacyKnob.reviewItems);
+    });
+
+    it('without engineParams the legacy knob still rules (existing configs untouched)', () => {
+      const result = runPipeline({
+        carrierConfig: AMBETTER_CARRIER_CONFIG,
+        rawRows: [thresholdRow],
+        crmPolicies: thresholdCrmPolicies,
+      });
+
+      // Seeded threshold 30 → 5 days is NOT placed.
+      expect(itemFor(result, 'U55667788').derivedStatus).toBe(
+        'PAYMENT_ERROR_ACTIVE_APPROVED',
+      );
     });
   });
 });

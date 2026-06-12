@@ -1,0 +1,80 @@
+{
+  "name": "UHO",
+  "carrierName": "UHO",
+  "statusConfig": {
+    "engineId": "ambetter-bob-v1",
+    "fieldMapping": {
+      "effectiveDate": "Effective Date",
+      "paidThroughDate": "Paid To Date",
+      "termDate": "Termination Date",
+      "eligibleForCommission": "Commission Eligible"
+    },
+    "placedThresholdDays": 30
+  },
+  "matchingConfig": {
+    "startDate": null,
+    "autoMatchThreshold": 90,
+    "dateToleranceDays": 30
+  },
+  "transformRules": {
+    "dateFormats": ["MM/DD/YYYY"],
+    "booleanTrue": ["yes", "y", "true", "1"],
+    "booleanFalse": ["no", "n", "false", "0"],
+    "currencyStrip": ["$", ","]
+  },
+  "policyNumberPattern": "^[0-9]{9}$",
+  "productMapping": [
+    {
+      "pattern": "bronze",
+      "productId": "00000000-0000-0000-0000-000000000001",
+      "productName": "ACA - Bronze"
+    },
+    {
+      "pattern": "silver",
+      "productId": "00000000-0000-0000-0000-000000000002",
+      "productName": "ACA - Silver"
+    },
+    {
+      "pattern": "gold",
+      "productId": "00000000-0000-0000-0000-000000000003",
+      "productName": "ACA - Gold"
+    }
+  ],
+  "columnMapping": {
+    "Policy Number": {
+      "crmField": "policyNumber",
+      "fieldType": "TEXT",
+      "fieldKey": "policyNumber"
+    },
+    "Member First Name": {
+      "crmField": "lead.name.firstName",
+      "fieldType": "FULL_NAME",
+      "fieldKey": "update:firstName-name (lead)"
+    },
+    "Member Last Name": {
+      "crmField": "lead.name.lastName",
+      "fieldType": "FULL_NAME",
+      "fieldKey": "update:lastName-name (lead)"
+    },
+    "Member Date Of Birth": {
+      "crmField": "lead.dateOfBirth",
+      "fieldType": "DATE",
+      "fieldKey": "update:dateOfBirth (lead)"
+    },
+    "Writing Agent NPN": {
+      "crmField": "agent.npn",
+      "fieldType": "TEXT",
+      "fieldKey": "update:npn (agent)"
+    },
+    "Paid To Date": {
+      "crmField": "paidThroughDate",
+      "fieldType": "DATE",
+      "fieldKey": "paidThroughDate"
+    },
+    "Monthly Premium": {
+      "crmField": "premium.amountMicros",
+      "fieldType": "CURRENCY",
+      "fieldKey": "Amount (premium)"
+    }
+  }
+}

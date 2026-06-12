@@ -2,14 +2,28 @@ import {
   buildBrokerEffAuditInput,
   buildStatusInputFromMapping,
   deriveBrokerEffAudit,
+  deriveCanceledStatus,
   deriveStatus,
+  evaluateAcaPlacement,
+  findPreviousVersion,
   getCancelExpireDate,
+  getCurrentCrmStatus,
+  getStatusEngine,
   isFullEffectiveMonthPaid,
   isKnownStatusEngine,
+  isPaidThroughCurrentMonth,
+  lastDayOfMonth,
   resolveEffectiveDateHeader,
+  validateStatusEngineParams,
   DEFAULT_STATUS_ENGINE_CONFIG,
   STATUS_ENGINE_IDS,
+  STATUS_ENGINE_ROLE_TYPES,
+  STATUS_ENGINES,
+  STATUS_ROLES,
+  type StatusEngineDescriptor,
+  type StatusInput,
 } from 'src/modules/reconciliation/engines/status';
+import { REQUIRED_STATUS_ENGINE_ROLES } from 'src/modules/reconciliation/parsers/transforms';
 import type { CrmPolicy } from 'src/modules/reconciliation/engines/matching';
 import {
   deriveCategory,
@@ -25,6 +39,7 @@ describe('status engine (ambetter-bob-v1)', () => {
     id: 'policy-id',
     policyNumber: 'U94692964',
     applicationId: null,
+    externalPolicyId: null,
     effectiveDate: '2026-01-01',
     expirationDate: null,
     paidThroughDate: null,
@@ -281,6 +296,7 @@ describe('status engine (ambetter-bob-v1)', () => {
         id: 'old-policy',
         policyNumber: 'U94692964',
         applicationId: null,
+        externalPolicyId: null,
         effectiveDate: '2025-01-01',
         expirationDate: null,
         paidThroughDate: null,
@@ -321,6 +337,7 @@ describe('status engine (ambetter-bob-v1)', () => {
         id: 'matched-policy',
         policyNumber: 'U94692964',
         applicationId: null,
+        externalPolicyId: null,
         effectiveDate: '2025-01-01',
         expirationDate: null,
         paidThroughDate: null,
@@ -873,6 +890,496 @@ describe('status engine registry (4.3)', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Self-describing registry (multi-carrier audit 2026-06-11): descriptors
+// declare their own role/param contract, so jobs validate per ENGINE.
+// ---------------------------------------------------------------------------
+describe('self-describing status-engine registry', () => {
+  it('every descriptor is internally consistent (id matches key, roles known, described)', () => {
+    for (const [key, descriptor] of Object.entries(STATUS_ENGINES)) {
+      expect(descriptor.id).toBe(key);
+      expect(descriptor.description.length).toBeGreaterThan(0);
+      expect(typeof descriptor.derive).toBe('function');
+
+      // requiredRoles ⊆ knownRoles. (knownRoles may exceed the global
+      // STATUS_ROLES vocabulary: extraRoles-channel engines declare their
+      // extra signal names here — see status-engine-authoring.md.)
+      for (const role of descriptor.requiredRoles) {
+        expect(descriptor.knownRoles).toContain(role);
+      }
+    }
+  });
+
+  it('ambetter-bob-v1 declares its real input contract', () => {
+    const ambetter = STATUS_ENGINES['ambetter-bob-v1'];
+
+    expect(ambetter.requiredRoles).toEqual([
+      'effectiveDate',
+      'paidThroughDate',
+    ]);
+    expect([...ambetter.knownRoles].sort()).toEqual(
+      [
+        'brokerEffectiveDate',
+        'effectiveDate',
+        'eligibleForCommission',
+        'paidThroughDate',
+        'policyEffectiveDate',
+        'termDate',
+      ].sort(),
+    );
+    expect(ambetter.paramsSchema).toBeDefined();
+  });
+
+  it('stays in lockstep with the deprecated REQUIRED_STATUS_ENGINE_ROLES global', () => {
+    // The global is kept only as the legacy default for
+    // validateStatusRoleMapping; it must equal the Ambetter descriptor's
+    // requiredRoles until it is deleted.
+    expect(STATUS_ENGINES['ambetter-bob-v1'].requiredRoles).toEqual(
+      REQUIRED_STATUS_ENGINE_ROLES,
+    );
+  });
+
+  it('STATUS_ROLES and STATUS_ENGINE_ROLE_TYPES cover the same vocabulary', () => {
+    expect([...STATUS_ROLES].sort()).toEqual(
+      Object.keys(STATUS_ENGINE_ROLE_TYPES).sort(),
+    );
+  });
+
+  it('getStatusEngine returns descriptors for known ids and null otherwise', () => {
+    expect(getStatusEngine('ambetter-bob-v1')).toBe(
+      STATUS_ENGINES['ambetter-bob-v1'],
+    );
+    expect(getStatusEngine('uho-bob-v1')).toBeNull();
+    expect(getStatusEngine('hasOwnProperty')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// engineParams channel (statusConfig.engineParams → paramsSchema → derive)
+// ---------------------------------------------------------------------------
+describe('validateStatusEngineParams', () => {
+  const ambetter = STATUS_ENGINES['ambetter-bob-v1'];
+
+  it('returns {} for null/undefined/empty params (legacy configs untouched)', () => {
+    expect(validateStatusEngineParams(ambetter, null)).toEqual({});
+    expect(validateStatusEngineParams(ambetter, undefined)).toEqual({});
+    expect(validateStatusEngineParams(ambetter, {})).toEqual({});
+  });
+
+  it('passes valid Ambetter params through', () => {
+    expect(
+      validateStatusEngineParams(ambetter, { placedThresholdDays: 45 }),
+    ).toEqual({ placedThresholdDays: 45 });
+  });
+
+  it('rejects mistyped params with an actionable message naming the key', () => {
+    expect(() =>
+      validateStatusEngineParams(ambetter, { placedThresholdDays: 'thirty' }),
+    ).toThrow(
+      /Invalid statusConfig\.engineParams for status engine "ambetter-bob-v1": placedThresholdDays:.*Fix statusConfig\.engineParams/s,
+    );
+  });
+
+  it('rejects unknown param keys (typo protection — schema is strict)', () => {
+    expect(() =>
+      validateStatusEngineParams(ambetter, { placedThresholdDay: 45 }),
+    ).toThrow(
+      /Invalid statusConfig\.engineParams for status engine "ambetter-bob-v1"/,
+    );
+  });
+
+  it('rejects non-empty params for engines that accept none', () => {
+    const paramless: StatusEngineDescriptor = {
+      id: 'paramless-test-engine',
+      derive: ambetter.derive,
+      requiredRoles: [],
+      knownRoles: [],
+      description: 'test',
+    };
+
+    expect(() =>
+      validateStatusEngineParams(paramless, { anything: 1 }),
+    ).toThrow(
+      'Status engine "paramless-test-engine" accepts no engineParams, but ' +
+        'statusConfig.engineParams is set (keys: anything). Remove ' +
+        'statusConfig.engineParams from the carrier config and re-run.',
+    );
+  });
+});
+
+describe('engineParams reach deriveStatus (Ambetter placedThresholdDays)', () => {
+  // eff 2026-03-20, paid 2026-03-25: 5 days, full effective month NOT paid
+  // (3/25 < 3/31), and paid-through short of the current month end
+  // (today 2026-04-13 → 2026-04-30) → payment error either way; placement
+  // decides PLACED vs APPROVED.
+  const input: StatusInput = {
+    effectiveDate: '2026-03-20',
+    paidThroughDate: '2026-03-25',
+    termDate: null,
+    eligibleForCommission: true,
+  };
+
+  it('engineParams.placedThresholdDays overrides the legacy statusConfig knob', () => {
+    const result = deriveStatus('ambetter-bob-v1', input, [], today, {
+      placedThresholdDays: 30,
+      paymentErrorAgeDays: 10,
+      engineParams: { placedThresholdDays: 5 },
+    });
+
+    expect(result?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
+  });
+
+  it('falls back to the legacy statusConfig.placedThresholdDays when engineParams is absent', () => {
+    const withLegacyKnob = deriveStatus('ambetter-bob-v1', input, [], today, {
+      placedThresholdDays: 30,
+      paymentErrorAgeDays: 10,
+    });
+    const withEmptyParams = deriveStatus('ambetter-bob-v1', input, [], today, {
+      placedThresholdDays: 30,
+      paymentErrorAgeDays: 10,
+      engineParams: {},
+    });
+
+    expect(withLegacyKnob?.derivedStatus).toBe('PAYMENT_ERROR_ACTIVE_APPROVED');
+    // Empty engineParams behaves exactly like no engineParams.
+    expect(withEmptyParams).toEqual(withLegacyKnob);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Open input channel: StatusInput.extraRoles
+// ---------------------------------------------------------------------------
+describe('StatusInput.extraRoles (open input channel)', () => {
+  it('populates extraRoles from fieldMapping keys outside the known vocabulary', () => {
+    const input = buildStatusInputFromMapping(
+      {
+        'Coverage Start': '2026-01-01',
+        'Paid To': '2026-02-28',
+        'Carrier Status': 'TERMED',
+        'Premium Paid': 123.45,
+        'Auto Pay': true,
+      },
+      {
+        effectiveDate: 'Coverage Start',
+        paidThroughDate: 'Paid To',
+        carrierStatus: 'Carrier Status',
+        premiumPaid: 'Premium Paid',
+        autoPay: 'Auto Pay',
+        lapseDate: 'Lapse Date', // header absent from the row → null
+      },
+    );
+
+    expect(input.effectiveDate).toBe('2026-01-01');
+    expect(input.extraRoles).toEqual({
+      carrierStatus: 'TERMED',
+      premiumPaid: 123.45,
+      autoPay: true,
+      lapseDate: null,
+    });
+  });
+
+  it('known roles never leak into extraRoles', () => {
+    const input = buildStatusInputFromMapping(
+      {
+        eff: '2026-01-01',
+        paid: '2026-02-28',
+        term: '2026-12-31',
+        elig: true,
+        broker: '2026-01-01',
+        policy: '2026-01-01',
+      },
+      {
+        effectiveDate: 'eff',
+        paidThroughDate: 'paid',
+        termDate: 'term',
+        eligibleForCommission: 'elig',
+        brokerEffectiveDate: 'broker',
+        policyEffectiveDate: 'policy',
+      },
+    );
+
+    expect(input.extraRoles).toEqual({});
+  });
+
+  it('ambetter-bob-v1 ignores extraRoles entirely (decision is bit-identical)', () => {
+    const base: StatusInput = {
+      effectiveDate: '2026-01-01',
+      paidThroughDate: '2026-02-28',
+      termDate: null,
+      eligibleForCommission: true,
+    };
+    const withBag: StatusInput = {
+      ...base,
+      extraRoles: {
+        carrierStatus: 'TERMED', // a signal Ambetter must NOT read
+        premiumPaid: 0,
+        eligibleForCommission: false, // a role-name collision in the bag
+      },
+    };
+
+    const policies = [
+      makeCrmPolicyForRegistry({ id: 'p1', effectiveDate: '2025-01-01' }),
+    ];
+
+    expect(
+      deriveStatus(
+        'ambetter-bob-v1',
+        withBag,
+        policies,
+        today,
+        undefined,
+        'p0',
+      ),
+    ).toEqual(
+      deriveStatus('ambetter-bob-v1', base, policies, today, undefined, 'p0'),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Exported generic ACA mechanics: parity with the engine they were extracted
+// from (NO behavior change — same fixtures, same answers).
+// ---------------------------------------------------------------------------
+const makeCrmPolicyForRegistry = (
+  overrides: Partial<CrmPolicy>,
+): CrmPolicy => ({
+  id: 'policy-id',
+  policyNumber: 'U94692964',
+  applicationId: null,
+  externalPolicyId: null,
+  effectiveDate: '2026-01-01',
+  expirationDate: null,
+  paidThroughDate: null,
+  status: 'ACTIVE_PLACED',
+  applicantCount: null,
+  'premium.amountMicros': null,
+  'lead.name.firstName': 'John',
+  'lead.name.lastName': 'Smith',
+  'lead.dateOfBirth': null,
+  'lead.addressCustom.addressState': null,
+  'agent.name': null,
+  'agent.npn': null,
+  planIdentifier: null,
+  'lead.phones.primaryPhoneNumber': null,
+  'lead.emails.primaryEmail': null,
+  'lead.id': null,
+  ...overrides,
+});
+
+describe('exported generic ACA mechanics', () => {
+  describe('lastDayOfMonth', () => {
+    it('resolves month ends including leap years', () => {
+      expect(lastDayOfMonth('2026-02-15')).toBe('2026-02-28');
+      expect(lastDayOfMonth('2024-02-01')).toBe('2024-02-29');
+      expect(lastDayOfMonth('2026-03-15')).toBe('2026-03-31');
+      expect(lastDayOfMonth('2026-12-31')).toBe('2026-12-31');
+    });
+
+    it('returns null for unparseable input', () => {
+      expect(lastDayOfMonth('not-a-date')).toBeNull();
+    });
+  });
+
+  describe('isPaidThroughCurrentMonth', () => {
+    it('true exactly when paid-through covers the current month end', () => {
+      expect(isPaidThroughCurrentMonth('2026-04-30', '2026-04-13')).toBe(true);
+      expect(isPaidThroughCurrentMonth('2026-05-01', '2026-04-13')).toBe(true);
+      expect(isPaidThroughCurrentMonth('2026-04-29', '2026-04-13')).toBe(false);
+    });
+
+    it('parity: drives the engine PAYMENT_ERROR split for placed rows', () => {
+      const derive = (paidThroughDate: string) =>
+        deriveStatus(
+          'ambetter-bob-v1',
+          {
+            effectiveDate: '2026-01-01',
+            paidThroughDate,
+            termDate: null,
+            eligibleForCommission: true,
+          },
+          [],
+          today, // 2026-04-13
+        )?.derivedStatus;
+
+      // Same boundary as the helper: 2026-04-30 current, 2026-04-29 not.
+      expect(derive('2026-04-30')).toBe('ACTIVE_PLACED');
+      expect(derive('2026-04-29')).toBe('PAYMENT_ERROR_ACTIVE_PLACED');
+    });
+  });
+
+  describe('evaluateAcaPlacement', () => {
+    it('calendar-month rule: full effective month paid places short months', () => {
+      expect(evaluateAcaPlacement('2026-02-01', '2026-02-28', 30)).toEqual({
+        isPlaced: true,
+        fullMonthPaid: true,
+        daysSinceEffective: 27,
+      });
+    });
+
+    it('days-based fallback places rows whose paid-through stops short of the month end', () => {
+      // 5 days elapsed ≥ threshold 5, but 3/25 < 3/31 so no full month.
+      expect(evaluateAcaPlacement('2026-03-20', '2026-03-25', 5)).toEqual({
+        isPlaced: true,
+        fullMonthPaid: false,
+        daysSinceEffective: 5,
+      });
+      // The mid-month case from the engine comment: eff 1/15 paid 2/14
+      // covers January's month end, so BOTH rules fire there.
+      expect(evaluateAcaPlacement('2026-01-15', '2026-02-14', 30)).toEqual({
+        isPlaced: true,
+        fullMonthPaid: true,
+        daysSinceEffective: 30,
+      });
+    });
+
+    it('neither rule → not placed', () => {
+      expect(evaluateAcaPlacement('2026-03-20', '2026-03-25', 30)).toEqual({
+        isPlaced: false,
+        fullMonthPaid: false,
+        daysSinceEffective: 5,
+      });
+    });
+
+    it('parity: agrees with the engine PLACED/APPROVED split over a fixture grid', () => {
+      const fixtures: { effectiveDate: string; paidThroughDate: string }[] = [
+        { effectiveDate: '2026-02-01', paidThroughDate: '2026-02-28' },
+        { effectiveDate: '2026-01-15', paidThroughDate: '2026-02-14' },
+        { effectiveDate: '2026-03-20', paidThroughDate: '2026-03-25' },
+        { effectiveDate: '2026-01-01', paidThroughDate: '2026-04-30' },
+        { effectiveDate: '2026-04-01', paidThroughDate: '2026-04-13' },
+      ];
+
+      for (const { effectiveDate, paidThroughDate } of fixtures) {
+        const placement = evaluateAcaPlacement(
+          effectiveDate,
+          paidThroughDate,
+          DEFAULT_STATUS_ENGINE_CONFIG.placedThresholdDays,
+        );
+        const decision = deriveStatus(
+          'ambetter-bob-v1',
+          {
+            effectiveDate,
+            paidThroughDate,
+            termDate: null,
+            eligibleForCommission: true,
+          },
+          [],
+          today,
+        );
+
+        expect(decision?.derivedStatus.endsWith('PLACED')).toBe(
+          placement.isPlaced,
+        );
+      }
+    });
+  });
+
+  describe('findPreviousVersion', () => {
+    const policies = [
+      makeCrmPolicyForRegistry({ id: 'v2024', effectiveDate: '2024-01-01' }),
+      makeCrmPolicyForRegistry({ id: 'v2025', effectiveDate: '2025-01-01' }),
+      makeCrmPolicyForRegistry({ id: 'v2026', effectiveDate: '2026-01-01' }),
+    ];
+
+    it('picks the most recent version strictly before the new effective date', () => {
+      expect(findPreviousVersion(policies, '2026-01-01', 'v2026')).toBe(
+        'v2025',
+      );
+    });
+
+    it('excludes the currently matched policy', () => {
+      expect(findPreviousVersion(policies, '2025-06-01', 'v2025')).toBe(
+        'v2024',
+      );
+    });
+
+    it('returns null when nothing precedes', () => {
+      expect(findPreviousVersion(policies, '2024-01-01', 'v2024')).toBeNull();
+      expect(findPreviousVersion([], '2026-01-01')).toBeNull();
+    });
+
+    it('parity: matches the engine cancelPreviousPolicyId for the same cohort', () => {
+      const decision = deriveStatus(
+        'ambetter-bob-v1',
+        {
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-04-30',
+          termDate: null,
+          eligibleForCommission: true,
+        },
+        policies,
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+        'v2026',
+      );
+
+      expect(decision?.cancelPreviousPolicyId).toBe(
+        findPreviousVersion(policies, '2026-01-01', 'v2026'),
+      );
+    });
+  });
+
+  describe('getCurrentCrmStatus', () => {
+    const policies = [
+      makeCrmPolicyForRegistry({ id: 'a', status: 'ACTIVE_PLACED' }),
+      makeCrmPolicyForRegistry({
+        id: 'b',
+        status: 'PAYMENT_ERROR_ACTIVE_PLACED',
+      }),
+    ];
+
+    it('resolves the matched policy status from the cohort', () => {
+      expect(getCurrentCrmStatus(policies, 'b')).toBe(
+        'PAYMENT_ERROR_ACTIVE_PLACED',
+      );
+    });
+
+    it('null when unmatched or absent', () => {
+      expect(getCurrentCrmStatus(policies, null)).toBeNull();
+      expect(getCurrentCrmStatus(policies, undefined)).toBeNull();
+      expect(getCurrentCrmStatus(policies, 'nope')).toBeNull();
+    });
+  });
+
+  describe('deriveCanceledStatus', () => {
+    it('preserves the PAYMENT_ERROR prefix; plain CANCELED otherwise', () => {
+      expect(deriveCanceledStatus('PAYMENT_ERROR_ACTIVE_PLACED')).toBe(
+        'PAYMENT_ERROR_CANCELED',
+      );
+      expect(deriveCanceledStatus('PAYMENT_ERROR_ACTIVE_APPROVED')).toBe(
+        'PAYMENT_ERROR_CANCELED',
+      );
+      expect(deriveCanceledStatus('ACTIVE_PLACED')).toBe('CANCELED');
+      expect(deriveCanceledStatus(null)).toBe('CANCELED');
+    });
+
+    it('parity: matches the engine cancel decision for an ineligible row', () => {
+      const decision = deriveStatus(
+        'ambetter-bob-v1',
+        {
+          effectiveDate: '2026-01-01',
+          paidThroughDate: '2026-03-01',
+          termDate: null,
+          eligibleForCommission: false,
+        },
+        [
+          makeCrmPolicyForRegistry({
+            id: 'pe',
+            status: 'PAYMENT_ERROR_ACTIVE_PLACED',
+          }),
+        ],
+        today,
+        DEFAULT_STATUS_ENGINE_CONFIG,
+        'pe',
+      );
+
+      expect(decision?.derivedStatus).toBe(
+        deriveCanceledStatus('PAYMENT_ERROR_ACTIVE_PLACED'),
+      );
+    });
+  });
+});
+
 // Remediation 4.3 (deferred 3.13): a null derivedStatus means "no status
 // assertion", not "status changed". The old `derivedStatus !==
 // currentCrmStatus` comparison promoted every null-status row with a real
@@ -929,6 +1436,157 @@ describe('deriveCategory (4.3 null = no status assertion)', () => {
 
   it('unmatched rows are always UNMATCHED', () => {
     expect(deriveCategory(true, [], null, null)).toBe('UNMATCHED');
+  });
+});
+
+// OMN-12 tuning depth: deriveCategory/deriveFlags accept the per-carrier
+// status-change gate (statusVocabulary.negativeTerminalStatuses +
+// diffConfig.suppressNegativeToNegativeStatus) so they stay in lockstep with
+// the diff engine's status-diff suppression. Unset = today's behavior
+// (already pinned by the suites above); each knob demonstrably moves it.
+describe('status-change gate knobs (OMN-12 tuning depth)', () => {
+  describe('deriveCategory', () => {
+    it('an empty gate object is bit-for-bit the implicit default', () => {
+      expect(deriveCategory(false, [], 'CANCELED', 'DECLINED', {})).toBeNull();
+      expect(deriveCategory(false, [], 'CANCELED', 'ACTIVE_PLACED', {})).toBe(
+        'UPDATE',
+      );
+    });
+
+    it('suppressNegativeToNegativeStatus=false promotes terminal-to-terminal moves', () => {
+      expect(
+        deriveCategory(false, [], 'CANCELED', 'DECLINED', {
+          suppressNegativeToNegativeStatus: false,
+        }),
+      ).toBe('UPDATE');
+    });
+
+    it('a grown set (workspace-added LAPSED) demotes CANCELED-over-LAPSED to confirmed', () => {
+      // Default vocabulary: LAPSED is unknown → status change → UPDATE.
+      expect(deriveCategory(false, [], 'CANCELED', 'LAPSED')).toBe('UPDATE');
+
+      // Carrier declares LAPSED terminal → terminal-to-terminal → confirmed
+      // (mirrors the diff engine suppressing the status diff, so no ghost
+      // empty UPDATE item is created).
+      expect(
+        deriveCategory(false, [], 'CANCELED', 'LAPSED', {
+          negativeTerminalStatuses: new Set([
+            'CANCELED',
+            'PAYMENT_ERROR_CANCELED',
+            'DECLINED',
+            'INCOMPLETE',
+            'LAPSED',
+          ]),
+        }),
+      ).toBeNull();
+    });
+  });
+
+  describe('deriveFlags STATUS_CHANGE', () => {
+    it('suppressNegativeToNegativeStatus=false flags terminal-to-terminal moves', () => {
+      const defaultGate = deriveFlags(
+        'CANCELED',
+        'DECLINED',
+        'POLICY_NUMBER_EXACT',
+        [],
+      );
+
+      expect(defaultGate.flags).not.toContain('STATUS_CHANGE');
+
+      const surfaced = deriveFlags(
+        'CANCELED',
+        'DECLINED',
+        'POLICY_NUMBER_EXACT',
+        [],
+        undefined,
+        undefined,
+        { suppressNegativeToNegativeStatus: false },
+      );
+
+      expect(surfaced.flags).toContain('STATUS_CHANGE');
+      expect(surfaced.reasons.STATUS_CHANGE).toBe('DECLINED → CANCELED');
+    });
+
+    it('a grown set suppresses STATUS_CHANGE for a workspace-added terminal status', () => {
+      const defaultGate = deriveFlags(
+        'CANCELED',
+        'LAPSED',
+        'POLICY_NUMBER_EXACT',
+        [],
+      );
+
+      expect(defaultGate.flags).toContain('STATUS_CHANGE');
+
+      const suppressed = deriveFlags(
+        'CANCELED',
+        'LAPSED',
+        'POLICY_NUMBER_EXACT',
+        [],
+        undefined,
+        undefined,
+        { negativeTerminalStatuses: new Set(['CANCELED', 'LAPSED']) },
+      );
+
+      expect(suppressed.flags).not.toContain('STATUS_CHANGE');
+    });
+  });
+
+  describe('deriveFlags REINSTATEMENT', () => {
+    it('a grown set flags transitions out of a workspace-added terminal status', () => {
+      // LAPSED is unknown to the default set → no flag today.
+      const defaultGate = deriveFlags(
+        'ACTIVE_PLACED',
+        'LAPSED',
+        'POLICY_NUMBER_EXACT',
+        [],
+      );
+
+      expect(defaultGate.flags).not.toContain('REINSTATEMENT');
+
+      // Carrier declares LAPSED terminal → LAPSED → ACTIVE_PLACED is a
+      // reinstatement and must hit the human-review gate.
+      const flagged = deriveFlags(
+        'ACTIVE_PLACED',
+        'LAPSED',
+        'POLICY_NUMBER_EXACT',
+        [],
+        undefined,
+        undefined,
+        {
+          negativeTerminalStatuses: new Set([
+            'CANCELED',
+            'PAYMENT_ERROR_CANCELED',
+            'DECLINED',
+            'INCOMPLETE',
+            'LAPSED',
+          ]),
+        },
+      );
+
+      expect(flagged.flags).toContain('REINSTATEMENT');
+      expect(flagged.reasons.REINSTATEMENT).toBe(
+        'CRM LAPSED → BOB ACTIVE_PLACED',
+      );
+    });
+
+    it('a shrunken set stops flagging transitions out of a removed status', () => {
+      const shrunk = deriveFlags(
+        'ACTIVE_PLACED',
+        'DECLINED',
+        'POLICY_NUMBER_EXACT',
+        [],
+        undefined,
+        undefined,
+        {
+          negativeTerminalStatuses: new Set([
+            'CANCELED',
+            'PAYMENT_ERROR_CANCELED',
+          ]),
+        },
+      );
+
+      expect(shrunk.flags).not.toContain('REINSTATEMENT');
+    });
   });
 });
 

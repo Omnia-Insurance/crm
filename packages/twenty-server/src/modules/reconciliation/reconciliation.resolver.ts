@@ -7,7 +7,7 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
-import { Args, Float, Mutation } from '@nestjs/graphql';
+import { Args, Float, Mutation, Query } from '@nestjs/graphql';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
 
@@ -22,7 +22,9 @@ import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace
 import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { StartReconciliationResultDTO } from 'src/modules/reconciliation/dtos/start-reconciliation.dto';
+import { ValidateCarrierConfigResultDTO } from 'src/modules/reconciliation/dtos/validate-carrier-config.dto';
 import { ReconciliationOrchestratorService } from 'src/modules/reconciliation/orchestrator.service';
+import { CarrierConfigValidationService } from 'src/modules/reconciliation/services/carrier-config-validation.service';
 import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
 
 @MetadataResolver()
@@ -36,8 +38,37 @@ export class ReconciliationResolver {
   constructor(
     private readonly orchestratorService: ReconciliationOrchestratorService,
     private readonly reviewItemService: ReviewItemService,
+    private readonly carrierConfigValidationService: CarrierConfigValidationService,
   ) {}
 
+  /**
+   * Synchronous pre-run config validation (OMN-11): runs the full parse/match
+   * fail-fast chain — boundary parse, engine id, engineParams, status-role
+   * presence/resolvability against the latest parsed run's actual headers —
+   * WITHOUT enqueuing anything. Config problems land in `errors`, never as a
+   * thrown GraphQL error (see CarrierConfigValidationService).
+   */
+  @Query(() => ValidateCarrierConfigResultDTO)
+  async validateCarrierConfig(
+    @Args('carrierConfigId', { type: () => UUIDScalarType })
+    carrierConfigId: string,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ): Promise<ValidateCarrierConfigResultDTO> {
+    return this.carrierConfigValidationService.validateCarrierConfig(
+      workspace.id,
+      carrierConfigId,
+    );
+  }
+
+  /**
+   * Starts (or restarts) parsing. Legal from UPLOADED, FAILED, and — since
+   * OMN-11 — REVIEW, so parse-time knob edits (transformRules, computed
+   * fields, hand-edited columnMapping snapshot) can be re-applied to the
+   * same pinned source file without a re-upload. The CAS transition inside
+   * the orchestrator serializes concurrent restarts; reviewer decisions
+   * survive the downstream re-match (ReviewItemService.reconcileMatchResults
+   * preserves decided items).
+   */
   @Mutation(() => StartReconciliationResultDTO)
   async startReconciliationParsing(
     @Args('reconciliationId', { type: () => UUIDScalarType })

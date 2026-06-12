@@ -14,12 +14,20 @@
 
 import { STATUS_ENGINE_ROLE_TYPES } from 'src/modules/reconciliation/engines/status';
 import {
+  applyComputedFields,
+  ArithmeticExprError,
   buildTransforms,
+  compileArithmeticExpr,
+  COMPUTATION_METHOD_IDS,
+  COMPUTATIONS,
   DEFAULT_TRANSFORM_RULES,
+  evaluateRowFilterOp,
   inferDataType,
   REQUIRED_STATUS_ENGINE_ROLES,
   resolveFieldMapping,
   resolveTwoDigitYear,
+  ROW_FILTER_OPS,
+  rowFilterRuleProblems,
   toBoolean,
   toCurrency,
   toDateString,
@@ -28,7 +36,9 @@ import {
   TRANSFORMS,
   transformRows,
   TWO_DIGIT_YEAR_FUTURE_WINDOW,
+  validateComputedFieldParams,
   validateStatusRoleMapping,
+  type RowFilterRule,
 } from 'src/modules/reconciliation/parsers/transforms';
 import type {
   ColumnMapping,
@@ -460,6 +470,87 @@ describe('validateStatusRoleMapping (status-role header validation)', () => {
 
     expect(resolved.paidThroughDate).toBe('paid_through_date');
     expect(result.unresolvedRequired).toHaveLength(0);
+  });
+
+  describe('required-role PRESENCE (per-engine, multi-carrier audit 2026-06-11)', () => {
+    it('flags required roles absent from the mapping entirely (the blanket-status hole)', () => {
+      // A config that simply OMITS the paidThroughDate mapping used to pass
+      // validation and blanket-derive PAYMENT_ERROR_* for the active book.
+      const result = validateStatusRoleMapping(
+        { effectiveDate: 'True Effective Date' },
+        actualHeaders,
+        computedFields,
+      );
+
+      expect(result.missingRequired).toEqual(['paidThroughDate']);
+      expect(result.unresolvedRequired).toHaveLength(0);
+    });
+
+    it('missing and unresolved are disjoint buckets', () => {
+      // effectiveDate is mapped but resolves to nothing; paidThroughDate is
+      // not mapped at all.
+      const result = validateStatusRoleMapping(
+        { effectiveDate: 'Nonexistent Header' },
+        actualHeaders,
+        null,
+      );
+
+      expect(result.unresolvedRequired).toEqual([
+        { role: 'effectiveDate', configuredHeader: 'Nonexistent Header' },
+      ]);
+      expect(result.missingRequired).toEqual(['paidThroughDate']);
+    });
+
+    it('needs no file headers to detect presence (empty-file case)', () => {
+      const result = validateStatusRoleMapping({}, [], null);
+
+      expect(result.missingRequired).toEqual([
+        'effectiveDate',
+        'paidThroughDate',
+      ]);
+    });
+
+    it('takes the required-role set from the engine, not the global default', () => {
+      // An explicit-status passthrough engine that requires only its status
+      // column: omitting paidThroughDate must NOT flag for it.
+      const result = validateStatusRoleMapping(
+        { carrierStatus: 'Carrier Status' },
+        ['Carrier Status'],
+        null,
+        ['carrierStatus'],
+      );
+
+      expect(result.missingRequired).toHaveLength(0);
+      expect(result.unresolvedRequired).toHaveLength(0);
+      expect(result.unresolvedOptional).toHaveLength(0);
+
+      // …and a missing required role is reported under the engine's own
+      // vocabulary.
+      const missing = validateStatusRoleMapping(
+        { effectiveDate: 'True Effective Date' },
+        actualHeaders,
+        computedFields,
+        ['carrierStatus'],
+      );
+
+      expect(missing.missingRequired).toEqual(['carrierStatus']);
+      // effectiveDate is not required for this engine → optional bucket
+      // would only flag it if unresolved (it resolves, so nothing flags).
+      expect(missing.unresolvedRequired).toHaveLength(0);
+    });
+
+    it('defaults to the deprecated Ambetter-tuned global when no roles are passed', () => {
+      const result = validateStatusRoleMapping(
+        {
+          effectiveDate: 'True Effective Date',
+          paidThroughDate: 'Paid Through Date',
+        },
+        actualHeaders,
+        computedFields,
+      );
+
+      expect(result.missingRequired).toHaveLength(0);
+    });
   });
 });
 
@@ -1016,5 +1107,812 @@ describe('buildTransforms (per-carrier transform rules)', () => {
 
       expect(explicit).toEqual(implicit);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OMN-12 parse vocabulary: date-format token grammar
+// ---------------------------------------------------------------------------
+
+describe('date-format token grammar (OMN-12)', () => {
+  const dateWith = (formats: Parameters<typeof buildTransforms>[0]) =>
+    buildTransforms(formats).date;
+
+  describe('YYYY/MM/DD', () => {
+    const date = dateWith({ dateFormats: ['YYYY/MM/DD'] });
+
+    it('parses zero-padded and unpadded forms', () => {
+      expect(date('2026/01/05')).toBe('2026-01-05');
+      expect(date('2026/1/5')).toBe('2026-01-05');
+    });
+
+    it('calendar-validates (no fabricated dates)', () => {
+      expect(() => date('2026/13/05')).toThrow(TransformError);
+      expect(() => date('2026/02/30')).toThrow(/Invalid month\/day/);
+    });
+
+    it('does not accept US slash dates when not configured', () => {
+      expect(() => date('1/5/2026')).toThrow(/Unrecognized date format/);
+    });
+  });
+
+  describe('MM-DD-YYYY / DD-MM-YYYY (dash numeric)', () => {
+    it('parses MM-DD order', () => {
+      const date = dateWith({ dateFormats: ['MM-DD-YYYY'] });
+
+      expect(date('01-05-2026')).toBe('2026-01-05');
+      expect(date('1-5-2026')).toBe('2026-01-05');
+    });
+
+    it('parses DD-MM order', () => {
+      const date = dateWith({ dateFormats: ['DD-MM-YYYY'] });
+
+      expect(date('31-12-2025')).toBe('2025-12-31');
+    });
+
+    it('tries dash formats in configured order, first valid wins', () => {
+      const date = dateWith({ dateFormats: ['MM-DD-YYYY', 'DD-MM-YYYY'] });
+
+      // Ambiguous: MM-DD wins (configured first)
+      expect(date('01-05-2026')).toBe('2026-01-05');
+      // Month 13 invalid for MM-DD → falls to DD-MM
+      expect(date('13-05-2026')).toBe('2026-05-13');
+    });
+
+    it('throws when the dash shape matches but no format yields a real date', () => {
+      const date = dateWith({ dateFormats: ['MM-DD-YYYY'] });
+
+      expect(() => date('13-45-2026')).toThrow(
+        /Invalid month\/day in date "13-45-2026" \(expected MM-DD-YYYY\)/,
+      );
+    });
+
+    it('resolves 2-digit dash years through the pivot window', () => {
+      const date = dateWith({ dateFormats: ['MM-DD-YYYY'] });
+
+      expect(date('12-30-63')).toBe('1963-12-30');
+      expect(date('1-5-26')).toBe('2026-01-05');
+    });
+
+    it('keeps the strict ISO fast path first (calendar-validated)', () => {
+      const date = dateWith({ dateFormats: ['DD-MM-YYYY'] });
+
+      expect(date('2026-01-05')).toBe('2026-01-05');
+      // Strict ISO shape with invalid month stays an ISO calendar error,
+      // never reinterpreted by the dash tokens.
+      expect(() => date('2025-31-12')).toThrow(/Invalid calendar date/);
+    });
+  });
+
+  describe('YYYY-MM-DD as a configured token (relaxed digits)', () => {
+    const date = dateWith({ dateFormats: ['YYYY-MM-DD'] });
+
+    it('parses unpadded month/day (strict ISO is always-on regardless)', () => {
+      expect(date('2026-1-5')).toBe('2026-01-05');
+      expect(date('2026-01-05')).toBe('2026-01-05');
+    });
+
+    it('calendar-validates the relaxed shape', () => {
+      expect(() => date('2026-2-30')).toThrow(/Invalid month\/day/);
+    });
+  });
+
+  describe('MMM D YYYY (written month)', () => {
+    const date = dateWith({ dateFormats: ['MMM D YYYY'] });
+
+    it('parses abbreviated month names', () => {
+      expect(date('Jan 5 2026')).toBe('2026-01-05');
+      expect(date('Dec 31 2025')).toBe('2025-12-31');
+    });
+
+    it('is case-insensitive and accepts an optional comma', () => {
+      expect(date('JAN 5, 2026')).toBe('2026-01-05');
+      expect(date('jan 05 2026')).toBe('2026-01-05');
+    });
+
+    it('accepts full month names', () => {
+      expect(date('January 5 2026')).toBe('2026-01-05');
+      expect(date('September 1 2025')).toBe('2025-09-01');
+    });
+
+    it('calendar-validates written dates', () => {
+      expect(() => date('Feb 30 2026')).toThrow(/Invalid month\/day/);
+      expect(() => date('Jan 32 2026')).toThrow(TransformError);
+    });
+
+    it('rejects non-month words as unrecognized, not as invalid dates', () => {
+      expect(() => date('Foo 5 2026')).toThrow(/Unrecognized date format/);
+    });
+  });
+
+  describe('D MMM YYYY (written month, day first)', () => {
+    const date = dateWith({ dateFormats: ['D MMM YYYY'] });
+
+    it('parses space and dash separated forms', () => {
+      expect(date('5 Jan 2026')).toBe('2026-01-05');
+      expect(date('05-JAN-2026')).toBe('2026-01-05');
+    });
+
+    it('calendar-validates', () => {
+      expect(() => date('31 Feb 2026')).toThrow(/Invalid month\/day/);
+    });
+  });
+
+  describe('unset-default parity (HARD INVARIANT)', () => {
+    it('default rules reject every new-token shape exactly as before', () => {
+      for (const probe of [
+        '01-05-2026', // dash numeric
+        '2026/01/05', // year-first slash
+        'Jan 5 2026', // written month
+        '05-JAN-2026', // day-first written
+      ]) {
+        expect(() => toDateString(probe)).toThrow(/Unrecognized date format/);
+      }
+    });
+
+    it('default slash + ISO + serial behavior is unchanged', () => {
+      expect(toDateString('1/5/2026')).toBe('2026-01-05');
+      expect(toDateString('12/30/63')).toBe('1963-12-30');
+      expect(toDateString('2026-01-05')).toBe('2026-01-05');
+      expect(toDateString(44197)).toBe('2021-01-01');
+      expect(() => toDateString('31/12/2025')).toThrow(
+        /Invalid month\/day in date "31\/12\/2025" \(expected MM\/DD\/YYYY\)/,
+      );
+      expect(() => toDateString('1/31/26')).not.toThrow();
+    });
+
+    it('mixed token lists keep slash interpretation order independent of other shapes', () => {
+      const date = dateWith({
+        dateFormats: ['MM/DD/YYYY', 'MMM D YYYY', 'DD-MM-YYYY'],
+      });
+
+      expect(date('1/5/2026')).toBe('2026-01-05'); // MM/DD
+      expect(date('Jan 5 2026')).toBe('2026-01-05');
+      expect(date('31-12-2025')).toBe('2025-12-31');
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OMN-12 parse vocabulary: row filters + skipFooterRows
+// ---------------------------------------------------------------------------
+
+describe('parseSettings row filters (OMN-12)', () => {
+  const headerTypes = new Map<string, string>([['Effective Date', 'date']]);
+
+  const rows = [
+    {
+      'Policy Number': 'U1',
+      'Effective Date': '1/1/2026',
+      Premium: '100',
+    },
+    {
+      'Policy Number': '',
+      'Effective Date': null,
+      Premium: null,
+    },
+    {
+      'Policy Number': 'U2',
+      'Effective Date': '2/1/2026',
+      Premium: '200',
+    },
+    {
+      'Policy Number': 'Totals',
+      'Effective Date': null,
+      Premium: '300',
+    },
+  ];
+
+  it('skips footer "Totals" rows via equals and counts them', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      {
+        rowFilters: [
+          {
+            column: 'Policy Number',
+            op: 'equals',
+            value: 'totals',
+            action: 'skip',
+          },
+        ],
+      },
+    );
+
+    expect(skippedByRowFilter).toBe(1);
+    expect(normalized).toHaveLength(3);
+    expect(normalized.map((row) => row['Policy Number'])).toEqual([
+      'U1',
+      '',
+      'U2',
+    ]);
+  });
+
+  it('skips blank separator rows via empty and preserves ORIGINAL row numbering', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      {
+        rowFilters: [{ column: 'Policy Number', op: 'empty', action: 'skip' }],
+      },
+    );
+
+    expect(skippedByRowFilter).toBe(1);
+    expect(normalized.map((row) => row.__rowNumber)).toEqual([1, 3, 4]);
+    expect(normalized[1].__name).toBe('U2 - row 3');
+  });
+
+  it('skipFooterRows drops the last N rows unconditionally', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      { skipFooterRows: 2 },
+    );
+
+    expect(skippedByRowFilter).toBe(2);
+    expect(normalized.map((row) => row['Policy Number'])).toEqual(['U1', '']);
+  });
+
+  it('combines rowFilters and skipFooterRows without double counting', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      {
+        skipFooterRows: 1,
+        rowFilters: [{ column: 'Policy Number', op: 'empty', action: 'skip' }],
+      },
+    );
+
+    expect(skippedByRowFilter).toBe(2);
+    expect(normalized.map((row) => row['Policy Number'])).toEqual(['U1', 'U2']);
+  });
+
+  it('resolves filter columns with header normalization (underscore CSV)', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      [{ policy_number: 'U1' }, { policy_number: 'Subtotal North Region' }],
+      new Map(),
+      null,
+      {},
+      undefined,
+      null,
+      {
+        rowFilters: [
+          {
+            column: 'Policy Number',
+            op: 'startsWith',
+            value: 'subtotal',
+            action: 'skip',
+          },
+        ],
+      },
+    );
+
+    expect(skippedByRowFilter).toBe(1);
+    expect(normalized).toHaveLength(1);
+  });
+
+  it('supports contains and matches ops (case-insensitive)', () => {
+    const filterWith = (rule: RowFilterRule) =>
+      transformRows(rows, headerTypes, null, {}, 'Policy Number', null, {
+        rowFilters: [rule],
+      });
+
+    expect(
+      filterWith({
+        column: 'Policy Number',
+        op: 'contains',
+        value: 'OTAL',
+        action: 'skip',
+      }).skippedByRowFilter,
+    ).toBe(1);
+
+    expect(
+      filterWith({
+        column: 'Policy Number',
+        op: 'matches',
+        value: '^(total|subtotal)',
+        action: 'skip',
+      }).skippedByRowFilter,
+    ).toBe(1);
+  });
+
+  it('a column matching no header makes the rule inert (typo safety)', () => {
+    const { normalized, skippedByRowFilter } = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      {
+        rowFilters: [
+          // 'empty' on a missing column would otherwise skip EVERY row
+          { column: 'Polcy Nmber', op: 'empty', action: 'skip' },
+        ],
+      },
+    );
+
+    expect(skippedByRowFilter).toBe(0);
+    expect(normalized).toHaveLength(rows.length);
+  });
+
+  it('unset parseSettings is bit-identical to the historical output', () => {
+    const without = transformRows(rows, headerTypes, null, {}, 'Policy Number');
+    const withEmpty = transformRows(
+      rows,
+      headerTypes,
+      null,
+      {},
+      'Policy Number',
+      null,
+      {},
+    );
+
+    expect(without.skippedByRowFilter).toBe(0);
+    expect(withEmpty).toEqual(without);
+  });
+});
+
+describe('evaluateRowFilterOp / rowFilterRuleProblems', () => {
+  it('treats null/undefined/whitespace as empty', () => {
+    expect(evaluateRowFilterOp(null, 'empty', undefined)).toBe(true);
+    expect(evaluateRowFilterOp(undefined, 'empty', undefined)).toBe(true);
+    expect(evaluateRowFilterOp('   ', 'empty', undefined)).toBe(true);
+    expect(evaluateRowFilterOp('x', 'empty', undefined)).toBe(false);
+    expect(evaluateRowFilterOp(0, 'notEmpty', undefined)).toBe(true);
+  });
+
+  it('flags value-requiredness per op', () => {
+    expect(
+      rowFilterRuleProblems({
+        column: 'A',
+        op: 'equals',
+        action: 'skip',
+      }),
+    ).toEqual([expect.stringContaining('requires a non-empty string "value"')]);
+
+    expect(
+      rowFilterRuleProblems({
+        column: 'A',
+        op: 'empty',
+        value: 'x',
+        action: 'skip',
+      }),
+    ).toEqual([expect.stringContaining('takes no "value"')]);
+
+    expect(
+      rowFilterRuleProblems({
+        column: 'A',
+        op: 'contains',
+        value: 'x',
+        action: 'skip',
+      }),
+    ).toEqual([]);
+  });
+
+  it('flags an uncompilable matches regex', () => {
+    expect(
+      rowFilterRuleProblems({
+        column: 'A',
+        op: 'matches',
+        value: '(unclosed',
+        action: 'skip',
+      }),
+    ).toEqual([expect.stringContaining('not a valid regular expression')]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OMN-12 parse vocabulary: computed-field methods
+// ---------------------------------------------------------------------------
+
+describe('computed-field vocabulary (OMN-12)', () => {
+  const stubContext = { resolveKey: () => null };
+
+  it('registers exactly the documented method ids', () => {
+    expect([...COMPUTATION_METHOD_IDS].sort()).toEqual([
+      'arithmetic',
+      'coalesce',
+      'concat',
+      'conditional',
+      'firstNonEmpty',
+      'maxDate',
+      'minDate',
+    ]);
+  });
+
+  describe('concat', () => {
+    it('joins non-empty inputs with the configured separator', () => {
+      expect(
+        COMPUTATIONS.concat(['John', 'Smith'], {
+          ...stubContext,
+          params: { separator: ' ' },
+        }),
+      ).toBe('John Smith');
+    });
+
+    it('defaults to no separator and skips null/empty inputs', () => {
+      expect(COMPUTATIONS.concat(['A', null, '', '  ', 'B'], stubContext)).toBe(
+        'AB',
+      );
+    });
+
+    it('stringifies numeric inputs', () => {
+      expect(
+        COMPUTATIONS.concat(['U', 123], { ...stubContext, params: {} }),
+      ).toBe('U123');
+    });
+  });
+
+  describe('firstNonEmpty vs coalesce (honest difference)', () => {
+    it('coalesce returns the first non-NULL value — including empty strings', () => {
+      expect(COMPUTATIONS.coalesce(['', 'X'], stubContext)).toBe('');
+    });
+
+    it('firstNonEmpty skips empty/whitespace strings and trims the winner', () => {
+      expect(
+        COMPUTATIONS.firstNonEmpty(['', '  ', ' X ', 'Y'], stubContext),
+      ).toBe('X');
+      expect(COMPUTATIONS.firstNonEmpty([null, false], stubContext)).toBe(
+        false,
+      );
+      expect(COMPUTATIONS.firstNonEmpty(['', '   '], stubContext)).toBeNull();
+    });
+  });
+
+  describe('conditional (through applyComputedFields)', () => {
+    const computedFields: ComputedFieldDef[] = [
+      {
+        outputKey: 'Effective Source',
+        method: 'conditional',
+        inputs: ['Broker Effective Date', 'Policy Effective Date'],
+        params: {
+          if: { column: 'Status', op: 'equals', value: 'active' },
+          then: '$1',
+          else: '$2',
+        },
+        type: 'date',
+      },
+    ];
+
+    it('picks then-ref when the condition matches (case-insensitive)', () => {
+      const row: Record<string, unknown> = {
+        Status: 'ACTIVE',
+        'Broker Effective Date': '2026-02-01',
+        'Policy Effective Date': '2021-04-01',
+      };
+
+      applyComputedFields(row, computedFields);
+
+      expect(row['Effective Source']).toBe('2026-02-01');
+    });
+
+    it('picks else-ref otherwise', () => {
+      const row: Record<string, unknown> = {
+        Status: 'Termed',
+        'Broker Effective Date': '2026-02-01',
+        'Policy Effective Date': '2021-04-01',
+      };
+
+      applyComputedFields(row, computedFields);
+
+      expect(row['Effective Source']).toBe('2021-04-01');
+    });
+
+    it('resolves the if.column through the role fieldMapping like inputs', () => {
+      const row: Record<string, unknown> = {
+        eligible_flag: 'Yes',
+        'Broker Effective Date': '2026-02-01',
+        'Policy Effective Date': '2021-04-01',
+      };
+
+      applyComputedFields(
+        row,
+        [
+          {
+            ...computedFields[0],
+            params: {
+              if: {
+                column: 'eligibleForCommission',
+                op: 'equals',
+                value: 'yes',
+              },
+              then: '$1',
+              else: '$2',
+            },
+          },
+        ],
+        { eligibleForCommission: 'eligible_flag' },
+      );
+
+      expect(row['Effective Source']).toBe('2026-02-01');
+    });
+
+    it('supports literal then/else branches', () => {
+      const row: Record<string, unknown> = {
+        Status: 'active',
+        'Broker Effective Date': '2026-02-01',
+      };
+
+      applyComputedFields(row, [
+        {
+          outputKey: 'Is Active',
+          method: 'conditional',
+          inputs: ['Broker Effective Date'],
+          params: {
+            if: { column: 'Status', op: 'notEmpty' },
+            then: true,
+            else: false,
+          },
+          type: 'boolean',
+        },
+      ]);
+
+      expect(row['Is Active']).toBe(true);
+    });
+  });
+
+  describe('arithmetic (through applyComputedFields)', () => {
+    it('evaluates input refs with precedence and parentheses', () => {
+      const row: Record<string, unknown> = {
+        'Annual Premium': 1200,
+        'Member Count': 2,
+      };
+
+      applyComputedFields(row, [
+        {
+          outputKey: 'Monthly Per Member',
+          method: 'arithmetic',
+          inputs: ['Annual Premium', 'Member Count'],
+          params: { expr: '($1 / 12) / $2' },
+          type: 'number',
+        },
+      ]);
+
+      expect(row['Monthly Per Member']).toBe(50);
+    });
+
+    it('coerces numeric strings and yields null on non-numeric input', () => {
+      const row: Record<string, unknown> = { A: '100', B: 'garbage' };
+
+      applyComputedFields(row, [
+        {
+          outputKey: 'Doubled',
+          method: 'arithmetic',
+          inputs: ['A'],
+          params: { expr: '$1 * 2' },
+          type: 'number',
+        },
+        {
+          outputKey: 'Broken',
+          method: 'arithmetic',
+          inputs: ['B'],
+          params: { expr: '$1 * 2' },
+          type: 'number',
+        },
+      ]);
+
+      expect(row.Doubled).toBe(200);
+      expect(row.Broken).toBeNull();
+    });
+
+    it('yields null on division by zero', () => {
+      const row: Record<string, unknown> = { A: 10, B: 0 };
+
+      applyComputedFields(row, [
+        {
+          outputKey: 'Ratio',
+          method: 'arithmetic',
+          inputs: ['A', 'B'],
+          params: { expr: '$1 / $2' },
+          type: 'number',
+        },
+      ]);
+
+      expect(row.Ratio).toBeNull();
+    });
+  });
+
+  it('skips computation when no inputs resolve (uniform with legacy methods)', () => {
+    const row: Record<string, unknown> = { Unrelated: 'x' };
+
+    applyComputedFields(row, [
+      {
+        outputKey: 'Out',
+        method: 'concat',
+        inputs: ['Missing A', 'Missing B'],
+        type: 'text',
+      },
+    ]);
+
+    expect('Out' in row).toBe(false);
+  });
+});
+
+describe('compileArithmeticExpr (safe evaluator — NO eval)', () => {
+  it('compiles refs, literals, operators, parens, unary minus', () => {
+    const { evaluate, maxInputRef } = compileArithmeticExpr(
+      '-$1 + 2 * ($2 - 0.5)',
+    );
+
+    expect(maxInputRef).toBe(2);
+    expect(evaluate([1, 2.5])).toBe(3);
+  });
+
+  it('applies standard precedence (* / before + -)', () => {
+    expect(compileArithmeticExpr('2 + 3 * 4').evaluate([])).toBe(14);
+    expect(compileArithmeticExpr('(2 + 3) * 4').evaluate([])).toBe(20);
+  });
+
+  it('rejects identifiers and function calls', () => {
+    expect(() => compileArithmeticExpr('Math.max(1, 2)')).toThrow(
+      ArithmeticExprError,
+    );
+    expect(() => compileArithmeticExpr('process')).toThrow(
+      /identifiers\/functions are not allowed/,
+    );
+    expect(() => compileArithmeticExpr('$1 + abs($2)')).toThrow(
+      ArithmeticExprError,
+    );
+  });
+
+  it('rejects unexpected characters and malformed syntax', () => {
+    expect(() => compileArithmeticExpr('1; 2')).toThrow(/unexpected character/);
+    expect(() => compileArithmeticExpr('(1 + 2')).toThrow(
+      /missing closing parenthesis/,
+    );
+    expect(() => compileArithmeticExpr('1 2')).toThrow(/unexpected trailing/);
+    expect(() => compileArithmeticExpr('$0')).toThrow(/invalid input ref/);
+    expect(() => compileArithmeticExpr('1 +')).toThrow(
+      /unexpected end of expression/,
+    );
+  });
+
+  it('null/missing inputs poison the result to null (not NaN)', () => {
+    const { evaluate } = compileArithmeticExpr('$1 + $2');
+
+    expect(evaluate([1, null])).toBeNull();
+    expect(evaluate([1])).toBeNull();
+  });
+});
+
+describe('validateComputedFieldParams (boundary helper)', () => {
+  it('rejects params on param-less methods', () => {
+    expect(
+      validateComputedFieldParams({
+        method: 'coalesce',
+        inputs: ['A'],
+        params: { separator: ',' },
+      }),
+    ).toEqual([expect.stringContaining('takes no params')]);
+
+    expect(
+      validateComputedFieldParams({ method: 'maxDate', inputs: ['A'] }),
+    ).toEqual([]);
+  });
+
+  it('validates concat params', () => {
+    expect(
+      validateComputedFieldParams({
+        method: 'concat',
+        inputs: ['A'],
+        params: { separator: 7 },
+      }),
+    ).toEqual([expect.stringContaining('params.separator must be a string')]);
+
+    expect(
+      validateComputedFieldParams({
+        method: 'concat',
+        inputs: ['A'],
+        params: { sep: ' ' },
+      }),
+    ).toEqual([expect.stringContaining('params.sep is not a recognized')]);
+
+    expect(
+      validateComputedFieldParams({ method: 'concat', inputs: ['A'] }),
+    ).toEqual([]);
+  });
+
+  it('requires conditional params with the row-filter op vocabulary', () => {
+    expect(
+      validateComputedFieldParams({ method: 'conditional', inputs: ['A'] }),
+    ).toEqual([expect.stringContaining('requires params { if')]);
+
+    const problems = validateComputedFieldParams({
+      method: 'conditional',
+      inputs: ['A'],
+      params: {
+        if: { column: 'Status', op: 'equalz', value: 'x' },
+        then: '$1',
+      },
+    });
+
+    expect(problems).toEqual([
+      expect.stringContaining(
+        `params.if.op "equalz" is not a recognized op — known ops: ${ROW_FILTER_OPS.join(', ')}`,
+      ),
+      expect.stringContaining('params.else is required'),
+    ]);
+  });
+
+  it('checks conditional value-requiredness and ref bounds', () => {
+    expect(
+      validateComputedFieldParams({
+        method: 'conditional',
+        inputs: ['A'],
+        params: {
+          if: { column: 'Status', op: 'equals' },
+          then: '$2',
+          else: null,
+        },
+      }),
+    ).toEqual([
+      expect.stringContaining('params.if: op "equals" requires a non-empty'),
+      expect.stringContaining(
+        'params.then references input $2 but only 1 input(s) are declared',
+      ),
+    ]);
+  });
+
+  it('requires a compilable arithmetic expr with in-range refs', () => {
+    expect(
+      validateComputedFieldParams({ method: 'arithmetic', inputs: ['A'] }),
+    ).toEqual([expect.stringContaining('requires params { expr')]);
+
+    expect(
+      validateComputedFieldParams({
+        method: 'arithmetic',
+        inputs: ['A'],
+        params: { expr: 'evil()' },
+      }),
+    ).toEqual([
+      expect.stringContaining('identifiers/functions are not allowed'),
+    ]);
+
+    expect(
+      validateComputedFieldParams({
+        method: 'arithmetic',
+        inputs: ['A'],
+        params: { expr: '$1 + $3' },
+      }),
+    ).toEqual([
+      expect.stringContaining(
+        'references input $3 but only 1 input(s) are declared',
+      ),
+    ]);
+
+    expect(
+      validateComputedFieldParams({
+        method: 'arithmetic',
+        inputs: ['A', 'B'],
+        params: { expr: '($1 + $2) / 2' },
+      }),
+    ).toEqual([]);
+  });
+
+  it('returns no problems for unknown methods (reported elsewhere)', () => {
+    expect(
+      validateComputedFieldParams({
+        method: 'nope',
+        inputs: [],
+        params: { x: 1 },
+      }),
+    ).toEqual([]);
   });
 });

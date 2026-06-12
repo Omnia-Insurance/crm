@@ -89,6 +89,14 @@ describe('ReconciliationStateMachineService', () => {
     it('should allow REVIEW → COMPLETED as the terminal transition', () => {
       expect(VALID_TRANSITIONS.REVIEW).toContain('COMPLETED');
     });
+
+    it('should allow REVIEW → PARSING for a deliberate re-parse (OMN-11)', () => {
+      expect(VALID_TRANSITIONS.REVIEW).toContain('PARSING');
+    });
+
+    it('should NOT open a COMPLETED → PARSING edge (re-parse is REVIEW-only)', () => {
+      expect(VALID_TRANSITIONS.COMPLETED).not.toContain('PARSING');
+    });
   });
 
   describe('transition', () => {
@@ -222,6 +230,39 @@ describe('ReconciliationStateMachineService', () => {
         'COMPLETED',
         { status: 'MATCHING' },
       );
+    });
+
+    it('should execute REVIEW → PARSING as a CAS keyed on REVIEW (re-parse, OMN-11)', async () => {
+      await service.transition(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        'REVIEW',
+        'PARSING',
+      );
+
+      expect(mutationService.updateReconciliationIfStatus).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        'REVIEW',
+        { status: 'PARSING' },
+      );
+    });
+
+    it('should surface a CAS conflict on REVIEW → PARSING (concurrent restart loses cleanly)', async () => {
+      mutationService.updateReconciliationIfStatus.mockResolvedValue(false);
+
+      await expect(
+        service.transition(
+          WORKSPACE_ID,
+          RECONCILIATION_ID,
+          'REVIEW',
+          'PARSING',
+        ),
+      ).rejects.toMatchObject({
+        name: 'TransitionConflictError',
+        expectedStatus: 'REVIEW',
+        targetStatus: 'PARSING',
+      });
     });
   });
 

@@ -74,6 +74,11 @@ export type ReconciliationStats = {
   autoMatched: number;
   needsReview: number;
   unmatched: number;
+  /** Active CRM policies (statusVocabulary.activeStatuses) absent from the
+   *  carrier file — the match job's missing-from-BOB phase (OMN-12). Always
+   *  0 while matchingConfig.enableMissingFromBob is off (the default).
+   *  Counted separately from `unmatched`/`needsReview` (those count file
+   *  rows; this counts CRM-side gaps). */
   missingFromBob: number;
   discrepanciesFound: number;
   applied: number;
@@ -98,6 +103,24 @@ export type ReconciliationStats = {
   /** BOB rows skipped because their policy number failed the carrier's
    *  policyNumberPattern (e.g. Ambetter's '^U'). */
   skippedInvalidPolicyNumber?: number;
+  /** Raw file rows dropped at PARSE by parseSettings.rowFilters /
+   *  skipFooterRows (OMN-12 — footer 'Totals' rows, blank separators).
+   *  Stamped at the PARSING → PARSED stats write; like parseErrors, it does
+   *  not survive the match job's wholesale stats rebuild, and the banner
+   *  tolerates its absence. */
+  skippedByRowFilter?: number;
+  /** Operator-facing run warnings (carrier-config boundary `onWarning`
+   *  messages: legacy fallbacks, ignored keys, config-drift notices),
+   *  deduped and capped (~20) by `mergeRunWarnings`. Stamped at the
+   *  PARSING → PARSED and MATCHING → REVIEW stats writes; absent on runs
+   *  that predate the key (Linear OMN-11). Rendered by the frontend
+   *  run-summary banner. */
+  warnings?: string[];
+  /** First 12 hex chars of sha256 of the canonical JSON of the parsed
+   *  CarrierPipelineConfig (`computeConfigFingerprint`). The match job
+   *  compares its live fingerprint against the parse-time stamp and appends
+   *  a warning when the config changed mid-run. Absent on older runs. */
+  configFingerprint?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -140,6 +163,29 @@ export type CarrierConfigRecord = {
    *  loosely here (like fieldConfig) to keep types/ free of a parsers/
    *  import cycle. */
   transformRules?: Record<string, unknown> | null;
+  /** Parse-stage settings (ParseSettings shape, OMN-12): headerRow (1-based),
+   *  rowFilters, skipFooterRows. Same admin-editable JSON caveat — validated
+   *  only through `parseCarrierPipelineConfig`; typed loosely for the same
+   *  cycle reason as transformRules. NOTE: the carrierConfig workspace
+   *  object does not yet seed a `parseSettings` RAW_JSON field — until the
+   *  seed adds it, the record reads as undefined and the defaults (today's
+   *  behavior) apply. */
+  parseSettings?: Record<string, unknown> | null;
+  /** Per-carrier diff suppression knobs (partial DiffPolicy shape, OMN-12
+   *  tuning depth): suppressAgentFields, suppressPremiumDiffs,
+   *  suppressBackwardsEffectiveDate, suppressAcaRolloverEffectiveDate,
+   *  leadIdentityFields, suppressNegativeToNegativeStatus. Same
+   *  admin-editable JSON caveat — validated only through
+   *  `parseCarrierPipelineConfig` (merged over DEFAULT_DIFF_POLICY); typed
+   *  loosely to keep types/ free of an engines/ import. NOTE: not yet
+   *  seeded as a RAW_JSON field — until the seed adds it, the record reads
+   *  as undefined and the defaults (today's hardcoded guards) apply. */
+  diffConfig?: Record<string, unknown> | null;
+  /** Per-carrier status vocabulary (partial StatusVocabulary shape, OMN-12
+   *  tuning depth): negativeTerminalStatuses, activeStatuses. Same caveats
+   *  as diffConfig — validated only through `parseCarrierPipelineConfig`
+   *  (merged over DEFAULT_STATUS_VOCABULARY); not yet seeded. */
+  statusVocabulary?: Record<string, unknown> | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -176,11 +222,19 @@ export type StatusConfig = {
   fieldMapping: Record<string, string>;
   /** Days since effective to consider a policy "placed". Default: 30 */
   placedThresholdDays: number;
-  /** Legacy knob; Ambetter active payment error uses current-month coverage. Default: 10 */
-  paymentErrorAgeDays: number;
+  // paymentErrorAgeDays was REMOVED from the stored surface (audit
+  // 2026-06-11 §"Validated-but-dead knobs"): no engine ever read it. Stored
+  // values are ignored with a boundary warning; engine-specific knobs
+  // belong in statusConfig.engineParams.
   /** Status engine id (see STATUS_ENGINE_IDS in engines/status.ts).
    *  Unknown ids fail the run at MATCH. */
   engineId: string;
+  /** Per-engine parameters, validated against the selected engine's
+   *  `paramsSchema` (STATUS_ENGINES descriptor, engines/status.ts) at the
+   *  parse/match fail-fast points — unknown or mistyped params kill the run
+   *  with an actionable error. Ambetter accepts `{ placedThresholdDays? }`
+   *  (overrides the legacy sibling knob when set). */
+  engineParams: Record<string, unknown>;
 };
 
 // ---------------------------------------------------------------------------
@@ -190,10 +244,16 @@ export type StatusConfig = {
 export type ComputedFieldDef = {
   /** Key added to the parsed row */
   outputKey: string;
-  /** Computation method: 'maxDate', 'minDate', 'coalesce' */
+  /** Computation method id (COMPUTATION_METHOD_IDS in parsers/transforms.ts):
+   *  'maxDate', 'minDate', 'coalesce', 'firstNonEmpty', 'concat',
+   *  'conditional', 'arithmetic'. Unknown methods fail the config boundary. */
   method: string;
   /** XLSX column headers (or other row keys) used as inputs */
   inputs: string[];
+  /** Method-specific params (OMN-12) — e.g. concat `{ separator }`,
+   *  conditional `{ if, then, else }`, arithmetic `{ expr }`. Validated per
+   *  method by `validateComputedFieldParams` at the config boundary. */
+  params?: Record<string, unknown>;
   /** Data type of the output */
   type: string;
   /** CRM field this computed value maps to (for diffing) */

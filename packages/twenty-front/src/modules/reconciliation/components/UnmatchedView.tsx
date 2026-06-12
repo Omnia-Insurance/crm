@@ -25,6 +25,7 @@ import {
   resolveProductFromPlanName,
   deriveStatusFromBob,
   normalizePaidThroughDateForEffectiveDate,
+  type ClientStatusConfig,
 } from '@/reconciliation/utils/buildSyntheticPolicyRecord';
 import {
   invertColumnMapping,
@@ -205,6 +206,26 @@ export const UnmatchedView = ({
     [columnMapping, computedFields],
   );
 
+  // ── statusConfig (carrierConfig.statusConfig) for the client status
+  // fallback (OMN-12): placedThresholdDays + the role → row-key fieldMapping.
+  // Without it deriveStatusFromBob keeps its legacy Ambetter literals.
+
+  const statusConfig = useMemo<ClientStatusConfig | null>(() => {
+    if (!carrierConfigRecord) return null;
+    const raw = (carrierConfigRecord as Record<string, unknown>).statusConfig;
+
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    return raw as ClientStatusConfig;
+  }, [carrierConfigRecord]);
+
   // ── Resolve product from plan name ──
 
   const planNameRaw = resolveBobValue(snapshot, crmFieldLookup, 'planIdentifier', [
@@ -297,6 +318,7 @@ export const UnmatchedView = ({
           agent: resolvedAgent,
         },
         derivedStatus: item.derivedStatus || null,
+        statusConfig,
         ltvAmountMicros,
         tempPolicyId,
         tempLeadId,
@@ -309,6 +331,7 @@ export const UnmatchedView = ({
       resolvedCarrier,
       resolvedAgent,
       item.derivedStatus,
+      statusConfig,
       ltvAmountMicros,
       tempPolicyId,
       tempLeadId,
@@ -512,7 +535,8 @@ export const UnmatchedView = ({
           ? { premium: { amountMicros: premiumMicros, currencyCode: 'USD' } }
           : {}),
         status:
-          item.derivedStatus || deriveStatusFromBob(snapshot, crmFieldLookup),
+          item.derivedStatus ||
+          deriveStatusFromBob(snapshot, crmFieldLookup, statusConfig),
         ...(ltvAmountMicros
           ? { ltv: { amountMicros: ltvAmountMicros, currencyCode: 'USD' } }
           : {}),
@@ -539,6 +563,7 @@ export const UnmatchedView = ({
     lastName,
     phoneNumber,
     item.derivedStatus,
+    statusConfig,
     ltvAmountMicros,
     resolvedProduct,
     resolvedCarrier,

@@ -3045,6 +3045,92 @@ check_file_exists \
   "packages/twenty-front/src/modules/reconciliation/utils/invertColumnMapping.ts" \
   "Frontend must resolve BOB values via inverted columnMapping, not hardcoded Ambetter headers"
 
+echo ""
+echo "--- Multi-carrier readiness (2026-06-12) ---"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/status.ts" \
+  "requiredRoles" \
+  "Status engines must be self-describing descriptors (requiredRoles/knownRoles/paramsSchema)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/parsers/transforms.ts" \
+  "missingRequired" \
+  "Status-role validation must check required-role PRESENCE per engine, not just resolvability"
+check_file_exists \
+  "docs/reconciliation/status-engine-authoring.md" \
+  "Status-engine author playbook (the documented engine contract)"
+check_file_contains \
+  "packages/twenty-front/src/modules/reconciliation/hooks/useOpenReconciliationWizard.ts" \
+  "resolveCarrierConfigSelection" \
+  "Run wizard must route through carrier selection, never the first carrierConfig record"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/seed-carrier-config.command.ts" \
+  "Generic carrier-config seed command with pre-flight validation"
+check_file_exists \
+  "packages/twenty-front/src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx" \
+  "Review page must surface run stats/errors/warnings to operators"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/carrier-config.ts" \
+  "unknown match tier" \
+  "enabledTiers must hard-fail unknown tier ids (typos silently disabled tiers)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/carrier-config.ts" \
+  "matchingConfig.startDate not set" \
+  "Boundary must warn when a carrier config inherits the Ambetter startDate default"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/matching.ts" \
+  "DEFAULT_TIER_TUNING" \
+  "Tier confidences/weights/bands must be tierTuning knobs defaulting to the historical constants"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/services/carrier-config-validation.service.ts" \
+  "validateCarrierConfig pre-run validation service (dry-run the fail-fast chain)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/parse.job.ts" \
+  "configFingerprint" \
+  "Runs must persist boundary warnings + a config fingerprint into stats"
+check_file_exists \
+  "packages/twenty-server/src/modules/reconciliation/query-hooks/carrier-config-update-one.pre-query.hook.ts" \
+  "carrierConfig rename guard (learned rules/overrides join on carrierName)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/parsers/transforms.ts" \
+  "compileArithmeticExpr" \
+  "Computed-field arithmetic must use the safe evaluator (never eval)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/parsers/xlsx.ts" \
+  "headerRow" \
+  "XLSX parsing must honor parseSettings.headerRow (header below row 1)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/diff.ts" \
+  "DEFAULT_DIFF_POLICY" \
+  "Diff suppression policy must be per-carrier diffConfig with bit-for-bit defaults"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/policy-statuses.ts" \
+  "DEFAULT_STATUS_VOCABULARY" \
+  "Status vocabulary must be per-carrier configurable with the Omnia sets as defaults"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/matching.ts" \
+  "IDENTIFIER_EXACT" \
+  "Identifier-role matching tier must exist (BCBS-class identity unlock)"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/engines/matching.ts" \
+  "buildIdentifierCanonicalizer" \
+  "Per-carrier identifier canonicalization (capture group + normalization) must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "buildMissingFromBobItems" \
+  "Missing-from-BOB must be implemented behind the enableMissingFromBob knob"
+check_file_contains \
+  "packages/twenty-server/src/modules/reconciliation/jobs/match.job.ts" \
+  "runPolicyNumberDiscovery" \
+  "Policy-number discovery must be implemented behind the enableDiscovery knob"
+check_file_not_contains \
+  "packages/twenty-server/src/modules/reconciliation/types/carrier-config.ts" \
+  "not yet implemented server-side" \
+  "The dead-knob warnings must stay dead — enableMissingFromBob/discovery are live now"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
+  "parseSettings" \
+  "Seed must materialize the parseSettings/diffConfig/statusVocabulary carrierConfig fields"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."

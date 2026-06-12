@@ -9,6 +9,8 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 
 import { InformationBannerWrapper } from '@/information-banner/components/InformationBannerWrapper';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
+// OMNIA-CUSTOM: carrier picker step for the reconciliation run wizard
+import { ReconciliationCarrierPickerModal } from '@/reconciliation/components/ReconciliationCarrierPickerModal';
 import { SpreadsheetImportProvider } from '@/spreadsheet-import/provider/components/SpreadsheetImportProvider';
 
 import { RecordIndexCalendarContainer } from '@/object-record/record-index/components/RecordIndexCalendarContainer';
@@ -52,6 +54,10 @@ export const RecordIndexContainer = () => {
     <>
       <StyledContainer>
         <InformationBannerWrapper />
+        {/* OMNIA-CUSTOM: carrier picker for the reconciliation run wizard */}
+        {objectNameSingular === 'reconciliation' && (
+          <ReconciliationCarrierPickerModal />
+        )}
         <SpreadsheetImportProvider>
           <ViewBar
             isReadOnly={hasCurrentViewNonReadableFields}

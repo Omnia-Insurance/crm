@@ -62,6 +62,24 @@ import {
 import { NEGATIVE_TERMINAL_STATUSES } from 'src/modules/reconciliation/types/policy-statuses';
 
 /**
+ * Per-carrier status-change gating knobs (OMN-12 tuning depth), threaded by
+ * the match job from the validated config boundary:
+ *   - `negativeTerminalStatuses` — the resolved
+ *     `carrierConfig.statusVocabulary.negativeTerminalStatuses` set;
+ *   - `suppressNegativeToNegativeStatus` — the
+ *     `carrierConfig.diffConfig.suppressNegativeToNegativeStatus` knob.
+ * Both default to today's behavior (the shared NEGATIVE_TERMINAL_STATUSES
+ * set / suppression on), so deriveCategory/deriveFlags stay in lockstep with
+ * the diff engine's status-diff suppression — a carrier that turns the
+ * suppression off (or reshapes the terminal set) must not regrow the
+ * ghost-review-row / missing-flag drift this gate originally fixed.
+ */
+export type StatusChangeGateOptions = {
+  negativeTerminalStatuses?: ReadonlySet<string>;
+  suppressNegativeToNegativeStatus?: boolean;
+};
+
+/**
  * Derive the review category. Returns null for confirmed records
  * (matched, no diffs, status agrees) — these should be skipped entirely.
  */
@@ -70,8 +88,14 @@ export const deriveCategory = (
   fieldDiffs: FieldDiff[],
   derivedStatus: string | null,
   currentCrmStatus: string | null,
+  statusChangeGate: StatusChangeGateOptions = {},
 ): ReviewCategory | null => {
   if (isUnmatched) return 'UNMATCHED';
+
+  const negativeTerminalStatuses =
+    statusChangeGate.negativeTerminalStatuses ?? NEGATIVE_TERMINAL_STATUSES;
+  const suppressNegativeToNegative =
+    statusChangeGate.suppressNegativeToNegativeStatus ?? true;
 
   const hasDiffs = fieldDiffs.length > 0;
   // A null derivedStatus means "no status assertion" (the engine didn't
@@ -85,7 +109,14 @@ export const deriveCategory = (
   const statusChanged =
     derivedStatus !== null &&
     derivedStatus !== currentCrmStatus &&
-    !isNegativeToNegativeStatusChange(derivedStatus, currentCrmStatus);
+    !(
+      suppressNegativeToNegative &&
+      isNegativeToNegativeStatusChange(
+        derivedStatus,
+        currentCrmStatus,
+        negativeTerminalStatuses,
+      )
+    );
 
   if (hasDiffs || statusChanged) return 'UPDATE';
 
@@ -117,18 +148,34 @@ export const deriveFlags = (
   fieldDiffs: FieldDiff[],
   statusFieldMapping?: Record<string, string>,
   bobRow?: Record<string, unknown>,
+  statusChangeGate: StatusChangeGateOptions = {},
 ): DerivedFlagsResult => {
   const flags: ReviewFlag[] = [];
   const reasons: FlagReasons = {};
 
+  const negativeTerminalStatuses =
+    statusChangeGate.negativeTerminalStatuses ?? NEGATIVE_TERMINAL_STATUSES;
+  const suppressNegativeToNegative =
+    statusChangeGate.suppressNegativeToNegativeStatus ?? true;
+
   // Status change: derived status differs from CRM. Suppress when both are
   // terminal-negative — diff.ts hides the diff in that case, so flagging it
-  // here would leave a review item with nothing to review.
+  // here would leave a review item with nothing to review. (Both the set and
+  // the suppression toggle are per-carrier — see StatusChangeGateOptions —
+  // so a carrier that surfaces terminal-to-terminal diffs also gets the
+  // matching flag.)
   if (
     derivedStatus &&
     currentCrmStatus &&
     derivedStatus !== currentCrmStatus &&
-    !isNegativeToNegativeStatusChange(derivedStatus, currentCrmStatus)
+    !(
+      suppressNegativeToNegative &&
+      isNegativeToNegativeStatusChange(
+        derivedStatus,
+        currentCrmStatus,
+        negativeTerminalStatuses,
+      )
+    )
   ) {
     flags.push('STATUS_CHANGE');
     reasons.STATUS_CHANGE = `${currentCrmStatus} → ${derivedStatus}`;
@@ -140,20 +187,21 @@ export const deriveFlags = (
     reasons.PAYMENT_ERROR = `Status engine derived ${derivedStatus}`;
   }
 
-  // Reinstatement: CRM says the policy is terminally over (CANCELED,
-  // PAYMENT_ERROR_CANCELED, DECLINED, INCOMPLETE), BOB derives a non-terminal
-  // (active) status. Every terminal→active transition gets the flag — it
-  // blocks both batch approval and learned-rule auto-apply. Matching exact
-  // 'CANCELED' only (the old check) let PAYMENT_ERROR_CANCELED→active
-  // reinstatements bypass the human-review gate. Terminal→terminal moves
-  // (e.g. CANCELED→PAYMENT_ERROR_CANCELED) are NOT reinstatements and no
-  // longer flag — consistent with isNegativeToNegativeStatusChange
-  // suppression in the diff engine and the STATUS_CHANGE flag above.
+  // Reinstatement: CRM says the policy is terminally over (the per-carrier
+  // negative-terminal set; default CANCELED, PAYMENT_ERROR_CANCELED,
+  // DECLINED, INCOMPLETE), BOB derives a non-terminal (active) status. Every
+  // terminal→active transition gets the flag — it blocks both batch approval
+  // and learned-rule auto-apply. Matching exact 'CANCELED' only (the old
+  // check) let PAYMENT_ERROR_CANCELED→active reinstatements bypass the
+  // human-review gate. Terminal→terminal moves (e.g.
+  // CANCELED→PAYMENT_ERROR_CANCELED) are NOT reinstatements and no longer
+  // flag — consistent with isNegativeToNegativeStatusChange suppression in
+  // the diff engine and the STATUS_CHANGE flag above.
   if (
     currentCrmStatus &&
-    NEGATIVE_TERMINAL_STATUSES.has(currentCrmStatus) &&
+    negativeTerminalStatuses.has(currentCrmStatus) &&
     derivedStatus &&
-    !NEGATIVE_TERMINAL_STATUSES.has(derivedStatus)
+    !negativeTerminalStatuses.has(derivedStatus)
   ) {
     flags.push('REINSTATEMENT');
     reasons.REINSTATEMENT = `CRM ${currentCrmStatus} → BOB ${derivedStatus}`;
