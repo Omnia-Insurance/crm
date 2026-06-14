@@ -34,6 +34,27 @@ const buildSections = (score: number) => {
   return sections;
 };
 
+// Only the first criterion of each section is scored; the rest are omitted, as
+// real AI responses frequently leave criteria out.
+const buildSparseSections = (score: number) => {
+  const sections: AiScorecardAnalysis['sections'] = {};
+
+  for (const section of SCORING_SECTIONS) {
+    const firstCriterion = section.criteria[0];
+
+    sections[section.id] = {
+      criteria: {
+        [firstCriterion.id]: {
+          ...passingCriterion,
+          score,
+        },
+      },
+    };
+  }
+
+  return sections;
+};
+
 const buildRedFlags = (violatedKey?: string) => {
   const redFlags: AiScorecardAnalysis['redFlags'] = {};
 
@@ -130,6 +151,73 @@ describe('Compliance QA scoring', () => {
     expect(result.overallScore).toBe(90);
     expect(result.overallResult).toBe('PASS');
     expect(result.hasRedFlag).toBe(false);
+  });
+
+  it('excludes missing criteria instead of scoring them zero', () => {
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        sections: buildSparseSections(100),
+      }),
+    );
+
+    expect(result.overallScore).toBe(100);
+    expect(result.overallResult).toBe('PASS');
+  });
+
+  it('re-normalizes the overall score when a section has no scored criteria', () => {
+    const sections = buildSections(90);
+
+    delete sections.closing;
+
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        sections,
+      }),
+    );
+
+    expect(result.sectionScores.closing).toBeNull();
+    expect(result.overallScore).toBe(90);
+    expect(result.overallResult).toBe('PASS');
+  });
+
+  it('routes a low-confidence red flag to needs review without auto-failing', () => {
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        redFlags: {
+          ...buildRedFlags(),
+          recordedLineDisclosure: {
+            violated: true,
+            evidence: 'No clear disclosure heard',
+            explanation: 'Possibly missing recorded-line disclosure',
+            confidence: 0.5,
+          },
+        },
+      }),
+    );
+
+    expect(result.overallScore).toBe(90);
+    expect(result.overallResult).toBe('NEEDS_REVIEW');
+    expect(result.hasRedFlag).toBe(false);
+  });
+
+  it('treats a 0-100 scale confidence as high confidence', () => {
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        redFlags: {
+          ...buildRedFlags(),
+          dncViolation: {
+            violated: true,
+            evidence: 'Consumer asked to stop calling',
+            explanation: 'Agent continued selling after the request',
+            confidence: 90,
+          },
+        },
+      }),
+    );
+
+    expect(result.overallScore).toBe(0);
+    expect(result.overallResult).toBe('FAIL');
+    expect(result.hasRedFlag).toBe(true);
   });
 
   it('validates unknown AI JSON into a typed scorecard analysis', () => {
