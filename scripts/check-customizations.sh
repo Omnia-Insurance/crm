@@ -664,8 +664,8 @@ check_file_contains \
   "Compliance app production package version must stay on a 1.x production line"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
-  "\"version\": \"1.1.1\"" \
-  "Compliance app production package version must include Deepgram transcription and the scoring false-positive fixes"
+  "\"version\": \"1.1.2\"" \
+  "Compliance app production package version must include Deepgram transcription, false-positive fixes, and the compliance-vs-sales result split"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"0." \
@@ -818,6 +818,10 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.ts" \
   "RED_FLAG_AUTO_FAIL_MIN_CONFIDENCE" \
   "Compliance QA must gate red-flag auto-fail on AI confidence"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/constants/compliance-rules.ts" \
+  "COMPLIANCE_CRITERION_IDS" \
+  "Compliance QA result must be driven by compliance criteria, not sales effectiveness"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/constants/compliance-rules.ts" \
   "automated system or IVR recording notice satisfies" \

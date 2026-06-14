@@ -50,6 +50,28 @@ export type ScoringSection = {
 export const PASSING_SCORE_EXCLUSIVE_THRESHOLD = 80;
 export const FAIL_SCORE_THRESHOLD = 60;
 
+// The QA result answers a compliance question ("did we follow the national
+// rules and guidelines?"), not a sales-effectiveness one. These criteria are
+// the consumer-protection / CMS-FFM / HIPAA obligations that gate the
+// PASS/NEEDS_REVIEW result. Every other criterion (referral, upsell, discovery
+// depth, soft skills, presentation polish, close technique) is sales coaching
+// that is reported separately and never fails or holds a call for review.
+export const COMPLIANCE_CRITERION_IDS: ReadonlySet<string> = new Set([
+  'opening-agent-introduction', // must identify as a licensed agent
+  'opening-hipaa-identity', // verify identity before discussing PHI
+  'eligibility-qle', // valid qualifying life event for SEP enrollment
+  'eligibility-income-tax', // accurate income/tax basis for subsidy
+  'presentation-no-misleading-info', // no misleading plan/eligibility claims
+  'application-verbatim-disclaimers', // read attestations/disclaimers verbatim
+]);
+
+export const isComplianceCriterion = (criterionId: string): boolean =>
+  COMPLIANCE_CRITERION_IDS.has(criterionId);
+
+// A call passes when its compliance criteria are solidly handled. Sales gaps
+// never push a call below PASS — they surface as a separate coaching score.
+export const COMPLIANCE_PASS_THRESHOLD = 70;
+
 export const SECTION_WEIGHTS: Record<ScoringSection['id'], number> = {
   opening: 0.15,
   factFinding: 0.2,

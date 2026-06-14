@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { RED_FLAGS, SCORING_SECTIONS } from 'src/constants/compliance-rules';
+import {
+  isComplianceCriterion,
+  RED_FLAGS,
+  SCORING_SECTIONS,
+} from 'src/constants/compliance-rules';
 import {
   finalizeAiAnalysis,
   parseAiScorecardAnalysis,
@@ -55,6 +59,32 @@ const buildSparseSections = (score: number) => {
   return sections;
 };
 
+// Score compliance criteria and sales-effectiveness criteria independently so
+// tests can prove the two tracks are decoupled.
+const buildSectionsByCategory = (
+  complianceScore: number,
+  salesScore: number,
+) => {
+  const sections: AiScorecardAnalysis['sections'] = {};
+
+  for (const section of SCORING_SECTIONS) {
+    const criteria: Record<string, CriterionScore> = {};
+
+    for (const criterion of section.criteria) {
+      criteria[criterion.id] = {
+        ...passingCriterion,
+        score: isComplianceCriterion(criterion.id)
+          ? complianceScore
+          : salesScore,
+      };
+    }
+
+    sections[section.id] = { criteria };
+  }
+
+  return sections;
+};
+
 const buildRedFlags = (violatedKey?: string) => {
   const redFlags: AiScorecardAnalysis['redFlags'] = {};
 
@@ -84,7 +114,7 @@ const buildAnalysis = (
 });
 
 describe('Compliance QA scoring', () => {
-  it('passes calls above 80 when no red flags are present', () => {
+  it('passes calls whose compliance criteria clear the threshold and have no red flags', () => {
     const result = finalizeAiAnalysis(buildAnalysis());
 
     expect(result.overallScore).toBe(90);
@@ -92,26 +122,41 @@ describe('Compliance QA scoring', () => {
     expect(result.hasRedFlag).toBe(false);
   });
 
-  it('routes scores from 61 to 80 to needs review', () => {
+  it('passes a compliant call even when sales effectiveness is weak', () => {
     const result = finalizeAiAnalysis(
       buildAnalysis({
-        sections: buildSections(80),
+        sections: buildSectionsByCategory(95, 20),
       }),
     );
 
-    expect(result.overallScore).toBe(80);
-    expect(result.overallResult).toBe('NEEDS_REVIEW');
+    expect(result.complianceScore).toBe(95);
+    expect(result.salesEffectivenessScore).toBe(20);
+    expect(result.overallScore).toBe(95);
+    expect(result.overallResult).toBe('PASS');
   });
 
-  it('fails scores at or below 60', () => {
+  it('holds a call for review when compliance is weak even if sales is strong', () => {
     const result = finalizeAiAnalysis(
       buildAnalysis({
-        sections: buildSections(60),
+        sections: buildSectionsByCategory(50, 95),
       }),
     );
 
-    expect(result.overallScore).toBe(60);
-    expect(result.overallResult).toBe('FAIL');
+    expect(result.complianceScore).toBe(50);
+    expect(result.salesEffectivenessScore).toBe(95);
+    expect(result.overallResult).toBe('NEEDS_REVIEW');
+    expect(result.hasRedFlag).toBe(false);
+  });
+
+  it('never fails a call without a confirmed red flag, however low the score', () => {
+    const result = finalizeAiAnalysis(
+      buildAnalysis({
+        sections: buildSections(10),
+      }),
+    );
+
+    expect(result.overallResult).toBe('NEEDS_REVIEW');
+    expect(result.hasRedFlag).toBe(false);
   });
 
   it('overrides score and result when any red flag is violated', () => {

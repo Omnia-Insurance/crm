@@ -1,12 +1,12 @@
 import {
-  FAIL_SCORE_THRESHOLD,
-  PASSING_SCORE_EXCLUSIVE_THRESHOLD,
+  COMPLIANCE_PASS_THRESHOLD,
   RED_FLAGS,
   SCORING_SECTIONS,
   SCORING_SYSTEM_PROMPT,
   SECTION_WEIGHTS,
   buildScoringUserPrompt,
   getScoringSectionsForRubric,
+  isComplianceCriterion,
   type QaResult,
   type QaRubricType,
   type RedFlagKey,
@@ -56,6 +56,8 @@ export type FinalScorecardAnalysis = {
   overallScore: number;
   overallResult: QaResult;
   hasRedFlag: boolean;
+  complianceScore: number | null;
+  salesEffectivenessScore: number | null;
   sectionScores: Record<string, number | null>;
   redFlags: Record<RedFlagKey, RedFlagScore>;
   scoreDetailsMarkdown: string;
@@ -344,16 +346,55 @@ export const calculateOverallScore = (
   return clampScore(weighted.total / weighted.weight);
 };
 
+// Average the AI scores of one criterion category (compliance vs sales). Not-
+// applicable/omitted criteria are excluded; null means the category had no
+// assessable criteria on this call.
+const collectCategoryScore = ({
+  analysis,
+  rubricType,
+  compliance,
+}: {
+  analysis: AiScorecardAnalysis;
+  rubricType: QaRubricType;
+  compliance: boolean;
+}): number | null => {
+  const scores: number[] = [];
+
+  for (const section of getScoringSectionsForRubric(rubricType)) {
+    const aiCriteria = analysis.sections?.[section.id]?.criteria ?? {};
+
+    for (const criterion of section.criteria) {
+      if (isComplianceCriterion(criterion.id) !== compliance) {
+        continue;
+      }
+
+      const aiCriterion = aiCriteria[criterion.id];
+
+      if (aiCriterion !== undefined && typeof aiCriterion.score === 'number') {
+        scores.push(aiCriterion.score);
+      }
+    }
+  }
+
+  if (scores.length === 0) {
+    return null;
+  }
+
+  return clampScore(
+    scores.reduce((total, score) => total + score, 0) / scores.length,
+  );
+};
+
 export const determineOverallResult = ({
   callQuality,
   rubricType,
-  overallScore,
+  complianceScore,
   hasConfirmedRedFlag,
   hasSuspectedRedFlag,
 }: {
   callQuality: 'SCORABLE' | 'NOT_SCORABLE';
   rubricType: QaRubricType;
-  overallScore: number;
+  complianceScore: number | null;
   hasConfirmedRedFlag: boolean;
   hasSuspectedRedFlag: boolean;
 }): QaResult => {
@@ -361,7 +402,10 @@ export const determineOverallResult = ({
     return 'NOT_APPLICABLE';
   }
 
-  if (hasConfirmedRedFlag || overallScore <= FAIL_SCORE_THRESHOLD) {
+  // FAIL is reserved for an actual compliance breach: a high-confidence red flag
+  // (missing disclosure, coaching/manipulation, DNC violation). Sales-execution
+  // weakness never fails a call.
+  if (hasConfirmedRedFlag) {
     return 'FAIL';
   }
 
@@ -369,13 +413,20 @@ export const determineOverallResult = ({
     return 'NEEDS_REVIEW';
   }
 
-  // A low-confidence (suspected) red flag never auto-passes: send it to a human
-  // reviewer instead of failing the agent automatically.
+  // A lower-confidence (suspected) compliance violation goes to human review
+  // instead of auto-failing the agent.
   if (hasSuspectedRedFlag) {
     return 'NEEDS_REVIEW';
   }
 
-  if (overallScore > PASSING_SCORE_EXCLUSIVE_THRESHOLD) {
+  // Compliance criteria (licensed-agent ID, HIPAA identity check, no misleading
+  // info, verbatim attestations, valid QLE, accurate income) gate the pass.
+  // Sales-effectiveness criteria are coaching only and never block a pass.
+  if (complianceScore === null) {
+    return 'NEEDS_REVIEW';
+  }
+
+  if (complianceScore >= COMPLIANCE_PASS_THRESHOLD) {
     return 'PASS';
   }
 
@@ -505,22 +556,35 @@ const criterionDetailsMarkdown = ({
           ? `  Evidence: "${result.evidence}"`
           : '';
 
-      return joinNonEmptyLines([`- ${criterion.label}: ${score}`, notes, evidence]);
+      const categoryTag = isComplianceCriterion(criterion.id)
+        ? ' (compliance)'
+        : '';
+
+      return joinNonEmptyLines([
+        `- ${criterion.label}${categoryTag}: ${score}`,
+        notes,
+        evidence,
+      ]);
     })
     .join('\n');
 };
+
+const formatScoreLabel = (score: number | null): string =>
+  score === null ? 'N/A' : `${score}/100`;
 
 export const buildScoreDetailsMarkdown = ({
   analysis,
   rubricType,
   sectionScores,
-  overallScore,
+  complianceScore,
+  salesEffectivenessScore,
   overallResult,
 }: {
   analysis: AiScorecardAnalysis;
   rubricType: QaRubricType;
   sectionScores: Record<string, number | null>;
-  overallScore: number;
+  complianceScore: number | null;
+  salesEffectivenessScore: number | null;
   overallResult: QaResult;
 }): string => {
   const sectionDetails = SCORING_SECTIONS.map((section) => {
@@ -560,7 +624,10 @@ export const buildScoreDetailsMarkdown = ({
 
   return joinNonEmptyLines([
     `## Final Result: ${overallResult}`,
-    `Overall score: ${overallScore}`,
+    `Compliance score: ${formatScoreLabel(complianceScore)} (determines the result)`,
+    `Sales effectiveness: ${formatScoreLabel(
+      salesEffectivenessScore,
+    )} (coaching only — does not affect the compliance result)`,
     `Rubric: ${rubricType}`,
     notScorableReason,
     '',
@@ -625,15 +692,26 @@ export const finalizeAiAnalysis = (
   const hasConfirmedRedFlag = Object.values(redFlags).some(isConfirmedRedFlag);
   const hasSuspectedRedFlag = Object.values(redFlags).some(isSuspectedRedFlag);
   const sectionScores = buildSectionScores({ analysis: aiAnalysis, rubricType });
-  const baseOverallScore = calculateOverallScore(sectionScores);
-  const overallScore = hasConfirmedRedFlag ? 0 : baseOverallScore;
+  const complianceScore = collectCategoryScore({
+    analysis: aiAnalysis,
+    rubricType,
+    compliance: true,
+  });
+  const salesEffectivenessScore = collectCategoryScore({
+    analysis: aiAnalysis,
+    rubricType,
+    compliance: false,
+  });
   const overallResult = determineOverallResult({
     callQuality: aiAnalysis.callQuality,
     rubricType,
-    overallScore,
+    complianceScore,
     hasConfirmedRedFlag,
     hasSuspectedRedFlag,
   });
+  // The scorecard score reflects the compliance result driver; a confirmed red
+  // flag is a hard compliance failure and zeroes it.
+  const overallScore = hasConfirmedRedFlag ? 0 : (complianceScore ?? 0);
 
   return {
     aiAnalysis,
@@ -641,13 +719,16 @@ export const finalizeAiAnalysis = (
     overallScore,
     overallResult,
     hasRedFlag: hasConfirmedRedFlag,
+    complianceScore,
+    salesEffectivenessScore,
     sectionScores,
     redFlags,
     scoreDetailsMarkdown: buildScoreDetailsMarkdown({
       analysis: aiAnalysis,
       rubricType,
       sectionScores,
-      overallScore,
+      complianceScore,
+      salesEffectivenessScore,
       overallResult,
     }),
     redFlagDetailsMarkdown: buildRedFlagDetailsMarkdown(redFlags),
