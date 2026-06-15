@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { FileModule } from 'src/engine/core-modules/file/file.module';
+import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
 import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { PolicyQueryHookModule } from 'src/modules/policy/query-hooks/policy-query-hook.module';
 import { ReconciliationMatchJob } from 'src/modules/reconciliation/jobs/match.job';
@@ -24,6 +25,10 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     FileModule,
     PolicyQueryHookModule,
     CarrierConfigQueryHookModule,
+    // Provides PermissionsService for the resolver's
+    // SettingsPermissionGuard(RECONCILIATION) — not @Global, so it must be
+    // imported explicitly (matches channel-sync/send-email modules).
+    PermissionsModule,
   ],
   providers: [
     // Resolver (GraphQL mutations for triggering pipeline stages)
