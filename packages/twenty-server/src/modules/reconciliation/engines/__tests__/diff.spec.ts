@@ -1,6 +1,10 @@
 import {
   computeFieldDiffsFromMapping,
+  DEFAULT_DIFF_POLICY,
+  isNegativeToNegativeStatusChange,
+  NEGATIVE_TERMINAL_STATUSES,
   summarizeDiffs,
+  type DiffPolicy,
 } from 'src/modules/reconciliation/engines/diff';
 import type { ColumnMapping } from 'src/modules/reconciliation/types/reconciliation';
 
@@ -125,6 +129,104 @@ describe('diff engine', () => {
     });
   });
 
+  describe('paid-through guard with computed effectiveDate (Ambetter config)', () => {
+    // Regression: Ambetter delivers effectiveDate exclusively via the
+    // computed 'True Effective Date' field — there is no effectiveDate
+    // entry in columnMapping. The guard used to look only at columnMapping,
+    // find nothing, and let stale pre-enrollment paid-through dates through
+    // as CRM writes while the status engine (which reads the computed
+    // output) treated the same date as missing.
+    const paidThroughOnlyMapping: ColumnMapping = {
+      paid_through: {
+        crmField: 'paidThroughDate',
+        fieldType: 'DATE',
+        fieldKey: 'paidThroughDate',
+      },
+    };
+    const computedEffectiveDate = [
+      {
+        outputKey: 'True Effective Date',
+        method: 'maxDate',
+        inputs: ['brokerEffectiveDate', 'policyEffectiveDate'],
+        type: 'date',
+        crmField: 'effectiveDate',
+      },
+    ];
+
+    it('suppresses stale paid-through when effectiveDate arrives via a computed field', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          paid_through: '2026-01-31',
+          'True Effective Date': '2026-06-01',
+        },
+        {
+          effectiveDate: '2026-06-01',
+          paidThroughDate: '2026-06-01',
+        },
+        null,
+        paidThroughOnlyMapping,
+        computedEffectiveDate,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'paidThroughDate'),
+      ).toBeUndefined();
+    });
+
+    it('keeps paid-through diffs at or after the computed effectiveDate', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          paid_through: '2026-06-30',
+          'True Effective Date': '2026-06-01',
+        },
+        {
+          effectiveDate: '2026-06-01',
+          paidThroughDate: '2026-06-01',
+        },
+        null,
+        paidThroughOnlyMapping,
+        computedEffectiveDate,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'paidThroughDate')).toMatchObject(
+        {
+          bobValue: '2026-06-30',
+          crmValue: '2026-06-01',
+        },
+      );
+    });
+
+    it('falls back to the mapped effectiveDate column when the computed output is blank', () => {
+      const mappingWithEffDate: ColumnMapping = {
+        ...paidThroughOnlyMapping,
+        eff_date: {
+          crmField: 'effectiveDate',
+          fieldType: 'DATE',
+          fieldKey: 'effectiveDate',
+        },
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          paid_through: '2026-01-31',
+          eff_date: '2026-06-01',
+          // 'True Effective Date' absent — both computed inputs were blank.
+        },
+        {
+          effectiveDate: '2026-06-01',
+          paidThroughDate: '2026-06-01',
+        },
+        null,
+        mappingWithEffDate,
+        computedEffectiveDate,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'paidThroughDate'),
+      ).toBeUndefined();
+    });
+  });
+
   it('detects status change from status engine', () => {
     const statusDecision = {
       derivedStatus: 'CANCELED' as const,
@@ -183,6 +285,44 @@ describe('diff engine', () => {
         expect(diffs.find((d) => d.crmField === 'status')).toBeUndefined();
       },
     );
+
+    it('suppresses the companion expirationDate diff (and its note) along with the status diff', () => {
+      // Regression: the status diff was suppressed but its companion
+      // derivedExpireDate CRITICAL diff (whose note explains the hidden
+      // status change) still leaked, recreating the ghost review rows the
+      // suppression was meant to remove. PAYMENT_ERROR_CANCELED → CANCELED
+      // with differing expiration dates must yield no diffs at all.
+      const diffs = computeFieldDiffsFromMapping(
+        baseBobRow,
+        {
+          ...baseCrmPolicy,
+          status: 'PAYMENT_ERROR_CANCELED',
+          expirationDate: '2026-02-01',
+        },
+        canceledDecision,
+        baseColumnMapping,
+      );
+
+      expect(diffs).toHaveLength(0);
+    });
+
+    it('still emits the expirationDate diff when the status change is not negative-to-negative', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        baseBobRow,
+        {
+          ...baseCrmPolicy,
+          status: 'ACTIVE_PLACED',
+          expirationDate: '2026-02-01',
+        },
+        canceledDecision,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'expirationDate')).toMatchObject({
+        bobValue: '2026-03-01',
+        severity: 'CRITICAL',
+      });
+    });
 
     it('still emits a status diff when CRM is a negative terminal but engine derives ACTIVE_*', () => {
       // Sanity check: going from a terminal state back to active still
@@ -314,6 +454,21 @@ describe('diff engine', () => {
       expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
     });
 
+    it('suppresses January rollover effectiveDate moves two or more years out', () => {
+      // Regression: the rule only matched year+1, so the same carry-forward
+      // diff leaked back the following plan year. The CRM date intentionally
+      // never advances (it anchors the commission window), so a 2027-01-01
+      // renewal report against a 2025 CRM date is the same rollover pattern.
+      const diffs = computeFieldDiffsFromMapping(
+        { ...baseBobRow, eff_date: '2027-01-01' },
+        { ...baseCrmPolicy, effectiveDate: '2025-10-08' },
+        null,
+        baseColumnMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+
     it('still emits non-January forward effectiveDate corrections from the prior year', () => {
       const diffs = computeFieldDiffsFromMapping(
         { ...baseBobRow, eff_date: '2026-03-01' },
@@ -391,6 +546,127 @@ describe('diff engine', () => {
       );
 
       expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+  });
+
+  describe('computed-field guard chain (shared with the column-mapping loop)', () => {
+    // The computed-field loop historically drifted from the column-mapping
+    // loop: it shipped without the "don't clear CRM when BOB is empty",
+    // "skip unpopulated CRM fields", and currency guards. Both loops now run
+    // one shared guard chain; these tests pin the guards on the computed
+    // path, which is the live production path for Ambetter's effectiveDate.
+    const policyNumberOnlyMapping: ColumnMapping = {
+      policy_no: {
+        crmField: 'policyNumber',
+        fieldType: 'TEXT',
+        fieldKey: 'policyNumber',
+      },
+    };
+    const computedEffectiveDate = [
+      {
+        outputKey: 'True Effective Date',
+        method: 'maxDate',
+        inputs: ['brokerEffectiveDate', 'policyEffectiveDate'],
+        type: 'date',
+        crmField: 'effectiveDate',
+      },
+    ];
+
+    it('does NOT propose effectiveDate → null when both source dates are blank', () => {
+      // Regression (live Ambetter path): blank Broker Effective Date +
+      // Policy Effective Date → applyComputedFields skips the output key
+      // entirely → bobRow['True Effective Date'] is undefined. The engine
+      // used to emit "effectiveDate: <crm> → null", and Accept-All would
+      // clear the policy's effective date.
+      const diffs = computeFieldDiffsFromMapping(
+        { policy_no: 'U94692964' },
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        policyNumberOnlyMapping,
+        computedEffectiveDate,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+      expect(diffs).toHaveLength(0);
+    });
+
+    it('treats a whitespace-only computed output the same as a missing one', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { policy_no: 'U94692964', 'True Effective Date': '  ' },
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        policyNumberOnlyMapping,
+        computedEffectiveDate,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeUndefined();
+    });
+
+    it('skips computed fields whose CRM field the data service did not populate', () => {
+      const computedPlan = [
+        {
+          outputKey: 'computed_plan',
+          method: 'coalesce',
+          inputs: ['plan_name'],
+          type: 'string',
+          crmField: 'planIdentifier',
+        },
+      ];
+
+      const diffs = computeFieldDiffsFromMapping(
+        { policy_no: 'U94692964', computed_plan: 'Ambetter Gold' },
+        // No planIdentifier key — the diff snapshot never loaded it.
+        { ...baseCrmPolicy },
+        null,
+        policyNumberOnlyMapping,
+        computedPlan,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'planIdentifier'),
+      ).toBeUndefined();
+    });
+
+    it('suppresses currency diffs on the computed path too', () => {
+      const computedPremium = [
+        {
+          outputKey: 'computed_premium',
+          method: 'coalesce',
+          inputs: ['premium_amount'],
+          type: 'number',
+          crmField: 'premium.amountMicros',
+        },
+      ];
+
+      const diffs = computeFieldDiffsFromMapping(
+        { policy_no: 'U94692964', computed_premium: 200 },
+        { ...baseCrmPolicy, 'premium.amountMicros': 156_500_000 },
+        null,
+        policyNumberOnlyMapping,
+        computedPremium,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'premium.amountMicros'),
+      ).toBeUndefined();
+    });
+
+    it('still emits forward effectiveDate corrections from the computed path', () => {
+      // Positive control: the shared chain must not over-suppress — a real
+      // forward correction with both sides populated still surfaces.
+      const diffs = computeFieldDiffsFromMapping(
+        { policy_no: 'U94692964', 'True Effective Date': '2026-03-01' },
+        { ...baseCrmPolicy, effectiveDate: '2026-01-01' },
+        null,
+        policyNumberOnlyMapping,
+        computedEffectiveDate,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toMatchObject({
+        bobValue: '2026-03-01',
+        crmValue: '2026-01-01',
+        action: 'UPDATE',
+      });
     });
   });
 
@@ -839,6 +1115,78 @@ describe('diff engine', () => {
       expect(notice?.label).toContain('spouse');
     });
 
+    it('suppresses lead contact fields (email/phone/state) along with name and DOB', () => {
+      // The original incident re-pointed the lead at the spouse's identity
+      // *including email* — the first fix suppressed only name/DOB, so
+      // Accept-All still wrote the other person's email/phone/state onto
+      // the linked lead. Contact fields are identity too.
+      const contactColumnMapping: ColumnMapping = {
+        ...spouseColumnMapping,
+        member_email: {
+          crmField: 'lead.emails.primaryEmail',
+          fieldType: 'EMAILS',
+          fieldKey: 'update:primaryEmail-emails (lead)',
+        },
+        member_phone: {
+          crmField: 'lead.phones.primaryPhoneNumber',
+          fieldType: 'PHONES',
+          fieldKey: 'update:primaryPhoneNumber-phones (lead)',
+        },
+        member_state: {
+          crmField: 'lead.addressCustom.addressState',
+          fieldType: 'TEXT',
+          fieldKey: 'update:addressState-addressCustom (lead)',
+        },
+        eff_date: {
+          crmField: 'effectiveDate',
+          fieldType: 'DATE',
+          fieldKey: 'effectiveDate',
+        },
+      };
+
+      const diffs = computeFieldDiffsFromMapping(
+        {
+          member_first: 'Robert',
+          member_last: 'Percy',
+          member_dob: '1964-12-12',
+          member_email: 'robert.percy@example.com',
+          member_phone: '+13055550199',
+          member_state: 'GA',
+          eff_date: '2026-02-15',
+        },
+        {
+          status: 'ACTIVE_PLACED',
+          applicantCount: 1,
+          effectiveDate: '2026-01-01',
+          'lead.name.firstName': 'Melony',
+          'lead.name.lastName': 'Percy',
+          'lead.dateOfBirth': '1965-01-02',
+          'lead.emails.primaryEmail': 'melony.percy@example.com',
+          'lead.phones.primaryPhoneNumber': '+13055550111',
+          'lead.addressCustom.addressState': 'Florida',
+        },
+        null,
+        contactColumnMapping,
+      );
+
+      expect(
+        diffs.find((d) => d.crmField === 'lead.emails.primaryEmail'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.phones.primaryPhoneNumber'),
+      ).toBeUndefined();
+      expect(
+        diffs.find((d) => d.crmField === 'lead.addressCustom.addressState'),
+      ).toBeUndefined();
+
+      // Suppression stays scoped to the lead: policy-level fields still
+      // surface, and the INFO_ONLY notice still explains the linkage issue.
+      expect(diffs.find((d) => d.crmField === 'effectiveDate')).toBeDefined();
+      expect(
+        diffs.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeDefined();
+    });
+
     it('suppresses lead identity when both first and last name diverge entirely (legacy mis-link)', () => {
       // U97236991 case: matched policy is linked to "juliun dixon" but BOB
       // describes "Randella Glasco" — totally different person. Likely a
@@ -1025,6 +1373,72 @@ describe('diff engine', () => {
     });
   });
 
+  describe('empty-string/null symmetry', () => {
+    // The parse pipeline emits '' for mapped text cells containing only
+    // whitespace, while the CRM stores null for empty fields. Both sides are
+    // semantically empty — a whitespace-only BOB cell must never produce a
+    // diff proposing to write '' over an empty CRM field (the row would be
+    // promoted to an UPDATE review item on pure noise).
+    const planMapping: ColumnMapping = {
+      plan_name: {
+        crmField: 'planIdentifier',
+        fieldType: 'TEXT',
+        fieldKey: 'planIdentifier',
+      },
+    };
+
+    it.each([[''], [' '], ['   ']])(
+      'emits no diff for BOB %j against a null CRM field',
+      (blank) => {
+        const diffs = computeFieldDiffsFromMapping(
+          { plan_name: blank },
+          { planIdentifier: null },
+          null,
+          planMapping,
+        );
+
+        expect(diffs).toHaveLength(0);
+      },
+    );
+
+    it('emits no diff for a whitespace-only BOB cell against a populated CRM field', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { plan_name: '   ' },
+        { planIdentifier: 'Ambetter Gold' },
+        null,
+        planMapping,
+      );
+
+      expect(diffs).toHaveLength(0);
+    });
+
+    it('treats a whitespace-only CRM value as empty too (no diff against blank BOB)', () => {
+      const diffs = computeFieldDiffsFromMapping(
+        { plan_name: '' },
+        { planIdentifier: '  ' },
+        null,
+        planMapping,
+      );
+
+      expect(diffs).toHaveLength(0);
+    });
+
+    it('still emits a diff when BOB has a real value and CRM is empty', () => {
+      // Positive control: normalization must not swallow genuine fills.
+      const diffs = computeFieldDiffsFromMapping(
+        { plan_name: 'Ambetter Gold' },
+        { planIdentifier: null },
+        null,
+        planMapping,
+      );
+
+      expect(diffs.find((d) => d.crmField === 'planIdentifier')).toMatchObject({
+        bobValue: 'Ambetter Gold',
+        crmValue: null,
+      });
+    });
+  });
+
   describe('summarizeDiffs', () => {
     it('returns empty string for no diffs', () => {
       expect(summarizeDiffs([])).toBe('');
@@ -1044,6 +1458,345 @@ describe('diff engine', () => {
 
       expect(summary).toContain('eff_date');
       expect(summary).toContain('2026-02-15');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Per-carrier diff policy (diffConfig knobs, OMN-12 tuning depth).
+  // Every knob defaults to the previously-hardcoded behavior; each test pair
+  // shows (a) default = suppression as the corpus above already pins, and
+  // (b) the knob demonstrably moving behavior.
+  // -------------------------------------------------------------------------
+  describe('per-carrier diff policy (diffConfig knobs, OMN-12)', () => {
+    const policy = (overrides: Partial<DiffPolicy>): DiffPolicy => ({
+      ...DEFAULT_DIFF_POLICY,
+      ...overrides,
+    });
+
+    it('an explicit DEFAULT_DIFF_POLICY is bit-for-bit the implicit default', () => {
+      // Exercise several guards at once: agent mismatch + backwards
+      // effective date + lead-name divergence.
+      const bobRow = {
+        ...baseBobRow,
+        member_first: 'Beatrice',
+        broker_name: 'Different Agency',
+        eff_date: '2025-01-01',
+      };
+
+      const implicit = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+      );
+      const explicit = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        DEFAULT_DIFF_POLICY,
+      );
+
+      expect(explicit).toEqual(implicit);
+    });
+
+    it('suppressAgentFields=false surfaces agent.* diffs (column-mapped path)', () => {
+      const bobRow = { ...baseBobRow, broker_name: 'Different Agency' };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+      );
+
+      expect(
+        suppressed.find((d) => d.crmField === 'agent.name'),
+      ).toBeUndefined();
+
+      const surfaced = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        policy({ suppressAgentFields: false }),
+      );
+
+      expect(surfaced.find((d) => d.crmField === 'agent.name')).toMatchObject({
+        bobValue: 'Different Agency',
+        crmValue: 'Omnia Insurance',
+        action: 'UPDATE',
+      });
+    });
+
+    it('suppressPremiumDiffs=false surfaces .amountMicros diffs', () => {
+      const currencyMapping: ColumnMapping = {
+        ...baseColumnMapping,
+        premium_amount: {
+          crmField: 'premium.amountMicros',
+          fieldType: 'CURRENCY',
+          fieldKey: 'Amount (premium)',
+        },
+      };
+      const bobRow = { ...baseBobRow, premium_amount: 200 };
+      const crmPolicy = {
+        ...baseCrmPolicy,
+        'premium.amountMicros': 156_500_000,
+      };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        bobRow,
+        crmPolicy,
+        null,
+        currencyMapping,
+      );
+
+      expect(
+        suppressed.find((d) => d.crmField === 'premium.amountMicros'),
+      ).toBeUndefined();
+
+      const surfaced = computeFieldDiffsFromMapping(
+        bobRow,
+        crmPolicy,
+        null,
+        currencyMapping,
+        undefined,
+        undefined,
+        policy({ suppressPremiumDiffs: false }),
+      );
+
+      expect(
+        surfaced.find((d) => d.crmField === 'premium.amountMicros'),
+      ).toMatchObject({ bobValue: '200', crmValue: '156500000' });
+    });
+
+    it('suppressBackwardsEffectiveDate=false surfaces backwards moves', () => {
+      // BOB carries forward the prior-year enrollment date (2025-06-15)
+      // while CRM holds the renewal date (2026-01-01) — suppressed today.
+      const bobRow = { ...baseBobRow, eff_date: '2025-06-15' };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+      );
+
+      expect(
+        suppressed.find((d) => d.crmField === 'effectiveDate'),
+      ).toBeUndefined();
+
+      const surfaced = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        policy({ suppressBackwardsEffectiveDate: false }),
+      );
+
+      expect(
+        surfaced.find((d) => d.crmField === 'effectiveDate'),
+      ).toMatchObject({ bobValue: '2025-06-15', crmValue: '2026-01-01' });
+    });
+
+    it('suppressAcaRolloverEffectiveDate=false surfaces later-year Jan-1 moves', () => {
+      // CRM continuous from 2026-01-01; BOB reports the 2027 ACA rollover.
+      const bobRow = { ...baseBobRow, eff_date: '2027-01-01' };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+      );
+
+      expect(
+        suppressed.find((d) => d.crmField === 'effectiveDate'),
+      ).toBeUndefined();
+
+      const surfaced = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        policy({ suppressAcaRolloverEffectiveDate: false }),
+      );
+
+      expect(
+        surfaced.find((d) => d.crmField === 'effectiveDate'),
+      ).toMatchObject({ bobValue: '2027-01-01', crmValue: '2026-01-01' });
+    });
+
+    it('leadIdentityFields re-targets which fields the subscriber-mismatch suppression protects', () => {
+      // Spouse-swap scenario (Beatrice vs John): the safety-net detector
+      // fires, and by default lead.name.firstName is protected.
+      const bobRow = { ...baseBobRow, member_first: 'Beatrice' };
+
+      const defaultDiffs = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+      );
+
+      expect(
+        defaultDiffs.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toBeUndefined();
+
+      // A carrier whose protected set covers only DOB lets the name diff
+      // through — while the INFO_ONLY notice still explains the mismatch.
+      const narrowed = computeFieldDiffsFromMapping(
+        bobRow,
+        baseCrmPolicy,
+        null,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        policy({ leadIdentityFields: ['lead.dateOfBirth'] }),
+      );
+
+      expect(
+        narrowed.find((d) => d.crmField === 'lead.name.firstName'),
+      ).toMatchObject({ bobValue: 'Beatrice', crmValue: 'John' });
+      expect(
+        narrowed.find((d) => d.field === '__multiMemberSubscriberMismatch'),
+      ).toBeDefined();
+    });
+
+    it('suppressNegativeToNegativeStatus=false surfaces terminal-to-terminal status (+ companion expirationDate) diffs', () => {
+      const canceledDecision = {
+        derivedStatus: 'CANCELED' as const,
+        derivedExpireDate: '2026-03-01',
+        cancelPreviousPolicyId: null,
+        statusChangeReason: 'Not eligible for commission',
+      };
+      const crmPolicy = {
+        ...baseCrmPolicy,
+        status: 'PAYMENT_ERROR_CANCELED',
+        expirationDate: '2026-02-01',
+      };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+      );
+
+      expect(suppressed).toHaveLength(0);
+
+      const surfaced = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        policy({ suppressNegativeToNegativeStatus: false }),
+      );
+
+      expect(surfaced.find((d) => d.crmField === 'status')).toMatchObject({
+        bobValue: 'CANCELED',
+        crmValue: 'PAYMENT_ERROR_CANCELED',
+        action: 'COMPUTED',
+      });
+      expect(
+        surfaced.find((d) => d.crmField === 'expirationDate'),
+      ).toMatchObject({ bobValue: '2026-03-01', crmValue: '2026-02-01' });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Per-carrier status vocabulary reaching the diff engine's negative-to-
+  // negative suppression (statusVocabulary knob, OMN-12 tuning depth).
+  // -------------------------------------------------------------------------
+  describe('per-carrier negative-terminal set (statusVocabulary, OMN-12)', () => {
+    const canceledDecision = {
+      derivedStatus: 'CANCELED' as const,
+      derivedExpireDate: '2026-03-01',
+      cancelPreviousPolicyId: null,
+      statusChangeReason: 'Not eligible for commission',
+    };
+
+    it('shrinking the set surfaces a previously-suppressed transition', () => {
+      // DECLINED is terminal by default → CANCELED-over-DECLINED suppressed.
+      const crmPolicy = { ...baseCrmPolicy, status: 'DECLINED' };
+
+      const suppressed = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+      );
+
+      expect(suppressed.find((d) => d.crmField === 'status')).toBeUndefined();
+
+      // A carrier that does NOT treat DECLINED as terminal sees the diff.
+      const surfaced = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        DEFAULT_DIFF_POLICY,
+        new Set(['CANCELED', 'PAYMENT_ERROR_CANCELED']),
+      );
+
+      expect(surfaced.find((d) => d.crmField === 'status')).toMatchObject({
+        bobValue: 'CANCELED',
+        crmValue: 'DECLINED',
+      });
+    });
+
+    it('growing the set suppresses a workspace-added terminal status', () => {
+      // LAPSED is a workspace-added SELECT option — unknown to the default
+      // set, so the transition surfaces today.
+      const crmPolicy = { ...baseCrmPolicy, status: 'LAPSED' };
+
+      const surfaced = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+      );
+
+      expect(surfaced.find((d) => d.crmField === 'status')).toBeDefined();
+
+      // With LAPSED declared terminal, CANCELED-over-LAPSED is noise.
+      const suppressed = computeFieldDiffsFromMapping(
+        baseBobRow,
+        crmPolicy,
+        canceledDecision,
+        baseColumnMapping,
+        undefined,
+        undefined,
+        DEFAULT_DIFF_POLICY,
+        new Set([...NEGATIVE_TERMINAL_STATUSES, 'LAPSED']),
+      );
+
+      expect(suppressed.find((d) => d.crmField === 'status')).toBeUndefined();
+    });
+
+    it('isNegativeToNegativeStatusChange honors a custom set', () => {
+      expect(isNegativeToNegativeStatusChange('CANCELED', 'LAPSED')).toBe(
+        false,
+      );
+      expect(
+        isNegativeToNegativeStatusChange(
+          'CANCELED',
+          'LAPSED',
+          new Set(['CANCELED', 'LAPSED']),
+        ),
+      ).toBe(true);
     });
   });
 });

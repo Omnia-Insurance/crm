@@ -28,6 +28,8 @@ import { fromFlatRoleToRoleDto } from 'src/engine/metadata-modules/role/utils/fr
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
+// OMNIA-CUSTOM: reconciliation objects are admin-only for every role
+import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
 
 @Injectable()
 export class RoleService {
@@ -40,6 +42,8 @@ export class RoleService {
     private readonly roleRepository: Repository<RoleEntity>,
     private readonly userRoleService: UserRoleService,
     private readonly applicationService: ApplicationService,
+    // OMNIA-CUSTOM: reconciliation objects are admin-only for every role
+    private readonly reconciliationObjectLockdownService: ReconciliationObjectLockdownService,
   ) {}
 
   public async getWorkspaceRoles(workspaceId: string): Promise<RoleEntity[]> {
@@ -141,6 +145,14 @@ export class RoleService {
         'Multiple validation errors occurred while creating role',
       );
     }
+
+    // OMNIA-CUSTOM: roles created after the reconciliation seed ran would
+    // otherwise fall back to their role-level object defaults and see the
+    // reconciliation objects — apply the admin-only deny rows immediately
+    await this.reconciliationObjectLockdownService.applyToRole({
+      workspaceId,
+      roleId: flatRoleToCreate.id,
+    });
 
     const { flatRoleMaps: recomputedFlatRoleMaps } =
       await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(

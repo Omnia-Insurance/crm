@@ -14,7 +14,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Command } from 'nest-commander';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -22,21 +22,10 @@ import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/w
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
-import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
-import { ObjectPermissionService } from 'src/engine/metadata-modules/object-permission/object-permission.service';
-import { ADMIN_ROLE_LABEL } from 'src/engine/metadata-modules/permissions/constants/admin-role-label.constants';
-import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { type FieldMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/field-metadata-seed.type';
 import { type ObjectMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/object-metadata-seed.type';
-
-// All Omnia reconciliation objects that should be admin-only.
-const ADMIN_ONLY_OBJECT_NAMES = [
-  'reconciliation',
-  'carrierConfig',
-  'reviewItem',
-  'reconciliationDecisionRule',
-];
+import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Object + field specs
@@ -60,6 +49,14 @@ const RECONCILIATION_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     description:
       'Which sheet of the uploaded workbook was used (for multi-sheet BOBs)',
     icon: 'IconTable',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'sourceAttachmentId',
+    label: 'Source Attachment Id',
+    description:
+      'Pinned id of the attachment holding the uploaded BOB source file. Set on first parse; re-runs read exactly this attachment instead of the newest one.',
+    icon: 'IconPaperclip',
   },
   {
     type: FieldMetadataType.SELECT,
@@ -208,8 +205,32 @@ const CARRIER_CONFIG_V2_FIELDS: FieldMetadataSeed[] = [
     name: 'statusConfig',
     label: 'Status Config',
     description:
-      'Status engine parameters: placedThresholdDays, paymentErrorAgeDays, etc.',
+      'Status engine selection + inputs: engineId, fieldMapping (role -> header), placedThresholdDays, engineParams (engine-specific knobs)',
     icon: 'IconBrain',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'parseSettings',
+    label: 'Parse Settings',
+    description:
+      'File-shape settings: headerRow (1-based), rowFilters (skip footer/junk rows), skipFooterRows',
+    icon: 'IconFilter',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'diffConfig',
+    label: 'Diff Config',
+    description:
+      'Per-carrier diff suppression policy: suppressAgentFields, suppressPremiumDiffs, leadIdentityFields, rollover/backwards effective-date and negative-to-negative toggles',
+    icon: 'IconGitCompare',
+  },
+  {
+    type: FieldMetadataType.RAW_JSON,
+    name: 'statusVocabulary',
+    label: 'Status Vocabulary',
+    description:
+      'Per-carrier CRM status sets: negativeTerminalStatuses, activeStatuses (defaults = Omnia ACA vocabulary)',
+    icon: 'IconListCheck',
   },
   {
     type: FieldMetadataType.TEXT,
@@ -383,6 +404,18 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
         color: 'sky',
       },
       { label: 'Unmatched', value: 'UNMATCHED', position: 10, color: 'red' },
+      {
+        label: 'Policy# Narrowed Recent',
+        value: 'POLICY_NUMBER_NARROWED_RECENT',
+        position: 11,
+        color: 'yellow',
+      },
+      {
+        label: 'Identifier Exact',
+        value: 'IDENTIFIER_EXACT',
+        position: 12,
+        color: 'turquoise',
+      },
     ],
   },
   {
@@ -508,6 +541,51 @@ const REVIEW_ITEM_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     label: 'BOB Row Snapshot',
     description: 'Snapshot of the parsed BOB row data at match time',
     icon: 'IconDatabase',
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'carrierPolicyNumber',
+    label: 'Carrier Policy Number',
+    description:
+      'Policy number from the BOB row, resolved via the run column mapping and stamped at match time. Stable row identity for re-runs and override learning — no snapshot key guessing.',
+    icon: 'IconHash',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'carrierName',
+    label: 'Carrier Name',
+    description:
+      'Carrier of the run that created this item — scopes learned match overrides so carrier A approvals never leak into carrier B runs',
+    icon: 'IconBuildingSkyscraper',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'cancelPreviousPolicyId',
+    label: 'Cancel Previous Policy ID',
+    description:
+      'Workspace record id of the older policy version the status engine wants canceled, stamped server-side at match time',
+    icon: 'IconFileX',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'cancelPriorStatus',
+    label: 'Cancel Prior Status',
+    description:
+      "Cancel target's status before the cancel was applied — captured at apply time so UNDO can restore it",
+    icon: 'IconArrowBackUp',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    name: 'cancelPriorExpirationDate',
+    label: 'Cancel Prior Expiration Date',
+    description:
+      "Cancel target's expiration date before the cancel was applied — captured at apply time so UNDO can restore it",
+    icon: 'IconCalendarX',
+    isNullable: true,
   },
 ];
 
@@ -642,6 +720,23 @@ const DECISION_RULE_CUSTOM_FIELDS: FieldMetadataSeed[] = [
     icon: 'IconCalendarBolt',
     isNullable: true,
   },
+  {
+    type: FieldMetadataType.DATE_TIME,
+    name: 'deactivatedAt',
+    label: 'Deactivated At',
+    description:
+      'When a human deactivated this rule (by undoing its source item or an item it auto-applied). Learning and backfill never reactivate a deactivated rule.',
+    icon: 'IconHandStop',
+    isNullable: true,
+  },
+  {
+    type: FieldMetadataType.TEXT,
+    name: 'deactivationReason',
+    label: 'Deactivation Reason',
+    description: 'Why this rule was deactivated, recorded at deactivation time',
+    icon: 'IconInfoCircle',
+    isNullable: true,
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -658,14 +753,10 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
     @InjectRepository(ObjectMetadataEntity)
     private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
-    @InjectRepository(RoleEntity)
-    private readonly roleRepository: Repository<RoleEntity>,
-    @InjectRepository(ObjectPermissionEntity)
-    private readonly objectPermissionRepository: Repository<ObjectPermissionEntity>,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
-    private readonly objectPermissionService: ObjectPermissionService,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly reconciliationObjectLockdownService: ReconciliationObjectLockdownService,
   ) {
     super(workspaceIteratorService);
   }
@@ -826,6 +917,8 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     );
   }
 
+  // Delegates to the shared lockdown service so the same logic also runs for
+  // roles created after seeding (see RoleService.createRole).
   private async restrictToAdminRole({
     workspaceId,
     dryRun,
@@ -833,14 +926,13 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     workspaceId: string;
     dryRun: boolean;
   }): Promise<void> {
-    const objects = await this.objectMetadataRepository.find({
-      where: {
+    const { objectCount, lockedRoleLabels } =
+      await this.reconciliationObjectLockdownService.applyToAllNonAdminRoles({
         workspaceId,
-        nameSingular: In(ADMIN_ONLY_OBJECT_NAMES),
-      },
-    });
+        dryRun,
+      });
 
-    if (objects.length === 0) {
+    if (objectCount === 0) {
       this.logger.warn(
         '  No reconciliation objects found — skipping permission lock-down',
       );
@@ -848,10 +940,7 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       return;
     }
 
-    const roles = await this.roleRepository.find({ where: { workspaceId } });
-    const nonAdminRoles = roles.filter((r) => r.label !== ADMIN_ROLE_LABEL);
-
-    if (nonAdminRoles.length === 0) {
+    if (lockedRoleLabels.length === 0) {
       this.logger.log(
         '  Only Admin role exists — no per-role permissions to write',
       );
@@ -861,62 +950,15 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
     if (dryRun) {
       this.logger.log(
-        `  [DRY RUN] would deny read/write on ${objects.length} object(s) for ${nonAdminRoles.length} non-admin role(s): ${nonAdminRoles.map((r) => r.label).join(', ')}`,
+        `  [DRY RUN] would deny read/write on ${objectCount} object(s) for ${lockedRoleLabels.length} non-admin role(s): ${lockedRoleLabels.join(', ')}`,
       );
 
       return;
     }
 
-    for (const role of nonAdminRoles) {
-      this.logger.log(
-        `  + Locking ${objects.length} object(s) from role "${role.label}"`,
-      );
-
-      const existingObjectPermissions =
-        await this.objectPermissionRepository.find({
-          where: {
-            roleId: role.id,
-            workspaceId,
-          },
-        });
-
-      const adminOnlyObjectMetadataIds = new Set(objects.map((o) => o.id));
-      const preservedObjectPermissions = existingObjectPermissions
-        .filter(
-          (permission) =>
-            !adminOnlyObjectMetadataIds.has(permission.objectMetadataId),
-        )
-        .map((permission) => ({
-          objectMetadataId: permission.objectMetadataId,
-          canReadObjectRecords: permission.canReadObjectRecords,
-          canUpdateObjectRecords: permission.canUpdateObjectRecords,
-          canSoftDeleteObjectRecords: permission.canSoftDeleteObjectRecords,
-          canDestroyObjectRecords: permission.canDestroyObjectRecords,
-          showInSidebar: permission.showInSidebar,
-          editWindowMinutes: permission.editWindowMinutes,
-        }));
-
-      const adminOnlyDenyPermissions = objects.map((object) => ({
-        objectMetadataId: object.id,
-        canReadObjectRecords: false,
-        canUpdateObjectRecords: false,
-        canSoftDeleteObjectRecords: false,
-        canDestroyObjectRecords: false,
-        showInSidebar: false,
-        editWindowMinutes: null,
-      }));
-
-      await this.objectPermissionService.upsertObjectPermissions({
-        workspaceId,
-        input: {
-          roleId: role.id,
-          objectPermissions: [
-            ...preservedObjectPermissions,
-            ...adminOnlyDenyPermissions,
-          ],
-        },
-      });
-    }
+    this.logger.log(
+      `  + Locked ${objectCount} object(s) from ${lockedRoleLabels.length} non-admin role(s): ${lockedRoleLabels.join(', ')}`,
+    );
   }
 
   // ───────────────────────────────────────────────────────────────────────

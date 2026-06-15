@@ -1,5 +1,6 @@
 import { useMutation } from '@apollo/client/react';
 import { styled } from '@linaria/react';
+import { useStore } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button, LightIconButton } from 'twenty-ui/input';
@@ -22,22 +23,19 @@ import { PageLayoutType } from '~/generated-metadata/graphql';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { type RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
+import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 
 import { useTasks } from '@/activities/tasks/hooks/useTasks';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import { BATCH_APPLY_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
 import { useOpenReviewItemCommentsInSidePanel } from '@/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel';
 import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
-import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
-import {
-  coerceFieldDiffValueForRecordUpdate,
-  promotePrimaryEmailToAdditional,
-  promotePrimaryPhoneToAdditional,
-} from 'twenty-shared/utils';
 
 type MatchedDiffViewProps = {
   item: ReviewItemRecord;
@@ -189,44 +187,6 @@ const StyledFooter = styled.div`
   padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
 `;
 
-/**
- * Enrich fieldDiffs with proper crmField values using the reconciliation's
- * column mapping (BOB headers → CRM field paths).
- */
-const enrichFieldDiffs = (
-  diffs: FieldDiff[],
-  columnMapping: Record<string, ColumnMappingEntry> | null,
-): FieldDiff[] => {
-  if (!columnMapping) return diffs;
-
-  // Column mapping is keyed by BOB header name (e.g., "member_email")
-  // Each entry has crmField (e.g., "lead.emails.primaryEmail") and fieldKey
-  const byBobHeader = new Map<string, string>();
-  const byFieldKey = new Map<string, string>();
-  Object.entries(columnMapping).forEach(([header, entry]) => {
-    byBobHeader.set(header, entry.crmField);
-    byFieldKey.set(entry.fieldKey, entry.crmField);
-  });
-
-  return diffs.map((d) => {
-    if (d.crmField) return d;
-
-    // fieldDiff.field is the BOB column key — look it up as a header
-    const resolved =
-      byBobHeader.get(d.field) ?? byFieldKey.get(d.field) ?? null;
-
-    if (resolved) {
-      return {
-        ...d,
-        crmField: resolved,
-        crmObjectType: resolved.startsWith('lead.') ? 'lead' : 'policy',
-        action: d.action === 'INFO_ONLY' ? 'UPDATE' : d.action,
-      };
-    }
-    return d;
-  });
-};
-
 export const MatchedDiffView = ({
   item,
   reconciliationId,
@@ -256,33 +216,22 @@ export const MatchedDiffView = ({
     return rawColumnMapping as Record<string, ColumnMappingEntry>;
   }, [rawColumnMapping]);
 
-  // Enrich fieldDiffs with proper crmField from column mapping, and surface
-  // statusChangeReason as a tooltip on the status field's inline diff so the
-  // explanation lives next to the change instead of pinned to the header.
+  // Server-stored diffs are authoritative (remediation 2.1). The former
+  // enrichFieldDiffs crmField backfill + INFO_ONLY → UPDATE promotion was
+  // deleted: the diff engine always stamps crmField on actionable diffs,
+  // and INFO_ONLY means "never applied" on both sides — the server refuses
+  // to write INFO_ONLY diffs and the client must never resurrect them. The
+  // only remaining enrichment surfaces statusChangeReason as a tooltip on
+  // the status field's inline diff so the explanation lives next to the
+  // change instead of pinned to the header.
   const fieldDiffs = useMemo(() => {
-    const enriched = enrichFieldDiffs(rawFieldDiffs, columnMapping);
-    if (!item.statusChangeReason) return enriched;
-    return enriched.map((d) =>
+    if (!item.statusChangeReason) return rawFieldDiffs;
+    return rawFieldDiffs.map((d) =>
       d.crmField === 'status' && !d.note
         ? { ...d, note: item.statusChangeReason }
         : d,
     );
-  }, [rawFieldDiffs, columnMapping, item.statusChangeReason]);
-  const fieldTypeByCrmField = useMemo(() => {
-    const fieldTypes = new Map<string, string>();
-
-    for (const entry of Object.values(columnMapping ?? {})) {
-      if (!entry.crmField || !entry.fieldType) continue;
-
-      fieldTypes.set(entry.crmField, entry.fieldType);
-
-      if (entry.crmField.startsWith('lead.')) {
-        fieldTypes.set(entry.crmField.replace(/^lead\./, ''), entry.fieldType);
-      }
-    }
-
-    return fieldTypes;
-  }, [columnMapping]);
+  }, [rawFieldDiffs, item.statusChangeReason]);
 
   const matchLabel = MATCH_LABELS[item.matchMethod] ?? item.matchMethod;
   const matchLabelId = `match-label-${item.id}`;
@@ -364,12 +313,35 @@ export const MatchedDiffView = ({
   const leadRecord = useRecordStoreValue(leadId ?? '');
 
   // ── Decision actions ──
+  // ONE WRITE PATH (remediation 2.1): Apply all / Undo all / Mark approved
+  // delegate every CRM record write to the server's batchApplyReviewItems
+  // mutation — it applies/reverts the stored field diffs to the policy and
+  // lead, executes + captures the cancel-previous-policy step, enforces the
+  // fork's policy-write RLS, and flips the review item decision. The former
+  // client-side updateOneRecord loop (a buildUpdatesForTarget mirror of the
+  // server's) was deleted; after the mutation we refetch the affected
+  // records so the UI reflects server truth (the mutation returns counts,
+  // not payloads).
+  //
+  // DELIBERATE SPLIT — inline per-diff accept/undo chips stay client-side:
+  // they live in RecordInlineCellContainer (single-field updateOneRecord
+  // writes) and the server has no per-diff granularity — batchApply always
+  // applies the whole item. They do not double-write: inline accepts never
+  // call the server mutation, and the explicit "Mark approved" server APPLY
+  // that follows them is value-idempotent (the record already equals BOB;
+  // promotePrimary*ToAdditional no-ops on an equal primary).
   const { updateOneRecord } = useUpdateOneRecord();
   const [batchApplyMutation] = useMutation(BATCH_APPLY_REVIEW_ITEMS);
-  const [serverSyncedApplyItemIds, setServerSyncedApplyItemIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
+  const { enqueueErrorSnackBar } = useSnackBar();
+  const store = useStore();
+  // Disables the footer buttons while an APPLY/UNDO/decision write is in
+  // flight so a double-click cannot fire the server mutation twice.
+  const [isDecisionActionInFlight, setIsDecisionActionInFlight] =
+    useState(false);
 
+  // Client-side review-item decision write. Only for decisions with no
+  // server-side write path (Reject → SKIPPED, comment → FLAG_AUDIT);
+  // APPLY/UNDO decisions are stamped by the server mutation.
   const updateDecision = useCallback(
     async (decision: string, note?: string | null) => {
       const updateInput: Record<string, unknown> = {
@@ -391,246 +363,164 @@ export const MatchedDiffView = ({
     [item.id, updateOneRecord, onDecisionMade],
   );
 
+  // Runs the server-side apply/undo for this single item and returns how
+  // many items the server actually updated (0 means it skipped this one —
+  // e.g. the RLS check refused the write or the item was not eligible).
   const syncReviewItemDecisionWithServer = useCallback(
-    async (action: 'APPLY' | 'UNDO') => {
-      if (action === 'APPLY') {
-        setServerSyncedApplyItemIds((currentIds) =>
-          new Set(currentIds).add(item.id),
-        );
-      } else {
-        setServerSyncedApplyItemIds((currentIds) => {
-          const nextIds = new Set(currentIds);
+    async (action: 'APPLY' | 'UNDO'): Promise<number> => {
+      const result = await batchApplyMutation({
+        variables: {
+          reconciliationId,
+          action,
+          reviewItemIds: [item.id],
+        },
+      });
+      const status =
+        (
+          result.data as
+            | { batchApplyReviewItems?: { status?: string | null } }
+            | null
+            | undefined
+        )?.batchApplyReviewItems?.status ?? '';
+      const updatedCount = Number(status.split('_').pop());
 
-          nextIds.delete(item.id);
-
-          return nextIds;
-        });
-      }
-
-      try {
-        await batchApplyMutation({
-          variables: {
-            reconciliationId,
-            action,
-            reviewItemIds: [item.id],
-          },
-        });
-      } catch (error) {
-        if (action === 'APPLY') {
-          setServerSyncedApplyItemIds((currentIds) => {
-            const nextIds = new Set(currentIds);
-
-            nextIds.delete(item.id);
-
-            return nextIds;
-          });
-        }
-
-        throw error;
-      }
+      return Number.isFinite(updatedCount) ? updatedCount : 0;
     },
     [batchApplyMutation, item.id, reconciliationId],
   );
 
-  /**
-   * Build the policy + lead update payloads needed to write either side of
-   * each diff. `target = 'bob'` writes the BOB-proposed values (Accept all);
-   * `target = 'crm'` writes the original CRM values (Undo all).
-   */
-  const buildUpdatesForTarget = useCallback(
-    (target: 'bob' | 'crm') => {
-      const policyUpdates: Record<string, unknown> = {};
-      const leadUpdates: Record<string, unknown> = {};
+  // After a server-side APPLY/UNDO, pull the affected records back
+  // network-only and push them into the record store so the rendered field
+  // values (and allDiffsAccepted) reflect what the server actually wrote.
+  const { findOneRecord: refetchPolicyRecord } = useLazyFindOneRecord({
+    objectNameSingular: 'policy',
+    fetchPolicy: 'network-only',
+  });
+  const { findOneRecord: refetchPersonRecord } = useLazyFindOneRecord({
+    objectNameSingular: 'person',
+    fetchPolicy: 'network-only',
+  });
 
-      for (const diff of fieldDiffs) {
-        if (!diff.crmField || diff.bobValue === diff.crmValue) continue;
+  const refetchAffectedRecords = useCallback(async () => {
+    const writeRecordToStore =
+      (recordId: string) => (record: ObjectRecord) => {
+        store.set(recordStoreFamilyState.atomFamily(recordId), record);
+      };
 
-        const targetValue = target === 'bob' ? diff.bobValue : diff.crmValue;
-
-        const isLeadField =
-          diff.crmObjectType === 'lead' || diff.crmField.startsWith('lead.');
-        const crmPath = isLeadField
-          ? diff.crmField.replace(/^lead\./, '')
-          : diff.crmField;
-        const parts = crmPath.split('.');
-        const fieldName = parts[0];
-        const updates = isLeadField ? leadUpdates : policyUpdates;
-        const sourceRecord = isLeadField ? leadRecord : policyRecord;
-        const fieldType =
-          fieldTypeByCrmField.get(diff.crmField) ??
-          fieldTypeByCrmField.get(crmPath);
-
-        if (parts.length >= 2) {
-          // Composite sub-field: merge into existing composite object.
-          // For phones.primaryPhoneNumber and emails.primaryEmail on Accept
-          // we also promote the previous primary into additional* (see helper).
-          const subField = parts[parts.length - 1];
-
-          // Seed the in-progress composite from prior in-loop writes if any,
-          // otherwise from the live record store. JSON deep clone strips
-          // __typename and detaches from the read-only record store.
-          const currentComposite = sourceRecord
-            ? (sourceRecord as Record<string, unknown>)[fieldName]
-            : null;
-          const seed: Record<string, unknown> =
-            updates[fieldName] && typeof updates[fieldName] === 'object'
-              ? (updates[fieldName] as Record<string, unknown>)
-              : (() => {
-                  const cloned: Record<string, unknown> =
-                    typeof currentComposite === 'object' &&
-                    currentComposite !== null
-                      ? JSON.parse(JSON.stringify(currentComposite))
-                      : {};
-                  delete cloned.__typename;
-                  return cloned;
-                })();
-          const currentSubFieldValue =
-            currentComposite !== null &&
-            currentComposite !== undefined &&
-            typeof currentComposite === 'object'
-              ? (currentComposite as Record<string, unknown>)[subField]
-              : undefined;
-          const coercedTargetValue = coerceFieldDiffValueForRecordUpdate(
-            targetValue,
-            {
-              fieldType,
-              currentValue: currentSubFieldValue,
-            },
-          );
-
-          if (
-            target === 'bob' &&
-            targetValue !== null &&
-            fieldName === 'phones' &&
-            subField === 'primaryPhoneNumber'
-          ) {
-            updates[fieldName] = promotePrimaryPhoneToAdditional(
-              seed as PhonesMetadata,
-              targetValue,
-            );
-          } else if (
-            target === 'bob' &&
-            targetValue !== null &&
-            fieldName === 'emails' &&
-            subField === 'primaryEmail'
-          ) {
-            updates[fieldName] = promotePrimaryEmailToAdditional(
-              seed as EmailsMetadata,
-              targetValue,
-            );
-          } else {
-            // Undo path: just swap the sub-field back; leave additional* alone
-            // (perfect reversal would require pre-accept snapshot we don't keep).
-            seed[subField] = coercedTargetValue;
-            updates[fieldName] = seed;
-          }
-        } else {
-          updates[fieldName] = coerceFieldDiffValueForRecordUpdate(
-            targetValue,
-            {
-              fieldType,
-              currentValue: sourceRecord
-                ? (sourceRecord as Record<string, unknown>)[fieldName]
-                : undefined,
-            },
-          );
-        }
-      }
-
-      return { policyUpdates, leadUpdates };
-    },
-    [fieldDiffs, fieldTypeByCrmField, leadRecord, policyRecord],
-  );
-
-  const handleAcceptAll = useCallback(async () => {
-    await syncReviewItemDecisionWithServer('APPLY');
-
-    const { policyUpdates, leadUpdates } = buildUpdatesForTarget('bob');
-
-    if (Object.keys(policyUpdates).length > 0 && policyId) {
-      await updateOneRecord({
-        objectNameSingular: 'policy',
-        idToUpdate: policyId,
-        updateOneRecordInput: policyUpdates,
-      });
-    }
-    if (Object.keys(leadUpdates).length > 0 && leadId) {
-      await updateOneRecord({
-        objectNameSingular: 'person',
-        idToUpdate: leadId,
-        updateOneRecordInput: leadUpdates,
+    if (policyId) {
+      await refetchPolicyRecord({
+        objectRecordId: policyId,
+        onCompleted: writeRecordToStore(policyId),
       });
     }
 
-    // Cancel previous policy version if the matcher flagged one
-    // (Section 4.3 — older effective date than the kept BOB row)
+    if (leadId) {
+      await refetchPersonRecord({
+        objectRecordId: leadId,
+        onCompleted: writeRecordToStore(leadId),
+      });
+    }
+
+    // The server may also have canceled (APPLY) or restored (UNDO) a
+    // previous policy version — refresh it so no stale cached copy
+    // survives. The `cancelId && cancelId !== policyId` guard mirrors the
+    // server's self-cancel refusal (resolveCancelTargetPolicy), which owns
+    // the actual write.
     const snapshot = item.bobRowSnapshot as
       | (Record<string, unknown> & {
           __cancelPreviousPolicyId?: string;
-          __cancelExpireDate?: string | null;
         })
       | null;
     const cancelId = snapshot?.__cancelPreviousPolicyId;
 
     if (cancelId && cancelId !== policyId) {
-      await updateOneRecord({
-        objectNameSingular: 'policy',
-        idToUpdate: cancelId,
-        updateOneRecordInput: {
-          status: 'CANCELED',
-          expirationDate: snapshot?.__cancelExpireDate ?? null,
-        },
+      await refetchPolicyRecord({
+        objectRecordId: cancelId,
+        onCompleted: writeRecordToStore(cancelId),
       });
     }
-
-    await updateDecision('APPROVED');
   }, [
-    buildUpdatesForTarget,
-    policyId,
-    leadId,
     item.bobRowSnapshot,
-    updateOneRecord,
-    updateDecision,
+    leadId,
+    policyId,
+    refetchPolicyRecord,
+    refetchPersonRecord,
+    store,
+  ]);
+
+  const handleAcceptAll = useCallback(async () => {
+    setIsDecisionActionInFlight(true);
+
+    try {
+      const updatedCount = await syncReviewItemDecisionWithServer('APPLY');
+
+      if (updatedCount === 0) {
+        enqueueErrorSnackBar({
+          message:
+            'The server did not apply this item — it may be outside your edit window or no longer pending.',
+        });
+
+        return;
+      }
+
+      await refetchAffectedRecords();
+      onDecisionMade?.(item.id);
+    } catch {
+      enqueueErrorSnackBar({
+        message: 'Apply all failed — no changes were saved.',
+      });
+    } finally {
+      setIsDecisionActionInFlight(false);
+    }
+  }, [
     syncReviewItemDecisionWithServer,
+    refetchAffectedRecords,
+    onDecisionMade,
+    item.id,
+    enqueueErrorSnackBar,
   ]);
 
   const handleUndoAll = useCallback(async () => {
-    await syncReviewItemDecisionWithServer('UNDO');
+    setIsDecisionActionInFlight(true);
 
-    const { policyUpdates, leadUpdates } = buildUpdatesForTarget('crm');
+    try {
+      const updatedCount = await syncReviewItemDecisionWithServer('UNDO');
 
-    if (Object.keys(policyUpdates).length > 0 && policyId) {
-      await updateOneRecord({
-        objectNameSingular: 'policy',
-        idToUpdate: policyId,
-        updateOneRecordInput: policyUpdates,
+      if (updatedCount === 0) {
+        enqueueErrorSnackBar({
+          message:
+            'The server did not undo this item — it may be outside your edit window or not applied.',
+        });
+
+        return;
+      }
+
+      await refetchAffectedRecords();
+      onDecisionMade?.(item.id);
+    } catch {
+      enqueueErrorSnackBar({
+        message: 'Undo all failed — no changes were reverted.',
       });
+    } finally {
+      setIsDecisionActionInFlight(false);
     }
-    if (Object.keys(leadUpdates).length > 0 && leadId) {
-      await updateOneRecord({
-        objectNameSingular: 'person',
-        idToUpdate: leadId,
-        updateOneRecordInput: leadUpdates,
-      });
-    }
-
-    // Note: cancel-previous-policy is NOT reversed here — we don't snapshot
-    // the previous policy's pre-cancel status/expiration, so we can't restore
-    // it precisely. If the user wants that undone they must do it manually.
-
-    await updateDecision('PENDING');
   }, [
-    buildUpdatesForTarget,
-    policyId,
-    leadId,
-    updateOneRecord,
-    updateDecision,
     syncReviewItemDecisionWithServer,
+    refetchAffectedRecords,
+    onDecisionMade,
+    item.id,
+    enqueueErrorSnackBar,
   ]);
 
   // True when every actionable diff currently matches its proposed BOB value
   // — meaning the user (or a prior Accept all) has already written all
-  // changes. Used to flip the bottom button between "Accept all" / "Undo all".
+  // changes. Used ONLY to flip the bottom button between "Apply all" /
+  // "Undo all" and to offer the explicit "Mark approved" promotion below.
+  // It must never trigger a mutation by itself: record-value equality is
+  // also true for stale items (e.g. two policies sharing a lead, or a
+  // policy edited between match and review), so acting on it would fire a
+  // server APPLY — with its rule-learning cascade — from merely viewing
+  // an item (reconciliation remediation item 2.2).
   const allDiffsAccepted = useMemo(() => {
     const actionable = fieldDiffs.filter(
       (d) => d.crmField !== null && d.bobValue !== d.crmValue,
@@ -666,43 +556,57 @@ export const MatchedDiffView = ({
     });
   }, [fieldDiffs, leadRecord, policyRecord]);
 
-  // Promote PENDING → APPROVED when the record's live values reach the
-  // all-accepted state — covers users who only do inline accepts and never
-  // click the bottom "Accept all" button. Keeps the sidebar fade signal in
-  // sync with the actual record state. (Demotion stays explicit: handled by
-  // the Undo all / Reject buttons.)
-  useEffect(() => {
-    if (allDiffsAccepted && item.decision === 'PENDING') {
-      if (serverSyncedApplyItemIds.has(item.id)) return;
+  // Explicit promotion for the inline-accept path: when the user has
+  // accepted every diff one by one (or the record already matches BOB),
+  // the primary button has flipped to "Undo all", so we surface a separate
+  // "Mark approved" button instead of auto-promoting from a useEffect.
+  // The server APPLY stamps the APPROVED decision and (value-idempotently)
+  // re-writes the already-accepted values; the records are then refetched
+  // so the UI shows server truth. Failures surface once via snackbar and
+  // stop — no retry loop.
+  const handleMarkApproved = useCallback(async () => {
+    setIsDecisionActionInFlight(true);
 
-      void (async () => {
-        try {
-          await syncReviewItemDecisionWithServer('APPLY');
-          await updateDecision('APPROVED');
-        } catch {
-          setServerSyncedApplyItemIds((currentIds) => {
-            const nextIds = new Set(currentIds);
+    try {
+      const updatedCount = await syncReviewItemDecisionWithServer('APPLY');
 
-            nextIds.delete(item.id);
+      if (updatedCount === 0) {
+        enqueueErrorSnackBar({
+          message:
+            'The server did not approve this item — it may be outside your edit window or no longer pending.',
+        });
 
-            return nextIds;
-          });
-        }
-      })();
+        return;
+      }
+
+      await refetchAffectedRecords();
+      onDecisionMade?.(item.id);
+    } catch {
+      enqueueErrorSnackBar({
+        message: 'Failed to mark the review item approved.',
+      });
+    } finally {
+      setIsDecisionActionInFlight(false);
     }
   }, [
-    allDiffsAccepted,
-    item.decision,
-    item.id,
-    serverSyncedApplyItemIds,
     syncReviewItemDecisionWithServer,
-    updateDecision,
+    refetchAffectedRecords,
+    onDecisionMade,
+    item.id,
+    enqueueErrorSnackBar,
   ]);
 
-  const handleReject = useCallback(
-    () => updateDecision('SKIPPED'),
-    [updateDecision],
-  );
+  const handleReject = useCallback(async () => {
+    setIsDecisionActionInFlight(true);
+
+    try {
+      await updateDecision('SKIPPED');
+    } catch {
+      enqueueErrorSnackBar({ message: 'Failed to reject the review item.' });
+    } finally {
+      setIsDecisionActionInFlight(false);
+    }
+  }, [updateDecision, enqueueErrorSnackBar]);
 
   // ── Leave comment ──
   // Routes to one of two flows depending on whether comments exist:
@@ -718,7 +622,23 @@ export const MatchedDiffView = ({
   const commentCount = existingTasks.length;
 
   const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
-    onTaskCreated: () => updateDecision('FLAG_AUDIT'),
+    // Only flag PENDING items: commenting on an APPROVED item must not
+    // clobber the decision, or the applied CRM writes lose batch-undo
+    // eligibility (both client and server undo select decision ===
+    // 'APPROVED') — reconciliation remediation item 2.3.
+    onTaskCreated: async () => {
+      if (item.decision !== 'PENDING') {
+        return;
+      }
+
+      try {
+        await updateDecision('FLAG_AUDIT');
+      } catch {
+        enqueueErrorSnackBar({
+          message: 'Failed to flag the review item for audit.',
+        });
+      }
+    },
   });
   const { openReviewItemCommentsInSidePanel } =
     useOpenReviewItemCommentsInSidePanel();
@@ -856,7 +776,19 @@ export const MatchedDiffView = ({
           size="small"
           Icon={allDiffsAccepted ? IconArrowBackUp : IconCheck}
           onClick={allDiffsAccepted ? handleUndoAll : handleAcceptAll}
+          disabled={isDecisionActionInFlight}
         />
+        {allDiffsAccepted && item.decision === 'PENDING' && (
+          <Button
+            title="Mark approved"
+            variant="primary"
+            accent="blue"
+            size="small"
+            Icon={IconCheck}
+            onClick={handleMarkApproved}
+            disabled={isDecisionActionInFlight}
+          />
+        )}
         <Button
           title="Reject"
           variant="secondary"
@@ -864,6 +796,7 @@ export const MatchedDiffView = ({
           size="small"
           Icon={IconX}
           onClick={handleReject}
+          disabled={isDecisionActionInFlight}
         />
         <StyledSpacer />
         <Button

@@ -14,6 +14,10 @@ export enum PermissionFlagType {
   LAYOUTS = 'LAYOUTS',
   BILLING = 'BILLING',
   AI_SETTINGS = 'AI_SETTINGS',
+  // OMNIA-CUSTOM: gates the reconciliation pipeline (start runs, batch
+  // approve/apply review items). Admin passes via canUpdateAllSettings;
+  // grant explicitly to any non-admin reconciliation operator role.
+  RECONCILIATION = 'RECONCILIATION',
 
   // Tool permissions
   AI = 'AI',

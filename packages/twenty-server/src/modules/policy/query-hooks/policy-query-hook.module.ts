@@ -10,6 +10,7 @@ import { PolicyUpdateManyPostQueryHook } from 'src/modules/policy/query-hooks/po
 import { PolicyUpdateManyPreQueryHook } from 'src/modules/policy/query-hooks/policy-update-many.pre-query.hook';
 import { PolicyUpdateOnePostQueryHook } from 'src/modules/policy/query-hooks/policy-update-one.post-query.hook';
 import { PolicyUpdateOnePreQueryHook } from 'src/modules/policy/query-hooks/policy-update-one.pre-query.hook';
+import { PolicyWriteAuthorizationService } from 'src/modules/policy/services/policy-write-authorization.service';
 
 @Module({
   imports: [AgentProfileModule, WorkspaceCacheModule],
@@ -22,6 +23,8 @@ import { PolicyUpdateOnePreQueryHook } from 'src/modules/policy/query-hooks/poli
     PolicyCreateManyPostQueryHook,
     PolicyUpdateOnePostQueryHook,
     PolicyUpdateManyPostQueryHook,
+    PolicyWriteAuthorizationService,
   ],
+  exports: [PolicyWriteAuthorizationService],
 })
 export class PolicyQueryHookModule {}

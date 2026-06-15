@@ -8,6 +8,8 @@ import { AdoptBrokerageAppCommand } from 'src/database/commands/custom/adopt-bro
 import { BackfillReconciliationDecisionRulesCommand } from 'src/database/commands/custom/backfill-reconciliation-decision-rules.command';
 // OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
 import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
+// OMNIA-CUSTOM: Generic carrier-config seed with pre-flight validation (multi-carrier readiness audit 2026-06-11)
+import { SeedCarrierConfigCommand } from 'src/database/commands/custom/seed-carrier-config.command';
 // OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
 import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-time-cards.command';
 import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
@@ -67,6 +69,7 @@ import { MessagingImportManagerModule } from 'src/modules/messaging/message-impo
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
 import { ReconciliationDecisionRuleService } from 'src/modules/reconciliation/services/decision-rule.service';
+import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
 import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
 
 @Module({
@@ -139,8 +142,12 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,
+    SeedCarrierConfigCommand,
     BackfillReconciliationDecisionRulesCommand,
     ReconciliationDecisionRuleService,
+    // OMNIA-CUSTOM: seed-reconciliation-objects delegates its admin-only
+    // lockdown to this shared service
+    ReconciliationObjectLockdownService,
     ReviewItemService,
     // OMNIA-CUSTOM: Time Card ingestion seed + backfill
     SeedConvosoTimeCardPipelineCommand,

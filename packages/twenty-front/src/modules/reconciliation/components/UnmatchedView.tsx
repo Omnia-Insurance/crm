@@ -25,19 +25,20 @@ import {
   resolveProductFromPlanName,
   deriveStatusFromBob,
   normalizePaidThroughDateForEffectiveDate,
+  type ClientStatusConfig,
 } from '@/reconciliation/utils/buildSyntheticPolicyRecord';
+import {
+  invertColumnMapping,
+  resolveBobValue,
+  type ColumnMappingEntry,
+  type ComputedFieldDef,
+} from '@/reconciliation/utils/invertColumnMapping';
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
 type UnmatchedViewProps = {
   item: ReviewItemRecord;
   reconciliationId: string;
   onDecisionMade?: (itemId: string) => void;
-};
-
-type ColumnMappingEntry = {
-  crmField: string;
-  fieldType: string;
-  fieldKey: string;
 };
 
 // ── Styled components ──
@@ -178,9 +179,59 @@ export const UnmatchedView = ({
     return raw as { pattern: string; productId: string; productName: string }[];
   }, [carrierConfigRecord]);
 
+  // ── Computed-field defs (carrierConfig.fieldConfig) + crmField lookup ──
+
+  const computedFields = useMemo<ComputedFieldDef[] | null>(() => {
+    if (!carrierConfigRecord) return null;
+    const raw = (carrierConfigRecord as Record<string, unknown>).fieldConfig;
+
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    return raw as ComputedFieldDef[];
+  }, [carrierConfigRecord]);
+
+  // Inverted columnMapping (crmField → snapshot key). All raw-snapshot reads
+  // below go through this so non-Ambetter carriers resolve their own headers;
+  // the legacy Ambetter literals passed to resolveBobValue only apply when
+  // the mapping has no entry (pre-mapping reconciliations).
+  const crmFieldLookup = useMemo(
+    () => invertColumnMapping(columnMapping, computedFields),
+    [columnMapping, computedFields],
+  );
+
+  // ── statusConfig (carrierConfig.statusConfig) for the client status
+  // fallback (OMN-12): placedThresholdDays + the role → row-key fieldMapping.
+  // Without it deriveStatusFromBob keeps its legacy Ambetter literals.
+
+  const statusConfig = useMemo<ClientStatusConfig | null>(() => {
+    if (!carrierConfigRecord) return null;
+    const raw = (carrierConfigRecord as Record<string, unknown>).statusConfig;
+
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    return raw as ClientStatusConfig;
+  }, [carrierConfigRecord]);
+
   // ── Resolve product from plan name ──
 
-  const planName = snapshot.plan_name as string | null;
+  const planNameRaw = resolveBobValue(snapshot, crmFieldLookup, 'planIdentifier', [
+    'plan_name',
+  ]);
+  const planName = planNameRaw == null ? null : String(planNameRaw);
   const resolvedProduct = useMemo(
     () => resolveProductFromPlanName(planName, productMapping),
     [planName, productMapping],
@@ -207,7 +258,10 @@ export const UnmatchedView = ({
 
   // ── Resolve agent by NPN ──
 
-  const brokerNpn = snapshot.broker_npn as string | null;
+  const brokerNpnRaw = resolveBobValue(snapshot, crmFieldLookup, 'agent.npn', [
+    'broker_npn',
+  ]);
+  const brokerNpn = brokerNpnRaw == null ? null : String(brokerNpnRaw);
   const { records: agentResults } = useFindManyRecords({
     objectNameSingular: 'agentProfile',
     filter: brokerNpn ? { npn: { eq: String(brokerNpn) } } : undefined,
@@ -257,12 +311,14 @@ export const UnmatchedView = ({
       buildSyntheticPolicyRecord({
         bobSnapshot: snapshot,
         columnMapping,
+        computedFields,
         resolvedRelations: {
           product: resolvedProduct,
           carrier: resolvedCarrier,
           agent: resolvedAgent,
         },
         derivedStatus: item.derivedStatus || null,
+        statusConfig,
         ltvAmountMicros,
         tempPolicyId,
         tempLeadId,
@@ -270,10 +326,12 @@ export const UnmatchedView = ({
     [
       snapshot,
       columnMapping,
+      computedFields,
       resolvedProduct,
       resolvedCarrier,
       resolvedAgent,
       item.derivedStatus,
+      statusConfig,
       ltvAmountMicros,
       tempPolicyId,
       tempLeadId,
@@ -313,10 +371,11 @@ export const UnmatchedView = ({
 
   // ── Pre-fetch existing lead by phone number ──
 
-  const phoneNumber = String(snapshot.member_phone_number ?? '').replace(
-    /\D/g,
-    '',
-  );
+  const phoneNumber = String(
+    resolveBobValue(snapshot, crmFieldLookup, 'lead.phones.primaryPhoneNumber', [
+      'member_phone_number',
+    ]) ?? '',
+  ).replace(/\D/g, '');
   const { records: existingLeadsByPhone } = useFindManyRecords({
     objectNameSingular: 'person',
     filter: phoneNumber
@@ -330,9 +389,17 @@ export const UnmatchedView = ({
   // ── Display values ──
 
   const firstName = String(
-    snapshot.inusred_first_name ?? snapshot.insured_first_name ?? '',
+    resolveBobValue(snapshot, crmFieldLookup, 'lead.name.firstName', [
+      // 'inusred' is Ambetter's own header typo, preserved verbatim
+      'inusred_first_name',
+      'insured_first_name',
+    ]) ?? '',
   );
-  const lastName = String(snapshot.insured_last_name ?? '');
+  const lastName = String(
+    resolveBobValue(snapshot, crmFieldLookup, 'lead.name.lastName', [
+      'insured_last_name',
+    ]) ?? '',
+  );
   const displayName =
     firstName || lastName ? `${firstName} ${lastName}`.trim() : item.name;
 
@@ -376,11 +443,26 @@ export const UnmatchedView = ({
       if (existingLead !== null) {
         leadId = existingLead.id;
       } else {
-        const email = String(snapshot.member_email ?? '');
-        const dob = snapshot.member_date_of_birth
-          ? String(snapshot.member_date_of_birth)
-          : null;
-        const state = String(snapshot.state ?? '');
+        const email = String(
+          resolveBobValue(snapshot, crmFieldLookup, 'lead.emails.primaryEmail', [
+            'member_email',
+          ]) ?? '',
+        );
+        const dobRaw = resolveBobValue(
+          snapshot,
+          crmFieldLookup,
+          'lead.dateOfBirth',
+          ['member_date_of_birth'],
+        );
+        const dob = dobRaw ? String(dobRaw) : null;
+        const state = String(
+          resolveBobValue(
+            snapshot,
+            crmFieldLookup,
+            'lead.addressCustom.addressState',
+            ['state'],
+          ) ?? '',
+        );
 
         const personRecord = await createPerson({
           name: { firstName, lastName },
@@ -396,21 +478,42 @@ export const UnmatchedView = ({
         leadId = personRecord.id;
       }
 
-      // 2. Build policy input
+      // 2. Build policy input — resolved through the inverted columnMapping;
+      // the computed effective-date output key (e.g. 'True Effective Date')
+      // wins over the raw mapped column when the snapshot carries it.
       const effectiveDate =
-        snapshot['True Effective Date'] ??
-        snapshot.policy_effective_date ??
-        null;
-      const expirationDate = snapshot.policy_term_date ?? null;
+        resolveBobValue(snapshot, crmFieldLookup, 'effectiveDate', [
+          'True Effective Date',
+          'policy_effective_date',
+        ]) ?? null;
+      const expirationDate =
+        resolveBobValue(snapshot, crmFieldLookup, 'expirationDate', [
+          'policy_term_date',
+        ]) ?? null;
       const paidThroughDate = normalizePaidThroughDateForEffectiveDate(
-        snapshot.paid_through_date,
+        resolveBobValue(snapshot, crmFieldLookup, 'paidThroughDate', [
+          'paid_through_date',
+        ]),
         effectiveDate,
       );
-      const policyNumber = String(snapshot.policy_number ?? '');
-      const applicantCount = Number(snapshot.number_of_members ?? 0) || null;
+      const policyNumber = String(
+        resolveBobValue(snapshot, crmFieldLookup, 'policyNumber', [
+          'policy_number',
+        ]) ?? '',
+      );
+      const applicantCount =
+        Number(
+          resolveBobValue(snapshot, crmFieldLookup, 'applicantCount', [
+            'number_of_members',
+          ]) ?? 0,
+        ) || null;
       // member_responsibility is the member's out-of-pocket (post-subsidy) amount
-      const premiumRaw =
-        snapshot.member_responsibility ?? snapshot.monthly_premium_amount;
+      const premiumRaw = resolveBobValue(
+        snapshot,
+        crmFieldLookup,
+        'premium.amountMicros',
+        ['member_responsibility', 'monthly_premium_amount'],
+      );
       const premiumNum =
         premiumRaw !== null && premiumRaw !== undefined
           ? Number(premiumRaw)
@@ -431,7 +534,9 @@ export const UnmatchedView = ({
         ...(premiumMicros !== null
           ? { premium: { amountMicros: premiumMicros, currencyCode: 'USD' } }
           : {}),
-        status: item.derivedStatus || deriveStatusFromBob(snapshot),
+        status:
+          item.derivedStatus ||
+          deriveStatusFromBob(snapshot, crmFieldLookup, statusConfig),
         ...(ltvAmountMicros
           ? { ltv: { amountMicros: ltvAmountMicros, currencyCode: 'USD' } }
           : {}),
@@ -453,10 +558,12 @@ export const UnmatchedView = ({
     creating,
     existingLead,
     snapshot,
+    crmFieldLookup,
     firstName,
     lastName,
     phoneNumber,
     item.derivedStatus,
+    statusConfig,
     ltvAmountMicros,
     resolvedProduct,
     resolvedCarrier,

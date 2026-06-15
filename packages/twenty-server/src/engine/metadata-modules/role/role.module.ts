@@ -31,6 +31,8 @@ import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationGraphqlApiExceptionInterceptor } from 'src/engine/workspace-manager/workspace-migration/interceptors/workspace-migration-graphql-api-exception.interceptor';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
+// OMNIA-CUSTOM: RoleService applies the reconciliation lockdown to new roles
+import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace
   providers: [
     RoleService,
     RoleResolver,
+    // OMNIA-CUSTOM: RoleService applies the reconciliation lockdown to new roles
+    ReconciliationObjectLockdownService,
     WorkspaceFlatRoleMapCacheService,
     WorkspaceFlatRoleTargetMapCacheService,
     WorkspaceMigrationGraphqlApiExceptionInterceptor,
