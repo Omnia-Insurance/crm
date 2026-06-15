@@ -68,9 +68,15 @@ import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
+// OMNIA-CUSTOM: PolicyWriteAuthorizationService (agent-ownership RLS) is a
+// constructor dependency of ReviewItemService, which the reconciliation seed
+// commands instantiate here; PolicyQueryHookModule exports it.
+import { PolicyQueryHookModule } from 'src/modules/policy/query-hooks/policy-query-hook.module';
 import { ReconciliationDecisionRuleService } from 'src/modules/reconciliation/services/decision-rule.service';
+import { ReconciliationMutationService } from 'src/modules/reconciliation/services/mutation.service';
 import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
 import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
+import { ReconciliationStateMachineService } from 'src/modules/reconciliation/services/state-machine.service';
 
 @Module({
   imports: [
@@ -88,6 +94,9 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
     ]),
     // OMNIA-CUSTOM: Reconciliation seed restricts new objects to Admin role only
     ObjectPermissionModule,
+    // OMNIA-CUSTOM: provides PolicyWriteAuthorizationService for ReviewItemService
+    // (used by the reconciliation seed commands)
+    PolicyQueryHookModule,
     WorkspaceExportModule,
     // Cron command dependencies
     MessagingImportManagerModule,
@@ -148,6 +157,11 @@ import { ReviewItemService } from 'src/modules/reconciliation/services/review-it
     // OMNIA-CUSTOM: seed-reconciliation-objects delegates its admin-only
     // lockdown to this shared service
     ReconciliationObjectLockdownService,
+    // OMNIA-CUSTOM: ReviewItemService's remaining constructor deps — the
+    // state machine and its mutation service — so the seed commands can
+    // instantiate it in the CLI/migration context (matches ReconciliationModule).
+    ReconciliationMutationService,
+    ReconciliationStateMachineService,
     ReviewItemService,
     // OMNIA-CUSTOM: Time Card ingestion seed + backfill
     SeedConvosoTimeCardPipelineCommand,
