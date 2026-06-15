@@ -213,5 +213,66 @@ describe('reconciliation job status guards', () => {
         expect.any(Error),
       );
     });
+
+    it('should skip all writes and exit cleanly when a stuck-run recovery supersedes the run mid-match (matchingStartedAt changed)', async () => {
+      // Entry guard (call 1) and loadMatchContext (call 2) see the original
+      // run; by the time persistMatchResults re-reads (call 3) a stuck-run
+      // recovery has force-failed us and a restart re-entered MATCHING with a
+      // fresh matchingStartedAt. The superseded (still-alive) zombie must bail
+      // before any CRM write, not double-apply on top of the live run.
+      const ORIGINAL_STARTED_AT = '2026-06-12T00:00:00.000Z';
+      const SUPERSEDED_STARTED_AT = '2026-06-12T00:45:00.000Z';
+
+      let calls = 0;
+      dataService.getReconciliation.mockImplementation(async () => {
+        calls += 1;
+
+        return {
+          ...matchingReconciliation,
+          stats: {
+            matchingStartedAt:
+              calls >= 3 ? SUPERSEDED_STARTED_AT : ORIGINAL_STARTED_AT,
+          },
+        };
+      });
+      dataService.getCarrierConfig.mockResolvedValue(carrierConfig);
+
+      await expect(buildMatchJob().handle(JOB_DATA)).resolves.toBeUndefined();
+
+      // No CRM-touching writes and no status flip — the live run owns these.
+      expect(reviewItemService.reconcileMatchResults).not.toHaveBeenCalled();
+      expect(
+        reviewItemService.applyLearnedRulesForReconciliation,
+      ).not.toHaveBeenCalled();
+      expect(stateMachine.transition).not.toHaveBeenCalled();
+      // Clean exit via the TransitionConflictError path: never setFailed.
+      expect(stateMachine.setFailed).not.toHaveBeenCalled();
+    });
+
+    it('should proceed normally when matchingStartedAt is unchanged through the write phase', async () => {
+      // Same stamp on every read → still our run → writes go through and the
+      // terminal CAS fires. Guards against the fence over-firing on the happy
+      // path.
+      dataService.getReconciliation.mockResolvedValue({
+        ...matchingReconciliation,
+        stats: { matchingStartedAt: '2026-06-12T00:00:00.000Z' },
+      });
+      dataService.getCarrierConfig.mockResolvedValue(carrierConfig);
+
+      await expect(buildMatchJob().handle(JOB_DATA)).resolves.toBeUndefined();
+
+      expect(reviewItemService.reconcileMatchResults).toHaveBeenCalledTimes(1);
+      expect(
+        reviewItemService.applyLearnedRulesForReconciliation,
+      ).toHaveBeenCalledTimes(1);
+      expect(stateMachine.transition).toHaveBeenCalledWith(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        'MATCHING',
+        'REVIEW',
+        expect.anything(),
+      );
+      expect(stateMachine.setFailed).not.toHaveBeenCalled();
+    });
   });
 });

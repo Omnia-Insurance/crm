@@ -228,6 +228,18 @@ export class ReconciliationMatchJob {
         return;
       }
 
+      // Fencing token for stuck-run recovery: the orchestrator stamps a fresh
+      // matchingStartedAt every time it (re)enters MATCHING, including after a
+      // stuck-run FAILED → MATCHING restart. Capture it now and re-assert it
+      // just before we write (persistMatchResults). If THIS run is a slow-but-
+      // alive job that got force-failed past STUCK_RUN_THRESHOLD_MS and a
+      // restart re-entered MATCHING with a new match job while our match was
+      // still computing, the replacement run's MATCHING is indistinguishable
+      // from ours by status alone — but its matchingStartedAt differs, so we
+      // bail out before double-writing the same CRM policies.
+      const expectedMatchingStartedAt =
+        reconciliation.stats?.matchingStartedAt ?? null;
+
       const ctx = await this.loadMatchContext(workspaceId, reconciliationId);
       const {
         carrierName,
@@ -593,6 +605,7 @@ export class ReconciliationMatchJob {
       await this.persistMatchResults(
         workspaceId,
         reconciliationId,
+        expectedMatchingStartedAt,
         reviewItems,
         carrierName,
         policyNumberHeader,
@@ -652,6 +665,9 @@ export class ReconciliationMatchJob {
   private async persistMatchResults(
     workspaceId: string,
     reconciliationId: string,
+    /** matchingStartedAt captured at job entry — the stuck-run recovery
+     *  fencing token (see handle()). */
+    expectedMatchingStartedAt: string | null,
     reviewItems: Record<string, unknown>[],
     carrierName: string,
     policyNumberHeader: string | undefined,
@@ -674,6 +690,38 @@ export class ReconciliationMatchJob {
       configFingerprint: string;
     },
   ): Promise<void> {
+    // Re-assert ownership immediately before any CRM write. A stuck-run
+    // recovery (orchestrator.recoverIfStuck) force-fails a run that has sat in
+    // MATCHING past STUCK_RUN_THRESHOLD_MS, and a manual restart re-enters
+    // MATCHING with a fresh matchingStartedAt + a new match job. If that
+    // happened while this (slow-but-alive) job was still computing its match,
+    // we are now a superseded zombie: bail out before reconcileMatchResults /
+    // applyLearnedRulesForReconciliation so we never double-write the same
+    // policies. The terminal MATCHING → REVIEW CAS below only guards the
+    // status flip, not these writes, and status alone can't tell our MATCHING
+    // from the replacement run's — the matchingStartedAt stamp can. Throwing
+    // TransitionConflictError routes through handle()'s existing clean-exit
+    // path (no setFailed — the live run owns the record).
+    const current = await this.dataService.getReconciliation(
+      workspaceId,
+      reconciliationId,
+    );
+    const currentMatchingStartedAt = current.stats?.matchingStartedAt ?? null;
+
+    if (
+      current.status !== 'MATCHING' ||
+      currentMatchingStartedAt !== expectedMatchingStartedAt
+    ) {
+      this.logger.warn(
+        `Match job for reconciliation ${reconciliationId} superseded before ` +
+          `the write phase (status ${current.status}, matchingStartedAt ` +
+          `${currentMatchingStartedAt ?? 'unset'} vs expected ` +
+          `${expectedMatchingStartedAt ?? 'unset'}) — skipping all writes`,
+      );
+
+      throw new TransitionConflictError(reconciliationId, 'MATCHING', 'REVIEW');
+    }
+
     // policyNumberHeader lets the reconcile derive identities for legacy
     // items that predate the carrierPolicyNumber column (snapshot lookup).
     await this.reviewItemService.reconcileMatchResults(

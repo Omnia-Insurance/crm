@@ -114,6 +114,14 @@ export class ReconciliationOrchestratorService {
    * Manual recovery is therefore "click start again after the threshold" —
    * the frontend already exposes both start mutations.
    *
+   * Data-safety note: the threshold is purely wall-clock, so a slow-but-alive
+   * match run that crosses it can be force-failed and superseded while still
+   * executing. That is safe because every (re)entry into MATCHING stamps a
+   * fresh stats.matchingStartedAt and the match job fences its CRM writes on
+   * that stamp (ReconciliationMatchJob.persistMatchResults): a superseded run
+   * sees the changed stamp and bails before writing, so recovery can never
+   * cause two runs to double-write the same policies.
+   *
    * FAILED-then-restart was chosen over direct re-entry
    * (PARSING → PARSING) because it stays entirely inside VALID_TRANSITIONS
    * and CAS-serializes concurrent recovery attempts: two simultaneous
