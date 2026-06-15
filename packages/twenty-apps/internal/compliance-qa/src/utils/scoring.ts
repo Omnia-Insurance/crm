@@ -56,7 +56,7 @@ export type FinalScorecardAnalysis = {
   overallScore: number;
   overallResult: QaResult;
   hasRedFlag: boolean;
-  sectionScores: Record<string, number>;
+  sectionScores: Record<string, number | null>;
   redFlags: Record<RedFlagKey, RedFlagScore>;
   scoreDetailsMarkdown: string;
   redFlagDetailsMarkdown: string | null;
@@ -69,6 +69,30 @@ const DEFAULT_RED_FLAG_SCORE: RedFlagScore = {
   explanation: '',
   confidence: 0,
 };
+
+// A red flag only forces an automatic FAIL (score overridden to 0) when the
+// model is highly confident in the violation. Lower-confidence violations are
+// surfaced for human review (NEEDS_REVIEW) instead of silently failing the
+// agent, which has disciplinary consequences.
+export const RED_FLAG_AUTO_FAIL_MIN_CONFIDENCE = 0.8;
+
+const normalizeConfidence = (confidence: number | undefined): number => {
+  if (confidence === undefined || !Number.isFinite(confidence)) {
+    return 0;
+  }
+
+  // Tolerate both 0-1 and 0-100 confidence scales from the model.
+  const normalized = confidence > 1 ? confidence / 100 : confidence;
+
+  return Math.max(0, Math.min(1, normalized));
+};
+
+const isConfirmedRedFlag = (redFlag: RedFlagScore): boolean =>
+  redFlag.violated &&
+  normalizeConfidence(redFlag.confidence) >= RED_FLAG_AUTO_FAIL_MIN_CONFIDENCE;
+
+const isSuspectedRedFlag = (redFlag: RedFlagScore): boolean =>
+  redFlag.violated && !isConfirmedRedFlag(redFlag);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -275,13 +299,16 @@ const clampScore = (score: number): number =>
 
 export const calculateCriterionAverage = (
   criteria: Record<string, CriterionScore>,
-): number => {
+): number | null => {
   const scores = Object.values(criteria)
     .map((criterion) => criterion.score)
     .filter((score): score is number => typeof score === 'number');
 
+  // No criterion was scored (all not-applicable or omitted): the section has no
+  // signal, so return null and let the overall score re-normalize around it
+  // rather than counting an unassessed section as zero.
   if (scores.length === 0) {
-    return 0;
+    return null;
   }
 
   return clampScore(
@@ -290,36 +317,61 @@ export const calculateCriterionAverage = (
 };
 
 export const calculateOverallScore = (
-  sectionScores: Record<string, number>,
-): number =>
-  clampScore(
-    Object.entries(SECTION_WEIGHTS).reduce(
-      (total, [sectionId, weight]) =>
-        total + (sectionScores[sectionId] ?? 0) * weight,
-      0,
-    ),
+  sectionScores: Record<string, number | null>,
+): number => {
+  const weighted = Object.entries(SECTION_WEIGHTS).reduce(
+    (accumulator, [sectionId, weight]) => {
+      const sectionScore = sectionScores[sectionId];
+
+      if (sectionScore === null || sectionScore === undefined) {
+        return accumulator;
+      }
+
+      return {
+        total: accumulator.total + sectionScore * weight,
+        weight: accumulator.weight + weight,
+      };
+    },
+    { total: 0, weight: 0 },
   );
+
+  // Re-normalize over the sections that actually have a score so that a section
+  // with no assessable criteria does not drag the weighted average toward zero.
+  if (weighted.weight === 0) {
+    return 0;
+  }
+
+  return clampScore(weighted.total / weighted.weight);
+};
 
 export const determineOverallResult = ({
   callQuality,
   rubricType,
   overallScore,
-  hasRedFlag,
+  hasConfirmedRedFlag,
+  hasSuspectedRedFlag,
 }: {
   callQuality: 'SCORABLE' | 'NOT_SCORABLE';
   rubricType: QaRubricType;
   overallScore: number;
-  hasRedFlag: boolean;
+  hasConfirmedRedFlag: boolean;
+  hasSuspectedRedFlag: boolean;
 }): QaResult => {
   if (callQuality === 'NOT_SCORABLE') {
     return 'NOT_APPLICABLE';
   }
 
-  if (hasRedFlag || overallScore <= FAIL_SCORE_THRESHOLD) {
+  if (hasConfirmedRedFlag || overallScore <= FAIL_SCORE_THRESHOLD) {
     return 'FAIL';
   }
 
   if (rubricType === 'UNKNOWN') {
+    return 'NEEDS_REVIEW';
+  }
+
+  // A low-confidence (suspected) red flag never auto-passes: send it to a human
+  // reviewer instead of failing the agent automatically.
+  if (hasSuspectedRedFlag) {
     return 'NEEDS_REVIEW';
   }
 
@@ -395,22 +447,26 @@ const buildSectionScores = ({
 }: {
   analysis: AiScorecardAnalysis;
   rubricType: QaRubricType;
-}): Record<string, number> => {
-  const scores: Record<string, number> = {};
+}): Record<string, number | null> => {
+  const scores: Record<string, number | null> = {};
 
   for (const section of getScoringSectionsForRubric(rubricType)) {
     const aiCriteria = analysis.sections?.[section.id]?.criteria ?? {};
-    const expectedCriteria: Record<string, CriterionScore> = {};
+    const rubricCriteria: Record<string, CriterionScore> = {};
 
     for (const criterion of section.criteria) {
-      expectedCriteria[criterion.id] = aiCriteria[criterion.id] ?? {
-        score: 0,
-        evidence: '',
-        notes: 'Criterion missing from AI response.',
-      };
+      const aiCriterion = aiCriteria[criterion.id];
+
+      // Only include criteria the AI actually returned. Missing or explicitly
+      // null (not-applicable) criteria are excluded from the section average
+      // rather than counted as zero, so an unaddressed criterion does not drag
+      // an otherwise strong call down.
+      if (aiCriterion !== undefined) {
+        rubricCriteria[criterion.id] = aiCriterion;
+      }
     }
 
-    scores[section.id] = calculateCriterionAverage(expectedCriteria);
+    scores[section.id] = calculateCriterionAverage(rubricCriteria);
   }
 
   return scores;
@@ -463,7 +519,7 @@ export const buildScoreDetailsMarkdown = ({
 }: {
   analysis: AiScorecardAnalysis;
   rubricType: QaRubricType;
-  sectionScores: Record<string, number>;
+  sectionScores: Record<string, number | null>;
   overallScore: number;
   overallResult: QaResult;
 }): string => {
@@ -473,9 +529,14 @@ export const buildScoreDetailsMarkdown = ({
       analysis,
       rubricType,
     });
+    const sectionScore = sectionScores[section.id];
+    const sectionScoreLabel =
+      sectionScore === null || sectionScore === undefined
+        ? 'N/A'
+        : `${sectionScore}/100`;
 
     return joinNonEmptyLines([
-      `### ${section.label} - ${sectionScores[section.id] ?? 0}/100`,
+      `### ${section.label} - ${sectionScoreLabel}`,
       criteriaMarkdown,
     ]);
   }).join('\n\n');
@@ -525,9 +586,16 @@ export const buildRedFlagDetailsMarkdown = (
       const result = redFlags[redFlag.key];
       const evidence =
         result.evidence.length > 0 ? `Evidence: "${result.evidence}"` : '';
+      const confidence = normalizeConfidence(result.confidence);
+      const severity = isConfirmedRedFlag(result)
+        ? 'Auto-fail'
+        : 'Suspected — routed to human review';
+      const severityLine = `Severity: ${severity} (confidence ${Math.round(
+        confidence * 100,
+      )}%)`;
 
       return joinNonEmptyLines(
-        [`### ${redFlag.label}`, result.explanation, evidence],
+        [`### ${redFlag.label}`, severityLine, result.explanation, evidence],
         '\n\n',
       );
     })
@@ -554,17 +622,17 @@ export const finalizeAiAnalysis = (
 ): FinalScorecardAnalysis => {
   const rubricType = normalizeRubricType(aiAnalysis.rubricType);
   const redFlags = buildRedFlags({ analysis: aiAnalysis, rubricType });
-  const hasRedFlag = Object.values(redFlags).some(
-    (redFlag) => redFlag.violated,
-  );
+  const hasConfirmedRedFlag = Object.values(redFlags).some(isConfirmedRedFlag);
+  const hasSuspectedRedFlag = Object.values(redFlags).some(isSuspectedRedFlag);
   const sectionScores = buildSectionScores({ analysis: aiAnalysis, rubricType });
   const baseOverallScore = calculateOverallScore(sectionScores);
-  const overallScore = hasRedFlag ? 0 : baseOverallScore;
+  const overallScore = hasConfirmedRedFlag ? 0 : baseOverallScore;
   const overallResult = determineOverallResult({
     callQuality: aiAnalysis.callQuality,
     rubricType,
     overallScore,
-    hasRedFlag,
+    hasConfirmedRedFlag,
+    hasSuspectedRedFlag,
   });
 
   return {
@@ -572,7 +640,7 @@ export const finalizeAiAnalysis = (
     rubricType,
     overallScore,
     overallResult,
-    hasRedFlag,
+    hasRedFlag: hasConfirmedRedFlag,
     sectionScores,
     redFlags,
     scoreDetailsMarkdown: buildScoreDetailsMarkdown({

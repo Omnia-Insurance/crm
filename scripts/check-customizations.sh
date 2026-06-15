@@ -664,8 +664,8 @@ check_file_contains \
   "Compliance app production package version must stay on a 1.x production line"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
-  "\"version\": \"1.1.0\"" \
-  "Compliance app production package version must include Deepgram transcription"
+  "\"version\": \"1.1.1\"" \
+  "Compliance app production package version must include Deepgram transcription and the scoring false-positive fixes"
 check_file_not_contains \
   "packages/twenty-apps/internal/compliance-qa/package.json" \
   "\"version\": \"0." \
@@ -814,6 +814,18 @@ check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/application-config.ts" \
   "Amazon Translate" \
   "Compliance QA app setup copy must mention translation runtime usage"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/utils/scoring.ts" \
+  "RED_FLAG_AUTO_FAIL_MIN_CONFIDENCE" \
+  "Compliance QA must gate red-flag auto-fail on AI confidence"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/constants/compliance-rules.ts" \
+  "automated system or IVR recording notice satisfies" \
+  "Compliance QA must accept an automated recorded-line notice instead of auto-failing"
+check_file_contains \
+  "packages/twenty-apps/internal/compliance-qa/src/constants/compliance-rules.ts" \
+  "Never infer that a disclosure, platform, or action occurred" \
+  "Compliance QA scoring prompt must forbid inferring compliance from the rubric text"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/roles/default-role.ts" \
   "objectPermissions" \

@@ -64,9 +64,9 @@ export const RED_FLAGS: RedFlagDefinition[] = [
     key: 'recordedLineDisclosure',
     label: 'Recorded Line Disclosure',
     description:
-      'Agent must state that the call is recorded for quality and compliance purposes on every call, callback, transfer, and when a new person joins.',
+      'A recorded-line notice must be present near the start of the call. An automated system or IVR recording notice satisfies this requirement; the agent should additionally restate it on callbacks, transfers, or when a new person joins.',
     aiPromptGuidance:
-      'Flag as violated when a scorable call does not include a recorded-line disclosure near the beginning of the live conversation.',
+      'A recorded-line notice from EITHER the agent OR an automated system/IVR message (for example "this call may be monitored or recorded for quality and training purposes") satisfies this requirement. Flag as violated ONLY when no recorded-line disclosure of any kind appears near the start of the call.',
   },
   {
     key: 'marketplaceDisclosure',
@@ -98,7 +98,7 @@ export const RED_FLAGS: RedFlagDefinition[] = [
     description:
       'Agent must provide HealthSherpa disclosure when using HealthSherpa for ACA enrollment.',
     aiPromptGuidance:
-      'Only evaluate when HealthSherpa or the enrollment platform is used. Flag missing required disclosure on ACA enrollment calls.',
+      'Only evaluate when the transcript itself shows the agent actually using HealthSherpa (or directing the consumer to it) for enrollment. Do NOT infer HealthSherpa use from the rubric, the documentation criteria, or the mere fact that this is an ACA call. If the agent enrolled directly through the Marketplace or a carrier rather than HealthSherpa, mark this not violated.',
   },
   {
     key: 'agentCoaching',
@@ -363,6 +363,11 @@ export const getScoringSectionsForRubric = (
 
 export const SCORING_SYSTEM_PROMPT = `You are a compliance QA analyst for Omnia Insurance Group. Score insurance sales call transcripts using only the provided rubric and transcript evidence.
 
+Transcript format:
+- The transcript is diarized into speaker turns labeled Speaker 0, Speaker 1, and so on, each with an approximate timestamp.
+- Identify which speaker is the Omnia agent (the person who introduces themselves as a licensed agent or says they are calling from or with Omnia) and attribute agent conduct, disclosures, and red flags to that speaker.
+- Treat the other speakers as the consumer or third parties such as a Marketplace representative or an automated system message.
+
 Return valid JSON only. Do not include markdown fences.
 
 Classification:
@@ -373,18 +378,19 @@ Classification:
 - UNKNOWN is allowed when the transcript does not clearly identify ACA versus ancillary.
 
 Red flags:
-- A red flag means the agent failed compliance.
-- If any red flag is violated, the final score will be overridden to 0 and the final result will be FAIL.
+- A red flag means the agent failed compliance. Base every red-flag decision strictly on what is actually spoken in the transcript. Never infer that a disclosure, platform, or action occurred (or was missing) from the rubric text, the criterion descriptions, or documentation expectations.
+- For every red flag, set "violated" and a "confidence" between 0 and 1. Only set violated to true when the transcript contains direct supporting evidence; when uncertain, keep violated false or give a low confidence.
+- A red flag violated with high confidence overrides the final score to 0 and fails the call; lower-confidence violations are routed to human review instead of auto-failing.
 - Marketplace and commission disclosures are mandatory on ACA sales/enrollment calls.
 - Commission disclosure is not an ancillary-only auto-fail unless an ACA marketplace sale/enrollment is also attempted.
-- Recorded-line disclosure is mandatory for every scorable call.
+- A recorded-line notice is required on every scorable call, but an automated system or IVR recording notice satisfies it. Do not flag it as missing when the recording already contains such a notice.
 - AOR disclosure is mandatory when AOR is attempted or completed.
-- HealthSherpa disclosure is mandatory when HealthSherpa is used for ACA enrollment.
-- Coaching/manipulation and DNC violations are automatic failures.
+- HealthSherpa disclosure applies only when the transcript shows HealthSherpa is actually used for ACA enrollment.
+- Coaching/manipulation and DNC violations are automatic failures when clearly evidenced.
 
 Scoring:
 - Score each criterion from 0 to 100.
-- Use null for not-applicable criteria and explain why.
+- Use null (not a low number) for any criterion that does not apply to this call type. For example, score sales-specific criteria such as discovery probing, assumptive close, upsell, or referral as null on a renewal, re-verification, service, or AOR-only call. Reserve low numeric scores for criteria that applied but were performed poorly. Return null with a short explanation rather than omitting a criterion.
 - Include evidence quotes and approximate timestamp or transcript position when available.
 - Do not invent compliance that is not supported by the transcript.`;
 
