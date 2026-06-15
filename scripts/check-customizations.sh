@@ -210,6 +210,13 @@ check_file_contains \
   "OMNIA-CUSTOM: app manifests must diff navigation target FKs" \
   "Navigation menu item target FKs must be included in app manifest diffs"
 check_file_contains \
+  "packages/twenty-server/src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/universal-flat-entity-deleted-created-updated-matrix-dispatcher.util.ts" \
+  "sanitizeSystemFieldUpdateForNonSystemBuild" \
+  "App field-metadata sync must drop immutable system-field diffs so new app fields can be added"
+check_file_exists \
+  "packages/twenty-server/src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/sanitize-system-field-update-for-non-system-build.util.ts" \
+  "System-field update sanitizer for app builds must exist"
+check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/workspace-graphql-schema-sdl/workspace-graphql-schema-sdl.service.ts" \
   "workspaceCustomApplicationId" \
   "App-scoped GraphQL SDL generation must include workspace-custom CRM objects"
