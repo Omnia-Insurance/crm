@@ -265,6 +265,31 @@ describe('Compliance QA scoring', () => {
     expect(result.hasRedFlag).toBe(true);
   });
 
+  it('summarizes a board-visible reason for the result', () => {
+    const fail = finalizeAiAnalysis(
+      buildAnalysis({ redFlags: buildRedFlags('marketplaceDisclosure') }),
+    );
+    expect(fail.resultReason).toContain('Compliance failure');
+    expect(fail.resultReason).toContain('Marketplace');
+
+    const pass = finalizeAiAnalysis(buildAnalysis());
+    expect(pass.resultReason).toBe('');
+
+    const review = finalizeAiAnalysis(
+      buildAnalysis({ sections: buildSectionsByCategory(50, 95) }),
+    );
+    expect(review.resultReason).toContain('compliance score');
+
+    const notApplicable = finalizeAiAnalysis(
+      buildAnalysis({
+        callQuality: 'NOT_SCORABLE',
+        notScorableReason: 'Voicemail only',
+        sections: {},
+      }),
+    );
+    expect(notApplicable.resultReason).toContain('Voicemail only');
+  });
+
   it('validates unknown AI JSON into a typed scorecard analysis', () => {
     const analysis = parseAiScorecardAnalysis({
       callQuality: 'SCORABLE',

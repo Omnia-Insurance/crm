@@ -594,6 +594,7 @@ const scoreTranscriptionSource = async ({
       result: analysis.overallResult,
       qaType: analysis.rubricType,
       redFlag: analysis.hasRedFlag,
+      reason: analysis.resultReason,
       taskId: task.taskId,
       qaManagerId: task.qaManagerId,
       analyzedAt: new Date().toISOString(),

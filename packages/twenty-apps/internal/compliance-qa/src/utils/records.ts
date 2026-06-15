@@ -98,6 +98,7 @@ export type QaScorecardInput = {
   result?: QaResult;
   qaType?: QaRubricType;
   redFlag?: boolean;
+  reason?: string;
   processingStartedAt?: string;
   analyzedAt?: string;
 };

@@ -43,6 +43,7 @@ export const RESULT_FIELD_ID = '4dca7ef6-ff56-49a8-9965-fddf0da94b24';
 export const TYPE_FIELD_ID = '0dcd9235-1658-4e73-be5b-1a8df13ab4d4';
 export const RED_FLAG_FIELD_ID = '631ba702-2f06-41a3-b234-388c684b0770';
 export const STATUS_FIELD_ID = '42b314a1-34ce-4862-9efb-0ff8b28942bf';
+export const REASON_FIELD_ID = 'd2c4e6a8-1b3d-4f5a-9c7e-0a2b4d6f8c1e';
 
 export default defineObject({
   universalIdentifier: QA_SCORECARD_OBJECT_UNIVERSAL_IDENTIFIER,
@@ -318,6 +319,15 @@ export default defineObject({
       label: 'Red Flag',
       description: 'Whether any red flag auto-fail was triggered.',
       icon: 'IconFlag',
+    },
+    {
+      universalIdentifier: REASON_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'reason',
+      label: 'Reason',
+      description:
+        'Concise reason for the result: which compliance breach failed it, why it needs review, or why it was not scorable.',
+      icon: 'IconMessage2',
     },
   ],
 });

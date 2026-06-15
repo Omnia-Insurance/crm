@@ -58,6 +58,7 @@ export type FinalScorecardAnalysis = {
   hasRedFlag: boolean;
   complianceScore: number | null;
   salesEffectivenessScore: number | null;
+  resultReason: string;
   sectionScores: Record<string, number | null>;
   redFlags: Record<RedFlagKey, RedFlagScore>;
   scoreDetailsMarkdown: string;
@@ -684,6 +685,65 @@ export const buildRecommendationsMarkdown = (
     .join('\n\n');
 };
 
+// A short, board-visible explanation of the result: which compliance breach
+// failed it, why it needs review, or why it was not scorable.
+export const buildResultReason = ({
+  analysis,
+  rubricType,
+  redFlags,
+  complianceScore,
+  overallResult,
+}: {
+  analysis: AiScorecardAnalysis;
+  rubricType: QaRubricType;
+  redFlags: Record<RedFlagKey, RedFlagScore>;
+  complianceScore: number | null;
+  overallResult: QaResult;
+}): string => {
+  if (overallResult === 'NOT_APPLICABLE') {
+    const reason = analysis.notScorableReason?.trim();
+
+    return reason !== undefined && reason.length > 0
+      ? `Not scorable: ${reason}`
+      : 'Not a scorable sales call';
+  }
+
+  const confirmed = RED_FLAGS.filter((redFlag) =>
+    isConfirmedRedFlag(redFlags[redFlag.key]),
+  );
+
+  if (confirmed.length > 0) {
+    return `Compliance failure: ${confirmed
+      .map((redFlag) => redFlag.label)
+      .join(', ')}`;
+  }
+
+  if (overallResult === 'PASS') {
+    return '';
+  }
+
+  // NEEDS_REVIEW: explain why a human should look.
+  const suspected = RED_FLAGS.filter((redFlag) =>
+    isSuspectedRedFlag(redFlags[redFlag.key]),
+  );
+
+  if (suspected.length > 0) {
+    return `Needs review — possible ${suspected
+      .map((redFlag) => redFlag.label)
+      .join(', ')} (low confidence)`;
+  }
+
+  if (rubricType === 'UNKNOWN') {
+    return 'Needs review — could not tell ACA vs ancillary';
+  }
+
+  if (complianceScore === null) {
+    return 'Needs review — compliance criteria not assessable';
+  }
+
+  return `Needs review — compliance score ${complianceScore} below ${COMPLIANCE_PASS_THRESHOLD}`;
+};
+
 export const finalizeAiAnalysis = (
   aiAnalysis: AiScorecardAnalysis,
 ): FinalScorecardAnalysis => {
@@ -712,6 +772,13 @@ export const finalizeAiAnalysis = (
   // The scorecard score reflects the compliance result driver; a confirmed red
   // flag is a hard compliance failure and zeroes it.
   const overallScore = hasConfirmedRedFlag ? 0 : (complianceScore ?? 0);
+  const resultReason = buildResultReason({
+    analysis: aiAnalysis,
+    rubricType,
+    redFlags,
+    complianceScore,
+    overallResult,
+  });
 
   return {
     aiAnalysis,
@@ -721,6 +788,7 @@ export const finalizeAiAnalysis = (
     hasRedFlag: hasConfirmedRedFlag,
     complianceScore,
     salesEffectivenessScore,
+    resultReason,
     sectionScores,
     redFlags,
     scoreDetailsMarkdown: buildScoreDetailsMarkdown({
