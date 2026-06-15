@@ -2652,6 +2652,10 @@ check_file_contains \
   "ObjectPermissionEntity" \
   "DatabaseCommandModule must register the object permission repository for reconciliation seed command DI"
 check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "PolicyQueryHookModule" \
+  "DatabaseCommandModule must import PolicyQueryHookModule so ReviewItemService can resolve PolicyWriteAuthorizationService (else the migration/upgrade hook fails DI and rolls the deploy back)"
+check_file_contains \
   "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
   "reconciliationDecisionRule" \
   "Seed command must create the learned reconciliation decision rule object"
