@@ -19,6 +19,7 @@ import { Repository } from 'typeorm';
 import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
+import { type UpdateFieldInput } from 'src/engine/metadata-modules/field-metadata/dtos/update-field.input';
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
@@ -1143,18 +1144,26 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
       });
     }
 
-    // Update options on existing SELECT/MULTI_SELECT fields.
-    // Direct metadata update + cache invalidation at the end of the seed
-    // ensures both metadata JSON and Postgres enums stay in sync.
+    // Update options on existing SELECT/MULTI_SELECT fields THROUGH the
+    // metadata service so the workspace migration runs ALTER TYPE ... ADD VALUE
+    // on the Postgres enum. A raw `UPDATE core."fieldMetadata" SET options`
+    // only rewrites the metadata JSON and leaves the per-field enum stale, so
+    // the moment a record is written with a newly added option value the write
+    // fails at runtime with `invalid input value for enum ..._enum` (this is
+    // exactly how POLICY_NUMBER_NARROWED_RECENT / IDENTIFIER_EXACT broke match
+    // runs after they were added to reviewItem.matchMethod).
     for (const field of fieldsToUpdateOptions) {
       this.logger.log(
         `  ↻ Updating options on "${objectNameSingular}.${field.name}"`,
       );
 
-      await this.objectMetadataRepository.manager.query(
-        `UPDATE core."fieldMetadata" SET options = $1 WHERE id = $2`,
-        [JSON.stringify(field.options), field.id],
-      );
+      await this.fieldMetadataService.updateOneField({
+        updateFieldInput: {
+          id: field.id,
+          options: field.options as UpdateFieldInput['options'],
+        },
+        workspaceId,
+      });
     }
   }
 

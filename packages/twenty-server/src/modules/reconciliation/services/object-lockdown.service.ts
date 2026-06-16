@@ -133,6 +133,74 @@ export class ReconciliationObjectLockdownService {
         where: { roleId: role.id, workspaceId },
       });
 
+    const existingPermissionByObjectId = new Map(
+      existingObjectPermissions.map((permission) => [
+        permission.objectMetadataId,
+        permission,
+      ]),
+    );
+
+    // Idempotency short-circuit: if every reconciliation object is already
+    // fully denied for this role there is nothing to do. This makes re-seeds a
+    // no-op and, critically, lets already-locked roles bypass the upsert below
+    // — which matters because upsertObjectPermissions rejects ANY input that
+    // references a system object ("platform-managed"), and re-sending a role's
+    // preserved permissions trips that guard whenever the role legitimately
+    // holds a permission on a system object (e.g. an app function role).
+    const isFullyDenied = (objectMetadataId: string): boolean => {
+      const permission = existingPermissionByObjectId.get(objectMetadataId);
+
+      return (
+        isDefined(permission) &&
+        !permission.canReadObjectRecords &&
+        !permission.canUpdateObjectRecords &&
+        !permission.canSoftDeleteObjectRecords &&
+        !permission.canDestroyObjectRecords &&
+        !permission.showInSidebar
+      );
+    };
+
+    if (adminOnlyObjects.every((object) => isFullyDenied(object.id))) {
+      return;
+    }
+
+    // A role that still needs locking but holds permissions on system objects
+    // cannot be locked through upsertObjectPermissions: re-sending those rows
+    // errors (system objects are platform-managed) and omitting them would
+    // delete them. Skip with a warning rather than error or corrupt the role's
+    // permissions. New roles are locked at creation while still empty, so in
+    // practice this only spares pre-existing system-permission-holding roles.
+    const existingObjectMetadataIds = [...existingPermissionByObjectId.keys()];
+    const systemObjectMetadataIds =
+      existingObjectMetadataIds.length > 0
+        ? new Set(
+            (
+              await this.objectMetadataRepository.find({
+                where: {
+                  workspaceId,
+                  id: In(existingObjectMetadataIds),
+                  isSystem: true,
+                },
+                select: { id: true },
+              })
+            ).map((object) => object.id),
+          )
+        : new Set<string>();
+
+    if (
+      existingObjectPermissions.some((permission) =>
+        systemObjectMetadataIds.has(permission.objectMetadataId),
+      )
+    ) {
+      this.logger.warn(
+        `Skipping reconciliation lockdown for role "${role.label}" in workspace ${workspaceId}: ` +
+          `it holds permissions on platform-managed system objects, which cannot be re-sent through ` +
+          `upsertObjectPermissions. Lock it manually if it is a user-facing role.`,
+      );
+
+      return;
+    }
+
     const adminOnlyObjectMetadataIds = new Set(
       adminOnlyObjects.map((objectMetadata) => objectMetadata.id),
     );
