@@ -49,7 +49,15 @@ describe('ReconciliationObjectLockdownService', () => {
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 
     objectMetadataRepository = {
-      find: jest.fn().mockResolvedValue(RECONCILIATION_OBJECTS),
+      // Query-aware: the system-object lookup (isSystem: true) finds none by
+      // default; findAdminOnlyObjects (nameSingular In) returns the recon objects.
+      find: jest
+        .fn()
+        .mockImplementation(({ where }) =>
+          Promise.resolve(
+            where?.isSystem === true ? [] : RECONCILIATION_OBJECTS,
+          ),
+        ),
     };
     roleRepository = {
       find: jest.fn().mockResolvedValue([ADMIN_ROLE, AGENT_ROLE]),
@@ -135,6 +143,61 @@ describe('ReconciliationObjectLockdownService', () => {
       expect(input.objectPermissions).not.toContainEqual(
         staleReconciliationGrant,
       );
+    });
+
+    it('should skip the upsert when every reconciliation object is already denied (idempotent re-run)', async () => {
+      objectPermissionRepository.find.mockResolvedValue(
+        RECONCILIATION_OBJECTS.map((objectMetadata) =>
+          buildDenyPermission(objectMetadata.id),
+        ),
+      );
+
+      await service.applyToRole({
+        workspaceId: WORKSPACE_ID,
+        roleId: AGENT_ROLE.id,
+      });
+
+      expect(
+        objectPermissionService.upsertObjectPermissions,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('should skip (with a warning) a not-yet-locked role that holds permissions on a system object', async () => {
+      const warnSpy = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+
+      // The role's only existing permission is on a system object; upsert
+      // would either reject it (platform-managed) or delete it, so the
+      // lockdown must skip rather than corrupt the role.
+      objectPermissionRepository.find.mockResolvedValue([
+        {
+          objectMetadataId: 'system-object-id',
+          canReadObjectRecords: true,
+          canUpdateObjectRecords: false,
+          canSoftDeleteObjectRecords: false,
+          canDestroyObjectRecords: false,
+          showInSidebar: true,
+          editWindowMinutes: null,
+        },
+      ]);
+      objectMetadataRepository.find.mockImplementation(({ where }) =>
+        Promise.resolve(
+          where?.isSystem === true
+            ? [{ id: 'system-object-id' } as ObjectMetadataEntity]
+            : RECONCILIATION_OBJECTS,
+        ),
+      );
+
+      await service.applyToRole({
+        workspaceId: WORKSPACE_ID,
+        roleId: AGENT_ROLE.id,
+      });
+
+      expect(
+        objectPermissionService.upsertObjectPermissions,
+      ).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
     });
 
     it('should not touch permissions for the admin role', async () => {
