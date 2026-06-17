@@ -114,7 +114,13 @@ export class ReconciliationDecisionRuleService {
     // explicit guard keeps cancel-bearing items out of rule learning AND out
     // of rule matching: a rule must never silently cancel another policy.
     if (this.hasCancelAction(item)) return null;
-    if (!this.isStatusOnlyReviewItem(item)) return null;
+    // Learning is intentionally BROADER than auto-apply: an item that also
+    // carries non-status diffs (paid-through, contact, premium) still learns/
+    // reinforces a status rule — the human's status approval is a valid signal
+    // regardless of what else changed on the row. Auto-apply stays narrow —
+    // ReviewItemService.applyLearnedRulesForReconciliation only applies
+    // STATUS-ONLY pending items (isStatusOnlyReviewItem) — so a status-pattern
+    // rule can never blind-write a mixed item's other fields.
 
     const statusDiff = this.findStatusDiff(item);
 
@@ -506,7 +512,11 @@ export class ReconciliationDecisionRuleService {
     return rule;
   }
 
-  private isStatusOnlyReviewItem(item: ReviewItemForDecisionRule): boolean {
+  // Auto-apply eligibility gate (public so ReviewItemService can enforce it on
+  // the apply path): true only when every actionable diff is status / its
+  // companion expirationDate. Rules are LEARNED from a wider set (see
+  // buildStatusRuleSignature), but only status-only items may be auto-applied.
+  isStatusOnlyReviewItem(item: ReviewItemForDecisionRule): boolean {
     // A cancel action is a destructive write to ANOTHER policy — by
     // definition not "status only", even though its synthetic diff carries
     // crmField null and is invisible to the filter below (audit 1.5).

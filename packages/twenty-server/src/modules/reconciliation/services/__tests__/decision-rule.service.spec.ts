@@ -196,7 +196,7 @@ describe('ReconciliationDecisionRuleService', () => {
       }
     });
 
-    it('returns null when a non-status actionable diff is present', () => {
+    it('still LEARNS a status rule when a non-status actionable diff is present (learning is broader than auto-apply)', () => {
       const { service } = createService();
       const item = createStatusOnlyItem();
 
@@ -210,7 +210,25 @@ describe('ReconciliationDecisionRuleService', () => {
         },
       ];
 
-      expect(service.buildStatusRuleSignature(item, CARRIER_NAME)).toBeNull();
+      // The status approval is a valid signal regardless of the premium diff —
+      // the rule is reinforced...
+      const result = service.buildStatusRuleSignature(item, CARRIER_NAME);
+
+      expect(result).not.toBeNull();
+      expect(result?.signature).toMatchObject({
+        ruleType: 'STATUS_UPDATE',
+        fromStatus: 'ACTIVE_PLACED',
+        toStatus: 'CANCELED',
+      });
+      // ...but the item is NOT auto-apply eligible: applying it would blind-write
+      // the premium too, so it stays for human review.
+      expect(service.isStatusOnlyReviewItem(item)).toBe(false);
+    });
+
+    it('treats a pure status item as auto-apply eligible', () => {
+      const { service } = createService();
+
+      expect(service.isStatusOnlyReviewItem(createStatusOnlyItem())).toBe(true);
     });
 
     it('returns null for unmatched items and missing carrier names', () => {

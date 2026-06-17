@@ -71,8 +71,9 @@ const createService = ({
   // semantics the undo bookkeeping relies on.
   const reviewItemRepo = {
     find: jest.fn(async () => reviewItems.map((item) => ({ ...item }))),
-    count: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
-      reviewItems.filter((item) => matchesWhere(item, where)).length,
+    count: jest.fn(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        reviewItems.filter((item) => matchesWhere(item, where)).length,
     ),
     update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
       const item = reviewItems.find((candidate) => candidate.id === id);
@@ -99,11 +100,10 @@ const createService = ({
     createQueryBuilder: jest.fn().mockReturnValue(policyQueryBuilder),
     // Prefetch IN-query: `where.id` is a typeorm In() FindOperator whose
     // `.value` is the id array.
-    find: jest.fn(
-      async ({ where }: { where: { id: { value: string[] } } }) =>
-        where.id.value
-          .map((id) => policiesLookup[id])
-          .filter((policy): policy is WorkspaceRecord => policy !== undefined),
+    find: jest.fn(async ({ where }: { where: { id: { value: string[] } } }) =>
+      where.id.value
+        .map((id) => policiesLookup[id])
+        .filter((policy): policy is WorkspaceRecord => policy !== undefined),
     ),
     findOne: jest.fn(
       async ({ where }: { where: { id: string } }) =>
@@ -949,6 +949,46 @@ describe('ReviewItemService', () => {
       expect(item.decisionRuleSignatureHash).toBe(rule.signatureHash);
       expect(item.autoAppliedAt).toEqual(expect.any(String));
       expect(rule.autoAppliedCount).toBe(1);
+    });
+
+    it('never auto-applies a MIXED pending item (status + another field), even when its status signature matches an active rule', async () => {
+      // A status rule may be LEARNED from this item, but auto-apply must not
+      // touch it: applying would blind-write the premium diff that still needs
+      // human review. The rule is built from the clean status shape, whose
+      // signature the mixed item shares.
+      const rule = createRule(
+        RULE_ID,
+        signatureHashFor(createReviewItem(statusOnlyOverrides())),
+      );
+      const mixedOverrides = statusOnlyOverrides();
+
+      mixedOverrides.fieldDiffs = [
+        ...(mixedOverrides.fieldDiffs as Record<string, unknown>[]),
+        {
+          field: 'premium',
+          crmField: 'premium',
+          crmObjectType: 'policy',
+          bobValue: '120.00',
+          crmValue: '110.00',
+        },
+      ];
+
+      const item = createReviewItem(mixedOverrides);
+      const { service, policyRepo } = createService({
+        reviewItems: [item],
+        matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
+        decisionRules: [rule],
+      });
+
+      const result = await service.applyLearnedRulesForReconciliation(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        { carrierName: CARRIER_NAME, rules: [rule] },
+      );
+
+      expect(result).toEqual({ updatedCount: 0, skippedCount: 0 });
+      expect(policyRepo.update).not.toHaveBeenCalled();
+      expect(item.decision).toBe('PENDING');
     });
 
     it('never auto-applies a cancel-bearing pending item, even when a rule matches its status shape', async () => {
