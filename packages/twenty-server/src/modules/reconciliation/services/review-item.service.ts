@@ -557,6 +557,14 @@ export class ReviewItemService {
             // filter keeps the policy visible at the candidate-selection
             // point too.
             if (this.decisionRuleService.hasCancelAction(item)) continue;
+            // Auto-apply is narrower than learning: a status rule may be
+            // reinforced by mixed items (status + other field diffs), but
+            // auto-apply must only ever write the status (+ companion
+            // expirationDate). A mixed pending item keeps its other diffs
+            // (paid-through, contact, premium) for human review, so it is never
+            // auto-applied even when its status signature matches an active rule.
+            if (!this.decisionRuleService.isStatusOnlyReviewItem(item))
+              continue;
 
             const signatureResult =
               this.decisionRuleService.buildStatusRuleSignature(
