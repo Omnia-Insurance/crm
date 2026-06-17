@@ -1,0 +1,285 @@
+// Application and roles
+export const TELEPHONY_APP_UNIVERSAL_IDENTIFIER =
+  '75e0be23-05d7-43d0-903a-5773f4fb9e71';
+export const TELEPHONY_DEFAULT_ROLE_UNIVERSAL_IDENTIFIER =
+  'ea4637da-2bf3-4b13-b54d-0c2f134e3708';
+export const TELEPHONY_AGENT_ROLE_UNIVERSAL_IDENTIFIER =
+  '48560953-3012-436a-b579-ce152d935642';
+export const TELEPHONY_MANAGER_ROLE_UNIVERSAL_IDENTIFIER =
+  '1d8b1534-887e-49c4-b22f-2d7688f5466f';
+
+// Brokerage-owned objects used by Telephony.
+export const BROKERAGE_AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER =
+  'f63fe6ff-3334-4143-9ec1-67f491d8127c';
+export const BROKERAGE_CALL_OBJECT_UNIVERSAL_IDENTIFIER =
+  '07f196c2-1e42-47e8-a882-fcf00cd01b16';
+export const BROKERAGE_LEAD_SOURCE_OBJECT_UNIVERSAL_IDENTIFIER =
+  '3a2a8707-b67f-4197-8f70-2016755da912';
+
+// Objects
+export const TELEPHONY_CAMPAIGN_OBJECT_ID =
+  '8ef1fae7-92bf-4056-a060-c27087463d31';
+export const TELEPHONY_CAMPAIGN_LEAD_OBJECT_ID =
+  '4821a96c-5225-46d1-9b44-7ceefb9c46fb';
+export const TELEPHONY_DISPOSITION_OBJECT_ID =
+  '107d7416-be52-4011-9548-179c487a9c52';
+export const TELEPHONY_CALL_SESSION_OBJECT_ID =
+  '191c7879-8cfd-4215-acc5-dceb84075d96';
+export const TELEPHONY_CALL_EVENT_OBJECT_ID =
+  '327b7ea7-6fcb-4346-a4dd-2a6869a64f99';
+export const TELEPHONY_AGENT_PRESENCE_OBJECT_ID =
+  '3d7ce46b-ee84-4cc1-b4d5-102585050f93';
+export const TELEPHONY_INBOUND_QUEUE_OBJECT_ID =
+  '46208d0b-07cc-4443-a13c-d8b46302ffe9';
+
+// Campaign fields
+export const TC_NAME_FIELD_ID = '141fece3-f637-46bf-9d8c-7fe28b378e82';
+export const TC_STATUS_FIELD_ID = 'ae296eb1-2e8e-41a4-9e7d-8305cddc7d5f';
+export const TC_PRIORITY_FIELD_ID = '3f7588b6-74df-483a-b1bd-e210070e87e4';
+export const TC_DESCRIPTION_FIELD_ID =
+  'b4ecb40f-e35b-4598-a83d-2ffe456d537c';
+export const TC_ALLOWED_START_LOCAL_TIME_FIELD_ID =
+  '6ec383f7-f9ec-4aa1-9d5e-e55eb8cde8ca';
+export const TC_ALLOWED_END_LOCAL_TIME_FIELD_ID =
+  '5fff5eea-350f-451b-924b-7c02cb7faf1b';
+export const TC_DEFAULT_TIME_ZONE_FIELD_ID =
+  '9240dd95-7dea-4f21-b03a-8310aba7ad16';
+export const TC_RECORDING_POLICY_FIELD_ID =
+  '226fd2ac-8ef0-4ba8-b8bd-f947530102c0';
+export const TC_AGENT_POOL_RULES_FIELD_ID =
+  '9521a5b4-0a12-4155-855d-760a47772067';
+export const TC_MAX_ATTEMPTS_FIELD_ID =
+  '7875299b-2a43-4107-90b6-7d74a7860391';
+export const TC_LEAD_SOURCE_FIELD_ID =
+  '6eb1971a-eb64-4153-9410-f72411a04c39';
+export const TC_CAMPAIGN_LEADS_FIELD_ID =
+  'd6009d63-0df6-4b18-a3b9-278a7761c516';
+export const TC_DISPOSITIONS_FIELD_ID =
+  '338cbd26-3365-42c4-a5e3-1dc65b4a6abc';
+export const TC_CALL_SESSIONS_FIELD_ID =
+  'c71b7598-3f4d-4831-92bb-aa81dac6cbe8';
+export const TC_INBOUND_QUEUES_FIELD_ID =
+  'c5f8b4ae-1e94-4758-90c2-2d6aff0b8bb3';
+
+// Campaign Lead fields
+export const TCL_NAME_FIELD_ID = '86537f64-e48a-49c0-8a6b-6b1466d057f8';
+export const TCL_STATUS_FIELD_ID = '0e80a4ce-d336-4f62-b0e3-37a3af380708';
+export const TCL_PRIORITY_FIELD_ID = '46c792b0-1885-47a7-a50c-0a873911e497';
+export const TCL_ATTEMPTS_FIELD_ID = '3f714c4b-e746-4fe1-a5ee-501a3ae84092';
+export const TCL_NEXT_CALL_AT_FIELD_ID =
+  '39277142-9a6d-4269-ae8b-29a8333e72c9';
+export const TCL_LAST_ATTEMPT_AT_FIELD_ID =
+  '0bd9f8db-b954-498f-80d0-64ca6e855cfd';
+export const TCL_CALLBACK_AT_FIELD_ID =
+  '220a389d-4ce0-4b61-a270-8024c04d2362';
+export const TCL_LOCK_OWNER_TOKEN_FIELD_ID =
+  '45153b1c-cd30-4527-b3ed-f01ab83001a4';
+export const TCL_LOCKED_AT_FIELD_ID =
+  '4a1bcc27-0108-4c5c-9b9f-9f13a64b5284';
+export const TCL_LOCK_EXPIRES_AT_FIELD_ID =
+  '1a7d7c16-5a9d-4d33-a39f-bd89e1530e27';
+export const TCL_BLOCKED_REASON_FIELD_ID =
+  '4f190d6b-8057-4e4a-83d1-457a6c66e663';
+export const TCL_SOURCE_LIST_KEY_FIELD_ID =
+  '13da3623-7845-44ad-8296-821fffb15cfb';
+export const TCL_RAW_IMPORT_PAYLOAD_FIELD_ID =
+  '411a4ab3-b02a-451d-abf5-9f2e7b55a9f0';
+export const TCL_CAMPAIGN_FIELD_ID =
+  '25f00699-5bfb-468d-85fa-f9c1645c1639';
+export const TCL_LEAD_FIELD_ID = '65b78b6c-43d9-4eee-a70e-17eab536e7a1';
+export const TCL_LAST_DISPOSITION_FIELD_ID =
+  'c4abbf19-428f-4d7d-9f74-971fb6d308db';
+export const TCL_LOCKED_BY_AGENT_FIELD_ID =
+  '943acec4-99c6-45c7-8fb2-4513137e6a5e';
+export const TCL_CALL_SESSIONS_FIELD_ID =
+  '36987944-3d25-4788-99c7-49029bc3581c';
+export const TCL_CALL_EVENTS_FIELD_ID =
+  '5c92b2c7-fb5d-4fc5-a5a4-f5191716e78c';
+
+// Disposition fields
+export const TD_NAME_FIELD_ID = '97a0a0e1-0a65-4a50-9d2e-626593b1a91b';
+export const TD_CODE_FIELD_ID = '482ecead-1844-451f-999b-f35f67ddb81c';
+export const TD_CATEGORY_FIELD_ID = '0fb47a43-83cb-42f4-8f38-216c4940a068';
+export const TD_RETRY_DELAY_MINUTES_FIELD_ID =
+  'c93fbe7e-db9d-49b0-87ca-56f5d0090c0d';
+export const TD_REQUIRES_CALLBACK_FIELD_ID =
+  '168623a7-9d17-49a7-b8aa-411d43cf301a';
+export const TD_IS_TERMINAL_FIELD_ID =
+  '53196572-2274-4760-a712-e06fa25ea6ee';
+export const TD_MAPS_LEAD_STATUS_TO_FIELD_ID =
+  '86d4e74d-7db5-4ffa-82ba-d7906bc492bd';
+export const TD_SORT_ORDER_FIELD_ID =
+  '97605d12-e1b3-4ca4-a4bc-a3ab65d22d92';
+export const TD_ACTIVE_FIELD_ID = 'dbb0595b-edc3-409f-9a83-0a910b5815a9';
+export const TD_CAMPAIGN_FIELD_ID =
+  '65c20438-2d0e-4d18-9a31-042886afeaca';
+export const TD_CAMPAIGN_LEADS_FIELD_ID =
+  '58fb2d0a-5348-4424-aaeb-e306352d68f2';
+export const TD_CALL_SESSIONS_FIELD_ID =
+  'e59aaae6-0ed4-40b9-8fda-fa84fa8b4308';
+
+// Call Session fields
+export const TCS_NAME_FIELD_ID = '2d04cdc3-cb2c-4c8c-82bd-bcb2d0309777';
+export const TCS_DIRECTION_FIELD_ID =
+  'b2f4084b-ba76-4205-b6d9-dffa5a5fbe8f';
+export const TCS_STATUS_FIELD_ID = '78c3fe2e-45c3-4c1e-870c-3eb2ad69e24f';
+export const TCS_PROVIDER_FIELD_ID =
+  '338ddb98-8b3f-446e-b56a-04c481ccb077';
+export const TCS_PROVIDER_CALL_ID_FIELD_ID =
+  '314739f0-3956-4a35-a004-b1703fb6e740';
+export const TCS_PROVIDER_PARENT_CALL_ID_FIELD_ID =
+  '661d3d15-1844-4d1b-9555-9bacb75da370';
+export const TCS_PROVIDER_RECORDING_ID_FIELD_ID =
+  'beb382a7-d9fe-4810-ad06-e439a6ebc13b';
+export const TCS_FROM_NUMBER_FIELD_ID =
+  '562da755-802b-47c0-8757-3a191f1e6cb9';
+export const TCS_TO_NUMBER_FIELD_ID =
+  'eb832723-71c0-4f6f-a4a2-69219737516e';
+export const TCS_STARTED_AT_FIELD_ID =
+  'd5ac9e5e-9dce-41fb-b7d8-8fbc33cf39d4';
+export const TCS_ANSWERED_AT_FIELD_ID =
+  '8b12e2f2-bd5b-4cdd-a647-0767f0cc7473';
+export const TCS_ENDED_AT_FIELD_ID =
+  '657eba8e-cd44-4e75-ae06-01f1de9aef88';
+export const TCS_DURATION_SECONDS_FIELD_ID =
+  '0a1be904-f680-435a-9d47-200e952a8b96';
+export const TCS_RECORDING_URL_FIELD_ID =
+  'c1c20762-4c34-447a-9c8b-a2541cffdebf';
+export const TCS_RECORDING_STATUS_FIELD_ID =
+  'ad299c5e-cbec-4861-893e-6a549186ec79';
+export const TCS_NOTES_FIELD_ID = 'd77b137d-2aeb-4a17-a8e2-967aff3fba2e';
+export const TCS_CAMPAIGN_LEAD_FIELD_ID =
+  '602e20b4-3677-410c-ab90-b618de3c68c8';
+export const TCS_CAMPAIGN_FIELD_ID =
+  '4b2f2e94-c4cc-4e4d-8cd5-9880f22eb9c5';
+export const TCS_AGENT_FIELD_ID = 'ad30755e-5379-459f-a86c-c5861d7ec6c8';
+export const TCS_LEAD_FIELD_ID = '6cdc49b1-ec74-4cca-8341-bbd8f266c28f';
+export const TCS_DISPOSITION_FIELD_ID =
+  '46fb00f6-088b-4c9e-8163-40a30932780c';
+export const TCS_BROKERAGE_CALL_FIELD_ID =
+  '46dc6046-0053-458f-9844-bbe24c514e96';
+export const TCS_EVENTS_FIELD_ID =
+  'ad943c39-4238-465b-8518-73b2c883a616';
+export const TCS_AGENT_PRESENCES_FIELD_ID =
+  'ddc62e94-1ce5-48ff-867f-9126f5faaf4e';
+
+// Call Event fields
+export const TCE_NAME_FIELD_ID = '234025bf-8cee-4471-8c8f-c5f8fbfa4051';
+export const TCE_EVENT_TYPE_FIELD_ID =
+  '8d69951e-e20e-4001-83c5-2bff8a980acf';
+export const TCE_EVENT_TIME_FIELD_ID =
+  'd0270e88-b40f-474e-a984-34e7397ed349';
+export const TCE_PROVIDER_FIELD_ID =
+  'd0bee9a7-7394-48ef-9ed1-e376ddb56f0c';
+export const TCE_PROVIDER_EVENT_ID_FIELD_ID =
+  '167d165d-8926-4a8e-9760-4c7e560291d2';
+export const TCE_PROVIDER_CALL_ID_FIELD_ID =
+  '5172aaa9-f9fc-45df-917c-26382852669b';
+export const TCE_PAYLOAD_FIELD_ID =
+  '5c1a373d-42de-4d5f-a856-2f4322e4118b';
+export const TCE_BLOCKED_REASON_FIELD_ID =
+  '87da01c8-77dc-4636-a229-42c4eb80e839';
+export const TCE_CALL_SESSION_FIELD_ID =
+  '15171ca3-b088-42c0-8581-f47515be260b';
+export const TCE_CAMPAIGN_LEAD_FIELD_ID =
+  '2f89cba5-3fc7-40b1-ab99-c6600f520f6e';
+export const TCE_AGENT_FIELD_ID = '506d3220-83cd-4a61-8113-9f0a0f14d9c3';
+
+// Agent Presence fields
+export const TAP_NAME_FIELD_ID = '92852f17-cb1d-4ece-a911-fc08039ee408';
+export const TAP_STATUS_FIELD_ID = '04f73368-30e3-425a-a86c-5f24bd763e60';
+export const TAP_SESSION_ID_FIELD_ID =
+  'e1cd20dd-7f69-4fc2-883c-7072095488ad';
+export const TAP_BROWSER_TAB_ID_FIELD_ID =
+  '4e074e29-1fa0-4353-93d6-e25d487097b5';
+export const TAP_LAST_HEARTBEAT_AT_FIELD_ID =
+  'dd0e9414-3f8d-44a0-b9a2-33a1bb27ab30';
+export const TAP_STATUS_CHANGED_AT_FIELD_ID =
+  'ff82ae45-b3df-424b-ba4e-2e0041039f99';
+export const TAP_AGENT_FIELD_ID = '831f3b56-10ca-417d-a040-24ffa5e9d6fe';
+export const TAP_WORKSPACE_MEMBER_FIELD_ID =
+  '9df92d56-0ff4-4a71-85d7-ec2a0c7e2d58';
+export const TAP_CURRENT_CALL_SESSION_FIELD_ID =
+  'cc29bfb4-b73f-4606-8ce5-4321b7a04553';
+
+// Inbound Queue fields
+export const TIQ_NAME_FIELD_ID = '7c3d401b-e553-4723-96ce-d7a4a2ea9f5f';
+export const TIQ_PROVIDER_NUMBER_FIELD_ID =
+  '5eee6698-4da4-4e6e-b16b-e8bdb3c21526';
+export const TIQ_FRIENDLY_NAME_FIELD_ID =
+  'a1470e4e-05aa-44d4-87b2-a0ef30f01a81';
+export const TIQ_STATUS_FIELD_ID = 'fc781f90-a93a-4892-949f-65e6a965f353';
+export const TIQ_PRIORITY_FIELD_ID =
+  'd08690d1-e233-492d-bc4e-19c25693c258';
+export const TIQ_OVERFLOW_ACTION_FIELD_ID =
+  '7de981d2-f2c5-4ce6-8655-cd3c7bbfcb2f';
+export const TIQ_MISSED_CALL_DISPOSITION_FIELD_ID =
+  '27d0af35-e59a-4a17-be5a-4df333f2a735';
+export const TIQ_PROVIDER_CONFIG_FIELD_ID =
+  '834109a4-c3da-4ca6-8eed-e1cabfc4395d';
+export const TIQ_CAMPAIGN_FIELD_ID =
+  '9ac24f02-9821-4465-9e01-cf9f884c7de2';
+
+// Reverse extension fields on Brokerage/standard objects
+export const LEAD_TELEPHONY_CAMPAIGN_LEADS_FIELD_ID =
+  'b03bbc24-955b-4035-b10f-7992f25fc6dc';
+export const LEAD_TELEPHONY_CALL_SESSIONS_FIELD_ID =
+  '178397ec-0a31-4301-85c7-244ff3d072e6';
+export const AGENT_TELEPHONY_LOCKED_CAMPAIGN_LEADS_FIELD_ID =
+  'b14370b4-cf41-4a19-82f1-0c1f4a5c85d3';
+export const AGENT_TELEPHONY_CALL_SESSIONS_FIELD_ID =
+  '6b7d9f58-8ce9-4a6e-a6c6-db679a24d99b';
+export const AGENT_TELEPHONY_CALL_EVENTS_FIELD_ID =
+  '940d9537-896a-485c-9f68-d4ba01fcbb4b';
+export const AGENT_TELEPHONY_PRESENCES_FIELD_ID =
+  '2a837d75-6b92-4303-88de-a1b315f92cdf';
+export const BROKERAGE_CALL_TELEPHONY_SESSIONS_FIELD_ID =
+  '2a23ac77-5fd9-46e8-b29c-f0abcb8d7182';
+export const WORKSPACE_MEMBER_TELEPHONY_PRESENCES_FIELD_ID =
+  'a7fdaf0a-3d0b-4450-a275-c2c9e0d817f0';
+export const LEAD_SOURCE_TELEPHONY_CAMPAIGNS_FIELD_ID =
+  '4529f5c3-d1f9-4689-a1fa-3362bf7e4592';
+
+// Front component, page layout, and navigation
+export const TELEPHONY_AGENT_SOFTPHONE_FRONT_COMPONENT_ID =
+  'c570c233-4201-436b-96eb-a24d6b7a14e5';
+export const TELEPHONY_AGENT_SOFTPHONE_PAGE_LAYOUT_ID =
+  '2bcae31f-2860-488b-96e3-09e42b3aede7';
+export const TELEPHONY_AGENT_SOFTPHONE_PAGE_TAB_ID =
+  'b6cac900-46e7-41c7-b90c-0a86b6165fcd';
+export const TELEPHONY_AGENT_SOFTPHONE_PAGE_WIDGET_ID =
+  'c441f80f-c5e2-48d6-8afa-85df1ec2bfc4';
+export const TELEPHONY_NAV_FOLDER_ID =
+  'a0d11dcb-d491-4431-b9c8-8aae2388912f';
+export const TELEPHONY_NAV_SOFTPHONE_ID =
+  '11099539-5db2-4c0b-8958-32c76eb2e7ca';
+export const TELEPHONY_NAV_CAMPAIGNS_ID =
+  '34a5f914-ac9f-4b1a-a717-2fecb7d5d2de';
+export const TELEPHONY_NAV_CAMPAIGN_LEADS_ID =
+  '6eb4c9c8-968f-4a32-8726-5c3063018bae';
+export const TELEPHONY_NAV_DISPOSITIONS_ID =
+  '1368d7e1-e3c5-4848-981f-df7b76c9ee9b';
+export const TELEPHONY_NAV_CALL_SESSIONS_ID =
+  '43fac998-5c09-40f2-be23-c834a9bb4c42';
+export const TELEPHONY_NAV_CALL_EVENTS_ID =
+  '0ba8096a-cbbd-4749-83b5-5a181c661450';
+export const TELEPHONY_NAV_AGENT_PRESENCE_ID =
+  '1c3502b1-0d42-41f8-82fa-216d18815ecf';
+export const TELEPHONY_NAV_INBOUND_QUEUES_ID =
+  'a529c70e-17c7-465b-99e4-34a6fe883929';
+
+// Views
+export const TELEPHONY_ACTIVE_CAMPAIGNS_VIEW_ID =
+  '3b488466-de68-44db-bb21-e68eb91dcdc8';
+export const TELEPHONY_READY_CAMPAIGN_LEADS_VIEW_ID =
+  'c9f5b97e-a82a-411b-a9d5-ba02fb2737c9';
+export const TELEPHONY_DISPOSITIONS_VIEW_ID =
+  '1dc737f6-63e2-423f-8a2a-e3ad9dcdb23a';
+export const TELEPHONY_ACTIVE_CALL_SESSIONS_VIEW_ID =
+  'ecda3804-7385-4600-860b-7ef32f179a47';
+export const TELEPHONY_BLOCKED_ATTEMPTS_VIEW_ID =
+  'a4369900-010a-4955-bc42-c5ed561680b4';
+export const TELEPHONY_AGENT_PRESENCE_VIEW_ID =
+  '03febf7a-756e-488c-b794-1602b42a5f06';
+export const TELEPHONY_INBOUND_QUEUES_VIEW_ID =
+  'e5e99335-0017-4238-9a1a-d98b36a05220';

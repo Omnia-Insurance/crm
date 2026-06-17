@@ -1,0 +1,242 @@
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+  STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS,
+} from 'twenty-sdk/define';
+
+import { TELEPHONY_CAMPAIGN_LEAD_STATUS_OPTIONS } from 'src/constants/field-options';
+import {
+  AGENT_TELEPHONY_LOCKED_CAMPAIGN_LEADS_FIELD_ID,
+  BROKERAGE_AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER,
+  LEAD_TELEPHONY_CAMPAIGN_LEADS_FIELD_ID,
+  TC_CAMPAIGN_LEADS_FIELD_ID,
+  TCL_ATTEMPTS_FIELD_ID,
+  TCL_BLOCKED_REASON_FIELD_ID,
+  TCL_CALLBACK_AT_FIELD_ID,
+  TCL_CALL_SESSIONS_FIELD_ID,
+  TCL_CALL_EVENTS_FIELD_ID,
+  TCL_CAMPAIGN_FIELD_ID,
+  TCL_LAST_ATTEMPT_AT_FIELD_ID,
+  TCL_LAST_DISPOSITION_FIELD_ID,
+  TCL_LEAD_FIELD_ID,
+  TCL_LOCK_EXPIRES_AT_FIELD_ID,
+  TCL_LOCK_OWNER_TOKEN_FIELD_ID,
+  TCL_LOCKED_AT_FIELD_ID,
+  TCL_LOCKED_BY_AGENT_FIELD_ID,
+  TCL_NAME_FIELD_ID,
+  TCL_NEXT_CALL_AT_FIELD_ID,
+  TCL_PRIORITY_FIELD_ID,
+  TCL_RAW_IMPORT_PAYLOAD_FIELD_ID,
+  TCL_SOURCE_LIST_KEY_FIELD_ID,
+  TCL_STATUS_FIELD_ID,
+  TCS_CAMPAIGN_LEAD_FIELD_ID,
+  TCE_CAMPAIGN_LEAD_FIELD_ID,
+  TELEPHONY_CALL_EVENT_OBJECT_ID,
+  TD_CAMPAIGN_LEADS_FIELD_ID,
+  TELEPHONY_CALL_SESSION_OBJECT_ID,
+  TELEPHONY_CAMPAIGN_LEAD_OBJECT_ID,
+  TELEPHONY_CAMPAIGN_OBJECT_ID,
+  TELEPHONY_DISPOSITION_OBJECT_ID,
+} from 'src/constants/universal-identifiers';
+
+export default defineObject({
+  universalIdentifier: TELEPHONY_CAMPAIGN_LEAD_OBJECT_ID,
+  nameSingular: 'telephonyCampaignLead',
+  namePlural: 'telephonyCampaignLeads',
+  labelSingular: 'Campaign Lead',
+  labelPlural: 'Campaign Leads',
+  description:
+    'Queue membership linking a Telephony Campaign to a canonical Lead.',
+  icon: 'IconTargetArrow',
+  labelIdentifierFieldMetadataUniversalIdentifier: TCL_NAME_FIELD_ID,
+  fields: [
+    {
+      universalIdentifier: TCL_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'name',
+      label: 'Name',
+      icon: 'IconAbc',
+    },
+    {
+      universalIdentifier: TCL_STATUS_FIELD_ID,
+      type: FieldType.SELECT,
+      name: 'status',
+      label: 'Status',
+      icon: 'IconStatusChange',
+      defaultValue: "'READY'",
+      options: TELEPHONY_CAMPAIGN_LEAD_STATUS_OPTIONS,
+    },
+    {
+      universalIdentifier: TCL_PRIORITY_FIELD_ID,
+      type: FieldType.NUMBER,
+      name: 'priority',
+      label: 'Priority',
+      icon: 'IconSortAscending',
+      defaultValue: 100,
+    },
+    {
+      universalIdentifier: TCL_ATTEMPTS_FIELD_ID,
+      type: FieldType.NUMBER,
+      name: 'attempts',
+      label: 'Attempts',
+      icon: 'IconRepeat',
+      defaultValue: 0,
+    },
+    {
+      universalIdentifier: TCL_NEXT_CALL_AT_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'nextCallAt',
+      label: 'Next Call At',
+      icon: 'IconCalendarTime',
+    },
+    {
+      universalIdentifier: TCL_LAST_ATTEMPT_AT_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'lastAttemptAt',
+      label: 'Last Attempt At',
+      icon: 'IconCalendar',
+    },
+    {
+      universalIdentifier: TCL_CALLBACK_AT_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'callbackAt',
+      label: 'Callback At',
+      icon: 'IconCalendarEvent',
+    },
+    {
+      universalIdentifier: TCL_LOCK_OWNER_TOKEN_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'lockOwnerToken',
+      label: 'Lock Owner Token',
+      icon: 'IconLock',
+    },
+    {
+      universalIdentifier: TCL_LOCKED_AT_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'lockedAt',
+      label: 'Locked At',
+      icon: 'IconLock',
+    },
+    {
+      universalIdentifier: TCL_LOCK_EXPIRES_AT_FIELD_ID,
+      type: FieldType.DATE_TIME,
+      name: 'lockExpiresAt',
+      label: 'Lock Expires At',
+      icon: 'IconClockCancel',
+    },
+    {
+      universalIdentifier: TCL_BLOCKED_REASON_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'blockedReason',
+      label: 'Blocked Reason',
+      icon: 'IconShieldX',
+    },
+    {
+      universalIdentifier: TCL_SOURCE_LIST_KEY_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'sourceListKey',
+      label: 'Source List Key',
+      icon: 'IconListDetails',
+    },
+    {
+      universalIdentifier: TCL_RAW_IMPORT_PAYLOAD_FIELD_ID,
+      type: FieldType.RAW_JSON,
+      name: 'rawImportPayload',
+      label: 'Raw Import Payload',
+      icon: 'IconJson',
+    },
+    {
+      universalIdentifier: TCL_CAMPAIGN_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'campaign',
+      label: 'Campaign',
+      icon: 'IconSpeakerphone',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_CAMPAIGN_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier: TC_CAMPAIGN_LEADS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.CASCADE,
+        joinColumnName: 'campaignId',
+      },
+    },
+    {
+      universalIdentifier: TCL_LEAD_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'lead',
+      label: 'Lead',
+      icon: 'IconUser',
+      relationTargetObjectMetadataUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier,
+      relationTargetFieldMetadataUniversalIdentifier:
+        LEAD_TELEPHONY_CAMPAIGN_LEADS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'leadId',
+      },
+    },
+    {
+      universalIdentifier: TCL_LAST_DISPOSITION_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'lastDisposition',
+      label: 'Last Disposition',
+      icon: 'IconChecklist',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_DISPOSITION_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier:
+        TD_CAMPAIGN_LEADS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'lastDispositionId',
+      },
+    },
+    {
+      universalIdentifier: TCL_LOCKED_BY_AGENT_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'lockedByAgent',
+      label: 'Locked By Agent',
+      icon: 'IconUserCheck',
+      relationTargetObjectMetadataUniversalIdentifier:
+        BROKERAGE_AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        AGENT_TELEPHONY_LOCKED_CAMPAIGN_LEADS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'lockedByAgentId',
+      },
+    },
+    {
+      universalIdentifier: TCL_CALL_SESSIONS_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'callSessions',
+      label: 'Call Sessions',
+      icon: 'IconPhoneCalling',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_CALL_SESSION_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier:
+        TCS_CAMPAIGN_LEAD_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    {
+      universalIdentifier: TCL_CALL_EVENTS_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'callEvents',
+      label: 'Call Events',
+      icon: 'IconTimelineEvent',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_CALL_EVENT_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier:
+        TCE_CAMPAIGN_LEAD_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+  ],
+});

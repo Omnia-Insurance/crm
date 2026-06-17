@@ -946,6 +946,162 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/application/application-upgrade/application-upgrade.resolver.ts" \
   "@AuthUser()" \
   "App upgrades must forward user context to post-install hooks"
+echo ""
+echo "--- Telephony App ---"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/package.json" \
+  "Telephony app package must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/CODEX_HANDOFF.md" \
+  "Telephony handoff plan must exist for future implementation agents"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/package.json" \
+  "\"lint\": \"oxlint -c .oxlintrc.json .\"" \
+  "Telephony app lint script must stay executable"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/tsconfig.json" \
+  "\"jsx\": \"react-jsx\"" \
+  "Telephony app front component TypeScript must compile JSX"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/application-config.ts" \
+  "displayName: 'Telephony'" \
+  "Telephony app must keep its user-facing app name"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/application-config.ts" \
+  "TELEPHONY_PROVIDER_WEBHOOK_SECRET" \
+  "Telephony app must keep provider webhook secret configuration"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/application-config.ts" \
+  "Install Brokerage first" \
+  "Telephony app must document its Brokerage dependency"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/constants/universal-identifiers.ts" \
+  "Telephony object and field identifiers must stay stable"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/constants/universal-identifiers.ts" \
+  "BROKERAGE_AGENT_PROFILE_OBJECT_UNIVERSAL_IDENTIFIER" \
+  "Telephony must link to Brokerage Agent Profile rather than redefining agents"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/constants/universal-identifiers.ts" \
+  "BROKERAGE_CALL_OBJECT_UNIVERSAL_IDENTIFIER" \
+  "Telephony must link new sessions to final Brokerage Calls"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/campaign.ts" \
+  "Telephony Campaign object must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/objects/campaign.ts" \
+  "nameSingular: 'telephonyCampaign'" \
+  "Telephony Campaign internal object name must stay stable"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/campaign-lead.ts" \
+  "Telephony Campaign Lead queue object must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/objects/campaign-lead.ts" \
+  "name: 'lockExpiresAt'" \
+  "Telephony Campaign Lead must keep routing lease expiry"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/disposition.ts" \
+  "Telephony Disposition object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/call-session.ts" \
+  "Telephony Call Session object must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/objects/call-session.ts" \
+  "name: 'providerCallId'" \
+  "Telephony Call Session must store provider call identifiers outside Brokerage core fields"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/call-event.ts" \
+  "Telephony Call Event audit object must exist"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/objects/call-event.ts" \
+  "name: 'payload'" \
+  "Telephony Call Event must preserve normalized provider/audit payloads"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/agent-presence.ts" \
+  "Telephony Agent Presence object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/objects/inbound-queue.ts" \
+  "Telephony Inbound Queue object must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/front-components/agent-softphone-workspace.tsx" \
+  "Telephony agent softphone front component must exist"
+check_file_not_contains \
+  "packages/twenty-apps/internal/telephony/src/front-components/agent-softphone-workspace.tsx" \
+  " as " \
+  "Telephony front component must avoid TypeScript assertion casts"
+check_file_contains \
+  "packages/twenty-apps/internal/telephony/src/front-components/agent-softphone-workspace.tsx" \
+  "parseGraphQlResponse" \
+  "Telephony front component must validate metadata GraphQL responses"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/page-layouts/agent-softphone-page-layout.ts" \
+  "Telephony softphone page layout must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/navigation-menu-items/telephony-folder.navigation-menu-item.ts" \
+  "Telephony sidebar folder must exist"
+check_file_exists \
+  "packages/twenty-apps/internal/telephony/src/views/blocked-attempts.view.ts" \
+  "Telephony blocked-attempt audit view must exist"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/telephony.module.ts" \
+  "Telephony runtime module must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/modules.module.ts" \
+  "TelephonyModule" \
+  "Telephony runtime module must be registered in the application modules tree"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/metadata-engine.module.ts" \
+  "TelephonyModule" \
+  "Telephony resolver must be registered in the metadata GraphQL module tree"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/telephony.resolver.ts" \
+  "Telephony metadata resolver must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/telephony.resolver.ts" \
+  "requestNextCampaignLead" \
+  "Telephony resolver must expose campaign lead routing"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/telephony.resolver.ts" \
+  "submitCallDisposition" \
+  "Telephony resolver must expose disposition submission"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/controllers/telephony-provider-webhook.controller.ts" \
+  "Telephony provider webhook controller must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/controllers/telephony-provider-webhook.controller.ts" \
+  "@Controller('webhooks/telephony')" \
+  "Telephony provider webhook route must stay public and stable"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/services/telephony.service.ts" \
+  "Telephony runtime service must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/services/telephony.service.ts" \
+  "WorkspaceRepository<T>" \
+  "Telephony service must use typed workspace repositories instead of coercion"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/services/telephony.service.ts" \
+  "isWithinAllowedCallingWindow" \
+  "Telephony service must enforce lead-local calling windows"
+check_file_not_contains \
+  "packages/twenty-server/src/modules/telephony/services/telephony.service.ts" \
+  " as " \
+  "Telephony service must avoid TypeScript assertion casts"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/providers/twilio-compatible-telephony-provider.adapter.ts" \
+  "Telephony Twilio/Plivo-compatible provider adapter must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/telephony/providers/twilio-compatible-telephony-provider.adapter.ts" \
+  "normalizeWebhookEvent" \
+  "Telephony provider adapter must normalize webhook events"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/utils/local-calling-window.util.ts" \
+  "Telephony local calling window utility must exist"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/providers/__tests__/twilio-compatible-telephony-provider.adapter.spec.ts" \
+  "Telephony provider normalization tests must exist"
+check_file_exists \
+  "packages/twenty-server/src/modules/telephony/utils/__tests__/local-calling-window.util.spec.ts" \
+  "Telephony local calling window tests must exist"
 check_file_contains \
   "packages/twenty-apps/internal/compliance-qa/src/logic-functions/start-compliance-qa.ts" \
   "readCachedTranscriptForCall" \

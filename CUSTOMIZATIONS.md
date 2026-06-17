@@ -147,6 +147,17 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `query-hooks/call-create-many.post-query.hook.ts` — Same for bulk
 - `query-hooks/call-query-hook.module.ts` — Module registration
 
+### `packages/twenty-server/src/modules/telephony/`
+
+- `telephony.module.ts` — CRM-owned Telephony runtime module registered in both the main modules tree and the metadata GraphQL module tree
+- `telephony.resolver.ts` — Metadata GraphQL mutations for agent sessions, ready-state changes, lead routing, campaign-lead release, outbound call start, disposition submit, and inbound transfer/end actions
+- `controllers/telephony-provider-webhook.controller.ts` — Public CPaaS provider webhook endpoint for call lifecycle and recording lifecycle events
+- `services/telephony.service.ts` — Durable routing/session coordinator backed by Telephony app workspace objects, with typed workspace-record repositories, DNC enforcement, lead-local calling-window enforcement, routing leases, provider event persistence, disposition transitions, and no unsafe type assertions
+- `services/telephony-provider-registry.service.ts` — Provider adapter lookup, defaulting to the Twilio/Plivo-compatible adapter
+- `providers/twilio-compatible-telephony-provider.adapter.ts` — First CPaaS adapter for access-token placeholders, outbound call instructions, webhook shared-secret validation, and Twilio/Plivo-style event normalization
+- `utils/local-calling-window.util.ts` and `utils/normalize-phone-number.util.ts` — Compliance/routing helpers with unit coverage
+- `providers/__tests__/*` and `utils/__tests__/*` — Focused unit tests for provider event normalization and local calling-window enforcement
+
 ### `packages/twenty-apps/internal/compliance-qa/`
 
 - `.nvmrc`, `.oxlintrc.json`, and `package.json` — Production app packaging and validation metadata. The app deploy action expects a local Node version file, app linting follows the standard Twenty app `oxlint` setup, and the production-ready Compliance app version started at `1.0.0` because tarball deployments reject same/lower versions.
@@ -174,6 +185,18 @@ These directories are 100% Omnia code. Upstream won't touch them, but verify the
 - `src/navigation-menu-items/*` — Sidebar navigation folder `Quality Assurance` with nested Scorecards and Managers views
 - `README.md` — Install/setup instructions for automatic Call event triggering, AWS variables, and QA Manager configuration
 
+### `packages/twenty-apps/internal/telephony/`
+
+- `package.json`, `.nvmrc`, `.oxlintrc.json`, and `tsconfig.json` — Standalone Twenty app package and validation setup for the internal Telephony app
+- `src/application-config.ts` — `Telephony` app registration with provider/server variables and About-page guidance that Brokerage must be installed first
+- `src/constants/universal-identifiers.ts` and `src/constants/field-options.ts` — Stable app/object/field/relation/navigation/view identifiers and typed select options for campaigns, campaign leads, sessions, events, presence, inbound queues, dispositions, and recording policies
+- `src/objects/*` — Telephony-owned objects for Campaign, Campaign Lead, Disposition, Call Session, Call Event, Agent Presence, and Inbound Queue
+- `src/fields/*` — Reverse relations from Brokerage Leads (`person`), Brokerage Calls, Agent Profiles, Lead Sources, and Workspace Members back into Telephony objects
+- `src/roles/default-role.ts`, `src/roles/agent.role.ts`, and `src/roles/manager.role.ts` — App roles for runtime function execution, agents, and managers
+- `src/front-components/agent-softphone-workspace.tsx` — Internal agent softphone workspace for session start, ready-state control, preview lead routing, campaign-lead release, and outbound call start using validated metadata GraphQL responses
+- `src/page-layouts/agent-softphone-page-layout.ts` and `src/navigation-menu-items/*` — Telephony folder/sidebar entries and a page-layout target for the softphone workspace
+- `src/views/*` — Default manager/agent operational views for active campaigns, ready leads, dispositions, active call sessions, blocked attempts, agent presence, and inbound queues
+- `CODEX_HANDOFF.md` — Current implementation state, remaining rollout plan, no-cast/no-coercion constraint, validation commands, and pickup notes for future Codex agents
 ### `packages/twenty-apps/internal/brokerage/`
 
 - `package.json`, `.nvmrc`, `.oxlintrc.json`, and `tsconfig.json` — Standalone Twenty app package and validation setup for the core Brokerage model

@@ -1,0 +1,206 @@
+import {
+  defineObject,
+  FieldType,
+  OnDeleteAction,
+  RelationType,
+} from 'twenty-sdk/define';
+
+import {
+  TELEPHONY_CAMPAIGN_STATUS_OPTIONS,
+  TELEPHONY_RECORDING_POLICY_OPTIONS,
+} from 'src/constants/field-options';
+import {
+  BROKERAGE_LEAD_SOURCE_OBJECT_UNIVERSAL_IDENTIFIER,
+  LEAD_SOURCE_TELEPHONY_CAMPAIGNS_FIELD_ID,
+  TC_AGENT_POOL_RULES_FIELD_ID,
+  TC_ALLOWED_END_LOCAL_TIME_FIELD_ID,
+  TC_ALLOWED_START_LOCAL_TIME_FIELD_ID,
+  TC_CALL_SESSIONS_FIELD_ID,
+  TC_CAMPAIGN_LEADS_FIELD_ID,
+  TC_DEFAULT_TIME_ZONE_FIELD_ID,
+  TC_DESCRIPTION_FIELD_ID,
+  TC_DISPOSITIONS_FIELD_ID,
+  TC_INBOUND_QUEUES_FIELD_ID,
+  TC_LEAD_SOURCE_FIELD_ID,
+  TC_MAX_ATTEMPTS_FIELD_ID,
+  TC_NAME_FIELD_ID,
+  TC_PRIORITY_FIELD_ID,
+  TC_RECORDING_POLICY_FIELD_ID,
+  TC_STATUS_FIELD_ID,
+  TCL_CAMPAIGN_FIELD_ID,
+  TCS_CAMPAIGN_FIELD_ID,
+  TD_CAMPAIGN_FIELD_ID,
+  TELEPHONY_CALL_SESSION_OBJECT_ID,
+  TELEPHONY_CAMPAIGN_LEAD_OBJECT_ID,
+  TELEPHONY_CAMPAIGN_OBJECT_ID,
+  TELEPHONY_DISPOSITION_OBJECT_ID,
+  TELEPHONY_INBOUND_QUEUE_OBJECT_ID,
+  TIQ_CAMPAIGN_FIELD_ID,
+} from 'src/constants/universal-identifiers';
+
+export default defineObject({
+  universalIdentifier: TELEPHONY_CAMPAIGN_OBJECT_ID,
+  nameSingular: 'telephonyCampaign',
+  namePlural: 'telephonyCampaigns',
+  labelSingular: 'Telephony Campaign',
+  labelPlural: 'Telephony Campaigns',
+  description:
+    'Manager-owned dialing unit with priority, hours, recording policy, and routing pool configuration.',
+  icon: 'IconSpeakerphone',
+  labelIdentifierFieldMetadataUniversalIdentifier: TC_NAME_FIELD_ID,
+  fields: [
+    {
+      universalIdentifier: TC_NAME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'name',
+      label: 'Name',
+      icon: 'IconAbc',
+    },
+    {
+      universalIdentifier: TC_STATUS_FIELD_ID,
+      type: FieldType.SELECT,
+      name: 'status',
+      label: 'Status',
+      icon: 'IconStatusChange',
+      defaultValue: "'DRAFT'",
+      options: TELEPHONY_CAMPAIGN_STATUS_OPTIONS,
+    },
+    {
+      universalIdentifier: TC_PRIORITY_FIELD_ID,
+      type: FieldType.NUMBER,
+      name: 'priority',
+      label: 'Priority',
+      icon: 'IconSortAscending',
+      defaultValue: 100,
+    },
+    {
+      universalIdentifier: TC_DESCRIPTION_FIELD_ID,
+      type: FieldType.RICH_TEXT,
+      name: 'description',
+      label: 'Description',
+      icon: 'IconNotes',
+    },
+    {
+      universalIdentifier: TC_ALLOWED_START_LOCAL_TIME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'allowedStartLocalTime',
+      label: 'Allowed Start',
+      description: 'Lead-local start time in HH:mm format.',
+      icon: 'IconClockHour9',
+      defaultValue: '09:00',
+    },
+    {
+      universalIdentifier: TC_ALLOWED_END_LOCAL_TIME_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'allowedEndLocalTime',
+      label: 'Allowed End',
+      description: 'Lead-local end time in HH:mm format.',
+      icon: 'IconClockHour8',
+      defaultValue: '20:00',
+    },
+    {
+      universalIdentifier: TC_DEFAULT_TIME_ZONE_FIELD_ID,
+      type: FieldType.TEXT,
+      name: 'defaultTimeZone',
+      label: 'Default Time Zone',
+      description:
+        'IANA time zone used when a lead-local time zone cannot be resolved.',
+      icon: 'IconWorld',
+      defaultValue: 'America/New_York',
+    },
+    {
+      universalIdentifier: TC_RECORDING_POLICY_FIELD_ID,
+      type: FieldType.SELECT,
+      name: 'recordingPolicy',
+      label: 'Recording Policy',
+      icon: 'IconMicrophone',
+      defaultValue: "'RECORD_ALL'",
+      options: TELEPHONY_RECORDING_POLICY_OPTIONS,
+    },
+    {
+      universalIdentifier: TC_AGENT_POOL_RULES_FIELD_ID,
+      type: FieldType.RAW_JSON,
+      name: 'agentPoolRules',
+      label: 'Agent Pool Rules',
+      description:
+        'Routing eligibility rules, initially a JSON list of Agent Profile IDs or pool attributes.',
+      icon: 'IconUsersGroup',
+    },
+    {
+      universalIdentifier: TC_MAX_ATTEMPTS_FIELD_ID,
+      type: FieldType.NUMBER,
+      name: 'maxAttempts',
+      label: 'Max Attempts',
+      icon: 'IconRepeat',
+      defaultValue: 6,
+    },
+    {
+      universalIdentifier: TC_LEAD_SOURCE_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'leadSource',
+      label: 'Lead Source',
+      icon: 'IconRoute',
+      relationTargetObjectMetadataUniversalIdentifier:
+        BROKERAGE_LEAD_SOURCE_OBJECT_UNIVERSAL_IDENTIFIER,
+      relationTargetFieldMetadataUniversalIdentifier:
+        LEAD_SOURCE_TELEPHONY_CAMPAIGNS_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.MANY_TO_ONE,
+        onDelete: OnDeleteAction.SET_NULL,
+        joinColumnName: 'leadSourceId',
+      },
+    },
+    {
+      universalIdentifier: TC_CAMPAIGN_LEADS_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'campaignLeads',
+      label: 'Campaign Leads',
+      icon: 'IconTargetArrow',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_CAMPAIGN_LEAD_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier: TCL_CAMPAIGN_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    {
+      universalIdentifier: TC_DISPOSITIONS_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'dispositions',
+      label: 'Dispositions',
+      icon: 'IconChecklist',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_DISPOSITION_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier: TD_CAMPAIGN_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    {
+      universalIdentifier: TC_CALL_SESSIONS_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'callSessions',
+      label: 'Call Sessions',
+      icon: 'IconPhoneCalling',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_CALL_SESSION_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier: TCS_CAMPAIGN_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+    {
+      universalIdentifier: TC_INBOUND_QUEUES_FIELD_ID,
+      type: FieldType.RELATION,
+      name: 'inboundQueues',
+      label: 'Inbound Queues',
+      icon: 'IconPhoneIncoming',
+      relationTargetObjectMetadataUniversalIdentifier:
+        TELEPHONY_INBOUND_QUEUE_OBJECT_ID,
+      relationTargetFieldMetadataUniversalIdentifier: TIQ_CAMPAIGN_FIELD_ID,
+      universalSettings: {
+        relationType: RelationType.ONE_TO_MANY,
+      },
+    },
+  ],
+});
