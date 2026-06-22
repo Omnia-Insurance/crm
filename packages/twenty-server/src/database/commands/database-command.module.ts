@@ -13,6 +13,7 @@ import { SeedCarrierConfigCommand } from 'src/database/commands/custom/seed-carr
 // OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
 import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-time-cards.command';
 import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
+import { SyncDashboardAudienceCommand } from 'src/database/commands/custom/sync-dashboard-audience.command';
 import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
@@ -65,6 +66,8 @@ import { WorkspaceManagerModule } from 'src/engine/workspace-manager/workspace-m
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { WorkspaceVersionModule } from 'src/engine/workspace-manager/workspace-version/workspace-version.module';
 import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-event-import-manager/calendar-event-import-manager.module';
+// OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
+import { DashboardAudienceModule } from 'src/modules/dashboard/dashboard-audience/dashboard-audience.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
@@ -114,6 +117,8 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     WorkspaceCacheStorageModule,
     WorkspaceCacheModule,
     WorkspaceIteratorModule,
+    // OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
+    DashboardAudienceModule,
     ApiKeyModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
@@ -148,6 +153,8 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     InstallPreInstalledAppsCommand,
     // OMNIA-CUSTOM: Brokerage app adoption for existing Omnia workspaces
     AdoptBrokerageAppCommand,
+    // OMNIA-CUSTOM: Dashboard role-gating — bootstrap/re-sync audience field + RLS predicates
+    SyncDashboardAudienceCommand,
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,

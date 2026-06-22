@@ -262,6 +262,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems.tsx" \
   "ignoreShowInSidebar" \
   "NavigationDrawerSection must support bypassing showInSidebar for curated sections"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems.tsx" \
+  "Dashboards first" \
+  "Member sidebar order must keep Dashboards first (Omnia ordering)"
 
 echo ""
 echo "--- Critical: Signed-Out Lead Mock ---"
@@ -3188,6 +3192,26 @@ check_file_contains \
   "packages/twenty-server/src/database/commands/custom/seed-reconciliation-objects.command.ts" \
   "parseSettings" \
   "Seed must materialize the parseSettings/diffConfig/statusVocabulary carrierConfig fields"
+
+echo "--- Dashboard Role-Gating (audience custom field auto-synced from roles) ---"
+check_file_exists \
+  "packages/twenty-server/src/modules/dashboard/dashboard-audience/services/dashboard-audience-role-sync.service.ts" \
+  "Dashboard audience role-sync service must exist"
+check_file_contains \
+  "packages/twenty-server/src/modules/dashboard/dashboard-audience/listeners/dashboard-audience-role-sync.listener.ts" \
+  "metadata.role.created" \
+  "Listener must subscribe to role lifecycle events so audience auto-tracks roles"
+check_file_contains \
+  "packages/twenty-server/src/modules/modules.module.ts" \
+  "DashboardAudienceModule" \
+  "DashboardAudienceModule must be registered so the role listener loads"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/custom/sync-dashboard-audience.command.ts" \
+  "Dashboard audience bootstrap/re-sync command must exist"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "SyncDashboardAudienceCommand" \
+  "Dashboard audience sync command must be registered in DatabaseCommandModule"
 
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
