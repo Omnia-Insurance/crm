@@ -266,6 +266,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems.tsx" \
   "Dashboards first" \
   "Member sidebar order must keep Dashboards first (Omnia ordering)"
+check_file_contains \
+  "packages/twenty-front/src/modules/page-layout/components/DashboardPageLayoutEditModeProvider.tsx" \
+  "hasLayoutsPermission" \
+  "Dashboard edit mode must be gated on the LAYOUTS permission flag (read-only for view-only roles)"
 
 echo ""
 echo "--- Critical: Signed-Out Lead Mock ---"
