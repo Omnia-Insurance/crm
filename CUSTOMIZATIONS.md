@@ -881,3 +881,17 @@ it survives role renames. Option changes go through `FieldMetadataService.update
 | `packages/twenty-server/src/modules/dashboard/dashboard-audience/dashboard-audience.module.ts` (new) | Wires the service + listener; imports FieldMetadataModule + RowLevelPermissionModule + the core repos | Provides the listener at startup and exports the service for the command |
 | `packages/twenty-server/src/modules/modules.module.ts` | Imports `DashboardAudienceModule` | Loads the role-change listener in the API server |
 | `packages/twenty-server/src/database/commands/custom/sync-dashboard-audience.command.ts` (new) + `database-command.module.ts` (registration + `DashboardAudienceModule` import) | `workspace:sync-dashboard-audience` bootstraps existing workspaces (and manual re-sync); delegates to `syncWorkspace`. `--dry-run`. | One-time backfill for existing workspaces + a manual fallback; ongoing changes are automatic via the listener |
+
+## Agent performance rollups (2026-06-22)
+
+Computes per-agent performance metrics and writes them onto `agentProfile` fields
+so they can be displayed/ranked natively in a leaderboard dashboard (avoids
+per-render custom widgets and the agentProfile→workspaceMember scoping hop).
+Fields are created idempotently via `FieldMetadataService` (no app re-sync), and
+metrics are aggregated with the `GlobalWorkspaceOrmManager` query-builder pattern.
+
+| File | What | Why |
+| --- | --- | --- |
+| `packages/twenty-server/src/modules/agent-rollup/services/agent-rollup.service.ts` (new) | Ensures rollup fields on `agentProfile` (`totalPolicies`, `placementRate6mo`, `billableHours`, `offPhoneHours`), aggregates per agent from `policy`/`timeCard`/`call`, writes back. Off-phone = login − talk; placement rate = `ACTIVE_PLACED ÷ written` over 6mo; status enum cast to text for the bound param. timeCard agent column probed (`agentId`/`agentsId`). Idempotent + write-resilient. | Single source of truth for agent rollups, reused by the command |
+| `packages/twenty-server/src/modules/agent-rollup/agent-rollup.module.ts` (new) | Wires the service; imports `FieldMetadataModule` + `GlobalWorkspaceDataSourceModule` + core repos | Provides the service for the command |
+| `packages/twenty-server/src/database/commands/custom/compute-agent-rollups.command.ts` (new) + `database-command.module.ts` (registration + `AgentRollupModule` import) | `workspace:compute-agent-rollups` (`--dry-run`) computes + writes rollups per workspace | Manual/scheduled refresh of the agent leaderboard data |

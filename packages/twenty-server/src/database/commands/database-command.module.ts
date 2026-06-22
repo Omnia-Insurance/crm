@@ -13,6 +13,7 @@ import { SeedCarrierConfigCommand } from 'src/database/commands/custom/seed-carr
 // OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
 import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-time-cards.command';
 import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
+import { ComputeAgentRollupsCommand } from 'src/database/commands/custom/compute-agent-rollups.command';
 import { SyncDashboardAudienceCommand } from 'src/database/commands/custom/sync-dashboard-audience.command';
 import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
@@ -66,6 +67,8 @@ import { WorkspaceManagerModule } from 'src/engine/workspace-manager/workspace-m
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { WorkspaceVersionModule } from 'src/engine/workspace-manager/workspace-version/workspace-version.module';
 import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-event-import-manager/calendar-event-import-manager.module';
+// OMNIA-CUSTOM: provides AgentRollupService for ComputeAgentRollupsCommand
+import { AgentRollupModule } from 'src/modules/agent-rollup/agent-rollup.module';
 // OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
 import { DashboardAudienceModule } from 'src/modules/dashboard/dashboard-audience/dashboard-audience.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
@@ -119,6 +122,8 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     WorkspaceIteratorModule,
     // OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
     DashboardAudienceModule,
+    // OMNIA-CUSTOM: provides AgentRollupService for ComputeAgentRollupsCommand
+    AgentRollupModule,
     ApiKeyModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
@@ -155,6 +160,8 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     AdoptBrokerageAppCommand,
     // OMNIA-CUSTOM: Dashboard role-gating — bootstrap/re-sync audience field + RLS predicates
     SyncDashboardAudienceCommand,
+    // OMNIA-CUSTOM: Agent performance rollups
+    ComputeAgentRollupsCommand,
     // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
     SeedReconciliationObjectsCommand,
     SeedAmbetterCarrierConfigCommand,

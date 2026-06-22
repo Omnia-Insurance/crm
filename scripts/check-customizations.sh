@@ -3217,6 +3217,15 @@ check_file_contains \
   "SyncDashboardAudienceCommand" \
   "Dashboard audience sync command must be registered in DatabaseCommandModule"
 
+echo "--- Agent performance rollups ---"
+check_file_exists \
+  "packages/twenty-server/src/modules/agent-rollup/services/agent-rollup.service.ts" \
+  "Agent rollup compute service must exist"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/database-command.module.ts" \
+  "ComputeAgentRollupsCommand" \
+  "Agent rollup command must be registered in DatabaseCommandModule"
+
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"
   echo "  Review CUSTOMIZATIONS.md and restore the missing changes."
