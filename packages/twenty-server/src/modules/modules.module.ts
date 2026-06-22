@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { CalendarModule } from 'src/modules/calendar/calendar.module';
 import { ConnectedAccountModule } from 'src/modules/connected-account/connected-account.module';
+// OMNIA-CUSTOM: dashboard role-gating — audience field + RLS predicates auto-track roles
+import { DashboardAudienceModule } from 'src/modules/dashboard/dashboard-audience/dashboard-audience.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
 // OMNIA-CUSTOM: Payment Reconciliation v2
 import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
@@ -16,6 +18,7 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     WorkflowModule,
     WorkspaceMemberModule,
     ReconciliationModule,
+    DashboardAudienceModule,
   ],
   providers: [],
   exports: [],

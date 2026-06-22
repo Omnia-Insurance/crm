@@ -11,7 +11,10 @@ import { isNavigationSectionOpenFamilyState } from '@/ui/navigation/navigation-d
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { isDefined } from 'twenty-shared/utils';
 
+// OMNIA-CUSTOM: member workspace sidebar order — Dashboards first, then
+// Leads (Person), Policies, Notes, Tasks (call is hidden by permission).
 const ORDERED_FIRST_STANDARD_OBJECTS: string[] = [
+  CoreObjectNameSingular.Dashboard,
   CoreObjectNameSingular.Person,
   'call',
   'policy',
@@ -19,9 +22,7 @@ const ORDERED_FIRST_STANDARD_OBJECTS: string[] = [
   CoreObjectNameSingular.Task,
 ];
 
-const ORDERED_LAST_STANDARD_OBJECTS: string[] = [
-  CoreObjectNameSingular.Dashboard,
-];
+const ORDERED_LAST_STANDARD_OBJECTS: string[] = [];
 
 type NavigationDrawerSectionForObjectMetadataItemsProps = {
   sectionTitle: string;
