@@ -3225,6 +3225,17 @@ check_file_contains \
   "packages/twenty-server/src/database/commands/database-command.module.ts" \
   "ComputeAgentRollupsCommand" \
   "Agent rollup command must be registered in DatabaseCommandModule"
+check_file_exists \
+  "packages/twenty-server/src/modules/agent-rollup/crons/compute-agent-rollups.cron.job.ts" \
+  "Agent rollup cron job must exist"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/core-engine.module.ts" \
+  "AgentRollupModule" \
+  "AgentRollupModule must load in core-engine so the worker processes the rollup cron"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/cron-register-all.command.ts" \
+  "ComputeAgentRollupsCronCommand" \
+  "Agent rollup cron must be registered in cron:register:all"
 
 if [ $ERRORS -gt 0 ]; then
   echo -e "${RED}  $ERRORS ERRORS found — customizations were overwritten!${NC}"

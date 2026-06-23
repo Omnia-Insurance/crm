@@ -74,6 +74,7 @@ import { RowLevelPermissionModule } from 'src/engine/metadata-modules/row-level-
 import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
+import { AgentRollupModule } from 'src/modules/agent-rollup/agent-rollup.module';
 import { ChannelSyncModule } from 'src/modules/connected-account/channel-sync/channel-sync.module';
 import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
 import { SendEmailModule } from 'src/modules/messaging/message-outbound-manager/send-email.module';
@@ -166,6 +167,8 @@ import { FileModule } from './file/file.module';
     PageLayoutModule,
     ImpersonationModule,
     TrashCleanupModule,
+    // OMNIA-CUSTOM: scheduled agent-rollup recompute (cron job processor)
+    AgentRollupModule,
     DashboardModule,
     EventLogsModule,
     PreInstalledAppsModule,
