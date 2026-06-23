@@ -324,10 +324,48 @@ export class AgentRollupService {
           { shouldBypassPermissionChecks: true },
         );
 
+        // Load current values so we only write agents whose metrics actually
+        // changed — avoids churning every agent record (and its change
+        // webhooks) on every scheduled run.
+        const agentIds = [...metricsByAgentId.keys()];
+        const currentRows = await agentRepo
+          .createQueryBuilder('agentProfile')
+          .select('agentProfile.id', 'id')
+          .addSelect('agentProfile.totalPolicies', 'totalPolicies')
+          .addSelect('agentProfile.placementRate6mo', 'placementRate6mo')
+          .addSelect('agentProfile.billableHours', 'billableHours')
+          .addSelect('agentProfile.offPhoneHours', 'offPhoneHours')
+          .where('agentProfile.id IN (:...agentIds)', { agentIds })
+          .getRawMany<{
+            id: string;
+            totalPolicies: number | string | null;
+            placementRate6mo: number | string | null;
+            billableHours: number | string | null;
+            offPhoneHours: number | string | null;
+          }>();
+        const currentByAgentId = new Map(
+          currentRows.map((row) => [row.id, row]),
+        );
+
+        const isUnchanged = (
+          current: (typeof currentRows)[number] | undefined,
+          metrics: AgentMetrics,
+        ): boolean =>
+          isDefined(current) &&
+          current.totalPolicies !== null &&
+          Number(current.totalPolicies) === metrics.totalPolicies &&
+          Number(current.placementRate6mo) === metrics.placementRate6mo &&
+          Number(current.billableHours) === metrics.billableHours &&
+          Number(current.offPhoneHours) === metrics.offPhoneHours;
+
         let updated = 0;
         let failed = 0;
 
         for (const [agentId, metrics] of metricsByAgentId) {
+          if (isUnchanged(currentByAgentId.get(agentId), metrics)) {
+            continue;
+          }
+
           try {
             await agentRepo.update(agentId, metrics);
             updated += 1;
@@ -344,7 +382,7 @@ export class AgentRollupService {
         }
 
         this.logger.log(
-          `  Wrote rollups for ${updated} agent(s)${
+          `  Wrote rollups for ${updated} changed agent(s)${
             failed > 0 ? ` (${failed} failed — re-run to fill)` : ''
           } in workspace ${workspaceId}`,
         );
