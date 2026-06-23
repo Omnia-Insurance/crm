@@ -43,9 +43,7 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
   }: RunOnWorkspaceArgs): Promise<void> {
     const force = (options as { force?: boolean }).force ?? false;
 
-    this.logger.log(
-      `Seeding ${PIPELINE_NAME} for workspace ${workspaceId}`,
-    );
+    this.logger.log(`Seeding ${PIPELINE_NAME} for workspace ${workspaceId}`);
 
     const existing = await this.pipelineRepository.findOne({
       where: { workspaceId, name: PIPELINE_NAME },
@@ -82,10 +80,15 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
         dateRangeParams: {
           startParam: 'date_start',
           endParam: 'date_end',
-          // 26 hours: covers yesterday's full LA-time day with a 2h overlap
-          // to absorb late-arriving events near the day boundary.
+          // 26h lookback, snapped to the start of its LA-time calendar day.
+          // Time cards aggregate per (agent, day) and upsert by that day, so the
+          // window MUST cover whole days — a rolling intra-day window would
+          // re-aggregate a shrinking tail of each day as it ages out and
+          // overwrite the complete record with a partial one (collapsing older
+          // days toward zero). Snapping keeps every in-window day fully covered.
           lookbackMinutes: 26 * 60,
           timezone: 'America/Los_Angeles',
+          snapStartToDay: true,
         },
       },
       paginationConfig: {
@@ -210,7 +213,9 @@ export class SeedConvosoTimeCardPipelineCommand extends ActiveOrSuspendedWorkspa
   }
 
   private logFieldMappings(): void {
-    this.logger.log('Field Mappings (post-aggregation, from TimeCardPreprocessor):');
+    this.logger.log(
+      'Field Mappings (post-aggregation, from TimeCardPreprocessor):',
+    );
     this.logger.log(
       '  user_id → agentId|agentsId (lookup AgentProfile by convosoUserId)',
     );

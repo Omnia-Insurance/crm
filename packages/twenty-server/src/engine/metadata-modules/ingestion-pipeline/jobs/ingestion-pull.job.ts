@@ -201,8 +201,13 @@ export class IngestionPullJob {
       // shared pipeline config; falling back to the config covers normal
       // lookback-driven cadence pulls.
       if (isDefined(pipeline.sourceRequestConfig?.dateRangeParams)) {
-        const { startParam, endParam, lookbackMinutes, timezone } =
-          pipeline.sourceRequestConfig!.dateRangeParams!;
+        const {
+          startParam,
+          endParam,
+          lookbackMinutes,
+          timezone,
+          snapStartToDay,
+        } = pipeline.sourceRequestConfig!.dateRangeParams!;
 
         const startTimeOverride =
           triggerOverrides.startTimeOverride ??
@@ -224,7 +229,15 @@ export class IngestionPullJob {
               .toLocaleString('sv-SE', { timeZone: timezone })
               .replace(' ', 'T');
 
-          url.searchParams.set(startParam, formatDate(since));
+          // For per-day aggregate pipelines, snap the window start down to the
+          // start of its calendar day so every still-in-window day stays fully
+          // covered (otherwise the per-(entity,day) upsert overwrites complete
+          // days with shrinking tail slices as they age out of the lookback).
+          const startValue = snapStartToDay
+            ? `${formatDate(since).split('T')[0]}T00:00:00`
+            : formatDate(since);
+
+          url.searchParams.set(startParam, startValue);
           url.searchParams.set(endParam, formatDate(now));
         }
       }
