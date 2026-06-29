@@ -4,11 +4,7 @@ import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { getObjectTypename } from '@/object-record/cache/utils/getObjectTypename';
 import { RecordChip } from '@/object-record/components/RecordChip';
-import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
-import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
 // OMNIA-CUSTOM: reconciliation diffs context
@@ -27,13 +23,9 @@ import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { t } from '@lingui/core/macro';
-import { Trans } from '@lingui/react/macro';
-import { createPortal } from 'react-dom';
 import {
   computeMorphRelationGqlFieldName,
   CustomError,
@@ -41,7 +33,6 @@ import {
 import {
   IconChevronDown,
   IconDotsVertical,
-  IconTrash,
   IconUnlink,
   type IconComponent,
 } from 'twenty-ui/display';
@@ -122,9 +113,6 @@ const StyledDiffBtn = styled.button<{ isAccepted: boolean }>`
     opacity: 1;
   }
 `;
-
-const getDeleteRelationModalId = (recordId: string) =>
-  `delete-relation-modal-${recordId}`;
 
 type RecordDetailRelationRecordsListItemProps = {
   isExpanded: boolean;
@@ -286,8 +274,6 @@ export const RecordDetailRelationRecordsListItem = ({
     updateRelationRecordForName,
   ]);
 
-  const { openModal } = useModal();
-
   const { relationType, objectMetadataNameSingular } =
     fieldDefinition.metadata as FieldRelationMetadata;
 
@@ -310,22 +296,7 @@ export const RecordDetailRelationRecordsListItem = ({
       objectNameSingular: relationObjectMetadataNameSingular,
     });
 
-  const relationObjectTypeName = getObjectTypename(
-    relationObjectMetadataNameSingular,
-  );
-
-  const relationObjectPermissions = useObjectPermissionsForObject(
-    relationObjectMetadataItem.id,
-  );
-
   const { updateOneRecord: updateOneRelationRecord } = useUpdateOneRecord();
-  const { deleteOneRecord: deleteOneRelationRecord } = useDeleteOneRecord({
-    objectNameSingular: relationObjectMetadataNameSingular,
-  });
-
-  const isAccountOwnerRelation =
-    relationObjectMetadataNameSingular ===
-    CoreObjectNameSingular.WorkspaceMember;
 
   const dropdownInstanceId = `record-field-card-menu:${scopeInstanceId}:${relationFieldMetadataId}:${relationRecord.id}`;
 
@@ -387,15 +358,6 @@ export const RecordDetailRelationRecordsListItem = ({
     }
 
     setSingleRecordPickerSelectedId(undefined);
-  };
-
-  const handleDelete = async () => {
-    closeDropdown(dropdownInstanceId);
-    openModal(getDeleteRelationModalId(relationRecord.id));
-  };
-
-  const handleConfirmDelete = async () => {
-    await deleteOneRelationRecord(relationRecord.id);
   };
 
   const handleClick = () => onClick(relationRecord.id);
@@ -475,20 +437,18 @@ export const RecordDetailRelationRecordsListItem = ({
             dropdownComponents={
               <DropdownContent>
                 <DropdownMenuItemsContainer>
+                  {/*
+                    OMNIA-CUSTOM: Delete intentionally omitted. Detaching a
+                    relation from a record's detail panel must never delete the
+                    related record itself — admins were accidentally deleting
+                    Agents/Leads/etc. from here. Deletion happens from the
+                    object's own page.
+                  */}
                   <MenuItem
                     LeftIcon={IconUnlink}
                     text={t`Detach`}
                     onClick={handleDetach}
                   />
-                  {!isAccountOwnerRelation &&
-                    relationObjectPermissions.canSoftDeleteObjectRecords && (
-                      <MenuItem
-                        LeftIcon={IconTrash}
-                        text={t`Delete`}
-                        accent="danger"
-                        onClick={handleDelete}
-                      />
-                    )}
                 </DropdownMenuItemsContainer>
               </DropdownContent>
             }
@@ -508,23 +468,6 @@ export const RecordDetailRelationRecordsListItem = ({
           fieldDiffs={relationFieldDiffs}
         />
       </AnimatedEaseInOut>
-      {createPortal(
-        <ConfirmationModal
-          modalInstanceId={getDeleteRelationModalId(relationRecord.id)}
-          title={t`Delete Related ${relationObjectTypeName}`}
-          subtitle={
-            <Trans>
-              Are you sure you want to delete this related{' '}
-              {relationObjectMetadataNameSingular}?
-              <br />
-              This action will break all its relationships with other objects.
-            </Trans>
-          }
-          onConfirmClick={handleConfirmDelete}
-          confirmButtonText={t`Delete ${relationObjectTypeName}`}
-        />,
-        document.body,
-      )}
     </>
   );
 };
