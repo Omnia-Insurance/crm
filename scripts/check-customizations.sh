@@ -2696,6 +2696,14 @@ check_file_contains \
   "ReconciliationDiffsContext" \
   "Relation chip must read ReconciliationDiffsContext to render inline diff annotations + change-count badge"
 check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx" \
+  "Delete intentionally omitted" \
+  "Relation chip menu must NOT offer Delete — only Detach (admins were cross-deleting related records)"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx" \
+  'text={t`Delete`}' \
+  "Relation chip menu Delete item must stay removed — deletion happens from the object's own page"
+check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-inline-cell/components/RecordInlineCellContainer.tsx" \
   "promotePrimaryPhoneToAdditional" \
   "Inline diff Accept must promote old primary phone/email to additional* (reconciliation review page)"
