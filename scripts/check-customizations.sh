@@ -2391,10 +2391,9 @@ check_file_contains \
   "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
   "OMNIA-CUSTOM" \
   "SignInUp.tsx must show workspace name instead of 'Welcome, X.'"
-check_file_contains \
-  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
-  "OMNIA-CUSTOM" \
-  "auth cookie domain widening (shared across sibling subdomains)"
+# NOTE: tokenPairState reverted to upstream localStorage in the v2.19 merge (a
+# cookie override breaks core auth — upstream's getTokenPair reads localStorage).
+# omniaagent.com cross-subdomain dashboard SSO must be re-solved separately.
 check_file_exists \
   "packages/twenty-shared/src/utils/auth/derive-trusted-redirect-domain.ts" \
   "Trusted external redirect helpers must exist (shared by server + frontend)"
@@ -2426,14 +2425,6 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/auth/services/auth.service.ts" \
   "markEmailAsVerified" \
   "auth.service must mark existing social SSO users as email-verified before issuing /verify login tokens"
-check_file_contains \
-  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
-  "legacyAttributesToRemove" \
-  "tokenPairState must clear the legacy host-only auth cookie after moving tokenPair to the shared parent domain"
-check_file_contains \
-  "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createAtomState.ts" \
-  "legacyAttributesToRemove" \
-  "createAtomState must pass legacy cookie attributes through to cookie storage"
 check_file_contains \
   "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createJotaiCookieStorage.ts" \
   "legacyAttributesToRemove" \
