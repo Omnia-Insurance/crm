@@ -144,14 +144,40 @@ export class NormalizeLegacyIndexNamesCommand extends ActiveOrSuspendedWorkspace
 
       for (const operation of operations) {
         if (operation.type === 'rename') {
-          await this.workspaceSchemaManagerService.indexManager.renameIndexWithoutRebuild(
-            {
-              queryRunner,
-              schemaName,
-              fromIndexName: operation.fromName,
-              toIndexName: operation.toName,
-            },
+          // OMNIA-CUSTOM: tolerate drift where indexMetadata.name points to a DB
+          // index that no longer exists (e.g. a unique index dropped out-of-band
+          // on a long-lived workspace — observed on product.name / carrier.name).
+          // The physical rename is then a no-op; we still converge the stored name
+          // so normalization completes instead of aborting the whole upgrade.
+          // (dropIndex is already DROP INDEX IF EXISTS, so the duplicate-drop
+          // branch is idempotent.)
+          const fromIndexExists: unknown[] = await queryRunner.query(
+            `SELECT 1
+               FROM pg_indexes
+              WHERE schemaname = $1
+                AND indexname = $2
+              LIMIT 1`,
+            [schemaName, operation.fromName],
           );
+
+          if (fromIndexExists.length > 0) {
+            await this.workspaceSchemaManagerService.indexManager.renameIndexWithoutRebuild(
+              {
+                queryRunner,
+                schemaName,
+                fromIndexName: operation.fromName,
+                toIndexName: operation.toName,
+              },
+            );
+
+            this.logger.log(
+              `Renamed index ${operation.fromName} -> ${operation.toName} (workspace ${workspaceId})`,
+            );
+          } else {
+            this.logger.warn(
+              `Index ${operation.fromName} not found in schema ${schemaName}; skipping physical rename and syncing indexMetadata name to ${operation.toName} (workspace ${workspaceId})`,
+            );
+          }
 
           await queryRunner.query(
             `UPDATE "core"."indexMetadata"
@@ -159,10 +185,6 @@ export class NormalizeLegacyIndexNamesCommand extends ActiveOrSuspendedWorkspace
               WHERE "id" = $2
                 AND "workspaceId" = $3`,
             [operation.toName, operation.indexMetadataId, workspaceId],
-          );
-
-          this.logger.log(
-            `Renamed index ${operation.fromName} -> ${operation.toName} (workspace ${workspaceId})`,
           );
         } else {
           await dropIndexFromWorkspaceSchema({

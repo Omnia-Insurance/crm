@@ -13,6 +13,19 @@ export class FinalizeRolePermissionFlagCutoverFastInstanceCommand
        DROP CONSTRAINT IF EXISTS "IDX_ROLE_PERMISSION_FLAG_FLAG_ROLE_ID_UNIQUE"`,
     );
 
+    // OMNIA-CUSTOM: self-heal rows the 2.6 Link step left unlinked (observed on
+    // long-lived workspaces: a few rolePermissionFlag rows had a NULL
+    // permissionFlagId). Backfill flag -> permissionFlag.key before SET NOT NULL
+    // so the cutover doesn't hard-fail the whole upgrade.
+    await queryRunner.query(
+      `UPDATE "core"."rolePermissionFlag" rolePermissionFlag
+          SET "permissionFlagId" = permissionFlag."id"
+         FROM "core"."permissionFlag" permissionFlag
+        WHERE rolePermissionFlag."permissionFlagId" IS NULL
+          AND permissionFlag."key" = rolePermissionFlag."flag"
+          AND permissionFlag."workspaceId" = rolePermissionFlag."workspaceId"`,
+    );
+
     await queryRunner.query(
       `ALTER TABLE "core"."rolePermissionFlag"
        ALTER COLUMN "permissionFlagId" SET NOT NULL`,
