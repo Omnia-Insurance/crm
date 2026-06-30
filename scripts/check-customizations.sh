@@ -192,6 +192,14 @@ check_file_contains \
   "CREATE_NEW_RECORD" \
   "Create Record button must apply blue primary CTA styling"
 check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/display/components/PinnedCommandMenuItemButtons.tsx" \
+  "initial={false}" \
+  "Pinned-item motion container must use initial={false} (React 19 stalls the framer-motion mount animation at opacity:0, hiding the blue Create button)"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/display/hooks/usePinnedCommandMenuItemsInlineLayout.ts" \
+  "pinnedCommandMenuItemKeysInDisplayOrder.length" \
+  "Pinned inline layout must bootstrap to all items before measurement (avoids the React 19 header action-column collapse deadlock)"
+check_file_contains \
   "packages/twenty-server/src/engine/workspace-manager/twenty-standard-application/constants/standard-command-menu-item.constant.ts" \
   "deleteSingleRecord" \
   "Delete single record action must be pinned as a header button"

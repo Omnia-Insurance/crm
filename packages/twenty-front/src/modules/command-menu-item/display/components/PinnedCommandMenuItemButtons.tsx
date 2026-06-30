@@ -73,7 +73,14 @@ export const PinnedCommandMenuItemButtons = () => {
                 <StyledCommandMenuItemContainer
                   key={item.id}
                   layout
-                  initial={{ width: 0, opacity: 0 }}
+                  // OMNIA-CUSTOM: initial={false} renders pinned buttons at their
+                  // final state on mount instead of playing the enter animation.
+                  // Under React 19 the framer-motion mount animation
+                  // (width/opacity 0 -> 1) stalls at opacity:0, leaving the blue
+                  // "Create <Object>" button invisible and the header action grid
+                  // column collapsed to the bare ⋮ width. Skipping the mount
+                  // animation paints it immediately; layout/exit animations stay.
+                  initial={false}
                   animate={{ width: 'unset', opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{
