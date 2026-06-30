@@ -104,6 +104,12 @@ const render: WorkerExports['render'] = async (
     });
   }
 
+  if (isDefined(renderContext.functionsBaseUrl)) {
+    setWorkerEnv({
+      TWENTY_FUNCTIONS_URL: renderContext.functionsBaseUrl,
+    });
+  }
+
   if (isDefined(renderContext.applicationAccessToken)) {
     setWorkerEnv({
       TWENTY_APP_ACCESS_TOKEN: renderContext.applicationAccessToken,
@@ -163,6 +169,8 @@ const initializeHostCommunicationApi: WorkerExports['initializeHostCommunication
       hostApi.enqueueSnackbar;
     frontComponentHostCommunicationApi.closeSidePanel = hostApi.closeSidePanel;
     frontComponentHostCommunicationApi.updateProgress = hostApi.updateProgress;
+    frontComponentHostCommunicationApi.copyToClipboard =
+      hostApi.copyToClipboard;
   };
 
 const onConfirmationModalResult: WorkerExports['onConfirmationModalResult'] =

@@ -22,7 +22,7 @@ import {
   IconEyeOff,
   IconFilter,
   IconSortDescending,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { MenuItem } from 'twenty-ui/navigation';
 
 export type RecordTableColumnHeadDropdownMenuProps = {
@@ -81,16 +81,12 @@ export const RecordTableColumnHeadDropdownMenu = ({
   };
 
   const handleColumnMoveLeft = () => {
-    closeDropdownAndToggleScroll();
-
     if (!canMoveLeft) return;
 
     moveTableColumn('left', recordField.id);
   };
 
   const handleColumnMoveRight = () => {
-    closeDropdownAndToggleScroll();
-
     if (!canMoveRight) return;
 
     moveTableColumn('right', recordField.id);

@@ -94,7 +94,7 @@ describe('Object metadata update - search vector side effect', () => {
     });
   });
 
-  it('should update search vector asExpression when updating label identifier and search should work with new field', async () => {
+  it('should index the new label identifier without dropping the existing name surface', async () => {
     await updateOneObjectMetadata({
       input: {
         idToUpdate: testObjectMetadataId,
@@ -105,6 +105,8 @@ describe('Object metadata update - search vector side effect', () => {
       expectToFail: false,
     });
 
+    // OMNIA-CUSTOM: the search vector asExpression should index the new label
+    // identifier field while preserving the existing name surface.
     const { objects } = await findManyObjectMetadata({
       expectToFail: false,
       input: {
@@ -149,22 +151,33 @@ describe('Object metadata update - search vector side effect', () => {
     expect(settings.asExpression).toContain(NEW_LABEL_IDENTIFIER_FIELD_NAME);
     expect(settings.asExpression).toContain('name');
 
-    const searchResult = await search({
+    // The record is now reachable through the new label identifier value.
+    const searchByNewLabelField = await search({
       searchInput: RECORD_FIELD_VALUE,
       includedObjectNameSingulars: [OBJECT_NAME_SINGULAR],
       limit: 10,
       expectToFail: false,
     });
 
-    expect(searchResult.data).toBeDefined();
-    expect(searchResult.data.search).toBeDefined();
-    expect(searchResult.data.search.edges).toBeDefined();
-    expect(searchResult.data.search.edges.length).toBe(1);
-    expect(searchResult.data.search.edges[0].node.recordId).toBe(
+    expect(searchByNewLabelField.data.search.edges.length).toBe(1);
+    expect(searchByNewLabelField.data.search.edges[0].node.recordId).toBe(
       createdRecordId,
     );
-    expect(searchResult.data.search.edges[0].node.objectNameSingular).toBe(
-      OBJECT_NAME_SINGULAR,
+    expect(
+      searchByNewLabelField.data.search.edges[0].node.objectNameSingular,
+    ).toBe(OBJECT_NAME_SINGULAR);
+
+    // The previously indexed name field remains searchable.
+    const searchByName = await search({
+      searchInput: RECORD_NAME_FIELD_VALUE,
+      includedObjectNameSingulars: [OBJECT_NAME_SINGULAR],
+      limit: 10,
+      expectToFail: false,
+    });
+
+    expect(searchByName.data.search.edges.length).toBe(1);
+    expect(searchByName.data.search.edges[0].node.recordId).toBe(
+      createdRecordId,
     );
   });
 });

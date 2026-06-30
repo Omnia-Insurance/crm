@@ -23,7 +23,7 @@ import {
   getUniqueConstraintsFields,
   isDefined,
 } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 export const useBuildSpreadsheetImportFields = () => {

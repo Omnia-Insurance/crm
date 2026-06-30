@@ -16,7 +16,7 @@ import { ViewBarFilterDropdown } from '@/views/components/ViewBarFilterDropdown'
 import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
 import { styled } from '@linaria/react';
 import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { IconPlus } from 'twenty-ui/display';
+import { IconPlus } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { beautifyPastDateRelativeToNow } from '~/utils/date-utils';

@@ -25,22 +25,21 @@ import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { isNonEmptyString } from '@sniptt/guards';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
+import { Avatar } from 'twenty-ui/data-display';
 import {
-  Avatar,
   IconLogout,
   IconMessage,
   IconSettings,
   IconSwitchHorizontal,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import {
   MenuItem,
   MenuItemSelectAvatar,
   UndecoratedLink,
 } from 'twenty-ui/navigation';
-import {
-  type AvailableWorkspace,
-} from '~/generated-metadata/graphql';
+import { type AvailableWorkspace } from '~/generated-metadata/graphql';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 const StyledDescription = styled.div`
   color: ${themeCssVariables.font.color.light};
@@ -89,7 +88,9 @@ export const MultiWorkspaceDropdownDefaultComponents = () => {
             Avatar={
               <Avatar
                 placeholder={currentWorkspace?.displayName || ''}
-                avatarUrl={currentWorkspace?.logo ?? DEFAULT_WORKSPACE_LOGO}
+                avatarUrl={getAbsoluteImageUrl(
+                  currentWorkspace?.logo ?? DEFAULT_WORKSPACE_LOGO,
+                )}
               />
             }
           />
@@ -122,9 +123,9 @@ export const MultiWorkspaceDropdownDefaultComponents = () => {
                     avatar={
                       <Avatar
                         placeholder={availableWorkspace.displayName || ''}
-                        avatarUrl={
-                          availableWorkspace.logo ?? DEFAULT_WORKSPACE_LOGO
-                        }
+                        avatarUrl={getAbsoluteImageUrl(
+                          availableWorkspace.logo ?? DEFAULT_WORKSPACE_LOGO,
+                        )}
                       />
                     }
                     selected={false}

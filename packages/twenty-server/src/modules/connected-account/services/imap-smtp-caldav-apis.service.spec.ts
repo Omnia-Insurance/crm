@@ -9,7 +9,12 @@ import {
 
 import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
 import { CreateMessageChannelService } from 'src/engine/core-modules/auth/services/create-message-channel.service';
-import { type ImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import {
+  type EncryptedImapSmtpCaldavParams,
+  type PlaintextImapSmtpCaldavParams,
+} from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
@@ -117,12 +122,13 @@ describe('ImapSmtpCalDavAPIService', () => {
     resetAndMarkAsCalendarEventListFetchPending: jest.fn(),
   };
 
-  const encryptPassword = (password: string) => `enc:v2:${password}`;
+  const encryptPassword = (password: string): EncryptedString =>
+    `enc:v2:${password}` as EncryptedString;
 
   const withEncryptedPasswords = (
-    params: ImapSmtpCaldavParams,
-  ): ImapSmtpCaldavParams => {
-    const result: ImapSmtpCaldavParams = {};
+    params: PlaintextImapSmtpCaldavParams,
+  ): EncryptedImapSmtpCaldavParams => {
+    const result: EncryptedImapSmtpCaldavParams = {};
 
     for (const protocol of ['IMAP', 'SMTP', 'CALDAV'] as const) {
       if (params[protocol]) {
@@ -141,7 +147,7 @@ describe('ImapSmtpCalDavAPIService', () => {
       ({
         connectionParameters,
       }: {
-        connectionParameters: ImapSmtpCaldavParams;
+        connectionParameters: PlaintextImapSmtpCaldavParams;
         workspaceId: string;
       }) => withEncryptedPasswords(connectionParameters),
     ),
@@ -239,17 +245,17 @@ describe('ImapSmtpCalDavAPIService', () => {
         IMAP: {
           host: 'imap.example.com',
           port: 993,
-          secure: true,
-          password: 'password',
+          connectionSecurity: 'SSL_TLS',
+          password: 'password' as PlaintextString,
         },
         SMTP: {
           host: 'smtp.example.com',
           port: 587,
-          secure: true,
+          connectionSecurity: 'SSL_TLS',
           username: 'test@example.com',
-          password: 'password',
+          password: 'password' as PlaintextString,
         },
-      } as ImapSmtpCaldavParams,
+      } as PlaintextImapSmtpCaldavParams,
     };
 
     it('should create new account with message channel when account does not exist and IMAP is configured', async () => {
@@ -336,11 +342,11 @@ describe('ImapSmtpCalDavAPIService', () => {
           CALDAV: {
             host: 'caldav.example.com',
             port: 443,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
         connectedAccountId: 'existing-account-id',
       };
 
@@ -466,10 +472,10 @@ describe('ImapSmtpCalDavAPIService', () => {
           IMAP: {
             host: 'imap.example.com',
             port: 993,
-            secure: true,
-            password: 'password',
+            connectionSecurity: 'SSL_TLS',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
       };
 
       mockConnectedAccountRepository.findOne.mockResolvedValue(null);
@@ -501,11 +507,11 @@ describe('ImapSmtpCalDavAPIService', () => {
           CALDAV: {
             host: 'caldav.example.com',
             port: 443,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
       };
 
       mockConnectedAccountRepository.findOne.mockResolvedValue(null);
@@ -537,17 +543,17 @@ describe('ImapSmtpCalDavAPIService', () => {
           IMAP: {
             host: 'imap.example.com',
             port: 993,
-            secure: true,
-            password: 'password',
+            connectionSecurity: 'SSL_TLS',
+            password: 'password' as PlaintextString,
           },
           SMTP: {
             host: 'smtp.example.com',
             port: 587,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
       };
 
       mockConnectedAccountRepository.findOne.mockResolvedValue(null);
@@ -579,24 +585,24 @@ describe('ImapSmtpCalDavAPIService', () => {
           IMAP: {
             host: 'imap.example.com',
             port: 993,
-            secure: true,
-            password: 'password',
+            connectionSecurity: 'SSL_TLS',
+            password: 'password' as PlaintextString,
           },
           SMTP: {
             host: 'smtp.example.com',
             port: 587,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
           CALDAV: {
             host: 'caldav.example.com',
             port: 443,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
       };
 
       mockConnectedAccountRepository.findOne.mockResolvedValue(null);
@@ -674,11 +680,11 @@ describe('ImapSmtpCalDavAPIService', () => {
           SMTP: {
             host: 'smtp.example.com',
             port: 587,
-            secure: true,
+            connectionSecurity: 'SSL_TLS',
             username: 'test@example.com',
-            password: 'password',
+            password: 'password' as PlaintextString,
           },
-        } as ImapSmtpCaldavParams,
+        } as PlaintextImapSmtpCaldavParams,
       };
 
       mockConnectedAccountRepository.findOne.mockResolvedValue(null);

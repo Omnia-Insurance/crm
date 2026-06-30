@@ -1,6 +1,6 @@
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { Tag } from 'twenty-ui/components';
+import { Tag } from 'twenty-ui/data-display';
 
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 

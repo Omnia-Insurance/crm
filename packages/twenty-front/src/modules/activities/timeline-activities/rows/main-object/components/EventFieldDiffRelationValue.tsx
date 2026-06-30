@@ -4,7 +4,7 @@ import { Trans } from '@lingui/react/macro';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { RecordChip } from '@/object-record/components/RecordChip';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
-import { ChipVariant } from 'twenty-ui/components';
+import { ChipVariant } from 'twenty-ui/data-display';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type EventFieldDiffRelationValueProps = {

@@ -1,23 +1,18 @@
 import { styled } from '@linaria/react';
 
-import { ObjectOptionsDropdown } from '@/object-record/object-options-dropdown/components/ObjectOptionsDropdown';
 import { RecordBoardContainer } from '@/object-record/record-board/components/RecordBoardContainer';
 import { RecordIndexTableContainer } from '@/object-record/record-index/components/RecordIndexTableContainer';
-import { RecordIndexViewBarEffect } from '@/object-record/record-index/components/RecordIndexViewBarEffect';
 import { recordIndexViewTypeState } from '@/object-record/record-index/states/recordIndexViewTypeState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
-import { InformationBannerWrapper } from '@/information-banner/components/InformationBannerWrapper';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 // OMNIA-CUSTOM: carrier picker step for the reconciliation run wizard
 import { ReconciliationCarrierPickerModal } from '@/reconciliation/components/ReconciliationCarrierPickerModal';
-import { SpreadsheetImportProvider } from '@/spreadsheet-import/provider/components/SpreadsheetImportProvider';
 
 import { RecordIndexCalendarContainer } from '@/object-record/record-index/components/RecordIndexCalendarContainer';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 import { RecordIndexFiltersToContextStoreEffect } from '@/object-record/record-index/components/RecordIndexFiltersToContextStoreEffect';
 import { useHasCurrentViewNonReadableFields } from '@/object-record/record-index/hooks/useHasCurrentViewNonReadableFields';
-import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
@@ -26,7 +21,6 @@ const StyledContainer = styled.div`
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-
   width: 100%;
 `;
 
@@ -40,71 +34,47 @@ const StyledContainerWithPadding = styled.div`
 export const RecordIndexContainer = () => {
   const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
 
-  const {
-    objectNamePlural,
-    recordIndexId,
-    objectMetadataItem,
-    objectNameSingular,
-  } = useRecordIndexContextOrThrow();
+  const { recordIndexId, objectMetadataItem, objectNameSingular } =
+    useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields, nonReadableViewFieldInfo } =
     useHasCurrentViewNonReadableFields(objectMetadataItem);
 
   return (
-    <>
-      <StyledContainer>
-        <InformationBannerWrapper />
-        {/* OMNIA-CUSTOM: carrier picker for the reconciliation run wizard */}
-        {objectNameSingular === 'reconciliation' && (
-          <ReconciliationCarrierPickerModal />
-        )}
-        <SpreadsheetImportProvider>
-          <ViewBar
-            isReadOnly={hasCurrentViewNonReadableFields}
-            viewBarId={recordIndexId}
-            optionsDropdownButton={
-              <ObjectOptionsDropdown
-                recordIndexId={recordIndexId}
-                objectMetadataItem={objectMetadataItem}
-                viewType={recordIndexViewType ?? ViewType.TABLE}
+    <StyledContainer>
+      {/* OMNIA-CUSTOM: carrier picker for the reconciliation run wizard */}
+      {objectNameSingular === 'reconciliation' && (
+        <ReconciliationCarrierPickerModal />
+      )}
+      {hasCurrentViewNonReadableFields ? (
+        <RecordIndexEmptyStateNotShared
+          nonReadableViewFieldInfo={nonReadableViewFieldInfo}
+        />
+      ) : (
+        <>
+          <RecordIndexFiltersToContextStoreEffect />
+          {recordIndexViewType === ViewType.TABLE && (
+            <RecordIndexTableContainer recordTableId={recordIndexId} />
+          )}
+          {recordIndexViewType === ViewType.KANBAN && (
+            <StyledContainerWithPadding>
+              <RecordBoardContainer
+                recordBoardId={recordIndexId}
+                viewBarId={recordIndexId}
+                objectNameSingular={objectNameSingular}
               />
-            }
-          />
-          <RecordIndexViewBarEffect
-            objectNamePlural={objectNamePlural}
-            viewBarId={recordIndexId}
-          />
-        </SpreadsheetImportProvider>
-        {hasCurrentViewNonReadableFields ? (
-          <RecordIndexEmptyStateNotShared
-            nonReadableViewFieldInfo={nonReadableViewFieldInfo}
-          />
-        ) : (
-          <>
-            <RecordIndexFiltersToContextStoreEffect />
-            {recordIndexViewType === ViewType.TABLE && (
-              <RecordIndexTableContainer recordTableId={recordIndexId} />
-            )}
-            {recordIndexViewType === ViewType.KANBAN && (
-              <StyledContainerWithPadding>
-                <RecordBoardContainer
-                  recordBoardId={recordIndexId}
-                  viewBarId={recordIndexId}
-                  objectNameSingular={objectNameSingular}
-                />
-              </StyledContainerWithPadding>
-            )}
-            {recordIndexViewType === ViewType.CALENDAR && (
-              <StyledContainerWithPadding>
-                <RecordIndexCalendarContainer
-                  recordCalendarInstanceId={recordIndexId}
-                  viewBarInstanceId={recordIndexId}
-                />
-              </StyledContainerWithPadding>
-            )}
-          </>
-        )}
-      </StyledContainer>
-    </>
+            </StyledContainerWithPadding>
+          )}
+          {recordIndexViewType === ViewType.CALENDAR && (
+            <StyledContainerWithPadding>
+              <RecordIndexCalendarContainer
+                recordCalendarInstanceId={recordIndexId}
+                viewBarInstanceId={recordIndexId}
+              />
+            </StyledContainerWithPadding>
+          )}
+        </>
+      )}
+    </StyledContainer>
   );
 };

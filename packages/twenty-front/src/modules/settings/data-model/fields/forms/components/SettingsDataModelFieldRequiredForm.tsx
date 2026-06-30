@@ -6,7 +6,7 @@ import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsO
 import { Select } from '@/ui/input/components/Select';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
-import { IconShield } from 'twenty-ui/display';
+import { IconShield } from 'twenty-ui/icon';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type RequiredCondition = {

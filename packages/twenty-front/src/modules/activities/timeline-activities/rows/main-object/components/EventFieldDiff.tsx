@@ -4,6 +4,8 @@ import { EventFieldDiffLabel } from '@/activities/timeline-activities/rows/main-
 import { EventFieldDiffRelationValue } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffRelationValue';
 import { EventFieldDiffValue } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffValue';
 import { EventFieldDiffValueEffect } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffValueEffect';
+import { EventRelationFieldDiffValues } from '@/activities/timeline-activities/rows/main-object/components/EventRelationFieldDiffValues';
+import { isRelationFieldChangeValue } from '@/activities/timeline-activities/utils/relationFieldChangeValue';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { Trans } from '@lingui/react/macro';
@@ -12,9 +14,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type EventFieldDiffProps = {
-  diffRecord: Record<string, unknown>;
-  // OMNIA-CUSTOM: optional before-value preview for timeline update events.
-  diffBeforeRecord?: Record<string, unknown>;
+  fieldDiff: { before: unknown; after: unknown };
   mainObjectMetadataItem: EnrichedObjectMetadataItem;
   fieldMetadataItem: FieldMetadataItem | undefined;
   diffArtificialRecordStoreId: string;
@@ -46,14 +46,12 @@ const StyledBeforeValue = styled.span`
   text-decoration: line-through;
 `;
 
-const StyledArrow = styled.span`
-  color: ${themeCssVariables.font.color.tertiary};
-  flex-shrink: 0;
+const StyledArrowContainer = styled.span`
+  color: ${themeCssVariables.font.color.secondary};
 `;
 
 export const EventFieldDiff = ({
-  diffRecord,
-  diffBeforeRecord,
+  fieldDiff,
   mainObjectMetadataItem,
   fieldMetadataItem,
   diffArtificialRecordStoreId,
@@ -63,11 +61,36 @@ export const EventFieldDiff = ({
     throw new Error('fieldMetadataItem is required');
   }
 
+  const isRelationFieldDiff =
+    fieldMetadataItem.type === FieldMetadataType.RELATION &&
+    (isRelationFieldChangeValue(fieldDiff.before) ||
+      isRelationFieldChangeValue(fieldDiff.after));
+
+  if (isRelationFieldDiff) {
+    return (
+      <StyledEventFieldDiffContainer>
+        <EventFieldDiffLabel fieldMetadataItem={fieldMetadataItem} />
+        <StyledArrowContainer>→</StyledArrowContainer>
+        <EventRelationFieldDiffValues
+          fieldDiff={fieldDiff}
+          fieldMetadataItem={fieldMetadataItem}
+        />
+      </StyledEventFieldDiffContainer>
+    );
+  }
+
+  const diffRecord = fieldDiff.after as Record<string, unknown> | undefined;
+  // OMNIA-CUSTOM: derive the before-value record from the diff so the
+  // struck-through "before" preview can be rendered ahead of the arrow.
+  const diffBeforeRecord = fieldDiff.before as
+    | Record<string, unknown>
+    | undefined;
+
   const isValueEmpty = (value: unknown): boolean =>
     value === null || value === undefined || value === '';
 
-  const isObjectEmpty = (obj: Record<string, unknown>): boolean =>
-    Object.values(obj).every(isValueEmpty);
+  const isObjectEmpty = (objectValue: Record<string, unknown>): boolean =>
+    Object.values(objectValue).every(isValueEmpty);
 
   const isRelationField =
     fieldMetadataItem.type === FieldMetadataType.RELATION ||
@@ -95,38 +118,36 @@ export const EventFieldDiff = ({
   return (
     <StyledEventFieldDiffContainer>
       <EventFieldDiffLabel fieldMetadataItem={fieldMetadataItem} />
+      {/* OMNIA-CUSTOM: struck-through before-value preview ahead of the arrow */}
       {showBeforeValue && (
-        <>
-          <StyledBeforeValue>
-            {isRelationField ? (
-              <EventFieldDiffRelationValue
+        <StyledBeforeValue>
+          {isRelationField ? (
+            <EventFieldDiffRelationValue
+              diffRecord={diffBeforeRecord as Record<string, unknown>}
+              fieldMetadataItem={fieldMetadataItem}
+            />
+          ) : (
+            <>
+              <EventFieldDiffValueEffect
+                diffArtificialRecordStoreId={
+                  diffBeforeArtificialRecordStoreId as string
+                }
+                mainObjectMetadataItem={mainObjectMetadataItem}
+                fieldMetadataItem={fieldMetadataItem}
                 diffRecord={diffBeforeRecord as Record<string, unknown>}
+              />
+              <EventFieldDiffValue
+                diffArtificialRecordStoreId={
+                  diffBeforeArtificialRecordStoreId as string
+                }
+                mainObjectMetadataItem={mainObjectMetadataItem}
                 fieldMetadataItem={fieldMetadataItem}
               />
-            ) : (
-              <>
-                <EventFieldDiffValueEffect
-                  diffArtificialRecordStoreId={
-                    diffBeforeArtificialRecordStoreId as string
-                  }
-                  mainObjectMetadataItem={mainObjectMetadataItem}
-                  fieldMetadataItem={fieldMetadataItem}
-                  diffRecord={diffBeforeRecord as Record<string, unknown>}
-                />
-                <EventFieldDiffValue
-                  diffArtificialRecordStoreId={
-                    diffBeforeArtificialRecordStoreId as string
-                  }
-                  mainObjectMetadataItem={mainObjectMetadataItem}
-                  fieldMetadataItem={fieldMetadataItem}
-                />
-              </>
-            )}
-          </StyledBeforeValue>
-          <StyledArrow>→</StyledArrow>
-        </>
+            </>
+          )}
+        </StyledBeforeValue>
       )}
-      {!showBeforeValue && <>→</>}
+      <StyledArrowContainer>→</StyledArrowContainer>
       {isUpdatedToEmpty ? (
         <StyledEmptyValue>
           <Trans>Empty</Trans>

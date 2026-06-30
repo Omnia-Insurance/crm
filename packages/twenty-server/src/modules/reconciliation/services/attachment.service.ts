@@ -109,11 +109,19 @@ export class ReconciliationAttachmentService {
     // 3. Use FileService.getFileContentById — the production pattern for
     //    reading uploaded files. Handles FileEntity lookup, application
     //    resolution, and storage abstraction (local + S3).
-    const { buffer } = await this.fileService.getFileContentById({
+    const fileContent = await this.fileService.getFileContentById({
       fileId,
       workspaceId,
       fileFolder: FileFolder.FilesField,
     });
+
+    if (!fileContent) {
+      throw new Error(
+        `Failed to read source file content for attachment ${attachment.id} (fileId=${fileId}) in reconciliation ${reconciliationId}`,
+      );
+    }
+
+    const { buffer } = fileContent;
 
     // Cap input size before handing the untrusted buffer to the unpatched
     // xlsx parser (prototype-pollution/ReDoS CVEs) — bounds blast radius.
@@ -227,7 +235,6 @@ export class ReconciliationAttachmentService {
     await this.fileStorageService.writeFile({
       ...this.buildResourceId(workspaceId, reconciliationId, filename),
       sourceFile: json,
-      mimeType: 'application/json',
       fileId: v4(),
       settings: { isTemporaryFile: false, toDelete: false },
     });

@@ -1,23 +1,11 @@
-import path from 'path';
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import withLinaria, { type LinariaConfig } from 'next-with-linaria';
-import { APP_LOCALES } from 'twenty-shared/translations';
+import path from 'path';
 
-// Locale URL segments that are actually served (others are normalised away).
-// Mirrors LOCALE_BY_URL_SEGMENT keys in src/lib/i18n/utils/website-locale-segments.ts.
-const DEPLOYED_LOCALE_URL_SEGMENTS = ['en', 'fr'] as const;
+import { WEBSITE_LOCALE_LIST } from './src/platform/i18n/website-locale-list';
+import { buildLocaleRewrites } from './src/platform/routing/locale-rewrite-patterns';
 
-// Raw locale codes (e.g. fr-FR, de-DE) that should redirect to the un-prefixed
-// path. Excludes pseudo-* locales and the deployed URL segments themselves.
-const RAW_LOCALE_PREFIXES_TO_STRIP = (
-  Object.values(APP_LOCALES) as string[]
-).filter(
-  (locale) =>
-    !locale.startsWith('pseudo-') &&
-    !(DEPLOYED_LOCALE_URL_SEGMENTS as readonly string[]).includes(locale),
-);
-
-const SECURITY_HEADERS = [
+const SECURITY_HEADERS: { key: string; value: string }[] = [
   {
     key: 'Strict-Transport-Security',
     value: 'max-age=63072000; includeSubDomains; preload',
@@ -30,16 +18,18 @@ const SECURITY_HEADERS = [
   },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
-] as const;
+];
 
 // Skew protection: CI sets DEPLOYMENT_ID at build time so it's baked into
 // prerendered HTML + the RSC payloads. The Worker reads the same value at
 // runtime (via the worker env var) and routes mismatched requests to the
-// matching older Worker version via its preview URL.
+// matching older Worker version via its preview URL. Required whenever
+// open-next.config.ts has cloudflare.skewProtection.enabled.
 const deploymentId = process.env.DEPLOYMENT_ID;
 
 const nextConfig: LinariaConfig = {
   deploymentId,
+  reactCompiler: true,
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
@@ -58,7 +48,6 @@ const nextConfig: LinariaConfig = {
   linaria: {
     configFile: path.resolve(__dirname, 'wyw-in-js.config.cjs'),
   },
-  reactCompiler: true,
   experimental: {
     swcPlugins: [
       [
@@ -76,7 +65,7 @@ const nextConfig: LinariaConfig = {
     return [
       {
         source: '/:path*',
-        headers: SECURITY_HEADERS.map((h) => ({ ...h })),
+        headers: SECURITY_HEADERS,
       },
       {
         source: '/(images|illustrations|lottie)/:path*',
@@ -89,20 +78,12 @@ const nextConfig: LinariaConfig = {
       },
     ];
   },
+  // Clean public URLs: the source locale is unprefixed, other locales get a
+  // short segment. Rewrites map unprefixed paths onto the internal /[locale]
+  // tree; redirects canonicalize away explicit source-locale prefixes.
   async rewrites() {
     return {
-      beforeFiles: [
-        // Root rewrites to the source locale.
-        { source: '/', destination: '/en' },
-        // Any path that isn't already locale-prefixed (en/, fr/), an internal
-        // Next.js path, a static asset folder, or a file with an extension
-        // rewrites to the source locale prefix. Mirrors proxy.ts Rule 4.
-        {
-          source:
-            '/:rest((?!en$|en/|fr$|fr/|api|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|illustrations|lottie|fonts|.+\\..+).+)',
-          destination: '/en/:rest',
-        },
-      ],
+      beforeFiles: buildLocaleRewrites(WEBSITE_LOCALE_LIST),
     };
   },
   async redirects() {
@@ -135,19 +116,9 @@ const nextConfig: LinariaConfig = {
         destination: 'https://twenty-main.com/:path*',
         permanent: true,
       },
-      // Strip the source-locale prefix: /en/foo → /foo (301). Mirrors proxy.ts Rule 1.
+      // Strip the source-locale prefix: /en/foo → /foo (301).
       { source: '/en', destination: '/', statusCode: 301 },
       { source: '/en/:path*', destination: '/:path*', statusCode: 301 },
-      // Normalise raw locale codes that aren't deployed URL segments
-      // (e.g. /fr-FR/foo → /foo, /de-DE/foo → /foo). Mirrors proxy.ts Rule 3.
-      ...RAW_LOCALE_PREFIXES_TO_STRIP.flatMap((locale) => [
-        { source: `/${locale}`, destination: '/', permanent: true },
-        {
-          source: `/${locale}/:path*`,
-          destination: '/:path*',
-          permanent: true,
-        },
-      ]),
       {
         source: '/user-guide',
         destination: 'https://docs.twenty.com/user-guide/introduction',
@@ -179,11 +150,6 @@ const nextConfig: LinariaConfig = {
         permanent: true,
       },
       {
-        source: '/developers/:slug',
-        destination: 'https://docs.twenty.com/developers/:slug',
-        permanent: true,
-      },
-      {
         source: '/twenty-ui',
         destination: 'https://docs.twenty.com/twenty-ui/introduction',
         permanent: true,
@@ -196,11 +162,6 @@ const nextConfig: LinariaConfig = {
       {
         source: '/twenty-ui/:folder/:slug*',
         destination: 'https://docs.twenty.com/twenty-ui/:folder/:slug*',
-        permanent: true,
-      },
-      {
-        source: '/twenty-ui/:slug',
-        destination: 'https://docs.twenty.com/twenty-ui/:slug',
         permanent: true,
       },
       {
@@ -257,6 +218,8 @@ const nextConfig: LinariaConfig = {
   },
 };
 
-initOpenNextCloudflareForDev();
+export default withLinaria(nextConfig);
 
-module.exports = withLinaria(nextConfig);
+// Binds the Cloudflare dev context (R2 incremental cache, env vars) into
+// `next dev` so local runs mirror the deployed OpenNext worker.
+initOpenNextCloudflareForDev();

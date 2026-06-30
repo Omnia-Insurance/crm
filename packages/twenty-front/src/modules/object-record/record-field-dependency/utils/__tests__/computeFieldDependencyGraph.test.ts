@@ -65,7 +65,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-pts-field',
               name: 'productTypes',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'productType-obj',
@@ -95,7 +94,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-cps-field',
               name: 'carrierProducts',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'carrierProduct-obj',
@@ -121,7 +119,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'pt-cps-field',
               name: 'carrierProducts',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'carrierProduct-obj',
@@ -154,7 +151,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'cp-pos-field',
               name: 'policyOptions',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policyOption-obj',
@@ -188,7 +184,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -214,7 +209,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'pt-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -240,7 +234,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'cp-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -266,7 +259,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'po-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -418,7 +410,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'alpha-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -444,7 +435,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'beta-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -498,7 +488,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-cps-field',
               name: 'carrierProducts',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'carrierProduct-obj',
@@ -524,7 +513,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'pt-cps-field',
               name: 'carrierProducts',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'carrierProduct-obj',
@@ -557,7 +545,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -583,7 +570,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'pt-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -609,7 +595,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'cp-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -669,7 +654,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-products-field',
               name: 'products',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'product-obj',
@@ -702,7 +686,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -728,7 +711,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'product-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -823,7 +805,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-products-field',
               name: 'products',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'product-obj',
@@ -857,7 +838,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -884,7 +864,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'product-policies-field',
               name: 'policies',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'policy-obj',
@@ -950,7 +929,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-pts-field',
               name: 'productTypes',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'productType-obj',
@@ -983,7 +961,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'carrier-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',
@@ -1009,7 +986,6 @@ describe('computeFieldDependencyGraph', () => {
             targetFieldMetadata: {
               id: 'pt-currents-field',
               name: 'currents',
-              isCustom: false,
             },
             sourceObjectMetadata: {
               id: 'current-obj',

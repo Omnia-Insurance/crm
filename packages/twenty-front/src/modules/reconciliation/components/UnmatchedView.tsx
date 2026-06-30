@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'jotai';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button } from 'twenty-ui/input';
-import { IconPlus, IconX, IconFlag, IconLoader } from 'twenty-ui/display';
-import { Tag } from 'twenty-ui/components';
+import { IconPlus, IconX, IconFlag, IconLoader } from 'twenty-ui/icon';
+import { Tag } from 'twenty-ui/data-display';
 
 import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';

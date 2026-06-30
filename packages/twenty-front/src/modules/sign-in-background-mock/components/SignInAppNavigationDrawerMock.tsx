@@ -19,7 +19,7 @@ import {
   IconSettings,
   IconShield,
   useIcons,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { getOsControlSymbol, useIsMobile } from 'twenty-ui/utilities';
 
 const StyledMainSectionWrapper = styled.div`

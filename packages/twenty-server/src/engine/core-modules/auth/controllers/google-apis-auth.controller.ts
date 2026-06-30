@@ -96,7 +96,7 @@ export class GoogleAPIsAuthController {
         id: workspaceId,
       });
 
-      const handle = emails[0].value;
+      const handle = emails[0].value.toLowerCase();
 
       const connectedAccountId =
         await this.googleAPIsService.refreshGoogleRefreshToken({
@@ -112,10 +112,9 @@ export class GoogleAPIsAuthController {
         });
 
       if (userId) {
-        await this.onboardingService.setOnboardingConnectAccountPending({
+        await this.onboardingService.completeOnboardingConnectAccountStep({
           userId,
           workspaceId,
-          value: false,
         });
       }
 

@@ -8,7 +8,7 @@ import { viewableRecordNameSingularComponentState } from '@/side-panel/pages/rec
 import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
 import { sidePanelPageState } from '@/side-panel/states/sidePanelPageState';
 import { SidePanelPages } from 'twenty-shared/types';
-import { IconSearch } from 'twenty-ui/display';
+import { IconSearch } from 'twenty-ui/icon';
 
 import { useCommandMenuCloseWithValidation } from '@/command-menu/hooks/useCommandMenuCloseWithValidation';
 import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';

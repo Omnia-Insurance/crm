@@ -23,7 +23,7 @@ import { useStore } from 'jotai';
 import { useContext } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { CustomError, isDefined } from 'twenty-shared/utils';
-import { IconForbid } from 'twenty-ui/display';
+import { IconForbid } from 'twenty-ui/icon';
 
 export const RelationManyToOneFieldInput = () => {
   const { t } = useLingui();

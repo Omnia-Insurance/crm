@@ -35,11 +35,11 @@ import {
   IconDotsVertical,
   IconUnlink,
   type IconComponent,
-} from 'twenty-ui/display';
-import { LightIconButton, Button } from 'twenty-ui/input';
+} from 'twenty-ui/icon';
+import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { MenuItem } from 'twenty-ui/navigation';
-import { AnimatedEaseInOut } from 'twenty-ui/utilities';
+import { AnimatedEaseInOut } from 'twenty-ui/layout';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 const StyledClickableZone = styled.div`

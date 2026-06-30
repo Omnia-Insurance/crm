@@ -746,7 +746,6 @@ export class ExportJobProcessor {
 
       const savedFile = await this.fileStorageService.writeFile({
         sourceFile: Buffer.from(csvContent, 'utf-8'),
-        mimeType: 'text/csv',
         fileFolder: FileFolder.Export,
         applicationUniversalIdentifier:
           workspaceCustomFlatApplication.universalIdentifier,

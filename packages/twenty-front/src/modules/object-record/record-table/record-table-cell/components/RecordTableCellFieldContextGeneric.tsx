@@ -1,3 +1,4 @@
+import { useGetIsMetadataItemFromStandardApplication } from '@/object-metadata/hooks/useGetIsMetadataItemFromStandardApplication';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
 import { isLabelIdentifierField } from '@/object-metadata/utils/isLabelIdentifierField';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
@@ -65,16 +66,18 @@ export const RecordTableCellFieldContextGeneric = ({
       fieldMetadataId: `${fieldDefinition.fieldMetadataId}.${recordField.subFieldName}`,
       label: `${fieldDefinition.label} / ${subFieldMeta?.label ?? recordField.subFieldName}`,
       type: (subFieldMeta?.type ?? fieldDefinition.type) as any,
-      isUIReadOnly: true,
+      isUIEditable: false,
       metadata: {
         ...fieldDefinition.metadata,
         subFieldName: recordField.subFieldName,
-        isUIReadOnly: true,
+        isUIEditable: false,
       } as any,
     };
   }
 
   const updateRecord = useContext(RecordTableUpdateContext);
+  const getIsMetadataItemFromStandardApplication =
+    useGetIsMetadataItemFromStandardApplication();
 
   let hasObjectReadPermissions = objectPermissions.canReadObjectRecords;
 
@@ -152,11 +155,14 @@ export const RecordTableCellFieldContextGeneric = ({
         isRecordFieldReadOnly({
           isRecordReadOnly: isRecordReadOnly ?? false,
           isSystemObject: objectMetadataItem.isSystem,
+          isFieldFromStandardApplication:
+            getIsMetadataItemFromStandardApplication({
+              applicationId: fieldDefinition.metadata.applicationId,
+            }),
           objectPermissions,
           fieldMetadataItem: {
             id: fieldDefinition.fieldMetadataId,
-            isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
-            isCustom: fieldDefinition.metadata.isCustom ?? false,
+            isUIEditable: fieldDefinition.metadata.isUIEditable ?? true,
           },
           fieldDefinition,
           objectPermissionsByObjectMetadataId,
@@ -174,6 +180,7 @@ export const RecordTableCellFieldContextGeneric = ({
       objectPermissions,
       hasObjectReadPermissions,
       objectPermissionsByObjectMetadataId,
+      getIsMetadataItemFromStandardApplication,
     ],
   );
 

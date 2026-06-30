@@ -154,14 +154,16 @@ check_file_not_contains \
 
 echo ""
 echo "--- Critical: Sidebar-Based Default Landing Page ---"
+# NOTE: rebuilt on upstream's navigation helpers in the upstream merge; the durable
+# Omnia markers are SIDEBAR_ORDER (member landing order) + showInSidebar (permission filter).
 check_file_contains \
   "packages/twenty-front/src/modules/navigation/hooks/useDefaultHomePagePath.ts" \
-  "navigationMenuItemsSelector" \
-  "Default landing page should use workspace sidebar nav items as source of truth"
+  "showInSidebar" \
+  "Default landing page must filter member-visible objects by the showInSidebar permission"
 check_file_contains \
   "packages/twenty-front/src/modules/navigation/hooks/useDefaultHomePagePath.ts" \
-  "sidebarObjectMetadataIds" \
-  "Admin last-visited should be validated against sidebar membership"
+  "SIDEBAR_ORDER" \
+  "Member landing object must follow Omnia SIDEBAR_ORDER (person/Leads first)"
 
 echo ""
 echo "--- Critical: Create Record CTA ---"
@@ -942,10 +944,9 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/application/application-install/application-install.service.ts" \
   "userWorkspaceId?: string" \
   "App post-install hooks must receive installing user context for Workflow API permissions"
-check_file_contains \
-  "packages/twenty-server/src/engine/core-modules/application/application-install/application-install.resolver.ts" \
-  "@AuthUser({ allowUndefined: true })" \
-  "Direct app installs must forward user context to post-install hooks"
+# NOTE: upstream consolidated the canonical installApplication mutation into
+# marketplace.resolver.ts (which natively forwards user context, matching Omnia's
+# customization). The old application-install.resolver mutation was dropped as redundant.
 check_file_contains \
   "packages/twenty-server/src/engine/core-modules/application/application-marketplace/marketplace.resolver.ts" \
   "@AuthUser({ allowUndefined: true })" \
@@ -1569,7 +1570,7 @@ check_file_contains \
 echo ""
 echo "--- DevelopmentGuard Removed ---"
 check_file_not_contains \
-  "packages/twenty-server/src/engine/core-modules/application/resolvers/application-development.resolver.ts" \
+  "packages/twenty-server/src/engine/core-modules/application/application-development/application-development.resolver.ts" \
   "DevelopmentGuard" \
   "DevelopmentGuard should be removed — app:dev must work on self-hosted prod"
 
@@ -1637,7 +1638,7 @@ check_file_contains \
   "scope: RowLevelPermissionPredicateScope" \
   "Predicate-group entity must persist scope"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1773079000000-add-scope-to-row-level-permission-predicates.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1773079000000-add-scope-to-row-level-permission-predicates.ts" \
   "Migration adding scope to row-level predicates"
 check_file_contains \
   "packages/twenty-server/src/engine/twenty-orm/utils/build-row-level-permission-record-filter.util.ts" \
@@ -1729,36 +1730,49 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/search/services/search.service.ts" \
   "getSearchableFieldExpressions" \
   "Search service must derive fallback search expressions from object field metadata"
+# Omnia indexes ALL active searchable custom-object fields in the searchVector (upstream
+# indexes only the label identifier). On upstream's redesigned model this is expressed as
+# one searchFieldMetadata row per indexed field (NOT a to_tsvector asExpression baked into
+# the now-null TS_VECTOR universalSettings). The migration runner derives the searchVector
+# expression from those rows.
 check_file_exists \
-  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util.ts" \
-  "Shared helper for building custom-object searchVector settings"
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-field-metadatas.util.ts" \
+  "Shared helper for building custom-object searchFieldMetadata rows"
 check_file_contains \
-  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util.ts" \
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-field-metadatas.util.ts" \
+  "isCustomObjectSearchVectorField" \
+  "Custom-object searchVector helper must expose the all-active-searchable-fields predicate"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-field-metadatas.util.ts" \
+  "buildCustomObjectSearchFieldMetadatasForFields" \
+  "Custom-object searchVector helper must build a searchFieldMetadata row per searchable field"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-field-metadatas.util.ts" \
   "getCustomObjectSearchVectorFields" \
-  "Custom-object searchVector helper must filter to active searchable fields"
-check_file_contains \
-  "packages/twenty-server/src/engine/metadata-modules/object-metadata/utils/build-default-flat-field-metadatas-for-custom-object.util.ts" \
-  "buildCustomObjectSearchVectorFieldSettings" \
-  "Default custom objects must build searchVector from the shared helper"
+  "Query-time helper must keep filtering to active searchable fields for global search"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/field-metadata/services/field-metadata.service.ts" \
-  "buildCustomObjectSearchVectorUpdate" \
-  "Field metadata service must recompute custom-object searchVector on create/delete"
-check_file_contains \
-  "packages/twenty-server/src/engine/metadata-modules/field-metadata/services/field-metadata.service.ts" \
-  "fieldUniversalIdentifiersToRemove" \
-  "Field delete path must update custom-object searchVector after removing a field"
+  "buildCustomObjectSearchFieldMetadatasToCreate" \
+  "Field create path must seed searchFieldMetadata rows for new active searchable fields"
 check_file_contains \
   "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-flat-field-metadata-update-side-effect.util.ts" \
   "handleSearchVectorChangesDuringFieldUpdate" \
-  "Field update side effects must recompute custom-object searchVector"
-check_file_exists \
-  "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util.ts" \
-  "Field update helper for custom-object searchVector recomputation"
+  "Field update side effects must sync custom-object searchFieldMetadata rows"
 check_file_contains \
-  "packages/twenty-server/src/engine/metadata-modules/flat-object-metadata/utils/recompute-search-vector-field-after-label-identifier-update.util.ts" \
-  "buildCustomObjectSearchVectorFieldSettings" \
-  "Label-identifier updates must preserve all searchable custom fields in searchVector"
+  "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util.ts" \
+  "isCustomObjectSearchVectorField" \
+  "Field update helper must add/remove searchFieldMetadata rows by the all-searchable-fields rule"
+check_file_contains \
+  "packages/twenty-server/src/engine/metadata-modules/flat-field-metadata/utils/handle-search-vector-changes-during-field-update.util.ts" \
+  "searchFieldMetadatasToDelete" \
+  "Field update helper must drop a field's searchFieldMetadata row when it stops qualifying"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/2-18-workspace-command-1799200002000-backfill-custom-object-search-fields.command.ts" \
+  "Upgrade command backfilling all-searchable-field searchFieldMetadata rows for existing custom objects"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/utils/build-omnia-custom-object-search-field-metadata-backfill-operations.util.ts" \
+  "isCustomObjectSearchVectorField" \
+  "Backfill must enumerate all active searchable custom fields, not just the label identifier"
 check_file_contains \
   "packages/twenty-server/src/engine/workspace-manager/utils/get-ts-vector-column-expression.util.ts" \
   "getSearchableColumnExpressionsFromField" \
@@ -1775,7 +1789,7 @@ check_file_contains \
   "buildPolicyDisplayName" \
   "Policy update hook must keep deriving display name from carrier/product"
 check_file_contains \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1771600000000-add-policy-number-and-rename.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1771600000000-add-policy-number-and-rename.ts" \
   'ADD COLUMN IF NOT EXISTS "policyNumber" text' \
   "Policy number must remain a text field so global search can match pasted policy IDs"
 
@@ -1808,39 +1822,39 @@ check_file_contains \
 echo ""
 echo "--- Custom Migrations Exist ---"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1772591146793-add-edit-window-minutes.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1772591146793-add-edit-window-minutes.ts" \
   "Edit window migration"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1772600000000-change-submitted-date-to-datetime.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1772600000000-change-submitted-date-to-datetime.ts" \
   "SubmittedDate datetime migration"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1773069763255-add-field-metadata-required.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1773069763255-add-field-metadata-required.ts" \
   "Required fields migration"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1775300000000-dedup-calls-and-add-unique-index.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1775300000000-dedup-calls-and-add-unique-index.ts" \
   "Call dedup migration + unique index on convosoCallId"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1776000000000-add-ingestion-pipeline-dedup-field-names.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1776000000000-add-ingestion-pipeline-dedup-field-names.ts" \
   "Composite dedup migration (dedupFieldNames array column)"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1776100000000-add-time-card-unique-index.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1776100000000-add-time-card-unique-index.ts" \
   "Time Card composite unique index migration"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1778000000000-reconcile-time-card-agent-relation.ts" \
   "Time Card agent relation metadata reconciliation migration"
 check_file_contains \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1778000000000-reconcile-time-card-agent-relation.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1778000000000-reconcile-time-card-agent-relation.ts" \
   "ReconcileTimeCardAgentRelation1778000000000" \
   "Time Card relation migration must normalize agent/agentId metadata"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1779200635935-add-call-analytics-indexes.ts" \
   "Call analytics covering indexes migration"
 check_file_contains \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1779200635935-add-call-analytics-indexes.ts" \
   "idx_call_live_billable_date_agent_cover" \
   "Call analytics migration must keep the billable aggregate covering index"
 check_file_contains \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1779200635935-add-call-analytics-indexes.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1779200635935-add-call-analytics-indexes.ts" \
   "transaction = false" \
   "Call analytics indexes must be created concurrently outside TypeORM migration transactions"
 
@@ -1987,7 +2001,7 @@ check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/entities/export-job.entity.ts" \
   "Export job TypeORM entity (core.exportJob table)"
 check_file_exists \
-  "packages/twenty-server/src/database/typeorm/core/migrations/common/1774400000000-add-export-job-entity.ts" \
+  "packages/twenty-server/src/database/typeorm/core/legacy-typeorm-migrations-do-not-add/common/1774400000000-add-export-job-entity.ts" \
   "Migration creating core.exportJob table"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
@@ -2468,18 +2482,11 @@ check_file_contains \
   "App.tsx must mount <Agentation /> in development for annotation syncing"
 
 echo ""
-echo "--- Compressed localStorage ---"
-check_file_contains \
-  "packages/twenty-front/src/modules/metadata-store/states/metadataStoreState.ts" \
-  "createCompressedLocalStorage" \
-  "metadataStoreState must use compressed localStorage adapter (Safari 5MB quota)"
-check_file_contains \
-  "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createAtomFamilyState.ts" \
-  "customStringStorage" \
-  "createAtomFamilyState must support custom string storage adapter"
-check_file_exists \
-  "packages/twenty-front/src/modules/ui/utilities/state/jotai/utils/createCompressedLocalStorage.ts" \
-  "Compressed localStorage adapter using lz-string"
+# NOTE: metadataStore lz-string compression (createCompressedLocalStorage) was
+# removed in the upstream merge — upstream's IndexedDB-backed metadataStoreStorage
+# (createIndexedDbBackedJotaiStorage) supersedes it, solving the same Safari 5MB
+# localStorage quota problem natively. customStringStorage in createAtomFamilyState
+# is now unused and can be dropped in a follow-up.
 check_file_contains \
   "packages/twenty-front/src/modules/metadata-store/hooks/useLoadMinimalMetadata.ts" \
   ".status === 'empty'" \

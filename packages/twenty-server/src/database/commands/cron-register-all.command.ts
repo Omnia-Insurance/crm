@@ -1,15 +1,18 @@
 import { Logger } from '@nestjs/common';
 
 import { Command, CommandRunner } from 'nest-commander';
+import { isDefined } from 'twenty-shared/utils';
 
 import { MarketplaceCatalogSyncCronCommand } from 'src/engine/core-modules/application/application-marketplace/crons/commands/marketplace-catalog-sync.cron.command';
 import { StaleRegistrationCleanupCronCommand } from 'src/engine/core-modules/application/application-oauth/stale-registration-cleanup/commands/stale-registration-cleanup.cron.command';
 import { ApplicationVersionCheckCronCommand } from 'src/engine/core-modules/application/application-upgrade/crons/commands/application-version-check.cron.command';
+import { BillingReminderCronCommand } from 'src/engine/core-modules/billing/reminders/crons/commands/billing-reminder.cron.command';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EventLogCleanupCronCommand } from 'src/engine/core-modules/event-logs/cleanup/commands/event-log-cleanup.cron.command';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
 import { CronTriggerCronCommand } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/cron/cron-trigger.cron.command';
 import { CheckPublicDomainsValidRecordsCronCommand } from 'src/engine/core-modules/public-domain/crons/commands/check-public-domains-valid-records.cron.command';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { CheckCustomDomainValidRecordsCronCommand } from 'src/engine/core-modules/workspace/crons/commands/check-custom-domain-valid-records.cron.command';
 import { TrashCleanupCronCommand } from 'src/engine/trash-cleanup/commands/trash-cleanup.cron.command';
 import { CleanOnboardingWorkspacesCronCommand } from 'src/engine/workspace-manager/workspace-cleaner/commands/clean-onboarding-workspaces.cron.command';
@@ -64,12 +67,24 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly marketplaceCatalogSyncCronCommand: MarketplaceCatalogSyncCronCommand,
     private readonly applicationVersionCheckCronCommand: ApplicationVersionCheckCronCommand,
     private readonly staleRegistrationCleanupCronCommand: StaleRegistrationCleanupCronCommand,
+    private readonly billingReminderCronCommand: BillingReminderCronCommand,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {
     super();
   }
 
   async run(): Promise<void> {
     this.logger.log('Registering all background sync cron jobs...');
+
+    const isSigningKeyAutoRotationEnabled = isDefined(
+      this.twentyConfigService.get('SIGNING_KEY_ROTATION_DAYS'),
+    );
+
+    const isMarketplaceCatalogSyncEnabled = this.twentyConfigService.get(
+      'MARKETPLACE_CATALOG_SYNC_CRON_ENABLED',
+    );
+
+    const isBillingEnabled = this.twentyConfigService.get('IS_BILLING_ENABLED');
 
     const allCommands = [
       {
@@ -155,6 +170,7 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'MarketplaceCatalogSync',
         command: this.marketplaceCatalogSyncCronCommand,
+        isEnabled: isMarketplaceCatalogSyncEnabled,
       },
       {
         name: 'ApplicationVersionCheck',
@@ -167,10 +183,16 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'RotateSigningKeys',
         command: this.rotateSigningKeysCronCommand,
+        isEnabled: isSigningKeyAutoRotationEnabled,
       },
       {
         name: 'StaleRegistrationCleanup',
         command: this.staleRegistrationCleanupCronCommand,
+      },
+      {
+        name: 'BillingReminder',
+        command: this.billingReminderCronCommand,
+        isEnabled: isBillingEnabled,
       },
     ];
 
@@ -178,8 +200,15 @@ export class CronRegisterAllCommand extends CommandRunner {
     let failureCount = 0;
     const failures: string[] = [];
     const successes: string[] = [];
+    const skipped: string[] = [];
 
-    for (const { name, command } of allCommands) {
+    for (const { name, command, isEnabled = true } of allCommands) {
+      if (!isEnabled) {
+        this.logger.log(`Skipping ${name} cron job (disabled by config)`);
+        skipped.push(name);
+        continue;
+      }
+
       try {
         this.logger.log(`Registering ${name} cron job...`);
         await command.run();
@@ -194,7 +223,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     }
 
     this.logger.log(
-      `Cron job registration completed: ${successCount} successful, ${failureCount} failed`,
+      `Cron job registration completed: ${successCount} successful, ${failureCount} failed, ${skipped.length} skipped`,
     );
 
     if (failures.length > 0) {
@@ -203,6 +232,10 @@ export class CronRegisterAllCommand extends CommandRunner {
 
     if (successCount > 0) {
       this.logger.log(`Successful commands: ${successes.join(', ')}`);
+    }
+
+    if (skipped.length > 0) {
+      this.logger.log(`Skipped commands: ${skipped.join(', ')}`);
     }
   }
 }

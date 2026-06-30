@@ -3,9 +3,10 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useNavigate, useParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/display';
+import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
-import { Card, Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/layout';
+import { Card } from 'twenty-ui/surfaces';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { SettingsOptionCardContentToggle } from '@/settings/components/SettingsOptions/SettingsOptionCardContentToggle';
@@ -17,7 +18,7 @@ import { IngestionTestSection } from '@/settings/ingestion-pipeline/components/I
 import { useIngestionFieldMappings } from '@/settings/ingestion-pipeline/hooks/useIngestionFieldMappings';
 import { useIngestionPipeline } from '@/settings/ingestion-pipeline/hooks/useIngestionPipeline';
 import { useIngestionPipelineLogs } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelineLogs';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 
 const StyledDangerZone = styled.div`
   border-top: 1px solid ${themeCssVariables.border.color.danger};
@@ -44,13 +45,13 @@ export const SettingsIngestionPipelineDetail = () => {
 
   if (loading || !pipeline) {
     return (
-      <SubMenuTopBarContainer title={t`Loading...`} links={[]}>
+      <SettingsPageLayout title={t`Loading...`} links={[]}>
         <SettingsPageContainer>
           <div>
             <Trans>Loading...</Trans>
           </div>
         </SettingsPageContainer>
-      </SubMenuTopBarContainer>
+      </SettingsPageLayout>
     );
   }
 
@@ -81,7 +82,7 @@ export const SettingsIngestionPipelineDetail = () => {
       : null;
 
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       title={pipeline.name}
       links={[
         { children: <Trans>Settings</Trans>, href: '/settings' },
@@ -172,6 +173,6 @@ export const SettingsIngestionPipelineDetail = () => {
           </StyledDangerZone>
         </Section>
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

@@ -37,12 +37,19 @@ export {
   promotePrimaryEmailToAdditional,
 } from './composite/promotePrimaryToAdditional';
 export { computeDiffBetweenObjects } from './compute-diff-between-objects';
+export {
+  NON_ISO_DATE_FORMATS,
+  ACCEPTED_DATE_FORMATS,
+  ACCEPTED_DATE_TIME_FORMATS,
+} from './date/dateInputFormats';
+export { isDateWithoutTime } from './date/isDateWithoutTime';
 export { isPlainDateAfter } from './date/isPlainDateAfter';
 export { isPlainDateBefore } from './date/isPlainDateBefore';
 export { isPlainDateBeforeOrEqual } from './date/isPlainDateBeforeOrEqual';
 export { isPlainDateInSameMonth } from './date/isPlainDateInSameMonth';
 export { isPlainDateInWeekend } from './date/isPlainDateInWeekend';
 export { isSamePlainDate } from './date/isSamePlainDate';
+export { parseToInstantOrThrow } from './date/parseToInstantOrThrow';
 export { parseToPlainDateOrThrow } from './date/parseToPlainDateOrThrow';
 export { sortPlainDate } from './date/sortPlainDate';
 export { turnJSDateToPlainDate } from './date/turnJSDateToPlainDate';
@@ -60,9 +67,13 @@ export {
 export { isFieldMetadataArrayKind } from './fieldMetadata/isFieldMetadataArrayKind';
 export { isFieldMetadataDateKind } from './fieldMetadata/isFieldMetadataDateKind';
 export { isFieldMetadataEligibleForFieldsWidget } from './fieldMetadata/isFieldMetadataEligibleForFieldsWidget';
+export { isFieldMetadataEnumKind } from './fieldMetadata/isFieldMetadataEnumKind';
 export { isFieldMetadataNumericKind } from './fieldMetadata/isFieldMetadataNumericKind';
 export { isFieldMetadataSelectKind } from './fieldMetadata/isFieldMetadataSelectKind';
+export { isFieldMetadataSupportedInGroupBy } from './fieldMetadata/isFieldMetadataSupportedInGroupBy';
 export { isFieldMetadataTextKind } from './fieldMetadata/isFieldMetadataTextKind';
+export { pickMorphGroupSurvivorOrThrow } from './fieldMetadata/pick-morph-group-survivor-or-throw';
+export { shouldExcludeFieldFromAgentToolSchema } from './fieldMetadata/shouldExcludeFieldFromAgentToolSchema';
 export { extractFolderPathFilenameAndTypeOrThrow } from './files/extractFolderPathFilenameAndTypeOrThrow.util';
 export { checkIfShouldComputeEmptinessFilter } from './filter/checkIfShouldComputeEmptinessFilter';
 export { computeGqlOperationFilterForEmails } from './filter/compute-record-gql-operation-filter/for-composite-field/computeGqlOperationFilterForEmails';
@@ -84,6 +95,7 @@ export {
   getNextPeriodStart,
 } from './filter/dates/utils/getNextPeriodStart';
 export { getPeriodStart } from './filter/dates/utils/getPeriodStart';
+export { isSubDayRelativeDateFilterUnit } from './filter/dates/utils/isSubDayRelativeDateFilterUnit';
 export { relativeDateFilterAmountSchema } from './filter/dates/utils/relativeDateFilterAmountSchema';
 export type { RelativeDateFilterDirection } from './filter/dates/utils/relativeDateFilterDirectionSchema';
 export { relativeDateFilterDirectionSchema } from './filter/dates/utils/relativeDateFilterDirectionSchema';
@@ -115,6 +127,7 @@ export { turnRecordFilterGroupsIntoGqlOperationFilter } from './filter/turnRecor
 export type { FieldShared } from './filter/turnRecordFilterIntoGqlOperationFilter';
 export { turnRecordFilterIntoRecordGqlOperationFilter } from './filter/turnRecordFilterIntoGqlOperationFilter';
 export { combineFilters } from './filter/utils/combineFilters';
+export { COMPOSITE_FIELD_FILTER_OPERANDS_MAP } from './filter/utils/compositeFieldFilterOperandsMap';
 export { convertViewFilterOperandToCoreOperand } from './filter/utils/convert-view-filter-operand-to-core-operand.util';
 export { convertViewFilterValueToString } from './filter/utils/convertViewFilterValueToString';
 export { createAnyFieldRecordFilterBaseProperties } from './filter/utils/createAnyFieldRecordFilterBaseProperties';
@@ -123,9 +136,11 @@ export {
   convertLessThanOrEqualRatingToArrayOfRatingValues,
   convertRatingToRatingValue,
 } from './filter/utils/fieldRatingConvertors';
+export { FILTER_OPERANDS_MAP } from './filter/utils/filterOperandsMap';
 export { filterSelectOptionsOfFieldMetadataItem } from './filter/utils/filterSelectOptionsOfFieldMetadataItem';
 export { generateILikeFiltersForCompositeFields } from './filter/utils/generateILikeFiltersForCompositeFields';
 export { getEmptyRecordGqlOperationFilter } from './filter/utils/getEmptyRecordGqlOperationFilter';
+export { getFilterOperandsForFilterableFieldType } from './filter/utils/getFilterOperandsForFilterableFieldType';
 export { getFilterTypeFromFieldType } from './filter/utils/getFilterTypeFromFieldType';
 export { isExpectedSubFieldName } from './filter/utils/isExpectedSubFieldName';
 export { isMatchingArrayFilter } from './filter/utils/isMatchingArrayFilter';
@@ -185,6 +200,7 @@ export { pascalCase } from './strings/pascalCase';
 export { pascalToKebab } from './strings/pascalToKebab';
 export { stringifySafely } from './strings/stringifySafely';
 export { uncapitalize } from './strings/uncapitalize';
+export { getSubdomainSlugFromDisplayName } from './subdomain/getSubdomainSlugFromDisplayName';
 export type {
   TipTapMarkType,
   TipTapNodeType,
@@ -199,6 +215,7 @@ export {
 export type { StringPropertyKeys } from './trim-and-remove-duplicated-whitespaces-from-object-string-properties';
 export { trimAndRemoveDuplicatedWhitespacesFromObjectStringProperties } from './trim-and-remove-duplicated-whitespaces-from-object-string-properties';
 export { trimAndRemoveDuplicatedWhitespacesFromString } from './trim-and-remove-duplicated-whitespaces-from-string';
+export { typedObjectEntries } from './typed-object-entries';
 export { isMetadataGqlOperationSignature } from './typeguard/isMetadataGqlOperationSignature';
 export { isPlainObject } from './typeguard/isPlainObject';
 export { isRecordGqlOperationSignature } from './typeguard/isRecordGqlOperationSignature';

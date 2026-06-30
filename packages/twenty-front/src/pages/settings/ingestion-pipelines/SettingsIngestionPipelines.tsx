@@ -3,14 +3,15 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useNavigate } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title, IconPlus } from 'twenty-ui/display';
+import { IconPlus } from 'twenty-ui/icon';
+import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { useIngestionPipelines } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelines';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 
 const StyledTable = styled.table`
   border-collapse: collapse;
@@ -67,7 +68,7 @@ export const SettingsIngestionPipelines = () => {
   const { pipelines, loading } = useIngestionPipelines();
 
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       title={t`Ingestion Pipelines`}
       actionButton={
         <Button
@@ -149,6 +150,6 @@ export const SettingsIngestionPipelines = () => {
           )}
         </Section>
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

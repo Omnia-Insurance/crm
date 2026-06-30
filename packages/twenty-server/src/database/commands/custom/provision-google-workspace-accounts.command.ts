@@ -17,7 +17,7 @@ import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twent
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { type ConnectedAccountWorkspaceEntity } from 'src/modules/connected-account/standard-objects/connected-account.workspace-entity';
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import {
   MessageChannelPendingGroupEmailsAction,
   MessageChannelSyncStage,
@@ -153,7 +153,7 @@ export class ProvisionGoogleWorkspaceAccountsCommand extends ActiveOrSuspendedWo
 
     // Load existing connected accounts
     const connectedAccountRepository =
-      await this.globalWorkspaceOrmManager.getRepository<ConnectedAccountWorkspaceEntity>(
+      await this.globalWorkspaceOrmManager.getRepository<ConnectedAccountEntity>(
         workspaceId,
         'connectedAccount',
         { shouldBypassPermissionChecks: true },

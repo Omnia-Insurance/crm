@@ -31,6 +31,7 @@ type FromUpdateFieldInputToFlatFieldMetadataArgs = {
   | 'flatObjectMetadataMaps'
   | 'flatIndexMaps'
   | 'flatFieldMetadataMaps'
+  | 'flatSearchFieldMetadataMaps'
   | 'flatViewFilterMaps'
   | 'flatViewGroupMaps'
   | 'flatViewMaps'
@@ -46,6 +47,7 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
   flatIndexMaps,
   flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
   flatFieldMetadataMaps,
+  flatSearchFieldMetadataMaps,
   updateFieldInput: rawUpdateFieldInput,
   flatViewFilterMaps,
   flatViewGroupMaps,
@@ -146,6 +148,7 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
       flatObjectMetadataMaps: existingFlatObjectMetadataMaps,
       fromFlatFieldMetadata,
       flatFieldMetadataMaps,
+      flatSearchFieldMetadataMaps,
       flatIndexMaps,
       toFlatFieldMetadata,
       flatViewMaps,
@@ -173,6 +176,8 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
       flatViewFieldsToDelete,
       flatViewsToUpdate,
       flatFieldMetadatasToUpdate: flatFieldMetadatasToUpdateFromSideEffect,
+      searchFieldMetadatasToCreate,
+      searchFieldMetadatasToDelete,
     } = sideEffectResult.result;
 
     return {
@@ -180,6 +185,14 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
         ...accumulator.flatFieldMetadatasToUpdate,
         toFlatFieldMetadata,
         ...flatFieldMetadatasToUpdateFromSideEffect,
+      ],
+      searchFieldMetadatasToCreate: [
+        ...accumulator.searchFieldMetadatasToCreate,
+        ...searchFieldMetadatasToCreate,
+      ],
+      searchFieldMetadatasToDelete: [
+        ...accumulator.searchFieldMetadatasToDelete,
+        ...searchFieldMetadatasToDelete,
       ],
       flatIndexMetadatasToUpdate: [
         ...accumulator.flatIndexMetadatasToUpdate,

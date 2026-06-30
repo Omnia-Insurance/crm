@@ -10,8 +10,8 @@ import { I18nProvider } from '@lingui/react';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { Agentation } from 'agentation';
 import { Provider as JotaiProvider } from 'jotai';
-import { HelmetProvider } from 'react-helmet-async';
-import { IconsProvider } from 'twenty-ui/display';
+import { HelmetProvider } from '@dr.pogodin/react-helmet';
+import { IconsProvider } from 'twenty-ui/icon';
 import { initialI18nActivate } from '~/utils/i18n/initialI18nActivate';
 
 initialI18nActivate();
