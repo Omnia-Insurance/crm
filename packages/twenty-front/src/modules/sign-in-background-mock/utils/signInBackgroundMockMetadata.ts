@@ -103,9 +103,7 @@ function createSelectFieldMetadataItem(): FieldMetadataItem {
     label: 'Status',
     description: 'Lead status',
     icon: 'IconTag',
-    isCustom: true,
     isSystem: false,
-    isUIReadOnly: false,
     isNullable: true,
     defaultValue: null,
     options: [
@@ -151,7 +149,6 @@ function createAddressFieldMetadataItem(): FieldMetadataItem {
     label: 'Address',
     description: 'Lead address',
     icon: 'IconMap',
-    isCustom: true,
     relation: null,
     morphRelations: null,
   };
@@ -200,7 +197,6 @@ function createManyToOneRelationFieldMetadataItem({
     label: fieldLabel,
     description,
     icon,
-    isCustom: true,
     relation: {
       type: RelationType.MANY_TO_ONE,
       sourceFieldMetadata: {
@@ -210,7 +206,6 @@ function createManyToOneRelationFieldMetadataItem({
       targetFieldMetadata: {
         id: targetFieldId,
         name: targetFieldName,
-        isCustom: targetFieldIsCustom,
       },
       sourceObjectMetadata: {
         id: basePersonObjectMetadataItem.id,
@@ -247,7 +242,6 @@ function createOneToManyRelationFieldMetadataItem(): FieldMetadataItem {
     label: 'Policies',
     description: 'Policies linked to the lead',
     icon: 'IconShield',
-    isCustom: true,
     relation: {
       type: RelationType.ONE_TO_MANY,
       sourceFieldMetadata: {
@@ -257,7 +251,6 @@ function createOneToManyRelationFieldMetadataItem(): FieldMetadataItem {
       targetFieldMetadata: {
         id: metadataIds.fields.backlinks.policyLead,
         name: 'lead',
-        isCustom: true,
       },
       sourceObjectMetadata: {
         id: basePersonObjectMetadataItem.id,
@@ -364,9 +357,7 @@ function createSimpleCustomObjectMetadataItem({
     universalIdentifier,
     nameSingular,
     namePlural,
-    isCustom: true,
     isSystem: false,
-    isUIReadOnly: false,
     labelIdentifierFieldMetadataId,
     imageIdentifierFieldMetadataId: null,
     shortcut: null,
@@ -418,7 +409,6 @@ function createSimpleCustomObjectFieldMetadataItems({
       universalIdentifier: nameFieldUniversalIdentifier,
       description,
       icon,
-      isCustom: true,
       objectMetadataId,
     },
   ];

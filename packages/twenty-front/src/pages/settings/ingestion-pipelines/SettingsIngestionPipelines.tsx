@@ -1,16 +1,18 @@
+/* eslint-disable twenty/no-navigate-prefer-link -- OMNIA-CUSTOM: this settings page navigates from a Button action and a clickable table row, neither of which is a semantic <Link>. */
 import { styled } from '@linaria/react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useNavigate } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title, IconPlus } from 'twenty-ui/display';
+import { IconPlus } from 'twenty-ui/icon';
+import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { useIngestionPipelines } from '@/settings/ingestion-pipeline/hooks/useIngestionPipelines';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 
 const StyledTable = styled.table`
   border-collapse: collapse;
@@ -27,10 +29,10 @@ const StyledTh = styled.th`
 `;
 
 const StyledTd = styled.td`
-  padding: ${themeCssVariables.spacing[2]};
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  font-size: ${themeCssVariables.font.size.md};
   cursor: pointer;
+  font-size: ${themeCssVariables.font.size.md};
+  padding: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledModeTag = styled.span<{ mode: string }>`
@@ -38,14 +40,14 @@ const StyledModeTag = styled.span<{ mode: string }>`
     mode === 'push'
       ? themeCssVariables.color.blue10
       : themeCssVariables.color.green10};
+  border-radius: ${themeCssVariables.border.radius.sm};
   color: ${({ mode }) =>
     mode === 'push'
       ? themeCssVariables.color.blue
       : themeCssVariables.color.green};
-  padding: ${themeCssVariables.spacing['0.5']} ${themeCssVariables.spacing[1]};
-  border-radius: ${themeCssVariables.border.radius.sm};
   font-size: ${themeCssVariables.font.size.xs};
   font-weight: ${themeCssVariables.font.weight.medium};
+  padding: ${themeCssVariables.spacing['0.5']} ${themeCssVariables.spacing[1]};
   text-transform: uppercase;
 `;
 
@@ -66,8 +68,20 @@ export const SettingsIngestionPipelines = () => {
   const navigate = useNavigate();
   const { pipelines, loading } = useIngestionPipelines();
 
+  const handleCreatePipeline = () => {
+    navigate(getSettingsPath(SettingsPath.NewIngestionPipeline));
+  };
+
+  const handlePipelineClick = (pipelineId: string) => {
+    navigate(
+      getSettingsPath(SettingsPath.IngestionPipelineDetail, {
+        pipelineId,
+      }),
+    );
+  };
+
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       title={t`Ingestion Pipelines`}
       actionButton={
         <Button
@@ -75,9 +89,7 @@ export const SettingsIngestionPipelines = () => {
           title={t`New pipeline`}
           size="small"
           variant="secondary"
-          onClick={() =>
-            navigate(getSettingsPath(SettingsPath.NewIngestionPipeline))
-          }
+          onClick={handleCreatePipeline}
         />
       }
       links={[
@@ -123,13 +135,7 @@ export const SettingsIngestionPipelines = () => {
                 {pipelines.map((pipeline) => (
                   <tr
                     key={pipeline.id}
-                    onClick={() =>
-                      navigate(
-                        getSettingsPath(SettingsPath.IngestionPipelineDetail, {
-                          pipelineId: pipeline.id,
-                        }),
-                      )
-                    }
+                    onClick={() => handlePipelineClick(pipeline.id)}
                   >
                     <StyledTd>{pipeline.name}</StyledTd>
                     <StyledTd>
@@ -149,6 +155,6 @@ export const SettingsIngestionPipelines = () => {
           )}
         </Section>
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

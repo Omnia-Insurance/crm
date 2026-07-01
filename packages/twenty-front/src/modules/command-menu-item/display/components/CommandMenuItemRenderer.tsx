@@ -1,3 +1,5 @@
+import { AppMenuItem } from '@/applications/components/AppMenuItem';
+import { useIsThirdPartyApplication } from '@/applications/hooks/useIsThirdPartyApplication';
 import { CommandMenuContext } from '@/command-menu-item/contexts/CommandMenuContext';
 import { CommandListItemLoader } from '@/command-menu-item/display/components/CommandListItemLoader';
 import { interpolateCommandMenuItemFields } from '@/command-menu-item/display/utils/interpolateCommandMenuItemFields';
@@ -14,7 +16,7 @@ import { COMMAND_MENU_DEFAULT_ICON } from '@/workflow/workflow-trigger/constants
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon';
 import { Loader } from 'twenty-ui/feedback';
 import { MenuItem } from 'twenty-ui/navigation';
 import {
@@ -32,12 +34,14 @@ const StyledPreviewWrapper = styled.div`
 
 type CommandMenuItemRendererProps = {
   item: CommandMenuItemFieldsFragment;
+  isPrimaryAction?: boolean;
 };
 
 type CommandMenuItemButtonRendererProps = CommandMenuItemRendererProps;
 
 const CommandMenuItemButtonRenderer = ({
   item,
+  isPrimaryAction = false,
 }: CommandMenuItemButtonRendererProps) => {
   const { commandMenuContextApi, isInPreviewMode } =
     useContext(CommandMenuContext);
@@ -75,7 +79,10 @@ const CommandMenuItemButtonRenderer = ({
   if (isInPreviewMode) {
     return (
       <StyledPreviewWrapper>
-        <CommandMenuButton command={command} />
+        <CommandMenuButton
+          command={command}
+          isPrimaryAction={isPrimaryAction}
+        />
       </StyledPreviewWrapper>
     );
   }
@@ -85,6 +92,7 @@ const CommandMenuItemButtonRenderer = ({
       command={command}
       onClick={disabled ? undefined : handleClick}
       disabled={disabled}
+      isPrimaryAction={isPrimaryAction}
     />
   );
 };
@@ -118,6 +126,8 @@ const CommandMenuItemSelectableRenderer = ({
     selectableListInstanceId,
   );
 
+  const isThirdPartyApp = useIsThirdPartyApplication(item.applicationId);
+
   const onItemClick = () => {
     if (disabled) {
       return;
@@ -125,16 +135,31 @@ const CommandMenuItemSelectableRenderer = ({
     handleClick();
   };
 
-  if (displayType === 'listItem') {
-    const loaderComponent =
-      disabled && showDisabledLoader ? (
-        isDefined(progress) ? (
-          <CommandListItemLoader progress={progress} />
-        ) : (
-          <Loader />
-        )
-      ) : undefined;
+  const loaderComponent =
+    disabled && showDisabledLoader ? (
+      isDefined(progress) ? (
+        <CommandListItemLoader progress={progress} />
+      ) : (
+        <Loader />
+      )
+    ) : undefined;
 
+  if (isThirdPartyApp) {
+    return (
+      <SelectableListItem itemId={item.id} onEnter={onItemClick}>
+        <AppMenuItem
+          applicationId={item.applicationId}
+          text={getCommandMenuItemLabel(label)}
+          onClick={disabled ? undefined : handleClick}
+          focused={!disabled && isSelectedItemId}
+          disabled={disabled}
+          RightComponent={loaderComponent}
+        />
+      </SelectableListItem>
+    );
+  }
+
+  if (displayType === 'listItem') {
     return (
       <SelectableListItem itemId={item.id} onEnter={onItemClick}>
         <CommandMenuItem
@@ -166,11 +191,17 @@ const CommandMenuItemSelectableRenderer = ({
 // oxlint-disable-next-line twenty/effect-components
 export const CommandMenuItemRenderer = ({
   item,
+  isPrimaryAction,
 }: CommandMenuItemRendererProps) => {
   const { displayType } = useContext(CommandMenuContext);
 
   if (displayType === 'button') {
-    return <CommandMenuItemButtonRenderer item={item} />;
+    return (
+      <CommandMenuItemButtonRenderer
+        item={item}
+        isPrimaryAction={isPrimaryAction}
+      />
+    );
   }
 
   if (displayType === 'listItem' || displayType === 'dropdownItem') {

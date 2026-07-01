@@ -1,5 +1,4 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { TwoFactorAuthenticationStrategy } from 'twenty-shared/types';
 
@@ -10,7 +9,7 @@ import {
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-
+import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 import {
   TwoFactorAuthenticationException,
   TwoFactorAuthenticationExceptionCode,
@@ -19,7 +18,6 @@ import { TwoFactorAuthenticationService } from './two-factor-authentication.serv
 
 import { TwoFactorAuthenticationMethodEntity } from './entities/two-factor-authentication-method.entity';
 import { OTPStatus } from './strategies/otp/otp.constants';
-import { SimpleSecretEncryptionUtil } from './utils/simple-secret-encryption.util';
 
 const V2_ENVELOPE_PREFIX = 'enc:v2:';
 
@@ -61,7 +59,6 @@ describe('TwoFactorAuthenticationService', () => {
   let repository: any;
   let userWorkspaceService: any;
   let secretEncryptionService: any;
-  let simpleSecretEncryptionUtil: any;
 
   const mockUser = { id: 'user_123', email: 'test@example.com' };
   const workspace = { id: 'ws_123', displayName: 'Test Workspace' };
@@ -72,14 +69,15 @@ describe('TwoFactorAuthenticationService', () => {
 
   const rawSecret = 'RAW_OTP_SECRET';
   const encryptedSecret = `${V2_ENVELOPE_PREFIX}abcdef12:payload`;
-  const legacyCbcSecret = '0123456789abcdef0123456789abcdef:cafebabe';
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TwoFactorAuthenticationService,
         {
-          provide: getRepositoryToken(TwoFactorAuthenticationMethodEntity),
+          provide: getWorkspaceScopedRepositoryToken(
+            TwoFactorAuthenticationMethodEntity,
+          ),
           useValue: {
             findOne: jest.fn(),
             save: jest.fn(),
@@ -95,13 +93,7 @@ describe('TwoFactorAuthenticationService', () => {
           provide: SecretEncryptionService,
           useValue: {
             encryptVersioned: jest.fn(),
-            decryptVersioned: jest.fn(),
-          },
-        },
-        {
-          provide: SimpleSecretEncryptionUtil,
-          useValue: {
-            decryptSecret: jest.fn(),
+            decryptVersionedOrThrow: jest.fn(),
           },
         },
       ],
@@ -111,15 +103,12 @@ describe('TwoFactorAuthenticationService', () => {
       TwoFactorAuthenticationService,
     );
     repository = module.get(
-      getRepositoryToken(TwoFactorAuthenticationMethodEntity),
+      getWorkspaceScopedRepositoryToken(TwoFactorAuthenticationMethodEntity),
     );
     userWorkspaceService =
       module.get<UserWorkspaceService>(UserWorkspaceService);
     secretEncryptionService = module.get<SecretEncryptionService>(
       SecretEncryptionService,
-    );
-    simpleSecretEncryptionUtil = module.get<SimpleSecretEncryptionUtil>(
-      SimpleSecretEncryptionUtil,
     );
 
     jest.clearAllMocks();
@@ -201,9 +190,8 @@ describe('TwoFactorAuthenticationService', () => {
         rawSecret,
         { workspaceId: workspace.id },
       );
-      expect(repository.save).toHaveBeenCalledWith({
+      expect(repository.save).toHaveBeenCalledWith(workspace.id, {
         id: undefined,
-        workspaceId: workspace.id,
         userWorkspace: mockUserWorkspace,
         secret: encryptedSecret,
         status: 'PENDING',
@@ -223,6 +211,7 @@ describe('TwoFactorAuthenticationService', () => {
       );
 
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           secret: encryptedSecret,
           status: 'PENDING',
@@ -251,6 +240,7 @@ describe('TwoFactorAuthenticationService', () => {
         'otpauth://totp/test@example.com?secret=RAW_OTP_SECRET&issuer=Twenty%20-%20Test%20Workspace',
       );
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           id: existingMethod.id,
           secret: encryptedSecret,
@@ -293,7 +283,9 @@ describe('TwoFactorAuthenticationService', () => {
       };
 
       repository.findOne.mockResolvedValue(existingMethod);
-      secretEncryptionService.decryptVersioned.mockReturnValue(rawSecret);
+      secretEncryptionService.decryptVersionedOrThrow.mockReturnValue(
+        rawSecret,
+      );
 
       const expectedUri =
         'otpauth://totp/test@example.com?secret=RAW_OTP_SECRET&issuer=Twenty%20-%20Test%20Workspace';
@@ -306,43 +298,10 @@ describe('TwoFactorAuthenticationService', () => {
       );
 
       expect(uri).toBe(expectedUri);
-      expect(secretEncryptionService.decryptVersioned).toHaveBeenCalledWith(
-        encryptedSecret,
-        { workspaceId: workspace.id },
-      );
-      expect(simpleSecretEncryptionUtil.decryptSecret).not.toHaveBeenCalled();
+      expect(
+        secretEncryptionService.decryptVersionedOrThrow,
+      ).toHaveBeenCalledWith(encryptedSecret, { workspaceId: workspace.id });
       // Should not create new method or call initiate
-      expect(totpStrategyMocks.initiate).not.toHaveBeenCalled();
-      expect(repository.save).not.toHaveBeenCalled();
-    });
-
-    it('falls back to SimpleSecretEncryptionUtil when the stored secret is in the legacy AES-CBC format', async () => {
-      const recentTime = new Date(Date.now() - 5 * 60 * 1000);
-      const existingMethod = {
-        id: 'existing_method_id',
-        status: 'PENDING',
-        secret: legacyCbcSecret,
-        createdAt: recentTime,
-      };
-
-      repository.findOne.mockResolvedValue(existingMethod);
-      simpleSecretEncryptionUtil.decryptSecret.mockResolvedValue(rawSecret);
-
-      const uri = await service.initiateStrategyConfiguration(
-        mockUser.id,
-        mockUser.email,
-        workspace.id,
-        workspace.displayName,
-      );
-
-      expect(uri).toBe(
-        'otpauth://totp/test@example.com?secret=RAW_OTP_SECRET&issuer=Twenty%20-%20Test%20Workspace',
-      );
-      expect(simpleSecretEncryptionUtil.decryptSecret).toHaveBeenCalledWith(
-        legacyCbcSecret,
-        `${mockUser.id}${workspace.id}otp-secret`,
-      );
-      expect(secretEncryptionService.decryptVersioned).not.toHaveBeenCalled();
       expect(totpStrategyMocks.initiate).not.toHaveBeenCalled();
       expect(repository.save).not.toHaveBeenCalled();
     });
@@ -374,6 +333,7 @@ describe('TwoFactorAuthenticationService', () => {
       // Should create new method since existing one is too old
       // (Don't check if totpStrategyMocks.initiate was called due to mocking complexity)
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           id: existingMethod.id,
           secret: encryptedSecret,
@@ -395,7 +355,7 @@ describe('TwoFactorAuthenticationService', () => {
       repository.findOne.mockResolvedValue(existingMethod);
       const decryptionError = new Error('Decryption failed');
 
-      secretEncryptionService.decryptVersioned.mockImplementation(() => {
+      secretEncryptionService.decryptVersionedOrThrow.mockImplementation(() => {
         throw decryptionError;
       });
 
@@ -437,6 +397,7 @@ describe('TwoFactorAuthenticationService', () => {
       // Should create new method since createdAt is null
       // (Don't check if totpStrategyMocks.initiate was called due to mocking complexity)
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           id: existingMethod.id,
           secret: encryptedSecret,
@@ -459,7 +420,9 @@ describe('TwoFactorAuthenticationService', () => {
 
     it('should successfully validate a valid token', async () => {
       repository.findOne.mockResolvedValue(mock2FAMethod);
-      secretEncryptionService.decryptVersioned.mockReturnValue(rawSecret);
+      secretEncryptionService.decryptVersionedOrThrow.mockReturnValue(
+        rawSecret,
+      );
 
       totpStrategyMocks.validate.mockReturnValue({
         isValid: true,
@@ -473,53 +436,27 @@ describe('TwoFactorAuthenticationService', () => {
         TwoFactorAuthenticationStrategy.TOTP,
       );
 
-      expect(secretEncryptionService.decryptVersioned).toHaveBeenCalledWith(
-        encryptedSecret,
-        { workspaceId: workspace.id },
-      );
-      expect(simpleSecretEncryptionUtil.decryptSecret).not.toHaveBeenCalled();
+      expect(
+        secretEncryptionService.decryptVersionedOrThrow,
+      ).toHaveBeenCalledWith(encryptedSecret, { workspaceId: workspace.id });
       expect(totpStrategyMocks.validate).toHaveBeenCalledWith(otpToken, {
         status: mock2FAMethod.status,
         secret: rawSecret,
       });
 
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           status: OTPStatus.VERIFIED,
         }),
       );
     });
 
-    it('dispatches to SimpleSecretEncryptionUtil for legacy AES-CBC secrets', async () => {
-      const legacyMethod = {
-        ...mock2FAMethod,
-        secret: legacyCbcSecret,
-      };
-
-      repository.findOne.mockResolvedValue(legacyMethod);
-      simpleSecretEncryptionUtil.decryptSecret.mockResolvedValue(rawSecret);
-      totpStrategyMocks.validate.mockReturnValue({
-        isValid: true,
-        context: { status: legacyMethod.status, secret: rawSecret },
-      });
-
-      await service.validateStrategy(
-        mockUser.id,
-        otpToken,
-        workspace.id,
-        TwoFactorAuthenticationStrategy.TOTP,
-      );
-
-      expect(simpleSecretEncryptionUtil.decryptSecret).toHaveBeenCalledWith(
-        legacyCbcSecret,
-        `${mockUser.id}${workspace.id}otp-secret`,
-      );
-      expect(secretEncryptionService.decryptVersioned).not.toHaveBeenCalled();
-    });
-
     it('should throw if the token is invalid', async () => {
       repository.findOne.mockResolvedValue(mock2FAMethod);
-      secretEncryptionService.decryptVersioned.mockReturnValue(rawSecret);
+      secretEncryptionService.decryptVersionedOrThrow.mockReturnValue(
+        rawSecret,
+      );
       totpStrategyMocks.validate.mockReturnValue({
         isValid: false,
         context: mock2FAMethod,
@@ -582,7 +519,7 @@ describe('TwoFactorAuthenticationService', () => {
 
     it('should handle secret decryption errors', async () => {
       repository.findOne.mockResolvedValue(mock2FAMethod);
-      secretEncryptionService.decryptVersioned.mockImplementation(() => {
+      secretEncryptionService.decryptVersionedOrThrow.mockImplementation(() => {
         throw new Error('Secret decryption failed');
       });
 
@@ -609,7 +546,9 @@ describe('TwoFactorAuthenticationService', () => {
 
     it('should successfully verify and return success', async () => {
       repository.findOne.mockResolvedValue(mock2FAMethod);
-      secretEncryptionService.decryptVersioned.mockReturnValue(rawSecret);
+      secretEncryptionService.decryptVersionedOrThrow.mockReturnValue(
+        rawSecret,
+      );
 
       totpStrategyMocks.validate.mockReturnValue({
         isValid: true,
@@ -630,6 +569,7 @@ describe('TwoFactorAuthenticationService', () => {
       });
 
       expect(repository.save).toHaveBeenCalledWith(
+        workspace.id,
         expect.objectContaining({
           status: OTPStatus.VERIFIED,
         }),
@@ -638,7 +578,9 @@ describe('TwoFactorAuthenticationService', () => {
 
     it('should throw if the token is invalid', async () => {
       repository.findOne.mockResolvedValue(mock2FAMethod);
-      secretEncryptionService.decryptVersioned.mockReturnValue(rawSecret);
+      secretEncryptionService.decryptVersionedOrThrow.mockReturnValue(
+        rawSecret,
+      );
       totpStrategyMocks.validate.mockReturnValue({
         isValid: false,
         context: mock2FAMethod,

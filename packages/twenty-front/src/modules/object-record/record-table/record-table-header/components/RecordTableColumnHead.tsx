@@ -8,7 +8,7 @@ import { type RecordField } from '@/object-record/record-field/types/RecordField
 import { shouldCompactRecordTableFirstColumnComponentState } from '@/object-record/record-table/states/shouldCompactRecordTableFirstColumnComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon';
 import {
   MOBILE_VIEWPORT,
   ThemeContext,
@@ -66,12 +66,15 @@ export const RecordTableColumnHead = ({
   // OMNIA-CUSTOM: For sub-field columns, resolve the label from the target object
   let headerLabel =
     correspondingFieldMetadataItem.foundFieldMetadataItem?.label ?? '';
-  let headerIcon =
-    correspondingFieldMetadataItem.foundFieldMetadataItem?.icon;
+  let headerIcon = correspondingFieldMetadataItem.foundFieldMetadataItem?.icon;
 
-  if (recordField.subFieldName && correspondingFieldMetadataItem.foundFieldMetadataItem) {
-    const targetObjName = correspondingFieldMetadataItem.foundFieldMetadataItem
-      .relation?.targetObjectMetadata?.nameSingular;
+  if (
+    recordField.subFieldName &&
+    correspondingFieldMetadataItem.foundFieldMetadataItem
+  ) {
+    const targetObjName =
+      correspondingFieldMetadataItem.foundFieldMetadataItem.relation
+        ?.targetObjectMetadata?.nameSingular;
     const targetObj = objectMetadataItems.find(
       (o) => o.nameSingular === targetObjName,
     );
@@ -103,9 +106,7 @@ export const RecordTableColumnHead = ({
       <StyledIcon>
         <Icon size={theme.icon.size.md} />
       </StyledIcon>
-      <StyledText>
-        {headerLabel}
-      </StyledText>
+      <StyledText>{headerLabel}</StyledText>
     </StyledTitle>
   );
 };

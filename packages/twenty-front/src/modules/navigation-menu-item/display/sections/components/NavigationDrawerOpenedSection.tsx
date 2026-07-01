@@ -32,10 +32,13 @@ export const NavigationDrawerOpenedSection = () => {
     (item) => item.id === objectMetadataIdForOpenedSection,
   );
 
-  // Omnia: also suppress the "Opened" section when the object is already
+  if (!isDefined(objectMetadataItem)) {
+    return null;
+  }
+
+  // OMNIA-CUSTOM: also suppress the "Opened" section when the object is already
   // visible in the workspace sidebar via showInSidebar permission.
   const isAlreadyShownInWorkspaceSection =
-    isDefined(objectMetadataItem) &&
     !hasLayoutsPermission &&
     getObjectPermissionsForObject(
       objectPermissionsByObjectMetadataId,
@@ -45,7 +48,6 @@ export const NavigationDrawerOpenedSection = () => {
   // Layout-capable users see the editable workspace tree, so use the actual
   // navigation items to avoid showing the same object again under "Opened".
   const isAlreadyShownInEditableWorkspaceSection =
-    isDefined(objectMetadataItem) &&
     hasLayoutsPermission &&
     workspaceNavigationMenuItemsSorted.some((navigationMenuItem) => {
       const workspaceObjectMetadataItem =
@@ -58,18 +60,18 @@ export const NavigationDrawerOpenedSection = () => {
       return workspaceObjectMetadataItem?.id === objectMetadataItem.id;
     });
 
-  const shouldShowOpenedSection =
-    isDefined(objectMetadataItem) &&
-    !isAlreadyShownInWorkspaceSection &&
-    !isAlreadyShownInEditableWorkspaceSection;
+  if (
+    isAlreadyShownInWorkspaceSection ||
+    isAlreadyShownInEditableWorkspaceSection
+  ) {
+    return null;
+  }
 
   return (
-    <AnimatedExpandableContainer isExpanded={shouldShowOpenedSection}>
+    <AnimatedExpandableContainer isExpanded>
       <NavigationDrawerSectionForObjectMetadataItems
         sectionTitle={t`Opened`}
-        objectMetadataItems={
-          isDefined(objectMetadataItem) ? [objectMetadataItem] : []
-        }
+        objectMetadataItems={[objectMetadataItem]}
       />
     </AnimatedExpandableContainer>
   );

@@ -2,7 +2,7 @@ import { styled } from '@linaria/react';
 import { isNonEmptyString } from '@sniptt/guards';
 import { AppPath } from 'twenty-shared/types';
 import { getImageAbsoluteURI, isDefined } from 'twenty-shared/utils';
-import { Avatar } from 'twenty-ui/display';
+import { Avatar } from 'twenty-ui/data-display';
 import { UndecoratedLink } from 'twenty-ui/navigation';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { REACT_APP_SERVER_BASE_URL } from '~/config';
@@ -13,6 +13,7 @@ type LogoProps = {
   secondaryLogo?: string | null;
   placeholder?: string | null;
   onClick?: () => void;
+  to?: AppPath;
 };
 
 const StyledContainer = styled.div`
@@ -56,6 +57,7 @@ export const Logo = ({
   secondaryLogo,
   placeholder,
   onClick,
+  to = AppPath.SignInUp,
 }: LogoProps) => {
   const { redirectToDefaultDomain } = useRedirectToDefaultDomain();
   const defaultPrimaryLogoUrl = `${window.location.origin}/images/icons/android/android-launchericon-192-192.png`;
@@ -85,10 +87,7 @@ export const Logo = ({
   return (
     <StyledContainer onClick={() => onClick?.()}>
       {isUsingDefaultLogo && !hideSecondaryLogo ? (
-        <UndecoratedLink
-          to={AppPath.SignInUp}
-          onClick={redirectToDefaultDomain}
-        >
+        <UndecoratedLink to={to} onClick={() => redirectToDefaultDomain()}>
           <StyledPrimaryLogo
             style={{ backgroundImage: `url(${effectivePrimaryLogoUrl})` }}
           />

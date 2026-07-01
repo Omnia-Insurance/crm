@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'jotai';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button } from 'twenty-ui/input';
-import { IconPlus, IconX, IconFlag, IconLoader } from 'twenty-ui/display';
-import { Tag } from 'twenty-ui/components';
+import { IconPlus, IconX, IconFlag, IconLoader } from 'twenty-ui/icon';
+import { Tag } from 'twenty-ui/data-display';
 
 import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
@@ -228,9 +228,12 @@ export const UnmatchedView = ({
 
   // ── Resolve product from plan name ──
 
-  const planNameRaw = resolveBobValue(snapshot, crmFieldLookup, 'planIdentifier', [
-    'plan_name',
-  ]);
+  const planNameRaw = resolveBobValue(
+    snapshot,
+    crmFieldLookup,
+    'planIdentifier',
+    ['plan_name'],
+  );
   const planName = planNameRaw == null ? null : String(planNameRaw);
   const resolvedProduct = useMemo(
     () => resolveProductFromPlanName(planName, productMapping),
@@ -372,9 +375,12 @@ export const UnmatchedView = ({
   // ── Pre-fetch existing lead by phone number ──
 
   const phoneNumber = String(
-    resolveBobValue(snapshot, crmFieldLookup, 'lead.phones.primaryPhoneNumber', [
-      'member_phone_number',
-    ]) ?? '',
+    resolveBobValue(
+      snapshot,
+      crmFieldLookup,
+      'lead.phones.primaryPhoneNumber',
+      ['member_phone_number'],
+    ) ?? '',
   ).replace(/\D/g, '');
   const { records: existingLeadsByPhone } = useFindManyRecords({
     objectNameSingular: 'person',
@@ -444,9 +450,12 @@ export const UnmatchedView = ({
         leadId = existingLead.id;
       } else {
         const email = String(
-          resolveBobValue(snapshot, crmFieldLookup, 'lead.emails.primaryEmail', [
-            'member_email',
-          ]) ?? '',
+          resolveBobValue(
+            snapshot,
+            crmFieldLookup,
+            'lead.emails.primaryEmail',
+            ['member_email'],
+          ) ?? '',
         );
         const dobRaw = resolveBobValue(
           snapshot,

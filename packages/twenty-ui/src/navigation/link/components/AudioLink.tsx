@@ -1,56 +1,38 @@
-import { styled } from '@linaria/react';
 import { THEME_COMMON } from '@ui/theme';
 import { ThemeContext } from '@ui/theme-constants';
 import { useContext } from 'react';
+
+import styles from './AudioLink.module.scss';
 
 type AudioLinkProps = {
   src: string;
 };
 
+// OMNIA-CUSTOM: audio player for call-recording playback. Uses SCSS modules +
+// inline theme styles (twenty-ui dropped Linaria/wyw in the v2.19 merge, so a
+// `styled` component here would ship a runtime stub and crash at import time).
 const spacing1 = THEME_COMMON.spacing(1);
-
-const StyledAudioContainer = styled.div<{
-  background: string;
-  border: string;
-}>`
-  align-items: center;
-  background-color: ${({ background }) => background};
-  border: 1px solid ${({ border }) => border};
-  border-radius: 50px;
-  display: inline-flex;
-  max-width: 100%;
-  overflow: hidden;
-  padding: ${spacing1};
-`;
-
-const StyledAudio = styled.audio`
-  height: 24px;
-  max-width: 160px;
-
-  &::-webkit-media-controls-panel {
-    background: transparent;
-  }
-`;
 
 export const AudioLink = ({ src }: AudioLinkProps) => {
   const { theme } = useContext(ThemeContext);
-
-  const background = theme.background.transparent.lighter;
-  const border = theme.border.color.strong;
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     event.stopPropagation();
   };
 
   return (
-    <StyledAudioContainer
-      background={background}
-      border={border}
+    <div
+      className={styles.audioContainer}
+      style={{
+        backgroundColor: theme.background.transparent.lighter,
+        border: `1px solid ${theme.border.color.strong}`,
+        padding: spacing1,
+      }}
       onClick={handleClick}
     >
-      <StyledAudio controls preload="none">
+      <audio className={styles.audio} controls preload="none">
         <source src={src} type="audio/mpeg" />
-      </StyledAudio>
-    </StyledAudioContainer>
+      </audio>
+    </div>
   );
 };

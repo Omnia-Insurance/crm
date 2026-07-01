@@ -9,7 +9,12 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { ViewType } from '@/views/types/ViewType';
 import { useContext, useState } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
-import { IconChevronLeft, IconChevronRight, IconEye, useIcons } from 'twenty-ui/display';
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconEye,
+  useIcons,
+} from 'twenty-ui/icon';
 import { MenuItem } from 'twenty-ui/navigation';
 
 // OMNIA-CUSTOM: Field types that can be displayed as relation sub-field columns
@@ -158,8 +163,7 @@ export const ViewFieldsHiddenDropdownSection = () => {
             iconButtons={[
               {
                 Icon: IconChevronRight,
-                onClick: () =>
-                  setExpandedRelationFieldId(fieldMetadataItem.id),
+                onClick: () => setExpandedRelationFieldId(fieldMetadataItem.id),
               },
             ]}
             text={`${fieldMetadataItem.label} fields...`}

@@ -9,6 +9,10 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { returnToPathState } from '@/auth/states/returnToPathState';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
+import {
+  clearSsoTokenPairCookie,
+  writeSsoTokenPairCookie,
+} from '@/auth/utils/ssoTokenPairCookie';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -39,6 +43,9 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
 
   const setReturnToPath = useSetAtomState(returnToPathState);
   const location = useLocation();
+  // oxlint-disable-next-line twenty/no-state-useref
+  const locationRef = useRef(location);
+  locationRef.current = location;
 
   const { enqueueErrorSnackBar } = useSnackBar();
 
@@ -64,20 +71,28 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       appVersion,
       onTokenPairChange: (tokenPair) => {
         setTokenPair(tokenPair);
+        // OMNIA-CUSTOM: keep the cross-app SSO cookie in sync on every silent
+        // token refresh so the sibling omniaagent.com dashboard never verifies a
+        // stale/expired token.
+        writeSsoTokenPairCookie(tokenPair);
       },
       onUnauthenticatedError: () => {
         setTokenPair(null);
+        // OMNIA-CUSTOM: drop the cross-app SSO cookie so the sibling app also
+        // loses the session on unauthenticated errors.
+        clearSsoTokenPairCookie();
         setCurrentUser(null);
         setCurrentWorkspaceMember(null);
         setCurrentWorkspace(null);
         setCurrentUserWorkspace(null);
         if (
-          !isMatchingLocation(location, AppPath.Verify) &&
-          !isMatchingLocation(location, AppPath.SignInUp) &&
-          !isMatchingLocation(location, AppPath.Invite) &&
-          !isMatchingLocation(location, AppPath.ResetPassword)
+          !isMatchingLocation(locationRef.current, AppPath.Verify) &&
+          !isMatchingLocation(locationRef.current, AppPath.VerifyV2) &&
+          !isMatchingLocation(locationRef.current, AppPath.SignInUp) &&
+          !isMatchingLocation(locationRef.current, AppPath.Invite) &&
+          !isMatchingLocation(locationRef.current, AppPath.ResetPassword)
         ) {
-          const path = `${location.pathname}${location.search}${location.hash}`;
+          const path = `${locationRef.current.pathname}${locationRef.current.search}${locationRef.current.hash}`;
 
           if (isValidReturnToPath(path)) {
             setReturnToPath(path);

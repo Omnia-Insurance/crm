@@ -1,3 +1,4 @@
+import { currentUserState } from '@/auth/states/currentUserState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { objectPermissionsFamilySelector } from '@/auth/states/objectPermissionsFamilySelector';
@@ -153,6 +154,10 @@ export const useCurrentCommandMenuContextApi = (): CommandMenuContextApi => {
     permissionFlags[flag] = true;
   }
 
+  const currentUser = useAtomStateValue(currentUserState);
+  const canImpersonate = currentUser?.canImpersonate === true;
+  const canAccessFullAdminPanel = currentUser?.canAccessFullAdminPanel === true;
+
   const targetObjectReadPermissions: Record<string, boolean> = {};
   const targetObjectWritePermissions: Record<string, boolean> = {};
 
@@ -190,6 +195,8 @@ export const useCurrentCommandMenuContextApi = (): CommandMenuContextApi => {
     permissionFlags,
     targetObjectReadPermissions,
     targetObjectWritePermissions,
+    canImpersonate,
+    canAccessFullAdminPanel,
     objectMetadataItem: objectMetadataItem ?? {},
     objectMetadataLabel,
   };

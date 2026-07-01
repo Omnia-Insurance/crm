@@ -16,10 +16,10 @@ type ExtractPropertyToCompare<
 
 export type MetadataUniversalFlatEntityPropertiesToCompare<
   T extends AllMetadataName,
-  MetadataConfig = (typeof ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME)[T],
-  TComparedKeys extends
-    keyof MetadataConfig = MetadataEntityComparablePropertyName<T> &
-    keyof MetadataConfig,
+  MetadataConfig =
+    (typeof ALL_ENTITY_PROPERTIES_CONFIGURATION_BY_METADATA_NAME)[T],
+  TComparedKeys extends keyof MetadataConfig =
+    MetadataEntityComparablePropertyName<T> & keyof MetadataConfig,
 > = {
   [P in TComparedKeys]: ExtractPropertyToCompare<MetadataConfig, P>;
 }[TComparedKeys] &
@@ -41,6 +41,7 @@ type Assertions = [
       | 'isUnique'
       | 'requiredCondition'
       | 'isLabelSyncedWithName'
+      | 'isUIEditable'
       | 'universalSettings'
     >
   >,
@@ -62,9 +63,12 @@ type Assertions = [
       | 'calendarFieldMetadataUniversalIdentifier'
       | 'mainGroupByFieldMetadataUniversalIdentifier'
       | 'shouldHideEmptyGroups'
+      | 'kanbanColumnWidth'
       | 'anyFieldFilterValue'
       | 'visibility'
       | 'createdByUserWorkspaceId'
+      | 'isActive'
+      | 'universalOverrides'
     >
   >,
 ];

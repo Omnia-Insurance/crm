@@ -10,7 +10,7 @@ import {
   IconAlertTriangle,
   IconSquareRoundedCheck,
   IconX,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { CircularProgressBar, ProgressBar } from 'twenty-ui/feedback';
 import { LightIconButton } from 'twenty-ui/input';
 import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';

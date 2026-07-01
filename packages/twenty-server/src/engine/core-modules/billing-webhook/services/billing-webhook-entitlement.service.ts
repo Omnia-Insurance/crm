@@ -14,14 +14,20 @@ import {
 } from 'src/engine/core-modules/billing/billing.exception';
 import { BillingCustomerEntity } from 'src/engine/core-modules/billing/entities/billing-customer.entity';
 import { BillingEntitlementEntity } from 'src/engine/core-modules/billing/entities/billing-entitlement.entity';
-
+import { BillingEntitlementKey } from 'src/engine/core-modules/billing/enums/billing-entitlement-key.enum';
+import { RowLevelPermissionPredicateGroupService } from 'src/engine/metadata-modules/row-level-permission-predicate/services/row-level-permission-predicate-group.service';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 @Injectable()
 export class BillingWebhookEntitlementService {
   constructor(
+    // Stripe webhook: workspace discovered from BillingCustomer by stripeCustomerId.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(BillingCustomerEntity)
     private readonly billingCustomerRepository: Repository<BillingCustomerEntity>,
-    @InjectRepository(BillingEntitlementEntity)
-    private readonly billingEntitlementRepository: Repository<BillingEntitlementEntity>,
+    @InjectWorkspaceScopedRepository(BillingEntitlementEntity)
+    private readonly billingEntitlementRepository: WorkspaceScopedRepository<BillingEntitlementEntity>,
+    private readonly rowLevelPermissionPredicateGroupService: RowLevelPermissionPredicateGroupService,
   ) {}
 
   async processStripeEvent(
@@ -46,10 +52,27 @@ export class BillingWebhookEntitlementService {
         data,
       );
 
-    await this.billingEntitlementRepository.upsert(billingEntitlements, {
-      conflictPaths: ['workspaceId', 'key'],
-      skipUpdateIfNoValuesChanged: true,
-    });
+    await this.billingEntitlementRepository.upsert(
+      workspaceId,
+      billingEntitlements,
+      {
+        conflictPaths: ['workspaceId', 'key'],
+        skipUpdateIfNoValuesChanged: true,
+      },
+    );
+
+    const isRowLevelPermissionDisabled = billingEntitlements.some(
+      (entitlement) =>
+        entitlement.workspaceId === workspaceId &&
+        entitlement.key === BillingEntitlementKey.RLS &&
+        entitlement.value === false,
+    );
+
+    if (isRowLevelPermissionDisabled) {
+      await this.rowLevelPermissionPredicateGroupService.deleteAllRowLevelPermissionPredicateGroups(
+        workspaceId,
+      );
+    }
 
     return {
       stripeEntitlementCustomerId: data.object.customer,

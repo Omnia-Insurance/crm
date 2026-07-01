@@ -42,7 +42,7 @@ import {
   CustomError,
   isDefined,
 } from 'twenty-shared/utils';
-import { IconPlus } from 'twenty-ui/display';
+import { IconPlus } from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
 
 type RecordDetailRelationSectionDropdownToManyProps = {
@@ -131,13 +131,12 @@ export const RecordDetailRelationSectionDropdownToMany = ({
   }
 
   // OMNIA-CUSTOM: lead-policy allowlist filter for the record picker
-  const {
-    additionalFilter: leadPolicyRecordPickerAdditionalFilter,
-  } = useLeadPolicyRecordPickerAdditionalFilter({
-    recordId,
-    inverseFieldName: relationFieldMetadataItem.name,
-    relationObjectMetadataNameSingular,
-  });
+  const { additionalFilter: leadPolicyRecordPickerAdditionalFilter } =
+    useLeadPolicyRecordPickerAdditionalFilter({
+      recordId,
+      inverseFieldName: relationFieldMetadataItem.name,
+      relationObjectMetadataNameSingular,
+    });
 
   const fieldValue = useAtomFamilySelectorValue(recordStoreFamilySelector, {
     recordId,

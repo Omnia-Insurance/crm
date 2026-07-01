@@ -1,3 +1,8 @@
+// OMNIA-CUSTOM: mount the required-fields close/back validation modal here so it
+// participates in the side-panel modal stack (upstream v2.19 merge relocated the
+// side-panel host and orphaned <RequiredFieldsValidationModal />).
+import { RequiredFieldsValidationModal } from '@/command-menu/components/RequiredFieldsValidationModal';
+import { useBeforeUnloadRequiredFieldsCheck } from '@/command-menu/hooks/useBeforeUnloadRequiredFieldsCheck';
 import { tableWidthResizeIsActiveState } from '@/object-record/record-table/states/tableWidthResizeIsActivedState';
 import { SidePanelRouter } from '@/side-panel/components/SidePanelRouter';
 import { SidePanelWidthEffect } from '@/side-panel/components/SidePanelWidthEffect';
@@ -37,8 +42,7 @@ const StyledSidePanelWrapper = styled.div<{
 
 const StyledSidePanel = styled.aside`
   background: ${themeCssVariables.background.primary};
-  border: 1px solid ${themeCssVariables.border.color.medium};
-  border-radius: ${themeCssVariables.border.radius.md};
+  border-left: 1px solid ${themeCssVariables.border.color.medium};
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -58,8 +62,6 @@ const StyledModalContainer = styled.div`
   z-index: 1;
 `;
 
-const GAP_WIDTH = 8;
-
 export const SidePanelForDesktop = () => {
   const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
   const isSidePanelClosing = useAtomStateValue(isSidePanelClosingState);
@@ -67,6 +69,9 @@ export const SidePanelForDesktop = () => {
   const { closeSidePanelMenu } = useSidePanelMenu();
   const { sidePanelCloseAnimationCompleteCleanup } =
     useSidePanelCloseAnimationCompleteCleanup();
+
+  // OMNIA-CUSTOM: guard browser unload when a persisted new record has empty required fields.
+  useBeforeUnloadRequiredFieldsCheck();
 
   const [modalContainer, setModalContainer] = useState<HTMLDivElement | null>(
     null,
@@ -130,7 +135,7 @@ export const SidePanelForDesktop = () => {
         currentWidth={sidePanelWidth}
         onWidthChange={handleWidthChange}
         onCollapse={handleCollapse}
-        gapWidth={isSidePanelOpened ? GAP_WIDTH : 0}
+        gapWidth={0}
         cssVariableName={SIDE_PANEL_WIDTH_VAR}
         onResizeStart={handleResizeStart}
       />
@@ -150,6 +155,10 @@ export const SidePanelForDesktop = () => {
             >
               {shouldShowContent && <SidePanelRouter />}
             </ParentClickOutsideIdContext.Provider>
+            {/* OMNIA-CUSTOM: mount inside the side-panel ModalContainerContext so the
+                required-fields validation modal renders into the modal stack when a
+                persisted new record with empty required fields is closed / navigated back. */}
+            <RequiredFieldsValidationModal />
           </ModalContainerContext.Provider>
         </StyledSidePanel>
       </StyledSidePanelWrapper>

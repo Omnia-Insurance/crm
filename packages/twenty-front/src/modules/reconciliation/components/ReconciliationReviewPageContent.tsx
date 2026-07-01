@@ -16,7 +16,6 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
 import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
-import { MainContainerLayoutWithSidePanel } from '@/object-record/components/MainContainerLayoutWithSidePanel';
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
 import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
 import { RecordShowContainerContextStoreTargetedRecordsEffect } from '@/object-record/record-show/components/RecordShowContainerContextStoreTargetedRecordsEffect';
@@ -54,16 +53,30 @@ export type ReviewItemRecord = ObjectRecord & {
 
 const StyledPageBody = styled.div`
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
 `;
 
-type Props = {
+// Replaces the upstream MainContainerLayoutWithSidePanel wrapper, which was
+// removed when upstream hoisted the side panel up to the MainAppLayoutWithSidePanel
+// route layout. This keeps the main content filling the available space without
+// rendering a second (duplicate) side panel.
+const StyledMainContainer = styled.div`
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+`;
+
+type ReconciliationReviewPageContentProps = {
   objectRecordId: string;
 };
 
-export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
+export const ReconciliationReviewPageContent = ({
+  objectRecordId,
+}: ReconciliationReviewPageContentProps) => {
   // Use the same hook RecordShowPage uses — handles metadata, icon, etc.
   const { objectNameSingular } = useRecordShowPage(
     'reconciliation',
@@ -155,9 +168,11 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
                   objectRecordId={objectRecordId}
                 >
                   <RecordShowCommandMenu />
-                  {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
+                  {!isLayoutCustomizationModeEnabled && (
+                    <SidePanelToggleButton />
+                  )}
                 </RecordShowPageHeader>
-                <MainContainerLayoutWithSidePanel>
+                <StyledMainContainer>
                   <TimelineActivityContext.Provider
                     value={{ recordId: objectRecordId }}
                   >
@@ -181,7 +196,7 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
                       </StyledPageBody>
                     </ReconciliationFilterProviders>
                   </TimelineActivityContext.Provider>
-                </MainContainerLayoutWithSidePanel>
+                </StyledMainContainer>
               </PageContainer>
             </CommandMenuComponentInstanceContext.Provider>
           </ContextStoreComponentInstanceContext.Provider>

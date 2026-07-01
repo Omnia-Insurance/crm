@@ -84,9 +84,7 @@ const addAction = async (options: {
   test?: boolean;
 }) => {
   if (options.apiUrl) {
-    console.warn(
-      chalk.yellow('⚠ --api-url is deprecated. Use --url instead.'),
-    );
+    console.warn(chalk.yellow('⚠ --api-url is deprecated. Use --url instead.'));
   }
   const configPath = options.test ? getConfigPath(true) : undefined;
   const configService = new ConfigService(
@@ -213,7 +211,7 @@ const useAction = async (nameArg?: string) => {
     (
       await inquirer.prompt<{ remote: string }>([
         {
-          type: 'list',
+          type: 'select',
           name: 'remote',
           message: 'Select default remote:',
           choices: await configService.getRemotes(),

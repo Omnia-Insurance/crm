@@ -52,9 +52,16 @@ export const useRelevantRecordsGqlFields = ({
     )
     .filter(isDefined);
 
+  const additionalFieldMetadataItem = isDefined(additionalFieldMetadataId)
+    ? fieldMetadataItemByFieldMetadataItemId[additionalFieldMetadataId]
+    : undefined;
+
   const fieldMetadataItemsToUse = [
     ...visibleRecordFieldMetadataItems,
     ...(recordFilterFields ?? []),
+    ...(isDefined(additionalFieldMetadataItem)
+      ? [additionalFieldMetadataItem]
+      : []),
   ].filter(filterDuplicatesById);
 
   const allDepthOneGqlFields = generateDepthRecordGqlFieldsFromFields({
@@ -112,13 +119,17 @@ export const useRelevantRecordsGqlFields = ({
       subFieldMeta?.relation?.type !== 'ONE_TO_MANY' &&
       subFieldMeta?.settings?.relationType !== 'ONE_TO_MANY';
     const joinColumnName = isManyToOne
-      ? subFieldMeta?.settings?.joinColumnName ??
-        `${recordField.subFieldName}Id`
+      ? (subFieldMeta?.settings?.joinColumnName ??
+        `${recordField.subFieldName}Id`)
       : undefined;
 
-    if (typeof existingRelationGql === 'object' && existingRelationGql !== null) {
-      (existingRelationGql as Record<string, unknown>)[recordField.subFieldName] =
-        subFieldGqlValue;
+    if (
+      typeof existingRelationGql === 'object' &&
+      existingRelationGql !== null
+    ) {
+      (existingRelationGql as Record<string, unknown>)[
+        recordField.subFieldName
+      ] = subFieldGqlValue;
 
       if (joinColumnName) {
         (existingRelationGql as Record<string, unknown>)[joinColumnName] = true;
@@ -141,19 +152,12 @@ export const useRelevantRecordsGqlFields = ({
 
   const hasPosition = hasObjectMetadataItemPositionField(objectMetadataItem);
 
-  const additionalFieldMetadataItem = isDefined(additionalFieldMetadataId)
-    ? fieldMetadataItemByFieldMetadataItemId[additionalFieldMetadataId]
-    : undefined;
-
   const isObjectAnActivity =
     objectMetadataItem.nameSingular === CoreObjectNameSingular.Note ||
     objectMetadataItem.nameSingular === CoreObjectNameSingular.Task;
 
   return {
     id: true,
-    ...(isDefined(additionalFieldMetadataItem)
-      ? { [additionalFieldMetadataItem.name]: true }
-      : {}),
     ...(isDefined(labelIdentifierFieldMetadataItem)
       ? { [labelIdentifierFieldMetadataItem.name]: true }
       : {}),

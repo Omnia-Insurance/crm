@@ -11,8 +11,9 @@ import { DEFAULT_WORKSPACE_LOGO } from '@/ui/navigation/navigation-drawer/consta
 import { DEFAULT_WORKSPACE_NAME } from '@/ui/navigation/navigation-drawer/constants/DefaultWorkspaceName';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 import { useContext } from 'react';
-import { Avatar } from 'twenty-ui/display';
+import { Avatar } from 'twenty-ui/data-display';
 import { ThemeContext } from 'twenty-ui/theme-constants';
 
 type MultiWorkspaceDropdownClickableComponentProps = {
@@ -46,7 +47,10 @@ export const MultiWorkspaceDropdownClickableComponent = ({
       isNavigationDrawerExpanded={isNavigationDrawerExpanded}
       disabled={disabled}
     >
-      <Avatar placeholder={workspaceDisplayName} avatarUrl={workspaceLogo} />
+      <Avatar
+        placeholder={workspaceDisplayName}
+        avatarUrl={getAbsoluteImageUrl(workspaceLogo)}
+      />
       <StyledLabelWrapper>
         <NavigationDrawerAnimatedCollapseWrapper>
           <StyledLabel>{workspaceDisplayName}</StyledLabel>

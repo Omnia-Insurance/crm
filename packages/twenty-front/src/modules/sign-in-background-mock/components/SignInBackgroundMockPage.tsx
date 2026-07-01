@@ -9,7 +9,7 @@ import { PageContainer } from '@/ui/layout/page/components/PageContainer';
 import { PageHeader } from '@/ui/layout/page/components/PageHeader';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { isDefined } from 'twenty-shared/utils';
-import { IconUser, useIcons } from 'twenty-ui/display';
+import { IconUser, useIcons } from 'twenty-ui/icon';
 
 const StyledTableContainer = styled.div`
   display: flex;

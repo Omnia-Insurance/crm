@@ -11,6 +11,9 @@ import {
   ConfigVariableExceptionCode,
 } from 'src/engine/core-modules/twenty-config/twenty-config.exception';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 const mockCryptoVerify = jest.fn();
 
@@ -61,6 +64,10 @@ describe('EnterprisePlanService', () => {
   const appTokenFindOneMock = jest.fn();
   const transactionMock = jest.fn();
   const fetchMock = jest.fn();
+  const workspaceCountMock = jest.fn();
+  const userCountMock = jest.fn();
+  const userWorkspaceCountMock = jest.fn();
+  const userFindOneMock = jest.fn();
 
   let originalFetch: typeof global.fetch;
 
@@ -109,6 +116,10 @@ describe('EnterprisePlanService', () => {
     });
 
     appTokenFindOneMock.mockResolvedValue(null);
+    workspaceCountMock.mockResolvedValue(0);
+    userCountMock.mockResolvedValue(0);
+    userWorkspaceCountMock.mockResolvedValue(0);
+    userFindOneMock.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -129,6 +140,18 @@ describe('EnterprisePlanService', () => {
               transaction: transactionMock,
             },
           },
+        },
+        {
+          provide: getRepositoryToken(UserWorkspaceEntity),
+          useValue: { count: userWorkspaceCountMock },
+        },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: { count: userCountMock, findOne: userFindOneMock },
+        },
+        {
+          provide: getRepositoryToken(WorkspaceEntity),
+          useValue: { count: workspaceCountMock },
         },
       ],
     }).compile();
@@ -159,7 +182,8 @@ describe('EnterprisePlanService', () => {
       await service.onModuleInit();
 
       expect(service.hasValidSignedEnterpriseKey()).toBe(false);
-      expect(service.hasValidEnterpriseValidityToken()).toBe(false);
+      // OMNIA-CUSTOM: force-unlocked for self-host — always true regardless of token
+      expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
 
     it('should handle DB error when loading validity token', async () => {
@@ -170,7 +194,8 @@ describe('EnterprisePlanService', () => {
       await service.onModuleInit();
 
       expect(service.hasValidSignedEnterpriseKey()).toBe(true);
-      expect(service.hasValidEnterpriseValidityToken()).toBe(false);
+      // OMNIA-CUSTOM: force-unlocked for self-host — always true regardless of token
+      expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
 
     it('should fall back to ENTERPRISE_VALIDITY_TOKEN config when DB has no token', async () => {
@@ -212,7 +237,7 @@ describe('EnterprisePlanService', () => {
       expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
 
-    it('should reject validity token with non-valid status', async () => {
+    it('stays force-unlocked (self-host) even for a non-valid status token', async () => {
       const invalidStatusPayload = {
         ...MOCK_VALIDITY_PAYLOAD,
         status: 'revoked',
@@ -226,7 +251,8 @@ describe('EnterprisePlanService', () => {
 
       await service.onModuleInit();
 
-      expect(service.hasValidEnterpriseValidityToken()).toBe(false);
+      // OMNIA-CUSTOM: force-unlocked for self-host — always true regardless of token
+      expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
   });
 
@@ -263,12 +289,13 @@ describe('EnterprisePlanService', () => {
   });
 
   describe('hasValidEnterpriseValidityToken', () => {
-    it('should return false when no validity token exists', async () => {
+    it('returns true even when no validity token exists (self-host force-unlock)', async () => {
       setupEnterpriseKey(undefined);
       appTokenFindOneMock.mockResolvedValue(null);
       await service.onModuleInit();
 
-      expect(service.hasValidEnterpriseValidityToken()).toBe(false);
+      // OMNIA-CUSTOM: force-unlocked for self-host — always true regardless of token
+      expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
 
     it('should return true when validity token is valid and not expired', async () => {
@@ -277,37 +304,13 @@ describe('EnterprisePlanService', () => {
       expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
 
-    it('should return false when validity token is expired', async () => {
+    it('returns true even when validity token is expired (self-host force-unlock)', async () => {
       await setupValidState({
         validityPayload: MOCK_EXPIRED_VALIDITY_PAYLOAD,
       });
 
-      expect(service.hasValidEnterpriseValidityToken()).toBe(false);
-    });
-  });
-
-  // hasValidEnterpriseKey now means "has any ENTERPRISE_KEY configured"
-  describe('hasValidEnterpriseKey', () => {
-    it('should return true when signed enterprise key is valid', async () => {
-      await setupValidState();
-
-      expect(service.hasValidEnterpriseKey()).toBe(true);
-    });
-
-    it('should return true with unsigned legacy key', async () => {
-      setupEnterpriseKey('some-legacy-key');
-      mockCryptoVerify.mockReturnValue(false);
-      appTokenFindOneMock.mockResolvedValue(null);
-      await service.onModuleInit();
-
-      expect(service.hasValidEnterpriseKey()).toBe(true);
-    });
-
-    it('should return false when no key is configured', async () => {
-      setupEnterpriseKey(undefined);
-      await service.onModuleInit();
-
-      expect(service.hasValidEnterpriseKey()).toBe(false);
+      // OMNIA-CUSTOM: force-unlocked for self-host — always true regardless of token
+      expect(service.hasValidEnterpriseValidityToken()).toBe(true);
     });
   });
 
@@ -318,21 +321,23 @@ describe('EnterprisePlanService', () => {
       expect(service.isValid()).toBe(true);
     });
 
-    it('should return false with unsigned legacy key', async () => {
+    it('returns true with unsigned legacy key (self-host force-unlock)', async () => {
       setupEnterpriseKey('some-legacy-key');
       mockCryptoVerify.mockReturnValue(false);
       appTokenFindOneMock.mockResolvedValue(null);
       await service.onModuleInit();
 
-      expect(service.isValid()).toBe(false);
+      // OMNIA-CUSTOM: isValid() delegates to the force-unlocked validity check
+      expect(service.isValid()).toBe(true);
     });
 
-    it('should return false when no key or token exists', async () => {
+    it('returns true when no key or token exists (self-host force-unlock)', async () => {
       setupEnterpriseKey(undefined);
       appTokenFindOneMock.mockResolvedValue(null);
       await service.onModuleInit();
 
-      expect(service.isValid()).toBe(false);
+      // OMNIA-CUSTOM: isValid() delegates to the force-unlocked validity check
+      expect(service.isValid()).toBe(true);
     });
   });
 
@@ -508,11 +513,74 @@ describe('EnterprisePlanService', () => {
       const result = await service.refreshValidityToken();
 
       expect(result).toBe(true);
-      expect(fetchMock).toHaveBeenCalledWith(`${MOCK_API_URL}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enterpriseKey: fakeKey }),
+
+      const [validateUrl, validateOptions] = fetchMock.mock.calls[0] as [
+        string,
+        { method: string; headers: Record<string, string>; body: string },
+      ];
+
+      expect(validateUrl).toBe(`${MOCK_API_URL}/validate`);
+      expect(validateOptions.method).toBe('POST');
+
+      const validateBody = JSON.parse(validateOptions.body);
+
+      expect(validateBody.enterpriseKey).toBe(fakeKey);
+      expect(validateBody.instanceMetadata).toBeDefined();
+    });
+
+    it('should include instance metadata in the validate payload', async () => {
+      const fakeKey = createFakeJwt(MOCK_KEY_PAYLOAD);
+
+      configGetMock.mockImplementation((key: string) => {
+        if (key === 'ENTERPRISE_KEY') return fakeKey;
+        if (key === 'ENTERPRISE_API_URL') return MOCK_API_URL;
+        if (key === 'SERVER_ID') return 'server-abc';
+        if (key === 'SERVER_URL') return 'https://crm.example.com';
+        if (key === 'APP_VERSION') return '1.2.3';
+        if (key === 'NODE_ENV') return NodeEnvironment.PRODUCTION;
+        if (key === 'TELEMETRY_ENABLED') return true;
+
+        return undefined;
       });
+      mockCryptoVerify.mockReturnValue(true);
+      workspaceCountMock.mockResolvedValue(2);
+      userWorkspaceCountMock.mockResolvedValue(7);
+      userCountMock.mockResolvedValue(5);
+      userFindOneMock.mockResolvedValue({ email: 'admin@example.com' });
+
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            validityToken: createFakeJwt(MOCK_VALIDITY_PAYLOAD),
+          }),
+      });
+      transactionMock.mockImplementation(
+        async (callback: (manager: Record<string, jest.Mock>) => void) => {
+          await callback({ update: jest.fn(), save: jest.fn() });
+        },
+      );
+      appTokenFindOneMock.mockResolvedValue({
+        value: createFakeJwt(MOCK_VALIDITY_PAYLOAD),
+      });
+
+      await service.refreshValidityToken();
+
+      const [, options] = fetchMock.mock.calls[0] as [string, { body: string }];
+      const body = JSON.parse(options.body);
+
+      expect(body.instanceMetadata).toMatchObject({
+        serverId: 'server-abc',
+        serverUrl: 'https://crm.example.com',
+        appVersion: '1.2.3',
+        nodeEnv: NodeEnvironment.PRODUCTION,
+        telemetryEnabled: true,
+        workspaceCount: 2,
+        activeUserWorkspaceCount: 7,
+        distinctUserCount: 5,
+        adminContactEmail: 'admin@example.com',
+      });
+      expect(typeof body.instanceMetadata.sentAt).toBe('string');
     });
 
     it('should return false when API returns non-OK response', async () => {

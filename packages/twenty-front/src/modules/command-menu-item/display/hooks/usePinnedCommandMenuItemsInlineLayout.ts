@@ -51,7 +51,14 @@ export const usePinnedCommandMenuItemsInlineLayout = ({
               commandMenuPinnedInlineLayout.containerWidth,
             commandMenuItemsGapWidth: PINNED_COMMAND_MENU_ITEMS_GAP,
           })
-        : 0,
+        : // OMNIA-CUSTOM: render all pinned items until the inline layout is
+          // measured, so the content-sized header action column bootstraps to a
+          // real width instead of collapsing to the bare ⋮ width. Upstream
+          // relies on the framer-motion mount animation giving items width to
+          // break this deadlock, but under React 19 that animation stalls (see
+          // initial={false} in PinnedCommandMenuItemButtons), so we bootstrap
+          // explicitly here.
+          pinnedCommandMenuItemKeysInDisplayOrder.length,
     [
       commandMenuPinnedInlineLayout,
       hasKnownPinnedInlineLayout,

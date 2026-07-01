@@ -1,5 +1,6 @@
 import { aiModelsState } from '@/client-config/states/aiModelsState';
 import { apiConfigState } from '@/client-config/states/apiConfigState';
+import { onboardingConfigState } from '@/client-config/states/onboardingConfigState';
 import { appVersionState } from '@/client-config/states/appVersionState';
 import { authProvidersState } from '@/client-config/states/authProvidersState';
 import { billingState } from '@/client-config/states/billingState';
@@ -13,8 +14,7 @@ import { isDeveloperDefaultSignInPrefilledState } from '@/client-config/states/i
 import { isClickHouseConfiguredState } from '@/client-config/states/isClickHouseConfiguredState';
 import { isCloudflareIntegrationEnabledState } from '@/client-config/states/isCloudflareIntegrationEnabledState';
 import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
-import { isEmailGroupEnabledState } from '@/client-config/states/isEmailGroupEnabledState';
-import { isEmailingDomainsEnabledState } from '@/client-config/states/isEmailingDomainsEnabledState';
+import { isEmailingDomainInDemoModeState } from '@/client-config/states/isEmailingDomainInDemoModeState';
 import { isEmailVerificationRequiredState } from '@/client-config/states/isEmailVerificationRequiredState';
 import { isGoogleCalendarEnabledState } from '@/client-config/states/isGoogleCalendarEnabledState';
 import { isGoogleMessagingEnabledState } from '@/client-config/states/isGoogleMessagingEnabledState';
@@ -34,6 +34,9 @@ import { getClientConfig } from '@/client-config/utils/getClientConfig';
 import { allowRequestsToTwentyIconsState } from '@/client-config/states/allowRequestsToTwentyIcons';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+// OMNIA-CUSTOM: token now lives in localStorage (post cookie-revert), so its
+// key must be preserved by the version cache-bust below.
+import { TOKEN_PAIR_LOCAL_STORAGE_KEY } from '@/auth/states/tokenPairState';
 
 type UseClientConfigResult = {
   data: { clientConfig: ClientConfig } | undefined;
@@ -70,6 +73,7 @@ export const useClientConfig = (): UseClientConfigResult => {
   const setCaptcha = useSetAtomState(captchaState);
 
   const setApiConfig = useSetAtomState(apiConfigState);
+  const setOnboardingConfig = useSetAtomState(onboardingConfigState);
 
   const setCanManageFeatureFlags = useSetAtomState(canManageFeatureFlagsState);
 
@@ -101,10 +105,8 @@ export const useClientConfig = (): UseClientConfigResult => {
 
   const setCalendarBookingPageId = useSetAtomState(calendarBookingPageIdState);
 
-  const setIsEmailGroupEnabled = useSetAtomState(isEmailGroupEnabledState);
-
-  const setIsEmailingDomainsEnabled = useSetAtomState(
-    isEmailingDomainsEnabledState,
+  const setIsEmailingDomainInDemoMode = useSetAtomState(
+    isEmailingDomainInDemoModeState,
   );
 
   const setIsImapSmtpCaldavEnabled = useSetAtomState(
@@ -152,16 +154,21 @@ export const useClientConfig = (): UseClientConfigResult => {
       }));
       // OMNIA-CUSTOM: clear localStorage when the deployed app version changes.
       // Twenty stores Jotai state (object metadata items, sidebar state, etc.)
-      // in localStorage via atomWithStorage. Auth lives in cookies, so users
-      // stay logged in across deploys and their stale localStorage gets replayed
-      // against the new bundle — which can break in subtle ways (e.g. all
-      // object icons rendering as "123" after the 2026-05-09 upstream merge
-      // because cached icon names no longer resolve in the new tabler-icons map).
-      // On version change, wipe localStorage (preserving a small allowlist) and
-      // reload so atoms re-initialise cleanly.
+      // in localStorage via atomWithStorage. On version change, wipe localStorage
+      // (preserving a small allowlist) and reload so atoms re-initialise cleanly.
+      // This fixes stale-cache breakage such as all object icons rendering as
+      // "123" after the 2026-05-09 upstream merge because cached icon names no
+      // longer resolve in the new tabler-icons map.
+      // The auth token was reverted from a cookie back into localStorage this
+      // session (key TOKEN_PAIR_LOCAL_STORAGE_KEY = 'tokenPairState'), so it MUST
+      // survive the cache-bust — otherwise every deploy logs all users out.
       if (clientConfig.appVersion) {
         const CACHED_APP_VERSION_KEY = 'omnia.cachedAppVersion';
-        const PRESERVED_KEYS = ['locale', CACHED_APP_VERSION_KEY];
+        const PRESERVED_KEYS = [
+          'locale',
+          CACHED_APP_VERSION_KEY,
+          TOKEN_PAIR_LOCAL_STORAGE_KEY,
+        ];
         const storedVersion = localStorage.getItem(CACHED_APP_VERSION_KEY);
         if (storedVersion !== clientConfig.appVersion) {
           const preserved: Record<string, string> = {};
@@ -208,9 +215,11 @@ export const useClientConfig = (): UseClientConfigResult => {
       });
 
       setApiConfig(clientConfig?.api);
+      setOnboardingConfig(clientConfig?.onboarding);
       setDomainConfiguration({
         defaultSubdomain: clientConfig?.defaultSubdomain,
         frontDomain: clientConfig?.frontDomain,
+        publicFunctionDomain: clientConfig?.publicFunctionDomain,
       });
       setCanManageFeatureFlags(clientConfig?.canManageFeatureFlags);
       setLabPublicFeatureFlags(clientConfig?.publicFeatureFlags);
@@ -229,8 +238,9 @@ export const useClientConfig = (): UseClientConfigResult => {
 
       setCalendarBookingPageId(clientConfig?.calendarBookingPageId ?? null);
       setIsImapSmtpCaldavEnabled(clientConfig?.isImapSmtpCaldavEnabled);
-      setIsEmailGroupEnabled(clientConfig?.isEmailGroupEnabled ?? false);
-      setIsEmailingDomainsEnabled(clientConfig?.isEmailingDomainsEnabled);
+      setIsEmailingDomainInDemoMode(
+        clientConfig?.isEmailingDomainInDemoMode ?? false,
+      );
       setAllowRequestsToTwentyIcons(clientConfig?.allowRequestsToTwentyIcons);
       setIsCloudflareIntegrationEnabled(
         clientConfig?.isCloudflareIntegrationEnabled,
@@ -252,6 +262,7 @@ export const useClientConfig = (): UseClientConfigResult => {
   }, [
     setAiModels,
     setApiConfig,
+    setOnboardingConfig,
     setAppVersion,
     setAuthProviders,
     setBilling,
@@ -268,9 +279,8 @@ export const useClientConfig = (): UseClientConfigResult => {
     setIsDeveloperDefaultSignInPrefilled,
     setIsEmailVerificationRequired,
     setIsImapSmtpCaldavEnabled,
-    setIsEmailGroupEnabled,
     setIsMultiWorkspaceEnabled,
-    setIsEmailingDomainsEnabled,
+    setIsEmailingDomainInDemoMode,
     setIsClickHouseConfigured,
     setIsCloudflareIntegrationEnabled,
     setIsDDLLocked,

@@ -7,14 +7,17 @@ import {
   isString,
   isUndefined,
 } from '@sniptt/guards';
-import React from 'react';
+import React, { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 import { EVENT_TO_REACT } from '@/constants/EventToReact';
+import { type SerializedEventData } from '@/types/SerializedEventData';
+import { type SerializedFileData } from '@/types/SerializedFileData';
 import {
-  type SerializedEventData,
-  type SerializedFileData,
-} from '@/constants/SerializedEventData';
+  FrontComponentInputFocusContext,
+  type SetEditableFocused,
+} from '@/host/contexts/FrontComponentInputFocusContext';
+import { sanitizeIframeSandbox } from '@/host/utils/sanitizeIframeSandbox';
 
 const INTERNAL_PROPS = new Set(['element', 'receiver', 'components']);
 
@@ -140,6 +143,12 @@ const serializeEvent = (event: unknown): SerializedEventData => {
   if (isNumber(domEvent.clientY)) {
     serialized.clientY = domEvent.clientY;
   }
+  if (isNumber(domEvent.x)) {
+    serialized.x = domEvent.x;
+  }
+  if (isNumber(domEvent.y)) {
+    serialized.y = domEvent.y;
+  }
   if (isNumber(domEvent.pageX)) {
     serialized.pageX = domEvent.pageX;
   }
@@ -169,6 +178,37 @@ const serializeEvent = (event: unknown): SerializedEventData => {
   }
   if (isNumber(domEvent.buttons)) {
     serialized.buttons = domEvent.buttons;
+  }
+
+  if (isNumber(domEvent.pointerId)) {
+    serialized.pointerId = domEvent.pointerId;
+  }
+  if (isString(domEvent.pointerType)) {
+    serialized.pointerType = domEvent.pointerType;
+  }
+  if (isNumber(domEvent.pressure)) {
+    serialized.pressure = domEvent.pressure;
+  }
+  if (isNumber(domEvent.tangentialPressure)) {
+    serialized.tangentialPressure = domEvent.tangentialPressure;
+  }
+  if (isNumber(domEvent.tiltX)) {
+    serialized.tiltX = domEvent.tiltX;
+  }
+  if (isNumber(domEvent.tiltY)) {
+    serialized.tiltY = domEvent.tiltY;
+  }
+  if (isNumber(domEvent.twist)) {
+    serialized.twist = domEvent.twist;
+  }
+  if (isNumber(domEvent.width)) {
+    serialized.width = domEvent.width;
+  }
+  if (isNumber(domEvent.height)) {
+    serialized.height = domEvent.height;
+  }
+  if (isBoolean(domEvent.isPrimary)) {
+    serialized.isPrimary = domEvent.isPrimary;
   }
 
   if (isString(domEvent.key)) {
@@ -274,10 +314,6 @@ const filterProps = <T extends object>(props: T): T => {
 
 type WrapperProps = { children?: React.ReactNode } & Record<string, unknown>;
 
-const FORCED_PROPS_BY_TAG: Record<string, Record<string, unknown>> = {
-  iframe: { sandbox: '' },
-};
-
 const TEXT_LIKE_INPUT_TYPES = new Set([
   'text',
   'search',
@@ -321,18 +357,41 @@ const createCaretPreservingElement = (
   htmlTag: 'input' | 'textarea',
   reactProps: Record<string, unknown>,
   forcedProps: Record<string, unknown> | undefined,
+  setEditableFocused: SetEditableFocused | null,
 ) => {
-  const { value, defaultValue, ...rest } = reactProps;
+  const {
+    value,
+    defaultValue,
+    onFocus: forwardedOnFocus,
+    onBlur: forwardedOnBlur,
+    ...rest
+  } = reactProps;
   const initialValue = isNonEmptyString(defaultValue)
     ? defaultValue
     : isNonEmptyString(value)
       ? value
       : undefined;
 
+  const handleFocus = (event: React.FocusEvent<CaretPreservingElement>) => {
+    setEditableFocused?.(true);
+    if (isFunction(forwardedOnFocus)) {
+      forwardedOnFocus(event);
+    }
+  };
+
+  const handleBlur = (event: React.FocusEvent<CaretPreservingElement>) => {
+    setEditableFocused?.(false);
+    if (isFunction(forwardedOnBlur)) {
+      forwardedOnBlur(event);
+    }
+  };
+
   return React.createElement(htmlTag, {
     ...rest,
     ...forcedProps,
     defaultValue: initialValue,
+    onFocus: handleFocus,
+    onBlur: handleBlur,
     ref: (node: CaretPreservingElement | null) => {
       if (!isDefined(node)) {
         return;
@@ -345,17 +404,50 @@ const createCaretPreservingElement = (
 };
 
 export const createHtmlHostWrapper = (htmlTag: string) => {
-  const forcedProps = FORCED_PROPS_BY_TAG[htmlTag];
   const isVoid = VOID_ELEMENTS.has(htmlTag);
+  const isIframe = htmlTag === 'iframe';
+  const isForm = htmlTag === 'form';
 
   return ({ children, ...props }: WrapperProps) => {
+    const setEditableFocused = useContext(FrontComponentInputFocusContext);
     const reactProps = filterProps(props);
+
+    const forcedProps: Record<string, unknown> | undefined = isIframe
+      ? { sandbox: sanitizeIframeSandbox(reactProps.sandbox) }
+      : isForm
+        ? {
+            // The remote component's onSubmit is forwarded asynchronously across
+            // the remote-dom boundary, so its preventDefault lands too late to
+            // stop a native form submission (which navigates and closes the
+            // page). Guard synchronously on the host while still forwarding the
+            // event to the remote handler. (React 19 also blocks the previous
+            // `action="javascript:void(0)"` guard.)
+            onSubmit: (event: React.FormEvent<HTMLFormElement>) => {
+              event.preventDefault();
+              const remoteOnSubmit = reactProps.onSubmit;
+              // The remote prop is untrusted across the remote-dom boundary, so
+              // it may not be a function — guard before invoking.
+              if (typeof remoteOnSubmit === 'function') {
+                (
+                  remoteOnSubmit as (
+                    event: React.FormEvent<HTMLFormElement>,
+                  ) => void
+                )(event);
+              }
+            },
+          }
+        : undefined;
 
     if (
       htmlTag === 'textarea' ||
       (htmlTag === 'input' && isTextLikeInputType(reactProps.type))
     ) {
-      return createCaretPreservingElement(htmlTag, reactProps, forcedProps);
+      return createCaretPreservingElement(
+        htmlTag,
+        reactProps,
+        forcedProps,
+        setEditableFocused,
+      );
     }
 
     return React.createElement(

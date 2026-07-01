@@ -8,7 +8,7 @@ import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAto
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { AppTooltip, TooltipDelay } from 'twenty-ui/display';
+import { AppTooltip, TooltipDelay } from 'twenty-ui/surfaces';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -49,14 +49,12 @@ export const SettingsRolePermissionsObjectLevelOverrideCell = ({
   ) => {
     const rolePermission = permissionMappings[objectPermissionKey];
 
-    const rolePermissionValue =
-      settingsDraftRole[
-        rolePermission as keyof typeof settingsDraftRole
-      ] as boolean;
+    const rolePermissionValue = settingsDraftRole[
+      rolePermission as keyof typeof settingsDraftRole
+    ] as boolean;
 
     return (
-      isDefined(permissionValue) &&
-      !!rolePermissionValue !== !!permissionValue
+      isDefined(permissionValue) && !!rolePermissionValue !== !!permissionValue
     );
   };
 

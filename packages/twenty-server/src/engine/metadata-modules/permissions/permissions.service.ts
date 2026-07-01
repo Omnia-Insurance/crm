@@ -25,6 +25,8 @@ import { type UserWorkspacePermissions } from 'src/engine/metadata-modules/permi
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
 import { type RolePermissionConfig } from 'src/engine/twenty-orm/types/role-permission-config';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @Injectable()
@@ -33,8 +35,8 @@ export class PermissionsService {
     private readonly userRoleService: UserRoleService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly apiKeyRoleService: ApiKeyRoleService,
-    @InjectRepository(RoleEntity)
-    private readonly roleRepository: Repository<RoleEntity>,
+    @InjectWorkspaceScopedRepository(RoleEntity)
+    private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
     @InjectRepository(ApplicationEntity)
     private readonly applicationRepository: Repository<ApplicationEntity>,
   ) {}
@@ -119,6 +121,7 @@ export class PermissionsService {
         [PermissionFlagType.UPLOAD_FILE]: false,
         [PermissionFlagType.DOWNLOAD_FILE]: false,
         [PermissionFlagType.SEND_EMAIL_TOOL]: false,
+        [PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL]: false,
         [PermissionFlagType.HTTP_REQUEST_TOOL]: false,
         [PermissionFlagType.CODE_INTERPRETER_TOOL]: false,
         [PermissionFlagType.IMPORT_CSV]: false,
@@ -151,8 +154,8 @@ export class PermissionsService {
         workspaceId,
       );
 
-      const role = await this.roleRepository.findOne({
-        where: { id: roleId, workspaceId },
+      const role = await this.roleRepository.findOne(workspaceId, {
+        where: { id: roleId },
         relations: [
           'rolePermissionFlags',
           'rolePermissionFlags.permissionFlag',
@@ -207,8 +210,8 @@ export class PermissionsService {
 
       const applicationRoleId = application.defaultRoleId;
 
-      const role = await this.roleRepository.findOne({
-        where: { id: applicationRoleId, workspaceId },
+      const role = await this.roleRepository.findOne(workspaceId, {
+        where: { id: applicationRoleId },
         relations: [
           'rolePermissionFlags',
           'rolePermissionFlags.permissionFlag',
@@ -262,8 +265,7 @@ export class PermissionsService {
 
     return rolePermissionFlags.some(
       (rolePermissionFlag) =>
-        (rolePermissionFlag.permissionFlag?.universalIdentifier ??
-          SystemPermissionFlag[rolePermissionFlag.flag]) ===
+        rolePermissionFlag.permissionFlag.universalIdentifier ===
         permissionFlagUniversalIdentifier,
     );
   }
@@ -292,8 +294,8 @@ export class PermissionsService {
       throw new Error('No role IDs provided');
     }
 
-    const roles = await this.roleRepository.find({
-      where: { id: In(roleIds), workspaceId },
+    const roles = await this.roleRepository.find(workspaceId, {
+      where: { id: In(roleIds) },
       relations,
     });
 

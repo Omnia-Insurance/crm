@@ -41,10 +41,13 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "engineComponentKey",
       "payload",
       "hotKeys",
+      "isActive",
+      "universalOverrides",
     ],
     "propertiesToStringify": [
       "payload",
       "hotKeys",
+      "universalOverrides",
     ],
   },
   "connectionProvider": {
@@ -72,6 +75,7 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "requiredCondition",
       "standardOverrides",
       "universalSettings",
+      "isUIEditable",
     ],
     "propertiesToStringify": [
       "defaultValue",
@@ -125,10 +129,12 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "sourceHandlerPath",
       "handlerName",
       "isBuildUpToDate",
+      "executionMode",
       "deletedAt",
       "cronTriggerSettings",
       "databaseEventTriggerSettings",
       "httpRouteTriggerSettings",
+      "serverRouteTriggerSettings",
       "toolTriggerSettings",
       "workflowActionTriggerSettings",
       "builtHandlerPath",
@@ -137,6 +143,7 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "cronTriggerSettings",
       "databaseEventTriggerSettings",
       "httpRouteTriggerSettings",
+      "serverRouteTriggerSettings",
       "toolTriggerSettings",
       "workflowActionTriggerSettings",
     ],
@@ -166,6 +173,8 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "nameSingular",
       "labelIdentifierFieldMetadataUniversalIdentifier",
       "standardOverrides",
+      "isUIEditable",
+      "isUICreatable",
       "isSearchable",
       "imageIdentifierFieldMetadataUniversalIdentifier",
     ],
@@ -218,6 +227,7 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "position",
       "universalConfiguration",
       "deletedAt",
+      "pageLayoutTabUniversalIdentifier",
       "conditionalDisplay",
       "conditionalAvailabilityExpression",
       "isActive",
@@ -262,7 +272,6 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
     "propertiesToCompare": [
       "permissionFlagUniversalIdentifier",
       "roleUniversalIdentifier",
-      "flag",
     ],
     "propertiesToStringify": [],
   },
@@ -300,6 +309,12 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
     ],
     "propertiesToStringify": [],
   },
+  "searchFieldMetadata": {
+    "propertiesToCompare": [
+      "position",
+    ],
+    "propertiesToStringify": [],
+  },
   "skill": {
     "propertiesToCompare": [
       "name",
@@ -330,8 +345,13 @@ exports[`ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY should ma
       "visibility",
       "mainGroupByFieldMetadataUniversalIdentifier",
       "shouldHideEmptyGroups",
+      "kanbanColumnWidth",
+      "isActive",
+      "universalOverrides",
     ],
-    "propertiesToStringify": [],
+    "propertiesToStringify": [
+      "universalOverrides",
+    ],
   },
   "viewField": {
     "propertiesToCompare": [

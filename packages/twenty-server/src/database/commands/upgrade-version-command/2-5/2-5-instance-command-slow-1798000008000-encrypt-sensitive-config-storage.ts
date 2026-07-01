@@ -2,7 +2,9 @@ import { isDefined } from 'twenty-shared/utils';
 import { DataSource, QueryRunner } from 'typeorm';
 
 import { KeyValuePairType } from 'src/engine/core-modules/key-value-pair/key-value-pair.entity';
-import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { isEncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/is-encrypted-string.util';
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { ConfigVariables } from 'src/engine/core-modules/twenty-config/config-variables';
 import { type ConfigVariablesMetadataMap } from 'src/engine/core-modules/twenty-config/decorators/config-variables-metadata.decorator';
@@ -14,9 +16,7 @@ import { TypedReflect } from 'src/utils/typed-reflect';
 type SensitiveConfigRow = { id: string; value: unknown };
 
 @RegisteredInstanceCommand('2.5.0', 1798000008000, { type: 'slow' })
-export class EncryptSensitiveConfigStorageSlowInstanceCommand
-  implements SlowInstanceCommand
-{
+export class EncryptSensitiveConfigStorageSlowInstanceCommand implements SlowInstanceCommand {
   constructor(
     private readonly secretEncryptionService: SecretEncryptionService,
   ) {}
@@ -53,22 +53,23 @@ export class EncryptSensitiveConfigStorageSlowInstanceCommand
           continue;
         }
 
-        if (
-          rawValue === '' ||
-          rawValue.startsWith(SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX)
-        ) {
+        if (rawValue === '' || isEncryptedString(rawValue)) {
           continue;
         }
 
         const plaintext =
-          this.secretEncryptionService.decryptVersioned(rawValue);
+          this.secretEncryptionService.legacyDecryptVersionedWithFallback(
+            rawValue as EncryptedString,
+          );
 
         if (!isDefined(plaintext)) {
           continue;
         }
 
         const encrypted =
-          this.secretEncryptionService.encryptVersioned(plaintext);
+          this.secretEncryptionService.encryptVersioned(
+            plaintext as PlaintextString,
+          );
 
         await dataSource.query(
           `UPDATE "core"."keyValuePair"

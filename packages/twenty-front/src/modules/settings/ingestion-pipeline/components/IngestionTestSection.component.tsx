@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
-import { H2Title } from 'twenty-ui/display';
+import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -13,21 +13,21 @@ type IngestionTestSectionProps = {
 };
 
 const StyledTextarea = styled.textarea`
-  width: 100%;
-  min-height: 120px;
-  padding: ${themeCssVariables.spacing[3]};
+  background: ${themeCssVariables.background.primary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.sm};
-  background: ${themeCssVariables.background.primary};
+  box-sizing: border-box;
   color: ${themeCssVariables.font.color.primary};
   font-family: monospace;
   font-size: ${themeCssVariables.font.size.sm};
+  min-height: 120px;
+  padding: ${themeCssVariables.spacing[3]};
   resize: vertical;
-  box-sizing: border-box;
+  width: 100%;
 
   &:focus {
-    outline: none;
     border-color: ${themeCssVariables.color.blue};
+    outline: none;
   }
 
   &::placeholder {
@@ -42,32 +42,32 @@ const StyledButtonRow = styled.div`
 `;
 
 const StyledResultSummary = styled.div`
-  padding: ${themeCssVariables.spacing[3]};
   background: ${themeCssVariables.background.tertiary};
   border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.sm};
+  padding: ${themeCssVariables.spacing[3]};
 `;
 
 const StyledPreviewBlock = styled.pre`
-  padding: ${themeCssVariables.spacing[3]};
   background: ${themeCssVariables.background.tertiary};
   border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.sm};
+  margin: ${themeCssVariables.spacing[1]} 0;
   overflow-x: auto;
+  padding: ${themeCssVariables.spacing[3]};
   white-space: pre-wrap;
   word-break: break-word;
-  margin: ${themeCssVariables.spacing[1]} 0;
 `;
 
 const StyledErrorItem = styled.div`
-  padding: ${themeCssVariables.spacing[2]};
   background: ${themeCssVariables.background.danger};
   border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.sm};
   color: ${themeCssVariables.color.red};
+  font-size: ${themeCssVariables.font.size.sm};
   margin-top: ${themeCssVariables.spacing[1]};
+  padding: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledResultContainer = styled.div`

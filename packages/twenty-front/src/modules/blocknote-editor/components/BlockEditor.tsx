@@ -16,7 +16,7 @@ import {
   type SuggestionItem,
 } from '@/blocknote-editor/components/CustomSlashMenu';
 import { useMentionMenu } from '@/mention/hooks/useMentionMenu';
-import { IconX } from 'twenty-ui/display';
+import { IconX } from 'twenty-ui/icon';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 
 interface BlockEditorProps {
@@ -30,6 +30,8 @@ interface BlockEditorProps {
 
 // oxlint-disable-next-line twenty/no-hardcoded-colors
 const StyledEditor = styled.div`
+  max-width: 100%;
+  min-width: 0;
   width: 100%;
 
   & .editor {
@@ -74,6 +76,15 @@ const StyledEditor = styled.div`
 
   & .bn-editor {
     padding-inline: 0px;
+  }
+
+  & .bn-block-content {
+    min-width: 0;
+  }
+
+  & .bn-block-content,
+  & .bn-inline-content {
+    overflow-wrap: anywhere;
   }
 
   & .bn-inline-content {

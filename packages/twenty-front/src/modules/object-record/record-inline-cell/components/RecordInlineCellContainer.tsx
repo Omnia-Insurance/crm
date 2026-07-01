@@ -15,7 +15,7 @@ import {
   AppTooltip,
   OverflowingTextWithTooltip,
   TooltipDelay,
-} from 'twenty-ui/display';
+} from 'twenty-ui/surfaces';
 import { type EmailsMetadata, type PhonesMetadata } from 'twenty-shared/types';
 import {
   coerceFieldDiffValueForRecordUpdate,
@@ -58,6 +58,7 @@ const StyledValueContainer = styled.div<{ readonly: boolean }>`
   display: flex;
   min-width: 0;
   position: relative;
+  user-select: text;
   width: 100%;
 `;
 

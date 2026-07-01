@@ -19,6 +19,7 @@ import { UserMetadataProviderInitialEffect } from '@/metadata-store/effect-compo
 import { ApolloCoreProvider } from '@/object-metadata/components/ApolloCoreProvider';
 import { PreComputedChipGeneratorsProvider } from '@/object-metadata/components/PreComputedChipGeneratorsProvider';
 import { ApolloAdminProvider } from '@/settings/admin-panel/apollo/components/ApolloAdminProvider';
+import { EndTrialAfterPaymentMethodGater } from '@/settings/billing/components/EndTrialAfterPaymentMethodGater';
 
 import { CommandRunner } from '@/command-menu-item/engine-command/components/CommandRunner';
 import { ExportJobRecoveryEffect } from '@/object-record/record-index/export/components/ExportJobRecoveryEffect';
@@ -69,6 +70,7 @@ export const AppRouterProviders = () => {
                               <DialogManager>
                                 <StrictMode>
                                   <PromiseRejectionEffect />
+                                  <EndTrialAfterPaymentMethodGater />
                                   <GotoHotkeysEffectsProvider />
                                   <PageTitle title={pageTitle} />
                                   <PageFavicon />

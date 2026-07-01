@@ -1,9 +1,3 @@
-export * from './AdvancedSettingsToggle';
+// OMNIA-CUSTOM: AudioLink is the only component remaining under link/components
+// after upstream relocated the others to top-level navigation folders.
 export * from './AudioLink';
-export * from './ClickToActionLink';
-export * from './ContactLink';
-export * from './GithubVersionLink';
-export * from './RawLink';
-export * from './RoundedLink';
-export * from './SocialLink';
-export * from './UndecoratedLink';

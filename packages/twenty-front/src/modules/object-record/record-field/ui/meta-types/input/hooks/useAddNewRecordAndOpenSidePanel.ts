@@ -5,6 +5,8 @@ import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSide
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/canCreateRecordsForObjectMetadataItem';
 
 import { useDraftRecordDefaults } from '@/object-record/hooks/useDraftRecordDefaults';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
@@ -65,8 +67,15 @@ export const useAddNewRecordAndOpenSidePanel = ({
     objectMetadataItem: relationObjectMetadataItem,
   });
 
+  const relationObjectPermissions = useObjectPermissionsForObject(
+    relationObjectMetadataItem.id,
+  );
+
   if (
-    relationObjectMetadataNameSingular === 'workspaceMember' ||
+    !canCreateRecordsForObjectMetadataItem({
+      objectPermissions: relationObjectPermissions,
+      objectMetadataItem: relationObjectMetadataItem,
+    }) ||
     !isDefined(objectMetadataItem.nameSingular)
   ) {
     return {

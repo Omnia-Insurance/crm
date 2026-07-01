@@ -10,6 +10,7 @@ import { ApiKeyInput } from '@/settings/developers/components/ApiKeyInput';
 import { ApiKeyNameInput } from '@/settings/developers/components/ApiKeyNameInput';
 import { SettingsDevelopersRoleSelector } from '@/settings/developers/components/SettingsDevelopersRoleSelector';
 import { apiKeyTokenFamilyState } from '@/settings/developers/states/apiKeyTokenFamilyState';
+import type { RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { computeNewExpirationDate } from '@/settings/developers/utils/computeNewExpirationDate';
 import { formatExpiration } from '@/settings/developers/utils/formatExpiration';
@@ -17,11 +18,12 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { H2Title, IconRepeat, IconTrash } from 'twenty-ui/display';
+import { IconRepeat, IconTrash } from 'twenty-ui/icon';
+import { H2Title } from 'twenty-ui/typography';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -101,7 +103,8 @@ export const SettingsDevelopersApiKeyDetail = () => {
   const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
 
   // getRoles returns the upstream Role type; cast to our extended type
-  const roles = (rolesData?.getRoles ?? []) as unknown as import('@/settings/roles/types/RoleWithPartialMembers').RoleWithPartialMembers[];
+  const roles = (rolesData?.getRoles ??
+    []) as unknown as RoleWithPartialMembers[];
 
   const apiKey = apiKeyData?.apiKey;
   const [apiKeyName, setApiKeyName] = useState('');
@@ -241,12 +244,12 @@ export const SettingsDevelopersApiKeyDetail = () => {
   return (
     <>
       {isDefined(apiKey) && (
-        <SubMenuTopBarContainer
+        <SettingsPageLayout
           title={apiKey.name || t`Unnamed API Key`}
           links={[
             {
               children: t`Workspace`,
-              href: getSettingsPath(SettingsPath.Workspace),
+              href: getSettingsPath(SettingsPath.General),
             },
             {
               children: t`APIs & Webhooks`,
@@ -331,7 +334,7 @@ export const SettingsDevelopersApiKeyDetail = () => {
               />
             </Section>
           </SettingsPageContainer>
-        </SubMenuTopBarContainer>
+        </SettingsPageLayout>
       )}
       <ConfirmationModal
         confirmationPlaceholder={confirmationValue}

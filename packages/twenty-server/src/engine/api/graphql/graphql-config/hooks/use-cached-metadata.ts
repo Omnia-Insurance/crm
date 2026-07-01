@@ -9,16 +9,21 @@ import { InternalServerError } from 'src/engine/core-modules/graphql/utils/graph
 import { warnIfSlowDuration } from 'src/engine/core-modules/observability/utils/slow-path-observer.util';
 
 export type CacheMetadataPluginConfig = {
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   cacheGetter: (key: string) => any;
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   cacheSetter: (key: string, value: any) => void;
   operationsToCache: string[];
 };
 
 const USER_SCOPED_METADATA_OPERATIONS = new Set([
   'FindAllViews',
-  'FindFieldsWidgetCoreViews',
+  // OMNIA-CUSTOM: match the actual client operation name
+  // (query FindFieldsWidgetViews in
+  // twenty-front/.../findFieldsWidgetViews.ts). Core-view visibility is
+  // user-dependent, so the cache key stays user-scoped via userWorkspaceId.
+  // Must stay in sync with operationsToCache in metadata.module-factory.ts.
+  'FindFieldsWidgetViews',
 ]);
 const SLOW_METADATA_CACHE_MISS_MS = 1_000;
 const logger = new Logger('CachedMetadata');
@@ -56,7 +61,7 @@ export function useCachedMetadata(config: CacheMetadataPluginConfig): Plugin {
     return `graphql:operations:${operationName}:${workspace.id}:${workspaceMetadataVersion}:${locale}:${queryHash}`;
   };
 
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   const getOperationName = (serverContext: any) =>
     serverContext?.req?.body?.operationName;
 

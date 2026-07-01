@@ -193,6 +193,7 @@ export class ReviewItemService {
               await repo.update(
                 id,
                 updates as QueryDeepPartialEntity<ReviewItem>,
+                undefined,
                 transactionManager,
               );
             }
@@ -885,6 +886,7 @@ export class ReviewItemService {
         await policyRepo.update(
           matchedPolicyId,
           this.toWorkspaceUpdate(policyUpdates),
+          undefined,
           transactionManager,
         );
       }
@@ -893,6 +895,7 @@ export class ReviewItemService {
         await personRepo.update(
           leadId,
           this.toWorkspaceUpdate(leadUpdates),
+          undefined,
           transactionManager,
         );
       }
@@ -924,6 +927,7 @@ export class ReviewItemService {
                 cancelPriorExpirationDate:
                   (cancelTarget.expirationDate as string | null) ?? null,
               } as QueryDeepPartialEntity<ReviewItem>,
+              undefined,
               transactionManager,
             );
           }
@@ -944,6 +948,7 @@ export class ReviewItemService {
             status: item.cancelPriorStatus,
             expirationDate: item.cancelPriorExpirationDate ?? null,
           }),
+          undefined,
           transactionManager,
         );
         cancelRestored = true;
@@ -983,6 +988,7 @@ export class ReviewItemService {
       await reviewItemRepo.update(
         item.id,
         reviewItemUpdate as QueryDeepPartialEntity<ReviewItem>,
+        undefined,
         transactionManager,
       );
     });
@@ -1322,6 +1328,7 @@ export class ReviewItemService {
         status: 'CANCELED',
         expirationDate: snapshot?.__cancelExpireDate ?? null,
       }),
+      undefined,
       transactionManager,
     );
   }

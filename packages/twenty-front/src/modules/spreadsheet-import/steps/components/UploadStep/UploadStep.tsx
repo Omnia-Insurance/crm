@@ -2,7 +2,7 @@ import { t } from '@lingui/core/macro';
 import { useCallback, useState } from 'react';
 import { type WorkBook } from 'xlsx-ugnis';
 
-import { ModalContent } from 'twenty-ui/layout';
+import { ModalContent } from 'twenty-ui/surfaces';
 
 import { useComputeColumnSuggestionsAndAutoMatch } from '@/spreadsheet-import/hooks/useComputeColumnSuggestionsAndAutoMatch';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
@@ -31,8 +31,13 @@ export const UploadStep = ({
 }: UploadStepProps) => {
   const [isLoading, setIsLoading] = useState(false);
   // OMNIA-CUSTOM: onSheetSelected callback for reconciliation
-  const { maxRecords, uploadStepHook, selectHeaderStepHook, selectHeader, onSheetSelected } =
-    useSpreadsheetImportInternal();
+  const {
+    maxRecords,
+    uploadStepHook,
+    selectHeaderStepHook,
+    selectHeader,
+    onSheetSelected,
+  } = useSpreadsheetImportInternal();
 
   const computeColumnSuggestionsAndAutoMatch =
     useComputeColumnSuggestionsAndAutoMatch();

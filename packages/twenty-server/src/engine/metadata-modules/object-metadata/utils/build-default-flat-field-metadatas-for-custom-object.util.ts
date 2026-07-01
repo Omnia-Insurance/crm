@@ -2,7 +2,6 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { v4 } from 'uuid';
 
 import { PARTIAL_SYSTEM_FLAT_FIELD_METADATAS } from 'src/engine/metadata-modules/object-metadata/constants/partial-system-flat-field-metadatas.constant';
-import { buildCustomObjectSearchVectorFieldSettings } from 'src/engine/metadata-modules/search-field-metadata/utils/build-custom-object-search-vector-field-settings.util';
 import { type UniversalFlatFieldMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-field-metadata.type';
 import { type UniversalFlatObjectMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-object-metadata.type';
 
@@ -22,12 +21,10 @@ const buildObjectSystemFlatFieldMetadatas = ({
   applicationUniversalIdentifier,
   objectMetadataUniversalIdentifier,
   now,
-  searchVectorUniversalSettings,
 }: {
   applicationUniversalIdentifier: string;
   objectMetadataUniversalIdentifier: string;
   now: string;
-  searchVectorUniversalSettings: UniversalFlatFieldMetadata<FieldMetadataType.TS_VECTOR>['universalSettings'];
 }) => {
   const {
     createdAt,
@@ -81,6 +78,9 @@ const buildObjectSystemFlatFieldMetadatas = ({
       createdAt: now,
       updatedAt: now,
     },
+    // OMNIA: searchVector.universalSettings stays null (upstream default). The fields a
+    // custom object indexes are tracked as searchFieldMetadata rows instead — at creation
+    // only the name field qualifies, seeded by buildDefaultSearchFieldMetadatasForCustomObject.
     searchVector: {
       ...searchVector,
       universalIdentifier: v4(),
@@ -88,7 +88,6 @@ const buildObjectSystemFlatFieldMetadatas = ({
       objectMetadataUniversalIdentifier,
       createdAt: now,
       updatedAt: now,
-      universalSettings: searchVectorUniversalSettings,
     },
     updatedAt: {
       ...updatedAt,
@@ -133,10 +132,10 @@ export const buildDefaultFlatFieldMetadatasForCustomObject = ({
           description: 'Name',
           isNullable: true,
           isActive: true,
-          isCustom: false,
           isSystem: false,
           requiredCondition: null,
-          isUIReadOnly: false,
+          isSystemSideEffect: true,
+          isUIEditable: true,
           defaultValue: null,
           createdAt: now,
           updatedAt: now,
@@ -155,10 +154,8 @@ export const buildDefaultFlatFieldMetadatasForCustomObject = ({
           fieldPermissionUniversalIdentifiers: [],
           universalSettings: null,
           viewSortUniversalIdentifiers: [],
+          searchFieldMetadataUniversalIdentifiers: [],
         };
-
-  const searchVectorUniversalSettings: UniversalFlatFieldMetadata<FieldMetadataType.TS_VECTOR>['universalSettings'] =
-    buildCustomObjectSearchVectorFieldSettings(nameField ? [nameField] : []);
 
   return {
     fields: {
@@ -167,7 +164,6 @@ export const buildDefaultFlatFieldMetadatasForCustomObject = ({
         applicationUniversalIdentifier,
         objectMetadataUniversalIdentifier,
         now,
-        searchVectorUniversalSettings,
       }),
     },
   } as const satisfies {

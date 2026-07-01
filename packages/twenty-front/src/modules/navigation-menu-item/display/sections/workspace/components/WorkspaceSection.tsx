@@ -8,7 +8,7 @@ import {
   IconPlus,
   IconTool,
   useIcons,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
@@ -37,6 +37,7 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { NavigationMenuItemType, SidePanelPages } from 'twenty-shared/types';
+import { lastVisitedViewPerObjectMetadataItemState } from '@/navigation/states/lastVisitedViewPerObjectMetadataItemState';
 
 const StyledRightIconsContainer = styled.div`
   align-items: center;
@@ -49,6 +50,9 @@ export const WorkspaceSection = () => {
   const { workspaceNavigationMenuItemsSorted } = useSortedNavigationMenuItems();
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
   const views = useAtomStateValue(viewsSelector);
+  const lastVisitedViewPerObjectMetadataItem = useAtomStateValue(
+    lastVisitedViewPerObjectMetadataItemState,
+  );
   const { enterLayoutCustomizationMode } = useEnterLayoutCustomizationMode();
   const isLayoutCustomizationModeEnabled = useAtomStateValue(
     isLayoutCustomizationModeEnabledState,
@@ -90,19 +94,21 @@ export const WorkspaceSection = () => {
     const firstChild = workspaceNavigationMenuItemsSorted.find((navItem) => {
       if (navItem.folderId !== folderId) return false;
       if (navItem.type === NavigationMenuItemType.LINK) return false;
-      const link = getNavigationMenuItemComputedLink(
-        navItem,
+      const link = getNavigationMenuItemComputedLink({
+        item: navItem,
         objectMetadataItems,
         views,
-      );
+        lastVisitedViewPerObjectMetadataItem,
+      });
       return isNonEmptyString(link);
     });
     if (firstChild) {
-      const link = getNavigationMenuItemComputedLink(
-        firstChild,
+      const link = getNavigationMenuItemComputedLink({
+        item: firstChild,
         objectMetadataItems,
         views,
-      );
+        lastVisitedViewPerObjectMetadataItem,
+      });
       if (isNonEmptyString(link)) {
         navigate(link);
       }
@@ -124,11 +130,12 @@ export const WorkspaceSection = () => {
         pageIcon: getIcon(objectMetadataItem.icon),
       });
     }
-    const link = getNavigationMenuItemComputedLink(
+    const link = getNavigationMenuItemComputedLink({
       item,
       objectMetadataItems,
       views,
-    );
+      lastVisitedViewPerObjectMetadataItem,
+    });
     if (isNonEmptyString(link)) {
       navigate(link);
     }

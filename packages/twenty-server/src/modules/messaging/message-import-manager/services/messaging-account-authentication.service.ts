@@ -4,6 +4,7 @@ import { isDefined } from 'class-validator';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { ConnectedAccountRefreshAccessTokenExceptionCode } from 'src/engine/metadata-modules/connected-account/exceptions/connected-account-refresh-tokens.exception';
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
 import {
   ConnectedAccountRefreshTokensService,
   type ConnectedAccountTokens,
@@ -44,14 +45,17 @@ export class MessagingAccountAuthenticationService {
       });
 
       return {
-        accessToken: '',
-        refreshToken: '',
+        accessToken: '' as EncryptedString,
+        refreshToken: '' as EncryptedString,
       };
     }
 
     // Service accounts mint JWT tokens on demand — no refresh needed
     if (connectedAccount.refreshToken === 'SERVICE_ACCOUNT') {
-      return { accessToken: '', refreshToken: 'SERVICE_ACCOUNT' };
+      return {
+        accessToken: '' as EncryptedString,
+        refreshToken: 'SERVICE_ACCOUNT' as EncryptedString,
+      };
     }
 
     return await this.refreshAccessTokenForOAuthProvider({

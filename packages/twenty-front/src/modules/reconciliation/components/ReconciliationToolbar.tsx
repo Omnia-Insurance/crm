@@ -1,6 +1,6 @@
 import { styled } from '@linaria/react';
 import type { ReactNode } from 'react';
-import { IconArrowBackUp, IconListCheck } from 'twenty-ui/display';
+import { IconArrowBackUp, IconListCheck } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 

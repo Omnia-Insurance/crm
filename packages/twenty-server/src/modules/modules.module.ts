@@ -5,6 +5,7 @@ import { ConnectedAccountModule } from 'src/modules/connected-account/connected-
 // OMNIA-CUSTOM: dashboard role-gating — audience field + RLS predicates auto-track roles
 import { DashboardAudienceModule } from 'src/modules/dashboard/dashboard-audience/dashboard-audience.module';
 import { MessagingModule } from 'src/modules/messaging/messaging.module';
+import { OnboardingInviteSuggestionsModule } from 'src/modules/onboarding-invite-suggestions/onboarding-invite-suggestions.module';
 // OMNIA-CUSTOM: Payment Reconciliation v2
 import { ReconciliationModule } from 'src/modules/reconciliation/reconciliation.module';
 import { WorkflowModule } from 'src/modules/workflow/workflow.module';
@@ -15,6 +16,7 @@ import { WorkspaceMemberModule } from 'src/modules/workspace-member/workspace-me
     MessagingModule,
     CalendarModule,
     ConnectedAccountModule,
+    OnboardingInviteSuggestionsModule,
     WorkflowModule,
     WorkspaceMemberModule,
     ReconciliationModule,

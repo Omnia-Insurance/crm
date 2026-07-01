@@ -29,7 +29,7 @@ import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
 import { shouldEmitEvent } from 'src/engine/twenty-orm/utils/should-emit-event.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
-import { computeTableName } from 'src/engine/utils/compute-table-name.util';
+import { computeObjectTargetTable } from 'src/engine/utils/compute-object-target-table.util';
 
 export class WorkspaceSoftDeleteQueryBuilder<
   T extends ObjectLiteral,
@@ -99,10 +99,7 @@ export class WorkspaceSoftDeleteQueryBuilder<
         objectRecordsPermissions: this.objectRecordsPermissions,
       });
 
-      const tableName = computeTableName(
-        objectMetadata.nameSingular,
-        objectMetadata.isCustom,
-      );
+      const tableName = computeObjectTargetTable(objectMetadata);
 
       const before = await beforeEventSelectQueryBuilder.getMany({
         noFormatting: true,

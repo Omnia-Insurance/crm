@@ -17,6 +17,7 @@ import {
   ENTERPRISE_JWT_PUBLIC_KEY,
 } from 'src/engine/core-modules/enterprise/constants/enterprise-public-key.constant';
 import {
+  type EnterpriseInstanceMetadata,
   type EnterpriseKeyPayload,
   type EnterpriseLicenseInfo,
   type EnterpriseValidityPayload,
@@ -27,6 +28,9 @@ import {
   ConfigVariableExceptionCode,
 } from 'src/engine/core-modules/twenty-config/twenty-config.exception';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { UserEntity } from 'src/engine/core-modules/user/user.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 @Injectable()
 export class EnterprisePlanService implements OnModuleInit {
@@ -38,6 +42,12 @@ export class EnterprisePlanService implements OnModuleInit {
     private readonly twentyConfigService: TwentyConfigService,
     @InjectRepository(AppTokenEntity)
     private readonly appTokenRepository: Repository<AppTokenEntity>,
+    @InjectRepository(UserWorkspaceEntity)
+    private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(WorkspaceEntity)
+    private readonly workspaceRepository: Repository<WorkspaceEntity>,
   ) {}
 
   async onModuleInit() {
@@ -133,26 +143,20 @@ export class EnterprisePlanService implements OnModuleInit {
   }
 
   hasValidEnterpriseValidityToken(): boolean {
-    if (isDefined(this.cachedValidityPayload)) {
-      const now = Math.floor(Date.now() / 1000);
-
-      return this.cachedValidityPayload.exp > now;
-    }
-
-    return false;
-  }
-
-  hasValidEnterpriseKey(): boolean {
-    return this.hasValidSignedEnterpriseKey() || this.checkLegacyKey();
+    // OMNIA-CUSTOM: self-hosted deployment — force-unlock ALL Enterprise-gated
+    // features (AI Usage analytics, Security/SSO, event logs, Admin AI, etc.).
+    // This is the single central switch: the frontend reads it via
+    // workspace.resolver's `hasValidEnterpriseValidityToken` field (consumed by
+    // SettingsEnterpriseFeatureGateCard), and server-side guards enforce via
+    // `isValid()` which delegates here (enterprise-features-enabled.guard,
+    // event-logs.service, sign-in-up.service, JWKS rotation cron). Returning
+    // true opens both layers. Upstream returned
+    // `isDefined(this.cachedValidityPayload) && this.cachedValidityPayload.exp > nowSeconds`.
+    return true;
   }
 
   isValid(): boolean {
     return this.hasValidEnterpriseValidityToken();
-  }
-
-  private checkLegacyKey(): boolean {
-    // temporary
-    return isDefined(this.twentyConfigService.get('ENTERPRISE_KEY'));
   }
 
   isValidEnterpriseKeyFormat(key: string): boolean {
@@ -224,10 +228,12 @@ export class EnterprisePlanService implements OnModuleInit {
     const validateUrl = `${apiUrl}/validate`;
 
     try {
+      const instanceMetadata = await this.gatherInstanceMetadata();
+
       const response = await fetch(validateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enterpriseKey }),
+        body: JSON.stringify({ enterpriseKey, instanceMetadata }),
       });
 
       if (!response.ok) {
@@ -278,10 +284,12 @@ export class EnterprisePlanService implements OnModuleInit {
     const seatsUrl = `${apiUrl}/seats`;
 
     try {
+      const instanceMetadata = await this.gatherInstanceMetadata();
+
       const response = await fetch(seatsUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enterpriseKey, seatCount }),
+        body: JSON.stringify({ enterpriseKey, seatCount, instanceMetadata }),
       });
 
       if (!response.ok) {
@@ -446,6 +454,53 @@ export class EnterprisePlanService implements OnModuleInit {
         `Enterprise checkout request failed: ${error instanceof Error ? error.message : 'Network error'}`,
       );
 
+      return null;
+    }
+  }
+
+  // Best-effort only: must never throw and fail a license refresh.
+  private async gatherInstanceMetadata(): Promise<EnterpriseInstanceMetadata> {
+    return {
+      serverId: this.twentyConfigService.get('SERVER_ID') ?? null,
+      serverUrl: this.twentyConfigService.get('SERVER_URL') ?? null,
+      appVersion: this.twentyConfigService.get('APP_VERSION') ?? null,
+      nodeEnv: this.twentyConfigService.get('NODE_ENV') ?? null,
+      telemetryEnabled:
+        this.twentyConfigService.get('TELEMETRY_ENABLED') ?? null,
+      workspaceCount: await this.safeCount(() =>
+        this.workspaceRepository.count(),
+      ),
+      activeUserWorkspaceCount: await this.safeCount(() =>
+        this.userWorkspaceRepository.count({ where: { deletedAt: IsNull() } }),
+      ),
+      distinctUserCount: await this.safeCount(() =>
+        this.userRepository.count({ where: { deletedAt: IsNull() } }),
+      ),
+      adminContactEmail: await this.getAdminContactEmail(),
+      sentAt: new Date().toISOString(),
+    };
+  }
+
+  private async safeCount(
+    countFn: () => Promise<number>,
+  ): Promise<number | null> {
+    try {
+      return await countFn();
+    } catch {
+      return null;
+    }
+  }
+
+  private async getAdminContactEmail(): Promise<string | null> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { deletedAt: IsNull() },
+        order: { createdAt: 'ASC' },
+        select: { email: true },
+      });
+
+      return user?.email ?? null;
+    } catch {
       return null;
     }
   }
