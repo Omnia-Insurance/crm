@@ -4,8 +4,6 @@ import { EventFieldDiffLabel } from '@/activities/timeline-activities/rows/main-
 import { EventFieldDiffRelationValue } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffRelationValue';
 import { EventFieldDiffValue } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffValue';
 import { EventFieldDiffValueEffect } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiffValueEffect';
-import { EventRelationFieldDiffValues } from '@/activities/timeline-activities/rows/main-object/components/EventRelationFieldDiffValues';
-import { isRelationFieldChangeValue } from '@/activities/timeline-activities/utils/relationFieldChangeValue';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { Trans } from '@lingui/react/macro';
@@ -61,24 +59,11 @@ export const EventFieldDiff = ({
     throw new Error('fieldMetadataItem is required');
   }
 
-  const isRelationFieldDiff =
-    fieldMetadataItem.type === FieldMetadataType.RELATION &&
-    (isRelationFieldChangeValue(fieldDiff.before) ||
-      isRelationFieldChangeValue(fieldDiff.after));
-
-  if (isRelationFieldDiff) {
-    return (
-      <StyledEventFieldDiffContainer>
-        <EventFieldDiffLabel fieldMetadataItem={fieldMetadataItem} />
-        <StyledArrowContainer>→</StyledArrowContainer>
-        <EventRelationFieldDiffValues
-          fieldDiff={fieldDiff}
-          fieldMetadataItem={fieldMetadataItem}
-        />
-      </StyledEventFieldDiffContainer>
-    );
-  }
-
+  // OMNIA-CUSTOM: relation-field diffs are rendered via the Omnia
+  // EventFieldDiffRelationValue chip path in the branches below (both the
+  // struck-through before value and the after value). The upstream early-return
+  // that routed them through EventRelationFieldDiffValues was removed so relation
+  // diffs render as before->after RecordChips like every other field.
   const diffRecord = fieldDiff.after as Record<string, unknown> | undefined;
   // OMNIA-CUSTOM: derive the before-value record from the diff so the
   // struck-through "before" preview can be rendered ahead of the arrow.

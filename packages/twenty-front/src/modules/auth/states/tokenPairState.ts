@@ -4,6 +4,25 @@ import { type AuthTokenPair } from '~/generated-metadata/graphql';
 
 export const TOKEN_PAIR_LOCAL_STORAGE_KEY = 'tokenPairState';
 
+// OMNIA-CUSTOM: cross-app SSO transport helper. Derives the shared parent
+// domain of the current hostname (e.g. crm.omniaagent.com -> '.omniaagent.com')
+// so a sibling app (the omniaagent.com dashboard) can read a WRITE-ONLY mirror
+// of the auth token from a parent-domain 'tokenPair' cookie. Returns undefined
+// on localhost, IPs, and apex domains with no subdomain to strip, so no
+// cross-domain cookie is written there. Core auth still reads ONLY from
+// localStorage (apollo/utils/getTokenPair) — this cookie is never a read source.
+const IP_HOSTNAME_REGEX = /^[\d.]+$/;
+
+export const deriveCookieDomain = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const { hostname } = window.location;
+  if (hostname === 'localhost' || IP_HOSTNAME_REGEX.test(hostname))
+    return undefined;
+  const parts = hostname.split('.');
+  if (parts.length < 3) return undefined;
+  return '.' + parts.slice(1).join('.');
+};
+
 // NOTE (Omnia): upstream (#21507) moved the auth token from a cross-subdomain
 // cookie to localStorage, and the Apollo token reader (apollo/utils/getTokenPair)
 // reads localStorage directly. We follow upstream here — a cookie override breaks

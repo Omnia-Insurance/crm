@@ -143,13 +143,16 @@ export class EnterprisePlanService implements OnModuleInit {
   }
 
   hasValidEnterpriseValidityToken(): boolean {
-    if (isDefined(this.cachedValidityPayload)) {
-      const now = Math.floor(Date.now() / 1000);
-
-      return this.cachedValidityPayload.exp > now;
-    }
-
-    return false;
+    // OMNIA-CUSTOM: self-hosted deployment — force-unlock ALL Enterprise-gated
+    // features (AI Usage analytics, Security/SSO, event logs, Admin AI, etc.).
+    // This is the single central switch: the frontend reads it via
+    // workspace.resolver's `hasValidEnterpriseValidityToken` field (consumed by
+    // SettingsEnterpriseFeatureGateCard), and server-side guards enforce via
+    // `isValid()` which delegates here (enterprise-features-enabled.guard,
+    // event-logs.service, sign-in-up.service, JWKS rotation cron). Returning
+    // true opens both layers. Upstream returned
+    // `isDefined(this.cachedValidityPayload) && this.cachedValidityPayload.exp > nowSeconds`.
+    return true;
   }
 
   isValid(): boolean {

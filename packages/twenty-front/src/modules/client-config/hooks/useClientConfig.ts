@@ -34,6 +34,9 @@ import { getClientConfig } from '@/client-config/utils/getClientConfig';
 import { allowRequestsToTwentyIconsState } from '@/client-config/states/allowRequestsToTwentyIcons';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+// OMNIA-CUSTOM: token now lives in localStorage (post cookie-revert), so its
+// key must be preserved by the version cache-bust below.
+import { TOKEN_PAIR_LOCAL_STORAGE_KEY } from '@/auth/states/tokenPairState';
 
 type UseClientConfigResult = {
   data: { clientConfig: ClientConfig } | undefined;
@@ -151,16 +154,21 @@ export const useClientConfig = (): UseClientConfigResult => {
       }));
       // OMNIA-CUSTOM: clear localStorage when the deployed app version changes.
       // Twenty stores Jotai state (object metadata items, sidebar state, etc.)
-      // in localStorage via atomWithStorage. Auth lives in cookies, so users
-      // stay logged in across deploys and their stale localStorage gets replayed
-      // against the new bundle — which can break in subtle ways (e.g. all
-      // object icons rendering as "123" after the 2026-05-09 upstream merge
-      // because cached icon names no longer resolve in the new tabler-icons map).
-      // On version change, wipe localStorage (preserving a small allowlist) and
-      // reload so atoms re-initialise cleanly.
+      // in localStorage via atomWithStorage. On version change, wipe localStorage
+      // (preserving a small allowlist) and reload so atoms re-initialise cleanly.
+      // This fixes stale-cache breakage such as all object icons rendering as
+      // "123" after the 2026-05-09 upstream merge because cached icon names no
+      // longer resolve in the new tabler-icons map.
+      // The auth token was reverted from a cookie back into localStorage this
+      // session (key TOKEN_PAIR_LOCAL_STORAGE_KEY = 'tokenPairState'), so it MUST
+      // survive the cache-bust — otherwise every deploy logs all users out.
       if (clientConfig.appVersion) {
         const CACHED_APP_VERSION_KEY = 'omnia.cachedAppVersion';
-        const PRESERVED_KEYS = ['locale', CACHED_APP_VERSION_KEY];
+        const PRESERVED_KEYS = [
+          'locale',
+          CACHED_APP_VERSION_KEY,
+          TOKEN_PAIR_LOCAL_STORAGE_KEY,
+        ];
         const storedVersion = localStorage.getItem(CACHED_APP_VERSION_KEY);
         if (storedVersion !== clientConfig.appVersion) {
           const preserved: Record<string, string> = {};

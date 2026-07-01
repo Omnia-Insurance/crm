@@ -103,6 +103,13 @@ check_file_not_contains \
   "Organization plan gate should be removed — RLS always enabled"
 
 echo ""
+echo "--- Critical: Enterprise Features Unlocked (Self-Hosted) ---"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/enterprise/services/enterprise-plan.service.ts" \
+  "force-unlock ALL Enterprise-gated" \
+  "Enterprise validity check must force-unlock all EE features for self-hosted (AI Usage, Security/SSO, event logs, Admin AI)"
+
+echo ""
 echo "--- Critical: Scoped RLS UI ---"
 check_file_contains \
   "packages/twenty-front/src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelSection.tsx" \
@@ -164,6 +171,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/navigation/hooks/useDefaultHomePagePath.ts" \
   "SIDEBAR_ORDER" \
   "Member landing object must follow Omnia SIDEBAR_ORDER (person/Leads first)"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation/hooks/__tests__/useDefaultHomePagePath.test.ts" \
+  "should pin a non-admin member to the first sidebar object" \
+  "Landing-page tests must keep Omnia member sidebar-pinning (person/Leads) coverage"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation/hooks/__tests__/useDefaultHomePagePath.test.ts" \
+  "should land an admin on their last-visited object when it is still in the sidebar" \
+  "Landing-page tests must keep Omnia admin last-visited landing coverage"
+check_file_contains \
+  "packages/twenty-front/src/modules/navigation/hooks/__tests__/useDefaultHomePagePath.test.ts" \
+  "PermissionFlagType.LAYOUTS" \
+  "Upstream nav-menu landing scenarios must run as admin (LAYOUTS flag) to test the admin branch"
 
 echo ""
 echo "--- Critical: Create Record CTA ---"
@@ -499,8 +518,8 @@ check_file_contains \
   "Metadata response cache must include FindAllRecordPageLayouts"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \
-  "'FindFieldsWidgetCoreViews'" \
-  "Metadata response cache must include FindFieldsWidgetCoreViews"
+  "'FindFieldsWidgetViews'" \
+  "Metadata response cache must include FindFieldsWidgetViews"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \
   "'FindManyLogicFunctions'" \
@@ -511,8 +530,8 @@ check_file_contains \
   "Metadata cache hook must keep user-scoped core-view operations grouped together"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
-  "'FindFieldsWidgetCoreViews'" \
-  "Fields-widget core views must stay user-scoped in metadata response cache keys"
+  "'FindFieldsWidgetViews'" \
+  "Fields-widget views must stay user-scoped in metadata response cache keys"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/graphql-config/hooks/use-cached-metadata.ts" \
   "SLOW_METADATA_CACHE_MISS_MS" \
@@ -2183,6 +2202,10 @@ check_file_exists \
   "packages/twenty-front/src/modules/command-menu/components/RequiredFieldsValidationModal.tsx" \
   "Required fields validation modal"
 check_file_contains \
+  "packages/twenty-front/src/modules/side-panel/components/SidePanelForDesktop.tsx" \
+  "RequiredFieldsValidationModal" \
+  "SidePanelForDesktop must mount RequiredFieldsValidationModal (guards against re-orphaning after upstream merges)"
+check_file_contains \
   "packages/twenty-front/src/modules/command-menu/hooks/useBeforeUnloadRequiredFieldsCheck.ts" \
   "record.deletedAt" \
   "Deleted records must not block browser unload"
@@ -2390,6 +2413,24 @@ check_file_exists \
   "AudioLink component for call recording playback"
 
 echo ""
+echo "--- Omnia: Call recording AudioLink displayAs backfill (v2.19 merge) ---"
+check_file_exists \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/2-18-workspace-command-1810000006000-set-recording-field-display-as-audio.command.ts" \
+  "Durable upgrade command that sets settings.displayAs='audio' on the call 'recording' field must exist (replaces retired migration 1771800000000; AudioLink only renders when displayAs==='audio')"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/2-18-workspace-command-1810000006000-set-recording-field-display-as-audio.command.ts" \
+  "upgrade:2-18:set-recording-field-display-as-audio" \
+  "Recording displayAs backfill must keep its upgrade command name"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/2-18-workspace-command-1810000006000-set-recording-field-display-as-audio.command.ts" \
+  "'{\"displayAs\": \"audio\"}'::jsonb" \
+  "Recording displayAs backfill must keep the idempotent jsonb merge that sets displayAs=audio"
+check_file_contains \
+  "packages/twenty-server/src/database/commands/upgrade-version-command/2-18/2-18-upgrade-version-command.module.ts" \
+  "SetRecordingFieldDisplayAsAudioCommand" \
+  "Recording displayAs backfill command must stay registered in the 2-18 upgrade-version module"
+
+echo ""
 echo "--- Auth / Branding ---"
 check_file_contains \
   "packages/twenty-front/src/modules/auth/components/Logo.tsx" \
@@ -2399,9 +2440,35 @@ check_file_contains \
   "packages/twenty-front/src/pages/auth/SignInUp.tsx" \
   "OMNIA-CUSTOM" \
   "SignInUp.tsx must show workspace name instead of 'Welcome, X.'"
-# NOTE: tokenPairState reverted to upstream localStorage in the v2.19 merge (a
-# cookie override breaks core auth — upstream's getTokenPair reads localStorage).
-# omniaagent.com cross-subdomain dashboard SSO must be re-solved separately.
+# NOTE: tokenPairState stays on upstream localStorage (a cookie override breaks
+# core auth — upstream's getTokenPair reads localStorage). Cross-subdomain SSO to
+# the omniaagent.com dashboard is restored via a WRITE-ONLY '.omniaagent.com'
+# 'tokenPair' cookie mirror set in useAuth (deriveCookieDomain), NOT by changing
+# the auth read path. Guarded below.
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
+  "deriveCookieDomain" \
+  "tokenPairState must export deriveCookieDomain() for cross-subdomain SSO cookie scoping"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
+  "useLocalStorage: true" \
+  "tokenPairState must stay on localStorage (cookie storage re-breaks core auth)"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/auth/states/tokenPairState.ts" \
+  "useCookieStorage" \
+  "tokenPairState must NOT read from a cookie — core auth reads localStorage only"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
+  "writeSsoTokenPairCookie" \
+  "useAuth must mirror the auth token into the cross-subdomain SSO cookie on setAuthTokens"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
+  "clearSsoTokenPairCookie" \
+  "useAuth must clear the cross-subdomain SSO cookie on logout/clearSession"
+check_file_contains \
+  "packages/twenty-front/src/modules/apollo/utils/getTokenPair.ts" \
+  "localStorage.getItem" \
+  "Core auth must keep reading the token pair from localStorage only (never the SSO cookie)"
 check_file_exists \
   "packages/twenty-shared/src/utils/auth/derive-trusted-redirect-domain.ts" \
   "Trusted external redirect helpers must exist (shared by server + frontend)"
@@ -2533,6 +2600,17 @@ check_file_contains \
 check_file_exists \
   "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiffRelationValue.tsx" \
   "Relation diff value component must exist"
+
+echo ""
+echo "--- Timeline relation-field diffs (before->after RecordChips) ---"
+check_file_not_contains \
+  "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiff.tsx" \
+  "<EventRelationFieldDiffValues" \
+  "Relation-field diffs must render via the Omnia EventFieldDiffRelationValue chip path, not the upstream EventRelationFieldDiffValues early-return"
+check_file_contains \
+  "packages/twenty-front/src/modules/activities/timeline-activities/rows/main-object/components/EventFieldDiffRelationValue.tsx" \
+  "'id' in diffRecord" \
+  "Relation diff renderer must accept both the server { id: uuid } object shape and the legacy bare-string UUID"
 
 # ==========================================================
 # Draft Record Creation (side panel draft instead of instant empty record)
@@ -2973,6 +3051,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/client-config/hooks/useClientConfig.ts" \
   "omnia.cachedAppVersion" \
   "useClientConfig must clear localStorage when clientConfig.appVersion differs from the cached version (post-upstream-merge stale-cache fix)"
+check_file_contains \
+  "packages/twenty-front/src/modules/client-config/hooks/useClientConfig.ts" \
+  "TOKEN_PAIR_LOCAL_STORAGE_KEY" \
+  "Cache-bust must preserve the localStorage auth token (tokenPairState) so deploys do not log all users out"
 
 echo ""
 echo "--- Timeline Field Diff: Before → After ---"

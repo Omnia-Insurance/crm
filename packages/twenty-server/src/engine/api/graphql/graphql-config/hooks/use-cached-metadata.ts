@@ -18,7 +18,12 @@ export type CacheMetadataPluginConfig = {
 
 const USER_SCOPED_METADATA_OPERATIONS = new Set([
   'FindAllViews',
-  'FindFieldsWidgetCoreViews',
+  // OMNIA-CUSTOM: match the actual client operation name
+  // (query FindFieldsWidgetViews in
+  // twenty-front/.../findFieldsWidgetViews.ts). Core-view visibility is
+  // user-dependent, so the cache key stays user-scoped via userWorkspaceId.
+  // Must stay in sync with operationsToCache in metadata.module-factory.ts.
+  'FindFieldsWidgetViews',
 ]);
 const SLOW_METADATA_CACHE_MISS_MS = 1_000;
 const logger = new Logger('CachedMetadata');

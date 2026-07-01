@@ -2,6 +2,8 @@ import { currentUserState } from '@/auth/states/currentUserState';
 import { currentUserWorkspaceState } from '@/auth/states/currentUserWorkspaceState';
 import { metadataStoreState } from '@/metadata-store/states/metadataStoreState';
 import { useDefaultHomePagePath } from '@/navigation/hooks/useDefaultHomePagePath';
+// OMNIA-CUSTOM: needed to exercise the admin "last visited" landing behaviour.
+import { lastVisitedObjectMetadataItemIdState } from '@/navigation/states/lastVisitedObjectMetadataItemIdState';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
@@ -14,6 +16,9 @@ import { getSettingsPath } from 'twenty-shared/utils';
 import {
   type NavigationMenuItem,
   NavigationMenuItemType,
+  // OMNIA-CUSTOM: LAYOUTS flag drives isAdmin in useDefaultHomePagePath; the
+  // upstream nav-menu scenarios only apply to admins.
+  PermissionFlagType,
   ViewOpenRecordIn,
   ViewType,
   ViewVisibility,
@@ -99,6 +104,10 @@ const renderHooks = ({
   objectMetadataItems = getTestEnrichedObjectMetadataItemsMock(),
   navigationMenuItems = [],
   withNavigationMenuItemsLoaded = true,
+  // OMNIA-CUSTOM: isAdmin === LAYOUTS permission flag. Upstream nav-menu
+  // landing scenarios only apply to admins; members are pinned to their first
+  // sidebar-visible object. Defaults to a non-admin member.
+  isAdmin = false,
 }: {
   withCurrentUser: boolean;
   withExistingView: boolean;
@@ -106,6 +115,7 @@ const renderHooks = ({
   objectMetadataItems?: EnrichedObjectMetadataItem[];
   navigationMenuItems?: NavigationMenuItem[];
   withNavigationMenuItemsLoaded?: boolean;
+  isAdmin?: boolean;
 }) => {
   if (withObjectMetadataLoaded) {
     setTestObjectMetadataItemsInMetadataStore(jotaiStore, objectMetadataItems);
@@ -163,7 +173,20 @@ const renderHooks = ({
 
         if (withCurrentUser) {
           setCurrentUser(mockedUserData);
-          setCurrentUserWorkspace(mockedUserData.currentUserWorkspace);
+          // OMNIA-CUSTOM: add the LAYOUTS permission flag so the hook treats the
+          // user as an admin for the upstream nav-menu landing scenarios.
+          setCurrentUserWorkspace(
+            isAdmin
+              ? {
+                  ...mockedUserData.currentUserWorkspace,
+                  permissionFlags: [
+                    ...(mockedUserData.currentUserWorkspace.permissionFlags ??
+                      []),
+                    PermissionFlagType.LAYOUTS,
+                  ],
+                }
+              : mockedUserData.currentUserWorkspace,
+          );
         }
       }, [setCurrentUser, setCurrentUserWorkspace]);
 
@@ -177,6 +200,12 @@ const renderHooks = ({
 };
 
 describe('useDefaultHomePagePath', () => {
+  // OMNIA-CUSTOM: the admin "last visited" landing reads a localStorage-backed
+  // atom that would otherwise leak between tests in the shared jotaiStore.
+  afterEach(() => {
+    jotaiStore.set(lastVisitedObjectMetadataItemIdState.atom, null);
+  });
+
   it('should return proper path when no currentUser', async () => {
     const { result } = renderHooks({
       withCurrentUser: false,
@@ -201,6 +230,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: false,
+      isAdmin: true,
       navigationMenuItems: [
         buildObjectNavigationMenuItem('person', 0),
         buildObjectNavigationMenuItem('company', 1),
@@ -215,6 +245,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: false,
+      isAdmin: true,
       navigationMenuItems: [
         buildObjectNavigationMenuItem('company', 0, 'folder-1'),
         buildObjectNavigationMenuItem('person', 1),
@@ -230,6 +261,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: false,
+      isAdmin: true,
       navigationMenuItems: [
         buildPageLayoutNavigationMenuItem('page-layout-1', 0),
         buildObjectNavigationMenuItem('person', 1),
@@ -244,6 +276,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: false,
+      isAdmin: true,
       navigationMenuItems: [
         buildLinkNavigationMenuItem(0),
         buildObjectNavigationMenuItem('person', 1),
@@ -258,6 +291,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: true,
+      isAdmin: true,
       navigationMenuItems: [buildViewNavigationMenuItem('viewId', 0)],
     });
 
@@ -271,6 +305,7 @@ describe('useDefaultHomePagePath', () => {
     const { result } = renderHooks({
       withCurrentUser: true,
       withExistingView: false,
+      isAdmin: true,
       navigationMenuItems: [],
     });
 
@@ -316,6 +351,47 @@ describe('useDefaultHomePagePath', () => {
 
     await waitFor(() => {
       expect(result.current.defaultHomePagePath).toEqual(AppPath.Index);
+    });
+  });
+  // OMNIA-CUSTOM: non-admin members are pinned to their first sidebar-visible
+  // object (person/Leads) and must never follow the workspace navigation menu,
+  // which is only read-permission filtered (not showInSidebar filtered).
+  it('should pin a non-admin member to the first sidebar object (Leads/person) regardless of navigation menu items', async () => {
+    const { result } = renderHooks({
+      withCurrentUser: true,
+      withExistingView: true,
+      isAdmin: false,
+      navigationMenuItems: [
+        buildObjectNavigationMenuItem('company', 0),
+        buildViewNavigationMenuItem('viewId', 1),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(result.current.defaultHomePagePath).toEqual('/objects/people');
+    });
+  });
+  // OMNIA-CUSTOM: admins return to their last-visited object when it is still
+  // part of the workspace sidebar, taking precedence over the first navigation
+  // menu item (person here).
+  it('should land an admin on their last-visited object when it is still in the sidebar', async () => {
+    jotaiStore.set(
+      lastVisitedObjectMetadataItemIdState.atom,
+      getMockObjectMetadataItemOrThrow('company').id,
+    );
+
+    const { result } = renderHooks({
+      withCurrentUser: true,
+      withExistingView: false,
+      isAdmin: true,
+      navigationMenuItems: [
+        buildObjectNavigationMenuItem('person', 0),
+        buildObjectNavigationMenuItem('company', 1),
+      ],
+    });
+
+    await waitFor(() => {
+      expect(result.current.defaultHomePagePath).toEqual('/objects/companies');
     });
   });
 });
