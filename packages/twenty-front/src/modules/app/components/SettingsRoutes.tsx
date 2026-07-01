@@ -180,27 +180,27 @@ const SettingsApiWebhooks = lazy(() =>
 
 // OMNIA-CUSTOM: Ingestion Pipeline settings pages
 const SettingsIngestionPipelines = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelines'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelines,
-  })),
+  import('~/pages/settings/ingestion-pipelines/SettingsIngestionPipelines').then(
+    (module) => ({
+      default: module.SettingsIngestionPipelines,
+    }),
+  ),
 );
 
 const SettingsIngestionPipelineNew = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelineNew,
-  })),
+  import('~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew').then(
+    (module) => ({
+      default: module.SettingsIngestionPipelineNew,
+    }),
+  ),
 );
 
 const SettingsIngestionPipelineDetail = lazy(() =>
-  import(
-    '~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail'
-  ).then((module) => ({
-    default: module.SettingsIngestionPipelineDetail,
-  })),
+  import('~/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail').then(
+    (module) => ({
+      default: module.SettingsIngestionPipelineDetail,
+    }),
+  ),
 );
 
 const SettingsAI = lazy(() =>

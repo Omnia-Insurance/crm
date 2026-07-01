@@ -107,11 +107,11 @@ const StyledCardTitle = styled.div`
 `;
 
 const StyledCardBody = styled.div`
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: ${themeCssVariables.font.color.secondary};
   display: -webkit-box;
   font-size: ${themeCssVariables.font.size.sm};
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
 `;

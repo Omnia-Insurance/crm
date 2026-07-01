@@ -55,15 +55,7 @@ const MotionIconChevronDown = motion.create(IconChevronDown);
 
 // OMNIA-CUSTOM: Diff highlight wrapper for the relation chip row
 const StyledDiffChipRow = styled.div<{ accepted: boolean }>`
-  display: flex;
   align-items: center;
-  gap: ${themeCssVariables.spacing[2]};
-  flex: 1;
-  min-width: 0;
-  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
-  margin: -${themeCssVariables.spacing[1]} 0;
-  border-radius: 0 ${themeCssVariables.border.radius.sm}
-    ${themeCssVariables.border.radius.sm} 0;
   background: ${({ accepted }) =>
     accepted
       ? themeCssVariables.color.transparent.red2
@@ -71,19 +63,27 @@ const StyledDiffChipRow = styled.div<{ accepted: boolean }>`
   border-left: 2px solid
     ${({ accepted }) =>
       accepted ? themeCssVariables.color.red : themeCssVariables.color.green};
+  border-radius: 0 ${themeCssVariables.border.radius.sm}
+    ${themeCssVariables.border.radius.sm} 0;
+  display: flex;
+  flex: 1;
+  gap: ${themeCssVariables.spacing[2]};
+  margin: -${themeCssVariables.spacing[1]} 0;
+  min-width: 0;
+  padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
 `;
 
 const StyledDiffAnnotation = styled.span`
-  display: inline-flex;
   align-items: center;
-  gap: ${themeCssVariables.spacing[1]};
+  display: inline-flex;
   font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[1]};
   white-space: nowrap;
 `;
 
 const StyledDiffOldName = styled.span`
-  text-decoration: line-through;
   color: ${themeCssVariables.font.color.tertiary};
+  text-decoration: line-through;
 `;
 
 const StyledDiffArrow = styled.span`
@@ -91,24 +91,24 @@ const StyledDiffArrow = styled.span`
 `;
 
 const StyledDiffNewName = styled.span`
-  font-weight: ${themeCssVariables.font.weight.medium};
   color: ${themeCssVariables.font.color.primary};
+  font-weight: ${themeCssVariables.font.weight.medium};
 `;
 
 const StyledDiffBtn = styled.button<{ isAccepted: boolean }>`
-  flex-shrink: 0;
-  padding: 0 ${themeCssVariables.spacing[2]};
-  border-radius: ${themeCssVariables.border.radius.sm};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  font-family: inherit;
-  cursor: pointer;
-  height: 20px;
-  border: none;
   background: ${({ isAccepted }) =>
     isAccepted ? themeCssVariables.color.red : themeCssVariables.color.green};
-  color: #fff;
+  border: none;
+  border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.inverted};
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: inherit;
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  height: 20px;
   opacity: 0.75;
+  padding: 0 ${themeCssVariables.spacing[2]};
   &:hover {
     opacity: 1;
   }
@@ -172,8 +172,7 @@ export const RecordDetailRelationRecordsListItem = ({
     return relationFieldDiffs.find((d) => d.crmField === 'name') ?? null;
   }, [relationFieldDiffs]);
 
-  const hasNameDiff =
-    compositeNameDiffs.length > 0 || singleNameDiff !== null;
+  const hasNameDiff = compositeNameDiffs.length > 0 || singleNameDiff !== null;
 
   type NameProposal =
     | {

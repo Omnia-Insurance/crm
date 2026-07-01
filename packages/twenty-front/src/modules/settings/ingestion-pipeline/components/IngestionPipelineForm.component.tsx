@@ -39,26 +39,26 @@ const StyledRow = styled.div`
 `;
 
 const StyledModeButton = styled.button<{ isActive: boolean }>`
-  flex: 1;
-  padding: ${themeCssVariables.spacing[3]};
+  background: ${({ isActive }) =>
+    isActive
+      ? themeCssVariables.color.blue10
+      : themeCssVariables.background.primary};
   border: 1px solid
     ${({ isActive }) =>
       isActive
         ? themeCssVariables.color.blue
         : themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.md};
-  background: ${({ isActive }) =>
-    isActive
-      ? themeCssVariables.color.blue10
-      : themeCssVariables.background.primary};
-  cursor: pointer;
-  text-align: center;
-  font-size: ${themeCssVariables.font.size.md};
-  font-weight: ${themeCssVariables.font.weight.medium};
   color: ${({ isActive }) =>
     isActive
       ? themeCssVariables.color.blue
       : themeCssVariables.font.color.primary};
+  cursor: pointer;
+  flex: 1;
+  font-size: ${themeCssVariables.font.size.md};
+  font-weight: ${themeCssVariables.font.weight.medium};
+  padding: ${themeCssVariables.spacing[3]};
+  text-align: center;
   transition: all 0.15s ease;
 
   &:hover {
@@ -74,21 +74,21 @@ const StyledModeDescription = styled.div`
 `;
 
 const StyledWebhookUrl = styled.div`
-  display: flex;
   align-items: center;
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[2]};
   background: ${themeCssVariables.background.tertiary};
   border-radius: ${themeCssVariables.border.radius.sm};
+  display: flex;
   font-family: monospace;
   font-size: ${themeCssVariables.font.size.sm};
+  gap: ${themeCssVariables.spacing[2]};
+  padding: ${themeCssVariables.spacing[2]};
   word-break: break-all;
 `;
 
 const StyledButtonRow = styled.div`
   display: flex;
-  justify-content: flex-end;
   gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
 `;
 
 export const IngestionPipelineForm = ({
@@ -118,6 +118,10 @@ export const IngestionPipelineForm = ({
   const handleSubmit = async () => {
     setIsSaving(true);
     try {
+      const parsedDedupFieldNames = dedupFieldNames
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       await onSubmit({
         name,
         description: description || undefined,
@@ -126,10 +130,7 @@ export const IngestionPipelineForm = ({
         sourceUrl: sourceUrl || undefined,
         schedule: schedule || undefined,
         dedupFieldNames:
-          dedupFieldNames
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean) || undefined,
+          parsedDedupFieldNames.length > 0 ? parsedDedupFieldNames : undefined,
       });
     } finally {
       setIsSaving(false);

@@ -163,8 +163,7 @@ export const ViewFieldsHiddenDropdownSection = () => {
             iconButtons={[
               {
                 Icon: IconChevronRight,
-                onClick: () =>
-                  setExpandedRelationFieldId(fieldMetadataItem.id),
+                onClick: () => setExpandedRelationFieldId(fieldMetadataItem.id),
               },
             ]}
             text={`${fieldMetadataItem.label} fields...`}

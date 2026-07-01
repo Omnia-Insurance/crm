@@ -88,7 +88,6 @@ export const Logo = ({
     <StyledContainer onClick={() => onClick?.()}>
       {isUsingDefaultLogo && !hideSecondaryLogo ? (
         <UndecoratedLink to={to} onClick={() => redirectToDefaultDomain()}>
-
           <StyledPrimaryLogo
             style={{ backgroundImage: `url(${effectivePrimaryLogoUrl})` }}
           />

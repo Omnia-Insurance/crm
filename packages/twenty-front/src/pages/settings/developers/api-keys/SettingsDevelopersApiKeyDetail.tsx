@@ -10,6 +10,7 @@ import { ApiKeyInput } from '@/settings/developers/components/ApiKeyInput';
 import { ApiKeyNameInput } from '@/settings/developers/components/ApiKeyNameInput';
 import { SettingsDevelopersRoleSelector } from '@/settings/developers/components/SettingsDevelopersRoleSelector';
 import { apiKeyTokenFamilyState } from '@/settings/developers/states/apiKeyTokenFamilyState';
+import type { RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { computeNewExpirationDate } from '@/settings/developers/utils/computeNewExpirationDate';
 import { formatExpiration } from '@/settings/developers/utils/formatExpiration';
@@ -102,7 +103,8 @@ export const SettingsDevelopersApiKeyDetail = () => {
   const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
 
   // getRoles returns the upstream Role type; cast to our extended type
-  const roles = (rolesData?.getRoles ?? []) as unknown as import('@/settings/roles/types/RoleWithPartialMembers').RoleWithPartialMembers[];
+  const roles = (rolesData?.getRoles ??
+    []) as unknown as RoleWithPartialMembers[];
 
   const apiKey = apiKeyData?.apiKey;
   const [apiKeyName, setApiKeyName] = useState('');

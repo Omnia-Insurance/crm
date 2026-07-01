@@ -25,15 +25,15 @@ type SettingsDataModelFieldRequiredFormProps = {
 };
 
 const StyledConditionalRow = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
   padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[4]};
 `;
 
 const StyledWhenLabel = styled.span`
-  font-size: ${themeCssVariables.font.size.md};
   color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.md};
   white-space: nowrap;
 `;
 
@@ -63,9 +63,7 @@ export const SettingsDataModelFieldRequiredForm = ({
 
   const otherFields = objectMetadataItem.fields.filter(
     (field) =>
-      field.id !== existingFieldMetadataId &&
-      field.isActive &&
-      !field.isSystem,
+      field.id !== existingFieldMetadataId && field.isActive && !field.isSystem,
   );
 
   const fieldOptions = otherFields.map((field) => ({
@@ -82,7 +80,9 @@ export const SettingsDataModelFieldRequiredForm = ({
         const mode = getRequiredMode(value);
         const conditionFieldId = value?.fieldId;
         const conditionType =
-          value?.type === 'always' ? 'fieldEmpty' : (value?.type ?? 'fieldEmpty');
+          value?.type === 'always'
+            ? 'fieldEmpty'
+            : (value?.type ?? 'fieldEmpty');
 
         const handleModeChange = (newMode: RequiredMode) => {
           if (newMode === 'never') {

@@ -49,14 +49,12 @@ export const SettingsRolePermissionsObjectLevelOverrideCell = ({
   ) => {
     const rolePermission = permissionMappings[objectPermissionKey];
 
-    const rolePermissionValue =
-      settingsDraftRole[
-        rolePermission as keyof typeof settingsDraftRole
-      ] as boolean;
+    const rolePermissionValue = settingsDraftRole[
+      rolePermission as keyof typeof settingsDraftRole
+    ] as boolean;
 
     return (
-      isDefined(permissionValue) &&
-      !!rolePermissionValue !== !!permissionValue
+      isDefined(permissionValue) && !!rolePermissionValue !== !!permissionValue
     );
   };
 

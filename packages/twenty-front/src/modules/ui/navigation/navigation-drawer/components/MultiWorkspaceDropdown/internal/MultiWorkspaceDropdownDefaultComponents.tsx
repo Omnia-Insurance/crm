@@ -172,11 +172,7 @@ export const MultiWorkspaceDropdownDefaultComponents = () => {
             onClick={handleSupport}
           />
         )}
-        <MenuItem
-          LeftIcon={IconLogout}
-          text={t`Log out`}
-          onClick={signOut}
-        />
+        <MenuItem LeftIcon={IconLogout} text={t`Log out`} onClick={signOut} />
       </DropdownMenuItemsContainer>
     </DropdownContent>
   );

@@ -228,9 +228,12 @@ export const UnmatchedView = ({
 
   // ── Resolve product from plan name ──
 
-  const planNameRaw = resolveBobValue(snapshot, crmFieldLookup, 'planIdentifier', [
-    'plan_name',
-  ]);
+  const planNameRaw = resolveBobValue(
+    snapshot,
+    crmFieldLookup,
+    'planIdentifier',
+    ['plan_name'],
+  );
   const planName = planNameRaw == null ? null : String(planNameRaw);
   const resolvedProduct = useMemo(
     () => resolveProductFromPlanName(planName, productMapping),
@@ -372,9 +375,12 @@ export const UnmatchedView = ({
   // ── Pre-fetch existing lead by phone number ──
 
   const phoneNumber = String(
-    resolveBobValue(snapshot, crmFieldLookup, 'lead.phones.primaryPhoneNumber', [
-      'member_phone_number',
-    ]) ?? '',
+    resolveBobValue(
+      snapshot,
+      crmFieldLookup,
+      'lead.phones.primaryPhoneNumber',
+      ['member_phone_number'],
+    ) ?? '',
   ).replace(/\D/g, '');
   const { records: existingLeadsByPhone } = useFindManyRecords({
     objectNameSingular: 'person',
@@ -444,9 +450,12 @@ export const UnmatchedView = ({
         leadId = existingLead.id;
       } else {
         const email = String(
-          resolveBobValue(snapshot, crmFieldLookup, 'lead.emails.primaryEmail', [
-            'member_email',
-          ]) ?? '',
+          resolveBobValue(
+            snapshot,
+            crmFieldLookup,
+            'lead.emails.primaryEmail',
+            ['member_email'],
+          ) ?? '',
         );
         const dobRaw = resolveBobValue(
           snapshot,

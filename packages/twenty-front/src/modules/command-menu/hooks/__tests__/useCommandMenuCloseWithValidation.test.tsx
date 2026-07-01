@@ -89,14 +89,19 @@ describe('useCommandMenuCloseWithValidation', () => {
       deletedRecord.id,
     );
     store.set(
-      viewableRecordNameSingularComponentState.atomFamily({ instanceId: pageId }),
+      viewableRecordNameSingularComponentState.atomFamily({
+        instanceId: pageId,
+      }),
       'person',
     );
     store.set(
       newlyCreatedRecordIdsState.atom,
       new Map([[deletedRecord.id, 'person']]),
     );
-    store.set(recordStoreFamilyState.atomFamily(deletedRecord.id), deletedRecord);
+    store.set(
+      recordStoreFamilyState.atomFamily(deletedRecord.id),
+      deletedRecord,
+    );
   };
 
   beforeEach(() => {

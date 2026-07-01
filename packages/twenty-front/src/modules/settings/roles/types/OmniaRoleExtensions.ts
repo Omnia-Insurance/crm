@@ -69,10 +69,6 @@ export type OmniaRole = Omit<
   editWindowMinutes?: number | null;
   showAllObjectsInSidebar?: boolean | null;
   objectPermissions?: Array<OmniaObjectPermission> | null;
-  rowLevelPermissionPredicates?:
-    | Array<OmniaRowLevelPermissionPredicate>
-    | null;
-  rowLevelPermissionPredicateGroups?:
-    | Array<OmniaRowLevelPermissionPredicateGroup>
-    | null;
+  rowLevelPermissionPredicates?: Array<OmniaRowLevelPermissionPredicate> | null;
+  rowLevelPermissionPredicateGroups?: Array<OmniaRowLevelPermissionPredicateGroup> | null;
 };

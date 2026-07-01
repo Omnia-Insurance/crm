@@ -7,6 +7,7 @@ import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLo
 import { SettingsDevelopersRoleSelector } from '@/settings/developers/components/SettingsDevelopersRoleSelector';
 import { EXPIRATION_DATES } from '@/settings/developers/constants/ExpirationDates';
 import { apiKeyTokenFamilyState } from '@/settings/developers/states/apiKeyTokenFamilyState';
+import type { RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { Select } from '@/ui/input/components/Select';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
@@ -32,7 +33,8 @@ export const SettingsDevelopersApiKeysNew = () => {
   const navigateSettings = useNavigateSettings();
   const { data: rolesData, loading: rolesLoading } = useQuery(GetRolesDocument);
   // getRoles returns the upstream Role type; cast to our extended type
-  const roles = (rolesData?.getRoles ?? []) as unknown as import('@/settings/roles/types/RoleWithPartialMembers').RoleWithPartialMembers[];
+  const roles = (rolesData?.getRoles ??
+    []) as unknown as RoleWithPartialMembers[];
 
   const [formValues, setFormValues] = useState<{
     name: string;

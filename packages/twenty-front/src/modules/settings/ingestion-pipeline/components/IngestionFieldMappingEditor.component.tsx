@@ -56,13 +56,13 @@ const StyledArrow = styled.div`
 `;
 
 const StyledDeleteButton = styled.button`
+  align-items: center;
   background: none;
   border: none;
-  cursor: pointer;
-  padding: ${themeCssVariables.spacing[1]};
   color: ${themeCssVariables.font.color.tertiary};
+  cursor: pointer;
   display: flex;
-  align-items: center;
+  padding: ${themeCssVariables.spacing[1]};
 
   &:hover {
     color: ${themeCssVariables.color.red};

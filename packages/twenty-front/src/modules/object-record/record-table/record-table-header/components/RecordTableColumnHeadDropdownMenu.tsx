@@ -58,8 +58,7 @@ export const RecordTableColumnHeadDropdownMenu = ({
   const lastVisibleRecordField =
     visibleRecordFields[visibleRecordFields.length - 1];
 
-  const canMoveRight =
-    recordField.id !== lastVisibleRecordField?.id && canMove;
+  const canMoveRight = recordField.id !== lastVisibleRecordField?.id && canMove;
 
   const { recordTableId } = useRecordTableContextOrThrow();
 

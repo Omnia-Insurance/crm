@@ -50,7 +50,8 @@ export const SelectSheetStep = ({
   const [value, setValue] = useState(sheetNames[0]);
 
   // OMNIA-CUSTOM: onSheetSelected callback for reconciliation
-  const { maxRecords, uploadStepHook, onSheetSelected } = useSpreadsheetImportInternal();
+  const { maxRecords, uploadStepHook, onSheetSelected } =
+    useSpreadsheetImportInternal();
 
   const handleContinue = useCallback(
     async (sheetName: string) => {

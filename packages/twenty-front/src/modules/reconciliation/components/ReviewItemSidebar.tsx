@@ -23,22 +23,22 @@ const FLAG_LABELS: Record<string, string> = {
 // ── Styled components ──
 
 const StyledSidebar = styled.nav`
-  width: 280px;
-  min-width: 280px;
-  border-right: 1px solid ${themeCssVariables.border.color.medium};
   background: ${themeCssVariables.background.primary};
+  border-right: 1px solid ${themeCssVariables.border.color.medium};
   display: flex;
   flex-direction: column;
+  min-width: 280px;
   overflow-y: auto;
+  width: 280px;
 `;
 
 const StyledItem = styled.div<{ active: boolean; reviewed: boolean }>`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+  background: ${({ active }) =>
+    active ? themeCssVariables.background.tertiary : 'transparent'};
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
   cursor: pointer;
   opacity: ${({ reviewed }) => (reviewed ? 0.45 : 1)};
-  background: ${({ active }) =>
-    active ? themeCssVariables.background.tertiary : 'transparent'};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
 
   &:hover {
     background: ${themeCssVariables.background.tertiary};
@@ -46,40 +46,40 @@ const StyledItem = styled.div<{ active: boolean; reviewed: boolean }>`
 `;
 
 const StyledItemRow = styled.div`
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
+  justify-content: space-between;
 `;
 
 const StyledItemName = styled.span`
+  color: ${themeCssVariables.font.color.primary};
   font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.medium};
-  color: ${themeCssVariables.font.color.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `;
 
 const StyledItemId = styled.span`
-  font-size: ${themeCssVariables.font.size.xs};
   color: ${themeCssVariables.font.color.tertiary};
   flex-shrink: 0;
+  font-size: ${themeCssVariables.font.size.xs};
   font-variant-numeric: tabular-nums;
 `;
 
 const StyledTags = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[1]};
   margin-top: ${themeCssVariables.spacing[1]};
-  flex-wrap: wrap;
 `;
 
 const StyledEmpty = styled.div`
-  padding: ${themeCssVariables.spacing[6]};
-  text-align: center;
   color: ${themeCssVariables.font.color.tertiary};
   font-size: ${themeCssVariables.font.size.sm};
+  padding: ${themeCssVariables.spacing[6]};
+  text-align: center;
 `;
 
 // ── Helpers ──
@@ -102,7 +102,7 @@ export const ReviewItemSidebar = ({
   selectedItemId,
   onSelectItem,
   loading,
-}: Props) => {
+}: ReviewItemSidebarProps) => {
   if (loading) {
     return (
       <StyledSidebar aria-label="Review items">

@@ -117,6 +117,8 @@ export const RecordTableCellFieldContextLabelIdentifier = ({
   );
 
   return (
-    <FieldContext.Provider value={contextValue}>{children}</FieldContext.Provider>
+    <FieldContext.Provider value={contextValue}>
+      {children}
+    </FieldContext.Provider>
   );
 };

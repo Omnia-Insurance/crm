@@ -31,8 +31,13 @@ export const UploadStep = ({
 }: UploadStepProps) => {
   const [isLoading, setIsLoading] = useState(false);
   // OMNIA-CUSTOM: onSheetSelected callback for reconciliation
-  const { maxRecords, uploadStepHook, selectHeaderStepHook, selectHeader, onSheetSelected } =
-    useSpreadsheetImportInternal();
+  const {
+    maxRecords,
+    uploadStepHook,
+    selectHeaderStepHook,
+    selectHeader,
+    onSheetSelected,
+  } = useSpreadsheetImportInternal();
 
   const computeColumnSuggestionsAndAutoMatch =
     useComputeColumnSuggestionsAndAutoMatch();

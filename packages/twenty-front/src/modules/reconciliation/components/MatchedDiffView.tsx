@@ -401,10 +401,9 @@ export const MatchedDiffView = ({
   });
 
   const refetchAffectedRecords = useCallback(async () => {
-    const writeRecordToStore =
-      (recordId: string) => (record: ObjectRecord) => {
-        store.set(recordStoreFamilyState.atomFamily(recordId), record);
-      };
+    const writeRecordToStore = (recordId: string) => (record: ObjectRecord) => {
+      store.set(recordStoreFamilyState.atomFamily(recordId), record);
+    };
 
     if (policyId) {
       await refetchPolicyRecord({

@@ -53,8 +53,8 @@ export type ReviewItemRecord = ObjectRecord & {
 
 const StyledPageBody = styled.div`
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
 `;
 
@@ -74,7 +74,9 @@ type Props = {
   objectRecordId: string;
 };
 
-export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
+export const ReconciliationReviewPageContent = ({
+  objectRecordId,
+}: ReconciliationReviewPageContentProps) => {
   // Use the same hook RecordShowPage uses — handles metadata, icon, etc.
   const { objectNameSingular } = useRecordShowPage(
     'reconciliation',
@@ -166,7 +168,9 @@ export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
                   objectRecordId={objectRecordId}
                 >
                   <RecordShowCommandMenu />
-                  {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
+                  {!isLayoutCustomizationModeEnabled && (
+                    <SidePanelToggleButton />
+                  )}
                 </RecordShowPageHeader>
                 <StyledMainContainer>
                   <TimelineActivityContext.Provider

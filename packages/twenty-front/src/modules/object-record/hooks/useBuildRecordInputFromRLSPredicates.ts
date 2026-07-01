@@ -238,9 +238,9 @@ export const useBuildRecordInputFromRLSPredicates = ({
     return workspaceMemberFieldValue;
   };
 
-  const buildRecordInputFromRLSPredicates = (
-    options?: { includeRestrictedFields?: boolean },
-  ): Partial<ObjectRecord> => {
+  const buildRecordInputFromRLSPredicates = (options?: {
+    includeRestrictedFields?: boolean;
+  }): Partial<ObjectRecord> => {
     const fieldMetadataItemMap = new Map(
       objectMetadataItem.fields.map((field) => [field.id, field]),
     );

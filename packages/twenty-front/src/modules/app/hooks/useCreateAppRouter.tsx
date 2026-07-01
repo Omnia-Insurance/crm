@@ -35,11 +35,11 @@ const RecordShowPage = lazy(() =>
 
 // OMNIA-CUSTOM: reconciliation review page replaces standard show page
 const ReconciliationReviewPage = lazy(() =>
-  import(
-    '@/reconciliation/components/ReconciliationReviewPage'
-  ).then((module) => ({
-    default: module.ReconciliationReviewPage,
-  })),
+  import('@/reconciliation/components/ReconciliationReviewPage').then(
+    (module) => ({
+      default: module.ReconciliationReviewPage,
+    }),
+  ),
 );
 
 const SignInUp = lazy(() =>

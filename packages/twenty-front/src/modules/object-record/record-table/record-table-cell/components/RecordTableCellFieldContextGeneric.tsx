@@ -46,7 +46,7 @@ export const RecordTableCellFieldContextGeneric = ({
   // OMNIA-CUSTOM: For sub-field columns, override the field definition to inject
   // subFieldName into metadata so FieldDisplay routes to RelationSubFieldDisplay.
   // We also look up the sub-field's type/label from the target object metadata.
-  if (recordField.subFieldName && fieldDefinition) {
+  if (isDefined(recordField.subFieldName) && isDefined(fieldDefinition)) {
     const targetObjectNameSingular = (
       fieldDefinition.metadata as Record<string, unknown>
     ).relationObjectMetadataNameSingular as string | undefined;
@@ -185,6 +185,8 @@ export const RecordTableCellFieldContextGeneric = ({
   );
 
   return (
-    <FieldContext.Provider value={contextValue}>{children}</FieldContext.Provider>
+    <FieldContext.Provider value={contextValue}>
+      {children}
+    </FieldContext.Provider>
   );
 };

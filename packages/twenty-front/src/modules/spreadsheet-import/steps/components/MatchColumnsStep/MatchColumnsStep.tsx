@@ -76,7 +76,8 @@ export const MatchColumnsStep = ({
   const { enqueueDialog } = useDialogManager();
   const dataExample = data.slice(0, 2);
   // OMNIA-CUSTOM: allowDuplicateFieldMatching for reconciliation
-  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } = useSpreadsheetImportInternal();
+  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } =
+    useSpreadsheetImportInternal();
   const [isLoading, setIsLoading] = useState(false);
   const [columns, setColumns] = useAtomFamilySelectorState(
     initialComputedColumnsSelector,

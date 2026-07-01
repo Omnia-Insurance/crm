@@ -119,13 +119,17 @@ export const useRelevantRecordsGqlFields = ({
       subFieldMeta?.relation?.type !== 'ONE_TO_MANY' &&
       subFieldMeta?.settings?.relationType !== 'ONE_TO_MANY';
     const joinColumnName = isManyToOne
-      ? subFieldMeta?.settings?.joinColumnName ??
-        `${recordField.subFieldName}Id`
+      ? (subFieldMeta?.settings?.joinColumnName ??
+        `${recordField.subFieldName}Id`)
       : undefined;
 
-    if (typeof existingRelationGql === 'object' && existingRelationGql !== null) {
-      (existingRelationGql as Record<string, unknown>)[recordField.subFieldName] =
-        subFieldGqlValue;
+    if (
+      typeof existingRelationGql === 'object' &&
+      existingRelationGql !== null
+    ) {
+      (existingRelationGql as Record<string, unknown>)[
+        recordField.subFieldName
+      ] = subFieldGqlValue;
 
       if (joinColumnName) {
         (existingRelationGql as Record<string, unknown>)[joinColumnName] = true;

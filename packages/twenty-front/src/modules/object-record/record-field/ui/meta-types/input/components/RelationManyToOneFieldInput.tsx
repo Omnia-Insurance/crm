@@ -65,8 +65,9 @@ export const RelationManyToOneFieldInput = () => {
         // Build the label field value matching the target object's label
         // identifier type. FULL_NAME fields expect { firstName, lastName },
         // not a plain string — otherwise the chip generator shows "-".
-        const labelField =
-          getLabelIdentifierFieldMetadataItem(relationObjectMetadataItem);
+        const labelField = getLabelIdentifierFieldMetadataItem(
+          relationObjectMetadataItem,
+        );
         const fieldName = labelField?.name ?? 'name';
 
         let labelValue: unknown;
