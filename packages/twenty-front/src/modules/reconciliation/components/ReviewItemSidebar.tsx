@@ -4,7 +4,7 @@ import { Tag } from 'twenty-ui/data-display';
 
 import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
-type Props = {
+type ReviewItemSidebarProps = {
   items: ReviewItemRecord[];
   selectedItemId: string | null;
   onSelectItem: (id: string) => void;

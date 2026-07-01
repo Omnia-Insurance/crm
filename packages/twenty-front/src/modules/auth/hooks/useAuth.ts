@@ -23,11 +23,12 @@ import {
 } from '~/generated-metadata/graphql';
 
 import { returnToPathState } from '@/auth/states/returnToPathState';
-import {
-  deriveCookieDomain,
-  tokenPairState,
-} from '@/auth/states/tokenPairState';
+import { tokenPairState } from '@/auth/states/tokenPairState';
 import { clearSessionLocalStorageKeys } from '@/auth/utils/clearSessionLocalStorageKeys';
+import {
+  clearSsoTokenPairCookie,
+  writeSsoTokenPairCookie,
+} from '@/auth/utils/ssoTokenPairCookie';
 import { broadcastSignOutToOtherTabs } from '@/auth/utils/crossTabSignOut';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
 import { isNonEmptyString } from '@sniptt/guards';
@@ -73,39 +74,7 @@ import { SOURCE_LOCALE } from 'twenty-shared/translations';
 import { isDefined, isExternalRedirectTrusted } from 'twenty-shared/utils';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
-import { cookieStorage } from '~/utils/cookie-storage';
 import { useStore } from 'jotai';
-
-// OMNIA-CUSTOM: cross-app SSO transport. Mirror the auth token into a
-// parent-domain 'tokenPair' cookie so the sibling omniaagent.com dashboard can
-// bootstrap its session from it. This mirror is WRITE-ONLY: core auth keeps
-// reading the token exclusively from localStorage (apollo/utils/getTokenPair) —
-// this cookie is never a read source. It is only written on real
-// *.omniaagent.com hosts (deriveCookieDomain returns a parent domain) and
-// no-ops on localhost/IPs/apex, so local dev and core auth are unaffected.
-const SSO_TOKEN_PAIR_COOKIE_KEY = 'tokenPair';
-
-const writeSsoTokenPairCookie = (tokens: AuthTokenPair) => {
-  const cookieDomain = deriveCookieDomain();
-  if (!isDefined(cookieDomain)) return;
-
-  cookieStorage.setItem(SSO_TOKEN_PAIR_COOKIE_KEY, JSON.stringify(tokens), {
-    domain: cookieDomain,
-    secure: true,
-    sameSite: 'lax',
-    path: '/',
-  });
-};
-
-const clearSsoTokenPairCookie = () => {
-  const cookieDomain = deriveCookieDomain();
-  if (!isDefined(cookieDomain)) return;
-
-  cookieStorage.removeItem(SSO_TOKEN_PAIR_COOKIE_KEY, {
-    domain: cookieDomain,
-    path: '/',
-  });
-};
 
 export const useAuth = () => {
   const store = useStore();

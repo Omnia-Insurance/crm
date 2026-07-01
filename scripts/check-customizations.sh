@@ -2465,6 +2465,17 @@ check_file_contains \
   "packages/twenty-front/src/modules/auth/hooks/useAuth.ts" \
   "clearSsoTokenPairCookie" \
   "useAuth must clear the cross-subdomain SSO cookie on logout/clearSession"
+check_file_exists \
+  "packages/twenty-front/src/modules/auth/utils/ssoTokenPairCookie.ts" \
+  "Shared cross-app SSO cookie helpers must exist (write-only mirror of the token pair)"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/utils/ssoTokenPairCookie.ts" \
+  "writeSsoTokenPairCookie" \
+  "ssoTokenPairCookie must export the write helper for the cross-subdomain SSO mirror"
+check_file_contains \
+  "packages/twenty-front/src/modules/apollo/hooks/useApolloFactory.ts" \
+  "writeSsoTokenPairCookie" \
+  "SSO cookie must be re-synced on silent token refresh (useApolloFactory) so the sibling app never verifies a stale token"
 check_file_contains \
   "packages/twenty-front/src/modules/apollo/utils/getTokenPair.ts" \
   "localStorage.getItem" \

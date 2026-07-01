@@ -9,6 +9,10 @@ import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMembe
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { returnToPathState } from '@/auth/states/returnToPathState';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
+import {
+  clearSsoTokenPairCookie,
+  writeSsoTokenPairCookie,
+} from '@/auth/utils/ssoTokenPairCookie';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -67,9 +71,16 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       appVersion,
       onTokenPairChange: (tokenPair) => {
         setTokenPair(tokenPair);
+        // OMNIA-CUSTOM: keep the cross-app SSO cookie in sync on every silent
+        // token refresh so the sibling omniaagent.com dashboard never verifies a
+        // stale/expired token.
+        writeSsoTokenPairCookie(tokenPair);
       },
       onUnauthenticatedError: () => {
         setTokenPair(null);
+        // OMNIA-CUSTOM: drop the cross-app SSO cookie so the sibling app also
+        // loses the session on unauthenticated errors.
+        clearSsoTokenPairCookie();
         setCurrentUser(null);
         setCurrentWorkspaceMember(null);
         setCurrentWorkspace(null);

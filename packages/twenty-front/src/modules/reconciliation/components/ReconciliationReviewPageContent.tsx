@@ -70,7 +70,7 @@ const StyledMainContainer = styled.div`
   overflow: hidden;
 `;
 
-type Props = {
+type ReconciliationReviewPageContentProps = {
   objectRecordId: string;
 };
 
