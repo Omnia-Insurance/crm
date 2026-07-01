@@ -2573,7 +2573,7 @@ echo ""
 echo "--- Deployment ---"
 check_file_contains \
   ".github/workflows/deploy-eks.yaml" \
-  "APP_VERSION=2.6.1" \
+  "APP_VERSION=2.19.0" \
   "deploy-eks.yaml must pass the current upstream APP_VERSION build arg for upgrade migrations"
 
 echo ""

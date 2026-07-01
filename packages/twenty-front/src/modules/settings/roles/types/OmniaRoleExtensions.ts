@@ -15,8 +15,13 @@ import {
   type Role,
   type RowLevelPermissionPredicate,
   type RowLevelPermissionPredicateGroup,
+  // OMNIA-CUSTOM: import the RLS scope enum from the GENERATED metadata types
+  // (codegen now emits it, commit 141a45068c). Importing it from
+  // 'twenty-shared/types' created a SECOND nominal enum, so intersecting it onto
+  // the generated predicate types collapsed `scope` to `never` and cascaded ~98
+  // typecheck errors across the record-level-permission files.
+  RowLevelPermissionPredicateScope,
 } from '~/generated-metadata/graphql';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 // ---------------------------------------------------------------------------
 // RowLevelPermissionPredicateScope — the RLS `scope` enum is Omnia-custom and
@@ -32,14 +37,14 @@ export { RowLevelPermissionPredicateScope };
 // codegen does not know about it), so add it here.
 // ---------------------------------------------------------------------------
 
-export type OmniaRowLevelPermissionPredicate = RowLevelPermissionPredicate & {
-  scope?: RowLevelPermissionPredicateScope;
-};
+// OMNIA-CUSTOM: codegen now emits `scope` on the generated predicate types, so
+// these are plain aliases (kept only for call-site stability). The previous
+// `& { scope?: RowLevelPermissionPredicateScope }` intersection is what caused
+// the `never` collapse when the added scope came from a different enum.
+export type OmniaRowLevelPermissionPredicate = RowLevelPermissionPredicate;
 
 export type OmniaRowLevelPermissionPredicateGroup =
-  RowLevelPermissionPredicateGroup & {
-    scope?: RowLevelPermissionPredicateScope;
-  };
+  RowLevelPermissionPredicateGroup;
 
 // ---------------------------------------------------------------------------
 // Extended ObjectPermission (adds editWindowMinutes, showInSidebar)
