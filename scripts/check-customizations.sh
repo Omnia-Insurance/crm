@@ -511,6 +511,21 @@ check_file_contains \
   "AI provider catalog must include native Bedrock entry (HIPAA-clean path via AWS BAA)"
 
 echo ""
+echo "--- Critical: AI Telemetry Content Recording Disabled (HIPAA) ---"
+check_file_not_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const.ts" \
+  "recordInputs: true" \
+  "AI telemetry must not record prompt inputs — CRM prompts contain PHI (upstream default is true)"
+check_file_not_contains \
+  "packages/twenty-server/src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const.ts" \
+  "recordOutputs: true" \
+  "AI telemetry must not record model outputs — responses contain PHI (upstream default is true)"
+check_file_not_contains \
+  "packages/twenty-server/src/instrument.ts" \
+  "recordInputs: true" \
+  "Sentry vercelAIIntegration must not record AI inputs/outputs — a re-enabled Sentry must never receive PHI"
+
+echo ""
 echo "--- Critical: Metadata Response Cache ---"
 check_file_contains \
   "packages/twenty-server/src/engine/api/graphql/metadata.module-factory.ts" \

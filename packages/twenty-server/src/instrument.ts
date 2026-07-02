@@ -35,9 +35,11 @@ if (process.env.EXCEPTION_HANDLER_DRIVER === ExceptionHandlerDriver.SENTRY) {
       Sentry.expressIntegration(),
       Sentry.graphqlIntegration(),
       Sentry.postgresIntegration(),
+      // OMNIA-CUSTOM: AI prompts/responses are PHI (HIPAA) — a re-enabled
+      // Sentry must never receive them. Upstream defaults both to true.
       Sentry.vercelAIIntegration({
-        recordInputs: true,
-        recordOutputs: true,
+        recordInputs: false,
+        recordOutputs: false,
       }),
       nodeProfilingIntegration(),
     ],

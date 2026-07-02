@@ -589,6 +589,15 @@ Compliance QA transcription runs on Deepgram (Enterprise project with a signed B
 | `packages/twenty-docker/helm/twenty/omnia-values.yaml`                              | Sets `server.serviceAccountName: twenty-bedrock` and `worker.serviceAccountName: twenty-bedrock` so the Pod Identity Association takes effect for Bedrock and Compliance QA AWS runtime access, including Translate/S3.      |
 | `packages/twenty-server/src/engine/metadata-modules/ai/ai-models/ai-providers.json` | Added `bedrock` provider entry (native `@ai-sdk/amazon-bedrock`, `authType: "role"`, region `us-east-1`) with Claude Opus 4.7 / Sonnet 4.6 / Sonnet 4.5 / Haiku 4.5 model configs. Upstream catalog has no Bedrock entry.               |
 
+### AI Telemetry Content Recording Disabled (HIPAA, 2026-07-02)
+
+Native AI calls (chat, workflow agents, title generation, turn grading, tool-call repair) emit Vercel AI SDK OpenTelemetry spans. Upstream defaults attach the full prompt and model response to every span — PHI in a CRM whose prompts carry lead/policy data. Content recording is disabled at both layers so timing/token spans survive but content never rides along, regardless of which observability tool is enabled later. Tracked in Linear OMN-14.
+
+| File                                                                                               | Modification                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/twenty-server/src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const.ts` | `recordInputs: false, recordOutputs: false` (upstream: both `true`)                                                          |
+| `packages/twenty-server/src/instrument.ts`                                                        | `Sentry.vercelAIIntegration({ recordInputs: false, recordOutputs: false })` so a re-enabled Sentry cannot receive AI content |
+
 ### Cloudflare / Asset Caching
 
 | File                                                   | Modification                                                                                                                                        |
