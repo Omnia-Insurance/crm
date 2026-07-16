@@ -1908,6 +1908,25 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
   "assigns lookup and smart-update relations by id sub-field" \
   "Regression test must cover relation ID assignment for imported rows"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "repository.updateMany" \
+  "Bulk import updates must use updateMany() (batched UPDATED event with diff) so existing records get timeline activities"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "rowsToUpdate" \
+  "Bulk import must split inserts vs updates instead of a blind upsert"
+check_file_not_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "repository.upsert(batchRows" \
+  "Bulk import must NOT revert to a blind upsert (it emits no UPDATED events, so import-driven updates leave no timeline history)"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/__tests__/import-job.processor.spec.ts" \
+  "Regression test for import insert/updateMany split (timeline activities on update)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/__tests__/import-job.processor.spec.ts" \
+  "never a blind upsert" \
+  "Regression test must assert import updates use updateMany and never upsert"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 

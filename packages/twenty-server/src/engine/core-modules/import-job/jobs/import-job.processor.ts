@@ -1,4 +1,6 @@
 import { Logger, Scope } from '@nestjs/common';
+import { In, type ObjectLiteral } from 'typeorm';
+import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
@@ -84,10 +86,8 @@ export class ImportJobProcessor {
 
       await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
         async () => {
-          // Event emission policy: only emit CREATED (skip duplicate
-          // UPSERTED), and tag events with 'import' origin so downstream
-          // listeners can skip webhook/trigger orchestrator jobs that
-          // would otherwise create 200k+ jobs for large imports.
+          // Event emission policy is configured on executeInWorkspaceContext
+          // below (see the eventEmissionPolicy option).
           // ── Relation Resolution (pre-processing) ──────────────
           if (hasRelationResolution) {
             this.logger.log(
@@ -248,7 +248,59 @@ export class ImportJobProcessor {
             );
 
             try {
-              await repository.upsert(batchRows, ['id']);
+              // Split the batch into genuine INSERTs and UPDATEs so that
+              // updates to existing records emit UPDATED events. A blind
+              // upsert() only emits CREATED/UPSERTED, so import-driven
+              // updates produced NO `<object>.updated` timeline activity
+              // (and re-imports mislabelled existing records as created).
+              // insert() -> CREATED (new records); updateMany() -> a
+              // batched UPDATED event carrying a before/after diff, which
+              // is what the timeline pipeline consumes.
+              const batchIds = batchRows
+                .map((row) => row.id)
+                .filter((id): id is string => typeof id === 'string');
+
+              const existingRecords =
+                batchIds.length > 0
+                  ? await repository.find({
+                      where: { id: In(batchIds) },
+                      select: { id: true },
+                    })
+                  : [];
+
+              const existingIds = new Set(
+                existingRecords.map((record) => record.id as string),
+              );
+
+              const rowsToInsert = batchRows.filter(
+                (row) =>
+                  typeof row.id !== 'string' || !existingIds.has(row.id),
+              );
+              const rowsToUpdate = batchRows.filter(
+                (row) =>
+                  typeof row.id === 'string' && existingIds.has(row.id),
+              );
+
+              if (rowsToInsert.length > 0) {
+                await repository.insert(rowsToInsert);
+              }
+
+              if (rowsToUpdate.length > 0) {
+                await repository.updateMany(
+                  rowsToUpdate.map((row) => {
+                    const partialEntity = { ...row };
+
+                    delete partialEntity.id;
+
+                    return {
+                      criteria: row.id as string,
+                      partialEntity:
+                        partialEntity as QueryDeepPartialEntity<ObjectLiteral>,
+                    };
+                  }),
+                );
+              }
+
               successCount += batchRows.length;
             } catch (error: unknown) {
               if (
@@ -306,7 +358,17 @@ export class ImportJobProcessor {
         authContext,
         {
           eventEmissionPolicy: {
-            allowedActions: [DatabaseEventAction.CREATED],
+            // Allow CREATED (new records) and UPDATED (existing records) so
+            // both halves of an import produce timeline activities. 'import'
+            // origin lets downstream listeners skip webhook/trigger jobs for
+            // large imports. NOTE: origin propagation through the ORM query
+            // builders is a separate pre-existing gap (documented in
+            // CUSTOMIZATIONS.md); the insert/updateMany split above is what
+            // restores update timeline activities today.
+            allowedActions: [
+              DatabaseEventAction.CREATED,
+              DatabaseEventAction.UPDATED,
+            ],
             origin: 'import',
           },
         },
