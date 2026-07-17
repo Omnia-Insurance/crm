@@ -53,6 +53,65 @@ const ROLLUP_FIELDS: {
     description:
       'Logged-in time minus call talk time over the last 30 days (idle while logged in).',
   },
+  // --- Compliance QA rollups (power the native QA Agents Dashboard view) ---
+  {
+    name: 'qaEvents',
+    label: 'QA Events (All Time)',
+    icon: 'IconClipboardCheck',
+    description: 'Total QA scorecards generated for this agent (all-time).',
+  },
+  {
+    name: 'qaEvents30d',
+    label: 'QA Events (30d)',
+    icon: 'IconClipboardCheck',
+    description: 'QA scorecards analyzed for this agent over the last 30 days.',
+  },
+  {
+    name: 'qaPassed',
+    label: 'QA Passed (All Time)',
+    icon: 'IconCircleCheck',
+    description: 'QA scorecards with a Pass result (all-time).',
+  },
+  {
+    name: 'qaFailed',
+    label: 'QA Failed (All Time)',
+    icon: 'IconCircleX',
+    description: 'QA scorecards with a Fail result (all-time).',
+  },
+  {
+    name: 'qaFailedRate',
+    label: 'QA Failed % (All Time)',
+    icon: 'IconChartPie',
+    description:
+      'Share of scored (Pass + Fail) QA scorecards that failed, all-time. Blank when the agent has no scored calls.',
+  },
+  {
+    name: 'qaLatestScore',
+    label: 'QA Latest Score (%)',
+    icon: 'IconPercentage',
+    description: 'Score of the agent’s most recently analyzed QA scorecard.',
+  },
+  {
+    name: 'qaAvgScore30d',
+    label: 'QA Avg Score 30d (%)',
+    icon: 'IconPercentage',
+    description:
+      'Average QA score over the last 30 days (scorecards with a numeric score).',
+  },
+  {
+    name: 'qaSales30d',
+    label: 'Sales (30d)',
+    icon: 'IconFileText',
+    description:
+      'Policies submitted by this agent over the last 30 days (by submitted date).',
+  },
+  {
+    name: 'qaCoachingRate',
+    label: 'Coaching Completion % (All Time)',
+    icon: 'IconChecklist',
+    description:
+      'Share of the agent’s QA follow-up tasks that are completed. Blank when no follow-up tasks exist.',
+  },
 ];
 
 type AgentMetrics = {
@@ -60,6 +119,17 @@ type AgentMetrics = {
   placementRate6mo: number;
   billableHours: number;
   offPhoneHours: number;
+  qaEvents: number;
+  qaEvents30d: number;
+  qaPassed: number;
+  qaFailed: number;
+  // Rates/scores are null when there is no data to base them on, so the native
+  // view shows blank rather than a misleading 0%.
+  qaFailedRate: number | null;
+  qaLatestScore: number | null;
+  qaAvgScore30d: number | null;
+  qaSales30d: number;
+  qaCoachingRate: number | null;
 };
 
 /**
@@ -168,6 +238,15 @@ export class AgentRollupService {
             placementRate6mo: 0,
             billableHours: 0,
             offPhoneHours: 0,
+            qaEvents: 0,
+            qaEvents30d: 0,
+            qaPassed: 0,
+            qaFailed: 0,
+            qaFailedRate: null,
+            qaLatestScore: null,
+            qaAvgScore30d: null,
+            qaSales30d: 0,
+            qaCoachingRate: null,
           };
 
           metrics.set(agentId, fresh);
@@ -195,20 +274,30 @@ export class AgentRollupService {
             `COUNT(*) FILTER (WHERE "policy"."effectiveDate" >= :placementSince AND "policy"."status"::text = :placedStatus)`,
             'placed',
           )
+          .addSelect(
+            `COUNT(*) FILTER (WHERE "policy"."submittedDate" >= :productivitySince)`,
+            'sales30d',
+          )
           .where('"policy"."agentId" IS NOT NULL')
-          .setParameters({ placementSince, placedStatus: PLACED_STATUS })
+          .setParameters({
+            placementSince,
+            placedStatus: PLACED_STATUS,
+            productivitySince,
+          })
           .groupBy('"policy"."agentId"')
           .getRawMany<{
             agentId: string;
             total: string;
             written: string;
             placed: string;
+            sales30d: string;
           }>();
 
         for (const row of policyRows) {
           const m = ensure(row.agentId);
 
           m.totalPolicies = Number(row.total) || 0;
+          m.qaSales30d = Number(row.sales30d) || 0;
           const written = Number(row.written) || 0;
           const placed = Number(row.placed) || 0;
 
@@ -300,6 +389,139 @@ export class AgentRollupService {
           );
         }
 
+        // --- QA scorecards: events, pass/fail, scores (30d), coaching. The QA
+        // app may be absent in a workspace, so this is defensive. ---
+        try {
+          const qaRepo = await this.globalWorkspaceOrmManager.getRepository(
+            workspaceId,
+            'qaScorecard',
+            { shouldBypassPermissionChecks: true },
+          );
+
+          const qaRows = await qaRepo
+            .createQueryBuilder('qa')
+            .select('"qa"."agentId"', 'agentId')
+            .addSelect('COUNT(*)', 'events')
+            .addSelect(
+              `COUNT(*) FILTER (WHERE "qa"."analyzedAt" >= :productivitySince)`,
+              'events30d',
+            )
+            .addSelect(
+              `COUNT(*) FILTER (WHERE "qa"."result"::text = 'PASS')`,
+              'passed',
+            )
+            .addSelect(
+              `COUNT(*) FILTER (WHERE "qa"."result"::text = 'FAIL')`,
+              'failed',
+            )
+            .addSelect(
+              `AVG("qa"."score") FILTER (WHERE "qa"."analyzedAt" >= :productivitySince AND "qa"."score" IS NOT NULL)`,
+              'avgScore30',
+            )
+            .where('"qa"."agentId" IS NOT NULL')
+            .setParameters({ productivitySince })
+            .groupBy('"qa"."agentId"')
+            .getRawMany<{
+              agentId: string;
+              events: string;
+              events30d: string;
+              passed: string;
+              failed: string;
+              avgScore30: string | null;
+            }>();
+
+          for (const row of qaRows) {
+            const m = ensure(row.agentId);
+
+            m.qaEvents = Number(row.events) || 0;
+            m.qaEvents30d = Number(row.events30d) || 0;
+            m.qaPassed = Number(row.passed) || 0;
+            m.qaFailed = Number(row.failed) || 0;
+
+            const scored = m.qaPassed + m.qaFailed;
+
+            m.qaFailedRate =
+              scored > 0 ? round1((m.qaFailed / scored) * 100) : null;
+            m.qaAvgScore30d =
+              row.avgScore30 !== null ? round1(Number(row.avgScore30)) : null;
+          }
+
+          // Latest score: the most recent analyzed scorecard with a score.
+          const latestRows = await qaRepo
+            .createQueryBuilder('qa')
+            .select('DISTINCT ON ("qa"."agentId") "qa"."agentId"', 'agentId')
+            .addSelect('"qa"."score"', 'score')
+            .where('"qa"."agentId" IS NOT NULL')
+            .andWhere('"qa"."score" IS NOT NULL')
+            .orderBy('"qa"."agentId"')
+            .addOrderBy('"qa"."analyzedAt"', 'DESC')
+            .getRawMany<{ agentId: string; score: string | null }>();
+
+          for (const row of latestRows) {
+            if (row.score !== null) {
+              ensure(row.agentId).qaLatestScore = round1(Number(row.score));
+            }
+          }
+
+          // Coaching completion: follow-up tasks done / total, per agent. Tasks
+          // link to the scorecard, so resolve statuses from the task table.
+          const taskLinks = await qaRepo
+            .createQueryBuilder('qa')
+            .select('"qa"."agentId"', 'agentId')
+            .addSelect('"qa"."taskId"', 'taskId')
+            .where('"qa"."agentId" IS NOT NULL')
+            .andWhere('"qa"."taskId" IS NOT NULL')
+            .getRawMany<{ agentId: string; taskId: string }>();
+
+          if (taskLinks.length > 0) {
+            const taskRepo = await this.globalWorkspaceOrmManager.getRepository(
+              workspaceId,
+              'task',
+              { shouldBypassPermissionChecks: true },
+            );
+            const taskIds = [...new Set(taskLinks.map((link) => link.taskId))];
+            const taskRows = await taskRepo
+              .createQueryBuilder('task')
+              .select('"task"."id"', 'id')
+              .addSelect('"task"."status"::text', 'status')
+              .where('"task"."id" IN (:...taskIds)', { taskIds })
+              .getRawMany<{ id: string; status: string | null }>();
+            const statusById = new Map(
+              taskRows.map((row) => [row.id, row.status]),
+            );
+
+            const totalByAgent = new Map<string, number>();
+            const doneByAgent = new Map<string, number>();
+
+            for (const link of taskLinks) {
+              totalByAgent.set(
+                link.agentId,
+                (totalByAgent.get(link.agentId) ?? 0) + 1,
+              );
+              if (statusById.get(link.taskId) === 'DONE') {
+                doneByAgent.set(
+                  link.agentId,
+                  (doneByAgent.get(link.agentId) ?? 0) + 1,
+                );
+              }
+            }
+
+            for (const [agentId, total] of totalByAgent) {
+              if (total > 0) {
+                ensure(agentId).qaCoachingRate = round1(
+                  ((doneByAgent.get(agentId) ?? 0) / total) * 100,
+                );
+              }
+            }
+          }
+        } catch (error) {
+          this.logger.warn(
+            `  QA rollups skipped (${
+              error instanceof Error ? error.message : String(error)
+            })`,
+          );
+        }
+
         return metrics;
       },
       authContext,
@@ -335,28 +557,50 @@ export class AgentRollupService {
           .addSelect('agentProfile.placementRate6mo', 'placementRate6mo')
           .addSelect('agentProfile.billableHours', 'billableHours')
           .addSelect('agentProfile.offPhoneHours', 'offPhoneHours')
+          .addSelect('agentProfile.qaEvents', 'qaEvents')
+          .addSelect('agentProfile.qaEvents30d', 'qaEvents30d')
+          .addSelect('agentProfile.qaPassed', 'qaPassed')
+          .addSelect('agentProfile.qaFailed', 'qaFailed')
+          .addSelect('agentProfile.qaFailedRate', 'qaFailedRate')
+          .addSelect('agentProfile.qaLatestScore', 'qaLatestScore')
+          .addSelect('agentProfile.qaAvgScore30d', 'qaAvgScore30d')
+          .addSelect('agentProfile.qaSales30d', 'qaSales30d')
+          .addSelect('agentProfile.qaCoachingRate', 'qaCoachingRate')
           .where('agentProfile.id IN (:...agentIds)', { agentIds })
-          .getRawMany<{
-            id: string;
-            totalPolicies: number | string | null;
-            placementRate6mo: number | string | null;
-            billableHours: number | string | null;
-            offPhoneHours: number | string | null;
-          }>();
+          .getRawMany<Record<string, number | string | null>>();
         const currentByAgentId = new Map(
-          currentRows.map((row) => [row.id, row]),
+          currentRows.map((row) => [row.id as string, row]),
         );
 
+        // Nullable-aware numeric equality: treats null/undefined as "no value"
+        // so a genuine null metric doesn't churn against a stored null.
+        const numEq = (
+          stored: number | string | null | undefined,
+          computed: number | null,
+        ): boolean =>
+          stored === null || stored === undefined
+            ? computed === null
+            : computed !== null && Number(stored) === computed;
+
         const isUnchanged = (
-          current: (typeof currentRows)[number] | undefined,
+          current: Record<string, number | string | null> | undefined,
           metrics: AgentMetrics,
         ): boolean =>
           isDefined(current) &&
           current.totalPolicies !== null &&
-          Number(current.totalPolicies) === metrics.totalPolicies &&
-          Number(current.placementRate6mo) === metrics.placementRate6mo &&
-          Number(current.billableHours) === metrics.billableHours &&
-          Number(current.offPhoneHours) === metrics.offPhoneHours;
+          numEq(current.totalPolicies, metrics.totalPolicies) &&
+          numEq(current.placementRate6mo, metrics.placementRate6mo) &&
+          numEq(current.billableHours, metrics.billableHours) &&
+          numEq(current.offPhoneHours, metrics.offPhoneHours) &&
+          numEq(current.qaEvents, metrics.qaEvents) &&
+          numEq(current.qaEvents30d, metrics.qaEvents30d) &&
+          numEq(current.qaPassed, metrics.qaPassed) &&
+          numEq(current.qaFailed, metrics.qaFailed) &&
+          numEq(current.qaFailedRate, metrics.qaFailedRate) &&
+          numEq(current.qaLatestScore, metrics.qaLatestScore) &&
+          numEq(current.qaAvgScore30d, metrics.qaAvgScore30d) &&
+          numEq(current.qaSales30d, metrics.qaSales30d) &&
+          numEq(current.qaCoachingRate, metrics.qaCoachingRate);
 
         let updated = 0;
         let failed = 0;
