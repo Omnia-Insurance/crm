@@ -82,7 +82,7 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
   flatFieldMetadataMaps,
   shouldIgnoreSoftDeleteDefaultFilter,
 }: {
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   record: any;
   filter: RecordGqlOperationFilter;
   flatObjectMetadata: FlatObjectMetadata;
@@ -209,7 +209,8 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
       objectFields.find((field) => field.name === filterKey) ??
       objectFields.find(
         (field) =>
-          field.type === FieldMetadataType.RELATION &&
+          (field.type === FieldMetadataType.RELATION ||
+            field.type === FieldMetadataType.MORPH_RELATION) &&
           computeMorphOrRelationFieldJoinColumnName({ name: field.name }) ===
             filterKey,
       );
@@ -412,7 +413,8 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
           });
         });
       }
-      case FieldMetadataType.RELATION: {
+      case FieldMetadataType.RELATION:
+      case FieldMetadataType.MORPH_RELATION: {
         const isJoinColumn =
           computeMorphOrRelationFieldJoinColumnName({
             name: objectMetadataField.name,
@@ -425,27 +427,28 @@ export const isRecordMatchingRLSRowLevelPermissionPredicate = ({
           });
         }
 
-        // ONE_TO_MANY relation: handle { is: 'NULL' } / { is: 'NOT_NULL' }
-        // The actual filtering is done at the SQL query level;
-        // at record-validation level, just check if related records exist
-        const relationFilter = filterValue as RelationFilter | undefined;
+        // OMNIA-CUSTOM: ONE_TO_MANY relations expose an array of related
+        // records; handle { is: 'NULL' } / { is: 'NOT_NULL' } against the
+        // array. The richer filtering is done at the SQL query level.
+        if (Array.isArray(recordFieldValue)) {
+          const relationFilter = filterValue as RelationFilter | undefined;
 
-        if (relationFilter?.is === 'NULL') {
-          return (
-            !recordFieldValue ||
-            (Array.isArray(recordFieldValue) &&
-              recordFieldValue.length === 0)
-          );
+          if (relationFilter?.is === 'NULL') {
+            return recordFieldValue.length === 0;
+          }
+
+          if (relationFilter?.is === 'NOT_NULL') {
+            return recordFieldValue.length > 0;
+          }
+
+          // For other relation filters we can't validate in-memory, pass through
+          return true;
         }
 
-        if (relationFilter?.is === 'NOT_NULL') {
-          return (
-            Array.isArray(recordFieldValue) && recordFieldValue.length > 0
-          );
-        }
-
-        // For other relation filters we can't validate in-memory, pass through
-        return true;
+        return isMatchingUUIDFilter({
+          uuidFilter: filterValue as UUIDFilter,
+          value: recordFieldValue?.id ?? null,
+        });
       }
       case FieldMetadataType.TS_VECTOR: {
         return isMatchingTSVectorFilter({

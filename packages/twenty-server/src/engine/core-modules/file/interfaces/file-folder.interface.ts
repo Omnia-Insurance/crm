@@ -63,6 +63,9 @@ export const fileFolderConfigs: Record<FileFolder, FileFolderConfig> = {
   [FileFolder.GeneratedSdkClient]: {
     ignoreExpirationToken: false,
   },
+  [FileFolder.Dpa]: {
+    ignoreExpirationToken: false,
+  },
   [FileFolder.Export]: {
     ignoreExpirationToken: false,
   },

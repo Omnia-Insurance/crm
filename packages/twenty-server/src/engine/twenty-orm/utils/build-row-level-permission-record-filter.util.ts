@@ -228,7 +228,7 @@ const resolveWorkspaceMemberLinkedRelationRecordIds = async ({
 
   const tableName = computeTableName(
     relationTargetObjectMetadata.nameSingular,
-    relationTargetObjectMetadata.isCustom,
+    relationTargetObjectMetadata.isCustom ?? false,
   );
   const fkColumn = `${relationToWorkspaceMemberField.name}Id`;
 
@@ -525,7 +525,7 @@ const buildRowLevelPermissionRecordFilterUncached = async ({
 
               const tableName = computeTableName(
                 intermediateObjectMetadata.nameSingular,
-                intermediateObjectMetadata.isCustom,
+                intermediateObjectMetadata.isCustom ?? false,
               );
 
               // The FK column is the field name + "Id"

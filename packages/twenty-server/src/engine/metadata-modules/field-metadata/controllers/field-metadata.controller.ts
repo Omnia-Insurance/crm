@@ -16,9 +16,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
 import { PermissionFlagType } from 'twenty-shared/constants';
 import { FeatureFlagKey } from 'twenty-shared/types';
+import { Repository } from 'typeorm';
 
 import { parseEndingBeforeRestRequest } from 'src/engine/api/rest/input-request-parsers/ending-before-parser-utils/parse-ending-before-rest-request.util';
 import { parseLimitRestRequest } from 'src/engine/api/rest/input-request-parsers/limit-parser-utils/parse-limit-rest-request.util';
@@ -28,6 +28,7 @@ import {
   type RestCursorPageInfo,
 } from 'src/engine/api/rest/metadata/utils/paginate-by-id-cursor.util';
 import { type AuthenticatedRequest } from 'src/engine/api/rest/types/authenticated-request';
+import { ApplicationRestApiExceptionFilter } from 'src/engine/core-modules/application/application-rest-api-exception.filter';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
@@ -52,7 +53,9 @@ import {
   toLegacyFieldMetadataListResponse,
   toLegacyFieldMetadataUpdateResponse,
 } from 'src/engine/metadata-modules/field-metadata/utils/to-legacy-field-metadata-response.util';
+import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { fromFlatFieldMetadataToFieldMetadataDto } from 'src/engine/metadata-modules/flat-field-metadata/utils/from-flat-field-metadata-to-field-metadata-dto.util';
+import { computeUniqueFieldMetadataIdsFromFlatIndexMaps } from 'src/engine/metadata-modules/index-metadata/utils/compute-unique-field-metadata-ids-from-flat-index-maps.util';
 import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
 
 @Controller('rest/metadata/fields')
@@ -64,6 +67,7 @@ import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/p
 @UseFilters(
   PermissionsRestApiExceptionFilter,
   FieldMetadataRestApiExceptionFilter,
+  ApplicationRestApiExceptionFilter,
 )
 @UsePipes(new ValidationPipe())
 export class FieldMetadataController {
@@ -72,7 +76,19 @@ export class FieldMetadataController {
     private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly featureFlagService: FeatureFlagService,
+    private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
   ) {}
+
+  private async loadUniqueFieldMetadataIds(
+    workspaceId: string,
+  ): Promise<ReadonlySet<string>> {
+    const { flatIndexMaps } =
+      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        { workspaceId, flatMapsKeys: ['flatIndexMaps'] },
+      );
+
+    return computeUniqueFieldMetadataIdsFromFlatIndexMaps(flatIndexMaps);
+  }
 
   @Get()
   async findMany(
@@ -87,12 +103,17 @@ export class FieldMetadataController {
       endingBefore: parseEndingBeforeRestRequest(request),
     });
 
+    const uniqueFieldMetadataIds =
+      await this.loadUniqueFieldMetadataIds(workspaceId);
+
     const result: {
       data: FieldMetadataDTO[];
       pageInfo: RestCursorPageInfo;
       totalCount: number;
     } = {
-      data: items.map(fromFieldMetadataEntityToFieldMetadataDto),
+      data: items.map((item) =>
+        fromFieldMetadataEntityToFieldMetadataDto(item, uniqueFieldMetadataIds),
+      ),
       pageInfo,
       totalCount,
     };
@@ -118,7 +139,12 @@ export class FieldMetadataController {
       );
     }
 
-    const result = fromFieldMetadataEntityToFieldMetadataDto(field);
+    const uniqueFieldMetadataIds =
+      await this.loadUniqueFieldMetadataIds(workspaceId);
+    const result = fromFieldMetadataEntityToFieldMetadataDto(
+      field,
+      uniqueFieldMetadataIds,
+    );
 
     return (await this.isNewMetadataFormat(workspaceId))
       ? result

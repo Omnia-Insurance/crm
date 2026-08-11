@@ -10,7 +10,7 @@ import {
   IconTrashOff,
   IconTrashX,
   IconTrashXOff,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 
 type SettingsRoleObjectPermissionIconConfig = {
   Icon: IconComponent;

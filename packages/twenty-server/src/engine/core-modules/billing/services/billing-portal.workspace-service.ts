@@ -24,24 +24,27 @@ import { SubscriptionStatus } from 'src/engine/core-modules/billing/enums/billin
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { StripeBillingPortalService } from 'src/engine/core-modules/billing/stripe/services/stripe-billing-portal.service';
 import { StripeCheckoutService } from 'src/engine/core-modules/billing/stripe/services/stripe-checkout.service';
+import { StripeCustomerService } from 'src/engine/core-modules/billing/stripe/services/stripe-customer.service';
 import { type BillingGetPricesPerPlanResult } from 'src/engine/core-modules/billing/types/billing-get-prices-per-plan-result.type';
 import { type BillingPortalCheckoutSessionParameters } from 'src/engine/core-modules/billing/types/billing-portal-checkout-session-parameters.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 @Injectable()
 export class BillingPortalWorkspaceService {
   protected readonly logger = new Logger(BillingPortalWorkspaceService.name);
   constructor(
     private readonly stripeCheckoutService: StripeCheckoutService,
+    private readonly stripeCustomerService: StripeCustomerService,
     private readonly stripeBillingPortalService: StripeBillingPortalService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly billingSubscriptionService: BillingSubscriptionService,
-    @InjectRepository(BillingSubscriptionEntity)
-    private readonly billingSubscriptionRepository: Repository<BillingSubscriptionEntity>,
-    @InjectRepository(BillingCustomerEntity)
-    private readonly billingCustomerRepository: Repository<BillingCustomerEntity>,
+    @InjectWorkspaceScopedRepository(BillingSubscriptionEntity)
+    private readonly billingSubscriptionRepository: WorkspaceScopedRepository<BillingSubscriptionEntity>,
+    @InjectWorkspaceScopedRepository(BillingCustomerEntity)
+    private readonly billingCustomerRepository: WorkspaceScopedRepository<BillingCustomerEntity>,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
   ) {}
@@ -71,8 +74,7 @@ export class BillingPortalWorkspaceService {
         stripeCustomerId: customer?.stripeCustomerId,
         plan,
         requirePaymentMethod,
-        withTrialPeriod:
-          !isDefined(customer) || customer.billingSubscriptions.length === 0,
+        withTrialPeriod: this.isCustomerEligibleForTrialPeriod(customer),
       });
 
     assertIsDefinedOrThrow(
@@ -121,8 +123,7 @@ export class BillingPortalWorkspaceService {
         stripeCustomerId: customer?.stripeCustomerId,
         plan,
         requirePaymentMethod,
-        withTrialPeriod:
-          !isDefined(customer) || customer.billingSubscriptions.length === 0,
+        withTrialPeriod: this.isCustomerEligibleForTrialPeriod(customer),
       });
 
     await this.billingSubscriptionService.syncSubscriptionToDatabase(
@@ -131,6 +132,195 @@ export class BillingPortalWorkspaceService {
     );
 
     return successUrl;
+  }
+
+  async createSubscriptionPaymentIntent({
+    user,
+    workspace,
+    billingPricesPerPlan,
+    plan,
+    idempotencyKey,
+  }: BillingPortalCheckoutSessionParameters & {
+    idempotencyKey: string;
+  }): Promise<{
+    clientSecret: string;
+    paymentIntentType: string;
+  }> {
+    const { customer, stripeSubscriptionLineItems } =
+      await this.prepareSubscriptionParameters({
+        workspace,
+        billingPricesPerPlan,
+      });
+
+    const resumablePaymentIntent =
+      await this.findResumableSubscriptionPaymentIntent(customer);
+
+    if (isDefined(resumablePaymentIntent)) {
+      return resumablePaymentIntent;
+    }
+
+    const stripeSubscription =
+      await this.stripeCheckoutService.createSubscriptionWithPaymentMethodCollection(
+        {
+          user,
+          workspace,
+          stripeSubscriptionLineItems,
+          stripeCustomerId: customer?.stripeCustomerId,
+          plan,
+          withTrialPeriod: this.isCustomerEligibleForTrialPeriod(customer),
+          idempotencyKey,
+        },
+      );
+
+    await this.billingSubscriptionService.syncSubscriptionToDatabase(
+      workspace.id,
+      stripeSubscription.id,
+    );
+
+    const paymentIntent =
+      this.extractSubscriptionClientSecret(stripeSubscription);
+
+    return paymentIntent;
+  }
+
+  async createPaymentMethodSetupIntent(
+    workspace: WorkspaceEntity,
+  ): Promise<{ clientSecret: string; paymentIntentType: string }> {
+    const subscription = await this.billingSubscriptionRepository.findOne(
+      workspace.id,
+      {
+        where: { status: Not(SubscriptionStatus.Canceled) },
+        order: { createdAt: 'DESC' },
+      },
+    );
+
+    const stripeCustomerId = subscription?.stripeCustomerId;
+
+    if (!isDefined(stripeCustomerId)) {
+      throw new BillingException(
+        'Error: missing subscription for payment method setup intent',
+        BillingExceptionCode.BILLING_SUBSCRIPTION_NOT_FOUND,
+      );
+    }
+
+    const setupIntent =
+      await this.stripeCustomerService.createSetupIntent(stripeCustomerId);
+
+    assertIsDefinedOrThrow(
+      setupIntent.client_secret,
+      new BillingException(
+        'Error: missing setupIntent.client_secret',
+        BillingExceptionCode.BILLING_STRIPE_ERROR,
+      ),
+    );
+
+    return {
+      clientSecret: setupIntent.client_secret,
+      paymentIntentType: 'setup',
+    };
+  }
+
+  // A failed earlier attempt leaves an incomplete subscription; it must not
+  // count, or a retry would be charged immediately instead of getting the
+  // trial. Only a real (non-incomplete) subscription blocks a new trial.
+  private isCustomerEligibleForTrialPeriod(
+    customer: BillingCustomerEntity | null,
+  ): boolean {
+    return (
+      !isDefined(customer) ||
+      !customer.billingSubscriptions.some(
+        (subscription) =>
+          subscription.status !== SubscriptionStatus.Incomplete &&
+          subscription.status !== SubscriptionStatus.IncompleteExpired,
+      )
+    );
+  }
+
+  private async findResumableSubscriptionPaymentIntent(
+    customer: BillingCustomerEntity | null,
+  ): Promise<{ clientSecret: string; paymentIntentType: string } | null> {
+    const existingSubscription = customer?.billingSubscriptions?.find(
+      (subscription) => subscription.status !== SubscriptionStatus.Canceled,
+    );
+
+    if (!isDefined(existingSubscription)) {
+      return null;
+    }
+
+    const stripeSubscription =
+      await this.stripeCheckoutService.retrieveSubscriptionForResume(
+        existingSubscription.stripeSubscriptionId,
+      );
+
+    const paymentIntent = this.findSubscriptionClientSecret(stripeSubscription);
+
+    if (isDefined(paymentIntent)) {
+      return paymentIntent;
+    }
+
+    if (
+      stripeSubscription.status === 'incomplete' ||
+      stripeSubscription.status === 'incomplete_expired'
+    ) {
+      return null;
+    }
+
+    throw new BillingException(
+      'Customer already has a non-canceled billing subscription',
+      BillingExceptionCode.BILLING_SUBSCRIPTION_INVALID,
+    );
+  }
+
+  private extractSubscriptionClientSecret(subscription: Stripe.Subscription): {
+    clientSecret: string;
+    paymentIntentType: string;
+  } {
+    const paymentIntent = this.findSubscriptionClientSecret(subscription);
+
+    if (!isDefined(paymentIntent)) {
+      throw new BillingException(
+        'Error: missing subscription client secret',
+        BillingExceptionCode.BILLING_STRIPE_ERROR,
+      );
+    }
+
+    return paymentIntent;
+  }
+
+  private findSubscriptionClientSecret(subscription: Stripe.Subscription): {
+    clientSecret: string;
+    paymentIntentType: string;
+  } | null {
+    const pendingSetupIntent = subscription.pending_setup_intent;
+
+    if (
+      isDefined(pendingSetupIntent) &&
+      typeof pendingSetupIntent !== 'string' &&
+      isDefined(pendingSetupIntent.client_secret)
+    ) {
+      return {
+        clientSecret: pendingSetupIntent.client_secret,
+        paymentIntentType: 'setup',
+      };
+    }
+
+    const latestInvoice = subscription.latest_invoice;
+    const confirmationSecret =
+      isDefined(latestInvoice) && typeof latestInvoice !== 'string'
+        ? latestInvoice.confirmation_secret
+        : undefined;
+
+    if (
+      isDefined(confirmationSecret) &&
+      isDefined(confirmationSecret.client_secret)
+    ) {
+      return {
+        clientSecret: confirmationSecret.client_secret,
+        paymentIntentType: 'payment',
+      };
+    }
+
+    return null;
   }
 
   private async prepareSubscriptionParameters({
@@ -156,10 +346,13 @@ export class BillingPortalWorkspaceService {
       workspaceId: workspace.id,
     });
 
-    const customer = await this.billingCustomerRepository.findOne({
-      where: { workspaceId: workspace.id },
-      relations: ['billingSubscriptions'],
-    });
+    const customer = await this.billingCustomerRepository.findOne(
+      workspace.id,
+      {
+        where: {},
+        relations: ['billingSubscriptions'],
+      },
+    );
 
     const stripeSubscriptionLineItems = this.getStripeSubscriptionLineItems({
       quantity,
@@ -179,14 +372,15 @@ export class BillingPortalWorkspaceService {
   async computeBillingPortalSessionURLOrThrow(
     workspace: WorkspaceEntity,
     returnUrlPath?: string,
+    forPaymentMethodUpdate?: boolean,
   ) {
-    const lastSubscription = await this.billingSubscriptionRepository.findOne({
-      where: {
-        workspaceId: workspace.id,
-        status: Not(SubscriptionStatus.Canceled),
+    const lastSubscription = await this.billingSubscriptionRepository.findOne(
+      workspace.id,
+      {
+        where: { status: Not(SubscriptionStatus.Canceled) },
+        order: { createdAt: 'DESC' },
       },
-      order: { createdAt: 'DESC' },
-    });
+    );
 
     if (!lastSubscription) {
       throw new Error('Error: missing subscription');
@@ -198,20 +392,17 @@ export class BillingPortalWorkspaceService {
       throw new Error('Error: missing stripeCustomerId');
     }
 
-    const frontBaseUrl = this.workspaceDomainsService.buildWorkspaceURL({
-      workspace,
-    });
+    const returnUrl = this.buildReturnUrl(workspace, returnUrlPath);
 
-    if (returnUrlPath) {
-      frontBaseUrl.pathname = returnUrlPath;
-    }
-    const returnUrl = frontBaseUrl.toString();
-
-    const session =
-      await this.stripeBillingPortalService.createBillingPortalSession(
-        stripeCustomerId,
-        returnUrl,
-      );
+    const session = forPaymentMethodUpdate
+      ? await this.stripeBillingPortalService.createBillingPortalSessionForPaymentMethodUpdate(
+          stripeCustomerId,
+          returnUrl,
+        )
+      : await this.stripeBillingPortalService.createBillingPortalSession(
+          stripeCustomerId,
+          returnUrl,
+        );
 
     assertIsDefinedOrThrow(
       session.url,
@@ -229,14 +420,7 @@ export class BillingPortalWorkspaceService {
     stripeCustomerId: string,
     returnUrlPath?: string,
   ) {
-    const frontBaseUrl = this.workspaceDomainsService.buildWorkspaceURL({
-      workspace,
-    });
-
-    if (returnUrlPath) {
-      frontBaseUrl.pathname = returnUrlPath;
-    }
-    const returnUrl = frontBaseUrl.toString();
+    const returnUrl = this.buildReturnUrl(workspace, returnUrlPath);
 
     const session =
       await this.stripeBillingPortalService.createBillingPortalSessionForPaymentMethodUpdate(
@@ -253,6 +437,24 @@ export class BillingPortalWorkspaceService {
     );
 
     return session.url;
+  }
+
+  private buildReturnUrl(workspace: WorkspaceEntity, returnUrlPath?: string) {
+    const frontBaseUrl = this.workspaceDomainsService.buildWorkspaceURL({
+      workspace,
+    });
+
+    if (!isDefined(returnUrlPath)) {
+      return frontBaseUrl.toString();
+    }
+
+    const resolvedUrl = new URL(returnUrlPath, frontBaseUrl);
+
+    if (resolvedUrl.origin !== frontBaseUrl.origin) {
+      return frontBaseUrl.toString();
+    }
+
+    return resolvedUrl.toString();
   }
 
   private getDefaultResourceCreditPrice(

@@ -6,7 +6,7 @@ import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
 import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context-user.type';
+import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import {
   AppendRowsResultDTO,

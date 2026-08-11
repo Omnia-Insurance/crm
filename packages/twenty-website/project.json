@@ -5,100 +5,56 @@
   "projectType": "application",
   "tags": ["scope:website"],
   "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "npx next dev --port 3002"
+      }
+    },
     "build": {
       "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/.next"],
       "options": {
         "cwd": "{projectRoot}",
         "command": "npx next build"
-      },
-      "dependsOn": ["^build"]
-    },
-    "dev": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "npx next dev"
       }
     },
-    "start": {
+    "typecheck": {
       "executor": "nx:run-commands",
-      "cache": false,
-      "dependsOn": ["build"],
+      "dependsOn": ["^build"],
       "options": {
         "cwd": "{projectRoot}",
-        "command": "npx next start"
+        "command": "npx tsc -p tsconfig.json --noEmit"
       }
     },
-    "check-boundaries": {
+    "test": {
       "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": [
-        "{projectRoot}/src/**/*",
-        "{projectRoot}/scripts/check-boundaries.mjs"
-      ],
+      "dependsOn": ["^build"],
       "options": {
         "cwd": "{projectRoot}",
-        "command": "node scripts/check-boundaries.mjs"
-      }
-    },
-    "check-section-shape": {
-      "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": [
-        "{projectRoot}/src/sections/**/*",
-        "{projectRoot}/scripts/check-section-shape.mjs"
-      ],
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "node scripts/check-section-shape.mjs"
-      }
-    },
-    "check-lottie-frames": {
-      "executor": "nx:run-commands",
-      "cache": true,
-      "inputs": [
-        "{projectRoot}/public/lottie/stepper/stepper.lottie",
-        "{projectRoot}/src/sections/HomeStepper/utils/home-stepper-lottie-frame-map.ts",
-        "{projectRoot}/scripts/check-lottie-frames.mjs"
-      ],
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "node scripts/check-lottie-frames.mjs"
+        "command": "npx jest --config=jest.config.mjs"
       }
     },
     "lint": {
-      "dependsOn": [
-        "check-boundaries",
-        "check-section-shape",
-        "check-lottie-frames",
-        "^build",
-        "twenty-oxlint-rules:build"
-      ]
-    },
-    "lint:diff-with-main": {
-      "dependsOn": [
-        "check-boundaries",
-        "check-section-shape",
-        "check-lottie-frames"
-      ]
-    },
-    "typecheck": {},
-    "test": {},
-    "fmt": {
+      "executor": "nx:run-commands",
       "options": {
-        "files": "."
+        "cwd": "{projectRoot}",
+        "command": "node scripts/check-conventions.mjs && npx oxlint -c .oxlintrc.json . && npx oxfmt --check ."
       },
       "configurations": {
-        "fix": {}
-      }
+        "fix": {
+          "command": "npx oxfmt ."
+        }
+      },
+      "dependsOn": [
+        {
+          "projects": ["twenty-ui"],
+          "target": "build"
+        }
+      ]
     },
     "lingui:extract": {
       "executor": "nx:run-commands",
-      "dependsOn": ["^build"],
       "options": {
         "cwd": "{projectRoot}",
         "command": "lingui extract --overwrite --clean"
@@ -106,7 +62,6 @@
     },
     "lingui:compile": {
       "executor": "nx:run-commands",
-      "dependsOn": ["^build"],
       "options": {
         "cwd": "{projectRoot}",
         "command": "lingui compile --typescript"

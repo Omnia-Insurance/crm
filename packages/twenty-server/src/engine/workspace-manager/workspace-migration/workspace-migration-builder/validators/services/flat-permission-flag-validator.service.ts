@@ -55,9 +55,9 @@ export class FlatPermissionFlagValidatorService {
       });
     }
 
-    const duplicateKey = Object.values(
+    const collidingPermissionFlag = Object.values(
       optimisticFlatPermissionFlagMaps.byUniversalIdentifier,
-    ).filter(
+    ).find(
       (definition) =>
         isDefined(definition) &&
         definition.key === flatPermissionFlagToValidate.key &&
@@ -65,11 +65,11 @@ export class FlatPermissionFlagValidatorService {
           flatPermissionFlagToValidate.universalIdentifier,
     );
 
-    if (duplicateKey.length > 0) {
+    if (isDefined(collidingPermissionFlag)) {
       validationResult.errors.push({
         code: PermissionFlagExceptionCode.PERMISSION_FLAG_ALREADY_EXISTS,
-        message: t`Permission flag definition with key ${flatPermissionFlagToValidate.key} already exists in this workspace`,
-        userFriendlyMessage: msg`A permission flag with this key already exists`,
+        message: t`Permission flag definition with key "${flatPermissionFlagToValidate.key}" is already registered in this workspace.`,
+        userFriendlyMessage: msg`Another application in this workspace has already registered a permission flag with this key.`,
       });
     }
 
@@ -166,7 +166,6 @@ export class FlatPermissionFlagValidatorService {
     flatEntityToValidate: { universalIdentifier },
     optimisticFlatEntityMapsAndRelatedFlatEntityMaps: {
       flatPermissionFlagMaps: optimisticFlatPermissionFlagMaps,
-      flatRolePermissionFlagMaps: optimisticFlatRolePermissionFlagMaps,
     },
     buildOptions,
   }: UniversalFlatEntityValidationArgs<
@@ -206,23 +205,6 @@ export class FlatPermissionFlagValidatorService {
         code: PermissionFlagExceptionCode.PERMISSION_FLAG_IS_STANDARD,
         message: t`Cannot delete standard permission flag definition`,
         userFriendlyMessage: msg`Cannot delete standard permission flag definition`,
-      });
-    }
-
-    const isPermissionFlagInUse = Object.values(
-      optimisticFlatRolePermissionFlagMaps.byUniversalIdentifier,
-    ).some(
-      (rolePermissionFlag) =>
-        isDefined(rolePermissionFlag) &&
-        rolePermissionFlag.permissionFlagUniversalIdentifier ===
-          existing.universalIdentifier,
-    );
-
-    if (isPermissionFlagInUse) {
-      validationResult.errors.push({
-        code: PermissionFlagExceptionCode.PERMISSION_FLAG_IN_USE,
-        message: t`Permission flag definition with key ${existing.key} is still assigned to a role`,
-        userFriendlyMessage: msg`Remove this permission from all roles before deleting it`,
       });
     }
 

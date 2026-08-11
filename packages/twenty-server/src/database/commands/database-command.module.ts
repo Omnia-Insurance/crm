@@ -35,6 +35,7 @@ import { StaleRegistrationCleanupModule } from 'src/engine/core-modules/applicat
 import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
+import { BillingReminderModule } from 'src/engine/core-modules/billing/reminders/billing-reminder.module';
 import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
 import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanup/event-log-cleanup.module';
@@ -58,6 +59,8 @@ import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadat
 import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
 import { ObjectPermissionModule } from 'src/engine/metadata-modules/object-permission/object-permission.module';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
+import { CodeInterpreterSessionCleanupModule } from 'src/engine/core-modules/code-interpreter/crons/code-interpreter-session-cleanup.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
@@ -129,6 +132,8 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     WorkspaceCleanerModule,
     WorkspaceMigrationModule,
     TrashCleanupModule,
+    BillingReminderModule,
+    CodeInterpreterSessionCleanupModule,
     PublicDomainModule,
     EventLogCleanupModule,
     EnterpriseModule,
@@ -156,6 +161,7 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
+    provideWorkspaceScopedRepository(RoleEntity),
     // OMNIA-CUSTOM: Brokerage app adoption for existing Omnia workspaces
     AdoptBrokerageAppCommand,
     // OMNIA-CUSTOM: Dashboard role-gating — bootstrap/re-sync audience field + RLS predicates

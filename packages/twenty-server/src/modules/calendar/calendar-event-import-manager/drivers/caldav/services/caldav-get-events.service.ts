@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { isDefined } from 'twenty-shared/utils';
-
-import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
-import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
-import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
+import { CalDavClientProvider } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/providers/caldav-client.provider';
 import { CalDavFetchEventsService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-fetch-events.service';
 import { type CalDavSyncCursor } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/types/caldav-sync-cursor';
 import { parseCalDAVError } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/utils/parse-caldav-error.util';
@@ -14,65 +10,33 @@ import { type GetCalendarEventsResponse } from 'src/modules/calendar/calendar-ev
 export class CalDavGetEventsService {
   private readonly logger = new Logger(CalDavGetEventsService.name);
 
-  private static readonly PAST_DAYS_WINDOW = 365 * 5;
-  private static readonly FUTURE_DAYS_WINDOW = 365;
-
   constructor(
-    private readonly clientService: CalDavClientService,
+    private readonly calDavClientProvider: CalDavClientProvider,
     private readonly fetchEventsService: CalDavFetchEventsService,
-    private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
   ) {}
 
   async getCalendarEvents(
-    connectedAccount: Pick<
-      ConnectedAccountEntity,
-      'provider' | 'id' | 'connectionParameters' | 'handle' | 'workspaceId'
-    >,
+    connectedAccountId: string,
     syncCursor?: string,
   ): Promise<GetCalendarEventsResponse> {
-    this.logger.debug(`Getting calendar events for ${connectedAccount.handle}`);
+    this.logger.debug(`Getting calendar events for ${connectedAccountId}`);
 
     try {
-      if (!isDefined(connectedAccount.connectionParameters?.CALDAV)) {
-        throw new Error('CalDAV settings not configured for this account');
-      }
+      const client =
+        await this.calDavClientProvider.getClient(connectedAccountId);
 
-      const params =
-        this.connectedAccountTokenEncryptionService.decryptProtocolPassword({
-          protocolParams: connectedAccount.connectionParameters.CALDAV,
-          workspaceId: connectedAccount.workspaceId,
-        });
-
-      const client = await this.clientService.getClient({
-        serverUrl: params.host,
-        username: params.username ?? connectedAccount.handle,
-        password: params.password,
-      });
-
-      const startDate = new Date(
-        Date.now() -
-          CalDavGetEventsService.PAST_DAYS_WINDOW * 24 * 60 * 60 * 1000,
+      const result = await this.fetchEventsService.fetchChangedEventHrefs(
+        client,
+        syncCursor ? (JSON.parse(syncCursor) as CalDavSyncCursor) : undefined,
       );
-      const endDate = new Date(
-        Date.now() +
-          CalDavGetEventsService.FUTURE_DAYS_WINDOW * 24 * 60 * 60 * 1000,
-      );
-
-      const result = await this.fetchEventsService.fetchEvents(client, {
-        startDate,
-        endDate,
-        syncCursor: syncCursor
-          ? (JSON.parse(syncCursor) as CalDavSyncCursor)
-          : undefined,
-      });
 
       this.logger.debug(
-        `Found ${result.events.length} calendar events for ${connectedAccount.handle}`,
+        `Found ${result.changedHrefs.length} changed and ${result.cancelledHrefs.length} cancelled calendar events for ${connectedAccountId}`,
       );
 
       return {
-        fullEvents: true,
-        calendarEvents: result.events,
+        calendarEventIds: result.changedHrefs,
+        calendarEventIdsToDelete: result.cancelledHrefs,
         nextSyncCursor: JSON.stringify(result.syncCursor),
       };
     } catch (error) {

@@ -29,12 +29,14 @@ const HOST_COMMUNICATION_API_NOOP_INITIALIZATION: FrontComponentHostCommunicatio
     enqueueSnackbar: noopAsync,
     closeSidePanel: noopAsync,
     updateProgress: noopAsync,
+    copyToClipboard: noopAsync,
   };
 
 type FrontComponentWorkerEffectProps = {
   componentUrl: string;
   applicationAccessToken?: string;
   apiUrl?: string;
+  functionsBaseUrl?: string;
   sdkClientUrls?: SdkClientUrls;
   applicationVariables?: Record<string, string>;
   frontComponentId: string;
@@ -52,6 +54,7 @@ export const FrontComponentWorkerEffect = ({
   componentUrl,
   applicationAccessToken,
   apiUrl,
+  functionsBaseUrl,
   sdkClientUrls,
   applicationVariables,
   frontComponentId,
@@ -122,6 +125,7 @@ export const FrontComponentWorkerEffect = ({
         componentUrl,
         applicationAccessToken,
         apiUrl,
+        functionsBaseUrl,
         sdkClientUrls,
         applicationVariables,
       })
@@ -145,6 +149,7 @@ export const FrontComponentWorkerEffect = ({
     componentUrl,
     applicationAccessToken,
     apiUrl,
+    functionsBaseUrl,
     sdkClientUrls,
     applicationVariables,
     frontComponentId,

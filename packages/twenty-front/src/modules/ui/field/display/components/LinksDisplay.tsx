@@ -8,13 +8,9 @@ import {
   getUrlHostnameOrThrow,
   isDefined,
 } from 'twenty-shared/utils';
-import {
-  AudioLink,
-  LinkType,
-  RoundedLink,
-  SocialLink,
-} from 'twenty-ui/navigation';
+import { AudioLink, RoundedLink, SocialLink } from 'twenty-ui/navigation';
 import { checkUrlType } from '~/utils/checkUrlType';
+import { isSocialLinkType } from '~/utils/isSocialLinkType';
 
 type LinksDisplayProps = {
   value?: FieldLinksValue;
@@ -55,9 +51,7 @@ export const LinksDisplay = ({
       {links.map(({ url, label, type }, index) =>
         displayAs === 'audio' ? (
           <AudioLink key={index} src={url} />
-        ) : type === LinkType.LinkedIn ||
-          type === LinkType.Twitter ||
-          type === LinkType.Facebook ? (
+        ) : isSocialLinkType(type) ? (
           <SocialLink
             key={index}
             href={url}

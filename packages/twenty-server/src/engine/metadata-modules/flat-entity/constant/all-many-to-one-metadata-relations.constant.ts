@@ -314,7 +314,7 @@ export const ALL_MANY_TO_ONE_METADATA_RELATIONS = {
       metadataName: 'permissionFlag',
       foreignKey: 'permissionFlagId',
       inverseOneToManyProperty: 'rolePermissionFlags',
-      isNullable: true,
+      isNullable: false,
       universalForeignKey: 'permissionFlagUniversalIdentifier',
     },
   },
@@ -530,6 +530,31 @@ export const ALL_MANY_TO_ONE_METADATA_RELATIONS = {
   connectionProvider: {
     workspace: null,
     application: null,
+  },
+  searchFieldMetadata: {
+    workspace: null,
+    application: null,
+    objectMetadata: {
+      metadataName: 'objectMetadata',
+      foreignKey: 'objectMetadataId',
+      inverseOneToManyProperty: 'searchFieldMetadatas',
+      isNullable: false,
+      universalForeignKey: 'objectMetadataUniversalIdentifier',
+    },
+    fieldMetadata: {
+      metadataName: 'fieldMetadata',
+      foreignKey: 'fieldMetadataId',
+      inverseOneToManyProperty: 'searchFieldMetadatas',
+      isNullable: false,
+      universalForeignKey: 'fieldMetadataUniversalIdentifier',
+    },
+    tsVectorFieldMetadata: {
+      metadataName: 'fieldMetadata',
+      foreignKey: 'tsVectorFieldMetadataId',
+      inverseOneToManyProperty: null,
+      isNullable: false,
+      universalForeignKey: 'tsVectorFieldMetadataUniversalIdentifier',
+    },
   },
 } as const satisfies ManyToOneMetadataRelationsProperties;
 

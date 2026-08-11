@@ -25,7 +25,7 @@ import {
   IconFilterOff,
   IconFilterPlus,
   useIcons,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { MenuItem } from 'twenty-ui/navigation';
 
 type AdvancedFilterRelationSubFieldSelectMenuProps = {

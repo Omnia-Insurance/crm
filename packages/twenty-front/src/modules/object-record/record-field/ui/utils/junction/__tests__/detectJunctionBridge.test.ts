@@ -15,7 +15,6 @@ const makeRelation = (
   targetFieldMetadata: {
     id: 'tgt-field',
     name: 'tgtField',
-    isCustom: false,
   },
   sourceObjectMetadata: {
     id: 'src-obj',
@@ -101,7 +100,6 @@ describe('detectJunctionBridge', () => {
       targetFieldMetadata: {
         id: carrierProductsFieldId,
         name: 'carrierProducts',
-        isCustom: false,
       },
       targetObjectMetadata: {
         id: carrierObjectId,
@@ -123,7 +121,6 @@ describe('detectJunctionBridge', () => {
       targetFieldMetadata: {
         id: 'product-carrier-products-field',
         name: 'carrierProducts',
-        isCustom: false,
       },
       targetObjectMetadata: {
         id: productObjectId,
@@ -155,7 +152,6 @@ describe('detectJunctionBridge', () => {
       targetFieldMetadata: {
         id: cpCarrierFieldId,
         name: 'carrier',
-        isCustom: false,
       },
       targetObjectMetadata: {
         id: carrierProductObjectId,
@@ -195,7 +191,6 @@ describe('detectJunctionBridge', () => {
       targetFieldMetadata: {
         id: 'carrier-policies-field',
         name: 'policies',
-        isCustom: false,
       },
       targetObjectMetadata: {
         id: carrierObjectId,
@@ -220,7 +215,6 @@ describe('detectJunctionBridge', () => {
       targetFieldMetadata: {
         id: 'product-policies-field',
         name: 'policies',
-        isCustom: false,
       },
       targetObjectMetadata: {
         id: productObjectId,
@@ -312,7 +306,6 @@ describe('detectJunctionBridge', () => {
             targetFieldMetadata: {
               id: cpCarrierFieldId,
               name: 'carrier',
-              isCustom: false,
             },
             targetObjectMetadata: {
               id: carrierProductObjectId,
@@ -358,7 +351,6 @@ describe('detectJunctionBridge', () => {
         targetFieldMetadata: {
           id: 'different-back-field',
           name: 'differentBack',
-          isCustom: false,
         },
         targetObjectMetadata: {
           id: differentTargetObjectId,
@@ -393,7 +385,6 @@ describe('detectJunctionBridge', () => {
             targetFieldMetadata: {
               id: cpCarrierFieldId,
               name: 'carrier',
-              isCustom: false,
             },
             targetObjectMetadata: {
               id: carrierProductObjectId,
@@ -606,7 +597,6 @@ describe('detectJunctionBridge', () => {
         targetFieldMetadata: {
           id: policyCarrierFieldId,
           name: 'carrier',
-          isCustom: false,
         },
         sourceFieldMetadata: {
           id: 'carrier-policies-field',

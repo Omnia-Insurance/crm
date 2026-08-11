@@ -1,5 +1,6 @@
 import {
   FieldMetadataType,
+  RelationType,
   ViewFilterOperand as RecordFilterOperand,
 } from '@/types';
 import { type RecordFilter } from '@/utils';
@@ -48,6 +49,34 @@ const fields = [
     name: 'company',
     type: FieldMetadataType.RELATION,
     label: 'Company',
+  },
+  {
+    id: 'f-relation-account-owner',
+    name: 'accountOwner',
+    type: FieldMetadataType.RELATION,
+    label: 'Account Owner',
+  },
+  {
+    id: 'f-morph-relation',
+    name: 'target',
+    type: FieldMetadataType.MORPH_RELATION,
+    label: 'Target',
+    morphRelations: [
+      {
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadata: {
+          nameSingular: 'person',
+          namePlural: 'people',
+        },
+      },
+      {
+        type: RelationType.MANY_TO_ONE,
+        targetObjectMetadata: {
+          nameSingular: 'company',
+          namePlural: 'companies',
+        },
+      },
+    ],
   },
   {
     id: 'f-bool',
@@ -484,6 +513,18 @@ describe('turnRecordFilterIntoRecordGqlOperationFilter', () => {
 
       expect(result).toHaveProperty('rating.in');
     });
+
+    it('should handle IS_NOT operand as wrapped eq', () => {
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies,
+        recordFilter: makeFilter('f-rating', RecordFilterOperand.IS_NOT, '3'),
+        fieldMetadataItemById,
+      });
+
+      expect(result).toEqual({
+        not: { rating: { eq: 'RATING_3' } },
+      });
+    });
   });
 
   describe('BOOLEAN filter', () => {
@@ -595,6 +636,67 @@ describe('turnRecordFilterIntoRecordGqlOperationFilter', () => {
       });
 
       expect(result).toHaveProperty('or');
+    });
+
+    it('should resolve programmatic current-record morph relation-table filters to the matching join column', () => {
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies: {
+          ...filterValueDependencies,
+          currentRecord: {
+            id: '11111111-1111-4111-8111-111111111111',
+            objectMetadataNameSingular: 'person',
+          },
+        },
+        recordFilter: makeFilter(
+          'f-morph-relation',
+          RecordFilterOperand.IS,
+          JSON.stringify({
+            selectedRecordIds: [],
+            isCurrentRecordSelected: true,
+          }),
+          'RELATION',
+        ),
+        fieldMetadataItemById,
+      });
+
+      expect(result).toEqual({
+        targetPersonId: { in: ['11111111-1111-4111-8111-111111111111'] },
+      });
+    });
+
+    it('should omit programmatic current-record morph filters when morph relation metadata is missing', () => {
+      const fieldMetadataItemByIdWithoutMorphRelations = new Map(
+        fieldMetadataItemById,
+      );
+
+      fieldMetadataItemByIdWithoutMorphRelations.set('f-morph-relation', {
+        id: 'f-morph-relation',
+        name: 'target',
+        type: FieldMetadataType.MORPH_RELATION,
+        label: 'Target',
+      });
+
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies: {
+          ...filterValueDependencies,
+          currentRecord: {
+            id: '11111111-1111-4111-8111-111111111111',
+            objectMetadataNameSingular: 'person',
+          },
+        },
+        recordFilter: makeFilter(
+          'f-morph-relation',
+          RecordFilterOperand.IS,
+          JSON.stringify({
+            selectedRecordIds: [],
+            isCurrentRecordSelected: true,
+          }),
+          'RELATION',
+        ),
+        fieldMetadataItemById: fieldMetadataItemByIdWithoutMorphRelations,
+      });
+
+      expect(result).toBeUndefined();
     });
   });
 
@@ -920,6 +1022,24 @@ describe('turnRecordFilterIntoRecordGqlOperationFilter', () => {
 
       expect(result).toHaveProperty('recordId.in');
     });
+
+    it('should handle IS_NOT operand as wrapped in', () => {
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies,
+        recordFilter: makeFilter(
+          'f-uuid',
+          RecordFilterOperand.IS_NOT,
+          '["550e8400-e29b-41d4-a716-446655440000"]',
+        ),
+        fieldMetadataItemById,
+      });
+
+      expect(result).toEqual({
+        not: {
+          recordId: { in: ['550e8400-e29b-41d4-a716-446655440000'] },
+        },
+      });
+    });
   });
 
   describe('relation traversal', () => {
@@ -1007,6 +1127,59 @@ describe('turnRecordFilterIntoRecordGqlOperationFilter', () => {
       });
 
       expect(result).toHaveProperty('companyId.in');
+    });
+
+    // A relation leaf compiles to a single-hop FK compare on the joined table
+    // (company.accountOwnerId), not a second-hop `company.accountOwner.<field>`.
+    it('should resolve a relation target field to its foreign key', () => {
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies,
+        recordFilter: {
+          ...makeFilter(
+            'f-relation',
+            RecordFilterOperand.IS,
+            '["550e8400-e29b-41d4-a716-446655440000"]',
+            'RELATION',
+          ),
+          relationTargetFieldMetadataId: 'f-relation-account-owner',
+        } as RecordFilter,
+        fieldMetadataItemById,
+      });
+
+      expect(result).toEqual({
+        company: {
+          accountOwnerId: { in: ['550e8400-e29b-41d4-a716-446655440000'] },
+        },
+      });
+    });
+
+    // "= me" (the current workspace member) resolves into that same FK compare.
+    it('should resolve a relation target field set to the current workspace member', () => {
+      const result = turnRecordFilterIntoRecordGqlOperationFilter({
+        filterValueDependencies: {
+          ...filterValueDependencies,
+          currentWorkspaceMemberId: '11111111-1111-4111-8111-111111111111',
+        },
+        recordFilter: {
+          ...makeFilter(
+            'f-relation',
+            RecordFilterOperand.IS,
+            JSON.stringify({
+              isCurrentWorkspaceMemberSelected: true,
+              selectedRecordIds: [],
+            }),
+            'RELATION',
+          ),
+          relationTargetFieldMetadataId: 'f-relation-account-owner',
+        } as RecordFilter,
+        fieldMetadataItemById,
+      });
+
+      expect(result).toEqual({
+        company: {
+          accountOwnerId: { in: ['11111111-1111-4111-8111-111111111111'] },
+        },
+      });
     });
   });
 });

@@ -2,6 +2,8 @@ import { type Manifest } from 'twenty-shared/application';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+
 import { generateIndexForFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/generate-index-for-flat-field-metadata.util';
 
 import { fromApplicationVariableManifestToUniversalFlatApplicationVariable } from 'src/engine/core-modules/application/application-manifest/converters/from-application-variable-manifest-to-universal-flat-application-variable.util';
@@ -212,11 +214,12 @@ export const computeApplicationManifestAllUniversalFlatEntityMaps = ({
       });
     }
 
-    for (const permissionFlag of roleManifest.permissionFlags ?? []) {
+    for (const permissionFlagUniversalIdentifier of roleManifest.permissionFlagUniversalIdentifiers ??
+      []) {
       addUniversalFlatEntityToUniversalFlatEntityMapsThroughMutationOrThrow({
         universalFlatEntity:
           fromPermissionFlagToUniversalFlatRolePermissionFlag({
-            permissionFlag,
+            permissionFlagUniversalIdentifier,
             roleUniversalIdentifier: roleManifest.universalIdentifier,
             applicationUniversalIdentifier,
             now,
@@ -447,10 +450,10 @@ export const computeApplicationManifestAllUniversalFlatEntityMaps = ({
         fromApplicationVariableManifestToUniversalFlatApplicationVariable({
           key,
           universalIdentifier: applicationVariableManifest.universalIdentifier,
-          value:
+          encryptedValue:
             'value' in applicationVariableManifest
-              ? applicationVariableManifest.value
-              : undefined,
+              ? ((applicationVariableManifest.value ?? '') as EncryptedString)
+              : '',
           description: applicationVariableManifest.description,
           isSecret: applicationVariableManifest.isSecret,
           applicationUniversalIdentifier,

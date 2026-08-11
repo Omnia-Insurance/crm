@@ -8,7 +8,7 @@ import {
 } from 'src/engine/core-modules/key-value-pair/key-value-pair.entity';
 
 export class KeyValuePairService<
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   KeyValueTypesMap extends Record<string, any> = Record<string, any>,
 > {
   constructor(
@@ -132,12 +132,12 @@ export class KeyValuePairService<
       key,
     };
 
-    if (queryRunner) {
-      await queryRunner.manager
-        .getRepository(KeyValuePairEntity)
-        .delete(deleteConditions);
-    } else {
-      await this.keyValuePairRepository.delete(deleteConditions);
-    }
+    const { affected } = queryRunner
+      ? await queryRunner.manager
+          .getRepository(KeyValuePairEntity)
+          .delete(deleteConditions)
+      : await this.keyValuePairRepository.delete(deleteConditions);
+
+    return affected;
   }
 }

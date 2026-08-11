@@ -336,7 +336,8 @@ export const isRecordMatchingFilter = ({
         });
       }
       case FieldMetadataType.NUMBER:
-      case FieldMetadataType.NUMERIC: {
+      case FieldMetadataType.NUMERIC:
+      case FieldMetadataType.POSITION: {
         return isMatchingFloatFilter({
           floatFilter: filterValue as FloatFilter,
           value: record[filterKey],
@@ -433,7 +434,8 @@ export const isRecordMatchingFilter = ({
           });
         }
 
-        // ONE_TO_MANY relation: handle { is: 'NULL' } / { is: 'NOT_NULL' }
+        // OMNIA-CUSTOM: ONE_TO_MANY relation — handle { is: 'NULL' } /
+        // { is: 'NOT_NULL' } against the array-valued relation.
         const relationFilter = filterValue as { is?: string };
 
         if (relationFilter?.is === 'NULL') {
@@ -448,8 +450,11 @@ export const isRecordMatchingFilter = ({
           return Array.isArray(val) && val.length > 0;
         }
 
-        // Other relation filters can't be validated client-side, pass through
-        return true;
+        // MANY_TO_ONE relation: match by related record id.
+        return isMatchingUUIDFilter({
+          uuidFilter: filterValue as UUIDFilter,
+          value: record[filterKey]?.id ?? null,
+        });
       }
       case FieldMetadataType.TS_VECTOR: {
         return isMatchingTSVectorFilter({

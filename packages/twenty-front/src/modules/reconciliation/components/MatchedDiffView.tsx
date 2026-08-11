@@ -5,15 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { Button, LightIconButton } from 'twenty-ui/input';
 import {
-  AppTooltip,
   IconArrowBackUp,
   IconCheck,
   IconX,
   IconCopy,
   IconAlertTriangle,
   IconMessage,
-  TooltipDelay,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
+import { AppTooltip, TooltipDelay } from 'twenty-ui/surfaces';
 
 import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
 import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
@@ -402,10 +401,9 @@ export const MatchedDiffView = ({
   });
 
   const refetchAffectedRecords = useCallback(async () => {
-    const writeRecordToStore =
-      (recordId: string) => (record: ObjectRecord) => {
-        store.set(recordStoreFamilyState.atomFamily(recordId), record);
-      };
+    const writeRecordToStore = (recordId: string) => (record: ObjectRecord) => {
+      store.set(recordStoreFamilyState.atomFamily(recordId), record);
+    };
 
     if (policyId) {
       await refetchPolicyRecord({

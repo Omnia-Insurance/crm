@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
 import { ExtendedUIMessage } from 'twenty-shared/ai';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
+import { In, IsNull, Not } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 import type { UIDataTypes, UIMessagePart, UITools } from 'ai';
 
+import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
 import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { AgentMessagePartEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message-part.entity';
 import {
@@ -15,6 +16,7 @@ import {
   AgentMessageStatus,
 } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-message.entity';
 import { AgentTurnEntity } from 'src/engine/metadata-modules/ai/ai-agent-execution/entities/agent-turn.entity';
+import { finalizeDanglingToolParts } from 'src/engine/metadata-modules/ai/ai-agent-execution/utils/finalize-dangling-tool-parts.util';
 import { mapUIMessagePartsToDBParts } from 'src/engine/metadata-modules/ai/ai-agent-execution/utils/mapUIMessagePartsToDBParts';
 import { AgentChatThreadEntity } from 'src/engine/metadata-modules/ai/ai-chat/entities/agent-chat-thread.entity';
 import {
@@ -22,7 +24,8 @@ import {
   AiExceptionCode,
 } from 'src/engine/metadata-modules/ai/ai.exception';
 import { WorkspaceEventBroadcaster } from 'src/engine/subscriptions/workspace-event-broadcaster/workspace-event-broadcaster.service';
-
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { toDisplayCredits } from 'src/engine/core-modules/usage/utils/to-display-credits.util';
 import { AiChatFileAttachment } from 'src/engine/metadata-modules/ai/ai-chat/types/ai-chat-file-attachment.type';
 import { AgentTitleGenerationService } from './agent-title-generation.service';
@@ -53,18 +56,19 @@ export class AgentChatService {
   private readonly logger = new Logger(AgentChatService.name);
 
   constructor(
-    @InjectRepository(AgentChatThreadEntity)
-    private readonly threadRepository: Repository<AgentChatThreadEntity>,
-    @InjectRepository(AgentTurnEntity)
-    private readonly turnRepository: Repository<AgentTurnEntity>,
-    @InjectRepository(AgentMessageEntity)
-    private readonly messageRepository: Repository<AgentMessageEntity>,
-    @InjectRepository(AgentMessagePartEntity)
-    private readonly messagePartRepository: Repository<AgentMessagePartEntity>,
-    @InjectRepository(FileEntity)
-    private readonly fileRepository: Repository<FileEntity>,
+    @InjectWorkspaceScopedRepository(AgentChatThreadEntity)
+    private readonly threadRepository: WorkspaceScopedRepository<AgentChatThreadEntity>,
+    @InjectWorkspaceScopedRepository(AgentTurnEntity)
+    private readonly turnRepository: WorkspaceScopedRepository<AgentTurnEntity>,
+    @InjectWorkspaceScopedRepository(AgentMessageEntity)
+    private readonly messageRepository: WorkspaceScopedRepository<AgentMessageEntity>,
+    @InjectWorkspaceScopedRepository(AgentMessagePartEntity)
+    private readonly messagePartRepository: WorkspaceScopedRepository<AgentMessagePartEntity>,
+    @InjectWorkspaceScopedRepository(FileEntity)
+    private readonly fileRepository: WorkspaceScopedRepository<FileEntity>,
     private readonly titleGenerationService: AgentTitleGenerationService,
     private readonly workspaceEventBroadcaster: WorkspaceEventBroadcaster,
+    private readonly codeInterpreterService: CodeInterpreterService,
   ) {}
 
   async createThread({
@@ -74,12 +78,9 @@ export class AgentChatService {
     userWorkspaceId: string;
     workspaceId: string;
   }) {
-    const thread = this.threadRepository.create({
+    const savedThread = await this.threadRepository.save(workspaceId, {
       userWorkspaceId,
-      workspaceId,
     });
-
-    const savedThread = await this.threadRepository.save(thread);
 
     await this.workspaceEventBroadcaster.broadcast({
       workspaceId,
@@ -99,8 +100,16 @@ export class AgentChatService {
     return savedThread;
   }
 
-  async getThreadById(threadId: string, userWorkspaceId: string) {
-    const thread = await this.threadRepository.findOne({
+  async getThreadById({
+    threadId,
+    userWorkspaceId,
+    workspaceId,
+  }: {
+    threadId: string;
+    userWorkspaceId: string;
+    workspaceId: string;
+  }) {
+    const thread = await this.threadRepository.findOne(workspaceId, {
       where: {
         id: threadId,
         userWorkspaceId,
@@ -117,15 +126,24 @@ export class AgentChatService {
     return thread;
   }
 
-  async getThreadsForUser(
-    userWorkspaceId: string,
-  ): Promise<(AgentChatThreadEntity & { lastMessageAt: Date | null })[]> {
+  async getThreadsForUser({
+    userWorkspaceId,
+    workspaceId,
+  }: {
+    userWorkspaceId: string;
+    workspaceId: string;
+  }): Promise<(AgentChatThreadEntity & { lastMessageAt: Date | null })[]> {
+    // Query builder uses the scoped wrapper's escape hatch; we add the
+    // workspaceId predicate manually below.
     const rankedThreads = await this.threadRepository
       .createQueryBuilder('thread')
       .select('thread.id', 'id')
       .addSelect('MAX(message.createdAt)', 'last_message_at')
       .leftJoin('thread.messages', 'message')
-      .where('thread.userWorkspaceId = :userWorkspaceId', { userWorkspaceId })
+      .where(
+        'thread.userWorkspaceId = :userWorkspaceId AND thread.workspaceId = :workspaceId',
+        { userWorkspaceId, workspaceId },
+      )
       .groupBy('thread.id')
       .orderBy('last_message_at', 'DESC', 'NULLS LAST')
       .addOrderBy('thread.updatedAt', 'DESC')
@@ -139,7 +157,7 @@ export class AgentChatService {
       (rankedThread) => rankedThread.id,
     );
 
-    const threads = await this.threadRepository.find({
+    const threads = await this.threadRepository.find(workspaceId, {
       where: { id: In(rankedThreadIds), userWorkspaceId },
     });
 
@@ -154,11 +172,20 @@ export class AgentChatService {
     });
   }
 
-  async getLastMessageAtForThread(threadId: string): Promise<Date | null> {
+  async getLastMessageAtForThread({
+    threadId,
+    workspaceId,
+  }: {
+    threadId: string;
+    workspaceId: string;
+  }): Promise<Date | null> {
     const result = await this.messageRepository
       .createQueryBuilder('message')
       .select('MAX(message.createdAt)', 'last_message_at')
-      .where('message.threadId = :threadId', { threadId })
+      .where(
+        'message.threadId = :threadId AND message.workspaceId = :workspaceId',
+        { threadId, workspaceId },
+      )
       .getRawOne<{ last_message_at: Date | null }>();
 
     return result?.last_message_at ?? null;
@@ -183,10 +210,9 @@ export class AgentChatService {
     let actualTurnId = turnId;
 
     if (!actualTurnId) {
-      const turnInsertResult = await this.turnRepository.insert({
+      const turnInsertResult = await this.turnRepository.insert(workspaceId, {
         threadId,
         agentId: agentId ?? null,
-        workspaceId,
       });
 
       actualTurnId = turnInsertResult.identifiers[0].id as string;
@@ -199,23 +225,28 @@ export class AgentChatService {
       role: uiMessage.role as AgentMessageRole,
       agentId: agentId ?? null,
       processedAt: new Date(),
-      workspaceId,
     };
 
-    const insertResult = await this.messageRepository.insert(messageValues);
+    const insertResult = await this.messageRepository.insert(
+      workspaceId,
+      messageValues,
+    );
 
     const savedMessageId = (id ?? insertResult.identifiers[0].id) as string;
 
     if (uiMessage.parts && uiMessage.parts.length > 0) {
       const dbParts = mapUIMessagePartsToDBParts(
-        uiMessage.parts,
+        finalizeDanglingToolParts(uiMessage.parts),
         savedMessageId,
         workspaceId,
       );
 
-      await this.messagePartRepository.insert(
-        dbParts as QueryDeepPartialEntity<AgentMessagePartEntity>[],
-      );
+      if (dbParts.length > 0) {
+        await this.messagePartRepository.insert(
+          workspaceId,
+          dbParts as QueryDeepPartialEntity<AgentMessagePartEntity>[],
+        );
+      }
     }
 
     return {
@@ -229,22 +260,35 @@ export class AgentChatService {
     } as AgentMessageEntity;
   }
 
-  async getMessagesForThread(threadId: string, userWorkspaceId: string) {
-    const thread = await this.threadRepository.findOne({
-      where: {
-        id: threadId,
-        userWorkspaceId,
-      },
+  async hasAssistantMessageForTurn({
+    turnId,
+    workspaceId,
+  }: {
+    turnId: string;
+    workspaceId: string;
+  }): Promise<boolean> {
+    const existingMessage = await this.messageRepository.findOne(workspaceId, {
+      where: { turnId, role: AgentMessageRole.ASSISTANT },
+      select: ['id'],
     });
 
-    if (!thread) {
-      throw new AiException(
-        'Thread not found',
-        AiExceptionCode.THREAD_NOT_FOUND,
-      );
-    }
+    return isDefined(existingMessage);
+  }
 
-    return this.messageRepository.find({
+  async getMessagesForThread({
+    threadId,
+    userWorkspaceId,
+    workspaceId,
+  }: {
+    threadId: string;
+    userWorkspaceId: string;
+    workspaceId: string;
+  }) {
+    // getThreadById enforces ownership; messages then scoped by both
+    // threadId and workspaceId.
+    await this.getThreadById({ threadId, userWorkspaceId, workspaceId });
+
+    return this.messageRepository.find(workspaceId, {
       where: { threadId },
       order: { processedAt: { direction: 'ASC', nulls: 'LAST' } },
       relations: ['parts', 'parts.file'],
@@ -273,19 +317,20 @@ export class AgentChatService {
       role: AgentMessageRole.USER,
       agentId: null,
       status: AgentMessageStatus.QUEUED,
-      workspaceId,
     };
 
-    const insertResult = await this.messageRepository.insert(messageValues);
+    const insertResult = await this.messageRepository.insert(
+      workspaceId,
+      messageValues,
+    );
 
     const savedMessageId = (id ?? insertResult.identifiers[0].id) as string;
 
     const validFiles =
       fileAttachments && fileAttachments.length > 0
-        ? await this.fileRepository.find({
+        ? await this.fileRepository.find(workspaceId, {
             where: {
               id: In(fileAttachments.map((attachment) => attachment.id)),
-              workspaceId,
             },
             select: ['id'],
           })
@@ -299,7 +344,6 @@ export class AgentChatService {
         orderIndex: 0,
         type: 'text',
         textContent: text,
-        workspaceId,
       },
       ...(fileAttachments ?? [])
         .filter((attachment) => validFileIds.has(attachment.id))
@@ -309,22 +353,32 @@ export class AgentChatService {
           type: 'file',
           fileId: attachment.id,
           fileFilename: attachment.filename,
-          workspaceId,
         })),
     ];
 
-    await this.messagePartRepository.insert(parts);
+    await this.messagePartRepository.insert(workspaceId, parts);
 
-    await this.notifyThreadActivityUpdated(threadId, userWorkspaceId);
+    await this.notifyThreadActivityUpdated({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     return {
       id: savedMessageId,
       ...messageValues,
+      workspaceId,
     } as AgentMessageEntity;
   }
 
-  async getQueuedMessages(threadId: string): Promise<AgentMessageEntity[]> {
-    return this.messageRepository.find({
+  async getQueuedMessages({
+    threadId,
+    workspaceId,
+  }: {
+    threadId: string;
+    workspaceId: string;
+  }): Promise<AgentMessageEntity[]> {
+    return this.messageRepository.find(workspaceId, {
       where: {
         threadId,
         status: AgentMessageStatus.QUEUED,
@@ -334,16 +388,26 @@ export class AgentChatService {
     });
   }
 
-  async findQueuedMessage(
-    messageId: string,
-  ): Promise<AgentMessageEntity | null> {
-    return this.messageRepository.findOne({
+  async findQueuedMessage({
+    messageId,
+    workspaceId,
+  }: {
+    messageId: string;
+    workspaceId: string;
+  }): Promise<AgentMessageEntity | null> {
+    return this.messageRepository.findOne(workspaceId, {
       where: { id: messageId, status: AgentMessageStatus.QUEUED },
     });
   }
 
-  async deleteQueuedMessage(messageId: string): Promise<boolean> {
-    const result = await this.messageRepository.delete({
+  async deleteQueuedMessage({
+    messageId,
+    workspaceId,
+  }: {
+    messageId: string;
+    workspaceId: string;
+  }): Promise<boolean> {
+    const result = await this.messageRepository.delete(workspaceId, {
       id: messageId,
       status: AgentMessageStatus.QUEUED,
     });
@@ -351,20 +415,24 @@ export class AgentChatService {
     return (result.affected ?? 0) > 0;
   }
 
-  async promoteQueuedMessage(
-    messageId: string,
-    threadId: string,
-    workspaceId: string,
-  ): Promise<string | null> {
-    const turnInsertResult = await this.turnRepository.insert({
+  async promoteQueuedMessage({
+    messageId,
+    threadId,
+    workspaceId,
+  }: {
+    messageId: string;
+    threadId: string;
+    workspaceId: string;
+  }): Promise<string | null> {
+    const turnInsertResult = await this.turnRepository.insert(workspaceId, {
       threadId,
       agentId: null,
-      workspaceId,
     });
 
     const savedTurnId = turnInsertResult.identifiers[0].id as string;
 
     const result = await this.messageRepository.update(
+      workspaceId,
       { id: messageId, threadId, status: AgentMessageStatus.QUEUED },
       {
         status: AgentMessageStatus.SENT,
@@ -374,7 +442,7 @@ export class AgentChatService {
     );
 
     if ((result.affected ?? 0) === 0) {
-      await this.turnRepository.delete(savedTurnId);
+      await this.turnRepository.delete(workspaceId, { id: savedTurnId });
 
       return null;
     }
@@ -385,10 +453,12 @@ export class AgentChatService {
   async updateThreadTitle({
     threadId,
     userWorkspaceId,
+    workspaceId,
     title,
   }: {
     threadId: string;
     userWorkspaceId: string;
+    workspaceId: string;
     title: string;
   }): Promise<AgentChatThreadEntity> {
     const trimmed = title.trim();
@@ -401,6 +471,7 @@ export class AgentChatService {
     }
 
     const result = await this.threadRepository.update(
+      workspaceId,
       { id: threadId, userWorkspaceId },
       { title: trimmed },
     );
@@ -412,7 +483,11 @@ export class AgentChatService {
       );
     }
 
-    const updated = await this.getThreadById(threadId, userWorkspaceId);
+    const updated = await this.getThreadById({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     await this.broadcastThreadUpdated(updated, ['title'], userWorkspaceId);
 
@@ -422,11 +497,17 @@ export class AgentChatService {
   async archiveThread({
     threadId,
     userWorkspaceId,
+    workspaceId,
   }: {
     threadId: string;
     userWorkspaceId: string;
+    workspaceId: string;
   }): Promise<AgentChatThreadEntity> {
-    const thread = await this.getThreadById(threadId, userWorkspaceId);
+    const thread = await this.getThreadById({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     if (thread.deletedAt) {
       return thread;
@@ -435,6 +516,7 @@ export class AgentChatService {
     const deletedAt = new Date();
 
     const result = await this.threadRepository.update(
+      workspaceId,
       { id: threadId, userWorkspaceId, deletedAt: IsNull() },
       { deletedAt, activeStreamId: null },
     );
@@ -448,23 +530,32 @@ export class AgentChatService {
 
     await this.broadcastThreadUpdated(thread, ['deletedAt'], userWorkspaceId);
 
+    this.releaseThreadSandboxBestEffort(workspaceId, threadId);
+
     return thread;
   }
 
   async unarchiveThread({
     threadId,
     userWorkspaceId,
+    workspaceId,
   }: {
     threadId: string;
     userWorkspaceId: string;
+    workspaceId: string;
   }): Promise<AgentChatThreadEntity> {
-    const thread = await this.getThreadById(threadId, userWorkspaceId);
+    const thread = await this.getThreadById({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     if (!thread.deletedAt) {
       return thread;
     }
 
     const result = await this.threadRepository.update(
+      workspaceId,
       { id: threadId, userWorkspaceId, deletedAt: Not(IsNull()) },
       { deletedAt: null },
     );
@@ -483,11 +574,13 @@ export class AgentChatService {
   async hardDeleteThread({
     threadId,
     userWorkspaceId,
+    workspaceId,
   }: {
     threadId: string;
     userWorkspaceId: string;
+    workspaceId: string;
   }): Promise<void> {
-    const thread = await this.threadRepository.findOne({
+    const thread = await this.threadRepository.findOne(workspaceId, {
       where: { id: threadId, userWorkspaceId },
     });
 
@@ -498,7 +591,7 @@ export class AgentChatService {
       );
     }
 
-    const result = await this.threadRepository.delete({
+    const result = await this.threadRepository.delete(workspaceId, {
       id: threadId,
       userWorkspaceId,
     });
@@ -525,13 +618,39 @@ export class AgentChatService {
         },
       ],
     });
+
+    this.releaseThreadSandboxBestEffort(workspaceId, threadId);
   }
 
-  async notifyThreadActivityUpdated(
+  private releaseThreadSandboxBestEffort(
+    workspaceId: string,
     threadId: string,
-    userWorkspaceId: string,
-  ): Promise<void> {
-    const thread = await this.getThreadById(threadId, userWorkspaceId);
+  ): void {
+    void this.codeInterpreterService
+      .releaseThreadSandbox(workspaceId, threadId)
+      .catch((error) =>
+        this.logger.warn(
+          `Failed to release code interpreter sandbox for thread ${threadId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        ),
+      );
+  }
+
+  async notifyThreadActivityUpdated({
+    threadId,
+    userWorkspaceId,
+    workspaceId,
+  }: {
+    threadId: string;
+    userWorkspaceId: string;
+    workspaceId: string;
+  }): Promise<void> {
+    const thread = await this.getThreadById({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     await this.broadcastThreadUpdated(
       thread,
@@ -543,11 +662,17 @@ export class AgentChatService {
   async notifyThreadUsageUpdated({
     threadId,
     userWorkspaceId,
+    workspaceId,
   }: {
     threadId: string;
     userWorkspaceId: string;
+    workspaceId: string;
   }): Promise<void> {
-    const thread = await this.getThreadById(threadId, userWorkspaceId);
+    const thread = await this.getThreadById({
+      threadId,
+      userWorkspaceId,
+      workspaceId,
+    });
 
     await this.broadcastThreadUpdated(
       thread,
@@ -568,7 +693,10 @@ export class AgentChatService {
     updatedFields: (keyof AgentChatThreadDTO)[],
     userWorkspaceId: string,
   ): Promise<void> {
-    const lastMessageAt = await this.getLastMessageAtForThread(thread.id);
+    const lastMessageAt = await this.getLastMessageAtForThread({
+      threadId: thread.id,
+      workspaceId: thread.workspaceId,
+    });
 
     await this.workspaceEventBroadcaster.broadcast({
       workspaceId: thread.workspaceId,
@@ -596,7 +724,7 @@ export class AgentChatService {
     messageContent: string;
     workspaceId: string;
   }): Promise<string | null> {
-    const thread = await this.threadRepository.findOne({
+    const thread = await this.threadRepository.findOne(workspaceId, {
       where: { id: threadId },
     });
 
@@ -610,7 +738,11 @@ export class AgentChatService {
       thread.userWorkspaceId,
     );
 
-    await this.threadRepository.update(threadId, { title });
+    await this.threadRepository.update(
+      workspaceId,
+      { id: threadId },
+      { title },
+    );
 
     await this.broadcastThreadUpdated(
       { ...thread, title },

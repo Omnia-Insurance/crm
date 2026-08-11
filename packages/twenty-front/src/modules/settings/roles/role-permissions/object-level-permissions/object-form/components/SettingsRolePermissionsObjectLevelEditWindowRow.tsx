@@ -8,7 +8,7 @@ import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconClockHour8 } from 'twenty-ui/display';
+import { IconClockHour8 } from 'twenty-ui/icon';
 import { type SelectOption } from 'twenty-ui/input';
 import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
 import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';

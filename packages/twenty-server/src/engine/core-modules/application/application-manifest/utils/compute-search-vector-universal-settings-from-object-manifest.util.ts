@@ -1,37 +1,19 @@
 import { type ObjectManifest } from 'twenty-shared/application';
-import {
-  type FieldMetadataUniversalSettings,
-  FieldMetadataType,
-} from 'twenty-shared/types';
+import { type FieldMetadataType } from 'twenty-shared/types';
 
-import { getTsVectorColumnExpressionFromFields } from 'src/engine/workspace-manager/utils/get-ts-vector-column-expression.util';
-import { isDefined, isSearchableFieldType } from 'twenty-shared/utils';
+import { type FieldMetadataUniversalSettings } from 'twenty-shared/types';
 
+// Upstream moved the searchVector `to_tsvector` asExpression out of the field's
+// (universal)Settings — `FieldMetadataSettings<TS_VECTOR>` is now `null` — and
+// into the dedicated `searchFieldMetadata` mechanism, which derives the column
+// expression at DDL generation time. There are therefore no per-field
+// universalSettings to compute for a TS_VECTOR field anymore; the value is null.
+// Kept as a function (rather than inlining `null`) so the application-manifest
+// flat-entity-map computation keeps its TS_VECTOR enrichment seam intact.
 export const computeSearchVectorUniversalSettingsFromObjectManifest = ({
-  objectManifest,
+  objectManifest: _objectManifest,
 }: {
   objectManifest: ObjectManifest;
 }): FieldMetadataUniversalSettings<FieldMetadataType.TS_VECTOR> => {
-  const labelIdentifierField = objectManifest.fields.find(
-    (field) =>
-      field.universalIdentifier ===
-      objectManifest.labelIdentifierFieldMetadataUniversalIdentifier,
-  );
-
-  if (
-    !isDefined(labelIdentifierField) ||
-    !isSearchableFieldType(labelIdentifierField.type)
-  ) {
-    return null;
-  }
-
-  return {
-    asExpression: getTsVectorColumnExpressionFromFields([
-      {
-        name: labelIdentifierField.name,
-        type: labelIdentifierField.type,
-      },
-    ]),
-    generatedType: 'STORED',
-  };
+  return null;
 };

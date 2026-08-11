@@ -1,11 +1,11 @@
 import { styled } from '@linaria/react';
 import { type ComponentProps, useMemo, useState } from 'react';
-import { Tag } from 'twenty-ui/components';
+import { Tag } from 'twenty-ui/data-display';
 import {
   IconAlertTriangle,
   IconChevronDown,
   IconChevronUp,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { isDefined } from 'twenty-shared/utils';

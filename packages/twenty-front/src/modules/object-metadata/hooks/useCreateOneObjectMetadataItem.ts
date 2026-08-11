@@ -7,6 +7,7 @@ import {
   FindManyViewsDocument,
 } from '~/generated-metadata/graphql';
 
+import { useInvalidateMetadataStore } from '@/metadata-store/hooks/useInvalidateMetadataStore';
 import { useMetadataErrorHandler } from '@/metadata-error-handler/hooks/useMetadataErrorHandler';
 import { useUpdateMetadataStoreDraft } from '@/metadata-store/hooks/useUpdateMetadataStoreDraft';
 import { type FlatFieldMetadataItem } from '@/metadata-store/types/FlatFieldMetadataItem';
@@ -31,6 +32,7 @@ export const useCreateOneObjectMetadataItem = () => {
   const { enqueueErrorSnackBar } = useSnackBar();
   const { addToDraft, replaceDraft, applyChanges } =
     useUpdateMetadataStoreDraft();
+  const { invalidateMetadataStore } = useInvalidateMetadataStore();
   const { loadCurrentUser } = useLoadCurrentUser();
 
   const createOneObjectMetadataItem = async (
@@ -125,6 +127,8 @@ export const useCreateOneObjectMetadataItem = () => {
         applyChanges();
 
         await loadCurrentUser();
+
+        invalidateMetadataStore();
       }
 
       return {

@@ -14,7 +14,7 @@ import { setIgnoreColumn } from '@/spreadsheet-import/utils/setIgnoreColumn';
 import { setSubColumn } from '@/spreadsheet-import/utils/setSubColumn';
 import { useDialogManager } from '@/ui/feedback/dialog-manager/hooks/useDialogManager';
 
-import { ModalContent } from 'twenty-ui/layout';
+import { ModalContent } from 'twenty-ui/surfaces';
 
 import { DO_NOT_IMPORT_OPTION_KEY } from '@/spreadsheet-import/constants/DoNotImportOptionKey';
 import { ColumnGrid } from '@/spreadsheet-import/steps/components/MatchColumnsStep/components/ColumnGrid';
@@ -76,7 +76,8 @@ export const MatchColumnsStep = ({
   const { enqueueDialog } = useDialogManager();
   const dataExample = data.slice(0, 2);
   // OMNIA-CUSTOM: allowDuplicateFieldMatching for reconciliation
-  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } = useSpreadsheetImportInternal();
+  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } =
+    useSpreadsheetImportInternal();
   const [isLoading, setIsLoading] = useState(false);
   const [columns, setColumns] = useAtomFamilySelectorState(
     initialComputedColumnsSelector,

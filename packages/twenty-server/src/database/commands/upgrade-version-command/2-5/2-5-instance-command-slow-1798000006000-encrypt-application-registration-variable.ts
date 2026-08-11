@@ -1,6 +1,8 @@
 import { isDefined } from 'twenty-shared/utils';
 import { DataSource, QueryRunner } from 'typeorm';
 
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { isEncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/is-encrypted-string.util';
 import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
@@ -51,9 +53,14 @@ export class EncryptApplicationRegistrationVariableSlowInstanceCommand
       }
 
       for (const row of rows) {
-        const plaintext = this.secretEncryptionService.decryptVersioned(
-          row.encryptedValue,
-        );
+        if (isEncryptedString(row.encryptedValue)) {
+          continue;
+        }
+
+        const plaintext =
+          this.secretEncryptionService.legacyDecryptVersionedWithFallback(
+            row.encryptedValue as EncryptedString,
+          );
 
         if (!isDefined(plaintext)) {
           continue;

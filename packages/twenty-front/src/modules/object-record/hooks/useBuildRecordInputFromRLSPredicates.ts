@@ -21,14 +21,12 @@ import { buildRecordInputFromFilter } from '@/object-record/record-table/utils/b
 import { buildCompositeValueFromSubField } from '@/object-record/record-table/utils/buildValueFromFilter';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { isUndefined } from '@sniptt/guards';
+import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useMemo } from 'react';
 import { isDefined, isPlainObject } from 'twenty-shared/utils';
 
-const mergeCompositeValues = (
-  existingValue: unknown,
-  incomingValue: unknown,
-) =>
+const mergeCompositeValues = (existingValue: unknown, incomingValue: unknown) =>
   isPlainObject(existingValue) && isPlainObject(incomingValue)
     ? { ...existingValue, ...incomingValue }
     : incomingValue;
@@ -39,6 +37,8 @@ export const useBuildRecordInputFromRLSPredicates = ({
   objectMetadataItem: EnrichedObjectMetadataItem;
 }) => {
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
+
+  const { userTimezone } = useUserTimezone();
 
   const { record: currentWorkspaceMemberRecord } = useFindOneRecord({
     objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
@@ -238,9 +238,9 @@ export const useBuildRecordInputFromRLSPredicates = ({
     return workspaceMemberFieldValue;
   };
 
-  const buildRecordInputFromRLSPredicates = (
-    options?: { includeRestrictedFields?: boolean },
-  ): Partial<ObjectRecord> => {
+  const buildRecordInputFromRLSPredicates = (options?: {
+    includeRestrictedFields?: boolean;
+  }): Partial<ObjectRecord> => {
     const fieldMetadataItemMap = new Map(
       objectMetadataItem.fields.map((field) => [field.id, field]),
     );
@@ -333,6 +333,7 @@ export const useBuildRecordInputFromRLSPredicates = ({
       currentRecordFilters: staticFilters,
       objectMetadataItem,
       currentWorkspaceMember: currentWorkspaceMember ?? undefined,
+      timeZone: userTimezone,
     });
 
     const mergedRecordInput: Partial<ObjectRecord> = {

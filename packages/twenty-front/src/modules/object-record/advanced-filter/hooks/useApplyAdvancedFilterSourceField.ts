@@ -65,21 +65,21 @@ export const useApplyAdvancedFilterSourceField = () => {
 
     const filterType = getFilterTypeFromFieldType(sourceFieldMetadataItem.type);
 
-    const firstOperand = getRecordFilterOperands({
+    const defaultOperand = getRecordFilterOperands({
       filterType,
       subFieldName: null,
       relationType: sourceFieldMetadataItem.relation?.type,
-    })?.[0];
+    })[0];
 
-    if (!isDefined(firstOperand)) {
+    if (!isDefined(defaultOperand)) {
       throw new Error(`No valid operand found for filter type: ${filterType}`);
     }
 
-    setSelectedOperandInDropdown(firstOperand);
+    setSelectedOperandInDropdown(defaultOperand);
 
     const { value, displayValue } = getInitialFilterValue(
       filterType,
-      firstOperand,
+      defaultOperand,
     );
 
     const existingRecordFilter = currentRecordFilters.find(
@@ -90,7 +90,7 @@ export const useApplyAdvancedFilterSourceField = () => {
       id: recordFilterId,
       fieldMetadataId: sourceFieldMetadataItem.id,
       displayValue,
-      operand: firstOperand,
+      operand: defaultOperand,
       value,
       recordFilterGroupId: existingRecordFilter?.recordFilterGroupId,
       positionInRecordFilterGroup:

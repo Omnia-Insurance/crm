@@ -1,0 +1,16 @@
+.audioContainer {
+  align-items: center;
+  border-radius: 50px;
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.audio {
+  height: 24px;
+  max-width: 160px;
+
+  &::-webkit-media-controls-panel {
+    background: transparent;
+  }
+}

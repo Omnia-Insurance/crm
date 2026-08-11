@@ -1,6 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
+import { WorkflowActionType } from 'twenty-shared/workflow';
 import { SEED_WORKFLOW_ACTION_TRIGGER_SETTINGS } from 'twenty-shared/logic-function';
 
 import { AiAgentRoleService } from 'src/engine/metadata-modules/ai/ai-agent-role/ai-agent-role.service';
@@ -12,14 +13,12 @@ import { LogicFunctionFromSourceService } from 'src/engine/metadata-modules/logi
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getWorkspaceScopedRepositoryToken } from 'src/engine/twenty-orm/workspace-scoped-repository/get-workspace-scoped-repository-token.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { CodeStepBuildService } from 'src/modules/workflow/workflow-builder/workflow-version-step/code-step/services/code-step-build.service';
 import { WorkflowVersionStepOperationsWorkspaceService } from 'src/modules/workflow/workflow-builder/workflow-version-step/workflow-version-step-operations.workspace-service';
-import {
-  type WorkflowAction,
-  WorkflowActionType,
-} from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 
 const mockWorkspaceId = 'workspace-id';
 
@@ -90,7 +89,7 @@ describe('WorkflowVersionStepOperationsWorkspaceService', () => {
     } as unknown as jest.Mocked<CodeStepBuildService>;
 
     logicFunctionFromSourceService = {
-      deleteOneWithSource: jest.fn(),
+      deleteOneWithSource: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<LogicFunctionFromSourceService>;
 
     agentService = {
@@ -143,7 +142,7 @@ describe('WorkflowVersionStepOperationsWorkspaceService', () => {
           useValue: agentService,
         },
         {
-          provide: getRepositoryToken(RoleTargetEntity),
+          provide: getWorkspaceScopedRepositoryToken(RoleTargetEntity),
           useValue: roleTargetRepository,
         },
         {
@@ -187,7 +186,7 @@ describe('WorkflowVersionStepOperationsWorkspaceService', () => {
         nextStepIds: [],
         settings: {
           input: {
-            logicFunctionId: 'function-id',
+            logicFunctionId: '550e8400-e29b-41d4-a716-446655440000',
           },
           outputSchema: {},
           errorHandlingOptions: {
@@ -205,7 +204,7 @@ describe('WorkflowVersionStepOperationsWorkspaceService', () => {
       expect(
         logicFunctionFromSourceService.deleteOneWithSource,
       ).toHaveBeenCalledWith({
-        id: 'function-id',
+        id: '550e8400-e29b-41d4-a716-446655440000',
         workspaceId: mockWorkspaceId,
       });
     });

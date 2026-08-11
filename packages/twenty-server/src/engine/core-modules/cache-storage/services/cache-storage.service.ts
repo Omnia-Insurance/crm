@@ -342,6 +342,31 @@ end`;
     }) as Promise<number>;
   }
 
+  async hashSetWithExpire({
+    key,
+    field,
+    value,
+    ttlMs,
+  }: {
+    key: string;
+    field: string;
+    value: string;
+    ttlMs: Milliseconds;
+  }): Promise<void> {
+    if (!this.isRedisCache()) {
+      throw new Error('hashSetWithExpire is only supported with Redis cache');
+    }
+
+    const redisClient = (this.cache as RedisCache).store.client;
+    const prefixedKey = this.getKey(key);
+
+    await redisClient
+      .multi()
+      .hSet(prefixedKey, field, value)
+      .pExpire(prefixedKey, ttlMs)
+      .exec();
+  }
+
   async hashDelete({
     key,
     field,
@@ -378,7 +403,7 @@ end`;
   }
 
   private isRedisCache() {
-    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     return (this.cache.store as any)?.name === 'redis';
   }
 

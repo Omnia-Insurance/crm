@@ -18,7 +18,7 @@ import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconPlus } from 'twenty-ui/display';
+import { IconPlus } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { getOsControlSymbol } from 'twenty-ui/utilities';
 

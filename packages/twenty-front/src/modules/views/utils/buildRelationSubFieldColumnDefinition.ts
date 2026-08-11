@@ -38,8 +38,7 @@ export const buildRelationSubFieldColumnDefinition = ({
   if (!targetObjectMetadata) return null;
 
   const subFieldMetadata = targetObjectMetadata.fields.find(
-    (field: FieldMetadataItem) =>
-      field.name === subFieldName && field.isActive,
+    (field: FieldMetadataItem) => field.name === subFieldName && field.isActive,
   );
 
   if (!subFieldMetadata) return null;
@@ -57,14 +56,14 @@ export const buildRelationSubFieldColumnDefinition = ({
       fieldName: relationFieldName,
       objectMetadataNameSingular,
       relationObjectMetadataNameSingular: targetObjectNameSingular,
-      isUIReadOnly: true,
+      isUIEditable: false,
       subFieldName,
     } as FieldMetadata,
     position: 0,
     size: 150,
     isLabelIdentifier: false,
     isVisible: true,
-    isUIReadOnly: true,
+    isUIEditable: false,
     isFilterable: false,
     isSortable: false,
     defaultValue: subFieldMetadata.defaultValue,

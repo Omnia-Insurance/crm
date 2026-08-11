@@ -2,14 +2,14 @@ import { useLingui } from '@lingui/react/macro';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { IconSearch, IconSettings } from 'twenty-ui/display';
+import { IconSearch, IconSettings } from 'twenty-ui/icon';
 import { useIsMobile } from 'twenty-ui/utilities';
 
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useOpenRecordsSearchPageInSidePanel } from '@/side-panel/hooks/useOpenRecordsSearchPageInSidePanel';
-import { NavigationDrawerAiChatContent } from '@/ai/components/NavigationDrawerAiChatContent';
 import { MainNavigationDrawerNavigationContent } from '@/navigation/components/MainNavigationDrawerNavigationContent';
 import { MainNavigationDrawerTabsRow } from '@/navigation/components/MainNavigationDrawerTabsRow';
+import { NavigationDrawerTabbedContent } from '@/navigation/components/NavigationDrawerTabbedContent';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { NavigationDrawer } from '@/ui/navigation/navigation-drawer/components/NavigationDrawer';
 import { NavigationDrawerFixedContent } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerFixedContent';
@@ -51,12 +51,10 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
     navigate(getSettingsPath(SettingsPath.ProfilePage));
   };
 
-  const hasAiSettingsPermission = useHasPermissionFlag(
-    PermissionFlagType.AI_SETTINGS,
-  );
+  const hasAiPermission = useHasPermissionFlag(PermissionFlagType.AI);
 
   const showAiChatContent =
-    hasAiSettingsPermission &&
+    hasAiPermission &&
     navigationDrawerActiveTab === NAVIGATION_DRAWER_TABS.AI_CHAT_HISTORY;
 
   return (
@@ -84,11 +82,11 @@ export const MainNavigationDrawer = ({ className }: { className?: string }) => {
       </NavigationDrawerFixedContent>
 
       <NavigationDrawerScrollableContent>
-        {showAiChatContent ? (
-          <NavigationDrawerAiChatContent />
-        ) : (
-          <MainNavigationDrawerNavigationContent />
-        )}
+        <NavigationDrawerTabbedContent
+          showAiChatContent={showAiChatContent}
+          shouldMountAiChatContent={hasAiPermission}
+          navigationContent={<MainNavigationDrawerNavigationContent />}
+        />
       </NavigationDrawerScrollableContent>
     </NavigationDrawer>
   );

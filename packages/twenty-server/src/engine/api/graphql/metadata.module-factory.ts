@@ -54,7 +54,13 @@ export const metadataModuleFactory = async (
         operationsToCache: [
           'ObjectMetadataItems',
           'FindAllViews',
-          'FindFieldsWidgetCoreViews',
+          // OMNIA-CUSTOM: match the actual client operation name
+          // (query FindFieldsWidgetViews in
+          // twenty-front/.../findFieldsWidgetViews.ts). The previous
+          // the old name FindFieldsWidgetCoreViews never matched, so this
+          // boot query was never cached. Must stay in sync with the
+          // user-scoped set in use-cached-metadata.ts.
+          'FindFieldsWidgetViews',
           'FindAllRecordPageLayouts',
           'FindManyLogicFunctions',
         ],

@@ -1,6 +1,7 @@
 import { isDefined } from 'twenty-shared/utils';
 import { DataSource, QueryRunner } from 'typeorm';
 
+import { PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings';
 import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
@@ -61,7 +62,7 @@ export class EncryptConnectedAccountTokensSlowInstanceCommand
         if (isPlaintext(row.accessToken)) {
           params.push(
             this.connectedAccountTokenEncryptionService.encrypt({
-              plaintext: row.accessToken,
+              plaintext: row.accessToken as PlaintextString,
               workspaceId: row.workspaceId,
             }),
           );
@@ -71,7 +72,7 @@ export class EncryptConnectedAccountTokensSlowInstanceCommand
         if (isPlaintext(row.refreshToken)) {
           params.push(
             this.connectedAccountTokenEncryptionService.encrypt({
-              plaintext: row.refreshToken,
+              plaintext: row.refreshToken as PlaintextString,
               workspaceId: row.workspaceId,
             }),
           );

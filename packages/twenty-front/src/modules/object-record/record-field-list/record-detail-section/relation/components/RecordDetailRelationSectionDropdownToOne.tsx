@@ -31,7 +31,7 @@ import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/is
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { CustomError, isDefined } from 'twenty-shared/utils';
-import { IconForbid, IconPencil } from 'twenty-ui/display';
+import { IconForbid, IconPencil } from 'twenty-ui/icon';
 import { LightIconButton } from 'twenty-ui/input';
 import { type ObjectRecordFilterInput } from '~/generated/graphql';
 

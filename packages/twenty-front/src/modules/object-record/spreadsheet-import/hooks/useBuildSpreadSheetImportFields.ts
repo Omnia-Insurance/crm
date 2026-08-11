@@ -23,7 +23,7 @@ import {
   getUniqueConstraintsFields,
   isDefined,
 } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 export const useBuildSpreadsheetImportFields = () => {
@@ -357,9 +357,7 @@ export const useBuildSpreadsheetImportFields = () => {
           // so they auto-match export CSV headers on re-import.
           if (isCompositeFieldType(targetField.type)) {
             const connectSubFieldNames = new Set(
-              SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
-                targetField.type
-              ].subFields
+              SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[targetField.type].subFields
                 .filter((sf) => sf.isIncludedInUniqueConstraint)
                 .map((sf) => sf.subFieldName as string),
             );
@@ -501,9 +499,8 @@ export const useBuildSpreadsheetImportFields = () => {
       for (const targetField of availableTargetFields) {
         if (!isCompositeFieldType(targetField.type)) continue;
 
-        for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
-          targetField.type
-        ].subFields) {
+        for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[targetField.type]
+          .subFields) {
           if (sf.isImportable) continue;
 
           const label = getRelationUpdateSubFieldLabel(

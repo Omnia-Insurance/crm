@@ -6,7 +6,7 @@ import { getSettingsPath } from 'twenty-shared/utils';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { IngestionPipelineForm } from '@/settings/ingestion-pipeline/components/IngestionPipelineForm.component';
 import { useIngestionPipeline } from '@/settings/ingestion-pipeline/hooks/useIngestionPipeline';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 
 export const SettingsIngestionPipelineNew = () => {
   const { t } = useLingui();
@@ -46,7 +46,7 @@ export const SettingsIngestionPipelineNew = () => {
   };
 
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       title={t`New Pipeline`}
       links={[
         { children: <Trans>Settings</Trans>, href: '/settings' },
@@ -60,6 +60,6 @@ export const SettingsIngestionPipelineNew = () => {
       <SettingsPageContainer>
         <IngestionPipelineForm onSubmit={handleSubmit} />
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

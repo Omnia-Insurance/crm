@@ -13,7 +13,7 @@ import { useModal } from '@/ui/layout/modal/hooks/useModal';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { isDefined } from 'twenty-shared/utils';
-import { H1Title, H1TitleFontColor } from 'twenty-ui/display';
+import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
 import { type SelectOption } from 'twenty-ui/input';
 import { Section, SectionAlignment, SectionFontColor } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';

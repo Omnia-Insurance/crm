@@ -1,5 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { EnvironmentConfigDriver } from 'src/engine/core-modules/twenty-config/drivers/environment-config.driver';
 
 import { SecretEncryptionService } from './secret-encryption.service';
@@ -194,7 +196,7 @@ describe('SecretEncryptionService', () => {
 
     it('round-trips a v2 envelope and applies the mask', () => {
       const secret = 'sk-abcdefghij1234567890';
-      const encrypted = service.encryptVersioned(secret);
+      const encrypted = service.encryptVersioned(secret as PlaintextString);
 
       const result = service.decryptAndMaskVersioned({
         value: encrypted,
@@ -208,7 +210,9 @@ describe('SecretEncryptionService', () => {
     it('decrypts a workspace-scoped v2 envelope when given the matching workspaceId', () => {
       const workspaceId = '11111111-1111-1111-1111-111111111111';
       const secret = 'sk-workspace-bound-secret';
-      const encrypted = service.encryptVersioned(secret, { workspaceId });
+      const encrypted = service.encryptVersioned(secret as PlaintextString, {
+        workspaceId,
+      });
 
       const result = service.decryptAndMaskVersioned({
         value: encrypted,
@@ -223,16 +227,61 @@ describe('SecretEncryptionService', () => {
     it('returns null/undefined values as-is', () => {
       expect(
         service.decryptAndMaskVersioned({
-          value: null as unknown as string,
+          value: null as unknown as EncryptedString,
           mask,
         }),
       ).toBeNull();
       expect(
         service.decryptAndMaskVersioned({
-          value: undefined as unknown as string,
+          value: undefined as unknown as EncryptedString,
           mask,
         }),
       ).toBeUndefined();
+    });
+  });
+
+  describe('decryptVersionedOrThrow', () => {
+    it('round-trips a v2 envelope', () => {
+      const secret = 'sk-strict-secret-value';
+      const encrypted = service.encryptVersioned(secret as PlaintextString);
+
+      expect(service.decryptVersionedOrThrow(encrypted)).toBe(secret);
+    });
+
+    it('throws on a legacy non-v2 value instead of falling back to CTR', () => {
+      const legacyCiphertext = service.encrypt(testValue) as EncryptedString;
+
+      expect(() => service.decryptVersionedOrThrow(legacyCiphertext)).toThrow();
+    });
+
+    it('returns null/undefined values as-is', () => {
+      expect(
+        service.decryptVersionedOrThrow(null as unknown as EncryptedString),
+      ).toBeNull();
+      expect(
+        service.decryptVersionedOrThrow(
+          undefined as unknown as EncryptedString,
+        ),
+      ).toBeUndefined();
+    });
+  });
+
+  describe('legacyDecryptVersionedWithFallback', () => {
+    it('round-trips a v2 envelope', () => {
+      const secret = 'sk-legacy-secret-value';
+      const encrypted = service.encryptVersioned(secret as PlaintextString);
+
+      expect(service.legacyDecryptVersionedWithFallback(encrypted)).toBe(
+        secret,
+      );
+    });
+
+    it('falls back to legacy CTR decryption for non-v2 values', () => {
+      const legacyCiphertext = service.encrypt(testValue) as EncryptedString;
+
+      expect(service.legacyDecryptVersionedWithFallback(legacyCiphertext)).toBe(
+        testValue,
+      );
     });
   });
 });

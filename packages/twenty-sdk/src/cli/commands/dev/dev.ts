@@ -1,3 +1,5 @@
+import { ApiService } from '@/cli/utilities/api/api-service';
+import { promptForReauthentication } from '@/cli/utilities/auth/reauth-helper';
 import { ConfigService } from '@/cli/utilities/config/config-service';
 import { CURRENT_EXECUTION_DIRECTORY } from '@/cli/utilities/config/current-execution-directory';
 import { DevModeOrchestrator } from '@/cli/utilities/dev/orchestrator/dev-mode-orchestrator';
@@ -28,6 +30,15 @@ export class AppDevCommand {
     return this.orchestrator;
   }
 
+  private async ensureAuthenticatedBeforeLaunch(): Promise<void> {
+    const apiService = new ApiService({ disableInterceptors: true });
+    const { serverUp, authValid } = await apiService.validateAuth();
+
+    if (serverUp && !authValid) {
+      await promptForReauthentication(ConfigService.getActiveRemote());
+    }
+  }
+
   async execute(options: AppDevOptions): Promise<void> {
     const appPath = options.appPath ?? CURRENT_EXECUTION_DIRECTORY;
 
@@ -37,11 +48,10 @@ export class AppDevCommand {
       await checkServerVersionCompatibility();
     }
 
-    const config = await new ConfigService().getConfig();
+    await this.ensureAuthenticatedBeforeLaunch();
 
     const orchestratorState = new OrchestratorState({
       appPath,
-      frontendUrl: config.apiUrl,
     });
 
     if (!options.headless) {
@@ -49,7 +59,7 @@ export class AppDevCommand {
 
       orchestratorState.onChange = () => uiStateManager.notify();
 
-      const { unmount } = await renderDevUI(uiStateManager);
+      const { unmount } = await renderDevUI(uiStateManager, options.verbose);
 
       this.unmountUI = unmount;
 

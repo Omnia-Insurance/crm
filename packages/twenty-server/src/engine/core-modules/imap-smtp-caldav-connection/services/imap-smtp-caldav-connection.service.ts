@@ -12,8 +12,10 @@ import { ImapSmtpCaldavValidatorService } from 'src/engine/core-modules/imap-smt
 import {
   type AccountType,
   type ConnectionParameters,
-  type ImapSmtpCaldavParams,
+  type PlaintextImapSmtpCaldavParams,
 } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import { buildImapTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-imap-tls-options.util';
+import { buildSmtpTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-smtp-tls-options.util';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
@@ -41,7 +43,7 @@ export class ImapSmtpCaldavService {
     const client = new ImapFlow({
       host: validatedHost,
       port: params.port,
-      secure: params.secure ?? true,
+      ...buildImapTlsOptions(params.connectionSecurity),
       auth: {
         user: params.username ?? handle,
         pass: params.password,
@@ -114,6 +116,7 @@ export class ImapSmtpCaldavService {
     const transport = createTransport({
       host: validatedHost,
       port: params.port,
+      ...buildSmtpTlsOptions(params.connectionSecurity),
       auth: {
         user: params.username ?? handle,
         pass: params.password,
@@ -217,9 +220,9 @@ export class ImapSmtpCaldavService {
   }: {
     connectionParameters: EmailAccountConnectionParametersInput;
     handle: string;
-    existingConnectionParameters: ImapSmtpCaldavParams | null;
-  }): Promise<ImapSmtpCaldavParams> {
-    const validatedParams: ImapSmtpCaldavParams = {};
+    existingConnectionParameters: PlaintextImapSmtpCaldavParams | null;
+  }): Promise<PlaintextImapSmtpCaldavParams> {
+    const validatedParams: PlaintextImapSmtpCaldavParams = {};
 
     for (const protocol of ACCOUNT_TYPES) {
       const params = connectionParameters[protocol];
