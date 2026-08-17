@@ -242,7 +242,7 @@ function getLabelIdentifierFieldName(
  * Build the auto-expanded selectedFieldPaths for a relation config:
  * always include 'id' and the label identifier field (e.g. 'name').
  */
-function buildExpandedSelectedPaths(
+export function buildExpandedSelectedPaths(
   rc: RelationConfig,
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
@@ -259,6 +259,15 @@ function buildExpandedSelectedPaths(
 
   if (labelField && !paths.includes(labelField)) {
     paths.unshift(labelField);
+  }
+
+  // Always expose the related record's id. On re-import this is what lets
+  // resolveImportRelations reconnect the exact same record via the explicit-id
+  // path instead of falling back to SMART_UPDATE fuzzy scoring, which can
+  // score an already-correct relation as a "different person" and create a
+  // blank duplicate. See resolve-import-relations.util.ts.
+  if (!paths.includes('id')) {
+    paths.unshift('id');
   }
 
   return paths;
