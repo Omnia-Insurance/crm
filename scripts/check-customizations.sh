@@ -1999,6 +1999,13 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
   "const downloadUrl = await this.fileUrlService.signFileByIdUrl" \
   "Export job processor must await signed download URLs before storing result JSON"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "paths.unshift('id')" \
+  "Export must emit each expanded relation's id column (e.g. 'Lead / Id') so re-import reconnects by id instead of fuzzy matching"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/__tests__/build-expanded-selected-paths.spec.ts" \
+  "Regression test guarding relation id columns in export (OMN-465)"
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/export-job.resolver.ts" \
   "Export job GraphQL resolver (start/cancel mutations, query, subscription)"

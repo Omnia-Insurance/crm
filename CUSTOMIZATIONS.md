@@ -322,6 +322,17 @@ Moves CSV export from browser-only to a BullMQ background job. The server fetche
 | `jobs/export-job.processor.ts`          | BullMQ processor: batched fetch, filter parsing, CSV gen, file storage, awaited signed download URL |
 | `jobs/export-job-processor.module.ts`   | Processor module registration                                                                       |
 | `utils/process-records-for-csv.util.ts` | Server-side CSV transformation (CURRENCY, RELATION, composite)                                      |
+| `jobs/__tests__/build-expanded-selected-paths.spec.ts` | Regression test: relation id columns are always exported (OMN-465)                    |
+
+**Relation id columns in export (OMN-465).** `buildExpandedSelectedPaths` in
+`jobs/export-job.processor.ts` always prepends `id` to every expanded relation's
+selected paths, so the CSV carries `Lead / Id`, `Agent / Id`, etc. alongside the
+label columns. This is load-bearing, not cosmetic: on re-import,
+`resolveImportRelations` uses the explicit id to reconnect the exact same related
+record. Without it the importer falls through to `SMART_UPDATE` fuzzy scoring,
+which can score an already-correct relation below `DIFFERENT_PERSON_THRESHOLD`
+and silently create a blank duplicate lead. Two August 2026 imports did exactly
+that to 168 policies.
 
 **New migration:**
 
