@@ -7,9 +7,15 @@ import { currentRecordFieldsComponentState } from '@/object-record/record-field/
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { ViewType } from '@/views/types/ViewType';
+import { isOneToManyBackReferenceSubField } from '@/views/utils/isOneToManyBackReferenceSubField';
 import { useContext, useState } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
-import { IconChevronLeft, IconChevronRight, IconEye, useIcons } from 'twenty-ui/display';
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconEye,
+  useIcons,
+} from 'twenty-ui/display';
 import { MenuItem } from 'twenty-ui/navigation';
 
 // OMNIA-CUSTOM: Field types that can be displayed as relation sub-field columns
@@ -110,6 +116,13 @@ export const ViewFieldsHiddenDropdownSection = () => {
           field.isActive &&
           !field.isSystem &&
           DISPLAYABLE_SUB_FIELD_TYPES.has(field.type as FieldMetadataType) &&
+          // OMNIA-CUSTOM: never offer a ONE_TO_MANY back-reference to the
+          // view's own object (e.g. Product → Policies on the Policies table):
+          // it fans out to every sibling row and OOMs the export worker.
+          !isOneToManyBackReferenceSubField({
+            subFieldMetadataItem: field,
+            baseObjectNameSingular: objectMetadataItem.nameSingular,
+          }) &&
           // Exclude sub-fields already visible
           !visibleRecordFields.some(
             (vf) =>
@@ -158,8 +171,7 @@ export const ViewFieldsHiddenDropdownSection = () => {
             iconButtons={[
               {
                 Icon: IconChevronRight,
-                onClick: () =>
-                  setExpandedRelationFieldId(fieldMetadataItem.id),
+                onClick: () => setExpandedRelationFieldId(fieldMetadataItem.id),
               },
             ]}
             text={`${fieldMetadataItem.label} fields...`}

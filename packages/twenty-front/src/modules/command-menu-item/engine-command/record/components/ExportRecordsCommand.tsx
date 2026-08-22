@@ -10,6 +10,7 @@ import { contextStoreFilterGroupsComponentState } from '@/context-store/states/c
 import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
 import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
 import { computeContextStoreFilters } from '@/context-store/utils/computeContextStoreFilters';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
@@ -26,6 +27,7 @@ import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/use
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
+import { isOneToManyBackReferenceSubField } from '@/views/utils/isOneToManyBackReferenceSubField';
 import { isDefined } from 'twenty-shared/utils';
 
 type StartExportJobResponse = {
@@ -72,6 +74,7 @@ const ExportIndexRecordsContent = ({
   const flattenedFieldMetadataItems = useAtomStateValue(
     flattenedFieldMetadataItemsSelector,
   );
+  const { objectMetadataItems } = useObjectMetadataItems();
 
   const queryFilter = computeContextStoreFilters({
     contextStoreTargetedRecordsRule,
@@ -152,6 +155,24 @@ const ExportIndexRecordsContent = ({
 
       if (!targetName) continue;
 
+      // OMNIA-CUSTOM: never send a ONE_TO_MANY back-reference to the export
+      // job (e.g. product.policies on a policy export) — it would fan out to
+      // every sibling row per cell. Saved views may still carry such a
+      // column; the server skips it too, this just keeps the CSV honest.
+      const subFieldMeta = objectMetadataItems
+        .find((item) => item.nameSingular === targetName)
+        ?.fields.find((f) => f.name === subField.subFieldName);
+
+      if (
+        isDefined(subFieldMeta) &&
+        isOneToManyBackReferenceSubField({
+          subFieldMetadataItem: subFieldMeta,
+          baseObjectNameSingular: objectMetadataItem.nameSingular,
+        })
+      ) {
+        continue;
+      }
+
       const existing = relationConfigMap.get(meta.name);
 
       if (existing) {
@@ -204,6 +225,7 @@ const ExportIndexRecordsContent = ({
     findManyRecordsParams.orderBy,
     findManyRecordsParams.filter,
     subFieldRecordFields,
+    objectMetadataItems,
     startTracking,
     unmountCommand,
     engineCommandId,

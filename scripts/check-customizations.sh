@@ -473,6 +473,10 @@ check_file_contains \
   "Amazon Translate" \
   "twenty-bedrock service account comment must document Compliance QA translation runtime access"
 check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "max-old-space-size" \
+  "Worker must get NODE_OPTIONS heap headroom via worker.extraEnv"
+check_file_contains \
   "CUSTOMIZATIONS.md" \
   "translate:TranslateText" \
   "AWS runtime customization docs must include Compliance QA Translate permissions"
@@ -2007,6 +2011,40 @@ check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/jobs/__tests__/build-expanded-selected-paths.spec.ts" \
   "Regression test guarding relation id columns in export (OMN-465)"
 check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/utils/one-to-many-export.util.ts" \
+  "ONE_TO_MANY export cap helpers (capChildIdsByParent, formatOneToManyList)"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/utils/__tests__/one-to-many-export.util.spec.ts" \
+  "Spec for ONE_TO_MANY export cap helpers"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "ONE_TO_MANY_EXPORT_CHILD_CAP" \
+  "Export job processor must cap ONE_TO_MANY children per parent (2026-08-22 worker OOM)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "Skipping ONE_TO_MANY back-reference" \
+  "Export job processor must skip ONE_TO_MANY back-references to the export root object"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "re-delivered while already PROCESSING" \
+  "Export job processor must fail (not re-run) a job re-delivered while PROCESSING"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/export-job.service.ts" \
+  "retryLimit: 0" \
+  "Export jobs must not auto-retry (crash-retry kills the next worker)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue-worker-options.constant.ts" \
+  "[MessageQueue.exportQueue]" \
+  "Export queue must have an extended BullMQ lockDuration"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/interfaces/message-queue-worker-options.interface.ts" \
+  "lockDuration?: number" \
+  "Worker options interface must accept lockDuration (backported from upstream)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/drivers/bullmq.driver.ts" \
+  "lockDuration: options.lockDuration" \
+  "BullMQ driver must forward per-queue lockDuration to the Worker"
+check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/export-job.resolver.ts" \
   "Export job GraphQL resolver (start/cancel mutations, query, subscription)"
 check_file_exists \
@@ -2026,6 +2064,18 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
   "pollTimerId = setInterval" \
   "Export job poller must use an effect-scoped timer that is cleared on cleanup"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
+  "EXPORT_JOB_STALE_AFTER_MS" \
+  "Export job poller must give up on jobs that stop making progress"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-index/export/hooks/useExportJobProgress.ts" \
+  "errorMessages" \
+  "Export job poller must surface the server's failure reason on the job card"
+check_file_contains \
+  "packages/twenty-front/src/modules/auth/utils/clearSessionLocalStorageKeys.ts" \
+  "activeExportJobId" \
+  "Sign-out must clear export job tracking"
 check_file_exists \
   "packages/twenty-front/src/modules/object-record/record-index/export/components/ExportJobRecoveryEffect.tsx" \
   "Export job recovery effect mounted in app root"
@@ -2053,6 +2103,10 @@ check_file_contains \
   "packages/twenty-front/src/modules/command-menu-item/engine-command/record/components/ExportRecordsCommand.tsx" \
   "START_EXPORT_JOB" \
   "Export command must call server-side startExportJob mutation"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/engine-command/record/components/ExportRecordsCommand.tsx" \
+  "isOneToManyBackReferenceSubField" \
+  "Export command must not send ONE_TO_MANY back-reference sub-fields"
 check_file_contains \
   "packages/twenty-front/src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx" \
   "AUTO_DISMISS_MS" \
@@ -2648,6 +2702,16 @@ check_file_contains \
   "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
   "expandedRelationFieldId" \
   "Column picker must support relation sub-field expansion"
+check_file_contains \
+  "packages/twenty-front/src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx" \
+  "isOneToManyBackReferenceSubField" \
+  "Column picker must not offer ONE_TO_MANY back-references to the view's own object"
+check_file_exists \
+  "packages/twenty-front/src/modules/views/utils/isOneToManyBackReferenceSubField.ts" \
+  "Shared back-reference predicate for picker + export"
+check_file_exists \
+  "packages/twenty-front/src/modules/views/utils/__tests__/isOneToManyBackReferenceSubField.test.ts" \
+  "Test for the back-reference predicate"
 check_file_contains \
   "packages/twenty-front/src/modules/object-record/advanced-filter/components/AdvancedFilterFieldSelectMenu.tsx" \
   "objectFilterDropdownIsSelectingRelationSubFieldComponentState" \

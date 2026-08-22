@@ -102,6 +102,9 @@ export class BullMQDriver
       ...(isDefined(options?.concurrency)
         ? { concurrency: options.concurrency }
         : {}),
+      ...(isDefined(options?.lockDuration)
+        ? { lockDuration: options.lockDuration }
+        : {}),
       metrics: {
         maxDataPoints: MetricsTime.ONE_WEEK,
         collectInterval: 60000,

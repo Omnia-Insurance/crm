@@ -20,6 +20,7 @@ export type ExportJobData = {
 @Injectable()
 export class ExportJobService {
   constructor(
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository -- export job ids are UUID PKs carried in the queue payload; the read paths (getExportJob/cancelExportJob) already filter by workspaceId and updateProgress is id-keyed from the worker by design
     @InjectRepository(ExportJobEntity)
     private readonly exportJobRepository: Repository<ExportJobEntity>,
     @InjectMessageQueue(MessageQueue.exportQueue)
@@ -66,7 +67,10 @@ export class ExportJobService {
         exportJobId: savedJob.id,
         workspaceId,
       },
-      { retryLimit: 2 },
+      // OMNIA: no automatic retries. The processor already swallows errors
+      // into a FAILED row, and a crash-retry of a memory-bomb export just
+      // kills the next worker too (2026-08-22 incident). Users re-export.
+      { retryLimit: 0 },
     );
 
     return savedJob;
