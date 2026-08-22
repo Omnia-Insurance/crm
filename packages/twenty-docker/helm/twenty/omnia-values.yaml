@@ -71,6 +71,10 @@ worker:
     repository: 189365142140.dkr.ecr.us-east-1.amazonaws.com/twenty-crm
     tag: latest
   extraEnv:
+    # OMNIA: V8's default old-space (~1 GiB) is half the 2 GiB container
+    # limit; exports/imports need the headroom (2026-08-22 export OOM).
+    - name: NODE_OPTIONS
+      value: "--max-old-space-size=1536"
     - name: LOGIC_FUNCTION_TYPE
       value: LOCAL
     - name: CONVOSO_API_TOKEN

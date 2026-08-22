@@ -9,6 +9,9 @@ const SESSION_KEYS_TO_CLEAR = [
   'currentWorkspaceState',
   'currentWorkspaceMemberState',
   'currentUserWorkspaceState',
+  // OMNIA-CUSTOM: server-side export tracking — never let the next user on a
+  // shared machine re-attach to (and auto-download) someone else's export.
+  'activeExportJobId',
 ];
 
 export const clearSessionLocalStorageKeys = () => {

@@ -7,9 +7,18 @@ import { activeExportJobState } from '@/object-record/record-index/export/states
 import { useBackgroundJob } from '@/ui/feedback/background-job-indicator/hooks/useBackgroundJob';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { isDefined } from 'twenty-shared/utils';
 
 const EXPORT_JOB_STORAGE_KEY = 'activeExportJobId';
 const POLL_INTERVAL_MS = 3000;
+// OMNIA: give up on a job that stops making progress or gets too old — the
+// worker may have died mid-job (2026-08-22: an OOM left rows in "processing"
+// forever and the card spun indefinitely).
+const EXPORT_JOB_STALE_AFTER_MS = 15 * 60 * 1000;
+const EXPORT_JOB_MAX_AGE_MS = 60 * 60 * 1000;
+const EXPORT_JOB_MAX_CONSECUTIVE_MISSING_POLLS = 5;
+const EXPORT_JOB_STUCK_MESSAGE =
+  'Export appears stuck — the worker may have restarted. Try again with fewer columns (avoid one-to-many columns such as "Product / Policies").';
 
 const EXPORT_JOB_STATUSES = [
   'pending',
@@ -37,6 +46,7 @@ type ExportJobData = {
   processedRecords: number;
   totalRecords: number;
   result: Record<string, unknown> | null;
+  createdAt?: string | null;
 };
 
 type ExportJobQueryResponse = {
@@ -135,18 +145,32 @@ export const useExportJobPoller = () => {
   const apolloClient = useApolloClient();
   const activeExportJob = useAtomStateValue(activeExportJobState);
   const setActiveExportJob = useSetAtomState(activeExportJobState);
-  const { upsertJob } = useBackgroundJob();
+  const { upsertJob, removeJob } = useBackgroundJob();
 
   useEffect(() => {
     if (!activeExportJob) return;
 
     let pollTimerId: ReturnType<typeof setInterval> | undefined;
+    let lastProgressSignature: string | undefined;
+    let lastProgressAt = Date.now();
+    let consecutiveMissingPolls = 0;
 
     const stopPolling = () => {
       if (pollTimerId === undefined) return;
 
       clearInterval(pollTimerId);
       pollTimerId = undefined;
+    };
+
+    const clearTracking = () => {
+      stopPolling();
+      setActiveExportJob(null);
+
+      try {
+        localStorage.removeItem(EXPORT_JOB_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
     };
 
     const poll = async () => {
@@ -163,7 +187,22 @@ export const useExportJobPoller = () => {
 
         const job = data.exportJob;
 
-        if (!job) return;
+        if (!job) {
+          // Job gone (deleted, other workspace after an account switch...):
+          // don't leave a phantom "0 of 0" card spinning forever.
+          consecutiveMissingPolls += 1;
+
+          if (
+            consecutiveMissingPolls >= EXPORT_JOB_MAX_CONSECUTIVE_MISSING_POLLS
+          ) {
+            removeJob(current.exportJobId);
+            clearTracking();
+          }
+
+          return;
+        }
+
+        consecutiveMissingPolls = 0;
 
         const normalizedStatus = toExportJobStatus(job.status);
         const isTerminal =
@@ -183,6 +222,44 @@ export const useExportJobPoller = () => {
           ? `Exporting ${current.objectNameSingular} records — ${phase}`
           : `Exporting ${current.objectNameSingular} records`;
 
+        // Surface the server's failure reason (OOM restart, bad config, "No
+        // records to export", ...) instead of a bare "failed".
+        const errorMessage =
+          typeof job.result?.error === 'string' ? job.result.error : undefined;
+
+        // Staleness: no visible progress for EXPORT_JOB_STALE_AFTER_MS, or the
+        // job is older than EXPORT_JOB_MAX_AGE_MS → treat as dead.
+        const progressSignature = `${normalizedStatus}|${job.processedRecords}|${job.totalRecords}|${phase ?? ''}`;
+
+        if (progressSignature !== lastProgressSignature) {
+          lastProgressSignature = progressSignature;
+          lastProgressAt = Date.now();
+        }
+
+        const createdAtMs = job.createdAt ? Date.parse(job.createdAt) : NaN;
+        const isStale =
+          !isTerminal &&
+          (Date.now() - lastProgressAt > EXPORT_JOB_STALE_AFTER_MS ||
+            (!Number.isNaN(createdAtMs) &&
+              Date.now() - createdAtMs > EXPORT_JOB_MAX_AGE_MS));
+
+        if (isStale) {
+          upsertJob({
+            id: job.id,
+            label,
+            status: 'failed',
+            totalItems: job.totalRecords,
+            processedItems: job.processedRecords,
+            successCount: 0,
+            warningCount: 0,
+            failureCount: 1,
+            errorMessages: [EXPORT_JOB_STUCK_MESSAGE],
+          });
+          clearTracking();
+
+          return;
+        }
+
         upsertJob({
           id: job.id,
           label,
@@ -190,14 +267,15 @@ export const useExportJobPoller = () => {
           totalItems: job.totalRecords,
           processedItems: job.processedRecords,
           successCount: job.processedRecords,
-          warningCount: 0,
-          failureCount: 0,
+          warningCount:
+            normalizedStatus === 'completed' && isDefined(errorMessage) ? 1 : 0,
+          failureCount: normalizedStatus === 'failed' ? 1 : 0,
+          errorMessages: isDefined(errorMessage) ? [errorMessage] : undefined,
           downloadUrl,
         });
 
         if (isTerminal) {
-          stopPolling();
-          setActiveExportJob(null);
+          clearTracking();
 
           // Auto-download on completion via fetch + blob
           if (normalizedStatus === 'completed' && downloadUrl) {
@@ -218,12 +296,6 @@ export const useExportJobPoller = () => {
               window.open(downloadUrl, '_blank');
             }
           }
-
-          try {
-            localStorage.removeItem(EXPORT_JOB_STORAGE_KEY);
-          } catch {
-            // ignore
-          }
         }
       } catch {
         // Polling failure — will retry next interval
@@ -236,7 +308,7 @@ export const useExportJobPoller = () => {
     return () => {
       stopPolling();
     };
-  }, [activeExportJob, apolloClient, setActiveExportJob, upsertJob]);
+  }, [activeExportJob, apolloClient, setActiveExportJob, upsertJob, removeJob]);
 
   return null;
 };
