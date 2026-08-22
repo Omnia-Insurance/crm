@@ -30,6 +30,12 @@ import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspac
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { normalizeUsState } from 'src/engine/core-modules/export-job/utils/normalize-us-state.util';
+import {
+  capChildIdsByParent,
+  formatOneToManyList,
+  ONE_TO_MANY_EXPORT_CHILD_CAP,
+  ONE_TO_MANY_TOTAL_KEY_SUFFIX,
+} from 'src/engine/core-modules/export-job/utils/one-to-many-export.util';
 import { json2csv } from 'json-2-csv';
 
 const BATCH_SIZE = 500;
@@ -299,6 +305,33 @@ function getNestedValue(
 }
 
 /**
+ * Read the uncapped child count stored next to a capped ONE_TO_MANY child
+ * array (see resolveNestedRelations), e.g. `policies__exportTotal`.
+ */
+function getOneToManyTotal(
+  record: Record<string, unknown> | undefined,
+  fieldPath: string,
+): number | undefined {
+  if (!record) return undefined;
+
+  const dotIndex = fieldPath.lastIndexOf('.');
+  const holder =
+    dotIndex === -1
+      ? record
+      : getNestedValue(record, fieldPath.substring(0, dotIndex));
+  const lastSegment =
+    dotIndex === -1 ? fieldPath : fieldPath.substring(dotIndex + 1);
+
+  if (!holder || typeof holder !== 'object') return undefined;
+
+  const total = (holder as Record<string, unknown>)[
+    `${lastSegment}${ONE_TO_MANY_TOTAL_KEY_SUFFIX}`
+  ];
+
+  return typeof total === 'number' ? total : undefined;
+}
+
+/**
  * Extract a human-readable label from a related record object.
  * Tries 'name' (string or FULL_NAME composite), then common fallbacks.
  */
@@ -441,6 +474,34 @@ export class ExportJobProcessor {
 
     if (exportJob.status === ExportJobStatus.CANCELLED) {
       this.logger.log(`Export job ${exportJobId} was cancelled before start`);
+
+      return;
+    }
+
+    // OMNIA: a job is only ever (re)delivered while PROCESSING when the
+    // previous attempt died without reaching the catch below (worker OOM,
+    // SIGKILL, BullMQ lock expiry). Re-running it would repeat the crash —
+    // mark it failed instead so the UI stops polling and the crash loop ends.
+    if (exportJob.status === ExportJobStatus.PROCESSING) {
+      this.logger.error(
+        `Export job ${exportJobId} was re-delivered while already PROCESSING (worker crashed or lock expired) — marking FAILED instead of re-running`,
+      );
+
+      await this.exportJobService.updateProgress(exportJobId, {
+        status: ExportJobStatus.FAILED,
+        result: {
+          error:
+            'The export worker restarted while processing this export (it may have run out of memory). Try again with fewer columns — avoid one-to-many columns such as "Product / Policies".',
+        },
+      });
+
+      return;
+    }
+
+    if (exportJob.status !== ExportJobStatus.PENDING) {
+      this.logger.log(
+        `Export job ${exportJobId} is already ${exportJob.status}; nothing to do`,
+      );
 
       return;
     }
@@ -700,6 +761,10 @@ export class ExportJobProcessor {
               flatObjectMetadataMaps,
               flatFieldMetadataMaps,
               metadataIndex,
+              {
+                rootObjectNameSingular: exportJob.objectNameSingular,
+                exportJobId,
+              },
             );
           }
         },
@@ -811,7 +876,8 @@ export class ExportJobProcessor {
     workspaceId: string,
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
-    metadataIndex?: MetadataIndex,
+    metadataIndex: MetadataIndex | undefined,
+    options: { rootObjectNameSingular: string; exportJobId: string },
   ): Promise<Record<string, unknown>[]> {
     // Build lookup maps per relation — fetch all relations in parallel
     const relationLookups = new Map<
@@ -886,6 +952,7 @@ export class ExportJobProcessor {
           flatObjectMetadataMaps,
           flatFieldMetadataMaps,
           metadataIndex,
+          options.rootObjectNameSingular,
         );
       } catch (error) {
         this.logger.warn(
@@ -911,9 +978,25 @@ export class ExportJobProcessor {
           lookupMap: result.lookupMap,
         });
       }
+
+      // Heartbeat: keeps updatedAt moving during long expansions so a stale
+      // job can be told apart from a slow one.
+      await this.exportJobService.updateProgress(options.exportJobId, {
+        result: {
+          phase: `Expanding relation fields (${Math.min(
+            i + chunk.length,
+            relationConfigs.length,
+          )}/${relationConfigs.length})`,
+        },
+      });
     }
 
-    // Flatten relation fields onto each record
+    // Flatten relation fields onto each record.
+    // ONE_TO_MANY cells are memoised per related record: every row pointing at
+    // the same parent (e.g. the same product) shares one joined string instead
+    // of re-formatting — and re-allocating — the child list per row.
+    const oneToManyCellCache = new Map<string, string>();
+
     return records.map((record) => {
       const expanded = { ...record };
 
@@ -987,16 +1070,26 @@ export class ExportJobProcessor {
 
             expanded[flatKey] = extractRecordLabel(obj);
           } else if (Array.isArray(rawValue)) {
-            // ONE_TO_MANY nested relation — format as pipe-separated list
+            // ONE_TO_MANY nested relation — pipe-separated list, capped at
+            // ONE_TO_MANY_EXPORT_CHILD_CAP children with a trailing "+N more".
             const flatKey = getRelationFieldFlatKey(
               rc.relationFieldName,
               fieldPath,
             );
+            const cacheKey = `${rc.relationFieldName}|${String(relatedId)}|${fieldPath}`;
+            let cell = oneToManyCellCache.get(cacheKey);
 
-            expanded[flatKey] = (rawValue as Record<string, unknown>[])
-              .map((item) => formatOneToManyItem(item))
-              .filter(Boolean)
-              .join(' | ');
+            if (cell === undefined) {
+              cell = formatOneToManyList(
+                (rawValue as Record<string, unknown>[]).map((item) =>
+                  formatOneToManyItem(item),
+                ),
+                getOneToManyTotal(relatedRecord, fieldPath),
+              );
+              oneToManyCellCache.set(cacheKey, cell);
+            }
+
+            expanded[flatKey] = cell;
           } else {
             const flatKey = getRelationFieldFlatKey(
               rc.relationFieldName,
@@ -1023,7 +1116,8 @@ export class ExportJobProcessor {
     workspaceId: string,
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>,
     flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>,
-    metadataIndex?: MetadataIndex,
+    metadataIndex: MetadataIndex | undefined,
+    rootObjectNameSingular: string,
   ): Promise<void> {
     // Group selectedFieldPaths by their first segment when it's a relation.
     // Handles both dotted paths ("leadSource.name") and bare relation names
@@ -1119,6 +1213,23 @@ export class ExportJobProcessor {
 
       const isOneToMany = relationType === 'ONE_TO_MANY';
 
+      // OMNIA: a ONE_TO_MANY that points back at the object being exported
+      // (e.g. product.policies on a policy export) would put every sibling row
+      // into every cell — ~43M labels on a 13.9k-row policy export — so it is
+      // never expanded. The frontend no longer offers or sends it; this is the
+      // server-side backstop for saved views that already carry the column.
+      if (isOneToMany && targetObjectName === rootObjectNameSingular) {
+        this.logger.warn(
+          `Skipping ONE_TO_MANY back-reference ${rc.targetObjectNameSingular}.${relationFieldName} -> ${targetObjectName} (export root object)`,
+        );
+
+        for (const parentRecord of lookupMap.values()) {
+          parentRecord[relationFieldName] = [];
+        }
+
+        return;
+      }
+
       try {
         const nestedRepository =
           await this.globalWorkspaceOrmManager.getRepository(
@@ -1168,37 +1279,74 @@ export class ExportJobProcessor {
 
           if (parentIds.length === 0) return;
 
-          const childRecordsByParent = new Map<
-            string,
-            Record<string, unknown>[]
-          >();
+          // Step 1 — ids only (cheap even for very large child tables), then
+          // cap per parent so a parent with thousands of children never pulls
+          // more than ONE_TO_MANY_EXPORT_CHILD_CAP full rows into memory.
+          const cappedIdsByParent = new Map<string, string[]>();
+          const totalByParent = new Map<string, number>();
 
           for (let i = 0; i < parentIds.length; i += RELATION_BATCH_SIZE) {
             const batchIds = parentIds.slice(i, i + RELATION_BATCH_SIZE);
 
+            const childIdRows = await nestedRepository
+              .createQueryBuilder(targetObjectName)
+              .select(`"${targetObjectName}"."id"`, 'id')
+              .addSelect(`"${targetObjectName}"."${parentFk}"`, 'parentId')
+              .where(`"${targetObjectName}"."${parentFk}" IN (:...ids)`, {
+                ids: batchIds,
+              })
+              .orderBy(`"${targetObjectName}"."createdAt"`, 'DESC')
+              .getRawMany<{ id: string; parentId: string | null }>();
+
+            const capped = capChildIdsByParent(
+              childIdRows,
+              ONE_TO_MANY_EXPORT_CHILD_CAP,
+            );
+
+            for (const [pid, ids] of capped.cappedIdsByParent) {
+              cappedIdsByParent.set(pid, ids);
+            }
+
+            for (const [pid, total] of capped.totalByParent) {
+              totalByParent.set(pid, total);
+            }
+          }
+
+          // Step 2 — fetch only the capped child rows (getMany → formatResult
+          // so composite fields on children are shaped like everywhere else).
+          const cappedChildIds = [...cappedIdsByParent.values()].flat();
+          const childById = new Map<string, Record<string, unknown>>();
+
+          for (let i = 0; i < cappedChildIds.length; i += RELATION_BATCH_SIZE) {
+            const batchIds = cappedChildIds.slice(i, i + RELATION_BATCH_SIZE);
+
             const childRecords = await nestedRepository
               .createQueryBuilder(targetObjectName)
-              .where(`"${targetObjectName}"."${parentFk}" IN (:...ids)`, {
+              .where(`"${targetObjectName}"."id" IN (:...ids)`, {
                 ids: batchIds,
               })
               .getMany();
 
             for (const child of childRecords as Record<string, unknown>[]) {
-              const pid = child[parentFk] as string;
-
-              if (!pid) continue;
-
-              const existing = childRecordsByParent.get(pid) ?? [];
-
-              existing.push(child);
-              childRecordsByParent.set(pid, existing);
+              if (typeof child.id === 'string') {
+                childById.set(child.id, child);
+              }
             }
           }
 
-          // Attach child arrays to parent records
+          // Attach capped child arrays (+ uncapped total) to parent records
           for (const [parentId, parentRecord] of lookupMap) {
-            parentRecord[relationFieldName] =
-              childRecordsByParent.get(parentId) ?? [];
+            const childIds = cappedIdsByParent.get(parentId) ?? [];
+
+            parentRecord[relationFieldName] = childIds
+              .map((id) => childById.get(id))
+              .filter(
+                (child): child is Record<string, unknown> =>
+                  child !== undefined,
+              );
+            parentRecord[
+              `${relationFieldName}${ONE_TO_MANY_TOTAL_KEY_SUFFIX}`
+            ] = totalByParent.get(parentId) ?? 0;
           }
         } else {
           // MANY_TO_ONE (e.g., leadSource): fetch by FK IDs
@@ -1252,6 +1400,7 @@ export class ExportJobProcessor {
               flatObjectMetadataMaps,
               flatFieldMetadataMaps,
               metadataIndex,
+              rootObjectNameSingular,
             );
           }
 
