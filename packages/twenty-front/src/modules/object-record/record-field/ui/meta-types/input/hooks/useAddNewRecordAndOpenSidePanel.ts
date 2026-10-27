@@ -8,10 +8,12 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 
 import { useDraftRecordDefaults } from '@/object-record/hooks/useDraftRecordDefaults';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { usePersistDraftRecord } from '@/object-record/record-side-panel/hooks/usePersistDraftRecord';
 import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
 import { viewableRecordIdState } from '@/object-record/record-side-panel/states/viewableRecordIdState';
 import { viewableRecordNameSingularState } from '@/object-record/record-side-panel/states/viewableRecordNameSingularState';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
+import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { buildRecordLabelPayload } from '@/object-record/utils/buildRecordLabelPayload';
@@ -64,6 +66,11 @@ export const useAddNewRecordAndOpenSidePanel = ({
   const { buildDraftSeeds } = useDraftRecordDefaults({
     objectMetadataItem: relationObjectMetadataItem,
   });
+
+  const { persistDraftRecord: persistSourceDraftRecord } =
+    usePersistDraftRecord({
+      objectNameSingular: objectMetadataItem.nameSingular ?? 'workspaceMember',
+    });
 
   if (
     relationObjectMetadataNameSingular === 'workspaceMember' ||
@@ -134,8 +141,43 @@ export const useAddNewRecordAndOpenSidePanel = ({
         objectMetadataItem: relationObjectMetadataItem,
         hiddenFieldNames: new Set(['position', ...rlsFieldNames]),
         extraRecordInput: {},
+        persistDependencies:
+          relationFieldMetadataItemRelationType === RelationType.MANY_TO_ONE
+            ? async () => {
+                const sourceDraftMeta = store
+                  .get(draftRecordIdsState.atom)
+                  .get(recordId);
+
+                if (isDefined(sourceDraftMeta)) {
+                  await persistSourceDraftRecord(recordId, sourceDraftMeta);
+                }
+              }
+            : undefined,
         onRecordCreated: async (createdRecord) => {
+          const isSourceDraft = store
+            .get(draftRecordIdsState.atom)
+            .has(recordId);
+
           if (
+            relationFieldMetadataItemRelationType ===
+              RelationType.ONE_TO_MANY &&
+            isSourceDraft
+          ) {
+            store.set(
+              recordStoreFamilySelector.selectorFamily({
+                recordId,
+                fieldName: `${fieldMetadataItem.name}Id`,
+              }),
+              createdRecord.id,
+            );
+            store.set(
+              recordStoreFamilySelector.selectorFamily({
+                recordId,
+                fieldName: fieldMetadataItem.name,
+              }),
+              createdRecord,
+            );
+          } else if (
             relationFieldMetadataItemRelationType === RelationType.ONE_TO_MANY
           ) {
             await updateOneRecord({

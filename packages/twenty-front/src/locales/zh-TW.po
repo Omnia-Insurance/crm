@@ -463,6 +463,21 @@ msgstr "{jobCount, plural, other {這將從隊列中永久移除它們。此操�
 msgid "{jobCount, plural, one {This will retry the selected job. It will be re-executed from the beginning.} other {This will retry the selected jobs. They will be re-executed from the beginning.}}"
 msgstr "{jobCount, plural, other {這將重試選定的工作。它們將從頭開始重新執行。}}"
 
+#. js-lingui-id: kY+q3P
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required"
+msgstr ""
+
+#. js-lingui-id: rfScoe
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required (+{remainingCount} more)"
+msgstr ""
+
+#. js-lingui-id: SMqRKC
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required, but you don't have permission to edit it. Ask an admin."
+msgstr ""
+
 #. js-lingui-id: FdY/eP
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 msgid "{label} list"
@@ -10853,6 +10868,11 @@ msgstr ""
 #: src/modules/activities/timeline-activities/components/TimelineCard.tsx
 msgid "No activity yet"
 msgstr "尚無活動"
+
+#. js-lingui-id: MzWWhz
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "No agent profile is linked to your account, so {label} can't be filled in. Ask an admin to link one."
+msgstr ""
 
 #. js-lingui-id: f9b1sj
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
