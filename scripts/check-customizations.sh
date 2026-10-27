@@ -2661,6 +2661,24 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
   "useDraftRecordDefaults" \
   "Relation create must use the shared draft defaults hook (includes Agent prefill + RLS)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
+  "persistDependencies" \
+  "Relation create must save an unsaved source draft before its MANY_TO_ONE child"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-side-panel/hooks/usePersistDraftRecord.ts" \
+  "Shared draft save hook must exist"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx" \
+  "getMissingRequiredFieldsMessage" \
+  "Create button must toast missing required fields on click"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx" \
+  "disabled={isCreating}" \
+  "Create button must stay enabled when required fields are missing (disabled only while saving)"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts" \
+  "Missing required fields toast message builder must exist"
 # TODO: CreateRelatedRecordCommand was deleted by upstream's engine-command refactor.
 # Draft creation for related records needs to be re-implemented in the new system.
 # check_file_contains \

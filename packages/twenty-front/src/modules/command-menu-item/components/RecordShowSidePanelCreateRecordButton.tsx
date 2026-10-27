@@ -1,17 +1,18 @@
+import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
+import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
+import { useDraftCombinedViolations } from '@/object-record/record-field/ui/hooks/useDraftCombinedViolations';
+import { usePersistDraftRecord } from '@/object-record/record-side-panel/hooks/usePersistDraftRecord';
+import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
+import { buildMissingRequiredFields } from '@/object-record/record-side-panel/utils/buildMissingRequiredFields';
+import {
+  getMissingRequiredFieldsMessage,
+  getReportedMissingField,
+} from '@/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage';
+import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
-import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
-import {
-  newlyCreatedRecordIdsState,
-  persistNewlyCreatedRecordIds,
-} from '@/object-record/record-side-panel/states/newlyCreatedRecordIdsState';
-import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
-import {
-  useDraftCombinedViolations,
-  clearDraftViolationsAtom,
-} from '@/object-record/record-field/ui/hooks/useDraftCombinedViolations';
+import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { t } from '@lingui/core/macro';
@@ -27,6 +28,9 @@ type RecordShowSidePanelCreateRecordButtonProps = {
   recordId: string;
 };
 
+const MISSING_REQUIRED_FIELDS_SNACK_BAR_DEDUPE_KEY =
+  'draft-missing-required-fields';
+
 export const RecordShowSidePanelCreateRecordButton = ({
   objectNameSingular,
   recordId,
@@ -39,111 +43,95 @@ export const RecordShowSidePanelCreateRecordButton = ({
 
   const combinedViolations = useDraftCombinedViolations(recordId, draftMeta);
 
-  const { createOneRecord } = useCreateOneRecord({
-    objectNameSingular,
-    shouldMatchRootQueryFilter: true,
-  });
-
-  const { upsertRecordsInStore } = useUpsertRecordsInStore();
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const { persistDraftRecord } = usePersistDraftRecord({ objectNameSingular });
   const { closeSidePanelMenu } = useSidePanelMenu();
+  const { enqueueErrorSnackBar } = useSnackBar();
 
-  const isDisabled =
-    (combinedViolations?.allViolationsCount ?? 0) > 0 || isCreating;
+  const reportMissingRequiredFields = useCallback(() => {
+    if (!isDefined(draftMeta) || !isDefined(combinedViolations)) return false;
+
+    const missingFields = buildMissingRequiredFields({
+      violations: combinedViolations,
+      objectMetadataItem: draftMeta.objectMetadataItem,
+      getObjectMetadataItem: (nameSingular) =>
+        store.get(
+          objectMetadataItemFamilySelector.selectorFamily({
+            objectName: nameSingular,
+            objectNameType: 'singular',
+          }),
+        ),
+      getRestrictedFields: (objectMetadataId) =>
+        getObjectPermissionsForObject(
+          objectPermissionsByObjectMetadataId,
+          objectMetadataId,
+        ).restrictedFields,
+    });
+
+    const message = getMissingRequiredFieldsMessage(missingFields);
+
+    if (!isDefined(message)) return false;
+
+    enqueueErrorSnackBar({
+      message,
+      options: { dedupeKey: MISSING_REQUIRED_FIELDS_SNACK_BAR_DEDUPE_KEY },
+    });
+
+    const reportedField = getReportedMissingField(missingFields);
+
+    if (isDefined(reportedField) && !reportedField.isReadOnly) {
+      document
+        .getElementById(
+          `label-${getRecordFieldInputInstanceId({
+            recordId,
+            fieldName: reportedField.fieldName,
+          })}`,
+        )
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    return true;
+  }, [
+    combinedViolations,
+    draftMeta,
+    enqueueErrorSnackBar,
+    objectPermissionsByObjectMetadataId,
+    recordId,
+    store,
+  ]);
 
   const handleCreateRecord = useCallback(async () => {
-    if (!draftMeta || isCreating) return;
+    if (!isDefined(draftMeta) || isCreating) return;
+
+    if (reportMissingRequiredFields()) return;
 
     setIsCreating(true);
 
     try {
-      const currentRecord = store.get(
-        recordStoreFamilyState.atomFamily(recordId),
-      );
+      const createdRecord = await persistDraftRecord(recordId, draftMeta);
 
-      if (!isDefined(currentRecord)) return;
-
-      // Strip system fields and relation objects that the server manages.
-      // Only send scalar fields, FK IDs, and the record ID.
-      const SYSTEM_FIELDS = new Set([
-        '__typename',
-        'createdAt',
-        'updatedAt',
-        'deletedAt',
-        'createdBy',
-        'updatedBy',
-        'position',
-      ]);
-
-      const recordInput: Record<string, unknown> = {};
-
-      for (const [key, value] of Object.entries(currentRecord)) {
-        if (SYSTEM_FIELDS.has(key)) continue;
-
-        // Skip relation objects (non-null objects with an `id` property that
-        // aren't composite field values like currency/address).
-        // The FK field (e.g. carrierId) is already in the record separately.
-        if (
-          isDefined(value) &&
-          typeof value === 'object' &&
-          !Array.isArray(value) &&
-          'id' in (value as Record<string, unknown>) &&
-          '__typename' in (value as Record<string, unknown>)
-        ) {
-          continue;
-        }
-
-        recordInput[key] = value;
+      if (isDefined(createdRecord)) {
+        closeSidePanelMenu();
       }
-
-      // Apply extra record input (e.g., position)
-      Object.assign(recordInput, draftMeta.extraRecordInput ?? {});
-
-      const createdRecord = await createOneRecord(recordInput);
-
-      // Remove from draft tracking
-      const updatedDraftMap = new Map(store.get(draftRecordIdsState.atom));
-      updatedDraftMap.delete(recordId);
-      store.set(draftRecordIdsState.atom, updatedDraftMap);
-
-      // Clean up cached violations atom
-      clearDraftViolationsAtom(recordId);
-
-      // Add to newly created tracking (for navigate-away validation)
-      const createdMap = new Map(store.get(newlyCreatedRecordIdsState.atom));
-      createdMap.set(recordId, objectNameSingular);
-      store.set(newlyCreatedRecordIdsState.atom, createdMap);
-      persistNewlyCreatedRecordIds(createdMap);
-
-      // Update store with server response
-      upsertRecordsInStore({ partialRecords: [createdRecord] });
-
-      // Run post-creation callback (relation linking, group tracking, etc.)
-      await draftMeta.onRecordCreated?.(createdRecord);
-
-      // Close side panel on success
-      closeSidePanelMenu();
     } finally {
       setIsCreating(false);
     }
   }, [
+    closeSidePanelMenu,
     draftMeta,
     isCreating,
-    store,
+    persistDraftRecord,
     recordId,
-    createOneRecord,
-    objectNameSingular,
-    upsertRecordsInStore,
+    reportMissingRequiredFields,
   ]);
 
   useHotkeysOnFocusedElement({
     keys: ['ctrl+Enter,meta+Enter'],
     callback: () => {
-      if (!isDisabled) {
-        handleCreateRecord();
-      }
+      handleCreateRecord();
     },
     focusId: SIDE_PANEL_FOCUS_ID,
-    dependencies: [handleCreateRecord, isDisabled],
+    dependencies: [handleCreateRecord],
   });
 
   return (
@@ -155,7 +143,7 @@ export const RecordShowSidePanelCreateRecordButton = ({
       Icon={IconPlus}
       hotkeys={[getOsControlSymbol(), '⏎']}
       onClick={handleCreateRecord}
-      disabled={isDisabled}
+      disabled={isCreating}
     />
   );
 };

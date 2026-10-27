@@ -458,6 +458,21 @@ msgstr "{jobCount, plural, one {This will permanently remove it from the queue. 
 msgid "{jobCount, plural, one {This will retry the selected job. It will be re-executed from the beginning.} other {This will retry the selected jobs. They will be re-executed from the beginning.}}"
 msgstr "{jobCount, plural, one {This will retry the selected job. It will be re-executed from the beginning.} other {This will retry the selected jobs. They will be re-executed from the beginning.}}"
 
+#. js-lingui-id: kY+q3P
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required"
+msgstr "{label} is required"
+
+#. js-lingui-id: rfScoe
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required (+{remainingCount} more)"
+msgstr "{label} is required (+{remainingCount} more)"
+
+#. js-lingui-id: SMqRKC
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "{label} is required, but you don't have permission to edit it. Ask an admin."
+msgstr "{label} is required, but you don't have permission to edit it. Ask an admin."
+
 #. js-lingui-id: FdY/eP
 #: src/modules/settings/applications/hooks/useComputeApplicationContentForLayoutAndLogic.ts
 msgid "{label} list"
@@ -10871,6 +10886,11 @@ msgstr "No active subscription."
 #: src/modules/activities/timeline-activities/components/TimelineCard.tsx
 msgid "No activity yet"
 msgstr "No activity yet"
+
+#. js-lingui-id: MzWWhz
+#: src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts
+msgid "No agent profile is linked to your account, so {label} can't be filled in. Ask an admin to link one."
+msgstr "No agent profile is linked to your account, so {label} can't be filled in. Ask an admin to link one."
 
 #. js-lingui-id: f9b1sj
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
