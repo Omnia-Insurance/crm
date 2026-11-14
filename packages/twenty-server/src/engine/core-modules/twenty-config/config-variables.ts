@@ -1426,7 +1426,7 @@ export class ConfigVariables {
     type: ConfigVariableType.NUMBER,
   })
   @CastToPositiveNumber()
-  API_RATE_LIMITING_SHORT_LIMIT = 100;
+  API_RATE_LIMITING_SHORT_LIMIT = 500;
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.RATE_LIMITING,
@@ -1443,7 +1443,7 @@ export class ConfigVariables {
     type: ConfigVariableType.NUMBER,
   })
   @CastToPositiveNumber()
-  API_RATE_LIMITING_LONG_LIMIT = 100;
+  API_RATE_LIMITING_LONG_LIMIT = 5000;
 
   @CastToPositiveNumber()
   @ConfigVariablesMetadata({

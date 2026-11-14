@@ -1968,6 +1968,25 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/import-job/utils/__tests__/resolve-import-relations.util.spec.ts" \
   "assigns lookup and smart-update relations by id sub-field" \
   "Regression test must cover relation ID assignment for imported rows"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "repository.updateMany" \
+  "Bulk import updates must use updateMany() (batched UPDATED event with diff) so existing records get timeline activities"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "rowsToUpdate" \
+  "Bulk import must split inserts vs updates instead of a blind upsert"
+check_file_not_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/import-job.processor.ts" \
+  "repository.upsert(batchRows" \
+  "Bulk import must NOT revert to a blind upsert (it emits no UPDATED events, so import-driven updates leave no timeline history)"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/__tests__/import-job.processor.spec.ts" \
+  "Regression test for import insert/updateMany split (timeline activities on update)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/import-job/jobs/__tests__/import-job.processor.spec.ts" \
+  "never a blind upsert" \
+  "Regression test must assert import updates use updateMany and never upsert"
 # extractRelationUpdatesFromImportedRows and executeRelationUpdatesViaMutation
 # removed — server-side relation resolution replaces frontend post-processing
 
@@ -2040,6 +2059,47 @@ check_file_contains \
   "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
   "const downloadUrl = await this.fileUrlService.signFileByIdUrl" \
   "Export job processor must await signed download URLs before storing result JSON"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "paths.unshift('id')" \
+  "Export must emit each expanded relation's id column (e.g. 'Lead / Id') so re-import reconnects by id instead of fuzzy matching"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/__tests__/build-expanded-selected-paths.spec.ts" \
+  "Regression test guarding relation id columns in export (OMN-465)"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/utils/one-to-many-export.util.ts" \
+  "ONE_TO_MANY export cap helpers (capChildIdsByParent, formatOneToManyList)"
+check_file_exists \
+  "packages/twenty-server/src/engine/core-modules/export-job/utils/__tests__/one-to-many-export.util.spec.ts" \
+  "Spec for ONE_TO_MANY export cap helpers"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "ONE_TO_MANY_EXPORT_CHILD_CAP" \
+  "Export job processor must cap ONE_TO_MANY children per parent (2026-08-22 worker OOM)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "Skipping ONE_TO_MANY back-reference" \
+  "Export job processor must skip ONE_TO_MANY back-references to the export root object"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/jobs/export-job.processor.ts" \
+  "re-delivered while already PROCESSING" \
+  "Export job processor must fail (not re-run) a job re-delivered while PROCESSING"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/export-job/export-job.service.ts" \
+  "retryLimit: 0" \
+  "Export jobs must not auto-retry (crash-retry kills the next worker)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/message-queue-worker-options.constant.ts" \
+  "[MessageQueue.exportQueue]" \
+  "Export queue must have an extended BullMQ lockDuration"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/interfaces/message-queue-worker-options.interface.ts" \
+  "lockDuration?: number" \
+  "Worker options interface must accept lockDuration (backported from upstream)"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/message-queue/drivers/bullmq.driver.ts" \
+  "lockDuration: options.lockDuration" \
+  "BullMQ driver must forward per-queue lockDuration to the Worker"
 check_file_exists \
   "packages/twenty-server/src/engine/core-modules/export-job/utils/one-to-many-export.util.ts" \
   "ONE_TO_MANY export cap helpers (capChildIdsByParent, formatOneToManyList)"
@@ -2737,6 +2797,24 @@ check_file_contains \
   "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
   "useDraftRecordDefaults" \
   "Relation create must use the shared draft defaults hook (includes Agent prefill + RLS)"
+check_file_contains \
+  "packages/twenty-front/src/modules/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel.ts" \
+  "persistDependencies" \
+  "Relation create must save an unsaved source draft before its MANY_TO_ONE child"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-side-panel/hooks/usePersistDraftRecord.ts" \
+  "Shared draft save hook must exist"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx" \
+  "getMissingRequiredFieldsMessage" \
+  "Create button must toast missing required fields on click"
+check_file_contains \
+  "packages/twenty-front/src/modules/command-menu-item/components/RecordShowSidePanelCreateRecordButton.tsx" \
+  "disabled={isCreating}" \
+  "Create button must stay enabled when required fields are missing (disabled only while saving)"
+check_file_exists \
+  "packages/twenty-front/src/modules/object-record/record-side-panel/utils/getMissingRequiredFieldsMessage.ts" \
+  "Missing required fields toast message builder must exist"
 # TODO: CreateRelatedRecordCommand was deleted by upstream's engine-command refactor.
 # Draft creation for related records needs to be re-implemented in the new system.
 # check_file_contains \
