@@ -36,13 +36,16 @@ export const isExternalRedirectTrusted = (
   try {
     const candidate = new URL(candidateUrl);
     const frontend = new URL(frontendUrl);
-    if (candidate.host === frontend.host) return true;
     if (
       frontend.hostname === 'localhost' &&
       candidate.hostname === 'localhost'
     ) {
-      return true;
+      return candidate.protocol === 'http:' || candidate.protocol === 'https:';
     }
+    // Only https destinations are followed; other protocols can carry a
+    // trusted host.
+    if (candidate.protocol !== 'https:') return false;
+    if (candidate.host === frontend.host) return true;
     const trustedParent = deriveTrustedParentDomain(frontendUrl);
     if (trustedParent === null) return false;
     return (
