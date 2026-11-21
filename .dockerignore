@@ -3,3 +3,7 @@
 **/node_modules
 .nx/cache
 packages/twenty-server/.env
+# OMNIA-CUSTOM: local file storage and repo-root data files can hold PHI; keep them out of image builds
+**/.local-storage
+/*.csv
+/*.xlsx
