@@ -149,6 +149,36 @@ tests:
           path: spec.template.spec.tolerations[0].key
           value: environment
 
+  - it: migration job skips ClickHouse without a migration secret
+    template: templates/job-migration.yaml
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "clickhouse"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CLICKHOUSE_MIGRATION_URL
+          any: true
+
+  - it: migration job applies ClickHouse migrations last, warn-only and time-boxed
+    template: templates/job-migration.yaml
+    set:
+      clickhouse.migration.secretName: twenty-clickhouse-credentials
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "^node dist/command/command.js omnia:run-legacy-typeorm-migrations && node dist/command/command.js cache:flush && node dist/command/command.js upgrade && node dist/command/command.js cache:flush && \\{ .* timeout 900 node dist/database/clickhouse/migrations/run-migrations.js \\|\\| echo \"WARNING: ClickHouse migrations failed"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CLICKHOUSE_MIGRATION_URL
+            valueFrom:
+              secretKeyRef:
+                name: twenty-clickhouse-credentials
+                key: migrator-url
+                optional: true
+
   - it: server PDB renders only with more than one replica
     template: templates/pdb-server.yaml
     set:

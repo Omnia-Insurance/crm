@@ -147,13 +147,28 @@ describe('EventLogEmitterResolver', () => {
     const invalidInput = { type: 'invalid' };
 
     await expect(
-      resolver.trackAnalytics(invalidInput as any, undefined, undefined),
+      resolver.trackAnalytics(
+        invalidInput as any,
+        { id: 'workspace-1' } as WorkspaceEntity,
+        undefined,
+      ),
     ).rejects.toThrowError(
       new EventLogEmitterException(
         'Invalid analytics input',
         EventLogEmitterExceptionCode.INVALID_TYPE,
       ),
     );
+  });
+
+  it('should drop analytics events from anonymous callers', async () => {
+    const result = await resolver.trackAnalytics(
+      { type: 'pageview' as const, name: 'Sign in', properties: {} },
+      undefined,
+      undefined,
+    );
+
+    expect(result).toEqual({ success: false });
+    expect(auditService.createContext).not.toHaveBeenCalled();
   });
 
   it('should throw an EventLogEmitterException when workspace is missing for createObjectEvent', async () => {

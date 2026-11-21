@@ -42,9 +42,10 @@ import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
         playground: true,
         workspaceAgnostic: false,
       },
-      apiKey: true,
-      oauthClient: true,
-      application: true,
+      // OMNIA-CUSTOM: rows hold full record snapshots (PHI) and skip row-level permissions; people only
+      apiKey: false,
+      oauthClient: false,
+      application: false,
     },
     requiredPermissionFlags: [PermissionFlagType.SECURITY],
   }),

@@ -1,0 +1,131 @@
+# One-off ClickHouse migrations for the first rollout, before any Twenty pod gets CLICKHOUSE_URL.
+# Later releases run them in the Helm pre-upgrade job (job-migration.yaml). Never run this Job while a
+# Helm deploy is in progress: the migration runner takes no lock.
+# TWENTY_IMAGE is replaced with the image the server runs now:
+#   IMAGE=$(kubectl -n twentycrm get deploy my-twenty-twenty-server -o jsonpath='{.spec.template.spec.containers[0].image}')
+#   sed "s|TWENTY_IMAGE|${IMAGE}|g" clickhouse-migrate-job.yaml | kubectl -n twentycrm apply -f -
+# The init container migrates as twenty_migrator; the main container then proves, as twenty_app and
+# from a pod the NetworkPolicy admits, that the URL the server and worker will use parses, connects,
+# authenticates and sees every migration.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-migrate
+  namespace: twentycrm
+  labels:
+    app.kubernetes.io/name: twenty
+    app.kubernetes.io/instance: my-twenty
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  # Migrations 006 and 009 are not safe to retry blindly; read the logs, then re-run by hand.
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: twenty
+        app.kubernetes.io/instance: my-twenty
+        app.kubernetes.io/component: migration
+        app.kubernetes.io/managed-by: kubectl
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        environment: production
+      tolerations:
+        - key: environment
+          operator: Equal
+          value: production
+          effect: NoSchedule
+      initContainers:
+        - name: migrate
+          image: TWENTY_IMAGE
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - dist/database/clickhouse/migrations/run-migrations.js
+          env:
+            - name: CLICKHOUSE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-clickhouse-credentials
+                  key: migrator-url
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      containers:
+        - name: verify-app-user
+          image: TWENTY_IMAGE
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - -e
+            - |
+              const fs = require('fs');
+              const { createClient } = require('@clickhouse/client');
+              const expected = fs
+                .readdirSync('dist/database/clickhouse/migrations')
+                .filter((name) => name.endsWith('.sql')).length;
+              const client = createClient({ url: process.env.CLICKHOUSE_URL, request_timeout: 15000 });
+              const rows = async (query) =>
+                (await client.query({ query, format: 'JSONEachRow' })).json();
+              const main = async () => {
+                const [session] = await rows(
+                  'SELECT currentUser() AS user, currentDatabase() AS db, timezone() AS tz, version() AS version',
+                );
+                const [migrations] = await rows('SELECT count() AS applied FROM _migration');
+                const grants = (await rows('SHOW GRANTS')).map((row) => Object.values(row)[0]);
+                const tables = (await rows('SHOW TABLES')).map((row) => Object.values(row)[0]);
+                const applied = Number(migrations.applied);
+                console.log(JSON.stringify({ ...session, applied, expected, grants, tables }, null, 2));
+                await client.close();
+                const ok =
+                  session.user === 'twenty_app' &&
+                  session.db === 'twenty' &&
+                  session.tz === 'UTC' &&
+                  applied === expected;
+                process.exit(ok ? 0 : 1);
+              };
+              main().catch((error) => {
+                console.error('verify failed: ' + error.message);
+                process.exit(1);
+              });
+          env:
+            - name: CLICKHOUSE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-clickhouse-credentials
+                  key: app-url
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

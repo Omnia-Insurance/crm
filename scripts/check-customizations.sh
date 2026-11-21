@@ -881,6 +881,65 @@ check_file_contains \
   "Migration job must run as the Pod Identity service account like the server"
 
 echo ""
+echo "--- Event logs (ClickHouse, infra/clickhouse) ---"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/templates/job-migration.yaml" \
+  "timeout 900 node dist/database/clickhouse/migrations/run-migrations.js ||" \
+  "Migration job must apply ClickHouse migrations, time-boxed, before new server and worker pods start"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/templates/job-migration.yaml" \
+  'echo "WARNING: ClickHouse migrations failed' \
+  "A ClickHouse migration failure must only warn, never fail the pre-upgrade job and block a CRM deploy"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/values.yaml" \
+  "OMNIA-CUSTOM: ClickHouse (event logs) migrations in the pre-upgrade job" \
+  "Omnia hunk: clickhouse.migration defaults (an empty secretName skips the ClickHouse step)"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "key: app-url" \
+  "Server, worker and migration job read CLICKHOUSE_URL (twenty_app) from twenty-clickhouse-credentials, optional"
+check_file_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "urlKey: migrator-url" \
+  "The pre-upgrade job applies ClickHouse migrations as twenty_migrator"
+check_file_not_contains \
+  "packages/twenty-docker/helm/twenty/omnia-values.yaml" \
+  "name: EVENT_SINKS" \
+  "Never set EVENT_SINKS: its console sink prints full record snapshots (PHI) to pod stdout"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/event-logs/event-logs.resolver.ts" \
+  "OMNIA-CUSTOM: rows hold full record snapshots (PHI) and skip row-level permissions; people only" \
+  "eventLogs must refuse API keys, OAuth clients and apps: rows hold full record snapshots without RLS"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/event-logs/event-logs-live.resolver.ts" \
+  "OMNIA-CUSTOM: rows hold full record snapshots (PHI) and skip row-level permissions; people only" \
+  "eventLogsLive must refuse API keys, OAuth clients and apps: rows hold full record snapshots without RLS"
+check_file_contains \
+  "packages/twenty-server/src/engine/core-modules/event-logs/emit/event-log-emitter.resolver.ts" \
+  "OMNIA-CUSTOM: public mutation; drop anonymous calls" \
+  "trackAnalytics must drop anonymous calls, or anyone can fill the event-log store"
+check_file_contains \
+  "packages/twenty-server/src/modules/omnia/omnia-modules.module.ts" \
+  "EventLogCleanupModule" \
+  "The worker must load EventLogCleanupModule, or the workspace event-log retention deletes nothing"
+check_file_not_contains \
+  ".github/workflows/deploy-eks.yaml" \
+  "kubectl logs" \
+  "Deploy failure output is public: never print pod logs (they can carry PHI)"
+check_file_contains \
+  "infra/clickhouse/clickhouse.yaml" \
+  '<default remove="remove"/>' \
+  "ClickHouse must not keep the stock passwordless default user"
+check_file_contains \
+  "infra/clickhouse/storageclass.yaml" \
+  'encrypted: "true"' \
+  "The ClickHouse volume (PHI) must be encrypted"
+check_file_contains \
+  "infra/clickhouse/create-secret.sh" \
+  "request_timeout=10000" \
+  "app-url must bound every Twenty call to ClickHouse"
+
+echo ""
 echo "--- Helm rollout, probes and scheduling ---"
 check_file_not_contains \
   "packages/twenty-docker/helm/twenty/templates/deployment-server.yaml" \

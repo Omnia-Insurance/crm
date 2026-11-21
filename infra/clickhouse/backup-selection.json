@@ -1,0 +1,10 @@
+{
+  "SelectionName": "twenty-crm-ebs-tagged",
+  "IamRoleArn": "arn:aws:iam::189365142140:role/AWSBackupRDSRole",
+  "Resources": ["arn:aws:ec2:*:*:volume/*"],
+  "Conditions": {
+    "StringEquals": [
+      { "ConditionKey": "aws:ResourceTag/backup", "ConditionValue": "twenty-crm-daily" }
+    ]
+  }
+}
