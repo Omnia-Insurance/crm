@@ -1,14 +1,18 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledTr = styled.div<{
   isDragging: boolean;
 }>`
+  border-bottom: ${({ isDragging }) =>
+    isDragging ? `1px solid ${themeCssVariables.border.color.medium}` : 'none'};
   border-top: ${({ isDragging }) =>
     isDragging ? `1px solid ${themeCssVariables.border.color.medium}` : 'none'};
 
   display: flex;
   flex-direction: row;
+
+  position: relative;
 
   &[data-focused='true'],
   &[data-active='true'] {
@@ -20,13 +24,7 @@ const StyledTr = styled.div<{
         border-color: ${themeCssVariables.border.color.medium};
       }
       &:nth-of-type(2) {
-        border-left: 1px solid ${themeCssVariables.border.color.medium};
-
-        margin-left: -1px;
-
-        div {
-          margin-left: -1px;
-        }
+        box-shadow: inset 1px 0 0 ${themeCssVariables.border.color.medium};
       }
       &:last-of-type {
         border-radius: 0 ${themeCssVariables.border.radius.sm}

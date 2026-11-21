@@ -4,14 +4,11 @@ import { useMutation } from '@apollo/client/react';
 
 import { UPSERT_ROW_LEVEL_PERMISSION_PREDICATES } from '@/settings/roles/graphql/mutations/upsertRowLevelPermissionPredicatesMutation';
 import {
+  type RowLevelPermissionPredicate,
+  type RowLevelPermissionPredicateGroup,
   type RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
 } from '~/generated-metadata/graphql';
-import {
-  type OmniaRowLevelPermissionPredicate,
-  type OmniaRowLevelPermissionPredicateGroup,
-  type RowLevelPermissionPredicateScope,
-} from '@/settings/roles/types/OmniaRoleExtensions';
 
 export type UpsertRowLevelPermissionPredicatesInput = {
   roleId: string;
@@ -19,7 +16,8 @@ export type UpsertRowLevelPermissionPredicatesInput = {
   predicates: Array<{
     id?: string;
     fieldMetadataId: string;
-    scope: RowLevelPermissionPredicateScope;
+    // OMNIA-CUSTOM: the Agent is Me hop field the role save sends (contract C2)
+    relationFieldMetadataId?: string | null;
     operand: RowLevelPermissionPredicateOperand;
     value?: unknown;
     subFieldName?: string | null;
@@ -31,17 +29,21 @@ export type UpsertRowLevelPermissionPredicatesInput = {
   predicateGroups: Array<{
     id?: string;
     objectMetadataId: string;
-    scope: RowLevelPermissionPredicateScope;
     parentRowLevelPermissionPredicateGroupId?: string | null;
     logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
     positionInRowLevelPermissionPredicateGroup?: number | null;
   }>;
+  canCreateRecords?: boolean;
+  canReadRecords?: boolean;
+  canUpdateRecords?: boolean;
+  canSoftDeleteRecords?: boolean;
+  canDestroyRecords?: boolean;
 };
 
 type UpsertRowLevelPermissionPredicatesResult = {
   upsertRowLevelPermissionPredicates: {
-    predicates: OmniaRowLevelPermissionPredicate[];
-    predicateGroups: OmniaRowLevelPermissionPredicateGroup[];
+    predicates: RowLevelPermissionPredicate[];
+    predicateGroups: RowLevelPermissionPredicateGroup[];
   };
 };
 

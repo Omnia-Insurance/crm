@@ -2,17 +2,16 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { In, Not } from 'typeorm';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { RECONCILIATION_BOOKKEEPING_REPOSITORY_OPTIONS } from 'src/modules/reconciliation/constants/reconciliation-bookkeeping-repository-options.constant';
 import type { ReconciliationStatus } from 'src/modules/reconciliation/types/reconciliation';
 
 @Injectable()
 export class ReconciliationMutationService {
   private readonly logger = new Logger(ReconciliationMutationService.name);
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   async updateReconciliation(
     workspaceId: string,
@@ -21,14 +20,11 @@ export class ReconciliationMutationService {
   ): Promise<void> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const repo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'reconciliation',
-        { shouldBypassPermissionChecks: true },
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      await this.getReconciliationRepository().update(
+        { id: reconciliationId },
+        data,
       );
-
-      await repo.update({ id: reconciliationId }, data);
     }, authContext);
   }
 
@@ -49,23 +45,14 @@ export class ReconciliationMutationService {
   ): Promise<boolean> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reconciliation',
-          { shouldBypassPermissionChecks: true },
-        );
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const result = await this.getReconciliationRepository().update(
+        { id: reconciliationId, status: expectedStatus },
+        data,
+      );
 
-        const result = await repo.update(
-          { id: reconciliationId, status: expectedStatus },
-          data,
-        );
-
-        return (result.affected ?? 0) > 0;
-      },
-      authContext,
-    );
+      return (result.affected ?? 0) > 0;
+    }, authContext);
   }
 
   /**
@@ -85,23 +72,14 @@ export class ReconciliationMutationService {
   ): Promise<boolean> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const repo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'reconciliation',
-          { shouldBypassPermissionChecks: true },
-        );
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const result = await this.getReconciliationRepository().update(
+        { id: reconciliationId, status: Not(In(excludedStatuses)) },
+        data,
+      );
 
-        const result = await repo.update(
-          { id: reconciliationId, status: Not(In(excludedStatuses)) },
-          data,
-        );
-
-        return (result.affected ?? 0) > 0;
-      },
-      authContext,
-    );
+      return (result.affected ?? 0) > 0;
+    }, authContext);
   }
 
   async updatePolicy(
@@ -111,14 +89,8 @@ export class ReconciliationMutationService {
   ): Promise<void> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const repo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'policy',
-        { shouldBypassPermissionChecks: true },
-      );
-
-      await repo.update({ id: policyId }, data);
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      await this.getSystemRepository('policy').update({ id: policyId }, data);
     }, authContext);
   }
 
@@ -129,16 +101,25 @@ export class ReconciliationMutationService {
   ): Promise<void> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const repo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'person',
-        { shouldBypassPermissionChecks: true },
-      );
-
-      await repo.update({ id: leadId }, data);
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      await this.getSystemRepository('person').update({ id: leadId }, data);
 
       this.logger.log(`Updated lead ${leadId}`);
     }, authContext);
+  }
+
+  private getReconciliationRepository() {
+    return this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+      'reconciliation',
+      RECONCILIATION_BOOKKEEPING_REPOSITORY_OPTIONS,
+    );
+  }
+
+  // System writes only: user-initiated CRM writes go through permission-checked
+  // repositories under the caller's auth context (ReviewItemService)
+  private getSystemRepository(objectName: string) {
+    return this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+      objectName,
+    );
   }
 }

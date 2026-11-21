@@ -2,7 +2,7 @@ import { useActivities } from '@/activities/hooks/useActivities';
 import { FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY } from '@/activities/timeline-activities/constants/FindManyTimelineActivitiesOrderBy';
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
 import { type Task } from '@/activities/types/Task';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 
 type UseTasksProps = {
   targetableObjects: ActivityTargetableObject[];
@@ -15,17 +15,26 @@ export const useTasks = ({ targetableObjects }: UseTasksProps) => {
     fetchMoreActivities: fetchMoreTasks,
     hasNextPage,
     totalCountActivities,
-  } = useActivities<Task>({
-    objectNameSingular: CoreObjectNameSingular.Task,
+  } = useActivities({
+    objectNameSingular: StandardObjectNameSingular.Task,
     targetableObjects,
     activityTargetsOrderByVariables: FIND_MANY_TIMELINE_ACTIVITIES_ORDER_BY,
     limit: 200,
   });
 
+  const filteredTasks = tasks.filter(
+    (activity): activity is Task => activity.__typename === 'Task',
+  );
+
+  const fetchMoreFilteredTasks = async () =>
+    (await fetchMoreTasks()).filter(
+      (activity): activity is Task => activity.__typename === 'Task',
+    );
+
   return {
-    tasks: (tasks ?? []) as Task[],
+    tasks: filteredTasks,
     tasksLoading,
-    fetchMoreTasks,
+    fetchMoreTasks: fetchMoreFilteredTasks,
     hasNextPage,
     totalCountTasks: totalCountActivities,
   };

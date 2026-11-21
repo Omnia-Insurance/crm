@@ -10,8 +10,8 @@ export const mapRecordFieldToViewField = (recordField: RecordField) => {
     position: recordField.position,
     size: recordField.size,
     aggregateOperation: recordField.aggregateOperation,
+    // OMNIA-CUSTOM: saves match on (fieldMetadataId, subFieldName), contract C6
     subFieldName: recordField.subFieldName,
-    isOverridden: false,
   };
 
   return viewField;

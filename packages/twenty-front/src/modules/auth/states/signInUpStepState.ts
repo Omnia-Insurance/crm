@@ -5,9 +5,11 @@ export enum SignInUpStep {
   Password = 'password',
   EmailVerification = 'emailVerification',
   WorkspaceSelection = 'workspaceSelection',
-  SSOIdentityProviderSelection = 'SSOIdentityProviderSelection',
+  WorkspaceCreation = 'workspaceCreation',
+  SsoIdentityProviderSelection = 'SSOIdentityProviderSelection',
   TwoFactorAuthenticationVerification = 'TwoFactorAuthenticationVerification',
   TwoFactorAuthenticationProvision = 'TwoFactorAuthenticationProvision',
+  TwoFactorAuthenticationRecovery = 'TwoFactorAuthenticationRecovery',
 }
 
 export const signInUpStepState = createAtomState<SignInUpStep>({

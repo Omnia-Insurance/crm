@@ -15,10 +15,12 @@ export class CreateFieldInput extends OmitType(
     'id',
     'createdAt',
     'updatedAt',
-    'standardOverrides',
+    'overrides',
     'applicationId',
     'morphId',
     'universalIdentifier',
+    'disabledFieldPermissionActions',
+    'isSystemSideEffect',
   ] as const,
   InputType,
 ) {

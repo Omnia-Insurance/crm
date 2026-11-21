@@ -1,26 +1,62 @@
+import { CONNECTION_SCOPE_BY_LEGACY_VISIBILITY } from 'twenty-shared/application-runtime';
+import { isDefined } from 'twenty-shared/utils';
+
 import { type AppConnection } from '@/sdk/logic-function/connections/types/app-connection.type';
-import { postConnectionsEndpoint } from '@/sdk/logic-function/connections/utils/post-connections-endpoint.util';
+import {
+  type AppConnectionWithoutVisibility,
+  withLegacyConnectionVisibility,
+} from '@/sdk/logic-function/connections/utils/with-legacy-connection-visibility.util';
+import { postGraphqlRequest } from '@/sdk/logic-function/utils/post-graphql-request.util';
+
+const LIST_APP_CONNECTIONS_QUERY = `
+  query ListAppConnections($filter: ListAppConnectionsInput) {
+    appConnections(filter: $filter) {
+      id
+      providerName
+      name
+      handle
+      externalAccountId
+      scope
+      userWorkspaceId
+      workspaceMemberId
+      providerType
+      accessToken
+      scopes
+      authFailedAt
+      authFailedReason
+    }
+  }
+`;
 
 export type ListConnectionsFilter = {
-  // Provider name as declared on `defineConnectionProvider({ name })`.
   providerName?: string;
-  // Restrict to credentials owned by a specific user. Useful in cron
-  // triggers when picking a service-account user via app config.
   userWorkspaceId?: string;
-  // Restrict by row visibility — 'user' (private) or 'workspace' (shared).
-  visibility?: 'user' | 'workspace';
+  scope?: AppConnection['scope'];
+  /** @deprecated Use `scope` instead. */
+  visibility?: AppConnection['visibility'];
 };
 
-// Returns every connection owned by the running app, optionally filtered.
-// The server refreshes each access token on read, so the returned values
-// are usable immediately. When the running execution carries a user
-// context (HTTP-route trigger with `isAuthRequired`, tool calls, etc.),
-// `scope: 'user'` connections belonging to other users are filtered out
-// server-side. Cron and database-event triggers see all connections.
-export const listConnections = async (
-  filter: ListConnectionsFilter = {},
-): Promise<AppConnection[]> =>
-  postConnectionsEndpoint<ListConnectionsFilter, AppConnection[]>(
-    'list',
-    filter,
-  );
+export const listConnections = async ({
+  visibility,
+  ...filter
+}: ListConnectionsFilter = {}): Promise<AppConnection[]> => {
+  const { appConnections } = await postGraphqlRequest<
+    { filter: Omit<ListConnectionsFilter, 'visibility'> },
+    { appConnections: AppConnectionWithoutVisibility[] }
+  >({
+    query: LIST_APP_CONNECTIONS_QUERY,
+    variables: {
+      filter: {
+        ...filter,
+        scope:
+          filter.scope ??
+          (isDefined(visibility)
+            ? CONNECTION_SCOPE_BY_LEGACY_VISIBILITY[visibility]
+            : undefined),
+      },
+    },
+    caller: 'listConnections',
+  });
+
+  return appConnections.map(withLegacyConnectionVisibility);
+};

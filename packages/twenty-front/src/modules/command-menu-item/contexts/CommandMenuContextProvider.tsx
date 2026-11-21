@@ -1,4 +1,3 @@
-import { CoreObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type CommandMenuContextType } from '@/command-menu-item/contexts/CommandMenuContext';
@@ -8,7 +7,6 @@ import { CommandMenuContextProviderContent } from './CommandMenuContextProviderC
 import { CommandMenuContextProviderWithWorkflowEnrichment } from './CommandMenuContextProviderWithWorkflowEnrichment';
 
 type CommandMenuContextProviderProps = {
-  isInSidePanel: boolean;
   displayType: CommandMenuContextType['displayType'];
   containerType: CommandMenuContextType['containerType'];
   children: React.ReactNode;
@@ -16,23 +14,14 @@ type CommandMenuContextProviderProps = {
 };
 
 export const CommandMenuContextProvider = ({
-  isInSidePanel,
   displayType,
   containerType,
   children,
   isInPreviewMode = false,
 }: CommandMenuContextProviderProps) => {
-  const commandMenuContextApiFromHook = useCurrentCommandMenuContextApi();
+  const commandMenuContextApi = useCurrentCommandMenuContextApi();
 
-  const commandMenuContextApi = isInSidePanel
-    ? { ...commandMenuContextApiFromHook, isInSidePanel: true }
-    : commandMenuContextApiFromHook;
-
-  const currentObjectNameSingular =
-    commandMenuContextApi.objectMetadataItem.nameSingular;
-
-  const isWorkflow =
-    currentObjectNameSingular === CoreObjectNameSingular.Workflow;
+  const isWorkflow = commandMenuContextApi.coreObjectName === 'workflow';
 
   const selectedWorkflowRecordIds = isWorkflow
     ? commandMenuContextApi.selectedRecords

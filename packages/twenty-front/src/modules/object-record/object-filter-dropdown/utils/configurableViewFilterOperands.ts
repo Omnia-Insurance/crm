@@ -11,5 +11,6 @@ export const configurableViewFilterOperands = new Set<ViewFilterOperand>([
   ViewFilterOperand.CONTAINS,
   ViewFilterOperand.DOES_NOT_CONTAIN,
   ViewFilterOperand.IS_RELATIVE,
+  // OMNIA-CUSTOM: workflow-only date operand with a relative window value
   ViewFilterOperand.IS_NOT_RELATIVE,
 ]);

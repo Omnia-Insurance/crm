@@ -2,8 +2,9 @@ import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMeta
 import { hasObjectMetadataItemPositionField } from '@/object-metadata/utils/hasObjectMetadataItemPositionField';
 
 import { RecordCalendarComponentInstanceContext } from '@/object-record/record-calendar/states/contexts/RecordCalendarComponentInstanceContext';
-import { recordCalendarRecordIdsComponentState } from '@/object-record/record-calendar/states/recordCalendarRecordIdsComponentState';
-import { recordIndexCalendarFieldMetadataIdState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdState';
+import { recordIndexCalendarFieldMetadataIdComponentState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdComponentState';
+import { recordIndexRecordIdsByGroupComponentFamilyState } from '@/object-record/record-index/states/recordIndexRecordIdsByGroupComponentFamilyState';
+import { NO_RECORD_GROUP_FAMILY_KEY } from '@/object-record/record-index/states/selectors/recordIndexAllRecordIdsComponentSelector';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { createAtomComponentFamilySelector } from '@/ui/utilities/state/jotai/utils/createAtomComponentFamilySelector';
 import { isNonEmptyString } from '@sniptt/guards';
@@ -23,7 +24,8 @@ export const calendarDayRecordIdsComponentFamilySelector =
       ({ instanceId, familyKey: { day, timeZone } }) =>
       ({ get }) => {
         const calendarFieldMetadataId = get(
-          recordIndexCalendarFieldMetadataIdState,
+          recordIndexCalendarFieldMetadataIdComponentState,
+          { instanceId },
         );
 
         const objectMetadataItems = get(objectMetadataItemsSelector);
@@ -48,9 +50,10 @@ export const calendarDayRecordIdsComponentFamilySelector =
           return [];
         }
 
-        const allRecordIds = get(recordCalendarRecordIdsComponentState, {
-          instanceId,
-        });
+        const allRecordIds = get(
+          recordIndexRecordIdsByGroupComponentFamilyState,
+          { instanceId, familyKey: NO_RECORD_GROUP_FAMILY_KEY },
+        );
 
         const recordIds = allRecordIds.filter((recordId) => {
           const record = get(recordStoreFamilyState, recordId);
@@ -61,14 +64,18 @@ export const calendarDayRecordIdsComponentFamilySelector =
             return false;
           }
 
-          const recordDateAsPlainDateInTimeZone =
-            fieldMetadataItem.type === FieldMetadataType.DATE
-              ? Temporal.PlainDate.from(recordDate)
-              : Temporal.Instant.from(recordDate)
-                  .toZonedDateTimeISO(timeZone)
-                  .toPlainDate();
+          try {
+            const recordDay =
+              fieldMetadataItem.type === FieldMetadataType.DATE
+                ? Temporal.PlainDate.from(recordDate)
+                : Temporal.Instant.from(recordDate)
+                    .toZonedDateTimeISO(timeZone)
+                    .toPlainDate();
 
-          return isSamePlainDate(day, recordDateAsPlainDateInTimeZone);
+            return isSamePlainDate(day, recordDay);
+          } catch {
+            return false;
+          }
         });
 
         if (
@@ -82,9 +89,15 @@ export const calendarDayRecordIdsComponentFamilySelector =
             const positionA = recordA?.position;
             const positionB = recordB?.position;
 
-            if (!isDefined(positionA) && !isDefined(positionB)) return 0;
-            if (!isDefined(positionA)) return -1;
-            if (!isDefined(positionB)) return 1;
+            if (!isDefined(positionA) && !isDefined(positionB)) {
+              return 0;
+            }
+            if (!isDefined(positionA)) {
+              return -1;
+            }
+            if (!isDefined(positionB)) {
+              return 1;
+            }
 
             return positionA - positionB;
           });

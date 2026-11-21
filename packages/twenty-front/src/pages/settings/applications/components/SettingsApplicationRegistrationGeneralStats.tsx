@@ -1,80 +1,58 @@
-import {
-  H2Title,
-  IconBrandDocker,
-  IconChartBar,
-  IconStatusChange,
-} from 'twenty-ui/display';
+import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
-import {
-  type ApplicationRegistration,
-  FindApplicationRegistrationStatsDocument,
-} from '~/generated-metadata/graphql';
-import { useQuery } from '@apollo/client/react';
-import { Section } from 'twenty-ui/layout';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
+import { type ApplicationRegistration } from '~/generated-metadata/graphql';
+import { SettingsApplicationRegistrationInstalledWorkspaces } from '~/pages/settings/applications/components/SettingsApplicationRegistrationInstalledWorkspaces';
+import { SettingsApplicationRegistrationInstallStats } from '~/pages/settings/applications/components/SettingsApplicationRegistrationInstallStats';
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+import { Section } from 'twenty-ui/components/layout';
+import { IconHeartRateMonitor } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+
+const StyledStatsFooterActions = styled.div`
+  display: flex;
+  gap: ${themeCssVariables.spacing[3]};
+  margin-top: ${themeCssVariables.spacing[3]};
+`;
 
 export const SettingsApplicationRegistrationGeneralStats = ({
   registration,
+  isAdminView = false,
 }: {
   registration: ApplicationRegistration;
+  isAdminView?: boolean;
 }) => {
   const { t } = useLingui();
 
-  const applicationRegistrationId = registration.id;
-
-  const { data: statsData } = useQuery(
-    FindApplicationRegistrationStatsDocument,
-    {
-      variables: { id: applicationRegistrationId },
-      skip: !applicationRegistrationId,
-    },
-  );
-
-  const stats = statsData?.findApplicationRegistrationStats;
-
-  const hasStats = (stats?.activeInstalls ?? 0) > 0;
-
-  if (!hasStats) {
-    return null;
-  }
-
-  const versionDistributionLabel =
-    stats?.versionDistribution
-      ?.map(
-        (entry: { version: string; count: number }) =>
-          `${entry.version} (${entry.count})`,
-      )
-      .join(', ') || '—';
-
-  const statsItems = [
-    {
-      Icon: IconBrandDocker,
-      label: t`Active installs`,
-      value: stats?.activeInstalls ?? '—',
-    },
-    {
-      Icon: IconStatusChange,
-      label: t`Most installed version`,
-      value: stats?.mostInstalledVersion ?? '—',
-    },
-    {
-      Icon: IconChartBar,
-      label: t`Distribution`,
-      value: versionDistributionLabel,
-    },
-  ];
-
   return (
-    <Section>
-      <H2Title
-        title={t`Install Stats`}
-        description={t`Usage across all workspaces on this server`}
+    <Section.Root>
+      <Section.Header
+        title={t`Statistics`}
+        description={t`Usage across all non-deleted workspaces on this server`}
       />
-      <SettingsTableCard
-        rounded
-        items={statsItems}
-        gridAutoColumns="200px 1fr"
+      <SettingsApplicationRegistrationInstallStats
+        registration={registration}
+        isAdminView={isAdminView}
       />
-    </Section>
+      <StyledStatsFooterActions>
+        <NavigationButton
+          to={getSettingsPath(
+            isAdminView
+              ? SettingsPath.AdminPanelApplicationRegistrationMonitoring
+              : SettingsPath.ApplicationRegistrationMonitoring,
+            { applicationRegistrationId: registration.id },
+          )}
+          startIcon={<IconHeartRateMonitor />}
+          size="sm"
+          variant="outline"
+        >{t`View monitoring`}</NavigationButton>
+      </StyledStatsFooterActions>
+      {isAdminView && (
+        <SettingsApplicationRegistrationInstalledWorkspaces
+          registration={registration}
+        />
+      )}
+    </Section.Root>
   );
 };

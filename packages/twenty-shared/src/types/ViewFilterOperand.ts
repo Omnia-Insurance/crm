@@ -11,6 +11,8 @@ export enum ViewFilterOperand {
   IS_EMPTY = 'IS_EMPTY',
   IS_NOT_EMPTY = 'IS_NOT_EMPTY',
   IS_RELATIVE = 'IS_RELATIVE',
+  // OMNIA-CUSTOM: workflow date filter "is not within the relative window";
+  // never offered on view filters.
   IS_NOT_RELATIVE = 'IS_NOT_RELATIVE',
   IS_IN_PAST = 'IS_IN_PAST',
   IS_IN_FUTURE = 'IS_IN_FUTURE',

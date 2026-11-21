@@ -1,6 +1,6 @@
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { getAvatarType } from '@/object-metadata/utils/getAvatarType';
+import { getAvatarShape } from '@/object-metadata/utils/getAvatarShape';
 import { getBasePathToShowPage } from '@/object-metadata/utils/getBasePathToShowPage';
 import { type ObjectRecordIdentifier } from '@/object-record/types/ObjectRecordIdentifier';
 import { isDefined } from 'twenty-shared/utils';
@@ -18,20 +18,21 @@ export const recordIdentifierToObjectRecordIdentifier = ({
   recordIdentifier: RecordIdentifierDTO;
   objectMetadataItem: EnrichedObjectMetadataItem;
 }): ObjectRecordIdentifier => {
-  const avatarType = getAvatarType(objectMetadataItem.nameSingular);
+  const avatarShape = getAvatarShape(objectMetadataItem);
 
   const basePathToShowPage = getBasePathToShowPage({
     objectNameSingular: objectMetadataItem.nameSingular,
   });
 
   const isWorkspaceMemberObjectMetadata =
-    objectMetadataItem.nameSingular === CoreObjectNameSingular.WorkspaceMember;
+    objectMetadataItem.nameSingular ===
+    StandardObjectNameSingular.WorkspaceMember;
 
   let linkToShowPage = '';
 
   if (
-    objectMetadataItem.nameSingular === CoreObjectNameSingular.NoteTarget ||
-    objectMetadataItem.nameSingular === CoreObjectNameSingular.TaskTarget
+    objectMetadataItem.nameSingular === StandardObjectNameSingular.NoteTarget ||
+    objectMetadataItem.nameSingular === StandardObjectNameSingular.TaskTarget
   ) {
     linkToShowPage = '';
   } else if (
@@ -45,7 +46,7 @@ export const recordIdentifierToObjectRecordIdentifier = ({
     id: recordIdentifier.id,
     name: recordIdentifier.labelIdentifier,
     avatarUrl: recordIdentifier.imageIdentifier ?? undefined,
-    avatarType,
+    avatarShape,
     linkToShowPage,
   };
 };

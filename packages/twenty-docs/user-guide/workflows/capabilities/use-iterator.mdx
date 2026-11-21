@@ -3,8 +3,7 @@ title: Use Iterator
 description: Loop through arrays of records to perform actions on each item.
 ---
 
-Iterator lets you loop through an array of records and perform actions on each one. It's essential for workflows that need to process multiple records returned by Search Records or received via webhooks.
-
+import { PageBanner } from "/snippets/page-banner.mdx"
 
 ## When to Use Iterator
 
@@ -19,9 +18,15 @@ Iterator lets you loop through an array of records and perform actions on each o
 
 Iterator expects an **array** as input. It then:
 1. Takes the first item from the array
-2. Runs all actions inside the iterator with that item
+2. Runs all actions inside the Iterator with that item
 3. Moves to the next item
 4. Repeats until all items are processed
+
+### Selecting the array to loop over
+
+Most array sources (Search Records, a webhook array field, a Bulk manual trigger) can be selected directly in the variable picker.
+
+When a **Code** or **Logic Function** step returns a *top-level array*, its output appears in the variable picker as indexed entries (`0`, `1`, `2`, …). To loop over the array as a whole, select the **Whole list** option for that step — the Iterator then infers the shape of each item from the list automatically.
 
 ## Basic Setup
 
@@ -52,7 +57,7 @@ Iterator expects an **array** as input. It then:
 
 Actions placed after Iterator run for each item:
 
-1. Add **Send Email** action (inside iterator)
+1. Add **Send Email** action (inside Iterator)
 2. To: `{{iterator.currentItem.email}}`
 3. Subject: Hello `{{iterator.currentItem.firstName}}`!
 4. Body: Personalized message using current item fields
@@ -75,6 +80,8 @@ Inside Iterator, use `{{iterator.currentItem}}` to access the current record:
 | `{{iterator.currentItem.email}}` | Email field |
 | `{{iterator.currentItem.company.name}}` | Related company name |
 | `{{iterator.index}}` | Current position in array (0-based) |
+
+In the variable picker, you can either drill into a specific field of the current item, or pick **Use the whole item** to reference the entire current item (`{{iterator.currentItem}}`). Selecting the whole item is handy when you want to pass a full record straight into a downstream step rather than rebuilding it field by field.
 
 ## Common Patterns
 
@@ -99,12 +106,12 @@ Inside Iterator, use `{{iterator.currentItem}}` to access the current record:
 ```
 1. Webhook Trigger (receives items array)
 2. Filter (items.length > 0)
-3. Iterator (trigger.body.items)
+3. Iterator (trigger.items)
    └── Create Record
        - Object: Order Items
        - Name: {{iterator.currentItem.name}}
        - Quantity: {{iterator.currentItem.qty}}
-       - Related Order: {{trigger.body.orderId}}
+       - Related Order: {{trigger.orderId}}
 ```
 
 ### Conditional Processing Inside Loop
@@ -171,3 +178,4 @@ Filter: {{searchRecords.length}} > 0
 - [How to Use Branches](/user-guide/workflows/capabilities/use-branches-in-workflows)
 - [Workflows FAQ](/user-guide/workflows/how-tos/need-more-help/workflows-faq)
 
+<PageBanner illustration="card-page-iterator" />

@@ -5,16 +5,17 @@
 // npx nx run twenty-server:command workspace:backfill-reconciliation-decision-rules
 
 import { Command, Option } from 'nest-commander';
+import { isDefined } from 'twenty-shared/utils';
 import { IsNull } from 'typeorm';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import {
   type RunOnWorkspaceArgs,
   type WorkspaceCommandOptions,
 } from 'src/database/commands/command-runners/workspace.command-runner';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import {
   ReconciliationDecisionRuleService,
   type ReviewItemForDecisionRule,
@@ -30,7 +31,7 @@ type BackfillReconciliationDecisionRuleOptions = WorkspaceCommandOptions & {
   description:
     'Learn reconciliation decision rules from historical approved status review items.',
 })
-export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class BackfillReconciliationDecisionRulesCommand extends ProvisionedWorkspaceCommandRunner<BackfillReconciliationDecisionRuleOptions> {
   @Option({
     flags: '--apply-to-reconciliation-id [reconciliation_id]',
     description:
@@ -43,7 +44,7 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
 
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly decisionRuleService: ReconciliationDecisionRuleService,
     private readonly reviewItemService: ReviewItemService,
   ) {
@@ -53,8 +54,7 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
   override async runOnWorkspace({
     workspaceId,
     options,
-  }: RunOnWorkspaceArgs): Promise<void> {
-    const opts = options as BackfillReconciliationDecisionRuleOptions;
+  }: RunOnWorkspaceArgs<BackfillReconciliationDecisionRuleOptions>): Promise<void> {
     const approvedItems = await this.fetchApprovedReviewItems(workspaceId);
     const carrierNameByReconciliationId =
       await this.buildCarrierNameCacheByReconciliationId(
@@ -73,14 +73,18 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
         item.reconciliationId,
       );
 
-      if (!carrierName) continue;
+      if (!carrierName) {
+        continue;
+      }
 
       const signatureResult = this.decisionRuleService.buildStatusRuleSignature(
         item,
         carrierName,
       );
 
-      if (!signatureResult) continue;
+      if (!signatureResult) {
+        continue;
+      }
 
       eligibleCount += 1;
       uniqueSignatureHashes.add(signatureResult.signatureHash);
@@ -95,10 +99,10 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
       `Found ${eligibleCount} approved status review item(s), yielding ${uniqueSignatureHashes.size} unique learned rule signature(s) in workspace ${workspaceId}`,
     );
 
-    if (opts.dryRun) {
-      if (opts.applyToReconciliationId) {
+    if (options.dryRun) {
+      if (options.applyToReconciliationId) {
         this.logger.log(
-          `[DRY RUN] would auto-apply learned rules to reconciliation ${opts.applyToReconciliationId}`,
+          `[DRY RUN] would auto-apply learned rules to reconciliation ${options.applyToReconciliationId}`,
         );
       }
 
@@ -122,29 +126,26 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
       `Backfilled/refreshed ${learnedRules} reconciliation decision rule observation(s) in workspace ${workspaceId}`,
     );
 
-    if (opts.applyToReconciliationId) {
+    if (options.applyToReconciliationId) {
       const applyResult =
         await this.reviewItemService.applyLearnedRulesForReconciliation(
           workspaceId,
-          opts.applyToReconciliationId,
+          options.applyToReconciliationId,
         );
 
       this.logger.log(
-        `Auto-applied ${applyResult.updatedCount} pending review item(s) and skipped ${applyResult.skippedCount} in reconciliation ${opts.applyToReconciliationId}`,
+        `Auto-applied ${applyResult.updatedCount} pending review item(s) and skipped ${applyResult.skippedCount} in reconciliation ${options.applyToReconciliationId}`,
       );
     }
   }
 
-  /**
-   * Backfill learns ONLY from human approvals (audit 1.7): items the
-   * auto-rule engine approved itself (decisionSource AUTO_RULE / autoAppliedAt
-   * set) must never feed rule learning — that would be a self-reinforcing
-   * feedback loop that can also resurrect rules a human deactivated.
-   * Items with a null decisionSource predate the column and were necessarily
-   * decided by a human, so they stay eligible.
-   */
+  // Learning from the rule engine's own approvals would reinforce itself and
+  // resurrect rules a human deactivated (audit 1.7). A null decisionSource
+  // predates the column, so a human decided it.
   static isHumanApprovedReviewItem(item: ReviewItemForDecisionRule): boolean {
-    if (item.autoAppliedAt != null) return false;
+    if (isDefined(item.autoAppliedAt)) {
+      return false;
+    }
 
     return (
       item.decisionSource === 'USER' ||
@@ -158,46 +159,40 @@ export class BackfillReconciliationDecisionRulesCommand extends ActiveOrSuspende
   ): Promise<ReviewItemForDecisionRule[]> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const reviewItemRepo =
-          await this.globalWorkspaceOrmManager.getRepository<ReviewItemForDecisionRule>(
-            workspaceId,
-            'reviewItem',
-            { shouldBypassPermissionChecks: true },
-          );
-
-        const items = await reviewItemRepo.find({
-          where: [
-            {
-              decision: 'APPROVED',
-              category: 'UPDATE',
-              decisionSource: 'USER',
-            },
-            {
-              decision: 'APPROVED',
-              category: 'UPDATE',
-              decisionSource: 'BATCH_USER',
-            },
-            {
-              decision: 'APPROVED',
-              category: 'UPDATE',
-              decisionSource: IsNull(),
-            },
-          ],
-        });
-
-        // Belt and braces on top of the query filter: drop anything that
-        // still looks machine-decided (e.g. legacy rows with a stale
-        // decisionSource but a populated autoAppliedAt).
-        return items.filter((item) =>
-          BackfillReconciliationDecisionRulesCommand.isHumanApprovedReviewItem(
-            item,
-          ),
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      // operator backfill over every run's review items, no requesting user
+      const reviewItemRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<ReviewItemForDecisionRule>(
+          'reviewItem',
         );
-      },
-      authContext,
-    );
+
+      const items = await reviewItemRepo.find({
+        where: [
+          {
+            decision: 'APPROVED',
+            category: 'UPDATE',
+            decisionSource: 'USER',
+          },
+          {
+            decision: 'APPROVED',
+            category: 'UPDATE',
+            decisionSource: 'BATCH_USER',
+          },
+          {
+            decision: 'APPROVED',
+            category: 'UPDATE',
+            decisionSource: IsNull(),
+          },
+        ],
+      });
+
+      // legacy rows can carry a stale decisionSource next to autoAppliedAt
+      return items.filter((item) =>
+        BackfillReconciliationDecisionRulesCommand.isHumanApprovedReviewItem(
+          item,
+        ),
+      );
+    }, authContext);
   }
 
   private async buildCarrierNameCacheByReconciliationId(

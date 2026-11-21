@@ -2,30 +2,29 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
-import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
-import { ViewPermissionsModule } from 'src/engine/metadata-modules/view-permissions/view-permissions.module';
+import { ViewPermissionsModule } from 'src/engine/metadata-modules/view/view-permissions.module';
 import { ViewSortController } from 'src/engine/metadata-modules/view-sort/controllers/view-sort.controller';
 import { ViewSortEntity } from 'src/engine/metadata-modules/view-sort/entities/view-sort.entity';
 import { ViewSortResolver } from 'src/engine/metadata-modules/view-sort/resolvers/view-sort.resolver';
 import { ViewSortService } from 'src/engine/metadata-modules/view-sort/services/view-sort.service';
-import { ViewSortToolsFactory } from 'src/engine/metadata-modules/view-sort/tools/view-sort-tools.factory';
-import { ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
-import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ViewSortEntity, ViewEntity]),
-    WorkspaceCacheStorageModule,
+    TypeOrmModule.forFeature([ViewSortEntity]),
     ApplicationModule,
-    PermissionsModule,
     WorkspaceMigrationModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     ViewPermissionsModule,
   ],
   controllers: [ViewSortController],
-  providers: [ViewSortService, ViewSortResolver, ViewSortToolsFactory],
-  exports: [ViewSortService, ViewSortToolsFactory],
+  providers: [
+    ViewSortService,
+    ViewSortResolver,
+    provideWorkspaceScopedRepository(ViewSortEntity),
+  ],
+  exports: [ViewSortService],
 })
 export class ViewSortModule {}

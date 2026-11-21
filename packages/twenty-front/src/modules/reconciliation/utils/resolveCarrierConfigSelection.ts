@@ -3,26 +3,13 @@ import {
   type ColumnMapping,
 } from '@/reconciliation/hooks/useOpenReconciliationImportDialog';
 
-/**
- * A carrierConfig record prepared for the run wizard's carrier picker:
- * the pipeline config payload plus the linked carrier's display name.
- */
 export type CarrierConfigPickerItem = {
   carrierConfig: CarrierConfig;
   carrierName: string | null;
 };
 
-/**
- * What the run wizard should do once carrierConfig records are loaded.
- *
- * - `none`     → no carrierConfig exists; show seeding guidance, never start
- *                a run (a run without a config breaks at PARSE).
- * - `single`   → exactly one config; open the import dialog directly so the
- *                single-carrier flow stays zero-friction (no extra click).
- * - `multiple` → show the carrier picker; `defaultCarrierConfigId` is the
- *                first item after a stable name sort, so the preselection is
- *                deterministic instead of whatever the API returned first.
- */
+// 'none' must never start a run (it would break at PARSE); 'single' skips the
+// picker; 'multiple' preselects the first config by name, not by API order.
 export type CarrierConfigSelection =
   | { kind: 'none' }
   | { kind: 'single'; item: CarrierConfigPickerItem }
@@ -32,10 +19,6 @@ export type CarrierConfigSelection =
       defaultCarrierConfigId: string;
     };
 
-/**
- * Map a raw carrierConfig record (from useFindManyRecords) to the picker
- * item shape consumed by the import dialog and the carrier picker modal.
- */
 export const buildCarrierConfigPickerItem = (
   record: Record<string, unknown>,
 ): CarrierConfigPickerItem => {
@@ -67,10 +50,14 @@ export const resolveCarrierConfigSelection = (
     return { kind: 'single', item: items[0] };
   }
 
-  const sortedItems = [...items].sort((a, b) =>
-    a.carrierConfig.name.localeCompare(b.carrierConfig.name, undefined, {
-      sensitivity: 'base',
-    }),
+  const sortedItems = [...items].sort((firstItem, secondItem) =>
+    firstItem.carrierConfig.name.localeCompare(
+      secondItem.carrierConfig.name,
+      undefined,
+      {
+        sensitivity: 'base',
+      },
+    ),
   );
 
   return {

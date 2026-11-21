@@ -1,10 +1,6 @@
 export type FieldDiffAction = 'UPDATE' | 'COMPUTED' | 'INFO_ONLY';
 export type FieldDiffSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
-export type FieldDiffApproval =
-  | 'PENDING'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'SKIPPED';
+export type FieldDiffApproval = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
 
 export type FieldDiff = {
   field: string;

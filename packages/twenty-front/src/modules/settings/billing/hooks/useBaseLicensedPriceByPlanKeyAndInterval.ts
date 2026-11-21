@@ -2,8 +2,9 @@ import {
   type SubscriptionInterval,
   type BillingPlanKey,
 } from '~/generated-metadata/graphql';
-import { findOrThrow } from 'twenty-shared/utils';
 import { useBaseProductByPlanKey } from '@/settings/billing/hooks/useBaseProductByPlanKey';
+import { findSellablePriceForIntervalOrThrow } from '@/settings/billing/utils/findSellablePriceForIntervalOrThrow';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const useBaseLicensedPriceByPlanKeyAndInterval = () => {
   const { getBaseProductByPlanKey } = useBaseProductByPlanKey();
@@ -14,13 +15,11 @@ export const useBaseLicensedPriceByPlanKeyAndInterval = () => {
   ) => {
     const baseProduct = getBaseProductByPlanKey(planKey);
 
-    if (!baseProduct.prices) throw new Error('Product prices is undefined.');
+    if (!baseProduct.prices) {
+      throw new Error(doNotTranslate('Product prices is undefined.'));
+    }
 
-    return findOrThrow(
-      baseProduct.prices,
-      (price) => price.recurringInterval === interval,
-      new Error('Base licensed price not found'),
-    );
+    return findSellablePriceForIntervalOrThrow(baseProduct.prices, interval);
   };
 
   return { getBaseLicensedPriceByPlanKeyAndInterval };

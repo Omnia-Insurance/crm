@@ -1,15 +1,16 @@
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
 import { FormSelectFieldInput } from '@/object-record/record-field/ui/form-types/components/FormSelectFieldInput';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
+import { InputLabel } from '@/ui/input/components/internal/InputLabel/InputLabel';
 import { type WorkflowFormActionField } from '@/workflow/workflow-steps/workflow-actions/form-action/types/WorkflowFormActionField';
 import { getDefaultFormFieldSettings } from '@/workflow/workflow-steps/workflow-actions/form-action/utils/getDefaultFormFieldSettings';
-import { t } from '@lingui/core/macro';
+import { getFormFieldDisplayText } from '@/workflow/workflow-steps/workflow-actions/form-action/utils/getFormFieldDisplayText';
 import { styled } from '@linaria/react';
 import camelCase from 'lodash.camelcase';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 type WorkflowFormFieldSettingsSelectProps = {
   field: WorkflowFormActionField;
@@ -32,6 +33,7 @@ export const WorkflowFormFieldSettingsSelect = ({
   field,
   onChange,
 }: WorkflowFormFieldSettingsSelectProps) => {
+  const { t } = useLingui();
   const selectTypeOptions = [
     {
       label: t`Existing Field`,
@@ -77,7 +79,10 @@ export const WorkflowFormFieldSettingsSelect = ({
               });
             }}
             defaultValue={field.label}
-            placeholder={getDefaultFormFieldSettings(field.type).label}
+            placeholder={getFormFieldDisplayText({
+              type: field.type,
+              text: getDefaultFormFieldSettings(field.type).label,
+            })}
           />
         </FormFieldInputContainer>
         <FormFieldInputContainer>

@@ -7,7 +7,10 @@ import { FieldMetadataType } from 'twenty-shared/types';
 import { StepStatus, type WorkflowRunStepInfos } from 'twenty-shared/workflow';
 import { v4 as uuidv4 } from 'uuid';
 
-jest.mock('uuid');
+jest.mock('uuid', () => ({
+  ...jest.requireActual('uuid'),
+  v4: jest.fn(),
+}));
 
 beforeEach(() => {
   let counter = 0;
@@ -40,7 +43,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -58,7 +61,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -76,7 +79,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -177,10 +180,6 @@ describe('generateWorkflowRunDiagram', () => {
           "icon": "IconPlaylistAdd",
           "name": "Company created",
           "nodeType": "trigger",
-          "position": {
-            "x": 0,
-            "y": 0,
-          },
           "runStatus": "SUCCESS",
           "stepId": "trigger",
           "triggerType": "DATABASE_EVENT",
@@ -197,17 +196,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 1",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 150,
-          },
           "runStatus": "FAILED",
           "stepId": "step1",
         },
         "id": "step1",
         "position": {
           "x": 0,
-          "y": 150,
+          "y": 0,
         },
       },
       {
@@ -216,17 +211,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 2",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 300,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step2",
         },
         "id": "step2",
         "position": {
           "x": 0,
-          "y": 300,
+          "y": 0,
         },
       },
       {
@@ -235,17 +226,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": false,
           "name": "Step 3",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 450,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step3",
         },
         "id": "step3",
         "position": {
           "x": 0,
-          "y": 450,
+          "y": 0,
         },
       },
     ],
@@ -274,7 +261,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -292,7 +279,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -310,7 +297,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -413,10 +400,6 @@ describe('generateWorkflowRunDiagram', () => {
           "icon": "IconPlaylistAdd",
           "name": "Company created",
           "nodeType": "trigger",
-          "position": {
-            "x": 0,
-            "y": 0,
-          },
           "runStatus": "SUCCESS",
           "stepId": "trigger",
           "triggerType": "DATABASE_EVENT",
@@ -433,17 +416,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 1",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 150,
-          },
           "runStatus": "SUCCESS",
           "stepId": "step1",
         },
         "id": "step1",
         "position": {
           "x": 0,
-          "y": 150,
+          "y": 0,
         },
       },
       {
@@ -452,17 +431,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 2",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 300,
-          },
           "runStatus": "SUCCESS",
           "stepId": "step2",
         },
         "id": "step2",
         "position": {
           "x": 0,
-          "y": 300,
+          "y": 0,
         },
       },
       {
@@ -471,17 +446,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": false,
           "name": "Step 3",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 450,
-          },
           "runStatus": "SUCCESS",
           "stepId": "step3",
         },
         "id": "step3",
         "position": {
           "x": 0,
-          "y": 450,
+          "y": 0,
         },
       },
     ],
@@ -510,7 +481,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -528,7 +499,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -546,7 +517,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -649,10 +620,6 @@ describe('generateWorkflowRunDiagram', () => {
           "icon": "IconPlaylistAdd",
           "name": "Company created",
           "nodeType": "trigger",
-          "position": {
-            "x": 0,
-            "y": 0,
-          },
           "runStatus": "SUCCESS",
           "stepId": "trigger",
           "triggerType": "DATABASE_EVENT",
@@ -669,17 +636,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 1",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 150,
-          },
           "runStatus": "RUNNING",
           "stepId": "step1",
         },
         "id": "step1",
         "position": {
           "x": 0,
-          "y": 150,
+          "y": 0,
         },
       },
       {
@@ -688,17 +651,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 2",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 300,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step2",
         },
         "id": "step2",
         "position": {
           "x": 0,
-          "y": 300,
+          "y": 0,
         },
       },
       {
@@ -707,17 +666,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": false,
           "name": "Step 3",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 450,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step3",
         },
         "id": "step3",
         "position": {
           "x": 0,
-          "y": 450,
+          "y": 0,
         },
       },
     ],
@@ -746,7 +701,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -764,7 +719,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -782,7 +737,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -800,7 +755,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: {
@@ -921,10 +876,6 @@ describe('generateWorkflowRunDiagram', () => {
           "icon": "IconPlaylistAdd",
           "name": "Company created",
           "nodeType": "trigger",
-          "position": {
-            "x": 0,
-            "y": 0,
-          },
           "runStatus": "SUCCESS",
           "stepId": "trigger",
           "triggerType": "DATABASE_EVENT",
@@ -941,17 +892,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 1",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 150,
-          },
           "runStatus": "SUCCESS",
           "stepId": "step1",
         },
         "id": "step1",
         "position": {
           "x": 0,
-          "y": 150,
+          "y": 0,
         },
       },
       {
@@ -960,17 +907,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 2",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 300,
-          },
           "runStatus": "RUNNING",
           "stepId": "step2",
         },
         "id": "step2",
         "position": {
           "x": 0,
-          "y": 300,
+          "y": 0,
         },
       },
       {
@@ -979,17 +922,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": true,
           "name": "Step 3",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 450,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step3",
         },
         "id": "step3",
         "position": {
           "x": 0,
-          "y": 450,
+          "y": 0,
         },
       },
       {
@@ -998,17 +937,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": false,
           "name": "Step 4",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 600,
-          },
           "runStatus": "NOT_STARTED",
           "stepId": "step4",
         },
         "id": "step4",
         "position": {
           "x": 0,
-          "y": 600,
+          "y": 0,
         },
       },
     ],
@@ -1036,7 +971,7 @@ describe('generateWorkflowRunDiagram', () => {
         valid: true,
         settings: {
           errorHandlingOptions: {
-            retryOnFailure: { value: true },
+            retryOnFailure: { value: 3 },
             continueOnFailure: { value: false },
           },
           input: [
@@ -1109,10 +1044,6 @@ describe('generateWorkflowRunDiagram', () => {
           "icon": "IconPlaylistAdd",
           "name": "Company created",
           "nodeType": "trigger",
-          "position": {
-            "x": 0,
-            "y": 0,
-          },
           "runStatus": "SUCCESS",
           "stepId": "trigger",
           "triggerType": "DATABASE_EVENT",
@@ -1129,17 +1060,13 @@ describe('generateWorkflowRunDiagram', () => {
           "hasNextStepIds": false,
           "name": "Step 1",
           "nodeType": "action",
-          "position": {
-            "x": 0,
-            "y": 150,
-          },
           "runStatus": "PENDING",
           "stepId": "step1",
         },
         "id": "step1",
         "position": {
           "x": 0,
-          "y": 150,
+          "y": 0,
         },
       },
     ],
@@ -1150,10 +1077,6 @@ describe('generateWorkflowRunDiagram', () => {
       "hasNextStepIds": false,
       "name": "Step 1",
       "nodeType": "action",
-      "position": {
-        "x": 0,
-        "y": 150,
-      },
       "runStatus": "PENDING",
       "stepId": "step1",
     },

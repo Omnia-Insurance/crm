@@ -1,10 +1,9 @@
 import {
   type CompositeFieldSubFieldName,
-  type FilterableAndTSVectorFieldType,
   RecordFilterGroupLogicalOperator,
   type RecordFilterValueDependencies,
   type RecordGqlOperationFilter,
-  type ViewFilterOperand,
+  type RecordFilterOperand,
 } from '@/types';
 
 import { isDefined } from '@/utils';
@@ -17,9 +16,9 @@ export type RecordFilter = {
   id: string;
   fieldMetadataId: string;
   value: string;
-  type: FilterableAndTSVectorFieldType;
   recordFilterGroupId?: string | null;
-  operand: ViewFilterOperand;
+  positionInRecordFilterGroup?: number | null;
+  operand: RecordFilterOperand;
   subFieldName?: CompositeFieldSubFieldName | null | undefined;
   relationTargetFieldMetadataId?: string | null | undefined;
 };
@@ -28,6 +27,7 @@ export type RecordFilterGroup = {
   id: string;
   parentRecordFilterGroupId?: string | null;
   logicalOperator: RecordFilterGroupLogicalOperator;
+  positionInRecordFilterGroup?: number | null;
 };
 
 export const turnRecordFilterGroupsIntoGqlOperationFilter = ({

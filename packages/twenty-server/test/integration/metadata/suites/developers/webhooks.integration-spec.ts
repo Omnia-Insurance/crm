@@ -1,5 +1,5 @@
 import { gql } from 'graphql-tag';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import {
   createWebhook,
   createWebhookReceiver,
@@ -8,7 +8,8 @@ import {
   getWebhooks,
   updateWebhook,
 } from 'test/integration/metadata/suites/utils/webhook-test.util';
-import { makeAdminPanelAPIRequest } from 'test/integration/twenty-config/utils/make-admin-panel-api-request.util';
+import { makeAdminPanelApiRequest } from 'test/integration/twenty-config/utils/make-admin-panel-api-request.util';
+import { expectEventually } from 'test/integration/utils/expect-eventually.util';
 import { v4 as uuidv4 } from 'uuid';
 
 import { type UpdateWebhookInput } from 'src/engine/metadata-modules/webhook/dtos/update-webhook.input';
@@ -60,7 +61,7 @@ describe('webhooksResolver (e2e)', () => {
 
   afterEach(async () => {
     if (createdPersonId) {
-      await makeGraphqlAPIRequest({
+      await makeGraphqlApiRequest({
         query: DESTROY_PERSON_MUTATION,
         variables: { id: createdPersonId },
       }).catch(() => {});
@@ -68,7 +69,7 @@ describe('webhooksResolver (e2e)', () => {
     }
 
     if (createdWebhookId) {
-      await deleteWebhook(createdWebhookId).catch(() => {});
+      await deleteWebhook({ id: createdWebhookId }).catch(() => {});
       createdWebhookId = undefined;
     }
   });
@@ -94,7 +95,7 @@ describe('webhooksResolver (e2e)', () => {
         secret: 'test-secret',
       };
 
-      const response = await createWebhook(webhookInput);
+      const response = await createWebhook({ input: webhookInput });
 
       expect(response.status).toBe(200);
       expect(response.body.data).toBeDefined();
@@ -120,7 +121,7 @@ describe('webhooksResolver (e2e)', () => {
         secret: 'test-secret',
       };
 
-      const response = await createWebhook(webhookInput);
+      const response = await createWebhook({ input: webhookInput });
 
       expect(response.status).toBe(200);
       expect(response.body.errors).toBeDefined();
@@ -131,10 +132,12 @@ describe('webhooksResolver (e2e)', () => {
   describe('updateWebhook mutation', () => {
     it('should update a webhook successfully', async () => {
       const createResponse = await createWebhook({
-        targetUrl: 'https://example.com/webhook',
-        operations: ['person.created'],
-        description: 'Test webhook',
-        secret: 'test-secret',
+        input: {
+          targetUrl: 'https://example.com/webhook',
+          operations: ['person.created'],
+          description: 'Test webhook',
+          secret: 'test-secret',
+        },
       });
 
       const createdWebhookData = createResponse.body.data.createWebhook;
@@ -151,7 +154,7 @@ describe('webhooksResolver (e2e)', () => {
         },
       };
 
-      const updateResponse = await updateWebhook(updateInput);
+      const updateResponse = await updateWebhook({ input: updateInput });
 
       expect(updateResponse.status).toBe(200);
       expect(updateResponse.body.data).toBeDefined();
@@ -174,10 +177,12 @@ describe('webhooksResolver (e2e)', () => {
   describe('webhook query', () => {
     it('should find a specific webhook', async () => {
       const createResponse = await createWebhook({
-        targetUrl: 'https://example.com/webhook',
-        operations: ['person.created'],
-        description: 'Test webhook',
-        secret: 'test-secret',
+        input: {
+          targetUrl: 'https://example.com/webhook',
+          operations: ['person.created'],
+          description: 'Test webhook',
+          secret: 'test-secret',
+        },
       });
 
       const createdWebhookData = createResponse.body.data.createWebhook;
@@ -204,15 +209,17 @@ describe('webhooksResolver (e2e)', () => {
   describe('deleteWebhook mutation', () => {
     it('should delete a webhook successfully', async () => {
       const createResponse = await createWebhook({
-        targetUrl: 'https://example.com/webhook',
-        operations: ['person.created'],
-        description: 'Test webhook',
-        secret: 'test-secret',
+        input: {
+          targetUrl: 'https://example.com/webhook',
+          operations: ['person.created'],
+          description: 'Test webhook',
+          secret: 'test-secret',
+        },
       });
 
       const createdWebhookData = createResponse.body.data.createWebhook;
 
-      const deleteResponse = await deleteWebhook(createdWebhookData.id);
+      const deleteResponse = await deleteWebhook({ id: createdWebhookData.id });
 
       expect(deleteResponse.status).toBe(200);
       expect(deleteResponse.body.data).toBeDefined();
@@ -235,17 +242,19 @@ describe('webhooksResolver (e2e)', () => {
 
       try {
         const createWebhookResponse = await createWebhook({
-          targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
-          operations: ['person.created'],
-          description: 'SSRF test webhook',
-          secret: 'test-secret',
+          input: {
+            targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
+            operations: ['person.created'],
+            description: 'SSRF test webhook',
+            secret: 'test-secret',
+          },
         });
 
         expect(createWebhookResponse.body.errors).toBeUndefined();
         createdWebhookId = createWebhookResponse.body.data.createWebhook.id;
 
         const testId = uuidv4().slice(0, 8);
-        const createPersonResponse = await makeGraphqlAPIRequest({
+        const createPersonResponse = await makeGraphqlApiRequest({
           query: CREATE_PERSON_MUTATION,
           variables: {
             data: {
@@ -271,17 +280,17 @@ describe('webhooksResolver (e2e)', () => {
       }
     });
 
-    it('should deliver webhook successfully when safe mode is disabled', async () => {
+    it('should deliver webhook successfully when internal hosts are allowed', async () => {
       jest.useRealTimers();
 
       const receiver = await createWebhookReceiver(WEBHOOK_RECEIVER_PORT);
 
       try {
-        const createConfigResponse = await makeAdminPanelAPIRequest({
+        const createConfigResponse = await makeAdminPanelApiRequest({
           query: CREATE_CONFIG_VARIABLE_MUTATION,
           variables: {
-            key: 'OUTBOUND_HTTP_SAFE_MODE_ENABLED',
-            value: false,
+            key: 'OUTBOUND_HTTP_ALLOWED_INTERNAL_HOSTS',
+            value: ['*'],
           },
         });
 
@@ -290,30 +299,32 @@ describe('webhooksResolver (e2e)', () => {
           createConfigResponse.body.data.createDatabaseConfigVariable,
         ).toBe(true);
 
-        const verifyConfig = await makeAdminPanelAPIRequest({
+        const verifyConfig = await makeAdminPanelApiRequest({
           query: GET_CONFIG_VARIABLE_QUERY,
-          variables: { key: 'OUTBOUND_HTTP_SAFE_MODE_ENABLED' },
+          variables: { key: 'OUTBOUND_HTTP_ALLOWED_INTERNAL_HOSTS' },
         });
 
-        expect(verifyConfig.body.data.getDatabaseConfigVariable.value).toBe(
-          false,
-        );
+        expect(verifyConfig.body.data.getDatabaseConfigVariable.value).toEqual([
+          '*',
+        ]);
         expect(verifyConfig.body.data.getDatabaseConfigVariable.source).toBe(
           'DATABASE',
         );
 
         const createWebhookResponse = await createWebhook({
-          targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
-          operations: ['person.created'],
-          description: 'Delivery test webhook',
-          secret: 'test-secret',
+          input: {
+            targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
+            operations: ['person.created'],
+            description: 'Delivery test webhook',
+            secret: 'test-secret',
+          },
         });
 
         expect(createWebhookResponse.body.errors).toBeUndefined();
         createdWebhookId = createWebhookResponse.body.data.createWebhook.id;
 
         const testId = uuidv4().slice(0, 8);
-        const createPersonResponse = await makeGraphqlAPIRequest({
+        const createPersonResponse = await makeGraphqlApiRequest({
           query: CREATE_PERSON_MUTATION,
           variables: {
             data: {
@@ -329,21 +340,25 @@ describe('webhooksResolver (e2e)', () => {
         expect(createPersonResponse.body.errors).toBeUndefined();
         createdPersonId = createPersonResponse.body.data.createPerson.id;
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        expect(receiver.receivedPayloads.length).toBe(1);
-        expect(receiver.receivedPayloads[0]).toMatchObject({
-          targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
-          eventName: 'person.created',
-        });
+        // Delivery crosses two BullMQ hops behind a fire-and-forget emit.
+        await expectEventually(
+          () => {
+            expect(receiver.receivedPayloads.length).toBe(1);
+            expect(receiver.receivedPayloads[0]).toMatchObject({
+              targetUrl: `http://127.0.0.1:${WEBHOOK_RECEIVER_PORT}/webhook`,
+              eventName: 'person.created',
+            });
+          },
+          { timeoutMs: 30_000, intervalMs: 100 },
+        );
       } finally {
         await receiver.close();
-        await makeAdminPanelAPIRequest({
+        await makeAdminPanelApiRequest({
           query: DELETE_CONFIG_VARIABLE_MUTATION,
-          variables: { key: 'HTTP_TOOL_SAFE_MODE_ENABLED' },
+          variables: { key: 'OUTBOUND_HTTP_ALLOWED_INTERNAL_HOSTS' },
         }).catch(() => {});
         jest.useFakeTimers();
       }
-    });
+    }, 60_000);
   });
 });

@@ -15,12 +15,15 @@ import {
   type SerializedRelation,
 } from 'twenty-shared/types';
 
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-15/is-system-side-effect-upgrade-command-name.constant';
 import { ViewFieldGroupEntity } from 'src/engine/metadata-modules/view-field-group/entities/view-field-group.entity';
 import { ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
-import { OverridableEntity } from 'src/engine/workspace-manager/types/overridable-entity';
+import { OverridableEntity } from 'src/engine/workspace-manager/types/overridable-entity.type';
 
 export type ViewFieldOverrides = {
+  isActive?: boolean;
   isVisible?: boolean;
   size?: number;
   position?: number;
@@ -29,10 +32,13 @@ export type ViewFieldOverrides = {
 };
 
 @Entity({ name: 'viewField', schema: 'core' })
+@Index('IDX_VIEW_FIELD_APPLICATION_ID', ['applicationId'])
 @Index('IDX_VIEW_FIELD_WORKSPACE_ID_VIEW_ID', ['workspaceId', 'viewId'])
 @Index('IDX_VIEW_FIELD_VIEW_ID', ['viewId'])
 @Index('IDX_VIEW_FIELD_FIELD_METADATA_ID', ['fieldMetadataId'])
 @Index('IDX_VIEW_FIELD_VIEW_FIELD_GROUP_ID', ['viewFieldGroupId'])
+// OMNIA-CUSTOM: the real index (legacy migration 1774500000000) is on
+// COALESCE("subFieldName", ''); never generate a migration from this decorator
 @Index(
   'IDX_VIEW_FIELD_FIELD_METADATA_ID_VIEW_ID_UNIQUE',
   ['fieldMetadataId', 'viewId', 'subFieldName'],
@@ -74,8 +80,8 @@ export class ViewFieldEntity
   })
   aggregateOperation: AggregateOperations | null;
 
-  // OMNIA-CUSTOM: When set, this ViewField represents a sub-field of a relation
-  // (e.g., subFieldName="dateOfBirth" on a "lead" relation field).
+  // OMNIA-CUSTOM: relation sub-field column, e.g. "dateOfBirth" on the "lead"
+  // relation; column created by legacy migration 1774500000000
   @Column({ nullable: true, type: 'varchar' })
   subFieldName: string | null;
 
@@ -84,6 +90,12 @@ export class ViewFieldEntity
 
   @Column({ nullable: true, type: 'uuid' })
   viewFieldGroupId: string | null;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: false, default: false, type: 'boolean' })
+  isSystemSideEffect: boolean;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

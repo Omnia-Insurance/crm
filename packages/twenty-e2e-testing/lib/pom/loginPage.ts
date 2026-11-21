@@ -1,4 +1,4 @@
-import { type Locator, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export class LoginPage {
   private readonly loginWithGoogleButton: Locator;
@@ -16,6 +16,10 @@ export class LoginPage {
   private readonly uploadImageButton: Locator;
   private readonly deleteImageButton: Locator;
   private readonly workspaceNameField: Locator;
+  private readonly subdomainField: Locator;
+  private readonly createWorkspaceButton: Locator;
+  private readonly skipOnboardingStepButton: Locator;
+  private readonly skipOnboardingStepAnywayButton: Locator;
   private readonly firstNameField: Locator;
   private readonly lastNameField: Locator;
   private readonly syncEverythingWithGoogleRadio: Locator;
@@ -43,8 +47,7 @@ export class LoginPage {
     this.privacyPolicyLink = page.getByRole('link', { name: 'Privacy Policy' });
     this.emailField = page.getByPlaceholder('Email');
     this.continueButton = page.getByRole('button', {
-      name: 'Continue',
-      exact: true,
+      name: /^Continue(,|$)/,
     });
     this.forgotPasswordButton = page.getByText('Forgot your password?');
     this.passwordField = page.getByPlaceholder('Password');
@@ -54,9 +57,20 @@ export class LoginPage {
     this.previewImageButton = page.locator('.css-1qzw107'); // TODO: fix
     this.uploadImageButton = page.getByRole('button', { name: 'Upload' });
     this.deleteImageButton = page.getByRole('button', { name: 'Remove' });
-    this.workspaceNameField = page.getByPlaceholder('Apple');
-    this.firstNameField = page.getByPlaceholder('Tim');
-    this.lastNameField = page.getByPlaceholder('Cook');
+    this.workspaceNameField = page.getByLabel('Name', { exact: true });
+    this.subdomainField = page.getByLabel('Subdomain', { exact: true });
+    this.createWorkspaceButton = page.getByRole('button', {
+      name: 'Create workspace',
+    });
+    this.skipOnboardingStepButton = page.getByRole('button', {
+      name: 'Skip',
+      exact: true,
+    });
+    this.skipOnboardingStepAnywayButton = page.getByTestId(
+      'onboarding-skip-dialog-skip-anyway',
+    );
+    this.firstNameField = page.getByLabel('First Name', { exact: true });
+    this.lastNameField = page.getByLabel('Last name', { exact: true });
     this.syncEverythingWithGoogleRadio = page.locator(
       'input[value="SHARE_EVERYTHING"]',
     );
@@ -86,10 +100,12 @@ export class LoginPage {
   }
 
   async clickLoginWithEmailIfVisible() {
-    try {
-      await this.loginWithEmailButton.click({ timeout: 3000 });
-    } catch {
-      // Button not found - email field might already be visible (SSO-only or different auth flow)
+    await expect(
+      this.loginWithEmailButton.or(this.emailField).first(),
+    ).toBeVisible({ timeout: 30000 });
+
+    if (await this.loginWithEmailButton.isVisible()) {
+      await this.loginWithEmailButton.click();
     }
   }
 
@@ -143,6 +159,24 @@ export class LoginPage {
 
   async typeWorkspaceName(workspaceName: string) {
     await this.workspaceNameField.fill(workspaceName);
+  }
+
+  async typeSubdomain(subdomain: string) {
+    await this.subdomainField.fill(subdomain);
+  }
+
+  async clickCreateWorkspaceButton() {
+    await this.createWorkspaceButton.click();
+  }
+
+  async clickSkipOnboardingStep() {
+    await this.skipOnboardingStepButton.click();
+
+    try {
+      await this.skipOnboardingStepAnywayButton.click({ timeout: 3000 });
+    } catch {
+      // No skip dialog on this step - clicking Skip already moved on
+    }
   }
 
   async typeFirstName(firstName: string) {

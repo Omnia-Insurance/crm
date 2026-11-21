@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
 import { FeatureFlagKey } from 'twenty-shared/types';
-import { Repository } from 'typeorm';
 
+import { FEATURE_FLAG_DISABLED_EVENT } from 'src/engine/core-modules/feature-flag/constants/feature-flag-disabled-event.constant';
+import { FEATURE_FLAG_ENABLED_EVENT } from 'src/engine/core-modules/feature-flag/constants/feature-flag-enabled-event.constant';
+import { type FeatureFlagEnabledEvent } from 'src/engine/core-modules/feature-flag/types/feature-flag-enabled-event.type';
+import { WorkspaceEventEmitter } from 'src/engine/workspace-event-emitter/workspace-event-emitter';
 import { type FeatureFlagMap } from 'src/engine/core-modules/feature-flag/interfaces/feature-flag-map.interface';
 
 import { type FeatureFlagDTO } from 'src/engine/core-modules/feature-flag/dtos/feature-flag.dto';
@@ -14,14 +16,17 @@ import {
 } from 'src/engine/core-modules/feature-flag/feature-flag.exception';
 import { featureFlagValidator } from 'src/engine/core-modules/feature-flag/validates/feature-flag.validate';
 import { publicFeatureFlagValidator } from 'src/engine/core-modules/feature-flag/validates/is-public-feature-flag.validate';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 
 @Injectable()
 export class FeatureFlagService {
   constructor(
-    @InjectRepository(FeatureFlagEntity)
-    private readonly featureFlagRepository: Repository<FeatureFlagEntity>,
+    @InjectWorkspaceScopedRepository(FeatureFlagEntity)
+    private readonly featureFlagRepository: WorkspaceScopedRepository<FeatureFlagEntity>,
     private readonly workspaceCacheService: WorkspaceCacheService,
+    private readonly workspaceEventEmitter: WorkspaceEventEmitter,
   ) {}
 
   public async isFeatureEnabled(
@@ -64,7 +69,8 @@ export class FeatureFlagService {
   ): Promise<void> {
     if (keys.length > 0) {
       await this.featureFlagRepository.upsert(
-        keys.map((key) => ({ workspaceId, key, value: true })),
+        workspaceId,
+        keys.map((key) => ({ key, value: true })),
         {
           conflictPaths: ['workspaceId', 'key'],
           skipUpdateIfNoValuesChanged: true,
@@ -74,6 +80,8 @@ export class FeatureFlagService {
       await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
         'featureFlagsMap',
       ]);
+
+      this.emitFeatureFlagsEnabled({ keys, workspaceId });
     }
   }
 
@@ -106,30 +114,45 @@ export class FeatureFlagService {
       );
     }
 
-    const existingFeatureFlag = await this.featureFlagRepository.findOne({
-      where: {
-        key: featureFlag,
-        workspaceId: workspaceId,
-      },
-    });
+    const existingFeatureFlag = await this.featureFlagRepository.findOne(
+      workspaceId,
+      { where: { key: featureFlag } },
+    );
 
-    const featureFlagToSave = existingFeatureFlag
-      ? {
-          ...existingFeatureFlag,
-          value,
-        }
-      : {
-          key: featureFlag,
-          value,
-          workspaceId: workspaceId,
-        };
+    if (existingFeatureFlag?.value === value) {
+      return existingFeatureFlag;
+    }
 
-    const result = await this.featureFlagRepository.save(featureFlagToSave);
+    const result = await this.featureFlagRepository.upsertAndReturnOne(
+      workspaceId,
+      { key: featureFlag, value },
+      ['workspaceId', 'key'],
+    );
 
     await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
       'featureFlagsMap',
     ]);
 
+    this.workspaceEventEmitter.emitCustomBatchEvent<FeatureFlagEnabledEvent>(
+      value ? FEATURE_FLAG_ENABLED_EVENT : FEATURE_FLAG_DISABLED_EVENT,
+      [{ key: featureFlag }],
+      workspaceId,
+    );
+
     return result;
+  }
+
+  private emitFeatureFlagsEnabled({
+    keys,
+    workspaceId,
+  }: {
+    keys: FeatureFlagKey[];
+    workspaceId: string;
+  }): void {
+    this.workspaceEventEmitter.emitCustomBatchEvent<FeatureFlagEnabledEvent>(
+      FEATURE_FLAG_ENABLED_EVENT,
+      keys.map((key) => ({ key })),
+      workspaceId,
+    );
   }
 }

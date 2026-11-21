@@ -1,5 +1,6 @@
-import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
+import { settingsPermissionFlagDefinitionsState } from '@/settings/roles/states/settingsPermissionFlagDefinitionsState';
 import { settingsPersistedRoleFamilyState } from '@/settings/roles/states/settingsPersistedRoleFamilyState';
+import { withRowLevelPermissionRuleGrants } from '@/settings/roles/role/utils/withRowLevelPermissionRuleGrants';
 import { settingsRoleIdsState } from '@/settings/roles/states/settingsRoleIdsState';
 import { settingsRolesIsLoadingState } from '@/settings/roles/states/settingsRolesIsLoadingState';
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
@@ -20,19 +21,19 @@ export const SettingsRolesQueryEffect = () => {
     settingsRolesIsLoadingState,
   );
 
+  const setSettingsPermissionFlagDefinitions = useSetAtomState(
+    settingsPermissionFlagDefinitionsState,
+  );
+
   const store = useStore();
 
   const populateRoles = useCallback(
     (roles: RoleWithPartialMembers[]) => {
       const roleIds = roles.map((role) => role.id);
       store.set(settingsRoleIdsState.atom, roleIds);
-      roles.forEach((role) => {
+      roles.map(withRowLevelPermissionRuleGrants).forEach((role) => {
         const persistedRole = store.get(
           settingsPersistedRoleFamilyState.atomFamily(role.id),
-        );
-
-        const currentDraftRole = store.get(
-          settingsDraftRoleFamilyState.atomFamily(role.id),
         );
 
         if (isDeeplyEqual(role, persistedRole)) {
@@ -40,10 +41,6 @@ export const SettingsRolesQueryEffect = () => {
         }
 
         store.set(settingsPersistedRoleFamilyState.atomFamily(role.id), role);
-
-        if (!isDeeplyEqual(currentDraftRole, role)) {
-          store.set(settingsDraftRoleFamilyState.atomFamily(role.id), role);
-        }
       });
     },
     [store],
@@ -52,14 +49,20 @@ export const SettingsRolesQueryEffect = () => {
   useEffect(() => {
     setSettingsRolesIsLoading(loading);
     if (!loading) {
-      const roles = data?.getRoles;
-      if (!isDefined(roles)) {
+      if (!isDefined(data?.getRoles)) {
         return;
       }
 
-      populateRoles(roles);
+      setSettingsPermissionFlagDefinitions(data.getPermissionFlags);
+      populateRoles(data.getRoles);
     }
-  }, [data, loading, populateRoles, setSettingsRolesIsLoading]);
+  }, [
+    data,
+    loading,
+    populateRoles,
+    setSettingsPermissionFlagDefinitions,
+    setSettingsRolesIsLoading,
+  ]);
 
   return null;
 };

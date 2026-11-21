@@ -5,6 +5,10 @@ export const mockBillingPlans = {
     {
       __typename: 'BillingPlan',
       planKey: 'PRO',
+      isSellable: true,
+      isCheckoutDefault: true,
+      upgradePlanKeys: ['ENTERPRISE'],
+      downgradePlanKeys: [],
       baseProducts: [
         {
           __typename: 'BillingLicensedProduct',
@@ -13,6 +17,7 @@ export const mockBillingPlans = {
           images: [],
           metadata: {
             __typename: 'BillingProductMetadata',
+            isLegacy: null,
             productKey: 'BASE_PRODUCT',
             planKey: 'PRO',
             priceUsageBased: 'LICENSED',
@@ -25,6 +30,7 @@ export const mockBillingPlans = {
               recurringInterval: 'Month',
               priceUsageType: 'LICENSED',
               creditAmount: null,
+              isSellable: true,
             },
             {
               __typename: 'BillingPriceLicensed',
@@ -33,6 +39,7 @@ export const mockBillingPlans = {
               recurringInterval: 'Year',
               priceUsageType: 'LICENSED',
               creditAmount: null,
+              isSellable: true,
             },
           ],
         },
@@ -46,6 +53,7 @@ export const mockBillingPlans = {
           images: [],
           metadata: {
             __typename: 'BillingProductMetadata',
+            isLegacy: null,
             productKey: 'RESOURCE_CREDIT',
             planKey: 'PRO',
             priceUsageBased: 'METERED',
@@ -298,6 +306,10 @@ export const mockBillingPlans = {
     {
       __typename: 'BillingPlan',
       planKey: 'ENTERPRISE',
+      isSellable: true,
+      isCheckoutDefault: false,
+      upgradePlanKeys: [],
+      downgradePlanKeys: ['PRO'],
       baseProducts: [
         {
           __typename: 'BillingLicensedProduct',
@@ -306,6 +318,7 @@ export const mockBillingPlans = {
           images: [],
           metadata: {
             __typename: 'BillingProductMetadata',
+            isLegacy: null,
             productKey: 'BASE_PRODUCT',
             planKey: 'ENTERPRISE',
             priceUsageBased: 'LICENSED',
@@ -318,6 +331,7 @@ export const mockBillingPlans = {
               recurringInterval: 'Month',
               priceUsageType: 'LICENSED',
               creditAmount: null,
+              isSellable: true,
             },
             {
               __typename: 'BillingPriceLicensed',
@@ -326,6 +340,7 @@ export const mockBillingPlans = {
               recurringInterval: 'Year',
               priceUsageType: 'LICENSED',
               creditAmount: null,
+              isSellable: true,
             },
           ],
         },
@@ -339,6 +354,7 @@ export const mockBillingPlans = {
           images: [],
           metadata: {
             __typename: 'BillingProductMetadata',
+            isLegacy: null,
             productKey: 'RESOURCE_CREDIT',
             planKey: 'ENTERPRISE',
             priceUsageBased: 'METERED',
@@ -587,6 +603,28 @@ export const mockBillingPlans = {
           ],
         },
       ],
+    },
+    {
+      __typename: 'BillingPlan',
+      planKey: 'PRO_V2',
+      isSellable: false,
+      isCheckoutDefault: false,
+      upgradePlanKeys: [],
+      downgradePlanKeys: [],
+      baseProducts: [],
+      resourceCreditProducts: [],
+      meteredProducts: [],
+    },
+    {
+      __typename: 'BillingPlan',
+      planKey: 'ORGANIZATION_V2',
+      isSellable: false,
+      isCheckoutDefault: false,
+      upgradePlanKeys: [],
+      downgradePlanKeys: [],
+      baseProducts: [],
+      resourceCreditProducts: [],
+      meteredProducts: [],
     },
   ],
 } as ListPlansQuery;

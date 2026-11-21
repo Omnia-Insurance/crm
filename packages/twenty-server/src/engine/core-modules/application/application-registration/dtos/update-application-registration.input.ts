@@ -4,7 +4,6 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
-  IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -36,11 +35,6 @@ export class UpdateApplicationRegistrationPayload {
   @MaxLength(256, { each: true })
   @IsOptional()
   oAuthScopes?: string[];
-
-  @Field(() => Boolean, { nullable: true })
-  @IsBoolean()
-  @IsOptional()
-  isListed?: boolean;
 }
 
 @InputType()

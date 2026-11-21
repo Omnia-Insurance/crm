@@ -3,6 +3,8 @@ import { CaptchaDriverType, SupportDriver } from '~/generated-metadata/graphql';
 
 export const mockedClientConfig: ClientConfig = {
   aiModels: [],
+  aiEvaluationModels: [],
+  aiModelTiers: [],
   signInPrefilled: true,
   isMultiWorkspaceEnabled: false,
   isEmailVerificationRequired: false,
@@ -14,6 +16,7 @@ export const mockedClientConfig: ClientConfig = {
     sso: [],
   },
   frontDomain: 'localhost',
+  serverUrl: 'http://localhost:3000',
   defaultSubdomain: 'app',
   analyticsEnabled: true,
   support: {
@@ -44,6 +47,13 @@ export const mockedClientConfig: ClientConfig = {
     siteKey: 'MOCKED_SITE_KEY',
   },
   api: { mutationMaximumAffectedRecords: 100 },
+  onboarding: {
+    importContactsCreditsReward: 2,
+    inviteTeamCreditsRewardPerUser: 3,
+    createProfileCreditsReward: 0.5,
+    upgradeCreditsReward: 2,
+    inviteTeamMaxInvites: 10,
+  },
   canManageFeatureFlags: true,
   publicFeatureFlags: [],
   isMicrosoftMessagingEnabled: true,
@@ -53,11 +63,13 @@ export const mockedClientConfig: ClientConfig = {
   isAttachmentPreviewEnabled: true,
   isConfigVariablesInDbEnabled: false,
   isImapSmtpCaldavEnabled: false,
-  isEmailGroupEnabled: false,
   isTwoFactorAuthenticationEnabled: false,
-  isEmailingDomainsEnabled: false,
+  isEmailingDomainInDemoMode: false,
   allowRequestsToTwentyIcons: true,
   isCloudflareIntegrationEnabled: false,
   isClickHouseConfigured: false,
   isWorkspaceSchemaDDLLocked: false,
+  isOnboardingAiChatEnabled: false,
+  isBookCallOnboardingStepEnabled: false,
+  isCompanyEnrichmentEnabled: false,
 };

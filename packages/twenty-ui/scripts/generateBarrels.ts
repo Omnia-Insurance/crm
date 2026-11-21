@@ -8,11 +8,37 @@ import ts from 'typescript';
 
 // TODO prastoin refactor this file in several one into its dedicated package and make it a TypeScript CLI
 
+const shouldCheck = process.argv.includes('--check');
+const writeGeneratedFile = ({
+  file,
+  content,
+}: {
+  file: string;
+  content: string;
+}) => {
+  if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === content) {
+    return;
+  }
+  if (shouldCheck) {
+    throw new Error(
+      `Generated exports are stale: ${file}. Run nx generateBarrels twenty-ui.`,
+    );
+  }
+  fs.writeFileSync(file, content, 'utf8');
+};
+
 const INDEX_FILENAME = 'index';
 const PACKAGE_JSON_FILENAME = 'package.json';
 const NX_PROJECT_CONFIGURATION_FILENAME = 'project.json';
 const PACKAGE_PATH = path.resolve('packages/twenty-ui');
 const SRC_PATH = path.resolve(`${PACKAGE_PATH}/src`);
+const STANDALONE_MODULES = [
+  'assets',
+  'components/code-editor',
+  'icon/provider',
+  'styles',
+  'testing',
+];
 const PACKAGE_JSON_PATH = path.join(PACKAGE_PATH, PACKAGE_JSON_FILENAME);
 const NX_PROJECT_CONFIGURATION_PATH = path.join(
   PACKAGE_PATH,
@@ -24,8 +50,14 @@ if (prettierConfigFile == null) {
   throw new Error('Prettier config file not found');
 }
 const prettierConfiguration = prettier.resolveConfig(prettierConfigFile);
-const prettierFormat = (str: string, parser: Options['parser']) =>
-  prettier.format(str, {
+const prettierFormat = ({
+  content,
+  parser,
+}: {
+  content: string;
+  parser: Options['parser'];
+}) =>
+  prettier.format(content, {
     ...prettierConfiguration,
     parser,
   });
@@ -49,27 +81,28 @@ const createTypeScriptFile = ({
  *                              |___/
  */
 `;
-  const formattedContent = prettierFormat(
-    `${header}\n${content}\n`,
-    'typescript',
-  );
-  fs.writeFileSync(
-    path.join(filePath, `${filename}.ts`),
-    formattedContent,
-    'utf-8',
-  );
+  const formattedContent = prettierFormat({
+    content: `${header}\n${content}\n`,
+    parser: 'typescript',
+  });
+  writeGeneratedFile({
+    file: path.join(filePath, `${filename}.ts`),
+    content: formattedContent,
+  });
 };
 
-const getLastPathFolder = (pathStr: string) => path.basename(pathStr);
+const getModuleName = (moduleDirectory: string) =>
+  slash(path.relative(SRC_PATH, moduleDirectory));
 
 const getSubDirectoryPaths = (directoryPath: string): string[] => {
-  const pattern = slash(path.join(directoryPath, '*/'));
-  return globSync(pattern, {
+  return globSync('*/', {
     ignore: [...EXCLUDED_DIRECTORIES],
-    cwd: SRC_PATH,
+    cwd: directoryPath,
     nodir: false,
     maxDepth: 1,
-  }).sort((a, b) => a.localeCompare(b));
+  })
+    .map((directory) => path.resolve(directoryPath, directory))
+    .sort((a, b) => a.localeCompare(b));
 };
 
 const partitionFileExportsByType = (declarations: DeclarationOccurrence[]) => {
@@ -103,7 +136,16 @@ const partitionFileExportsByType = (declarations: DeclarationOccurrence[]) => {
 const generateModuleIndexFiles = (exportByBarrel: ExportByBarrel[]) => {
   return exportByBarrel.map<createTypeScriptFileArgs>(
     ({ barrel: { moduleDirectory }, allFileExports }) => {
-      const content = allFileExports
+      const childModuleDirectories = exportByBarrel
+        .map(({ barrel }) => barrel.moduleDirectory)
+        .filter((directory) => path.dirname(directory) === moduleDirectory);
+      const fileExports = allFileExports
+        .filter(
+          ({ file }) =>
+            !childModuleDirectories.some((directory) =>
+              file.startsWith(`${directory}${path.sep}`),
+            ),
+        )
         .sort((a, b) => a.file.localeCompare(b.file))
         .map(({ exports, file }) => {
           const { otherDeclarations, typeAndInterfaceDeclarations } =
@@ -134,9 +176,19 @@ const generateModuleIndexFiles = (exportByBarrel: ExportByBarrel[]) => {
             .join('\n');
         })
         .join('\n');
+      const childModuleExports = childModuleDirectories
+        .filter(
+          (directory) => !STANDALONE_MODULES.includes(getModuleName(directory)),
+        )
+        .map((directory) => `export * from './${path.basename(directory)}';`);
+      const content = [fileExports, ...childModuleExports]
+        .filter((entry) => entry !== '')
+        .join('\n');
 
       return {
-        content,
+        // A placeholder barrel for an empty module must still be a valid module
+        // so `export * from './x'` re-exports (e.g. in individual-entry.ts) resolve.
+        content: content === '' ? 'export {};' : content,
         path: moduleDirectory,
         filename: INDEX_FILENAME,
       };
@@ -155,7 +207,7 @@ const updateJsonFile = ({ content, file }: WriteInJsonFileArgs) => {
     ...prettierConfiguration,
     filepath: file,
   });
-  fs.writeFileSync(file, formattedContent, 'utf-8');
+  writeGeneratedFile({ file, content: formattedContent });
 };
 
 const writeInPackageJson = (update: JsonUpdate) => {
@@ -200,7 +252,7 @@ type ExportsConfig = Record<string, ExportOccurrence | string>;
 const generateModulePackageExports = (moduleDirectories: string[]) => {
   return moduleDirectories.reduce<ExportsConfig>(
     (acc, moduleDirectory) => {
-      const moduleName = getLastPathFolder(moduleDirectory);
+      const moduleName = getModuleName(moduleDirectory);
       if (moduleName === undefined) {
         throw new Error(
           `Should never occur, moduleName is undefined ${moduleDirectory}`,
@@ -227,7 +279,7 @@ const generateModulePackageExports = (moduleDirectories: string[]) => {
 const computePackageJsonFilesAndExportsConfig = (
   moduleDirectories: string[],
 ) => {
-  const entrypoints = moduleDirectories.map(getLastPathFolder);
+  const entrypoints = moduleDirectories.map(getModuleName);
   const exports = {
     '.': {
       types: './dist/index.d.ts',
@@ -248,20 +300,18 @@ const computePackageJsonFilesAndExportsConfig = (
   return {
     exports,
     typesVersions: { '*': typesVersionsEntries },
-    files: ['dist', ...entrypoints],
+    files: [
+      'dist',
+      'LICENSE',
+      '!dist/individual',
+      '!dist/individual/**',
+      '!dist/**/*.map',
+    ],
   };
 };
 
-const computeProjectNxBuildOutputsPath = (moduleDirectories: string[]) => {
-  const dynamicOutputsPath = moduleDirectories
-    .map(getLastPathFolder)
-    .flatMap((barrelName) =>
-      ['package.json', 'dist'].map(
-        (subPath) => `{projectRoot}/${barrelName}/${subPath}`,
-      ),
-    );
-
-  return ['{projectRoot}/dist', ...dynamicOutputsPath];
+const computeProjectNxBuildOutputsPath = () => {
+  return ['{projectRoot}/dist'];
 };
 
 const EXCLUDED_EXTENSIONS = [
@@ -277,6 +327,8 @@ const EXCLUDED_DIRECTORIES = [
   '**/__mocks__/**',
   '**/__stories__/**',
   '**/internal/**',
+  '**/internals/**',
+  '**/parts/**',
 ] as const;
 function getTypeScriptFiles(
   directoryPath: string,
@@ -396,10 +448,8 @@ function extractExportsFromSourceFile(sourceFile: ts.SourceFile) {
             const exportName = element.name.text;
 
             // Check both the declaration and the individual specifier for type-only exports
-            const isTypeExport =
-              node.isTypeOnly || ts.isTypeOnlyExportDeclaration(node);
+            const isTypeExport = node.isTypeOnly || element.isTypeOnly;
             if (isTypeExport) {
-              // should handle kind
               exports.push({
                 kind: 'type',
                 name: exportName,
@@ -472,7 +522,7 @@ type ExportByBarrel = {
 const retrieveExportsByBarrel = (barrelDirectories: string[]) => {
   return barrelDirectories.map<ExportByBarrel>((moduleDirectory) => {
     const moduleExportsPerFile = findAllExports(moduleDirectory);
-    const moduleName = getLastPathFolder(moduleDirectory);
+    const moduleName = getModuleName(moduleDirectory);
     if (!moduleName) {
       throw new Error(
         `Should never occur moduleName not found ${moduleDirectory}`,
@@ -489,17 +539,59 @@ const retrieveExportsByBarrel = (barrelDirectories: string[]) => {
   });
 };
 
+const INDIVIDUAL_ENTRY_FILENAME = 'individual-entry';
+
+const getRootBarrelModuleNames = (moduleDirectories: string[]) =>
+  moduleDirectories
+    .map(getModuleName)
+    .filter((moduleName) => !STANDALONE_MODULES.includes(moduleName));
+
+const generateRootBarrel = (
+  moduleDirectories: string[],
+): createTypeScriptFileArgs => {
+  const content = [
+    "import './styles/base/reset.scss';",
+    '',
+    ...getRootBarrelModuleNames(moduleDirectories).map(
+      (moduleName) => `export * from './${moduleName}';`,
+    ),
+  ].join('\n');
+
+  return { path: SRC_PATH, content, filename: INDEX_FILENAME };
+};
+
+const generateIndividualEntry = (
+  moduleDirectories: string[],
+): createTypeScriptFileArgs => {
+  const content = getRootBarrelModuleNames(moduleDirectories)
+    .map((moduleName) => `export * from './${moduleName}';`)
+    .join('\n');
+
+  return { path: SRC_PATH, content, filename: INDIVIDUAL_ENTRY_FILENAME };
+};
+
 const main = () => {
   const moduleDirectories = getSubDirectoryPaths(SRC_PATH);
-  const exportsByBarrel = retrieveExportsByBarrel(moduleDirectories);
+  const barrelDirectories = [
+    ...new Set([
+      ...moduleDirectories,
+      ...getSubDirectoryPaths(path.join(SRC_PATH, 'primitives')),
+      ...getSubDirectoryPaths(path.join(SRC_PATH, 'components')),
+      ...STANDALONE_MODULES.map((moduleName) =>
+        path.join(SRC_PATH, moduleName),
+      ),
+    ]),
+  ].sort((first, second) => first.localeCompare(second));
+  const exportsByBarrel = retrieveExportsByBarrel(barrelDirectories);
   const moduleIndexFiles = generateModuleIndexFiles(exportsByBarrel);
   const packageJsonConfig =
-    computePackageJsonFilesAndExportsConfig(moduleDirectories);
-  const nxBuildOutputsPath =
-    computeProjectNxBuildOutputsPath(moduleDirectories);
+    computePackageJsonFilesAndExportsConfig(barrelDirectories);
+  const nxBuildOutputsPath = computeProjectNxBuildOutputsPath();
 
   updateNxProjectConfigurationBuildOutputs(nxBuildOutputsPath);
   writeInPackageJson(packageJsonConfig);
   moduleIndexFiles.forEach(createTypeScriptFile);
+  createTypeScriptFile(generateRootBarrel(moduleDirectories));
+  createTypeScriptFile(generateIndividualEntry(moduleDirectories));
 };
 main();

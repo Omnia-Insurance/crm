@@ -1,5 +1,2 @@
-// Returns the current UTC moment as an ISO string for stamping submittedDate.
-// The frontend handles timezone display via formatInTimeZone().
-export function getNowUtc(): string {
-  return new Date().toISOString();
-}
+// Stored in UTC; the front renders submittedDate in the member's time zone
+export const getNowUtc = (): string => new Date().toISOString();

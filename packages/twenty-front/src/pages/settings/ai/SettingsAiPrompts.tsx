@@ -1,19 +1,27 @@
 import { styled } from '@linaria/react';
 
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
-import { FormAdvancedTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormAdvancedTextFieldInput';
+import { FormAdvancedTextFieldInput } from '@/advanced-text-editor/components/FormAdvancedTextFieldInput';
+import { AI_INSTRUCTIONS_EDITOR_PROFILE } from '@/ai/constants/AiInstructionsEditorProfile';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useQuery } from '@apollo/client/react';
-import { t } from '@lingui/core/macro';
 import { SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { H2Title, H3Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import {
+  getSettingsPath,
+  getValidTimeZoneOrUndefined,
+  isDefined,
+} from 'twenty-shared/utils';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { GetAiSystemPromptPreviewDocument } from '~/generated-metadata/graphql';
-import { formatNumber } from '~/utils/format/formatNumber';
+import { formatNumber } from '@/localization/utils/formatNumber';
+import { useLingui } from '@lingui/react/macro';
+
+const StyledSectionHeader = styled(Section.Header)`
+  margin-block-end: 0;
+`;
 
 const StyledFormContainer = styled.div`
   display: flex;
@@ -29,6 +37,7 @@ const StyledTitleContainer = styled.div`
 `;
 
 export const SettingsAiPrompts = () => {
+  const { t } = useLingui();
   const currentWorkspaceMember = useAtomStateValue(currentWorkspaceMemberState);
 
   const { data: previewData, loading: previewLoading } = useQuery(
@@ -48,9 +57,23 @@ export const SettingsAiPrompts = () => {
       `**${t`Locale`}:** ${currentWorkspaceMember.locale ?? 'en'}`,
     ];
 
-    if (isDefined(currentWorkspaceMember.timeZone)) {
-      parts.push(`**${t`Timezone`}:** ${currentWorkspaceMember.timeZone}`);
+    const validTimeZone = getValidTimeZoneOrUndefined(
+      currentWorkspaceMember.timeZone,
+    );
+
+    if (isDefined(validTimeZone)) {
+      parts.push(`**${t`Timezone`}:** ${validTimeZone}`);
     }
+
+    const currentDate = new Intl.DateTimeFormat('en-US', {
+      timeZone: validTimeZone,
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date());
+
+    parts.push(`**${t`Current date`}:** ${currentDate}`);
 
     return parts.join('\n\n');
   };
@@ -71,27 +94,30 @@ export const SettingsAiPrompts = () => {
     : '';
 
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       links={[
         {
           children: t`Workspace`,
-          href: getSettingsPath(SettingsPath.Workspace),
+          href: getSettingsPath(SettingsPath.General),
         },
         { children: t`AI`, href: getSettingsPath(SettingsPath.AI) },
         { children: t`System Prompt` },
       ]}
     >
       <SettingsPageContainer>
-        <Section>
+        <Section.Root>
           <StyledTitleContainer>
-            <H3Title
+            <StyledSectionHeader
               title={t`System Prompt`}
               description={[t`Read-only`, totalTokenCount]
                 .filter(Boolean)
                 .join(' ')}
+              level={3}
+              size="lg"
+              descriptionLineClamp={2}
             />
           </StyledTitleContainer>
-        </Section>
+        </Section.Root>
         {promptSections.map((section) => {
           const sectionTokenCount = t`~ ${formatNumber(
             section.estimatedTokenCount,
@@ -102,8 +128,8 @@ export const SettingsAiPrompts = () => {
           )} tokens`;
 
           return (
-            <Section key={section.title}>
-              <H2Title
+            <Section.Root key={section.title}>
+              <Section.Header
                 title={section.title}
                 description={[t`Read-only`, sectionTokenCount]
                   .filter(Boolean)
@@ -117,7 +143,7 @@ export const SettingsAiPrompts = () => {
                   label={section.title}
                   readonly={true}
                   defaultValue={section.content}
-                  contentType="markdown"
+                  profile={AI_INSTRUCTIONS_EDITOR_PROFILE}
                   onChange={() => {}}
                   enableFullScreen={true}
                   fullScreenBreadcrumbs={[
@@ -130,15 +156,14 @@ export const SettingsAiPrompts = () => {
                     },
                   ]}
                   minHeight={120}
-                  maxWidth={700}
                 />
               </StyledFormContainer>
-            </Section>
+            </Section.Root>
           );
         })}
 
-        <Section>
-          <H2Title
+        <Section.Root>
+          <Section.Header
             title={t`User Context`}
             description={t`Information about the current user (auto-generated and included in each request)`}
           />
@@ -147,15 +172,14 @@ export const SettingsAiPrompts = () => {
               label={t`User Information`}
               readonly={true}
               defaultValue={userContextPreview}
-              contentType="markdown"
+              profile={AI_INSTRUCTIONS_EDITOR_PROFILE}
               onChange={() => {}}
               enableFullScreen={false}
               minHeight={80}
-              maxWidth={700}
             />
           </StyledFormContainer>
-        </Section>
+        </Section.Root>
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

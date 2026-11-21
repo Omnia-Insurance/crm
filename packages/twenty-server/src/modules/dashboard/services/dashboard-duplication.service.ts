@@ -5,8 +5,18 @@ import { appendCopySuffix, isDefined } from 'twenty-shared/utils';
 import { ActorFromAuthContextService } from 'src/engine/core-modules/actor/services/actor-from-auth-context.service';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { PageLayoutDuplicationService } from 'src/engine/metadata-modules/page-layout/services/page-layout-duplication.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
+import { PageLayoutService } from 'src/engine/metadata-modules/page-layout/services/page-layout.service';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+  PermissionsExceptionMessage,
+} from 'src/engine/permissions/permissions.exception';
+import { RecordPermissionsReadService } from 'src/engine/permissions/record-permissions-read.service';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
+// OMNIA-CUSTOM: dashboard audience token for gated creators
+import { DashboardAudienceCreatorService } from 'src/modules/dashboard/dashboard-audience/services/dashboard-audience-creator.service';
 import { DuplicatedDashboardDTO } from 'src/modules/dashboard/dtos/duplicated-dashboard.dto';
 import {
   DashboardException,
@@ -16,14 +26,32 @@ import {
 } from 'src/modules/dashboard/exceptions/dashboard.exception';
 import { DashboardWorkspaceEntity } from 'src/modules/dashboard/standard-objects/dashboard.workspace-entity';
 
+// A role-scoped read validates every selected column, so reading the whole row would refuse over fields never copied
+const DUPLICATION_SOURCE_COLUMNS: (keyof DashboardWorkspaceEntity)[] = [
+  'id',
+  'title',
+  'pageLayoutId',
+  'position',
+];
+
+const DUPLICATED_DASHBOARD_COLUMNS: (keyof DashboardWorkspaceEntity)[] = [
+  ...DUPLICATION_SOURCE_COLUMNS,
+  'createdAt',
+  'updatedAt',
+];
+
 @Injectable()
 export class DashboardDuplicationService {
   private readonly logger = new Logger(DashboardDuplicationService.name);
 
   constructor(
     private readonly pageLayoutDuplicationService: PageLayoutDuplicationService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly pageLayoutService: PageLayoutService,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly actorFromAuthContextService: ActorFromAuthContextService,
+    private readonly recordPermissionsReadService: RecordPermissionsReadService,
+    // OMNIA-CUSTOM: tags a gated creator's copy with its dashboard audience token
+    private readonly dashboardAudienceCreatorService: DashboardAudienceCreatorService,
   ) {}
 
   async duplicateDashboard(
@@ -33,72 +61,125 @@ export class DashboardDuplicationService {
     const workspace = authContext.workspace;
     const workspaceId = workspace.id;
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const dashboardRepository =
-          await this.globalWorkspaceOrmManager.getRepository<DashboardWorkspaceEntity>(
-            workspaceId,
-            'dashboard',
-            { shouldBypassPermissionChecks: true },
-          );
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const dashboardRepository =
+        this.workspaceOrmManager.getRepository<DashboardWorkspaceEntity>(
+          'dashboard',
+        );
 
-        const originalDashboard = await dashboardRepository.findOne({
-          where: { id: dashboardId },
+      const originalDashboard = await dashboardRepository.findOne({
+        where: { id: dashboardId },
+        select: DUPLICATION_SOURCE_COLUMNS,
+      });
+
+      if (!isDefined(originalDashboard)) {
+        throw new DashboardException(
+          generateDashboardExceptionMessage(
+            DashboardExceptionMessageKey.DASHBOARD_NOT_FOUND,
+            dashboardId,
+          ),
+          DashboardExceptionCode.DASHBOARD_NOT_FOUND,
+        );
+      }
+
+      if (!isDefined(originalDashboard.pageLayoutId)) {
+        throw new DashboardException(
+          generateDashboardExceptionMessage(
+            DashboardExceptionMessageKey.PAGE_LAYOUT_NOT_FOUND,
+            dashboardId,
+          ),
+          DashboardExceptionCode.PAGE_LAYOUT_NOT_FOUND,
+        );
+      }
+
+      const { permissionsPrincipals, objectIdByNameSingular } =
+        getWorkspaceContext();
+
+      // The layout copy lives outside the dashboard insert, so refuse before creating it
+      if (
+        !(await this.recordPermissionsReadService.canAccessSomeRecords({
+          operationType: 'create',
+          principals: permissionsPrincipals,
+          objectMetadataId: objectIdByNameSingular.dashboard,
+        }))
+      ) {
+        throw new PermissionsException(
+          PermissionsExceptionMessage.PERMISSION_DENIED,
+          PermissionsExceptionCode.PERMISSION_DENIED,
+        );
+      }
+
+      try {
+        const newPageLayout = await this.pageLayoutDuplicationService.duplicate(
+          {
+            pageLayoutId: originalDashboard.pageLayoutId,
+            workspaceId,
+          },
+        );
+
+        const newDashboard = await this.createDuplicatedDashboardOrRollback({
+          originalDashboard,
+          newPageLayoutId: newPageLayout.id,
+          dashboardRepository,
+          authContext,
+          workspaceId,
         });
 
-        if (!isDefined(originalDashboard)) {
-          throw new DashboardException(
-            generateDashboardExceptionMessage(
-              DashboardExceptionMessageKey.DASHBOARD_NOT_FOUND,
-              dashboardId,
-            ),
-            DashboardExceptionCode.DASHBOARD_NOT_FOUND,
-          );
-        }
+        return {
+          id: newDashboard.id,
+          title: newDashboard.title,
+          pageLayoutId: newDashboard.pageLayoutId,
+          position: newDashboard.position,
+          createdAt: new Date(newDashboard.createdAt).toISOString(),
+          updatedAt: new Date(newDashboard.updatedAt).toISOString(),
+        };
+      } catch (error) {
+        this.logger.error(
+          `Failed to duplicate dashboard ${dashboardId}: ${error.message}`,
+          error.stack,
+        );
 
-        if (!isDefined(originalDashboard.pageLayoutId)) {
-          throw new DashboardException(
-            generateDashboardExceptionMessage(
-              DashboardExceptionMessageKey.PAGE_LAYOUT_NOT_FOUND,
-              dashboardId,
-            ),
-            DashboardExceptionCode.PAGE_LAYOUT_NOT_FOUND,
-          );
-        }
+        throw error;
+      }
+    }, authContext);
+  }
 
-        try {
-          const newPageLayout =
-            await this.pageLayoutDuplicationService.duplicate({
-              pageLayoutId: originalDashboard.pageLayoutId,
-              workspaceId,
-            });
+  // The layout lives in the core schema, outside the insert, so a refused or failed insert must remove it
+  private async createDuplicatedDashboardOrRollback({
+    originalDashboard,
+    newPageLayoutId,
+    dashboardRepository,
+    authContext,
+    workspaceId,
+  }: {
+    originalDashboard: DashboardWorkspaceEntity;
+    newPageLayoutId: string;
+    dashboardRepository: WorkspaceRepository<DashboardWorkspaceEntity>;
+    authContext: WorkspaceAuthContext;
+    workspaceId: string;
+  }): Promise<DashboardWorkspaceEntity> {
+    try {
+      return await this.createDuplicatedDashboard(
+        originalDashboard,
+        newPageLayoutId,
+        dashboardRepository,
+        authContext,
+      );
+    } catch (error) {
+      try {
+        await this.pageLayoutService.destroy({
+          id: newPageLayoutId,
+          workspaceId,
+        });
+      } catch (rollbackError) {
+        this.logger.error(
+          `Failed to destroy page layout ${newPageLayoutId} left by a failed dashboard duplication: ${rollbackError.message}`,
+          rollbackError.stack,
+        );
+      }
 
-          const newDashboard = await this.createDuplicatedDashboard(
-            originalDashboard,
-            newPageLayout.id,
-            dashboardRepository,
-            authContext,
-          );
-
-          return {
-            id: newDashboard.id,
-            title: newDashboard.title,
-            pageLayoutId: newDashboard.pageLayoutId,
-            position: newDashboard.position,
-            createdAt: newDashboard.createdAt,
-            updatedAt: newDashboard.updatedAt,
-          };
-        } catch (error) {
-          this.logger.error(
-            `Failed to duplicate dashboard ${dashboardId}: ${error.message}`,
-            error.stack,
-          );
-
-          throw error;
-        }
-      },
-      authContext,
-    );
+      throw error;
+    }
   }
 
   private async createDuplicatedDashboard(
@@ -116,6 +197,10 @@ export class DashboardDuplicationService {
             title: newTitle,
             pageLayoutId: newPageLayoutId,
             position: originalDashboard.position,
+            // OMNIA-CUSTOM: create follows update, so a gated creator's audience rule needs its token on the copy
+            ...(await this.dashboardAudienceCreatorService.buildNewDashboardAudienceFields(
+              authContext,
+            )),
           },
         ],
         objectMetadataNameSingular: 'dashboard',
@@ -128,6 +213,7 @@ export class DashboardDuplicationService {
 
     const newDashboard = await dashboardRepository.findOne({
       where: { id: newDashboardId },
+      select: DUPLICATED_DASHBOARD_COLUMNS,
     });
 
     if (!isDefined(newDashboard)) {

@@ -5,23 +5,19 @@ import {
   AUTO_MATCH_THRESHOLD,
   DIFFERENT_PERSON_THRESHOLD,
   type RecordMatchData,
-} from '../score-record-match.util';
+} from 'src/engine/core-modules/import-job/utils/score-record-match.util';
 
-/**
- * Tests based on real data from the policies.csv export.
- * Lead records have FULL_NAME (name.firstName/name.lastName),
- * PHONES (phones.primaryPhoneNumber), EMAILS (emails.primaryEmail),
- * and ADDRESS (addressCustom.addressCity/addressState).
- */
+// Synthetic lead data only (example.com addresses, 555-01xx numbers), shaped like a lead export:
+// FULL_NAME (name.firstName/name.lastName), PHONES, EMAILS and ADDRESS (addressCustom).
 
 describe('scoreRecordMatch', () => {
   const existingLead: RecordMatchData = {
-    firstName: 'ciera',
-    lastName: 'mays',
-    email: 'mayscutco@gmail.com',
-    phone: '9412935341',
-    city: 'bradenton',
-    state: 'FL',
+    firstName: 'jamie',
+    lastName: 'sample',
+    email: 'jamie.sample@example.com',
+    phone: '2025550143',
+    city: 'testville',
+    state: 'TX',
   };
 
   describe('exact match', () => {
@@ -41,8 +37,8 @@ describe('scoreRecordMatch', () => {
   describe('same person detection (above threshold)', () => {
     it('should match with just email + first name (score=65)', () => {
       const csvData: RecordMatchData = {
-        firstName: 'ciera',
-        email: 'mayscutco@gmail.com',
+        firstName: 'jamie',
+        email: 'jamie.sample@example.com',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -53,9 +49,9 @@ describe('scoreRecordMatch', () => {
 
     it('should match with name + phone (score=50, borderline)', () => {
       const csvData: RecordMatchData = {
-        firstName: 'ciera',
-        lastName: 'mays',
-        phone: '9412935341',
+        firstName: 'jamie',
+        lastName: 'sample',
+        phone: '2025550143',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -67,10 +63,10 @@ describe('scoreRecordMatch', () => {
 
     it('should match with name + phone + city (score=55, at threshold)', () => {
       const csvData: RecordMatchData = {
-        firstName: 'ciera',
-        lastName: 'mays',
-        phone: '9412935341',
-        city: 'bradenton',
+        firstName: 'jamie',
+        lastName: 'sample',
+        phone: '2025550143',
+        city: 'testville',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -81,7 +77,7 @@ describe('scoreRecordMatch', () => {
 
     it('should match with email only (score=50)', () => {
       const csvData: RecordMatchData = {
-        email: 'mayscutco@gmail.com',
+        email: 'jamie.sample@example.com',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -94,8 +90,8 @@ describe('scoreRecordMatch', () => {
   describe('different person detection (below threshold)', () => {
     it('should NOT match with only name (score=30)', () => {
       const csvData: RecordMatchData = {
-        firstName: 'ciera',
-        lastName: 'mays',
+        firstName: 'jamie',
+        lastName: 'sample',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -106,12 +102,12 @@ describe('scoreRecordMatch', () => {
 
     it('should NOT match with completely different data (score=0)', () => {
       const csvData: RecordMatchData = {
-        firstName: 'John',
-        lastName: 'Smith',
-        email: 'john@example.com',
-        phone: '5551234567',
-        city: 'New York',
-        state: 'NY',
+        firstName: 'Robin',
+        lastName: 'Doe',
+        email: 'robin@example.org',
+        phone: '3125550178',
+        city: 'New Town',
+        state: 'OH',
       };
 
       const { same, score } = isSamePerson(existingLead, csvData);
@@ -120,26 +116,26 @@ describe('scoreRecordMatch', () => {
       expect(same).toBe(false);
     });
 
-    it('should NOT match two Michael Smiths in different cities (score=30)', () => {
-      const michaelSmith1: RecordMatchData = {
-        firstName: 'Michael',
-        lastName: 'Smith',
-        email: 'mike1@gmail.com',
-        phone: '5551111111',
-        city: 'bradenton',
-        state: 'FL',
+    it('should NOT match two Alex Does in different cities (score=35)', () => {
+      const firstAlexDoe: RecordMatchData = {
+        firstName: 'Alex',
+        lastName: 'Doe',
+        email: 'alex1@example.com',
+        phone: '2025550161',
+        city: 'testville',
+        state: 'TX',
       };
 
-      const michaelSmith2: RecordMatchData = {
-        firstName: 'Michael',
-        lastName: 'Smith',
-        email: 'mike2@yahoo.com',
-        phone: '5552222222',
-        city: 'Tampa',
-        state: 'FL',
+      const secondAlexDoe: RecordMatchData = {
+        firstName: 'Alex',
+        lastName: 'Doe',
+        email: 'alex2@example.com',
+        phone: '2025550162',
+        city: 'Othertown',
+        state: 'TX',
       };
 
-      const { same, score } = isSamePerson(michaelSmith1, michaelSmith2);
+      const { same, score } = isSamePerson(firstAlexDoe, secondAlexDoe);
 
       // Name matches (30) + state (5) = 35, below threshold
       expect(score).toBe(35);
@@ -150,9 +146,9 @@ describe('scoreRecordMatch', () => {
   describe('fuzzy name matching', () => {
     it('should fuzzy match names with first 3 chars matching', () => {
       const csvData: RecordMatchData = {
-        firstName: 'cierra', // extra 'r', first 3 chars "cie" match
-        lastName: 'mays',
-        email: 'mayscutco@gmail.com',
+        firstName: 'jamey', // a different spelling whose first 3 chars "jam" match
+        lastName: 'sample',
+        email: 'jamie.sample@example.com',
       };
 
       const result = scoreRecordMatch(existingLead, csvData);
@@ -165,8 +161,8 @@ describe('scoreRecordMatch', () => {
 
     it('should NOT fuzzy match when first 3 chars differ', () => {
       const csvData: RecordMatchData = {
-        firstName: 'sierra', // first 3 "sie" vs "cie" — no match
-        lastName: 'mays',
+        firstName: 'jaime', // first 3 "jai" vs "jam" — no match
+        lastName: 'sample',
       };
 
       const result = scoreRecordMatch(existingLead, csvData);
@@ -179,8 +175,8 @@ describe('scoreRecordMatch', () => {
   describe('phone normalization', () => {
     it('should match phones regardless of formatting', () => {
       const result = scoreRecordMatch(
-        { phone: '9412935341' },
-        { phone: '(941) 293-5341' },
+        { phone: '2025550143' },
+        { phone: '(202) 555-0143' },
       );
 
       expect(result.breakdown.phone).toBe(20);
@@ -188,8 +184,8 @@ describe('scoreRecordMatch', () => {
 
     it('should strip leading 1 from 11-digit numbers', () => {
       const result = scoreRecordMatch(
-        { phone: '9412935341' },
-        { phone: '19412935341' },
+        { phone: '2025550143' },
+        { phone: '12025550143' },
       );
 
       expect(result.breakdown.phone).toBe(20);
@@ -199,8 +195,8 @@ describe('scoreRecordMatch', () => {
   describe('case insensitivity', () => {
     it('should match emails case-insensitively', () => {
       const result = scoreRecordMatch(
-        { email: 'MaysCutco@Gmail.COM' },
-        { email: 'mayscutco@gmail.com' },
+        { email: 'Jamie.Sample@Example.COM' },
+        { email: 'jamie.sample@example.com' },
       );
 
       expect(result.breakdown.email).toBe(50);
@@ -208,8 +204,8 @@ describe('scoreRecordMatch', () => {
 
     it('should match names case-insensitively', () => {
       const result = scoreRecordMatch(
-        { firstName: 'CIERA', lastName: 'MAYS' },
-        { firstName: 'ciera', lastName: 'mays' },
+        { firstName: 'JAMIE', lastName: 'SAMPLE' },
+        { firstName: 'jamie', lastName: 'sample' },
       );
 
       expect(result.breakdown.firstName).toBe(15);
@@ -218,8 +214,8 @@ describe('scoreRecordMatch', () => {
 
     it('should match cities case-insensitively', () => {
       const result = scoreRecordMatch(
-        { city: 'Bradenton' },
-        { city: 'BRADENTON' },
+        { city: 'Testville' },
+        { city: 'TESTVILLE' },
       );
 
       expect(result.breakdown.city).toBe(5);
@@ -230,51 +226,51 @@ describe('scoreRecordMatch', () => {
 describe('extractMatchDataFromRecord', () => {
   it('should extract from a record with composite name object', () => {
     const record = {
-      name: { firstName: 'John', lastName: 'Doe' },
-      phones: { primaryPhoneNumber: '5551234567' },
-      emails: { primaryEmail: 'john@example.com' },
-      addressCustom: { addressCity: 'Tampa', addressState: 'FL' },
+      name: { firstName: 'Robin', lastName: 'Roe' },
+      phones: { primaryPhoneNumber: '3125550178' },
+      emails: { primaryEmail: 'robin@example.org' },
+      addressCustom: { addressCity: 'Othertown', addressState: 'TX' },
     };
 
     const data = extractMatchDataFromRecord(record);
 
-    expect(data.firstName).toBe('John');
-    expect(data.lastName).toBe('Doe');
-    expect(data.phone).toBe('5551234567');
-    expect(data.email).toBe('john@example.com');
-    expect(data.city).toBe('Tampa');
-    expect(data.state).toBe('FL');
+    expect(data.firstName).toBe('Robin');
+    expect(data.lastName).toBe('Roe');
+    expect(data.phone).toBe('3125550178');
+    expect(data.email).toBe('robin@example.org');
+    expect(data.city).toBe('Othertown');
+    expect(data.state).toBe('TX');
   });
 
   it('should extract from a record with flat DB columns', () => {
     const record = {
-      nameFirstName: 'ciera',
-      nameLastName: 'mays',
-      phonesPrimaryPhoneNumber: '9412935341',
-      emailsPrimaryEmail: 'mayscutco@gmail.com',
-      addressCustomAddressCity: 'bradenton',
-      addressCustomAddressState: 'FL',
+      nameFirstName: 'jamie',
+      nameLastName: 'sample',
+      phonesPrimaryPhoneNumber: '2025550143',
+      emailsPrimaryEmail: 'jamie.sample@example.com',
+      addressCustomAddressCity: 'testville',
+      addressCustomAddressState: 'TX',
     };
 
     const data = extractMatchDataFromRecord(record);
 
-    expect(data.firstName).toBe('ciera');
-    expect(data.lastName).toBe('mays');
-    expect(data.phone).toBe('9412935341');
-    expect(data.email).toBe('mayscutco@gmail.com');
-    expect(data.city).toBe('bradenton');
-    expect(data.state).toBe('FL');
+    expect(data.firstName).toBe('jamie');
+    expect(data.lastName).toBe('sample');
+    expect(data.phone).toBe('2025550143');
+    expect(data.email).toBe('jamie.sample@example.com');
+    expect(data.city).toBe('testville');
+    expect(data.state).toBe('TX');
   });
 
   it('should extract from a record with simple string name', () => {
     const record = {
-      name: 'Slate U65 Leads',
+      name: 'Sample Q10 Plan',
     };
 
     const data = extractMatchDataFromRecord(record);
 
-    expect(data.firstName).toBe('Slate');
-    expect(data.lastName).toBe('U65 Leads');
+    expect(data.firstName).toBe('Sample');
+    expect(data.lastName).toBe('Q10 Plan');
   });
 
   it('should handle missing fields gracefully', () => {

@@ -6,9 +6,9 @@ import {
   InvalidMetadataExceptionCode,
 } from 'src/engine/metadata-modules/utils/exceptions/invalid-metadata.exception';
 
-// Server-specific wrapper that converts generic errors to InvalidMetadataException
-// This provides consistent error handling with proper exception codes for the server
-export const computeMetadataNameFromLabelOrThrow = (label: string): string => {
+export const computeMetadataNameFromLabelOrThrow = (
+  label: string | undefined,
+): string => {
   if (!isDefined(label)) {
     throw new InvalidMetadataException(
       'Label is required',

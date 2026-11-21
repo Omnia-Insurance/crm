@@ -1,14 +1,19 @@
+import { MOCKED_DATE } from '~/testing/constants/MockedDate';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { ComponentDecorator } from 'twenty-ui/testing';
 
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ARGOS_CAPTURE_DISABLED } from '~/testing/constants/ArgosCaptureDisabled';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
 
 import { WorkflowStepExecutionResult } from '@/workflow/components/WorkflowStepExecutionResult';
 
 const meta: Meta<typeof WorkflowStepExecutionResult> = {
   title: 'Modules/Workflow/Components/StepExecutionResult',
   component: WorkflowStepExecutionResult,
-  decorators: [ComponentDecorator, SnackBarDecorator],
+  decorators: [ComponentDecorator, ToastDecorator],
+  parameters: {
+    argos: ARGOS_CAPTURE_DISABLED,
+  },
   args: {
     result: JSON.stringify(
       { message: 'Hello World', status: 'success' },
@@ -128,8 +133,8 @@ export const LargeResult: Story = {
           email: `user${i + 1}@example.com`,
           active: i % 2 === 0,
           metadata: {
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
+            createdAt: MOCKED_DATE,
+            lastLogin: MOCKED_DATE,
             permissions: ['read', 'write'],
           },
         })),

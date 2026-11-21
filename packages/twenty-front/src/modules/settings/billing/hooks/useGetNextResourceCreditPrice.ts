@@ -1,9 +1,10 @@
+import { isDefined } from 'twenty-shared/utils';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { usePlans } from '@/settings/billing/hooks/usePlans';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { getSubscriptionPlanKey } from '@/settings/billing/utils/getSubscriptionPlanKey';
 import {
   BillingProductKey,
-  type BillingPlanKey,
   type BillingPriceLicensed,
 } from '~/generated-metadata/graphql';
 
@@ -15,9 +16,9 @@ export const useGetNextResourceCreditPrice =
     const items =
       currentWorkspace?.currentBillingSubscription?.billingSubscriptionItems;
     const interval = currentWorkspace?.currentBillingSubscription?.interval;
-    const planKey = currentWorkspace?.currentBillingSubscription?.metadata?.[
-      'plan'
-    ] as BillingPlanKey | undefined;
+    const planKey = getSubscriptionPlanKey(
+      currentWorkspace?.currentBillingSubscription,
+    );
 
     if (!items || !planKey || !isPlansLoaded) {
       return null;
@@ -42,10 +43,7 @@ export const useGetNextResourceCreditPrice =
 
     const resourceCreditPrices = currentPlan.resourceCreditProducts
       .flatMap((product) => product.prices ?? [])
-      .filter(
-        (price): price is BillingPriceLicensed =>
-          price !== null && price !== undefined,
-      );
+      .filter(isDefined);
 
     const pricesForInterval = resourceCreditPrices
       .filter((price) => price.recurringInterval === interval)

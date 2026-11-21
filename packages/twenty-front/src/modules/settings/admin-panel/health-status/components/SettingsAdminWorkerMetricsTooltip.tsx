@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 import type { LineSeries, Point } from '@nivo/line';
 import { type ReactElement } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledTooltipContainer = styled.div`
   backdrop-filter: ${themeCssVariables.blur.medium};
@@ -25,6 +25,7 @@ const StyledTooltipItem = styled.div`
 const StyledTooltipColorCircle = styled.div<{ color: string }>`
   background-color: ${({ color }) => color};
   border-radius: 50%;
+  corner-shape: round;
   height: 8px;
   margin-right: ${themeCssVariables.spacing[2]};
   width: 8px;

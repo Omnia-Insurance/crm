@@ -1,12 +1,14 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 
-import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { type IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
+import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { IngestionPushProcessJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-push-process.job';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 const pipelineId = 'pipeline-1';
 const workspaceId = 'workspace-1';
@@ -35,8 +37,13 @@ describe('IngestionPushProcessJob', () => {
   let fieldMappingService: jest.Mocked<IngestionFieldMappingService>;
   let logService: jest.Mocked<IngestionLogService>;
   let recordProcessorService: jest.Mocked<IngestionRecordProcessorService>;
+  let workspaceOrmManager: { executeInWorkspaceContext: jest.Mock };
 
   beforeEach(async () => {
+    workspaceOrmManager = {
+      executeInWorkspaceContext: jest.fn((callback) => callback()),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IngestionPushProcessJob,
@@ -65,6 +72,18 @@ describe('IngestionPushProcessJob', () => {
           useValue: {
             processRecords: jest.fn(),
           },
+        },
+        {
+          provide: IngestionPreprocessorRegistry,
+          useValue: {
+            preProcessRecords: jest
+              .fn()
+              .mockImplementation((records) => records),
+          },
+        },
+        {
+          provide: WorkspaceOrmManager,
+          useValue: workspaceOrmManager,
         },
       ],
     }).compile();
@@ -98,6 +117,14 @@ describe('IngestionPushProcessJob', () => {
     await job.handle({ pipelineId, workspaceId, logId, records });
 
     expect(logService.markRunning).toHaveBeenCalledWith(logId);
+    expect(fieldMappingService.findEntitiesByPipelineId).toHaveBeenCalledWith(
+      pipelineId,
+      workspaceId,
+    );
+    expect(workspaceOrmManager.executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      { type: 'system', workspace: { id: workspaceId } },
+    );
     expect(recordProcessorService.processRecords).toHaveBeenCalledWith(
       records,
       mockPipeline,

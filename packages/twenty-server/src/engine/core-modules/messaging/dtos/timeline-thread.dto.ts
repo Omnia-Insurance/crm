@@ -2,6 +2,7 @@ import { Field, ObjectType } from '@nestjs/graphql';
 
 import { MessageChannelVisibility } from 'twenty-shared/types';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { TimelineThreadChannelDTO } from 'src/engine/core-modules/messaging/dtos/timeline-thread-channel.dto';
 import { TimelineThreadParticipantDTO } from 'src/engine/core-modules/messaging/dtos/timeline-thread-participant.dto';
 
 @ObjectType('TimelineThread')
@@ -35,4 +36,10 @@ export class TimelineThreadDTO {
 
   @Field()
   participantCount: number;
+
+  @Field()
+  lastMessageIsDraft: boolean;
+
+  @Field(() => TimelineThreadChannelDTO, { nullable: true })
+  channel: TimelineThreadChannelDTO | null;
 }

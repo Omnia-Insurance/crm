@@ -1,41 +1,45 @@
 import { useMutation } from '@apollo/client/react';
 import { styled } from '@linaria/react';
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useStore } from 'jotai';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { Button, LightIconButton } from 'twenty-ui/input';
+import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { LightIconButton } from 'twenty-ui/components/input';
 import {
-  AppTooltip,
+  IconAlertTriangle,
   IconArrowBackUp,
   IconCheck,
-  IconX,
   IconCopy,
-  IconAlertTriangle,
   IconMessage,
-  TooltipDelay,
-} from 'twenty-ui/display';
-
-import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
-import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
-import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
-import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
-import { PageLayoutType } from '~/generated-metadata/graphql';
-import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
-import { type RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
-import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
-import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+  IconX,
+} from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { Tooltip } from 'twenty-ui/primitives/surfaces';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { useTasks } from '@/activities/tasks/hooks/useTasks';
+import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
+import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 import { RecordFieldList } from '@/object-record/record-field-list/components/RecordFieldList';
+import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
+import { RecordShowResourceLoader } from '@/object-record/record-show/components/RecordShowResourceLoader';
+import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { ReconciliationRecordRelationsList } from '@/reconciliation/components/ReconciliationRecordRelationsList';
+import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { ReconciliationDiffsContext } from '@/reconciliation/contexts/ReconciliationDiffsContext';
 import { BATCH_APPLY_REVIEW_ITEMS } from '@/reconciliation/graphql/mutations/batchApproveReviewItems';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useOpenCreateAuditTaskDraft } from '@/reconciliation/hooks/useOpenCreateAuditTaskDraft';
 import { useOpenReviewItemCommentsInSidePanel } from '@/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel';
-import type { FieldDiff } from '@/reconciliation/types/FieldDiff';
-import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
+import { type FieldDiff } from '@/reconciliation/types/FieldDiff';
+import { normalizeDiffComparableValue } from '@/reconciliation/utils/normalizeDiffComparableValue';
+import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
+import { TooltipDelay } from '@/ui/layout/tooltip/constants/TooltipDelay';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
+import { PageLayoutType } from '~/generated-metadata/graphql';
 
 type MatchedDiffViewProps = {
   item: ReviewItemRecord;
@@ -55,19 +59,16 @@ const useRecordStoreValue = (recordId: string) => {
   return recordStore;
 };
 
-const MATCH_LABELS: Record<string, string> = {
-  POLICY_NUMBER_DATE_AGENT: 'Strong match — policy #, date, and agent',
-  POLICY_NUMBER_PLUS_EFFECTIVE_DATE: 'Strong match — policy # and date',
-  POLICY_NUMBER_PLUS_AGENT: 'Good match — policy # and agent',
-  POLICY_NUMBER_SINGLE: 'Good match — unique policy #',
-  POLICY_NUMBER_MULTI_BEST: 'Possible match — best scored',
-  NPN_DATE_NAME: 'Possible match — NPN, date, and name',
-  NAME_DOB_DATE: 'Weak match — name, DOB, and date',
-  OVERRIDE: 'Manual match',
+const MATCH_LABELS: Record<string, MessageDescriptor> = {
+  POLICY_NUMBER_DATE_AGENT: msg`Strong match — policy #, date, and agent`,
+  POLICY_NUMBER_PLUS_EFFECTIVE_DATE: msg`Strong match — policy # and date`,
+  POLICY_NUMBER_PLUS_AGENT: msg`Good match — policy # and agent`,
+  POLICY_NUMBER_SINGLE: msg`Good match — unique policy #`,
+  POLICY_NUMBER_MULTI_BEST: msg`Possible match — best scored`,
+  NPN_DATE_NAME: msg`Possible match — NPN, date, and name`,
+  NAME_DOB_DATE: msg`Weak match — name, DOB, and date`,
+  OVERRIDE: msg`Manual match`,
 };
-
-const normalizeDiffComparableValue = (value: unknown): string | null =>
-  value === null || value === undefined || value === '' ? null : String(value);
 
 const StyledContainer = styled.div`
   display: flex;
@@ -124,11 +125,8 @@ const StyledBody = styled.div`
   padding-left: ${themeCssVariables.spacing[4]};
 `;
 
-// Callout for synthetic INFO_ONLY diffs (e.g., multi-member subscriber
-// mismatch, cross-term namesake) — these have no inline field to attach
-// to but still need to be visible. Without this, the only visible signal
-// is the small flag reason in the header, and the body looks like an
-// unchanged record despite the NAME_MISMATCH chip.
+// INFO_ONLY diffs with no crmField (multi-member subscriber mismatch,
+// cross-term namesake) have no inline cell to attach to, so they get a callout.
 const StyledInfoCallout = styled.div`
   background: ${themeCssVariables.background.tertiary};
   border: 1px solid ${themeCssVariables.border.color.medium};
@@ -192,10 +190,10 @@ export const MatchedDiffView = ({
   reconciliationId,
   onDecisionMade,
 }: MatchedDiffViewProps) => {
+  const { t } = useLingui();
   const rawFieldDiffs = item.fieldDiffs as FieldDiff[];
   const policyId = item.policy?.id;
 
-  // Read reconciliation record from store to get column mapping
   const reconciliationRecord = useRecordStoreValue(reconciliationId);
 
   const rawColumnMapping = reconciliationRecord
@@ -205,7 +203,9 @@ export const MatchedDiffView = ({
     string,
     ColumnMappingEntry
   > | null>(() => {
-    if (!rawColumnMapping) return null;
+    if (!rawColumnMapping) {
+      return null;
+    }
     if (typeof rawColumnMapping === 'string') {
       try {
         return JSON.parse(rawColumnMapping);
@@ -216,16 +216,13 @@ export const MatchedDiffView = ({
     return rawColumnMapping as Record<string, ColumnMappingEntry>;
   }, [rawColumnMapping]);
 
-  // Server-stored diffs are authoritative (remediation 2.1). The former
-  // enrichFieldDiffs crmField backfill + INFO_ONLY → UPDATE promotion was
-  // deleted: the diff engine always stamps crmField on actionable diffs,
-  // and INFO_ONLY means "never applied" on both sides — the server refuses
-  // to write INFO_ONLY diffs and the client must never resurrect them. The
-  // only remaining enrichment surfaces statusChangeReason as a tooltip on
-  // the status field's inline diff so the explanation lives next to the
-  // change instead of pinned to the header.
+  // Server-stored diffs are authoritative (remediation 2.1): INFO_ONLY diffs are
+  // never promoted to writes. The only enrichment shows statusChangeReason as the
+  // note on the status field's inline diff.
   const fieldDiffs = useMemo(() => {
-    if (!item.statusChangeReason) return rawFieldDiffs;
+    if (!item.statusChangeReason) {
+      return rawFieldDiffs;
+    }
     return rawFieldDiffs.map((d) =>
       d.crmField === 'status' && !d.note
         ? { ...d, note: item.statusChangeReason }
@@ -233,26 +230,26 @@ export const MatchedDiffView = ({
     );
   }, [rawFieldDiffs, item.statusChangeReason]);
 
-  const matchLabel = MATCH_LABELS[item.matchMethod] ?? item.matchMethod;
-  const matchLabelId = `match-label-${item.id}`;
+  const reconciliationDiffsContextValue = useMemo(
+    () => ({ fieldDiffs, columnMapping }),
+    [fieldDiffs, columnMapping],
+  );
+
+  const matchLabelDescriptor = MATCH_LABELS[item.matchMethod];
+  const matchLabel = isDefined(matchLabelDescriptor)
+    ? t(matchLabelDescriptor)
+    : item.matchMethod;
   const multiMatchReason = item.flagReasons?.MULTI_MATCH ?? null;
   const displayName = item.policy?.name ?? item.name;
   const policyNumber =
     item.name.split(' → ')[0] ?? item.name.split(' ')[0] ?? '';
 
-  // Synthetic informational diffs from the server (e.g., multi-member
-  // subscriber mismatch, cross-term namesake). They have no actionable
-  // crmField — the apply step skips them. We render them as a banner
-  // because the inline RecordFieldList has no field to attach them to,
-  // and the header flag-reason is too subtle for cases where the body
-  // shows an apparently unchanged record.
   const informationalNotices = useMemo(
     () =>
       fieldDiffs.filter((d) => d.action === 'INFO_ONLY' && d.crmField === null),
     [fieldDiffs],
   );
 
-  // Read policy record from store to get lead relation ID
   const policyRecord = useRecordStoreValue(policyId ?? '');
 
   const leadId = policyRecord
@@ -264,84 +261,23 @@ export const MatchedDiffView = ({
       )?.id
     : undefined;
 
-  // Build related violations to auto-expand any relation with diffs.
-  // Group diffs by their relation prefix (lead./agent./carrier./product./...)
-  // and resolve each to its record id from the policy record.
-  const relatedViolations = useMemo<RelatedRecordViolation[]>(() => {
-    if (!policyRecord) return [];
-
-    const groups = new Map<string, FieldDiff[]>();
-    for (const d of fieldDiffs) {
-      if (!d.crmField || d.bobValue === d.crmValue) continue;
-      const dot = d.crmField.indexOf('.');
-      if (dot <= 0) continue;
-      const relName = d.crmField.slice(0, dot);
-      if (!groups.has(relName)) groups.set(relName, []);
-      groups.get(relName)!.push(d);
-    }
-
-    const violations: RelatedRecordViolation[] = [];
-    for (const [relName, diffs] of groups) {
-      const relValue = (policyRecord as Record<string, unknown>)[relName];
-      const relRecord =
-        relValue && typeof relValue === 'object'
-          ? (relValue as Record<string, unknown>)
-          : null;
-      const relId = relRecord?.id;
-      if (typeof relId !== 'string') continue;
-
-      // Lead is special-cased to use 'person' (the underlying object).
-      // Other relations use their own field name as the object singular.
-      const objectNameSingular = relName === 'lead' ? 'person' : relName;
-
-      violations.push({
-        relationFieldName: relName,
-        relationLabel: relName.charAt(0).toUpperCase() + relName.slice(1),
-        relatedObjectNameSingular: objectNameSingular,
-        relatedRecordId: relId,
-        violations: diffs.map((d) => ({
-          fieldMetadataId: d.field,
-          fieldLabel: d.label,
-        })),
-      });
-    }
-
-    return violations;
-  }, [fieldDiffs, policyRecord]);
-
-  // Read lead record from store for batch composite merging
   const leadRecord = useRecordStoreValue(leadId ?? '');
 
-  // ── Decision actions ──
-  // ONE WRITE PATH (remediation 2.1): Apply all / Undo all / Mark approved
-  // delegate every CRM record write to the server's batchApplyReviewItems
-  // mutation — it applies/reverts the stored field diffs to the policy and
-  // lead, executes + captures the cancel-previous-policy step, enforces the
-  // fork's policy-write RLS, and flips the review item decision. The former
-  // client-side updateOneRecord loop (a buildUpdatesForTarget mirror of the
-  // server's) was deleted; after the mutation we refetch the affected
-  // records so the UI reflects server truth (the mutation returns counts,
-  // not payloads).
-  //
-  // DELIBERATE SPLIT — inline per-diff accept/undo chips stay client-side:
-  // they live in RecordInlineCellContainer (single-field updateOneRecord
-  // writes) and the server has no per-diff granularity — batchApply always
-  // applies the whole item. They do not double-write: inline accepts never
-  // call the server mutation, and the explicit "Mark approved" server APPLY
-  // that follows them is value-idempotent (the record already equals BOB;
-  // promotePrimary*ToAdditional no-ops on an equal primary).
+  // ONE WRITE PATH (remediation 2.1): Apply all / Undo all / Mark approved run
+  // the server's batchApplyReviewItems mutation, which writes the diffs, the
+  // cancel-previous-policy step and the decision under the fork's policy-write
+  // RLS. Per-diff inline Accept/Undo stays client-side (single-field writes the
+  // server has no granularity for); the later server APPLY is value-idempotent.
   const { updateOneRecord } = useUpdateOneRecord();
   const [batchApplyMutation] = useMutation(BATCH_APPLY_REVIEW_ITEMS);
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const store = useStore();
-  // Disables the footer buttons while an APPLY/UNDO/decision write is in
-  // flight so a double-click cannot fire the server mutation twice.
+  // A double-click must not fire the server mutation twice.
   const [isDecisionActionInFlight, setIsDecisionActionInFlight] =
     useState(false);
 
-  // Client-side review-item decision write. Only for decisions with no
-  // server-side write path (Reject → SKIPPED, comment → FLAG_AUDIT);
-  // APPLY/UNDO decisions are stamped by the server mutation.
+  // Only for decisions with no server write path (Reject → SKIPPED, comment →
+  // FLAG_AUDIT); the server mutation stamps APPLY/UNDO decisions itself.
   const updateDecision = useCallback(
     async (decision: string, note?: string | null) => {
       const updateInput: Record<string, unknown> = {
@@ -363,9 +299,8 @@ export const MatchedDiffView = ({
     [item.id, updateOneRecord, onDecisionMade],
   );
 
-  // Runs the server-side apply/undo for this single item and returns how
-  // many items the server actually updated (0 means it skipped this one —
-  // e.g. the RLS check refused the write or the item was not eligible).
+  // Returns how many items the server updated: 0 means it skipped this one
+  // (RLS refused the write or the item was not eligible).
   const syncReviewItemDecisionWithServer = useCallback(
     async (action: 'APPLY' | 'UNDO'): Promise<number> => {
       const result = await batchApplyMutation({
@@ -389,9 +324,7 @@ export const MatchedDiffView = ({
     [batchApplyMutation, item.id, reconciliationId],
   );
 
-  // After a server-side APPLY/UNDO, pull the affected records back
-  // network-only and push them into the record store so the rendered field
-  // values (and allDiffsAccepted) reflect what the server actually wrote.
+  // The mutation returns counts, not records: refetch what the server wrote.
   const { findOneRecord: refetchPolicyRecord } = useLazyFindOneRecord({
     objectNameSingular: 'policy',
     fetchPolicy: 'network-only',
@@ -402,10 +335,9 @@ export const MatchedDiffView = ({
   });
 
   const refetchAffectedRecords = useCallback(async () => {
-    const writeRecordToStore =
-      (recordId: string) => (record: ObjectRecord) => {
-        store.set(recordStoreFamilyState.atomFamily(recordId), record);
-      };
+    const writeRecordToStore = (recordId: string) => (record: ObjectRecord) => {
+      store.set(recordStoreFamilyState.atomFamily(recordId), record);
+    };
 
     if (policyId) {
       await refetchPolicyRecord({
@@ -421,11 +353,9 @@ export const MatchedDiffView = ({
       });
     }
 
-    // The server may also have canceled (APPLY) or restored (UNDO) a
-    // previous policy version — refresh it so no stale cached copy
-    // survives. The `cancelId && cancelId !== policyId` guard mirrors the
-    // server's self-cancel refusal (resolveCancelTargetPolicy), which owns
-    // the actual write.
+    // The server may have canceled (APPLY) or restored (UNDO) a previous policy
+    // version. The guard mirrors the server's self-cancel refusal
+    // (resolveCancelTargetPolicy), which owns the write.
     const snapshot = item.bobRowSnapshot as
       | (Record<string, unknown> & {
           __cancelPreviousPolicyId?: string;
@@ -455,9 +385,9 @@ export const MatchedDiffView = ({
       const updatedCount = await syncReviewItemDecisionWithServer('APPLY');
 
       if (updatedCount === 0) {
-        enqueueErrorSnackBar({
-          message:
-            'The server did not apply this item — it may be outside your edit window or no longer pending.',
+        enqueueToast({
+          status: 'error',
+          children: t`The server did not apply this item — it may be outside your edit window or no longer pending.`,
         });
 
         return;
@@ -466,8 +396,9 @@ export const MatchedDiffView = ({
       await refetchAffectedRecords();
       onDecisionMade?.(item.id);
     } catch {
-      enqueueErrorSnackBar({
-        message: 'Apply all failed — no changes were saved.',
+      enqueueToast({
+        status: 'error',
+        children: t`Apply all failed — no changes were saved.`,
       });
     } finally {
       setIsDecisionActionInFlight(false);
@@ -477,7 +408,8 @@ export const MatchedDiffView = ({
     refetchAffectedRecords,
     onDecisionMade,
     item.id,
-    enqueueErrorSnackBar,
+    enqueueToast,
+    t,
   ]);
 
   const handleUndoAll = useCallback(async () => {
@@ -487,9 +419,9 @@ export const MatchedDiffView = ({
       const updatedCount = await syncReviewItemDecisionWithServer('UNDO');
 
       if (updatedCount === 0) {
-        enqueueErrorSnackBar({
-          message:
-            'The server did not undo this item — it may be outside your edit window or not applied.',
+        enqueueToast({
+          status: 'error',
+          children: t`The server did not undo this item — it may be outside your edit window or not applied.`,
         });
 
         return;
@@ -498,8 +430,9 @@ export const MatchedDiffView = ({
       await refetchAffectedRecords();
       onDecisionMade?.(item.id);
     } catch {
-      enqueueErrorSnackBar({
-        message: 'Undo all failed — no changes were reverted.',
+      enqueueToast({
+        status: 'error',
+        children: t`Undo all failed — no changes were reverted.`,
       });
     } finally {
       setIsDecisionActionInFlight(false);
@@ -509,24 +442,22 @@ export const MatchedDiffView = ({
     refetchAffectedRecords,
     onDecisionMade,
     item.id,
-    enqueueErrorSnackBar,
+    enqueueToast,
+    t,
   ]);
 
-  // True when every actionable diff currently matches its proposed BOB value
-  // — meaning the user (or a prior Accept all) has already written all
-  // changes. Used ONLY to flip the bottom button between "Apply all" /
-  // "Undo all" and to offer the explicit "Mark approved" promotion below.
-  // It must never trigger a mutation by itself: record-value equality is
-  // also true for stale items (e.g. two policies sharing a lead, or a
-  // policy edited between match and review), so acting on it would fire a
-  // server APPLY — with its rule-learning cascade — from merely viewing
-  // an item (reconciliation remediation item 2.2).
+  // Only flips the footer between Apply all / Undo all and offers Mark approved.
+  // It must never trigger a mutation: record equality also holds for stale items
+  // (two policies sharing a lead), so acting on it would APPLY from merely
+  // viewing an item (remediation 2.2).
   const allDiffsAccepted = useMemo(() => {
     const actionable = fieldDiffs.filter(
       (d) => d.crmField !== null && d.bobValue !== d.crmValue,
     );
 
-    if (actionable.length === 0) return false;
+    if (actionable.length === 0) {
+      return false;
+    }
 
     return actionable.every((d) => {
       const isLead =
@@ -534,7 +465,9 @@ export const MatchedDiffView = ({
         (d.crmField !== null && d.crmField.startsWith('lead.'));
       const source = isLead ? leadRecord : policyRecord;
 
-      if (!source) return false;
+      if (!source) {
+        return false;
+      }
 
       const path =
         isLead && d.crmField !== null
@@ -556,14 +489,8 @@ export const MatchedDiffView = ({
     });
   }, [fieldDiffs, leadRecord, policyRecord]);
 
-  // Explicit promotion for the inline-accept path: when the user has
-  // accepted every diff one by one (or the record already matches BOB),
-  // the primary button has flipped to "Undo all", so we surface a separate
-  // "Mark approved" button instead of auto-promoting from a useEffect.
-  // The server APPLY stamps the APPROVED decision and (value-idempotently)
-  // re-writes the already-accepted values; the records are then refetched
-  // so the UI shows server truth. Failures surface once via snackbar and
-  // stop — no retry loop.
+  // Explicit promotion once every diff was accepted inline: the primary button
+  // has flipped to Undo all, so approving is its own click, never an effect.
   const handleMarkApproved = useCallback(async () => {
     setIsDecisionActionInFlight(true);
 
@@ -571,9 +498,9 @@ export const MatchedDiffView = ({
       const updatedCount = await syncReviewItemDecisionWithServer('APPLY');
 
       if (updatedCount === 0) {
-        enqueueErrorSnackBar({
-          message:
-            'The server did not approve this item — it may be outside your edit window or no longer pending.',
+        enqueueToast({
+          status: 'error',
+          children: t`The server did not approve this item — it may be outside your edit window or no longer pending.`,
         });
 
         return;
@@ -582,8 +509,9 @@ export const MatchedDiffView = ({
       await refetchAffectedRecords();
       onDecisionMade?.(item.id);
     } catch {
-      enqueueErrorSnackBar({
-        message: 'Failed to mark the review item approved.',
+      enqueueToast({
+        status: 'error',
+        children: t`Failed to mark the review item approved.`,
       });
     } finally {
       setIsDecisionActionInFlight(false);
@@ -593,7 +521,8 @@ export const MatchedDiffView = ({
     refetchAffectedRecords,
     onDecisionMade,
     item.id,
-    enqueueErrorSnackBar,
+    enqueueToast,
+    t,
   ]);
 
   const handleReject = useCallback(async () => {
@@ -602,18 +531,17 @@ export const MatchedDiffView = ({
     try {
       await updateDecision('SKIPPED');
     } catch {
-      enqueueErrorSnackBar({ message: 'Failed to reject the review item.' });
+      enqueueToast({
+        status: 'error',
+        children: t`Failed to reject the review item.`,
+      });
     } finally {
       setIsDecisionActionInFlight(false);
     }
-  }, [updateDecision, enqueueErrorSnackBar]);
+  }, [updateDecision, enqueueToast, t]);
 
-  // ── Leave comment ──
-  // Routes to one of two flows depending on whether comments exist:
-  //   * 0 tasks: open the new audit-task draft side panel directly (no
-  //     point in showing an empty list).
-  //   * ≥1 tasks: open the SidePanelReviewItemCommentsPage with the
-  //     stacked-card list + filters; the user can add a new one from there.
+  // With no comments yet the reviewer goes straight to a new audit task;
+  // otherwise the side panel lists the existing ones.
   const { tasks: existingTasks } = useTasks({
     targetableObjects: [
       { id: item.id, targetObjectNameSingular: 'reviewItem' },
@@ -622,10 +550,8 @@ export const MatchedDiffView = ({
   const commentCount = existingTasks.length;
 
   const { openCreateAuditTaskDraft } = useOpenCreateAuditTaskDraft({
-    // Only flag PENDING items: commenting on an APPROVED item must not
-    // clobber the decision, or the applied CRM writes lose batch-undo
-    // eligibility (both client and server undo select decision ===
-    // 'APPROVED') — reconciliation remediation item 2.3.
+    // Only PENDING items get flagged: an APPROVED item must keep its decision
+    // or its applied writes lose batch-undo eligibility (remediation 2.3).
     onTaskCreated: async () => {
       if (item.decision !== 'PENDING') {
         return;
@@ -634,8 +560,9 @@ export const MatchedDiffView = ({
       try {
         await updateDecision('FLAG_AUDIT');
       } catch {
-        enqueueErrorSnackBar({
-          message: 'Failed to flag the review item for audit.',
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to flag the review item for audit.`,
         });
       }
     },
@@ -656,11 +583,12 @@ export const MatchedDiffView = ({
     item.id,
   ]);
 
-  // ── Copy policy number ──
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!copied) return;
+    if (!copied) {
+      return;
+    }
 
     const copyTimerId = setTimeout(() => setCopied(false), 1500);
 
@@ -680,28 +608,26 @@ export const MatchedDiffView = ({
           <StyledPolicyBadge>
             {policyNumber}
             <LightIconButton
-              Icon={copied ? IconCheck : IconCopy}
-              size="small"
-              accent="tertiary"
+              emphasis="subtle"
+              size="sm"
+              aria-label={t`Copy policy number`}
               onClick={handleCopyPolicyNumber}
-            />
+            >
+              {copied ? <IconCheck /> : <IconCopy />}
+            </LightIconButton>
           </StyledPolicyBadge>
           <StyledSpacer />
-          <StyledMatchLabel id={matchLabelId}>
-            <IconAlertTriangle size={14} />
-            {matchLabel}
-          </StyledMatchLabel>
-          {multiMatchReason && (
-            <AppTooltip
-              anchorSelect={`#${matchLabelId}`}
-              content={multiMatchReason}
-              clickable
-              noArrow
-              place="bottom"
-              positionStrategy="fixed"
-              delay={TooltipDelay.shortDelay}
-            />
-          )}
+          <Tooltip
+            content={multiMatchReason}
+            side="bottom"
+            positionMethod="fixed"
+            delay={TooltipDelay.shortDelay}
+          >
+            <StyledMatchLabel>
+              <IconAlertTriangle size={14} />
+              {matchLabel}
+            </StyledMatchLabel>
+          </Tooltip>
         </StyledHeaderRow>
       </StyledHeader>
 
@@ -719,12 +645,12 @@ export const MatchedDiffView = ({
               <StyledInfoCalloutValues>
                 {notice.crmValue && (
                   <StyledInfoCalloutValue>
-                    <strong>CRM:</strong> {notice.crmValue}
+                    <strong>{t`CRM:`}</strong> {notice.crmValue}
                   </StyledInfoCalloutValue>
                 )}
                 {notice.bobValue && (
                   <StyledInfoCalloutValue>
-                    <strong>BOB:</strong> {notice.bobValue}
+                    <strong>{t`BOB:`}</strong> {notice.bobValue}
                   </StyledInfoCalloutValue>
                 )}
               </StyledInfoCalloutValues>
@@ -733,36 +659,38 @@ export const MatchedDiffView = ({
         ))}
         {policyId && (
           <>
-            <RecordShowEffect objectNameSingular="policy" recordId={policyId} />
+            <RecordShowResourceLoader
+              objectNameSingular="policy"
+              recordId={policyId}
+            />
             <ReconciliationDiffsContext.Provider
-              value={{ fieldDiffs, columnMapping }}
+              value={reconciliationDiffsContextValue}
             >
-              <DraftRelatedViolationsContext.Provider value={relatedViolations}>
-                <LayoutRenderingProvider
+              <LayoutRenderingProvider
+                value={{
+                  targetRecordIdentifier: {
+                    id: policyId,
+                    targetObjectNameSingular: 'policy',
+                  },
+                  layoutType: PageLayoutType.RECORD_PAGE,
+                }}
+              >
+                <RecordFieldsScopeContextProvider
                   value={{
-                    targetRecordIdentifier: {
-                      id: policyId,
-                      targetObjectNameSingular: 'policy',
-                    },
-                    layoutType: PageLayoutType.RECORD_PAGE,
-                    isInSidePanel: false,
+                    scopeInstanceId: `recon-policy-${policyId}`,
                   }}
                 >
-                  <RecordFieldsScopeContextProvider
-                    value={{
-                      scopeInstanceId: `recon-policy-${policyId}`,
-                    }}
-                  >
-                    <RecordFieldList
-                      instanceId={`recon-policy-${policyId}`}
-                      objectNameSingular="policy"
-                      objectRecordId={policyId}
-                      fieldDiffs={fieldDiffs}
-                      showRelationSections
-                    />
-                  </RecordFieldsScopeContextProvider>
-                </LayoutRenderingProvider>
-              </DraftRelatedViolationsContext.Provider>
+                  <RecordFieldList
+                    instanceId={`recon-policy-${policyId}`}
+                    objectNameSingular="policy"
+                    objectRecordId={policyId}
+                  />
+                  <ReconciliationRecordRelationsList
+                    objectNameSingular="policy"
+                    objectRecordId={policyId}
+                  />
+                </RecordFieldsScopeContextProvider>
+              </LayoutRenderingProvider>
             </ReconciliationDiffsContext.Provider>
           </>
         )}
@@ -770,45 +698,45 @@ export const MatchedDiffView = ({
 
       <StyledFooter>
         <Button
-          title={allDiffsAccepted ? 'Undo all' : 'Apply all'}
-          variant="primary"
-          accent={allDiffsAccepted ? 'danger' : 'blue'}
-          size="small"
-          Icon={allDiffsAccepted ? IconArrowBackUp : IconCheck}
+          variant="solid"
+          color={allDiffsAccepted ? 'danger' : 'accent'}
+          size="sm"
+          startIcon={allDiffsAccepted ? <IconArrowBackUp /> : <IconCheck />}
           onClick={allDiffsAccepted ? handleUndoAll : handleAcceptAll}
           disabled={isDecisionActionInFlight}
-        />
+        >
+          {allDiffsAccepted ? t`Undo all` : t`Apply all`}
+        </Button>
         {allDiffsAccepted && item.decision === 'PENDING' && (
           <Button
-            title="Mark approved"
-            variant="primary"
-            accent="blue"
-            size="small"
-            Icon={IconCheck}
+            variant="solid"
+            color="accent"
+            size="sm"
+            startIcon={<IconCheck />}
             onClick={handleMarkApproved}
             disabled={isDecisionActionInFlight}
-          />
+          >
+            {t`Mark approved`}
+          </Button>
         )}
         <Button
-          title="Reject"
-          variant="secondary"
-          accent="default"
-          size="small"
-          Icon={IconX}
+          variant="outline"
+          size="sm"
+          startIcon={<IconX />}
           onClick={handleReject}
           disabled={isDecisionActionInFlight}
-        />
+        >
+          {t`Reject`}
+        </Button>
         <StyledSpacer />
         <Button
-          title={
-            commentCount > 0 ? `Comments (${commentCount})` : 'Leave comment'
-          }
-          variant="tertiary"
-          accent="default"
-          size="small"
-          Icon={IconMessage}
+          variant="ghost"
+          size="sm"
+          startIcon={<IconMessage />}
           onClick={handleCommentClick}
-        />
+        >
+          {commentCount > 0 ? t`Comments (${commentCount})` : t`Leave comment`}
+        </Button>
       </StyledFooter>
     </StyledContainer>
   );

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
+import { isDefined } from 'twenty-shared/utils';
+
 import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
 import { SubscriptionChannel } from 'src/engine/subscriptions/enums/subscription-channel.enum';
+import { filterMapAsyncIterator } from 'src/engine/subscriptions/utils/filter-map-async-iterator';
+import { subscribeToChannel } from 'src/engine/subscriptions/utils/subscribe-to-channel';
 
 @Injectable()
 export class SubscriptionService {
@@ -27,18 +31,24 @@ export class SubscriptionService {
     return `${SubscriptionChannel.EVENT_STREAM_CHANNEL}:${workspaceId}:${eventStreamChannelId}`;
   }
 
-  async subscribe({
+  async subscribe<TPayload>({
     channel,
     workspaceId,
+    mapPayload,
   }: {
     channel: SubscriptionChannel;
     workspaceId: string;
-  }) {
+    mapPayload?: (payload: TPayload) => TPayload | undefined;
+  }): Promise<AsyncIterableIterator<TPayload>> {
     const client = this.redisClient.getPubSubClient();
 
-    return client.asyncIterator(
+    const iterator = client.asyncIterator<TPayload>(
       this.getSubscriptionChannel({ channel, workspaceId }),
     );
+
+    return isDefined(mapPayload)
+      ? filterMapAsyncIterator(iterator, mapPayload)
+      : iterator;
   }
 
   async subscribeToEventStream({
@@ -99,18 +109,17 @@ export class SubscriptionService {
     return `${SubscriptionChannel.AGENT_CHAT_CHANNEL}:${workspaceId}:${threadId}`;
   }
 
-  async subscribeToAgentChat({
+  async subscribeToAgentChat<TPayload>({
     workspaceId,
     threadId,
   }: {
     workspaceId: string;
     threadId: string;
   }) {
-    const client = this.redisClient.getPubSubClient();
-
-    return client.asyncIterator(
-      this.getAgentChatChannel({ workspaceId, threadId }),
-    );
+    return subscribeToChannel<TPayload>({
+      pubSub: this.redisClient.getPubSubClient(),
+      channel: this.getAgentChatChannel({ workspaceId, threadId }),
+    });
   }
 
   async publishToAgentChat<T>({

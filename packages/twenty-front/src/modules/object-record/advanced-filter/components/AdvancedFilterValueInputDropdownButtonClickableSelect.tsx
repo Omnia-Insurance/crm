@@ -1,3 +1,4 @@
+import { AdvancedFilterRelationValueInputClickableSelect } from '@/object-record/advanced-filter/components/AdvancedFilterRelationValueInputClickableSelect';
 import { getAdvancedFilterInputPlaceholderText } from '@/object-record/advanced-filter/utils/getAdvancedFilterInputPlacedholderText';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { SelectControl } from '@/ui/input/components/SelectControl';
@@ -9,9 +10,9 @@ import { styled } from '@linaria/react';
 
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { useGetRecordFilterDisplayValue } from '@/object-record/record-filter/hooks/useGetRecordFilterDisplayValue';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 // TODO: factorize this with https://github.com/twentyhq/core-team-issues/issues/752
 const StyledControlContainer = styled.div`
@@ -37,6 +38,7 @@ type AdvancedFilterValueInputDropdownButtonClickableSelectProps = {
 export const AdvancedFilterValueInputDropdownButtonClickableSelect = ({
   recordFilterId,
 }: AdvancedFilterValueInputDropdownButtonClickableSelectProps) => {
+  const { t } = useLingui();
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
   );
@@ -69,6 +71,18 @@ export const AdvancedFilterValueInputDropdownButtonClickableSelect = ({
 
   const isDateTimeType =
     recordFilter?.type === 'DATE' || recordFilter?.type === 'DATE_TIME';
+
+  if (
+    recordFilter?.type === 'RELATION' &&
+    !shouldUsePlaceholder &&
+    isDefined(recordFilter.fieldMetadataId)
+  ) {
+    return (
+      <AdvancedFilterRelationValueInputClickableSelect
+        recordFilter={recordFilter}
+      />
+    );
+  }
 
   return isDateTimeType ? (
     <StyledControlContainer>{advancedFilterInputText}</StyledControlContainer>

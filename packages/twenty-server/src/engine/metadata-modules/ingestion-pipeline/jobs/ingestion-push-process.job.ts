@@ -6,13 +6,14 @@ import { Process } from 'src/engine/core-modules/message-queue/decorators/proces
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { type IngestionPushProcessJobData } from 'src/engine/metadata-modules/ingestion-pipeline/controllers/ingestion-pipeline-webhook.controller';
+import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
-import { IngestionPreprocessorRegistry } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/ingestion-preprocessor.registry';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 @Processor(MessageQueue.ingestionQueue)
 export class IngestionPushProcessJob {
@@ -24,7 +25,7 @@ export class IngestionPushProcessJob {
     private readonly logService: IngestionLogService,
     private readonly recordProcessorService: IngestionRecordProcessorService,
     private readonly preprocessorRegistry: IngestionPreprocessorRegistry,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
   ) {}
 
   @Process(IngestionPushProcessJob.name)
@@ -49,8 +50,10 @@ export class IngestionPushProcessJob {
         return;
       }
 
-      const mappings =
-        await this.fieldMappingService.findEntitiesByPipelineId(pipelineId);
+      const mappings = await this.fieldMappingService.findEntitiesByPipelineId(
+        pipelineId,
+        workspaceId,
+      );
 
       if (mappings.length === 0) {
         await this.logService.markFailed(logId, 'No field mappings configured');
@@ -58,17 +61,16 @@ export class IngestionPushProcessJob {
         return;
       }
 
-      // Run preprocessor if available (wrapped in workspace context for DB access)
-      const authContext = buildSystemAuthContext(workspaceId);
+      // Preprocessors read and write workspace records as the system: ingestion is not user-initiated
       const preprocessedRecords =
-        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        await this.workspaceOrmManager.executeInWorkspaceContext(
           () =>
             this.preprocessorRegistry.preProcessRecords(
               records,
               pipeline,
               workspaceId,
             ),
-          authContext,
+          buildSystemAuthContext(workspaceId),
         );
 
       this.logger.log(
@@ -92,7 +94,7 @@ export class IngestionPushProcessJob {
       );
     } catch (error) {
       this.logger.error(
-        `Push ingestion failed: pipeline=${pipelineId}, error=${error}`,
+        `Push ingestion failed: pipeline=${pipelineId}, error=${getIngestionErrorLogLabel(error)}`,
       );
 
       await this.logService.markFailed(

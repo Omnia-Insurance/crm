@@ -1,6 +1,4 @@
 import { Field, ObjectType } from '@nestjs/graphql';
-
-import { IDField } from '@ptc-org/nestjs-query-graphql';
 import {
   Column,
   CreateDateColumn,
@@ -11,13 +9,13 @@ import {
 } from 'typeorm';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 @Index('IDX_API_KEY_WORKSPACE_ID', ['workspaceId'])
 @Entity({ name: 'apiKey', schema: 'core' })
 @ObjectType('ApiKey')
 export class ApiKeyEntity extends WorkspaceRelatedEntity {
-  @IDField(() => UUIDScalarType)
+  @Field(() => UUIDScalarType)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

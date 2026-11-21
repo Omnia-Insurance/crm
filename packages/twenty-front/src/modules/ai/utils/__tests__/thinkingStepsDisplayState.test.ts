@@ -1,10 +1,8 @@
 import { type ExtendedUIMessagePart } from 'twenty-shared/ai';
 
-import { getActiveReasoningContent } from '@/ai/utils/getActiveReasoningContent';
-import { getLastReasoningContent } from '@/ai/utils/getLastReasoningContent';
 import { groupContiguousThinkingStepParts } from '@/ai/utils/groupContiguousThinkingStepParts';
 import { isThinkingStepPartActive } from '@/ai/utils/isThinkingStepPartActive';
-import { type ThinkingStepPart } from '@/ai/utils/thinkingStepPart';
+import { type ThinkingStepPart } from '@/ai/types/ThinkingStepPart';
 
 const createReasoningPart = ({
   state = 'done',
@@ -23,12 +21,14 @@ const createToolPart = ({
   errorText,
   input = {},
   output,
+  state = 'output-available',
   type = 'tool-web_search',
 }: {
   type?: `tool-${string}`;
   input?: Record<string, unknown>;
   output?: unknown;
   errorText?: string;
+  state?: string;
 } = {}): ThinkingStepPart =>
   ({
     type,
@@ -36,12 +36,12 @@ const createToolPart = ({
     input,
     output,
     errorText,
-    state: 'output-available',
+    state,
   }) as ThinkingStepPart;
 
 describe('thinkingStepsDisplayState', () => {
   describe('groupContiguousThinkingStepParts', () => {
-    it('should group contiguous reasoning and non-code-interpreter tool parts', () => {
+    it('should group contiguous reasoning and tool parts', () => {
       const parts = [
         { type: 'text', text: 'hello' } as ExtendedUIMessagePart,
         { type: 'step-start' } as ExtendedUIMessagePart,
@@ -77,9 +77,9 @@ describe('thinkingStepsDisplayState', () => {
         type: 'part',
         part: parts[6],
       });
-      expect(groupedParts[3]).toEqual({
-        type: 'part',
-        part: parts[7],
+      expect(groupedParts[3]).toMatchObject({
+        type: 'thinking-steps',
+        parts: [parts[7]],
       });
     });
   });
@@ -91,44 +91,33 @@ describe('thinkingStepsDisplayState', () => {
       expect(isThinkingStepPartActive(reasoningPart, false)).toBe(true);
     });
 
-    it('should mark tool parts without output as active while message is streaming', () => {
+    it('should mark tool parts awaiting their output as active while message is streaming', () => {
       const toolPart = createToolPart({
         type: 'tool-web_search',
-        output: undefined,
-        errorText: undefined,
+        state: 'input-available',
       });
 
       expect(isThinkingStepPartActive(toolPart, true)).toBe(true);
       expect(isThinkingStepPartActive(toolPart, false)).toBe(false);
     });
 
-    it('should mark tool parts with output or error as inactive', () => {
+    it('should mark completed and failed tool parts as inactive', () => {
       const completedToolPart = createToolPart({
         output: { result: { ok: true } },
       });
+      const completedNullOutputToolPart = createToolPart({
+        output: null,
+      });
       const failedToolPart = createToolPart({
-        output: undefined,
         errorText: 'Tool failed',
+        state: 'output-error',
       });
 
       expect(isThinkingStepPartActive(completedToolPart, true)).toBe(false);
+      expect(isThinkingStepPartActive(completedNullOutputToolPart, true)).toBe(
+        false,
+      );
       expect(isThinkingStepPartActive(failedToolPart, true)).toBe(false);
-    });
-  });
-
-  describe('reasoning content helpers', () => {
-    const parts = [
-      createReasoningPart({ state: 'done', text: 'Initial reasoning' }),
-      createToolPart({ type: 'tool-web_search' }),
-      createReasoningPart({ state: 'streaming', text: 'Active reasoning' }),
-    ];
-
-    it('should return active reasoning content', () => {
-      expect(getActiveReasoningContent(parts)).toBe('Active reasoning');
-    });
-
-    it('should return the latest reasoning content', () => {
-      expect(getLastReasoningContent(parts)).toBe('Active reasoning');
     });
   });
 });

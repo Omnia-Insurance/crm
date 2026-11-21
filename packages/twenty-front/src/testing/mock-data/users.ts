@@ -1,11 +1,11 @@
-import {
-  AUTO_SELECT_FAST_MODEL_ID,
-  AUTO_SELECT_SMART_MODEL_ID,
-} from 'twenty-shared/constants';
+import { getMockedDateWithOffset } from '~/testing/utils/getMockedDateWithOffset';
 import { type CurrentUserWorkspace } from '@/auth/states/currentUserWorkspaceState';
 import { CUSTOM_WORKSPACE_APPLICATION_MOCK } from '@/object-metadata/hooks/__tests__/constants/CustomWorkspaceApplicationMock.test.constant';
 import { type WorkspaceMember } from '@/workspace-member/types/WorkspaceMember';
+import { DEFAULT_AI_CHAT_ASSISTANT_PROFILE } from 'twenty-shared/ai';
 import {
+  AiChatAssistantMode,
+  AiModelTier,
   OnboardingStatus,
   PermissionFlagType,
   SubscriptionInterval,
@@ -13,6 +13,7 @@ import {
   type User,
   type Workspace,
   WorkspaceActivationStatus,
+  WorkspaceDiscoverability,
   WorkspaceMemberDateFormatEnum,
   WorkspaceMemberTimeFormatEnum,
 } from '~/generated-metadata/graphql';
@@ -47,7 +48,6 @@ export const avatarUrl =
 export const workspaceLogoUrl =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACb0lEQVR4nO2VO4taQRTHr3AblbjxEVlwCwVhg7BoqqCIjy/gAyyFWNlYBOxsfH0KuxgQGwXRUkGuL2S7i1barGAgiwbdW93SnGOc4BonPiKahf3DwXFmuP/fPM4ZlvmlTxAhCBdzHnEQWYiv7Mr4C3NeuVYhQYDPzOUUQgDLBQGcLHNhvQK8DACPx8PTxiqVyvISG43GbyaT6Qfpn06n0m63e/tPAPF4vJ1MJu8kEsnWTCkWi1yr1RKGw+GDRqPBOTfr44vFQvD7/Q/lcpmaaVQAr9fLp1IpO22c47hGOBz+MB6PH+Vy+VYDAL8qlUoGtVotzOfzq4MAgsHgE/6KojiQyWR/bKVSqbSszHFM8Pl8z1YK48JsNltCOBwOnrYLO+8AAIjb+nHbycoTiUQfDJ7tFq4YAHiVSmXBxcD41u8flQU8z7fhzO0r83atVns3Go3u9Xr9x0O/RQXo9/tsIBBg6vX606a52Wz+bZ7P5/WwG29gxSJzhKgA6XTaDoFNF+krFAocmC//4yWEcSf2wTm7mCO19xFgSsKOLI16vV7b7XY7mRNoLwA0JymJ5uQIzgIAuX5PzDElT2m+E8BqtQ4ymcx7Yq7T6a6ZE4sKgOadTucaCwkxp1UzlEKh0GDxIXOwDWHAdi6Xe3swQDQa/Q7mywoolUpvsaptymazDWKxmBHTlWXZm405BFZoNpuGgwEmk4mE2SGtVivii4f1AO7J3ZopkQCQj7Ar1FeRChCJRJzVapX6DKNIfSc1Ax+wtQWQ55h6bH8FWDfYV4fO3wlwDr0C/BcADYiTPCxHqIEA2QsCZAkAKnRGkMbKN/sTX5YHPQ1e7SkAAAAASUVORK5CYII=';
 
-// Extract Pro monthly base product from mockBillingPlans to use in workspace billing mocks
 const PRO_PLAN = mockBillingPlans.listPlans.find((p) => p.planKey === 'PRO')!;
 const PRO_BASE_LICENSED_PRODUCT = PRO_PLAN?.baseProducts?.[0]!;
 const PRO_BASE_MONTHLY_PRICE = PRO_BASE_LICENSED_PRODUCT?.prices?.find(
@@ -68,15 +68,19 @@ export const mockCurrentWorkspace = {
   inviteHash: 'twenty.com-invite-hash',
   logo: workspaceLogoUrl,
   isPublicInviteLinkEnabled: true,
+  isCampaignClickTrackingEnabled: false,
+  isCampaignOpenTrackingEnabled: false,
+  workspaceDiscoverability: WorkspaceDiscoverability.PUBLIC,
   allowImpersonation: true,
   activationStatus: WorkspaceActivationStatus.ACTIVE,
-  hasValidEnterpriseKey: false,
   hasValidSignedEnterpriseKey: false,
   hasValidEnterpriseValidityToken: false,
+  isTrialAvailable: true,
   isGoogleAuthEnabled: true,
   isPasswordAuthEnabled: true,
   isMicrosoftAuthEnabled: false,
   isCustomDomainEnabled: false,
+  iframeMediaPermissions: [],
   isPasswordAuthBypassEnabled: false,
   isGoogleAuthBypassEnabled: false,
   isMicrosoftAuthBypassEnabled: false,
@@ -89,18 +93,23 @@ export const mockCurrentWorkspace = {
   updatedAt: '2023-04-26T10:23:42.33625+00:00',
   metadataVersion: 1,
   trashRetentionDays: 14,
-  fastModel: AUTO_SELECT_FAST_MODEL_ID,
-  smartModel: AUTO_SELECT_SMART_MODEL_ID,
-  routerModel: 'auto',
-  enabledAiModelIds: [],
-  useRecommendedModels: true,
+  aiChatModelTier: AiModelTier.fast,
+  aiChatAssistantProfile: {
+    ...DEFAULT_AI_CHAT_ASSISTANT_PROFILE,
+    __typename: 'AiChatAssistantProfile',
+  },
+  aiChatDirectMessageAssistantMode: AiChatAssistantMode.MENTION_ONLY,
+  aiChatInboxAssistantMode: AiChatAssistantMode.AUTOMATIC,
+  aiAgentModelTier: AiModelTier.fast,
+  isAutoModelSelectionEnabled: true,
+  aiModelIdByTier: {},
   isInternalMessagesImportEnabled: false,
   currentBillingSubscription: {
     __typename: 'BillingSubscription',
     id: '7efbc3f7-6e5e-4128-957e-8d86808cdf6a',
     interval: SubscriptionInterval.Month,
     status: SubscriptionStatus.Active,
-    currentPeriodEnd: new Date().toString(),
+    currentPeriodEnd: getMockedDateWithOffset({ months: 1 }),
     metadata: {
       plan: PRO_PLAN.planKey,
     },
@@ -112,6 +121,8 @@ export const mockCurrentWorkspace = {
         hasReachedCurrentPeriodCap: false,
         quantity: 1,
         stripePriceId: PRO_BASE_MONTHLY_PRICE.stripePriceId,
+        unitAmount: PRO_BASE_MONTHLY_PRICE.unitAmount,
+        creditAmount: PRO_BASE_MONTHLY_PRICE.creditAmount,
         billingProduct: {
           name: PRO_BASE_LICENSED_PRODUCT.name,
           description: PRO_BASE_LICENSED_PRODUCT.description,
@@ -125,6 +136,8 @@ export const mockCurrentWorkspace = {
         hasReachedCurrentPeriodCap: false,
         quantity: null,
         stripePriceId: PRO_METERED_MONTHLY_PRICE.stripePriceId,
+        unitAmount: null,
+        creditAmount: null,
         billingProduct: {
           name: PRO_METERED_PRODUCT.name,
           description: PRO_METERED_PRODUCT.description,
@@ -149,6 +162,8 @@ export const mockCurrentWorkspace = {
           hasReachedCurrentPeriodCap: false,
           quantity: 1,
           stripePriceId: PRO_BASE_MONTHLY_PRICE.stripePriceId,
+          unitAmount: PRO_BASE_MONTHLY_PRICE.unitAmount,
+          creditAmount: PRO_BASE_MONTHLY_PRICE.creditAmount,
           billingProduct: {
             name: PRO_BASE_LICENSED_PRODUCT.name,
             description: PRO_BASE_LICENSED_PRODUCT.description,
@@ -204,19 +219,23 @@ export const mockedUserData: MockedUser = {
       PermissionFlagType.CONNECTED_ACCOUNTS,
     ],
     twoFactorAuthenticationMethodSummary: [],
-    objectsPermissions: getTestEnrichedObjectMetadataItemsMock().map(
+    objectRecordsPermissions: getTestEnrichedObjectMetadataItemsMock().map(
       (item) => ({
         objectMetadataId: item.id,
-        canReadObjectRecords: true,
-        canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: true,
-        canDestroyObjectRecords: true,
-        showInSidebar: true,
-        editWindowMinutes: null,
+        canCreateAllRecords: true,
+        canReadAllRecords: true,
+        canUpdateAllRecords: true,
+        canSoftDeleteAllRecords: true,
+        canDestroyAllRecords: true,
+        unreadableFields: [],
+        uneditableFields: [],
         restrictedFields: {},
-        rowLevelPermissionPredicates: [],
-        rowLevelPermissionPredicateGroups: [],
       }),
+    ),
+    // OMNIA-CUSTOM: a loaded user always carries sidebar visibility (contract C4); the member
+    // sidebar renders nothing without it
+    objectSidebarVisibility: getTestEnrichedObjectMetadataItemsMock().map(
+      (item) => ({ objectMetadataId: item.id, showInSidebar: true }),
     ),
   },
   locale: 'en',
@@ -234,24 +253,24 @@ export const mockedLimitedPermissionsUserData: MockedUser = {
   ...mockedUserData,
   currentUserWorkspace: {
     ...mockedUserData.currentUserWorkspace,
-    objectsPermissions: getTestEnrichedObjectMetadataItemsMock()
-      .filter(
-        (objectMetadata) =>
-          objectMetadata.nameSingular !== 'task' &&
-          objectMetadata.nameSingular !== 'opportunity',
-      )
-      .map((item) => ({
-        objectMetadataId: item.id,
-        canReadObjectRecords: true,
-        canUpdateObjectRecords: true,
-        canSoftDeleteObjectRecords: true,
-        canDestroyObjectRecords: true,
-        showInSidebar: true,
-        editWindowMinutes: null,
-        restrictedFields: {},
-        rowLevelPermissionPredicates: [],
-        rowLevelPermissionPredicateGroups: [],
-      })),
+    objectRecordsPermissions: getTestEnrichedObjectMetadataItemsMock().map(
+      (item) => {
+        const hasAccess =
+          item.nameSingular !== 'task' && item.nameSingular !== 'opportunity';
+
+        return {
+          objectMetadataId: item.id,
+          canCreateAllRecords: hasAccess,
+          canReadAllRecords: hasAccess,
+          canUpdateAllRecords: hasAccess,
+          canSoftDeleteAllRecords: hasAccess,
+          canDestroyAllRecords: hasAccess,
+          unreadableFields: [],
+          uneditableFields: [],
+          restrictedFields: {},
+        };
+      },
+    ),
   },
 };
 
@@ -274,16 +293,17 @@ export const mockedOnboardingUserData = (
     currentWorkspace: mockCurrentWorkspace,
     currentUserWorkspace: {
       permissionFlags: [PermissionFlagType.WORKSPACE_MEMBERS],
-      objectPermissions: getTestEnrichedObjectMetadataItemsMock().map(
+      objectRecordsPermissions: getTestEnrichedObjectMetadataItemsMock().map(
         (item) => ({
           objectMetadataId: item.id,
-          canReadObjectRecords: true,
-          canUpdateObjectRecords: true,
-          canSoftDeleteObjectRecords: true,
-          canDestroyObjectRecords: true,
+          canCreateAllRecords: true,
+          canReadAllRecords: true,
+          canUpdateAllRecords: true,
+          canSoftDeleteAllRecords: true,
+          canDestroyAllRecords: true,
+          unreadableFields: [],
+          uneditableFields: [],
           restrictedFields: {},
-          rowLevelPermissionPredicates: [],
-          rowLevelPermissionPredicateGroups: [],
         }),
       ),
     },

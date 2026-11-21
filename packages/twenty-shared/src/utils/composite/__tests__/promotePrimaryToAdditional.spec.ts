@@ -3,6 +3,8 @@ import {
   promotePrimaryPhoneToAdditional,
 } from '../promotePrimaryToAdditional';
 
+import { type PhonesMetadata } from '@/types/composite-types/phones.composite-type';
+
 describe('promotePrimaryPhoneToAdditional', () => {
   it('pushes the old primary into additionalPhones', () => {
     const result = promotePrimaryPhoneToAdditional(
@@ -81,7 +83,7 @@ describe('promotePrimaryPhoneToAdditional', () => {
   it('is a no-op when primary is unchanged', () => {
     const existing = {
       primaryPhoneNumber: '+13346657717',
-      primaryPhoneCountryCode: 'US',
+      primaryPhoneCountryCode: 'US' as const,
       primaryPhoneCallingCode: '1',
       additionalPhones: [
         {
@@ -101,7 +103,9 @@ describe('promotePrimaryPhoneToAdditional', () => {
     const result = promotePrimaryPhoneToAdditional(
       {
         primaryPhoneNumber: '',
-        primaryPhoneCountryCode: '',
+        // Stored rows can carry an empty country code.
+        primaryPhoneCountryCode:
+          '' as PhonesMetadata['primaryPhoneCountryCode'],
         primaryPhoneCallingCode: '',
         additionalPhones: null,
       },

@@ -1,35 +1,39 @@
+import { verifyEmailRedirectPathState } from '@/auth/states/verifyEmailRedirectPathState';
 import { useAuth } from '@/auth/hooks/useAuth';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
-import { AppPath } from 'twenty-shared/types';
-
-import { verifyEmailRedirectPathState } from '@/app/states/verifyEmailRedirectPathState';
 import { useVerifyLogin } from '@/auth/hooks/useVerifyLogin';
 import { clientConfigApiStatusState } from '@/client-config/states/clientConfigApiStatusState';
 import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
 import { useRedirectToWorkspaceDomain } from '@/domain-manager/hooks/useRedirectToWorkspaceDomain';
-import { ModalContent } from 'twenty-ui/layout';
-import { useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { useLingui } from '@lingui/react/macro';
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { AppPath } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast, type ToastOptions } from 'twenty-ui/components/feedback';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
-import { EmailVerificationSent } from '@/auth/sign-in-up/components/EmailVerificationSent';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 
-export const VerifyEmailEffect = () => {
+type VerifyEmailEffectProps = {
+  onError: () => void;
+};
+
+const EMAIL_VERIFICATION_ERROR_DEDUPE_KEY =
+  'email-verification-error-dedupe-key';
+
+export const VerifyEmailEffect = ({ onError }: VerifyEmailEffectProps) => {
   const {
     verifyEmailAndGetLoginToken,
     verifyEmailAndGetWorkspaceAgnosticToken,
   } = useAuth();
 
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const [searchParams] = useSearchParams();
-  const [isError, setIsError] = useState(false);
 
   const setVerifyEmailRedirectPath = useSetAtomState(
     verifyEmailRedirectPathState,
@@ -49,21 +53,19 @@ export const VerifyEmailEffect = () => {
   useEffect(() => {
     const verifyEmailToken = async () => {
       if (!email || !emailVerificationToken) {
-        enqueueErrorSnackBar({
-          message: t`Invalid email verification link.`,
-          options: {
-            dedupeKey: 'email-verification-link-dedupe-key',
-          },
+        enqueueToast({
+          status: 'error',
+          children: t`Invalid email verification link.`,
+          dedupeKey: 'email-verification-link-dedupe-key',
         });
         return navigate(AppPath.SignInUp);
       }
 
-      const successSnackbarParams = {
-        message: t`Email verified.`,
-        options: {
-          dedupeKey: 'email-verification-dedupe-key',
-        },
-      };
+      const successToastOptions = {
+        status: 'success',
+        children: t`Email verified.`,
+        dedupeKey: 'email-verification-dedupe-key',
+      } satisfies ToastOptions;
 
       try {
         if (!isOnAWorkspace) {
@@ -72,7 +74,9 @@ export const VerifyEmailEffect = () => {
             email,
           );
 
-          return enqueueSuccessSnackBar(successSnackbarParams);
+          enqueueToast(successToastOptions);
+
+          return navigate(AppPath.SignInUp);
         }
 
         const { loginToken, workspaceUrls } = await verifyEmailAndGetLoginToken(
@@ -80,12 +84,14 @@ export const VerifyEmailEffect = () => {
           email,
         );
 
-        enqueueSuccessSnackBar(successSnackbarParams);
+        enqueueToast(successToastOptions);
 
         const workspaceUrl = getWorkspaceUrl(workspaceUrls);
         if (workspaceUrl.slice(0, -1) !== window.location.origin) {
-          return await redirectToWorkspaceDomain(workspaceUrl, AppPath.Verify, {
-            loginToken: loginToken.token,
+          return await redirectToWorkspaceDomain({
+            baseUrl: workspaceUrl,
+            pathname: AppPath.Verify,
+            searchParams: { loginToken: loginToken.token },
           });
         }
 
@@ -95,19 +101,23 @@ export const VerifyEmailEffect = () => {
 
         await verifyLoginToken(loginToken.token);
       } catch (error) {
-        enqueueErrorSnackBar({
-          ...(CombinedGraphQLErrors.is(error)
-            ? { apolloError: error }
-            : { message: t`Email verification failed` }),
-          options: {
-            dedupeKey: 'email-verification-error-dedupe-key',
-          },
-        });
+        enqueueToast(
+          CombinedGraphQLErrors.is(error)
+            ? getToastOptionsFromError({
+                error,
+                dedupeKey: EMAIL_VERIFICATION_ERROR_DEDUPE_KEY,
+              })
+            : {
+                status: 'error',
+                children: t`Email verification failed`,
+                dedupeKey: EMAIL_VERIFICATION_ERROR_DEDUPE_KEY,
+              },
+        );
         if (isGraphqlErrorOfType(error, 'EMAIL_ALREADY_VERIFIED')) {
           navigate(AppPath.SignInUp);
         }
 
-        setIsError(true);
+        onError();
       }
     };
 
@@ -120,14 +130,6 @@ export const VerifyEmailEffect = () => {
     // Verify email only needs to run once at mount
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [clientConfigApiStatus.isLoadedOnce]);
-
-  if (isError) {
-    return (
-      <ModalContent isVerticallyCentered isHorizontallyCentered>
-        <EmailVerificationSent email={email} isError={true} />
-      </ModalContent>
-    );
-  }
 
   return <></>;
 };

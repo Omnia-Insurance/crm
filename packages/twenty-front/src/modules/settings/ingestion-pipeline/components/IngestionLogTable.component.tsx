@@ -1,218 +1,181 @@
-import { useState } from 'react';
-
 import { styled } from '@linaria/react';
-import { Trans, useLingui } from '@lingui/react/macro';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLingui } from '@lingui/react/macro';
+import { useState } from 'react';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { Status, Tag } from 'twenty-ui/primitives/data-display';
+import { Collapsible } from 'twenty-ui/primitives/layout';
+import { type ThemeColor, themeCssVariables } from 'twenty-ui/theme';
 
-import { type IngestionLog } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+import { Table } from '@/ui/layout/table/components/Table';
+import { TableBody } from '@/ui/layout/table/components/TableBody';
+import { TableCell } from '@/ui/layout/table/components/TableCell';
+import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
+import { type IngestionLogFragmentFragment } from '~/generated-metadata/graphql';
+import { beautifyPastDateRelativeToNow } from '~/utils/date-utils';
+import { formatDuration } from '~/utils/format/formatDuration';
 
 type IngestionLogTableProps = {
-  logs: IngestionLog[];
+  logs: IngestionLogFragmentFragment[];
 };
 
-const StyledTable = styled.table`
-  border-collapse: collapse;
-  width: 100%;
+const INGESTION_LOG_TABLE_GRID_TEMPLATE_COLUMNS =
+  '104px 72px repeat(4, 1fr) 80px 1.5fr';
+
+const StyledDetailsContainer = styled.div`
+  background-color: ${themeCssVariables.background.secondary};
+  border-top: 1px solid ${themeCssVariables.border.color.medium};
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[4]};
+  padding: ${themeCssVariables.spacing[4]};
 `;
 
-const StyledTh = styled.th`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  padding: ${themeCssVariables.spacing[2]};
-  text-align: left;
-`;
-
-const StyledTd = styled.td`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  font-size: ${themeCssVariables.font.size.sm};
-  padding: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledClickableRow = styled.tr`
-  cursor: pointer;
-
-  &:hover {
-    background: ${themeCssVariables.background.transparent.lighter};
-  }
-`;
-
-const StyledPayloadRow = styled.tr`
-  background: ${themeCssVariables.background.secondary};
-`;
-
-const StyledPayloadCell = styled.td`
-  border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
-`;
-
-const StyledPayloadPre = styled.pre`
-  margin: 0;
-  font-size: ${themeCssVariables.font.size.xs};
+const StyledDetailsTitle = styled.div`
   color: ${themeCssVariables.font.color.secondary};
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 300px;
-  overflow-y: auto;
-`;
-
-const StyledPayloadLabel = styled.div`
-  font-size: ${themeCssVariables.font.size.xs};
-  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.medium};
-  margin-bottom: ${themeCssVariables.spacing[1]};
+  margin-bottom: ${themeCssVariables.spacing[2]};
 `;
 
-const StyledStatusBadge = styled.span<{ status: string }>`
-  padding: ${themeCssVariables.spacing['0.5']} ${themeCssVariables.spacing[1]};
+const StyledPreformattedText = styled.pre`
+  background-color: ${themeCssVariables.background.primary};
+  border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.sm};
+  color: ${themeCssVariables.font.color.secondary};
+  font-family: ${themeCssVariables.code.font.family};
   font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.medium};
-  background: ${({ status }) => {
-    switch (status) {
-      case 'completed':
-        return themeCssVariables.color.green10;
-      case 'failed':
-        return themeCssVariables.color.red10;
-      case 'partial':
-        return themeCssVariables.color.orange10;
-      case 'running':
-        return themeCssVariables.color.blue10;
-      default:
-        return themeCssVariables.background.tertiary;
-    }
-  }};
-  color: ${({ status }) => {
-    switch (status) {
-      case 'completed':
-        return themeCssVariables.color.green;
-      case 'failed':
-        return themeCssVariables.color.red;
-      case 'partial':
-        return themeCssVariables.color.orange;
-      case 'running':
-        return themeCssVariables.color.blue;
-      default:
-        return themeCssVariables.font.color.tertiary;
-    }
-  }};
+  margin: 0;
+  max-height: 300px;
+  overflow: auto;
+  padding: ${themeCssVariables.spacing[2]};
+  white-space: pre-wrap;
+  word-break: break-word;
 `;
 
-const formatDuration = (ms: number | null): string => {
-  if (ms === null) return '-';
-  if (ms < 1000) return `${ms}ms`;
-
-  return `${(ms / 1000).toFixed(1)}s`;
-};
-
-const formatDate = (date: string | null): string => {
-  if (!date) return '-';
-
-  return new Date(date).toLocaleString();
-};
-
-const COLUMN_COUNT = 8;
+const StyledEmptyDetails = styled.div`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
+`;
 
 export const IngestionLogTable = ({ logs }: IngestionLogTableProps) => {
   const { t } = useLingui();
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
-  if (logs.length === 0) {
-    return (
-      <div>
-        <Trans>No runs yet.</Trans>
-      </div>
-    );
-  }
+  const logStatusDisplays: Record<
+    string,
+    { label: string; color: ThemeColor }
+  > = {
+    pending: { label: t`Pending`, color: 'gray' },
+    running: { label: t`Running`, color: 'blue' },
+    completed: { label: t`Completed`, color: 'green' },
+    partial: { label: t`Partial`, color: 'orange' },
+    failed: { label: t`Failed`, color: 'red' },
+  };
+
+  const triggerTypeLabels: Record<string, string> = {
+    push: t`Push`,
+    pull: t`Pull`,
+    test: t`Test`,
+  };
 
   const handleRowClick = (logId: string) => {
     setExpandedLogId(expandedLogId === logId ? null : logId);
   };
 
   return (
-    <StyledTable>
-      <thead>
-        <tr>
-          <StyledTh>
-            <Trans>Status</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Trigger</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Records</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Created</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Updated</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Failed</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Duration</Trans>
-          </StyledTh>
-          <StyledTh>
-            <Trans>Started</Trans>
-          </StyledTh>
-        </tr>
-      </thead>
-      <tbody>
-        {logs.map((log) => (
-          <>
-            <StyledClickableRow
-              key={log.id}
-              onClick={() => handleRowClick(log.id)}
-            >
-              <StyledTd>
-                <StyledStatusBadge status={log.status}>
-                  {log.status}
-                </StyledStatusBadge>
-              </StyledTd>
-              <StyledTd>{log.triggerType}</StyledTd>
-              <StyledTd>{log.totalRecordsReceived}</StyledTd>
-              <StyledTd>{log.recordsCreated}</StyledTd>
-              <StyledTd>{log.recordsUpdated}</StyledTd>
-              <StyledTd>{log.recordsFailed}</StyledTd>
-              <StyledTd>{formatDuration(log.durationMs)}</StyledTd>
-              <StyledTd>{formatDate(log.startedAt)}</StyledTd>
-            </StyledClickableRow>
-            {expandedLogId === log.id && (
-              <StyledPayloadRow key={`${log.id}-payload`}>
-                <StyledPayloadCell colSpan={COLUMN_COUNT}>
-                  {log.incomingPayload ? (
-                    <>
-                      <StyledPayloadLabel>
-                        <Trans>Incoming Payload</Trans>
-                      </StyledPayloadLabel>
-                      <StyledPayloadPre>
-                        {JSON.stringify(log.incomingPayload, null, 2)}
-                      </StyledPayloadPre>
-                    </>
-                  ) : (
-                    <StyledPayloadLabel>
-                      <Trans>No payload data available</Trans>
-                    </StyledPayloadLabel>
-                  )}
-                  {log.errors && log.errors.length > 0 && (
-                    <>
-                      <StyledPayloadLabel style={{ marginTop: '8px' }}>
-                        <Trans>Errors</Trans>
-                      </StyledPayloadLabel>
-                      <StyledPayloadPre>
-                        {JSON.stringify(log.errors, null, 2)}
-                      </StyledPayloadPre>
-                    </>
-                  )}
-                </StyledPayloadCell>
-              </StyledPayloadRow>
-            )}
-          </>
-        ))}
-      </tbody>
-    </StyledTable>
+    <Table>
+      <TableRow gridTemplateColumns={INGESTION_LOG_TABLE_GRID_TEMPLATE_COLUMNS}>
+        <TableHeader>{t`Status`}</TableHeader>
+        <TableHeader>{t`Trigger`}</TableHeader>
+        <TableHeader align="right">{t`Records`}</TableHeader>
+        <TableHeader align="right">{t`Created`}</TableHeader>
+        <TableHeader align="right">{t`Updated`}</TableHeader>
+        <TableHeader align="right">{t`Failed`}</TableHeader>
+        <TableHeader align="right">{t`Duration`}</TableHeader>
+        <TableHeader align="right">{t`Started`}</TableHeader>
+      </TableRow>
+      <TableBody>
+        {logs.length === 0 ? (
+          <TableCell color={themeCssVariables.font.color.tertiary}>
+            {t`No runs yet`}
+          </TableCell>
+        ) : (
+          logs.map((log) => {
+            const isExpanded = expandedLogId === log.id;
+            const statusDisplay = logStatusDisplays[log.status] ?? {
+              label: log.status,
+              color: 'gray',
+            };
+
+            return (
+              <div key={log.id}>
+                <TableRow
+                  gridTemplateColumns={
+                    INGESTION_LOG_TABLE_GRID_TEMPLATE_COLUMNS
+                  }
+                  onClick={() => handleRowClick(log.id)}
+                  isExpanded={isExpanded}
+                  cursor="pointer"
+                >
+                  <TableCell>
+                    <Status color={statusDisplay.color} weight="medium">
+                      {statusDisplay.label}
+                    </Status>
+                  </TableCell>
+                  <TableCell>
+                    <Tag color="gray">
+                      {triggerTypeLabels[log.triggerType] ?? log.triggerType}
+                    </Tag>
+                  </TableCell>
+                  <TableCell align="right">
+                    {log.totalRecordsReceived}
+                  </TableCell>
+                  <TableCell align="right">{log.recordsCreated}</TableCell>
+                  <TableCell align="right">{log.recordsUpdated}</TableCell>
+                  <TableCell align="right">{log.recordsFailed}</TableCell>
+                  <TableCell align="right">
+                    {isDefined(log.durationMs)
+                      ? formatDuration(log.durationMs)
+                      : ''}
+                  </TableCell>
+                  <TableCell align="right">
+                    {isDefined(log.startedAt)
+                      ? beautifyPastDateRelativeToNow(log.startedAt)
+                      : ''}
+                  </TableCell>
+                </TableRow>
+                <Collapsible.Root open={isExpanded}>
+                  <Collapsible.Panel dimension="height">
+                    <StyledDetailsContainer>
+                      <div>
+                        <StyledDetailsTitle>{t`Incoming payload`}</StyledDetailsTitle>
+                        {isDefined(log.incomingPayload) ? (
+                          <StyledPreformattedText>
+                            {JSON.stringify(log.incomingPayload, null, 2)}
+                          </StyledPreformattedText>
+                        ) : (
+                          <StyledEmptyDetails>
+                            {t`No payload data available`}
+                          </StyledEmptyDetails>
+                        )}
+                      </div>
+                      {isNonEmptyArray(log.errors) && (
+                        <div>
+                          <StyledDetailsTitle>{t`Errors`}</StyledDetailsTitle>
+                          <StyledPreformattedText>
+                            {JSON.stringify(log.errors, null, 2)}
+                          </StyledPreformattedText>
+                        </div>
+                      )}
+                    </StyledDetailsContainer>
+                  </Collapsible.Panel>
+                </Collapsible.Root>
+              </div>
+            );
+          })
+        )}
+      </TableBody>
+    </Table>
   );
 };

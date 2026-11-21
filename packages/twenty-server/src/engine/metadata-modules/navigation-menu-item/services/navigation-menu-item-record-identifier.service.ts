@@ -6,22 +6,26 @@ import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/wo
 import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
 import { getRecordDisplayName } from 'src/engine/core-modules/record-crud/utils/get-record-display-name.util';
 import { getRecordImageIdentifier } from 'src/engine/core-modules/record-crud/utils/get-record-image-identifier.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { RecordIdentifierDTO } from 'src/engine/metadata-modules/navigation-menu-item/dtos/record-identifier.dto';
 import { getMinimalSelectForRecordIdentifier } from 'src/engine/metadata-modules/navigation-menu-item/utils/get-minimal-select-for-record-identifier.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+} from 'src/engine/permissions/permissions.exception';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { formatResult } from 'src/engine/twenty-orm/utils/format-result.util';
-import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { FileFolder } from 'twenty-shared/types';
 
 @Injectable()
 export class NavigationMenuItemRecordIdentifierService {
   constructor(
     private readonly workspaceManyOrAllFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly fileUrlService: FileUrlService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   async resolveRecordIdentifier({
@@ -64,52 +68,47 @@ export class NavigationMenuItemRecordIdentifierService {
         workspace: { id: workspaceId },
       } as WorkspaceAuthContext);
 
-    const record =
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          const context = getWorkspaceContext();
-          const rolePermissionConfig = resolveRolePermissionConfig({
-            authContext: context.authContext,
-            userWorkspaceRoleMap: context.userWorkspaceRoleMap,
-            apiKeyRoleMap: context.apiKeyRoleMap,
-          });
+    // A caller who cannot read the record sees no identifier rather than an error
+    const record = await this.workspaceOrmManager
+      .executeInWorkspaceContext(async () => {
+        const repository = this.workspaceOrmManager.getRepository(
+          objectMetadata.nameSingular,
+        );
 
-          if (!rolePermissionConfig) {
-            return null;
-          }
+        const alias = objectMetadata.nameSingular;
+        const queryBuilder = repository.createQueryBuilder(alias);
 
-          const repository = await this.globalWorkspaceOrmManager.getRepository(
-            workspaceId,
-            objectMetadata.nameSingular,
-            rolePermissionConfig,
-          );
+        queryBuilder.select([]);
 
-          const alias = objectMetadata.nameSingular;
-          const queryBuilder = repository.createQueryBuilder(alias);
+        for (const column of minimalSelectColumns) {
+          queryBuilder.addSelect(`"${alias}"."${column}"`, column);
+        }
 
-          queryBuilder.select([]);
+        const rawResult = await queryBuilder
+          .where(`"${alias}".id = :id`, { id: targetRecordId })
+          .getRawOne();
 
-          for (const column of minimalSelectColumns) {
-            queryBuilder.addSelect(`"${alias}"."${column}"`, column);
-          }
+        if (!isDefined(rawResult)) {
+          return null;
+        }
 
-          const rawResult = await queryBuilder
-            .where(`${alias}.id = :id`, { id: targetRecordId })
-            .getRawOne();
+        return formatResult<Record<string, unknown>>(
+          rawResult,
+          objectMetadata,
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+        );
+      }, resolvedAuthContext)
+      .catch((error: unknown) => {
+        if (
+          error instanceof PermissionsException &&
+          error.code === PermissionsExceptionCode.PERMISSION_DENIED
+        ) {
+          return null;
+        }
 
-          if (!isDefined(rawResult)) {
-            return null;
-          }
-
-          return formatResult<Record<string, unknown>>(
-            rawResult,
-            objectMetadata,
-            flatObjectMetadataMaps,
-            flatFieldMetadataMaps,
-          );
-        },
-        resolvedAuthContext,
-      );
+        throw error;
+      });
 
     if (!isDefined(record)) {
       return null;
@@ -125,6 +124,9 @@ export class NavigationMenuItemRecordIdentifierService {
       record,
       flatObjectMetadata: objectMetadata,
       flatFieldMetadataMaps,
+      allowRequestsToTwentyIcons: this.twentyConfigService.get(
+        'ALLOW_REQUESTS_TO_TWENTY_ICONS',
+      ),
       signUrl: (fileId: string, fileFolder: FileFolder) =>
         this.fileUrlService.signFileByIdUrl({
           fileId,

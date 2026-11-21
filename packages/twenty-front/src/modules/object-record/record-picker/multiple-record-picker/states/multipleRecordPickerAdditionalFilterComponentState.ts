@@ -1,9 +1,9 @@
 import { MultipleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/multiple-record-picker/states/contexts/MultipleRecordPickerComponentInstanceContext';
 import { createAtomComponentState } from '@/ui/utilities/state/jotai/utils/createAtomComponentState';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
 
 export const multipleRecordPickerAdditionalFilterComponentState =
-  createAtomComponentState<ObjectRecordFilterInput | undefined>({
+  createAtomComponentState<RecordGqlOperationFilter | undefined>({
     key: 'multipleRecordPickerAdditionalFilterComponentState',
     defaultValue: undefined,
     componentInstanceContext: MultipleRecordPickerComponentInstanceContext,

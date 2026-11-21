@@ -6,8 +6,8 @@ import {
   WorkspaceMigrationRunnerException,
   WorkspaceMigrationRunnerExceptionCode,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-runner.exception';
-import { type AllUniversalWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
-import { type OrchestratorFailureReport } from 'src/engine/workspace-manager/workspace-migration/types/workspace-migration-orchestrator.type';
+import { type AllUniversalWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
+import { EMPTY_ORCHESTRATOR_FAILURE_REPORT } from 'src/engine/workspace-manager/workspace-migration/constant/empty-orchestrator-failure-report.constant';
 
 import { formatUpgradeErrorForStorage } from 'src/engine/core-modules/upgrade/utils/format-upgrade-error-for-storage.util';
 
@@ -54,10 +54,11 @@ describe('formatUpgradeErrorForStorage', () => {
   });
 
   it('should format a WorkspaceMigrationRunnerException with EXECUTION_FAILED', () => {
-    const action = {
-      type: 'create',
+    const action: AllUniversalWorkspaceMigrationAction = {
+      type: 'delete',
       metadataName: 'objectMetadata',
-    } as unknown as AllUniversalWorkspaceMigrationAction;
+      universalIdentifier: 'test-object-uid',
+    };
 
     const error = new WorkspaceMigrationRunnerException({
       action,
@@ -71,14 +72,52 @@ describe('formatUpgradeErrorForStorage', () => {
     expect(stripStack(formatUpgradeErrorForStorage(error))).toMatchSnapshot();
   });
 
+  it('should surface driver details of a QueryFailedError nested in an EXECUTION_FAILED', () => {
+    const driverError = new Error(
+      'duplicate key value violates unique constraint "IDX_PAGE_LAYOUT_WIDGET_UNIVERSAL_ID"',
+    );
+
+    Object.assign(driverError, {
+      code: '23505',
+      detail:
+        'Key (universalIdentifier)=(f473b435-e2d4-4928-8d90-1db0094389f7) already exists.',
+    });
+
+    const action: AllUniversalWorkspaceMigrationAction = {
+      type: 'delete',
+      metadataName: 'pageLayoutWidget',
+      universalIdentifier: 'f473b435-e2d4-4928-8d90-1db0094389f7',
+    };
+
+    const error = new WorkspaceMigrationRunnerException({
+      action,
+      errors: {
+        metadata: new QueryFailedError(
+          'INSERT INTO "core"."pageLayoutWidget" VALUES ($1)',
+          [],
+          driverError,
+        ),
+      },
+      code: WorkspaceMigrationRunnerExceptionCode.EXECUTION_FAILED,
+    });
+
+    expect(stripStack(formatUpgradeErrorForStorage(error))).toMatchSnapshot();
+  });
+
   it('should format a WorkspaceMigrationBuilderException', () => {
     const report = {
+      ...EMPTY_ORCHESTRATOR_FAILURE_REPORT(),
       objectMetadata: [
         {
-          validationErrors: ['name must not be empty'],
+          type: 'create' as const,
+          metadataName: 'objectMetadata' as const,
+          errors: [
+            { code: 'INVALID_INPUT', message: 'name must not be empty' },
+          ],
+          flatEntityMinimalInformation: {},
         },
       ],
-    } as unknown as OrchestratorFailureReport;
+    };
 
     const error = new WorkspaceMigrationBuilderException({
       status: 'fail',

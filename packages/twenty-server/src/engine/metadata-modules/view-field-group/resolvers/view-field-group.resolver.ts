@@ -9,17 +9,16 @@ import {
 } from '@nestjs/graphql';
 
 import { isArray } from '@sniptt/guards';
+import { PermissionFlagType } from 'twenty-shared/constants';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
-import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { type I18nContext } from 'src/engine/core-modules/i18n/types/i18n-context.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { type IDataloaders } from 'src/engine/dataloaders/dataloader.interface';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { CreateViewChildEntityPermissionGuard } from 'src/engine/metadata-modules/view/guards/create-view-child-entity-permission.guard';
+import { ViewChildEntityPermissionGuard } from 'src/engine/metadata-modules/view/guards/view-child-entity-permission.guard';
 import { CreateViewFieldGroupInput } from 'src/engine/metadata-modules/view-field-group/dtos/inputs/create-view-field-group.input';
 import { DeleteViewFieldGroupInput } from 'src/engine/metadata-modules/view-field-group/dtos/inputs/delete-view-field-group.input';
 import { DestroyViewFieldGroupInput } from 'src/engine/metadata-modules/view-field-group/dtos/inputs/destroy-view-field-group.input';
@@ -28,47 +27,67 @@ import { UpsertFieldsWidgetInput } from 'src/engine/metadata-modules/view-field-
 import { ViewFieldGroupDTO } from 'src/engine/metadata-modules/view-field-group/dtos/view-field-group.dto';
 import { FieldsWidgetUpsertService } from 'src/engine/metadata-modules/view-field-group/services/fields-widget-upsert.service';
 import { ViewFieldGroupService } from 'src/engine/metadata-modules/view-field-group/services/view-field-group.service';
-import { resolveViewFieldGroupName } from 'src/engine/metadata-modules/view-field-group/utils/resolve-view-field-group-name.util';
+import { resolveEffectiveEntityProperty } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-entity-property.util';
 import { ViewFieldDTO } from 'src/engine/metadata-modules/view-field/dtos/view-field.dto';
 import { ViewDTO } from 'src/engine/metadata-modules/view/dtos/view.dto';
 import { type ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
 import { ViewGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/view/utils/view-graphql-api-exception.filter';
+import { ApplicationTranslationCatalogService } from 'src/engine/metadata-modules/application-translation-catalog/services/application-translation-catalog.service';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+import { type AccessPolicy } from 'src/engine/guards/types/access-policy.type';
+
+const VIEW_FIELD_GROUP_ACCESS_POLICY: AccessPolicy = {
+  authPrincipals: {
+    userSession: {
+      standard: true,
+      impersonated: true,
+      playground: true,
+      workspaceAgnostic: false,
+    },
+    apiKey: true,
+    oauthClient: true,
+    application: true,
+  },
+  requiredPermissionFlags: [],
+};
 
 @MetadataResolver(() => ViewFieldGroupDTO)
-@UseFilters(ViewGraphqlApiExceptionFilter)
-@UseGuards(WorkspaceAuthGuard)
+@UseFilters(ViewGraphqlApiExceptionFilter, AuthGraphqlApiExceptionFilter)
 export class ViewFieldGroupResolver {
   constructor(
     private readonly viewFieldGroupService: ViewFieldGroupService,
     private readonly fieldsWidgetUpsertService: FieldsWidgetUpsertService,
-    private readonly i18nService: I18nService,
-    private readonly applicationService: ApplicationService,
+    private readonly applicationTranslationCatalogService: ApplicationTranslationCatalogService,
   ) {}
 
   @ResolveField(() => String)
   async name(
     @Parent() viewFieldGroup: ViewFieldGroupDTO,
-    @Context() context: I18nContext,
+    @Context() context: { loaders: IDataloaders } & I18nContext,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<string> {
-    const i18n = this.i18nService.getI18nInstance(context.req.locale);
-
-    const { twentyStandardFlatApplication } =
-      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
-        { workspace },
+    const i18nContext =
+      await this.applicationTranslationCatalogService.buildEffectiveEntityI18nContext(
+        {
+          applicationId: viewFieldGroup.applicationId,
+          loaders: context.loaders,
+          locale: context.req.locale,
+          workspaceId: workspace.id,
+        },
       );
 
-    return resolveViewFieldGroupName({
-      name: viewFieldGroup.name,
-      applicationId: viewFieldGroup.applicationId,
-      twentyStandardApplicationId: twentyStandardFlatApplication.id,
+    return resolveEffectiveEntityProperty({
+      metadataName: 'viewFieldGroup',
+      baseValue: viewFieldGroup.name,
       overrides: viewFieldGroup.overrides,
-      i18nInstance: i18n,
+      property: 'name',
+      i18nContext,
     });
   }
 
   @Query(() => [ViewFieldGroupDTO])
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY))
   async getViewFieldGroups(
     @Args('viewId', { type: () => String }) viewId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -77,7 +96,7 @@ export class ViewFieldGroupResolver {
   }
 
   @Query(() => ViewFieldGroupDTO, { nullable: true })
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY))
   async getViewFieldGroup(
     @Args('id', { type: () => String }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -86,7 +105,10 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => ViewFieldGroupDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY),
+    ViewChildEntityPermissionGuard('viewFieldGroup'),
+  )
   async updateViewFieldGroup(
     @Args('input') updateViewFieldGroupInput: UpdateViewFieldGroupInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
@@ -98,7 +120,10 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => ViewFieldGroupDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY),
+    CreateViewChildEntityPermissionGuard,
+  )
   async createViewFieldGroup(
     @Args('input')
     createViewFieldGroupInput: CreateViewFieldGroupInput,
@@ -111,7 +136,10 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => [ViewFieldGroupDTO])
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY),
+    CreateViewChildEntityPermissionGuard,
+  )
   async createManyViewFieldGroups(
     @Args('inputs', { type: () => [CreateViewFieldGroupInput] })
     createViewFieldGroupInputs: CreateViewFieldGroupInput[],
@@ -124,7 +152,10 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => ViewFieldGroupDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY),
+    ViewChildEntityPermissionGuard('viewFieldGroup'),
+  )
   async deleteViewFieldGroup(
     @Args('input') deleteViewFieldGroupInput: DeleteViewFieldGroupInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
@@ -136,7 +167,10 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => ViewFieldGroupDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard(VIEW_FIELD_GROUP_ACCESS_POLICY),
+    ViewChildEntityPermissionGuard('viewFieldGroup'),
+  )
   async destroyViewFieldGroup(
     @Args('input')
     destroyViewFieldGroupInput: DestroyViewFieldGroupInput,
@@ -149,7 +183,22 @@ export class ViewFieldGroupResolver {
   }
 
   @Mutation(() => ViewDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: true,
+      },
+      requiredPermissionFlags: [PermissionFlagType.LAYOUTS],
+    }),
+  )
   @UsePipes(ResolverValidationPipe)
   async upsertFieldsWidget(
     @Args('input') input: UpsertFieldsWidgetInput,

@@ -1,0 +1,249 @@
+import { isDefined } from 'twenty-shared/utils';
+
+import { fetchAppExport } from '@/app/fetch-app-export';
+import { fetchWorkspaceOrThrow } from '@/app/fetch-workspace-or-throw';
+import { createPullProject } from '@/app/pull/create-pull-project';
+import { formatToolingDiagnostic } from '@/app/format-tooling-diagnostic';
+import { parseToolingResult } from '@/app/parse-tooling-result';
+import { formatPullReport } from '@/app/pull/format-pull-report';
+import { parsePullData } from '@/app/pull/parse-pull-data';
+import { PULL_MINIMUM_SDK_VERSION } from '@/app/pull/pull-minimum-sdk-version.constant';
+import { readAppIdentity } from '@/app/read-app-identity';
+import { resolveAppProject } from '@/app/project/resolve-app-project';
+import { runAppWorker } from '@/app/run-app-worker';
+import { toWorkerOutputDiagnostics } from '@/app/to-worker-output-diagnostics';
+import {
+  readBooleanOption,
+  readStringOption,
+} from '@/catalog/read-command-values';
+import { type CommandRun } from '@/catalog/types/command-run.type';
+import { type TargetCommandContext } from '@/catalog/types/target-command-context.type';
+import { formatDataValue } from '@/data/format-data-value';
+import { CliError } from '@/output/cli-error';
+import { EXIT_CODE } from '@/output/constants/exit-code.constant';
+import { commandText, formatSuccessLine } from '@/output/style';
+
+export const runAppPullCommand: CommandRun<TargetCommandContext> = async (
+  context,
+) => {
+  const { options, target, signal, output, outputMode } = context;
+  let project = await resolveAppProject({
+    explicitPath: readStringOption(options, 'path'),
+    workingDirectory: process.cwd(),
+  }).catch((error: unknown) => {
+    if (
+      error instanceof CliError &&
+      ['APP_NOT_FOUND', 'APP_PATH_REQUIRED'].includes(error.code)
+    ) {
+      return undefined;
+    }
+    throw error;
+  });
+  const identity = isDefined(project)
+    ? await readAppIdentity({
+        appPath: project.path,
+        signal,
+        warn: output.warn,
+      })
+    : { application: null, diagnostics: [] };
+  const workspace = await fetchWorkspaceOrThrow({
+    target,
+    signal,
+    shouldIncludeCustomApplication: !isDefined(identity.application),
+  });
+  const universalIdentifier = (
+    identity.application?.universalIdentifier ??
+    workspace.workspaceCustomApplication?.universalIdentifier
+  )?.toLowerCase();
+
+  if (!isDefined(universalIdentifier)) {
+    throw new CliError({
+      code: 'APP_NOT_FOUND',
+      message: 'This workspace has no custom application to pull.',
+    });
+  }
+
+  output.progress({ message: `Exporting the app from ${target.apiUrl}…` });
+
+  const applicationExport = await fetchAppExport({
+    universalIdentifier,
+    target,
+    signal,
+    shouldIncludeDependencies: true,
+    shouldIncludeSourceFiles: true,
+  });
+  if (!isDefined(project)) {
+    project = await createPullProject({
+      context,
+      displayName: applicationExport.application.displayName,
+    });
+  }
+
+  output.progress({
+    message:
+      'Reconciling local definitions. Changed workspace entities replace local edits…',
+  });
+
+  const worker = await runAppWorker({
+    request: {
+      type: 'pull',
+      appPath: project.path,
+      target: { apiUrl: target.apiUrl, workspaceId: workspace.id },
+      applicationExport,
+    },
+    signal,
+  }).catch((error: unknown) => {
+    throw new CliError({
+      code: error instanceof CliError ? error.code : 'PULL_FAILED',
+      exitCode: error instanceof CliError ? error.exitCode : EXIT_CODE.FAILURE,
+      message: error instanceof Error ? error.message : String(error),
+      hint: 'The worker did not acknowledge completion. Inspect local changes and any backups in .twenty/cli/pull-backup-* before retrying.',
+      details: {
+        ...(error instanceof CliError ? error.details : {}),
+        outcome: 'unknown',
+      },
+    });
+  });
+
+  const result = parseToolingResult({
+    value: worker.result,
+    parseData: parsePullData,
+  });
+
+  const diagnostics = [
+    ...identity.diagnostics,
+    ...result.diagnostics,
+    ...toWorkerOutputDiagnostics(worker.output),
+  ];
+
+  if (outputMode === 'human') {
+    for (const diagnostic of diagnostics) {
+      output.progress({ message: formatToolingDiagnostic(diagnostic) });
+    }
+  }
+
+  if (!result.success) {
+    throw new CliError({
+      code:
+        result.error.code === 'CANCELLED'
+          ? 'CANCELLED'
+          : result.error.code === 'SDK_SOURCE_UNSUPPORTED'
+            ? 'SDK_SOURCE_UNSUPPORTED'
+            : 'PULL_FAILED',
+      exitCode:
+        result.error.code === 'CANCELLED'
+          ? EXIT_CODE.CANCELLED
+          : EXIT_CODE.FAILURE,
+      message: result.error.message,
+      hint:
+        result.error.hint ??
+        (result.error.code === 'SDK_SOURCE_UNSUPPORTED'
+          ? `Upgrade the app to a compatible twenty-sdk version (${PULL_MINIMUM_SDK_VERSION} or later).`
+          : undefined),
+      details: { ...result.error.details, diagnostics },
+    });
+  }
+
+  const data = result.data;
+
+  if (
+    data.skipped.length > 0 ||
+    data.unreadableRelativePaths.length > 0 ||
+    applicationExport.coverage.some(
+      (entry) => !['EXPORTED', 'ENGINE_DERIVED'].includes(entry.status),
+    )
+  ) {
+    output.warn({
+      code: 'PULL_INCOMPLETE',
+      message:
+        'Some entities could not be written. See coverage, skipped entities and unreadable files in the pull report.',
+    });
+  }
+
+  const report = formatPullReport({
+    ...data,
+    writes: data.writes.map((entry) => ({
+      ...entry,
+      relativePath: formatDataValue(entry.relativePath),
+    })),
+    deletions: data.deletions.map((entry) => ({
+      ...entry,
+      relativePath: formatDataValue(entry.relativePath),
+    })),
+    skipped: data.skipped.map((entry) => ({
+      ...entry,
+      reason: formatDataValue(entry.reason),
+    })),
+    localOnlyRelativePaths: data.localOnlyRelativePaths.map(formatDataValue),
+    unreadableRelativePaths: data.unreadableRelativePaths.map(formatDataValue),
+    entityLabelByUniversalIdentifier: Object.fromEntries(
+      Object.entries(data.entityLabelByUniversalIdentifier).map(
+        ([identifier, label]) => [identifier, formatDataValue(label)],
+      ),
+    ),
+    coverage: applicationExport.coverage.map((entry) => ({
+      ...entry,
+      metadataName: formatDataValue(entry.metadataName),
+      universalIdentifier: formatDataValue(entry.universalIdentifier),
+      reason: entry.reason === null ? null : formatDataValue(entry.reason),
+    })),
+    verbose: readBooleanOption(options, 'verbose'),
+  });
+
+  const unknownCoverage = applicationExport.coverage.filter(
+    (entry) =>
+      ![
+        'EXPORTED',
+        'UNSUPPORTED',
+        'FOREIGN_OWNED',
+        'EXCLUDED',
+        'ENGINE_DERIVED',
+      ].includes(entry.status),
+  );
+
+  return {
+    data: {
+      app: { path: project.path, name: project.name },
+      ...data,
+      pulled: true,
+      coverage: applicationExport.coverage,
+      diagnostics,
+    },
+    human: [
+      formatSuccessLine(
+        `Pulled ${formatDataValue(data.application.displayName)} into ${formatDataValue(project.path)}`,
+      ),
+      report,
+      ...(data.base.status !== 'used'
+        ? [
+            `No matching pull base (${data.base.status}); local-only definitions were kept.`,
+          ]
+        : []),
+      ...(data.overwrittenLocalChanges.length > 0
+        ? [
+            'Local edits replaced by workspace changes:',
+            ...data.overwrittenLocalChanges.map(
+              (entry) => `  ${formatDataValue(entry.relativePath)}`,
+            ),
+          ]
+        : []),
+      ...(unknownCoverage.length > 0
+        ? [
+            'Unrecognized coverage, not written:',
+            ...unknownCoverage.map(
+              (entry) =>
+                `  ${formatDataValue(entry.metadataName)} ${formatDataValue(entry.status)}: ${formatDataValue(entry.reason)}`,
+            ),
+          ]
+        : []),
+      ...(data.writes.some((write) => write.kind === 'dependency')
+        ? [
+            `Run ${commandText('yarn install')} to install the pulled dependencies.`,
+          ]
+        : []),
+      `Run ${commandText('twenty app typecheck')} to check the generated definitions.`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  };
+};

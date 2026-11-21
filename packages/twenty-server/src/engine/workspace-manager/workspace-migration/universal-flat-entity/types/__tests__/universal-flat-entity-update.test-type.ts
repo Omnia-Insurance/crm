@@ -13,11 +13,17 @@ type Assertions = [
       | 'description'
       | 'isActive'
       | 'defaultValue'
-      | 'standardOverrides'
+      | 'overrides'
       | 'options'
       | 'isUnique'
+      | 'isSearchable'
+      | 'isAuditLogged'
+      // OMNIA-CUSTOM: soft required rule (contract C5)
       | 'requiredCondition'
       | 'isLabelSyncedWithName'
+      | 'isUIEditable'
+      | 'disabledFieldPermissionActions'
+      | 'isNullable'
       | 'universalSettings'
     >
   >,
@@ -27,9 +33,10 @@ type Assertions = [
       keyof UniversalFlatEntityUpdate<'objectMetadata'>,
       | 'icon'
       | 'color'
+      | 'openRecordIn'
       | 'description'
       | 'isActive'
-      | 'standardOverrides'
+      | 'overrides'
       | 'isLabelSyncedWithName'
       | 'nameSingular'
       | 'namePlural'
@@ -38,6 +45,9 @@ type Assertions = [
       | 'labelIdentifierFieldMetadataUniversalIdentifier'
       | 'imageIdentifierFieldMetadataUniversalIdentifier'
       | 'isSearchable'
+      | 'isUIEditable'
+      | 'isUICreatable'
+      | 'disabledObjectPermissionActions'
     >
   >,
 ];

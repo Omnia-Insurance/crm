@@ -1,0 +1,187 @@
+---
+title: الاختبار
+description: إعداد Vitest، واختبارات تكامل مقابل خادم Twenty حقيقي، والتحقق من الأنواع، والتكامل المستمر (CI) باستخدام GitHub Actions.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## نظرة عامة
+
+استخدم CLI المستقلة مع `--json` لبناء تطبيقك ونشره وتثبيته وإلغاء تثبيته من شيفرة الاختبار. ثبّتها على مستوى النظام باستخدام `npm install -g twenty`. بالاقتران مع [Vitest](https://vitest.dev/) وعملاء واجهة البرمجة مضبوطي الأنواع، يمكنك كتابة اختبارات تكامل تتحقّق من أن تطبيقك يعمل من البداية إلى النهاية مقابل خادم Twenty حقيقي.
+
+## استخدام حِزَم npm
+
+يمكنك تثبيت واستخدام أي حزمة npm في تطبيقك. يتم تجميع كلٍ من الدوال المنطقية والمكوّنات الأمامية باستخدام [esbuild](https://esbuild.github.io/)، والذي يُضمّن تبعياتها ضمن المخرجات — لا حاجة إلى `node_modules` وقت التشغيل.
+
+### تثبيت حزمة
+
+```bash filename="Terminal"
+yarn add axios
+```
+
+ثم استوردها في شيفرتك:
+
+```ts src/logic-functions/fetch-data.ts
+import { defineLogicFunction } from 'twenty-sdk/define';
+import axios from 'axios';
+
+const handler = async () => {
+  const { data } = await axios.get('https://api.example.com/data');
+
+  return { data };
+};
+
+export default defineLogicFunction({
+  universalIdentifier: '...',
+  name: 'fetch-data',
+  description: 'Fetches data from an external API',
+  timeoutSeconds: 10,
+  handler,
+});
+```
+
+وينطبق الأمر نفسه على المكوّنات الأمامية:
+
+```tsx src/front-components/chart.tsx
+import { defineFrontComponent } from 'twenty-sdk/define';
+import { format } from 'date-fns';
+
+const DateWidget = () => {
+  return <p>Today is {format(new Date(), 'MMMM do, yyyy')}</p>;
+};
+
+export default defineFrontComponent({
+  universalIdentifier: '...',
+  name: 'date-widget',
+  component: DateWidget,
+});
+```
+
+### كيف يعمل التجميع
+
+تستخدم خطوة البناء أداة esbuild لإنتاج ملف واحد مستقل لكل دالة منطقية ولكل مكوّن أمامي. تُضمَّن الحزم المستوردة داخل الحزمة، باستثناء تلك المدرجة أدناه.
+
+**الدوال المنطقية** تعمل في بيئة Node.js. الوحدات المدمجة في Node (`fs` و`path` و`crypto` و`http` وغيرها) متاحة ولا تحتاج إلى تثبيت.
+
+**المكوّنات الأمامية** تعمل ضمن Web Worker. وحدات Node المدمجة **غير** متاحة — المتوفّر فقط حِزَم npm التي تعمل في بيئة المتصفّح. لاحظ أن الـ sandbox يطبّق نموذج DOM *جزئيًا*، لذلك قد تتمكّن الحزمة من البناء بنجاح ولكنها قد تفشل أثناء وقت التشغيل؛ راجع [القيود الحالية](/ar/developers/extend/apps/layout/front-components#current-limitations).
+
+كلتا البيئتين تحتويان على `twenty-client-sdk/core` و`twenty-client-sdk/metadata` كوحدات متاحة مُسبقًا — لا تُضمَّن هذه ضمن الحزم بل تُحلّ وقت التشغيل بواسطة الخادم.
+
+يمكن للمكوّنات الأمامية أيضًا مشاركة التبعيات من خلال [حزمة التبعيات المشتركة](/ar/developers/extend/apps/layout/front-components#sharing-dependencies-across-front-components). تُبنَى الحزم المدرجة في حقل `frontComponentSharedDependencies` في ملف package.json الخاص بالتطبيق مرة واحدة في ملف منفصل ويتم تحميلها منه أثناء وقت التشغيل بدلًا من تضمينها داخل كل مكوّن، لذا فإن المكوّن الذي يستورد حزمًا مشتركة فقط لا يحمل تقريبًا أي شيفرة تبعيات خاصة به.
+
+## إعداد
+
+يتضمّن التطبيق المُولَّد بالقالب بالفعل Vitest. إذا أعددته يدويًا، فثبّت التبعيات:
+
+```bash filename="Terminal"
+yarn add -D vitest vite-tsconfig-paths
+```
+
+أنشئ `vitest.config.ts` في جذر تطبيقك:
+
+```ts vitest.config.ts
+import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from 'vitest/config';
+
+const TWENTY_API_URL = process.env.TWENTY_API_URL ?? 'http://localhost:2020';
+const TWENTY_API_KEY =
+  process.env.TWENTY_API_KEY ?? '<the pre-seeded local dev key>';
+
+// Make env vars available to globalSetup (test.env only applies to workers)
+process.env.TWENTY_API_URL = TWENTY_API_URL;
+process.env.TWENTY_API_KEY = TWENTY_API_KEY;
+
+export default defineConfig({
+  plugins: [
+    tsconfigPaths({
+      projects: ['tsconfig.spec.json'],
+      ignoreConfigErrors: true,
+    }),
+  ],
+  test: {
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+    fileParallelism: false,
+    include: ['src/**/*.integration-test.ts'],
+    globalSetup: ['src/__tests__/global-setup.ts'],
+    env: {
+      TWENTY_API_URL,
+      TWENTY_API_KEY,
+    },
+  },
+});
+```
+
+يتضمن القالب المُنشأ `src/__tests__/run-twenty.ts`، وهي أداة مساعدة لعملية فرعية تستدعي CLI العمومية وتُحلّل نتيجتها بتنسيق JSON. اضبط `TWENTY_CLI` على مسار مطلق لملف قابل للتنفيذ لاستخدام إصدار CLI محلي. وهي ترث `TWENTY_API_URL` و`TWENTY_API_KEY`؛ لا حاجة إلى ملف إعدادات في الدليل الرئيسي.
+
+استخدم هذه الأداة المساعدة للإعداد والتنظيف:
+
+```ts src/__tests__/global-setup.ts
+import { runTwenty } from './run-twenty';
+
+export async function setup() {
+  const result = await runTwenty(['app', 'apply', '--create']);
+  if (!result.ok) throw new Error(result.error.message);
+}
+
+export async function teardown() {
+  const result = await runTwenty(['app', 'uninstall', '--yes']);
+  if (!result.ok) throw new Error(result.error.message);
+}
+```
+
+شغّل اختبارات التكامل على مساحة عمل مؤقتة: يقوم الإعداد بتثبيت التطبيق ويقوم التنظيف بإلغاء تثبيته. لتغطية تثبيت السجل، شغّل `app publish --private` متبوعًا بـ `app install` بدلًا من `app apply --create`.
+
+## كتابة اختبار تكامل
+
+استخدم `twenty-client-sdk` لفحص البيانات والبيانات الوصفية بعد اكتمال إعداد CLI:
+
+```ts
+import { MetadataApiClient } from 'twenty-client-sdk/metadata';
+import { expect, it } from 'vitest';
+import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+
+it('installs the app', async () => {
+  const result = await new MetadataApiClient().query({
+    findOneApplication: {
+      __args: { universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER },
+      id: true,
+    },
+  });
+  expect(result.findOneApplication.id).toBeTruthy();
+});
+```
+
+بالنسبة إلى بيان، اقرأ `data.manifest` من `twenty app build --json`. لاختبارات الدوال المنشورة، استخدم طفرة `executeOneLogicFunction` الخاصة بعميل البيانات الوصفية مع رمز مستخدم مميز. حدّد الدالة ضمن معرّف التطبيق المثبّت قبل استدعائها.
+
+## تشغيل الاختبارات
+
+تأكّد من تشغيل خادم Twenty المحلي لديك، ثم:
+
+```bash filename="Terminal"
+yarn test
+```
+
+أو في وضع المراقبة أثناء التطوير:
+
+```bash filename="Terminal"
+yarn test:watch
+```
+
+## التحقق من الأنواع
+
+يمكنك أيضًا تشغيل التحقق من الأنواع على تطبيقك دون تشغيل الاختبارات:
+
+```bash filename="Terminal"
+twenty app typecheck
+```
+
+يتحقق هذا من `tsconfig.json` الخاص بتطبيقك باستخدام مترجم TypeScript المثبت لديه، دون إنشاء ملفات، ويبلّغ عن أي أخطاء في الأنواع. كما تتضمن التطبيقات المُنشأة بالهيكل برنامج نصي `yarn typecheck` يشمل ملفات الاختبار (`tsconfig.spec.json`) أيضًا.
+
+## التكامل المستمر (CI) باستخدام GitHub Actions
+
+تولّد أداة إنشاء الهيكل سير عمل جاهزًا للاستخدام في `.github/workflows/ci.yml`. عند كل دفع إلى الفرع `main` وكل طلب سحب، تُنشئ الأداة خادم Twenty مؤقتًا في بيئة التشغيل (عبر الإجراء `twentyhq/twenty/.github/actions/spawn-twenty-app-dev-test`)، ثم تشغِّل الأوامر `yarn lint` و`yarn typecheck` و`yarn test:unit` و`yarn test` مع ضبط المتغيرين `TWENTY_API_URL` و`TWENTY_API_KEY` للإشارة إلى ذلك الخادم. لا تُطلَب أي أسرار، ويمكنك تثبيت إصدار الخادم عبر متغير البيئة `TWENTY_VERSION` في أعلى سير العمل.
+
+راجع قسم [النشر → التكامل/التسليم المستمران الآليان](/ar/developers/extend/apps/operations/publishing#automated-cicd-scaffolded-workflows) للاطلاع على شرح كامل لثلاثة مسارات العمل التي تم إنشاؤها تلقائياً (`ci.yml`، وخط أنابيب النشر `cd.yml`، و`publish.yml` للنشر على npm).
+
+<PageBanner illustration="card-page-testing" />

@@ -15,7 +15,7 @@ import { generateWorkflowRunDiagram } from '@/workflow/workflow-diagram/utils/ge
 import { getWorkflowNodeIconKey } from '@/workflow/workflow-diagram/utils/getWorkflowNodeIconKey';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { useStore } from 'jotai';
 
 export const useRunWorkflowRunOpeningInSidePanelEffects = () => {
@@ -50,6 +50,13 @@ export const useRunWorkflowRunOpeningInSidePanelEffects = () => {
         return;
       }
 
+      const workflowId = workflowRunRecord.coreWorkflowId;
+      const workflowVersionId =
+        workflowRunRecord.coreWorkflowVersionId ??
+        workflowRunRecord.workflowVersionId;
+      if (!isDefined(workflowId) || !isDefined(workflowVersionId)) {
+        return;
+      }
       const { stepToOpenByDefault } = generateWorkflowRunDiagram({
         steps: workflowRunRecord.state.flow.steps,
         stepInfos: workflowRunRecord.state.stepInfos,
@@ -74,14 +81,14 @@ export const useRunWorkflowRunOpeningInSidePanelEffects = () => {
         workflowVisualizerWorkflowIdComponentState.atomFamily({
           instanceId,
         }),
-        workflowRunRecord.workflowId,
+        workflowId,
       );
       store.set(
         flowComponentState.atomFamily({
           instanceId,
         }),
         {
-          workflowVersionId: workflowRunRecord.workflowVersionId,
+          workflowVersionId,
           trigger: workflowRunRecord.state.flow.trigger,
           steps: workflowRunRecord.state.flow.steps,
         },
@@ -106,7 +113,7 @@ export const useRunWorkflowRunOpeningInSidePanelEffects = () => {
         ],
       );
       openWorkflowRunViewStepInSidePanel({
-        workflowId: workflowRunRecord.workflowId,
+        workflowId,
         workflowRunId: workflowRunRecord.id,
         title: stepToOpenByDefault.data.name,
         icon: getIcon(getWorkflowNodeIconKey(stepToOpenByDefault.data)),

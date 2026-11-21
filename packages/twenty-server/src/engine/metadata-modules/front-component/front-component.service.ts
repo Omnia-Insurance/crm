@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 
-import { Readable } from 'stream';
-
 import { FileFolder } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
-import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
+import { FileStorageService } from 'src/engine/core-modules/file-storage/services/file-storage.service';
+import { type FileResponse } from 'src/engine/core-modules/file/types/file-response.type';
+import { getContentDisposition } from 'src/engine/core-modules/file/utils/get-content-disposition.util';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
@@ -15,7 +16,7 @@ import { type FlatFrontComponent } from 'src/engine/metadata-modules/flat-front-
 import { fromCreateFrontComponentInputToFlatFrontComponentToCreate } from 'src/engine/metadata-modules/flat-front-component/utils/from-create-front-component-input-to-flat-front-component-to-create.util';
 import { fromFlatFrontComponentToFrontComponentDto } from 'src/engine/metadata-modules/flat-front-component/utils/from-flat-front-component-to-front-component-dto.util';
 import { fromUpdateFrontComponentInputToFlatFrontComponentToUpdateOrThrow } from 'src/engine/metadata-modules/flat-front-component/utils/from-update-front-component-input-to-flat-front-component-to-update-or-throw.util';
-import { type CreateFrontComponentInput } from 'src/engine/metadata-modules/front-component/dtos/create-front-component.input';
+import { type CreateFrontComponentArgs } from 'src/engine/metadata-modules/front-component/types/create-front-component-args.type';
 import { type FrontComponentDTO } from 'src/engine/metadata-modules/front-component/dtos/front-component.dto';
 import { type UpdateFrontComponentInput } from 'src/engine/metadata-modules/front-component/dtos/update-front-component.input';
 import {
@@ -32,6 +33,7 @@ export class FrontComponentService {
     private readonly workspaceManyOrAllFlatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly applicationService: ApplicationService,
     private readonly fileStorageService: FileStorageService,
+    private readonly twentyConfigService: TwentyConfigService,
   ) {}
 
   async findAll(workspaceId: string): Promise<FrontComponentDTO[]> {
@@ -78,7 +80,7 @@ export class FrontComponentService {
     workspaceId,
     ownerFlatApplication,
   }: {
-    input: Omit<CreateFrontComponentInput, 'applicationId'>;
+    input: CreateFrontComponentArgs;
     workspaceId: string;
     ownerFlatApplication?: FlatApplication;
   }): Promise<FlatFrontComponent> {
@@ -296,30 +298,47 @@ export class FrontComponentService {
     return frontComponent;
   }
 
-  async getBuiltComponentStream({
+  async getBuiltComponentPresignedUrlOrStream({
     frontComponentId,
     workspaceId,
   }: {
     frontComponentId: string;
     workspaceId: string;
-  }): Promise<Readable> {
+  }): Promise<FileResponse> {
     const frontComponent = await this.findByIdOrThrow(
       frontComponentId,
       workspaceId,
     );
 
-    const application = await this.applicationService.findOneApplicationOrThrow(
-      {
+    const application =
+      await this.applicationService.findOneApplicationWithRelationsOrThrow({
         id: frontComponent.applicationId,
         workspaceId,
-      },
-    );
+      });
 
-    return this.fileStorageService.readFile({
+    const mimeType = 'application/javascript';
+    const resourceIdentifier = {
       workspaceId,
       applicationUniversalIdentifier: application.universalIdentifier,
       fileFolder: FileFolder.BuiltFrontComponent,
       resourcePath: frontComponent.builtComponentPath,
+    };
+
+    const presignedUrl = await this.fileStorageService.getPresignedUrl({
+      ...resourceIdentifier,
+      expiresInSeconds: this.twentyConfigService.get(
+        'STORAGE_S3_PRESIGNED_URL_EXPIRES_IN',
+      ),
+      responseContentType: mimeType,
+      responseContentDisposition: getContentDisposition(mimeType),
     });
+
+    if (presignedUrl) {
+      return { type: 'redirect', presignedUrl };
+    }
+
+    const stream = await this.fileStorageService.readFile(resourceIdentifier);
+
+    return { type: 'stream', stream, mimeType };
   }
 }

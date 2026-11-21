@@ -5,12 +5,33 @@ import requestDb, {
   requestSchema,
 } from 'src/utils/requestDb';
 import handleQueryParams from 'src/utils/handleQueryParams';
+import { type InputData } from 'src/utils/data.types';
 
 export enum DatabaseEventAction {
   CREATED = 'created',
   UPDATED = 'updated',
   DELETED = 'deleted',
 }
+
+const getApiKeyRoleId = async ({
+  z,
+  bundle,
+}: {
+  z: ZObject;
+  bundle: Bundle;
+}): Promise<string> => {
+  const [, payload] = bundle.authData.apiKey.split('.');
+  const { jti: apiKeyId } = JSON.parse(
+    Buffer.from(payload, 'base64url').toString(),
+  );
+  const result = await requestDb({
+    z,
+    bundle,
+    query: `query apiKey {apiKey(input: {id: "${apiKeyId}"}) {role {id}}}`,
+    endpoint: 'metadata',
+  });
+  return result.data.apiKey.role.id;
+};
 
 export const performSubscribe = async (z: ZObject, bundle: Bundle) => {
   const data = {
@@ -19,6 +40,7 @@ export const performSubscribe = async (z: ZObject, bundle: Bundle) => {
       `${bundle.inputData.nameSingular}.${bundle.inputData.operation}`,
     ],
     secret: '',
+    roleId: await getApiKeyRoleId({ z, bundle }),
   };
   const result = await requestDb({
     z,
@@ -84,7 +106,7 @@ const getNamePluralFromNameSingular = async (
 
 export const performList = async (
   z: ZObject,
-  bundle: Bundle,
+  bundle: Bundle<InputData>,
 ): Promise<{ record: Record<string, any>; updatedFields?: string[] }[]> => {
   const nameSingular = bundle.inputData.nameSingular;
   const namePlural = await getNamePluralFromNameSingular(

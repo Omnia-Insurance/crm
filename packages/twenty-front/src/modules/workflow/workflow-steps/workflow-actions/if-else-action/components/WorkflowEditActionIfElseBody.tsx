@@ -1,9 +1,8 @@
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { InputLabel } from '@/ui/input/components/internal/InputLabel/InputLabel';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useGetUpdatableWorkflowVersionOrThrow } from '@/workflow/hooks/useGetUpdatableWorkflowVersionOrThrow';
-import { useWorkflowWithCurrentVersion } from '@/workflow/hooks/useWorkflowWithCurrentVersion';
-import { workflowVisualizerWorkflowIdComponentState } from '@/workflow/states/workflowVisualizerWorkflowIdComponentState';
+import { flowComponentState } from '@/workflow/states/flowComponentState';
 import {
   type WorkflowIfElseAction,
   type WorkflowStep,
@@ -15,21 +14,19 @@ import { type FilterSettings } from '@/workflow/workflow-steps/filters/types/Fil
 import { useCreateStep } from '@/workflow/workflow-steps/hooks/useCreateStep';
 import { useDeleteWorkflowVersionStep } from '@/workflow/workflow-steps/hooks/useDeleteWorkflowVersionStep';
 import { WorkflowIfElseBranchEditor } from '@/workflow/workflow-steps/workflow-actions/if-else-action/components/WorkflowIfElseBranchEditor';
-import { calculateElseIfBranchPosition } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/calculateElseIfBranchPosition';
-import { calculateExistingBranchPositions } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/calculateExistingBranchPositions';
 import { createElseIfBranch } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/createElseIfBranch';
-import { getBranchesToDelete } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/getBranchesToDelete';
 import { getBranchLabel } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/getBranchLabel';
+import { getBranchesToDelete } from '@/workflow/workflow-steps/workflow-actions/if-else-action/utils/getBranchesToDelete';
 import { useStepsOutputSchema } from '@/workflow/workflow-variables/hooks/useStepsOutputSchema';
-import { useTidyUpWorkflowVersion } from '@/workflow/workflow-version/hooks/useTidyUpWorkflowVersion';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { Fragment } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 import { type StepIfElseBranch } from 'twenty-shared/workflow';
-import { HorizontalSeparator, IconPlus } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconPlus } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { Separator } from 'twenty-ui/primitives/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   align-items: start;
@@ -54,6 +51,7 @@ export const WorkflowEditActionIfElseBody = ({
   action,
   actionOptions,
 }: WorkflowEditActionIfElseBodyProps) => {
+  const { t } = useLingui();
   const branches = action.settings.input.branches;
   const stepFilterGroups = action.settings.input.stepFilterGroups ?? [];
   const stepFilters = action.settings.input.stepFilters ?? [];
@@ -62,13 +60,9 @@ export const WorkflowEditActionIfElseBody = ({
   const { createStep } = useCreateStep();
   const { getUpdatableWorkflowVersion } =
     useGetUpdatableWorkflowVersionOrThrow();
-  const { updateWorkflowVersionPosition } = useTidyUpWorkflowVersion();
   const { deleteWorkflowVersionStep } = useDeleteWorkflowVersionStep();
   const { deleteStepsOutputSchema } = useStepsOutputSchema();
-  const workflowVisualizerWorkflowId = useAtomComponentStateValue(
-    workflowVisualizerWorkflowIdComponentState,
-  );
-  const workflow = useWorkflowWithCurrentVersion(workflowVisualizerWorkflowId);
+  const flow = useAtomComponentStateValue(flowComponentState);
 
   const currentStepFilters = useAtomComponentStateValue(
     currentStepFiltersComponentState,
@@ -145,7 +139,7 @@ export const WorkflowEditActionIfElseBody = ({
 
     await cleanupEmptyChildStepsFromDeletedBranches({
       branchesToDelete,
-      allSteps: workflow?.currentVersion?.steps ?? undefined,
+      allSteps: flow?.steps ?? undefined,
     });
 
     setCurrentStepFilterGroups(updatedStepFilterGroups);
@@ -177,37 +171,12 @@ export const WorkflowEditActionIfElseBody = ({
 
     const { filterGroup, filter, branchId, filterGroupId } =
       createElseIfBranch();
-    const totalBranches = branches.length + 1;
-    const elseIfBranchIndex = branches.length - 1;
-    const ifElseStepPosition = action.position ?? { x: 0, y: 0 };
-
     const workflowVersionId = await getUpdatableWorkflowVersion();
-
-    const existingBranchPositions = calculateExistingBranchPositions({
-      branches,
-      elseIfBranchIndex,
-      totalBranches,
-      ifElseStepPosition,
-    });
-
-    const newEmptyNodePosition = calculateElseIfBranchPosition(
-      elseIfBranchIndex,
-      totalBranches,
-      ifElseStepPosition,
-    );
-
-    if (existingBranchPositions.length > 0) {
-      await updateWorkflowVersionPosition(
-        workflowVersionId,
-        existingBranchPositions,
-      );
-    }
 
     const emptyNode = await createStep({
       newStepType: 'EMPTY',
       parentStepId: undefined,
       nextStepId: undefined,
-      position: newEmptyNodePosition,
       shouldSelectNode: false,
       workflowVersionId,
     });
@@ -260,19 +229,18 @@ export const WorkflowEditActionIfElseBody = ({
 
           return (
             <Fragment key={branch.id}>
-              {branchIndex > 0 && !isElse && <HorizontalSeparator noMargin />}
+              {branchIndex > 0 && !isElse && <Separator />}
               {isElse && !isReadonly && (
                 <>
-                  <HorizontalSeparator noMargin />
+                  <Separator />
                   <Button
-                    Icon={IconPlus}
-                    title={t`Add route`}
-                    variant="secondary"
-                    size="small"
+                    startIcon={<IconPlus />}
+                    size="sm"
                     onClick={(event: React.MouseEvent<HTMLButtonElement>) =>
                       handleAddRoute(event)
                     }
-                  />
+                    variant="outline"
+                  >{t`Add route`}</Button>
                 </>
               )}
               <WorkflowIfElseBranchEditor

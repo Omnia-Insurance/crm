@@ -1,0 +1,186 @@
+import { renderHook } from '@testing-library/react';
+import { Provider as JotaiProvider } from 'jotai';
+
+import { isAppEffectRedirectEnabledState } from '@/auth/states/isAppEffectRedirectEnabledState';
+import { useRedeemSsoExchangeToken } from '@/auth/hooks/useRedeemSsoExchangeToken';
+import { isCookieAuthActiveState } from '@/auth/states/isCookieAuthActiveState';
+import { clearSessionGeneration } from '@/auth/utils/clearSessionGeneration';
+import { getSessionGeneration } from '@/auth/utils/getSessionGeneration';
+import { logError } from '~/utils/logError';
+
+import {
+  jotaiStore,
+  resetJotaiStore,
+} from '@/ui/utilities/state/jotai/jotaiStore';
+
+const mockGetAuthTokensFromSsoExchangeToken = jest.fn();
+
+jest.mock('@apollo/client/react', () => ({
+  ...jest.requireActual('@apollo/client/react'),
+  useMutation: () => [mockGetAuthTokensFromSsoExchangeToken],
+}));
+
+const mockEnqueueToast = jest.fn();
+
+jest.mock('twenty-ui/components/feedback', () => ({
+  ...jest.requireActual('twenty-ui/components/feedback'),
+  useToast: () => ({ enqueueToast: mockEnqueueToast }),
+}));
+
+jest.mock('~/utils/logError');
+
+// OMNIA-CUSTOM: trusted sibling redirect after the exchange (omniaagent.com dashboard)
+const mockRedirectToTrustedExternalReturnUrl = jest.fn();
+
+jest.mock(
+  '@/auth/sign-in-up/hooks/useRedirectToTrustedExternalReturnUrl',
+  () => ({
+    useRedirectToTrustedExternalReturnUrl: () => ({
+      redirectToTrustedExternalReturnUrl:
+        mockRedirectToTrustedExternalReturnUrl,
+    }),
+  }),
+);
+
+const renderHooks = () => {
+  const { result } = renderHook(() => useRedeemSsoExchangeToken(), {
+    wrapper: ({ children }) => JotaiProvider({ store: jotaiStore, children }),
+  });
+
+  return { result };
+};
+
+const freshTokenPair = {
+  accessOrWorkspaceAgnosticToken: {
+    token: 'fresh-access-token',
+    expiresAt: '2100-01-01T00:00:00.000Z',
+  },
+  refreshToken: {
+    token: 'fresh-refresh-token',
+    expiresAt: '2100-01-01T00:00:00.000Z',
+  },
+};
+
+describe('useRedeemSsoExchangeToken', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    clearSessionGeneration();
+    resetJotaiStore();
+
+    mockGetAuthTokensFromSsoExchangeToken.mockResolvedValue({
+      data: {
+        getAuthTokensFromSSOExchangeToken: { tokens: freshTokenPair },
+      },
+    });
+  });
+
+  it('should disable the redirect effect while exchanging and restore it after', async () => {
+    const redirectFlagsAtExchangeTime: unknown[] = [];
+
+    mockGetAuthTokensFromSsoExchangeToken.mockImplementation(() => {
+      redirectFlagsAtExchangeTime.push(
+        jotaiStore.get(isAppEffectRedirectEnabledState.atom),
+      );
+
+      return Promise.resolve({
+        data: { getAuthTokensFromSSOExchangeToken: { tokens: freshTokenPair } },
+      });
+    });
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(redirectFlagsAtExchangeTime).toEqual([false]);
+    expect(jotaiStore.get(isAppEffectRedirectEnabledState.atom)).toBe(true);
+  });
+
+  // The cookie is httpOnly, so nothing else tells the client it is signed in.
+  it('should mark the session active once the exchange succeeds', async () => {
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(jotaiStore.get(isCookieAuthActiveState.atom)).toBe(true);
+    expect(getSessionGeneration()).not.toBeNull();
+  });
+
+  it('should leave the session inactive when the exchange fails', async () => {
+    mockGetAuthTokensFromSsoExchangeToken.mockRejectedValueOnce(
+      new Error('Invalid SSO exchange token'),
+    );
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(jotaiStore.get(isCookieAuthActiveState.atom)).toBe(false);
+    expect(getSessionGeneration()).toBeNull();
+  });
+
+  it('should toast when redemption fails', async () => {
+    mockGetAuthTokensFromSsoExchangeToken.mockRejectedValueOnce(
+      new Error('Invalid SSO exchange token'),
+    );
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(mockEnqueueToast).toHaveBeenCalledWith({
+      status: 'error',
+      children: 'Authentication failed',
+    });
+    expect(jotaiStore.get(isAppEffectRedirectEnabledState.atom)).toBe(true);
+  });
+
+  it('reports a missing exchange result without showing technical details', async () => {
+    mockGetAuthTokensFromSsoExchangeToken.mockResolvedValueOnce({ data: {} });
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(jest.mocked(logError)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'No getAuthTokensFromSSOExchangeToken result',
+      }),
+    );
+    expect(mockEnqueueToast).toHaveBeenCalledWith({
+      status: 'error',
+      children: 'Authentication failed',
+    });
+  });
+
+  // OMNIA-CUSTOM: trusted sibling redirect after the exchange (omniaagent.com dashboard)
+  it('sends the user on to a trusted sibling URL once the session is active', async () => {
+    const isSessionActiveAtRedirect: boolean[] = [];
+
+    mockRedirectToTrustedExternalReturnUrl.mockImplementationOnce(async () => {
+      isSessionActiveAtRedirect.push(
+        jotaiStore.get(isCookieAuthActiveState.atom),
+      );
+
+      return true;
+    });
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(isSessionActiveAtRedirect).toEqual([true]);
+  });
+
+  it('does not redirect when the exchange fails', async () => {
+    mockGetAuthTokensFromSsoExchangeToken.mockRejectedValueOnce(
+      new Error('Invalid SSO exchange token'),
+    );
+
+    const { result } = renderHooks();
+
+    await result.current.redeemSsoExchangeToken('sso-exchange-token');
+
+    expect(mockRedirectToTrustedExternalReturnUrl).not.toHaveBeenCalled();
+  });
+});

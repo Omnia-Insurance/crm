@@ -1,7 +1,9 @@
+import { AUTOMATICALLY_LAID_OUT_NODE_PLACEHOLDER_POSITION } from '@/workflow/workflow-diagram/constants/AutomaticallyLaidOutNodePlaceholderPosition';
 import {
   type WorkflowIfElseAction,
   type WorkflowStep,
 } from '@/workflow/types/Workflow';
+import { getWorkflowStepDisplayName } from '@/workflow/utils/getWorkflowStepDisplayName';
 import { type WorkflowContext } from '@/workflow/workflow-diagram/types/WorkflowContext';
 import {
   type WorkflowDiagramEdge,
@@ -21,16 +23,12 @@ import { v4 } from 'uuid';
 export const generateNodesAndEdgesForIfElseNode = ({
   step,
   steps,
-  xPos,
-  yPos,
   nodes,
   edges,
   workflowContext,
 }: {
   step: WorkflowIfElseAction;
   steps: WorkflowStep[];
-  yPos: number;
-  xPos: number;
   nodes: readonly WorkflowDiagramNode[];
   edges: readonly WorkflowDiagramEdge[];
   workflowContext: WorkflowContext;
@@ -50,18 +48,11 @@ export const generateNodesAndEdgesForIfElseNode = ({
     data: {
       nodeType: 'action',
       actionType: step.type,
-      name: step.name,
+      name: getWorkflowStepDisplayName({ name: step.name, type: step.type }),
       hasNextStepIds: true,
       stepId: step.id,
-      position: step.position ?? {
-        x: xPos,
-        y: yPos,
-      },
     } satisfies WorkflowDiagramStepNodeData,
-    position: step.position ?? {
-      x: xPos,
-      y: yPos,
-    },
+    position: step.position ?? AUTOMATICALLY_LAID_OUT_NODE_PLACEHOLDER_POSITION,
   };
 
   updatedNodes.push(ifElseNode);
@@ -99,10 +90,14 @@ export const generateNodesAndEdgesForIfElseNode = ({
         target: nextStepId,
         deletable: false,
         selectable: false,
-        reconnectable: false,
+        reconnectable: workflowContext === 'workflow' ? 'target' : false,
         targetHandle: WORKFLOW_DIAGRAM_NODE_DEFAULT_TARGET_HANDLE_ID,
         data: {
           ...WORKFLOW_VISUALIZER_EDGE_DEFAULT_CONFIGURATION.data,
+          sourceConnectionOptions: {
+            connectedStepType: 'IF_ELSE',
+            settings: { branchId: branch.id },
+          },
           labelOptions: {
             position: Position.Bottom,
             label,

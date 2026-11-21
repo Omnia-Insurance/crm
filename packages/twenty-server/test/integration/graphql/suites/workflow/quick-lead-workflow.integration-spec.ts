@@ -1,16 +1,28 @@
 import request from 'supertest';
 import {
+  coreWorkflowGraphqlRequest,
+  findCoreWorkflowVersion,
+  runCoreWorkflowVersion,
+} from 'test/integration/graphql/suites/workflow/utils/core-workflow.util';
+import { submitFormStep } from 'test/integration/graphql/suites/workflow/utils/submit-form-step.util';
+import {
   destroyWorkflowRun,
   getWorkflowRun,
-  runWorkflowVersion,
+  waitForWorkflowCompletion,
+  waitForWorkflowRunStatus,
+  waitForWorkflowRunStepStatus,
 } from 'test/integration/graphql/suites/workflow/utils/workflow-run-test.util';
 import { v4 as uuidv4 } from 'uuid';
 
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { getWorkflowPrefillIds } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-workflows.util';
+
 const client = request(`http://localhost:${APP_PORT}`);
 
-// Quick Lead workflow IDs from prefill-workflows.ts
-const QUICK_LEAD_WORKFLOW_ID = '8b213cac-a68b-4ffe-817a-3ec994e9932d';
-const QUICK_LEAD_WORKFLOW_VERSION_ID = 'ac67974f-c524-4288-9d88-af8515400b68';
+const {
+  coreQuickLeadWorkflowId: QUICK_LEAD_CORE_WORKFLOW_ID,
+  coreQuickLeadWorkflowVersionId: QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
+} = getWorkflowPrefillIds(SEED_APPLE_WORKSPACE_ID);
 const FORM_STEP_ID = '6e089bc9-aabd-435f-865f-f31c01c8f4a7';
 
 describe('Quick Lead Workflow (e2e)', () => {
@@ -24,112 +36,87 @@ describe('Quick Lead Workflow (e2e)', () => {
 
   describe('Workflow triggering', () => {
     it('should verify Quick Lead workflow exists and is active', async () => {
-      const response = await client
-        .post('/graphql')
-        .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-        .send({
-          query: `
-            query FindWorkflow {
-              workflow(filter: { id: { eq: "${QUICK_LEAD_WORKFLOW_ID}" } }) {
-                id
-                name
-                lastPublishedVersionId
-                statuses
-              }
+      const { coreWorkflowById } = await coreWorkflowGraphqlRequest<{
+        coreWorkflowById: {
+          id: string;
+          name: string;
+          statuses: string[];
+          lastPublishedCoreWorkflowVersionId: string | null;
+        };
+      }>({
+        query: `
+          query FindCoreWorkflow($coreWorkflowId: UUID!) {
+            coreWorkflowById(coreWorkflowId: $coreWorkflowId) {
+              id
+              name
+              statuses
+              lastPublishedCoreWorkflowVersionId
             }
-          `,
-        });
+          }
+        `,
+        variables: { coreWorkflowId: QUICK_LEAD_CORE_WORKFLOW_ID },
+      });
 
-      expect(response.status).toBe(200);
-      expect(response.body.errors).toBeUndefined();
-      expect(response.body.data.workflow).toBeDefined();
-      expect(response.body.data.workflow.id).toBe(QUICK_LEAD_WORKFLOW_ID);
-      expect(response.body.data.workflow.name).toBe('Quick Lead');
-      expect(response.body.data.workflow.lastPublishedVersionId).toBe(
-        QUICK_LEAD_WORKFLOW_VERSION_ID,
+      expect(coreWorkflowById.id).toBe(QUICK_LEAD_CORE_WORKFLOW_ID);
+      expect(coreWorkflowById.name).toBe('Quick Lead');
+      expect(coreWorkflowById.lastPublishedCoreWorkflowVersionId).toBe(
+        QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
       );
-      expect(response.body.data.workflow.statuses).toContain('ACTIVE');
+      expect(coreWorkflowById.statuses).toContain('ACTIVE');
     });
 
     it('should verify Quick Lead workflow version has correct structure', async () => {
-      const response = await client
-        .post('/graphql')
-        .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-        .send({
-          query: `
-            query FindWorkflowVersion {
-              workflowVersion(filter: { id: { eq: "${QUICK_LEAD_WORKFLOW_VERSION_ID}" } }) {
-                id
-                name
-                status
-                trigger
-                steps
-              }
-            }
-          `,
-        });
+      const workflowVersion = await findCoreWorkflowVersion({
+        coreWorkflowVersionId: QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
+      });
 
-      expect(response.status).toBe(200);
-      expect(response.body.errors).toBeUndefined();
-
-      const workflowVersion = response.body.data.workflowVersion;
-
-      expect(workflowVersion).toBeDefined();
       expect(workflowVersion.status).toBe('ACTIVE');
 
-      // Verify trigger structure
-      const trigger = workflowVersion.trigger;
+      expect(workflowVersion.trigger?.type).toBe('MANUAL');
+      expect(workflowVersion.trigger?.nextStepIds).toContain(FORM_STEP_ID);
 
-      expect(trigger.type).toBe('MANUAL');
-      expect(trigger.nextStepIds).toContain(FORM_STEP_ID);
-
-      // Verify steps structure
-      const steps = workflowVersion.steps;
+      const steps = workflowVersion.steps ?? [];
 
       expect(steps).toHaveLength(3);
-
-      // Form step
-      const formStep = steps.find(
-        (step: { id: string }) => step.id === FORM_STEP_ID,
+      expect(steps).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: FORM_STEP_ID,
+            type: 'FORM',
+            name: 'Quick Lead Form',
+          }),
+          expect.objectContaining({
+            id: '0715b6cd-7cc1-4b98-971b-00f54dfe643b',
+            type: 'CREATE_RECORD',
+            name: 'Create Company',
+          }),
+          expect.objectContaining({
+            id: '6f553ea7-b00e-4371-9d88-d8298568a246',
+            type: 'CREATE_RECORD',
+            name: 'Create Person',
+          }),
+        ]),
       );
-
-      expect(formStep).toBeDefined();
-      expect(formStep.type).toBe('FORM');
-      expect(formStep.name).toBe('Quick Lead Form');
-
-      // Create Company step
-      const createCompanyStep = steps.find(
-        (step: { id: string }) =>
-          step.id === '0715b6cd-7cc1-4b98-971b-00f54dfe643b',
-      );
-
-      expect(createCompanyStep).toBeDefined();
-      expect(createCompanyStep.type).toBe('CREATE_RECORD');
-      expect(createCompanyStep.name).toBe('Create Company');
-
-      // Create Person step
-      const createPersonStep = steps.find(
-        (step: { id: string }) =>
-          step.id === '6f553ea7-b00e-4371-9d88-d8298568a246',
-      );
-
-      expect(createPersonStep).toBeDefined();
-      expect(createPersonStep.type).toBe('CREATE_RECORD');
-      expect(createPersonStep.name).toBe('Create Person');
     });
 
     it('should trigger Quick Lead workflow and create workflow run', async () => {
-      const workflowRunId = await runWorkflowVersion({
-        workflowVersionId: QUICK_LEAD_WORKFLOW_VERSION_ID,
+      const workflowRunId = await runCoreWorkflowVersion({
+        coreWorkflowVersionId: QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
       });
 
       createdWorkflowRunId = workflowRunId;
 
-      const workflowRun = await getWorkflowRun(workflowRunId);
+      await waitForWorkflowRunStatus(workflowRunId, 'RUNNING');
+
+      const workflowRun = await waitForWorkflowRunStepStatus(
+        workflowRunId,
+        FORM_STEP_ID,
+        'PENDING',
+      );
 
       expect(workflowRun).toBeDefined();
-      expect(workflowRun?.workflowVersionId).toBe(
-        QUICK_LEAD_WORKFLOW_VERSION_ID,
+      expect(workflowRun?.coreWorkflowVersionId).toBe(
+        QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
       );
       expect(workflowRun?.status).toBe('RUNNING');
       expect(workflowRun?.state).toBeDefined();
@@ -158,8 +145,8 @@ describe('Quick Lead Workflow (e2e)', () => {
     });
 
     it('should be able to stop a running workflow run', async () => {
-      const workflowRunId = await runWorkflowVersion({
-        workflowVersionId: QUICK_LEAD_WORKFLOW_VERSION_ID,
+      const workflowRunId = await runCoreWorkflowVersion({
+        coreWorkflowVersionId: QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
       });
 
       const stopResponse = await client
@@ -193,7 +180,6 @@ describe('Quick Lead Workflow (e2e)', () => {
     let createdPersonId: string | null = null;
 
     afterAll(async () => {
-      // Clean up created records in reverse order of creation
       if (createdPersonId) {
         await client
           .post('/graphql')
@@ -232,13 +218,19 @@ describe('Quick Lead Workflow (e2e)', () => {
     });
 
     it('should complete full workflow: trigger → submit form → create Company and Person', async () => {
-      testWorkflowRunId = await runWorkflowVersion({
-        workflowVersionId: QUICK_LEAD_WORKFLOW_VERSION_ID,
+      testWorkflowRunId = await runCoreWorkflowVersion({
+        coreWorkflowVersionId: QUICK_LEAD_CORE_WORKFLOW_VERSION_ID,
       });
 
       expect(testWorkflowRunId).toBeDefined();
 
-      let workflowRun = await getWorkflowRun(testWorkflowRunId as string);
+      await waitForWorkflowRunStatus(testWorkflowRunId as string, 'RUNNING');
+
+      let workflowRun = await waitForWorkflowRunStepStatus(
+        testWorkflowRunId as string,
+        FORM_STEP_ID,
+        'PENDING',
+      );
 
       expect(workflowRun?.status).toBe('RUNNING');
       expect(workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status).toBe(
@@ -255,28 +247,18 @@ describe('Quick Lead Workflow (e2e)', () => {
         companyDomain: `https://test-${testId}.example.com`,
       };
 
-      const submitFormResponse = await client
-        .post('/graphql')
-        .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-        .send({
-          query: `
-            mutation SubmitFormStep($input: SubmitFormStepInput!) {
-              submitFormStep(input: $input)
-            }
-          `,
-          variables: {
-            input: {
-              stepId: FORM_STEP_ID,
-              workflowRunId: testWorkflowRunId,
-              response: testFormData,
-            },
-          },
-        });
+      const submitFormResponse = await submitFormStep({
+        workflowRunId: testWorkflowRunId as string,
+        stepId: FORM_STEP_ID,
+        response: testFormData,
+      });
 
       expect(submitFormResponse.body.errors).toBeUndefined();
       expect(submitFormResponse.body.data.submitFormStep).toBe(true);
 
-      workflowRun = await getWorkflowRun(testWorkflowRunId as string);
+      workflowRun = await waitForWorkflowCompletion(
+        testWorkflowRunId as string,
+      );
       expect(workflowRun?.status).toBe('COMPLETED');
       expect(workflowRun?.state?.stepInfos?.trigger?.status).toBe('SUCCESS');
       expect(workflowRun?.state?.stepInfos?.[FORM_STEP_ID]?.status).toBe(
@@ -347,6 +329,7 @@ describe('Quick Lead Workflow (e2e)', () => {
                 emails {
                   primaryEmail
                 }
+                jobTitle
               }
             }
           `,
@@ -363,6 +346,9 @@ describe('Quick Lead Workflow (e2e)', () => {
       );
       expect(personResponse.body.data.person.emails.primaryEmail).toBe(
         testFormData.email,
+      );
+      expect(personResponse.body.data.person.jobTitle).toBe(
+        testFormData.jobTitle,
       );
     });
   });

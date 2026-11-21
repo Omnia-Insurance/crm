@@ -1,16 +1,16 @@
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
-import { isRecordTableCreateDisabled } from '@/object-record/record-table/utils/isRecordTableCreateDisabled';
+import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/canCreateRecordsForObjectMetadataItem';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { IconPlus } from 'twenty-ui/display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { LightIconButton } from 'twenty-ui/input';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconPlus } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useIsMobile } from 'twenty-ui/utilities';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledHeaderIcon = styled.div`
   margin: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[1]}
@@ -18,6 +18,7 @@ const StyledHeaderIcon = styled.div`
 `;
 
 export const RecordTableHeaderLabelIdentifierCellPlusButton = () => {
+  const { t } = useLingui();
   const { objectMetadataItem, objectPermissions } =
     useRecordTableContextOrThrow();
 
@@ -26,42 +27,37 @@ export const RecordTableHeaderLabelIdentifierCellPlusButton = () => {
     isLayoutCustomizationModeEnabledState,
   );
 
-  const { openDraftInSidePanel } = useCreateNewIndexRecord({
+  const { createNewIndexRecord } = useCreateNewIndexRecord({
     objectMetadataItem,
   });
 
   const handlePlusButtonClick = () => {
-    openDraftInSidePanel({
+    createNewIndexRecord({
       position: 'first',
     });
   };
-
-  const isReadOnly =
-    isLayoutCustomizationModeEnabled ||
-    isObjectMetadataReadOnly({
-      objectPermissions,
-      objectMetadataItem,
-    });
 
   const hasAnySoftDeleteFilterOnView = useAtomComponentSelectorValue(
     hasAnySoftDeleteFilterOnViewComponentSelector,
   );
 
-  const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
-
   return (
     !isMobile &&
-    !isReadOnly &&
-    hasObjectUpdatePermissions &&
+    !isLayoutCustomizationModeEnabled &&
     !hasAnySoftDeleteFilterOnView &&
-    !isRecordTableCreateDisabled(objectMetadataItem) && (
+    canCreateRecordsForObjectMetadataItem({
+      objectPermissions,
+      objectMetadataItem,
+    }) && (
       <StyledHeaderIcon>
         <LightIconButton
-          Icon={IconPlus}
-          size="small"
-          accent="tertiary"
+          size="sm"
+          emphasis="subtle"
           onClick={handlePlusButtonClick}
-        />
+          aria-label={t`Add field`}
+        >
+          <IconPlus />
+        </LightIconButton>
       </StyledHeaderIcon>
     )
   );

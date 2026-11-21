@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
 
+import { ApplicationGrantRoleModule } from 'src/engine/core-modules/application/application-grant-role/application-grant-role.module';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
-import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
-import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
-import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
+import { PermissionTableModule } from 'src/engine/permissions/permission-table/permission-table.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
 
@@ -12,12 +11,11 @@ import { TwentyStandardApplicationService } from './services/twenty-standard-app
 @Module({
   providers: [TwentyStandardApplicationService],
   imports: [
+    ApplicationGrantRoleModule,
     ApplicationModule,
-    TwentyConfigModule,
+    PermissionTableModule,
     WorkspaceCacheModule,
     WorkspaceMigrationModule,
-    GlobalWorkspaceDataSourceModule,
-    WorkspaceManyOrAllFlatEntityMapsCacheModule,
   ],
   exports: [TwentyStandardApplicationService],
 })

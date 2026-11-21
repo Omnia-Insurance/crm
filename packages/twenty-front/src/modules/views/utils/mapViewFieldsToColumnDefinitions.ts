@@ -1,22 +1,18 @@
-import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
-import { buildRelationSubFieldColumnDefinition } from '@/views/utils/buildRelationSubFieldColumnDefinition';
 import { mapArrayToObject } from '~/utils/array/mapArrayToObject';
 import { moveArrayItem } from '~/utils/array/moveArrayItem';
-import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 
+import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 import { type ViewField } from '@/views/types/ViewField';
 
 export const mapViewFieldsToColumnDefinitions = ({
   columnDefinitions,
   viewFields,
-  objectMetadataItems,
 }: {
   columnDefinitions: ColumnDefinition<FieldMetadata>[];
   viewFields: ViewField[];
-  objectMetadataItems?: EnrichedObjectMetadataItem[];
 }): ColumnDefinition<FieldMetadata>[] => {
   let labelIdentifierFieldMetadataId = '';
 
@@ -27,28 +23,17 @@ export const mapViewFieldsToColumnDefinitions = ({
 
   const columnDefinitionsFromViewFields = viewFields
     .map((viewField) => {
+      // OMNIA-CUSTOM: sub-field columns are table-only (they render from
+      // RecordField); these definitions only feed Kanban options (contract C6)
+      if (isNonEmptyString(viewField.subFieldName)) {
+        return null;
+      }
+
       const correspondingColumnDefinition =
         columnDefinitionsByFieldMetadataId[viewField.fieldMetadataId];
 
-      if (isUndefinedOrNull(correspondingColumnDefinition)) return null;
-
-      // OMNIA-CUSTOM: Handle relation sub-field columns
-      if (viewField.subFieldName && objectMetadataItems) {
-        const subFieldColDef = buildRelationSubFieldColumnDefinition({
-          relationColumnDefinition: correspondingColumnDefinition,
-          subFieldName: viewField.subFieldName,
-          objectMetadataItems,
-        });
-
-        if (!subFieldColDef) return null;
-
-        return {
-          ...subFieldColDef,
-          position: viewField.position,
-          size: viewField.size ?? subFieldColDef.size,
-          isVisible: viewField.isVisible,
-          viewFieldId: viewField.id,
-        } as ColumnDefinition<FieldMetadata>;
+      if (!isDefined(correspondingColumnDefinition)) {
+        return null;
       }
 
       const { isLabelIdentifier } = correspondingColumnDefinition;
@@ -69,7 +54,7 @@ export const mapViewFieldsToColumnDefinitions = ({
         isLabelIdentifier,
         isVisible: isLabelIdentifier || viewField.isVisible,
         viewFieldId: viewField.id,
-        isUIReadOnly: correspondingColumnDefinition.metadata.isUIReadOnly,
+        isUIEditable: correspondingColumnDefinition.metadata.isUIEditable,
         isSortable: correspondingColumnDefinition.isSortable,
         isFilterable: correspondingColumnDefinition.isFilterable,
         defaultValue: correspondingColumnDefinition.defaultValue,
@@ -81,15 +66,14 @@ export const mapViewFieldsToColumnDefinitions = ({
     })
     .filter(isDefined);
 
-  // No label identifier set for this object
-  if (!labelIdentifierFieldMetadataId) return columnDefinitionsFromViewFields;
+  if (!labelIdentifierFieldMetadataId) {
+    return columnDefinitionsFromViewFields;
+  }
 
   const labelIdentifierIndex = columnDefinitionsFromViewFields.findIndex(
     ({ fieldMetadataId }) => fieldMetadataId === labelIdentifierFieldMetadataId,
   );
 
-  // Label identifier field found in view fields
-  // => move it to the start of the list
   return moveArrayItem(columnDefinitionsFromViewFields, {
     fromIndex: labelIdentifierIndex,
     toIndex: 0,

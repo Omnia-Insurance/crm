@@ -16,7 +16,7 @@ import {
 
 const fileItemSchema = z
   .object({
-    fileId: z.string().uuidv4(),
+    fileId: z.uuidv4(),
     label: z.string(),
   })
   .strict();
@@ -28,7 +28,9 @@ export const validateFilesFieldOrThrow = (
   fieldName: string,
   settings: FieldMetadataSettingsMapping[FieldMetadataType.FILES],
 ): FileInput[] | null => {
-  if (isNull(value)) return null;
+  if (isNull(value)) {
+    return null;
+  }
 
   let parsedValue: unknown = value;
 

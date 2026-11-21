@@ -10,6 +10,7 @@ import { ObjectPermissionDTO } from 'src/engine/metadata-modules/object-permissi
 import { RolePermissionFlagDTO } from 'src/engine/metadata-modules/role-permission-flag/dtos/role-permission-flag.dto';
 import { type RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RowLevelPermissionPredicateGroupDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate-group.dto';
+import { RowLevelPermissionRuleDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-rule.dto';
 import { RowLevelPermissionPredicateDTO } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/row-level-permission-predicate.dto';
 
 @ObjectType('ApiKeyForRole')
@@ -35,6 +36,9 @@ export class RoleDTO {
   @Field(() => UUIDScalarType, { nullable: true })
   universalIdentifier?: string;
 
+  @Field(() => UUIDScalarType)
+  applicationId: string;
+
   @Field({ nullable: false })
   label: string;
 
@@ -59,13 +63,13 @@ export class RoleDTO {
   @HideField()
   roleTargets?: Relation<RoleTargetEntity[]>;
 
-  @Field(() => [WorkspaceMemberDTO], { nullable: true })
+  @Field(() => [WorkspaceMemberDTO])
   workspaceMembers?: WorkspaceMemberDTO[];
 
-  @Field(() => [AgentDTO], { nullable: true })
+  @Field(() => [AgentDTO])
   agents?: AgentDTO[];
 
-  @Field(() => [ApiKeyForRoleDTO], { nullable: true })
+  @Field(() => [ApiKeyForRoleDTO])
   apiKeys?: ApiKeyForRoleDTO[];
 
   @Field({ nullable: false })
@@ -73,6 +77,9 @@ export class RoleDTO {
 
   @Field({ nullable: false })
   canAccessAllTools: boolean;
+
+  @Field({ nullable: false })
+  canAccessAllAgentChatChannels: boolean;
 
   @Field({ nullable: false })
   canReadAllObjectRecords: boolean;
@@ -86,6 +93,7 @@ export class RoleDTO {
   @Field({ nullable: false })
   canDestroyAllObjectRecords: boolean;
 
+  // OMNIA-CUSTOM: role-wide sidebar default and policy edit window (C3, C4)
   @Field({ nullable: false })
   showAllObjectsInSidebar: boolean;
 
@@ -101,9 +109,15 @@ export class RoleDTO {
   @Field(() => [FieldPermissionDTO], { nullable: true })
   fieldPermissions?: FieldPermissionDTO[];
 
+  @Field(() => [FieldPermissionDTO], { nullable: true })
+  rowLevelPermissionFieldPermissions?: FieldPermissionDTO[];
+
   @Field(() => [RowLevelPermissionPredicateDTO], { nullable: true })
   rowLevelPermissionPredicates?: RowLevelPermissionPredicateDTO[];
 
   @Field(() => [RowLevelPermissionPredicateGroupDTO], { nullable: true })
   rowLevelPermissionPredicateGroups?: RowLevelPermissionPredicateGroupDTO[];
+
+  @Field(() => [RowLevelPermissionRuleDTO], { nullable: true })
+  rowLevelPermissionRules?: RowLevelPermissionRuleDTO[];
 }

@@ -63,8 +63,7 @@ const failingCommandMenuItemCreationTestCases: EachTestingContext<TestContext>[]
       },
     },
     {
-      title:
-        'when creating TRIGGER_WORKFLOW_VERSION without workflowVersionId',
+      title: 'when creating TRIGGER_WORKFLOW_VERSION without workflowVersionId',
       context: {
         input: {
           engineComponentKey: EngineComponentKey.TRIGGER_WORKFLOW_VERSION,
@@ -73,8 +72,7 @@ const failingCommandMenuItemCreationTestCases: EachTestingContext<TestContext>[]
       },
     },
     {
-      title:
-        'when creating TRIGGER_WORKFLOW_VERSION with frontComponentId',
+      title: 'when creating TRIGGER_WORKFLOW_VERSION with frontComponentId',
       context: {
         input: {
           workflowVersionId: faker.string.uuid(),
@@ -85,8 +83,7 @@ const failingCommandMenuItemCreationTestCases: EachTestingContext<TestContext>[]
       },
     },
     {
-      title:
-        'when creating FRONT_COMPONENT_RENDERER without frontComponentId',
+      title: 'when creating FRONT_COMPONENT_RENDERER without frontComponentId',
       context: {
         input: {
           engineComponentKey: EngineComponentKey.FRONT_COMPONENT_RENDERER,
@@ -95,8 +92,7 @@ const failingCommandMenuItemCreationTestCases: EachTestingContext<TestContext>[]
       },
     },
     {
-      title:
-        'when creating FRONT_COMPONENT_RENDERER with workflowVersionId',
+      title: 'when creating FRONT_COMPONENT_RENDERER with workflowVersionId',
       context: {
         input: {
           frontComponentId: faker.string.uuid(),
@@ -142,4 +138,18 @@ describe('CommandMenuItem creation should fail', () => {
       });
     },
   );
+
+  it('when the caller lacks the LAYOUTS permission', async () => {
+    const { errors } = await createCommandMenuItem({
+      expectToFail: true,
+      input: {
+        engineComponentKey: EngineComponentKey.GO_TO_PEOPLE,
+        label: 'Member Pinned Item',
+        isPinned: true,
+      },
+      token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    });
+
+    expect(errors?.[0]?.extensions?.code).toBe('FORBIDDEN');
+  });
 });

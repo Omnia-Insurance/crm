@@ -18,6 +18,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
+      {{- /* OMNIA-CUSTOM: keep the old Redis serving until the new pod passes its ping probes */}}
       maxUnavailable: 0
   template:
     metadata:
@@ -26,7 +27,8 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: redis
     spec:
-      {{- with .Values.tolerations }}
+      {{- /* OMNIA-CUSTOM: Redis runs on the tainted production node pool */}}
+      {{- with .Values.redisInternal.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
@@ -45,6 +47,7 @@ spec:
             - containerPort: {{ .Values.redisInternal.service.port }}
               name: redis
               protocol: TCP
+          {{- /* OMNIA-CUSTOM: redis-cli ping probes gate traffic and restart a hung Redis */}}
           readinessProbe:
             exec:
               command:

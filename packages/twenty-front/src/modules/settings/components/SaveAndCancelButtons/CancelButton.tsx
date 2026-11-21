@@ -1,39 +1,38 @@
 import { useLingui } from '@lingui/react/macro';
-import { Button, LightButton } from 'twenty-ui/input';
+import { LightButton } from 'twenty-ui/components/input';
+import { Button, type ButtonColor } from 'twenty-ui/primitives/input';
 
 type CancelButtonProps = {
   onCancel?: () => void;
   disabled?: boolean;
-  inverted?: boolean;
+  color?: ButtonColor;
 };
 
 export const CancelButton = ({
   onCancel,
   disabled = false,
-  inverted = false,
+  color,
 }: CancelButtonProps) => {
   const { t } = useLingui();
 
-  if (inverted) {
+  if (color === 'inherit') {
     return (
       <Button
-        title={t`Cancel`}
-        variant="tertiary"
-        accent="default"
-        inverted
-        size="small"
+        color={color}
+        size="sm"
         onClick={onCancel}
         disabled={disabled}
-      />
+        variant="ghost"
+      >{t`Cancel`}</Button>
     );
   }
 
   return (
     <LightButton
-      title={t`Cancel`}
-      accent="tertiary"
+      emphasis="subtle"
+      color={color}
       onClick={onCancel}
       disabled={disabled}
-    />
+    >{t`Cancel`}</LightButton>
   );
 };

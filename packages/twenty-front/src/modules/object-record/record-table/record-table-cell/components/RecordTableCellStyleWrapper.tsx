@@ -1,31 +1,32 @@
-import { type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { cx } from '@linaria/core';
 import { styled } from '@linaria/react';
-import { type ReactNode, useContext } from 'react';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { type ReactNode } from 'react';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-export const StyledCell = styled.div<{
-  backgroundColor: string;
-  borderColor: string;
-  isDragging?: boolean;
-  fontColor: string;
-  hasRightBorder?: boolean;
-  hasBottomBorder?: boolean;
-}>`
-  background: ${({ backgroundColor, isDragging }) =>
-    isDragging ? 'transparent' : backgroundColor};
-
-  border-bottom: 1px solid
-    ${({ borderColor, hasBottomBorder, isDragging }) =>
-      hasBottomBorder && !isDragging ? borderColor : 'transparent'};
-  border-right: ${({ borderColor, hasRightBorder }) =>
-    hasRightBorder ? `1px solid ${borderColor}` : 'none'};
-
-  color: ${({ fontColor }) => fontColor};
-
+const StyledCell = styled.div`
+  background: ${themeCssVariables.background.primary};
+  border-bottom: 1px solid ${themeCssVariables.border.color.light};
+  border-right: 1px solid ${themeCssVariables.border.color.light};
+  color: ${themeCssVariables.font.color.primary};
   padding: 0;
-
   text-align: left;
+
+  &[data-selected] {
+    background: ${themeCssVariables.accent.quaternary};
+  }
+
+  &[data-without-right-border] {
+    border-right: none;
+  }
+
+  &[data-without-bottom-border] {
+    border-bottom-color: transparent;
+  }
+
+  &[data-dragging] {
+    background: transparent;
+    border-bottom-color: transparent;
+  }
 `;
 
 export const RecordTableCellStyleWrapper = ({
@@ -35,7 +36,7 @@ export const RecordTableCellStyleWrapper = ({
   hasRightBorder = true,
   hasBottomBorder = true,
   widthClassName,
-  ...dragHandleProps
+  ...divProps
 }: {
   className?: string;
   children?: ReactNode;
@@ -44,27 +45,15 @@ export const RecordTableCellStyleWrapper = ({
   hasRightBorder?: boolean;
   hasBottomBorder?: boolean;
   widthClassName: string;
-} & (Partial<DraggableProvidedDragHandleProps> | null)) => {
-  const { theme } = useContext(ThemeContext);
-
-  const tdBackgroundColor = isSelected
-    ? theme.accent.quaternary
-    : theme.background.primary;
-
-  const borderColor = theme.border.color.light;
-
-  const fontColor = theme.font.color.primary;
-
+} & React.ComponentProps<'div'>) => {
   return (
     <StyledCell
-      isDragging={isDragging}
-      backgroundColor={tdBackgroundColor}
-      borderColor={borderColor}
-      fontColor={fontColor}
-      hasRightBorder={hasRightBorder}
-      hasBottomBorder={hasBottomBorder}
+      data-selected={isSelected || undefined}
+      data-dragging={isDragging || undefined}
+      data-without-right-border={!hasRightBorder || undefined}
+      data-without-bottom-border={!hasBottomBorder || undefined}
       // oxlint-disable-next-line react/jsx-props-no-spreading
-      {...dragHandleProps}
+      {...divProps}
       className={cx('table-cell', widthClassName)}
     >
       {children}

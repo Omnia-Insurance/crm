@@ -3,7 +3,14 @@ import {
   FileFolder,
   type ObjectRecord,
 } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { isNonEmptyString, isString } from '@sniptt/guards';
+import {
+  getTipTapFileUrlAttributeName,
+  isDefined,
+  isTipTapNode,
+  parseJson,
+  type TipTapNode,
+} from 'twenty-shared/utils';
 
 import { type QueryResultGetterHandlerInterface } from 'src/engine/api/graphql/workspace-query-runner/factories/query-result-getters/interfaces/query-result-getter-handler.interface';
 
@@ -11,7 +18,7 @@ import { type FileUrlService } from 'src/engine/core-modules/file/file-url/file-
 import { extractFileIdFromUrl } from 'src/engine/core-modules/file/files-field/utils/extract-file-id-from-url.util';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 
-// oxlint-disable-next-line @typescripttypescript/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 type RichTextBlock = Record<string, any>;
 
 const parseBlocknoteJsonSafely = (
@@ -30,10 +37,10 @@ const parseBlocknoteJsonSafely = (
   }
 };
 
-export class RichTextFieldQueryResultGetterHandler
-  implements QueryResultGetterHandlerInterface
-{
-  constructor(private readonly fileUrlService: FileUrlService) {}
+export class RichTextFieldQueryResultGetterHandler implements QueryResultGetterHandlerInterface {
+  constructor(
+    private readonly fileUrlService: Pick<FileUrlService, 'signFileByIdUrl'>,
+  ) {}
 
   async handle(
     record: ObjectRecord,
@@ -50,13 +57,22 @@ export class RichTextFieldQueryResultGetterHandler
 
     for (const field of richTextFields) {
       const fieldValue = record[field.name];
-      const blocknoteJson = fieldValue?.blocknote;
 
-      if (!blocknoteJson || typeof blocknoteJson !== 'string') {
+      if (isNonEmptyString(fieldValue?.tiptap)) {
+        record[field.name] = {
+          ...record[field.name],
+          tiptap: await this.signTipTapFileUrls({
+            tiptapJson: fieldValue.tiptap,
+            workspaceId,
+          }),
+        };
+      }
+
+      if (!isNonEmptyString(fieldValue?.blocknote)) {
         continue;
       }
 
-      const blocknoteBlocks = parseBlocknoteJsonSafely(blocknoteJson);
+      const blocknoteBlocks = parseBlocknoteJsonSafely(fieldValue.blocknote);
 
       if (!isDefined(blocknoteBlocks)) {
         continue;
@@ -68,7 +84,7 @@ export class RichTextFieldQueryResultGetterHandler
       );
 
       record[field.name] = {
-        ...fieldValue,
+        ...record[field.name],
         blocknote: JSON.stringify(signedBlocks),
       };
     }
@@ -110,5 +126,68 @@ export class RichTextFieldQueryResultGetterHandler
         };
       }),
     );
+  };
+
+  signTipTapFileUrls = async ({
+    tiptapJson,
+    workspaceId,
+  }: {
+    tiptapJson: string;
+    workspaceId: string;
+  }): Promise<string> => {
+    const document = parseJson<unknown>(tiptapJson);
+
+    if (!isTipTapNode(document)) {
+      return tiptapJson;
+    }
+
+    return JSON.stringify(
+      await this.signTipTapNodeFileUrls({ node: document, workspaceId }),
+    );
+  };
+
+  private signTipTapNodeFileUrls = async ({
+    node,
+    workspaceId,
+  }: {
+    node: TipTapNode;
+    workspaceId: string;
+  }): Promise<TipTapNode> => {
+    const signedNode = isDefined(node.content)
+      ? {
+          ...node,
+          content: await Promise.all(
+            node.content.map((childNode) =>
+              this.signTipTapNodeFileUrls({ node: childNode, workspaceId }),
+            ),
+          ),
+        }
+      : node;
+
+    const fileUrlAttributeName = getTipTapFileUrlAttributeName(node.type);
+
+    if (!isDefined(fileUrlAttributeName)) {
+      return signedNode;
+    }
+
+    const fileUrl = node.attrs?.[fileUrlAttributeName];
+    const fileIdFromUrl = isString(fileUrl)
+      ? extractFileIdFromUrl(fileUrl, FileFolder.FilesField)
+      : undefined;
+
+    if (!isDefined(fileIdFromUrl)) {
+      return signedNode;
+    }
+
+    const url = await this.fileUrlService.signFileByIdUrl({
+      fileId: fileIdFromUrl,
+      workspaceId,
+      fileFolder: FileFolder.FilesField,
+    });
+
+    return {
+      ...signedNode,
+      attrs: { ...signedNode.attrs, [fileUrlAttributeName]: url },
+    };
   };
 }

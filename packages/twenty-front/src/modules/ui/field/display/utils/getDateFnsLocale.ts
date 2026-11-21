@@ -1,3 +1,5 @@
+import { isObject } from '@sniptt/guards';
+import { type Locale } from 'date-fns';
 import { type APP_LOCALES } from 'twenty-shared/translations';
 
 type AppLocale = keyof typeof APP_LOCALES;
@@ -22,6 +24,8 @@ export const getDateFnsLocaleImport = (locale: AppLocale) => {
       return import('date-fns/locale/en-US');
     case 'es-ES':
       return import('date-fns/locale/es');
+    case 'fa-IR':
+      return import('date-fns/locale/fa-IR');
     case 'fi-FI':
       return import('date-fns/locale/fi');
     case 'fr-FR':
@@ -30,6 +34,8 @@ export const getDateFnsLocaleImport = (locale: AppLocale) => {
       return import('date-fns/locale/he');
     case 'hu-HU':
       return import('date-fns/locale/hu');
+    case 'hy-AM':
+      return import('date-fns/locale/hy');
     case 'it-IT':
       return import('date-fns/locale/it');
     case 'ja-JP':
@@ -51,12 +57,16 @@ export const getDateFnsLocaleImport = (locale: AppLocale) => {
       return import('date-fns/locale/ru');
     case 'sr-Cyrl':
       return import('date-fns/locale/sr');
+    case 'sr-Latn':
+      return import('date-fns/locale/sr-Latn');
     case 'sv-SE':
       return import('date-fns/locale/sv');
     case 'tr-TR':
       return import('date-fns/locale/tr');
     case 'uk-UA':
       return import('date-fns/locale/uk');
+    case 'uz-UZ':
+      return import('date-fns/locale/uz');
     case 'vi-VN':
       return import('date-fns/locale/vi');
     case 'zh-CN':
@@ -64,13 +74,21 @@ export const getDateFnsLocaleImport = (locale: AppLocale) => {
     case 'zh-TW':
       return import('date-fns/locale/zh-TW');
     default: {
+      // Unknown strings land here at runtime, but an APP_LOCALES locale must not silently format in en-US
+      locale satisfies never;
+
       return import('date-fns/locale/en-US');
     }
   }
 };
 
-export const getDateFnsLocale = async (localeString?: string | null) => {
+const isDateFnsLocale = (value: unknown): value is Locale =>
+  isObject(value) && 'code' in value && 'formatLong' in value;
+
+export const getDateFnsLocale = async (
+  localeString?: string | null,
+): Promise<Locale | undefined> => {
   return getDateFnsLocaleImport(localeString as AppLocale)
-    .then((m) => m.default as unknown as Locale)
-    .catch((_e) => undefined);
+    .then((localeModule) => Object.values(localeModule).find(isDateFnsLocale))
+    .catch(() => undefined);
 };

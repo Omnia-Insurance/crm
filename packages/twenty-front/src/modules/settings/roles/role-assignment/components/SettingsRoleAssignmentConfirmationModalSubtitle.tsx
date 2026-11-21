@@ -3,10 +3,11 @@ import { SettingsCard } from '@/settings/components/SettingsCard';
 import { type SettingsRoleAssignmentConfirmationModalSelectedRoleTarget } from '@/settings/roles/role-assignment/types/SettingsRoleAssignmentConfirmationModalSelectedRoleTarget';
 
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { Avatar } from 'twenty-ui/display';
+import { Avatar } from 'twenty-ui/primitives/data-display';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledSettingsCardContainer = styled.div`
   margin-top: ${themeCssVariables.spacing[6]};
@@ -21,6 +22,7 @@ export const SettingsRoleAssignmentConfirmationModalSubtitle = ({
   selectedRoleTarget,
   onRoleClick,
 }: SettingsRoleAssignmentConfirmationModalSubtitleProps) => {
+  const { t } = useLingui();
   const currentWorkspaceMembers = useAtomStateValue(
     currentWorkspaceMembersState,
   );
@@ -41,11 +43,13 @@ export const SettingsRoleAssignmentConfirmationModalSubtitle = ({
           title={selectedRoleTarget.role?.label || ''}
           Icon={
             <Avatar
-              avatarUrl={enrichedSelectedWorkspaceMember?.avatarUrl}
-              placeholderColorSeed={enrichedSelectedWorkspaceMember?.id}
-              placeholder={workspaceMemberName}
+              src={getAbsoluteImageUrl(
+                enrichedSelectedWorkspaceMember?.avatarUrl,
+              )}
+              colorSeed={enrichedSelectedWorkspaceMember?.id}
+              name={workspaceMemberName}
               size="md"
-              type="rounded"
+              shape="circle"
             />
           }
           onClick={() =>

@@ -1,12 +1,14 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
-import { SettingsOptionCardContentToggle } from '@/settings/components/SettingsOptions/SettingsOptionCardContentToggle';
+import { SettingsOptionCardContentSwitch } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSwitch';
 import { useLabPublicFeatureFlags } from '@/settings/lab/hooks/useLabPublicFeatureFlags';
-import { styled } from '@linaria/react';
-import { useState } from 'react';
-import { Card } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { type FeatureFlagKey } from '~/generated-metadata/graphql';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { styled } from '@linaria/react';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useState } from 'react';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Card } from 'twenty-ui/primitives/surfaces';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { type FeatureFlagKey } from '~/generated-metadata/graphql';
 
 const StyledCardGrid = styled.div`
   display: grid;
@@ -24,6 +26,7 @@ const StyledImage = styled.img`
 
 export const SettingsLabContent = () => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { getIcon } = useIcons();
   const { labPublicFeatureFlags, handleLabPublicFeatureFlagUpdate } =
     useLabPublicFeatureFlags();
   const [hasImageLoadingError, setHasImageLoadingError] = useState<
@@ -38,38 +41,53 @@ export const SettingsLabContent = () => {
     setHasImageLoadingError((prev) => ({ ...prev, [key]: true }));
   };
 
+  const labPublicFeatureFlagsWithImage = labPublicFeatureFlags.filter((flag) =>
+    isNonEmptyString(flag.metadata.imagePath),
+  );
+  const labPublicFeatureFlagsWithoutImage = labPublicFeatureFlags.filter(
+    (flag) => !isNonEmptyString(flag.metadata.imagePath),
+  );
+
   return (
     currentWorkspace?.id && (
       <StyledCardGrid>
-        {[...labPublicFeatureFlags]
-          .sort((a, b) => {
-            // Sort flags with images first
-            if (a.metadata.imagePath !== '' && b.metadata.imagePath === '')
-              return -1;
-            if (a.metadata.imagePath === '' && b.metadata.imagePath !== '')
-              return 1;
-            return 0;
-          })
-          .map((flag) => (
-            <Card key={flag.key} rounded>
-              {flag.metadata.imagePath && !hasImageLoadingError[flag.key] ? (
-                <StyledImage
-                  src={flag.metadata.imagePath}
-                  alt={flag.metadata.label}
-                  onError={() => handleImageError(flag.key)}
-                />
-              ) : (
-                <></>
-              )}
-              <SettingsOptionCardContentToggle
+        {labPublicFeatureFlagsWithImage.map((flag) => (
+          <Card.Root
+            key={flag.key}
+            backgroundColor={themeCssVariables.background.secondary}
+          >
+            {!hasImageLoadingError[flag.key] && (
+              <StyledImage
+                src={flag.metadata.imagePath ?? undefined}
+                alt={flag.metadata.label}
+                onError={() => handleImageError(flag.key)}
+              />
+            )}
+            <SettingsOptionCardContentSwitch
+              Icon={getIcon(flag.metadata.icon)}
+              title={flag.metadata.label}
+              description={flag.metadata.description}
+              checked={flag.value}
+              onChange={(value) => handleToggle(flag.key, value)}
+            />
+          </Card.Root>
+        ))}
+
+        {labPublicFeatureFlagsWithoutImage.length > 0 && (
+          <Card.Root backgroundColor={themeCssVariables.background.secondary}>
+            {labPublicFeatureFlagsWithoutImage.map((flag, index) => (
+              <SettingsOptionCardContentSwitch
+                key={flag.key}
+                Icon={getIcon(flag.metadata.icon)}
                 title={flag.metadata.label}
                 description={flag.metadata.description}
                 checked={flag.value}
                 onChange={(value) => handleToggle(flag.key, value)}
-                toggleCentered={false}
+                divider={index < labPublicFeatureFlagsWithoutImage.length - 1}
               />
-            </Card>
-          ))}
+            ))}
+          </Card.Root>
+        )}
       </StyledCardGrid>
     )
   );

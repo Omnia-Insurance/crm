@@ -1,184 +1,336 @@
 import '@remote-dom/core/polyfill';
 import '@remote-dom/react/polyfill';
 
-import '../generated/remote-elements';
-
-import { ThreadWebWorker } from '@quilted/threads';
 import {
-  BatchingRemoteConnection,
-  type RemoteConnection,
-  type RemoteRootElement,
-} from '@remote-dom/core/elements';
+  HtmlInputElement,
+  HtmlImgElement,
+  HtmlTextareaElement,
+} from '../generated/remote-elements';
+
+import { ThreadMessagePort } from '@quilted/threads';
 
 import { isDefined } from 'twenty-shared/utils';
 
-import { installStyleBridge } from '@/polyfills/installStyleBridge';
-import { installStylePropertyOnRemoteElements } from '@/remote/utils/installStylePropertyOnRemoteElements';
-import { patchRemoteElementSetAttribute } from '@/remote/utils/patchRemoteElementSetAttribute';
-import { type FrontComponentExecutionContext } from 'twenty-sdk/front-component';
-import { frontComponentHostCommunicationApi } from '@/constants/frontComponentHostCommunicationApi';
-import { HTML_TAG_TO_CUSTOM_ELEMENT_TAG } from '@/constants/HtmlTagToRemoteComponent';
-import { setFrontComponentExecutionContext } from './utils/setFrontComponentExecutionContext';
-import { type FrontComponentHostCommunicationApi } from '../../types/FrontComponentHostCommunicationApi';
-import { type HostToWorkerRenderContext } from '../../types/HostToWorkerRenderContext';
-import { type WorkerExports } from '../../types/WorkerExports';
-import { exposeGlobals } from '../utils/exposeGlobals';
-import {
-  createOpenCommandConfirmationModalAdapter,
-  handleCommandConfirmationModalResult,
-} from './utils/createCommandConfirmationModalBridge';
-import { setWorkerEnv } from './utils/setWorkerEnv';
+import { frontComponentHostCommunicationApi } from '@/remote/worker/thread/states/frontComponentHostCommunicationApi';
+import { HTML_TAG_TO_CUSTOM_ELEMENT_TAG } from '@/constants/HtmlTagToCustomElementTag';
+import { installClipboardPolyfill } from '@/polyfills/clipboard/utils/installClipboardPolyfill';
+import { installImageLoadingPolyfill } from '@/polyfills/image/utils/installImageLoadingPolyfill';
+import { installImageObjectUrlPolyfill } from '@/polyfills/image/utils/installImageObjectUrlPolyfill';
+import { workerActiveElementStore } from '@/polyfills/dom/states/workerActiveElementStore';
+import { installTextTreeWalkerPolyfill } from '@/polyfills/dom/utils/installTextTreeWalkerPolyfill';
+import { installInputSelectionPolyfill } from '@/polyfills/input-selection/utils/installInputSelectionPolyfill';
+import { workerInputSelectionStore } from '@/polyfills/input-selection/states/workerInputSelectionStore';
+import { workerFocusTransport } from '@/polyfills/dom/states/workerFocusTransport';
+import { installActiveElementDetachmentHook } from '@/polyfills/dom/utils/installActiveElementDetachmentHook';
+import { installClassAttributeAccessors } from '@/polyfills/dom/utils/installClassAttributeAccessors';
+import { installCompareDocumentPositionPolyfill } from '@/polyfills/dom/utils/installCompareDocumentPositionPolyfill';
+import { installDocumentActiveElementPolyfill } from '@/polyfills/dom/utils/installDocumentActiveElementPolyfill';
+import { findElementByRemoteId } from '@/polyfills/dom/utils/findElementByRemoteId';
+import { installDocumentGetElementById } from '@/polyfills/dom/utils/installDocumentGetElementById';
+import { installElementDatasetPolyfill } from '@/polyfills/dom/utils/installElementDatasetPolyfill';
+import { installElementClickMethodPolyfill } from '@/polyfills/dom/utils/installElementClickMethodPolyfill';
+import { installFocusAndBlurMethodsPolyfill } from '@/polyfills/dom/utils/installFocusAndBlurMethodsPolyfill';
+import { installGetComputedStyle } from '@/polyfills/dom/utils/installGetComputedStyle';
+import { installGetElementsByClassName } from '@/polyfills/dom/utils/installGetElementsByClassName';
+import { installGetRootNodePolyfill } from '@/polyfills/dom/utils/installGetRootNodePolyfill';
+import { installInputClickActivationPolyfill } from '@/polyfills/dom/utils/installInputClickActivationPolyfill';
+import { installLocalStyleOnBaseElements } from '@/polyfills/dom/utils/installLocalStyleOnBaseElements';
+import { installMutationObserver } from '@/polyfills/dom/utils/installMutationObserver';
+import { installNodeContainsPolyfill } from '@/polyfills/dom/utils/installNodeContainsPolyfill';
+import { resolvePolyfillHooks } from '@/polyfills/dom/utils/resolvePolyfillHooks';
+import { installPointerCapturePolyfill } from '@/polyfills/events/utils/installPointerCapturePolyfill';
+import { installEventConstructorPolyfills } from '@/polyfills/events/utils/installEventConstructorPolyfills';
+import { installHostEventRetargetingPolyfill } from '@/polyfills/events/utils/installHostEventRetargetingPolyfill';
+import { installOutsidePressObservation } from '@/polyfills/events/utils/installOutsidePressObservation';
+import { installSelectorMethodsPolyfill } from '@/polyfills/selectors/utils/installSelectorMethodsPolyfill';
+import { workerGeometryStore } from '@/polyfills/geometry/states/workerGeometryStore';
+import { installElementGeometryPolyfill } from '@/polyfills/geometry/utils/installElementGeometryPolyfill';
+import { installVisualViewportPolyfill } from '@/polyfills/geometry/utils/installVisualViewportPolyfill';
+import { installResizeObserverPolyfill } from '@/polyfills/geometry/utils/installResizeObserverPolyfill';
+import { installWindowGeometryPolyfill } from '@/polyfills/geometry/utils/installWindowGeometryPolyfill';
+import { workerScrollStore } from '@/polyfills/scroll/states/workerScrollStore';
+import { installElementScrollPolyfill } from '@/polyfills/scroll/utils/installElementScrollPolyfill';
+import { installWindowScrollPolyfill } from '@/polyfills/scroll/utils/installWindowScrollPolyfill';
+import { mediaQueryEnvironmentSource } from '@/polyfills/media-query/states/mediaQueryEnvironmentSource';
+import { workerMediaBridge } from '@/polyfills/media/states/workerMediaBridge';
+import { installMediaCapturePolyfills } from '@/polyfills/media/utils/installMediaCapturePolyfills';
+import { installMatchMediaPolyfill } from '@/polyfills/media-query/utils/installMatchMediaPolyfill';
+import { frontComponentStorageBridges } from '@/polyfills/storage/states/frontComponentStorageBridges';
+import { resolveGlobalScopeInstallTargets } from '@/polyfills/utils/resolveGlobalScopeInstallTargets';
+import { toGlobalScopeRecord } from '@/polyfills/utils/toGlobalScopeRecord';
+import { installStorageBridge } from '@/polyfills/storage/utils/installStorageBridge';
+import { installWindowAliasesPolyfill } from '@/polyfills/window-aliases/utils/installWindowAliasesPolyfill';
+import { exposeGlobals } from '@/utils/exposeGlobals';
+import { installAriaBooleanPropertyAccessors } from '@/remote/elements/utils/installAriaBooleanPropertyAccessors';
+import { installStylePropertyOnRemoteElements } from '@/remote/elements/utils/installStylePropertyOnRemoteElements';
+import { patchRemoteElementAttributes } from '@/remote/elements/utils/patchRemoteElementAttributes';
+import { dispatchOutsidePressEvent } from '@/remote/elements/utils/dispatchOutsidePressEvent';
+import { dispatchOwnedPressEvent } from '@/remote/elements/utils/dispatchOwnedPressEvent';
+import { resolveRemoteElementPrototypes } from '@/remote/elements/utils/resolveRemoteElementPrototypes';
+import { buildFrontComponentHostCommunicationApiFromThreadImports } from '@/remote/worker/thread/utils/buildFrontComponentHostCommunicationApiFromThreadImports';
+import { handleCommandConfirmationModalResult } from '@/remote/worker/thread/utils/handleCommandConfirmationModalResult';
+import { installErrorEventBridge } from '@/remote/worker/thread/utils/installErrorEventBridge';
+import { renderFrontComponent } from '@/remote/worker/rendering/utils/renderFrontComponent';
+import { setFrontComponentExecutionContext } from '@/remote/worker/environment/utils/setFrontComponentExecutionContext';
+import { type FrontComponentHostThread } from '@/types/FrontComponentHostThread';
+import { type FrontComponentHostThreadExports } from '@/types/FrontComponentHostThreadExports';
+import { type WorkerExports } from '@/types/WorkerExports';
+import { createClonableErrorThreadSerialization } from '@/utils/clonable-error/createClonableErrorThreadSerialization';
+
+installImageObjectUrlPolyfill({
+  urlConstructor: URL,
+  imageElementPrototype: HtmlImgElement.prototype,
+});
 
 installStylePropertyOnRemoteElements();
-patchRemoteElementSetAttribute();
+patchRemoteElementAttributes();
+installAriaBooleanPropertyAccessors();
+installErrorEventBridge();
+
+installTextTreeWalkerPolyfill({ globalScope: toGlobalScopeRecord(globalThis) });
+installInputSelectionPolyfill({
+  elementPrototypes: [
+    HtmlInputElement.prototype,
+    HtmlTextareaElement.prototype,
+  ],
+  selectionStore: workerInputSelectionStore,
+});
+installDocumentGetElementById(document);
+installGetElementsByClassName(Element.prototype);
+installGetElementsByClassName(document);
+installClassAttributeAccessors({
+  elementPrototype: Element.prototype,
+  remoteElementPrototypes: resolveRemoteElementPrototypes(),
+});
+installLocalStyleOnBaseElements(Element.prototype);
+installElementDatasetPolyfill(Element.prototype);
+
+installNodeContainsPolyfill(Node.prototype);
+installCompareDocumentPositionPolyfill({
+  nodeConstructor: Node,
+  nodePrototype: Node.prototype,
+});
+installGetRootNodePolyfill(Node.prototype);
+installSelectorMethodsPolyfill({
+  elementPrototype: Element.prototype,
+  querySelectorTargets: [
+    Element.prototype,
+    DocumentFragment.prototype,
+    document,
+  ],
+  resolveActiveElement: () => workerActiveElementStore.getActiveElement(),
+  resolveFocusVisibleElement: () =>
+    workerActiveElementStore.getFocusVisibleElement(),
+});
+installFocusAndBlurMethodsPolyfill({
+  elementPrototype: Element.prototype,
+  activeElementStore: workerActiveElementStore,
+  forwardFocusMethod: workerFocusTransport.forwardFocusMethod,
+});
+installDocumentActiveElementPolyfill({
+  documentTarget: document,
+  activeElementStore: workerActiveElementStore,
+});
+const workerPointerCapture = installPointerCapturePolyfill({
+  elementPrototype: HTMLElement.prototype,
+  documentTarget: document,
+});
+const polyfillHooks = resolvePolyfillHooks(
+  resolveGlobalScopeInstallTargets(toGlobalScopeRecord(globalThis)),
+);
+installActiveElementDetachmentHook({
+  hooks: polyfillHooks,
+  activeElementStore: workerActiveElementStore,
+  onRemoveSubtree: (node) => {
+    workerFocusTransport.blurFocusedElementWithinSubtree(node);
+    workerInputSelectionStore.scheduleDetachedElementSweep();
+    workerScrollStore.scheduleDetachedElementSweep();
+    workerPointerCapture.scheduleDetachedCaptureSweep();
+  },
+});
+const workerOutsidePressObservation = installOutsidePressObservation({
+  hooks: polyfillHooks,
+  documentTarget: document,
+});
+installHostEventRetargetingPolyfill(HTMLElement.prototype);
+installElementClickMethodPolyfill(HTMLElement.prototype);
+installInputClickActivationPolyfill(HtmlInputElement.prototype);
+
+installGetComputedStyle({
+  globalScope: toGlobalScopeRecord(globalThis),
+  geometryStore: workerGeometryStore,
+});
+
+installMutationObserver({
+  globalScope: toGlobalScopeRecord(globalThis),
+});
+
+installElementGeometryPolyfill({
+  elementPrototype: Element.prototype,
+  documentTarget: document,
+  geometryStore: workerGeometryStore,
+});
+
+installElementScrollPolyfill({
+  elementPrototype: Element.prototype,
+  scrollStore: workerScrollStore,
+});
+
+installWindowGeometryPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  geometryStore: workerGeometryStore,
+});
+
+installWindowScrollPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+});
+
+installVisualViewportPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  geometryStore: workerGeometryStore,
+});
+
+installResizeObserverPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  geometryStore: workerGeometryStore,
+});
+
+installWindowAliasesPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+});
+
+installMatchMediaPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  environmentSource: mediaQueryEnvironmentSource,
+});
+
+installEventConstructorPolyfills({
+  globalScope: toGlobalScopeRecord(globalThis),
+});
+
+installStorageBridge({
+  globalScope: toGlobalScopeRecord(globalThis),
+  storageBridges: frontComponentStorageBridges,
+});
+
+installClipboardPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  // Resolved lazily: the host communication api is populated after worker boot.
+  copyToClipboard: (text) => {
+    const copyToClipboardFunction =
+      frontComponentHostCommunicationApi.copyToClipboard;
+
+    if (!isDefined(copyToClipboardFunction)) {
+      return Promise.reject(new Error('copyToClipboardFunction is not set'));
+    }
+
+    return copyToClipboardFunction(text);
+  },
+});
+
+installMediaCapturePolyfills({
+  globalScope: toGlobalScopeRecord(globalThis),
+  bridge: workerMediaBridge,
+});
 
 exposeGlobals({
   __HTML_TAG_TO_CUSTOM_ELEMENT_TAG__: HTML_TAG_TO_CUSTOM_ELEMENT_TAG,
 });
 
-const fetchComponentSource = async (
-  url: string,
-  headers?: Record<string, string>,
-): Promise<string> => {
-  const response = await fetch(url, { headers });
+let hostThread: FrontComponentHostThread | null = null;
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch ${url}: ${response.status} ${response.statusText}`,
-    );
-  }
+installImageLoadingPolyfill({
+  globalScope: toGlobalScopeRecord(globalThis),
+  loadImage: (request) => {
+    if (!isDefined(hostThread)) {
+      return Promise.reject(
+        new Error('Image loading transport is not connected'),
+      );
+    }
 
-  return response.text();
-};
+    return hostThread.imports.loadImage(request);
+  },
+  cancelImage: async (requestId) => {
+    await hostThread?.imports.cancelImage(requestId);
+  },
+});
 
-const SDK_IMPORT_SPECIFIERS = [
-  'twenty-client-sdk/core',
-  'twenty-client-sdk/metadata',
-] as const;
-
-// Rewrites bare SDK import specifiers to the blob URLs provided by the host.
-const rewriteSdkImports = (
-  source: string,
-  sdkClientUrls: { core: string; metadata: string },
-): string => {
-  const specifierToBlobUrl: Record<string, string> = {
-    'twenty-client-sdk/core': sdkClientUrls.core,
-    'twenty-client-sdk/metadata': sdkClientUrls.metadata,
-  };
-
-  let rewritten = source;
-
-  for (const [specifier, blobUrl] of Object.entries(specifierToBlobUrl)) {
-    rewritten = rewritten
-      .split(`"${specifier}"`)
-      .join(`"${blobUrl}"`)
-      .split(`'${specifier}'`)
-      .join(`'${blobUrl}'`);
-  }
-
-  return rewritten;
-};
-
-const render: WorkerExports['render'] = async (
-  connection: RemoteConnection,
-  renderContext: HostToWorkerRenderContext,
-) => {
-  const batchedConnection = new BatchingRemoteConnection(connection);
-  const root = document.createElement('remote-root') as RemoteRootElement;
-  const renderContainer = document.createElement('remote-fragment');
-  root.connect(batchedConnection);
-  root.append(renderContainer);
-  document.body.append(root);
-  installStyleBridge(root);
-
-  if (isDefined(renderContext.applicationVariables)) {
-    setWorkerEnv({
-      applicationVariables: JSON.stringify(renderContext.applicationVariables),
+const workerExports: WorkerExports = {
+  render: async (connection, renderContext) => {
+    await renderFrontComponent({
+      connection,
+      renderContext,
+      hostFetch: hostThread?.imports.hostFetch ?? null,
     });
-  }
+  },
+  initializeHostCommunicationApi: async () => {
+    if (!isDefined(hostThread)) {
+      return;
+    }
 
-  // System variables are set after application variables so they cannot be overridden
-  if (isDefined(renderContext.apiUrl)) {
-    setWorkerEnv({
-      TWENTY_API_URL: renderContext.apiUrl,
-    });
-  }
-
-  if (isDefined(renderContext.applicationAccessToken)) {
-    setWorkerEnv({
-      TWENTY_APP_ACCESS_TOKEN: renderContext.applicationAccessToken,
-    });
-  }
-
-  const authHeaders = isDefined(renderContext.applicationAccessToken)
-    ? { Authorization: `Bearer ${renderContext.applicationAccessToken}` }
-    : undefined;
-
-  const componentSource = await fetchComponentSource(
-    renderContext.componentUrl,
-    authHeaders,
-  );
-
-  const hasSdkImports =
-    isDefined(renderContext.sdkClientUrls) &&
-    SDK_IMPORT_SPECIFIERS.some((specifier) =>
-      componentSource.includes(specifier),
+    Object.assign(
+      frontComponentHostCommunicationApi,
+      buildFrontComponentHostCommunicationApiFromThreadImports(
+        hostThread.imports,
+      ),
     );
 
-  const finalSource = hasSdkImports
-    ? rewriteSdkImports(componentSource, renderContext.sdkClientUrls!)
-    : componentSource;
-
-  const componentBlob = new Blob([finalSource], {
-    type: 'application/javascript',
-  });
-
-  const importUrl = URL.createObjectURL(componentBlob);
-
-  try {
-    /* @vite-ignore */
-    const componentModule = await import(importUrl);
-
-    componentModule.default(renderContainer);
-  } finally {
-    URL.revokeObjectURL(importUrl);
-  }
-};
-
-const initializeHostCommunicationApi: WorkerExports['initializeHostCommunicationApi'] =
-  async () => {
-    const hostApi =
-      ThreadWebWorker.self.import<FrontComponentHostCommunicationApi>();
-
-    frontComponentHostCommunicationApi.navigate = hostApi.navigate;
-    frontComponentHostCommunicationApi.requestAccessTokenRefresh =
-      hostApi.requestAccessTokenRefresh;
-    frontComponentHostCommunicationApi.openSidePanelPage =
-      hostApi.openSidePanelPage;
-    frontComponentHostCommunicationApi.openCommandConfirmationModal =
-      createOpenCommandConfirmationModalAdapter(hostApi);
-    frontComponentHostCommunicationApi.unmountFrontComponent =
-      hostApi.unmountFrontComponent;
-    frontComponentHostCommunicationApi.enqueueSnackbar =
-      hostApi.enqueueSnackbar;
-    frontComponentHostCommunicationApi.closeSidePanel = hostApi.closeSidePanel;
-    frontComponentHostCommunicationApi.updateProgress = hostApi.updateProgress;
-  };
-
-const onConfirmationModalResult: WorkerExports['onConfirmationModalResult'] =
-  async (result) => {
+    for (const storageBridge of Object.values(frontComponentStorageBridges)) {
+      storageBridge.connectHostCommunicationApi(
+        frontComponentHostCommunicationApi,
+      );
+    }
+  },
+  updateContext: async (context) => {
+    setFrontComponentExecutionContext(context);
+  },
+  onConfirmationModalResult: async (result) => {
     await handleCommandConfirmationModalResult(result);
-  };
-
-const updateContext: WorkerExports['updateContext'] = async (
-  context: FrontComponentExecutionContext,
-) => {
-  setFrontComponentExecutionContext(context);
+  },
+  pushGeometryUpdates: async (batch) => {
+    workerGeometryStore.applyGeometryBatch(batch);
+  },
+  pushFocusUpdate: async ({ remoteElementId, isFocusVisible }) => {
+    workerActiveElementStore.setActiveElement({
+      element: isDefined(remoteElementId)
+        ? findElementByRemoteId({ rootNode: document.body, remoteElementId })
+        : null,
+      isFocusVisible,
+    });
+  },
+  pushCapturedPointerEvent: async (update) => {
+    workerPointerCapture.dispatchCapturedPointerEvent(update);
+  },
+  pushOutsidePressEvent: async (eventData) => {
+    dispatchOutsidePressEvent({ documentTarget: document, eventData });
+  },
+  pushOwnedPressEvent: async (eventData) => {
+    dispatchOwnedPressEvent({ documentTarget: document, eventData });
+  },
+  pushMediaSessionEvents: async (batch) => {
+    workerMediaBridge.dispatchEvents(batch);
+  },
 };
 
-ThreadWebWorker.self.export({
-  render,
-  initializeHostCommunicationApi,
-  onConfirmationModalResult,
-  updateContext,
+self.addEventListener('message', (event) => {
+  const [transferredPort] = event.ports;
+
+  if (isDefined(hostThread) || !isDefined(transferredPort)) {
+    return;
+  }
+
+  const nextHostThread = new ThreadMessagePort<
+    FrontComponentHostThreadExports,
+    WorkerExports
+  >(transferredPort, {
+    exports: workerExports,
+    serialization: createClonableErrorThreadSerialization(),
+  });
+  hostThread = nextHostThread;
+
+  workerGeometryStore.connectTransport(nextHostThread.imports);
+  workerMediaBridge.connectTransport(nextHostThread.imports);
+  workerOutsidePressObservation.connectTransport(nextHostThread.imports);
+
+  transferredPort.start();
 });

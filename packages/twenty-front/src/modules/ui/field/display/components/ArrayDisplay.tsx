@@ -1,23 +1,22 @@
+import { getChipLabel } from '@/ui/field/display/utils/getChipLabel';
 import { type FieldArrayValue } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { ExpandableList } from '@/ui/layout/expandable-list/components/ExpandableList';
-import { t } from '@lingui/core/macro';
-import { Chip, ChipVariant } from 'twenty-ui/components';
+import { OverflowingList } from 'twenty-ui/components/layout';
+import { Chip } from 'twenty-ui/primitives/data-display';
+import { useLingui } from '@lingui/react/macro';
 
 type ArrayDisplayProps = {
   value: FieldArrayValue;
 };
 
 export const ArrayDisplay = ({ value }: ArrayDisplayProps) => {
+  const { t } = useLingui();
   return (
-    <ExpandableList>
+    <OverflowingList overflowLabel={t`Show all items`}>
       {value?.map((item, index) => (
-        <Chip
-          key={`${item}-${index}`}
-          variant={ChipVariant.Highlighted}
-          label={item}
-          emptyLabel={t`Untitled`}
-        />
+        <Chip key={`${item}-${index}`} variant="soft">
+          {getChipLabel(item).content}
+        </Chip>
       ))}
-    </ExpandableList>
+    </OverflowingList>
   );
 };

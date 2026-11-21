@@ -1,65 +1,16 @@
 import { downloadFile } from '@/activities/files/utils/downloadFile';
+import { FilePreviewDialog } from '@/ui/field/display/components/FilePreviewDialog';
+import { GlobalFilePreviewOpenEffect } from '@/ui/field/display/components/GlobalFilePreviewOpenEffect';
+import { GLOBAL_FILE_PREVIEW_MODAL_ID } from '@/ui/field/display/constants/GlobalFilePreviewModalId';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { filePreviewState } from '@/ui/field/display/states/filePreviewState';
-import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
-import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { lazy, Suspense, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { isDefined } from 'twenty-shared/utils';
-import { IconDownload, IconX } from 'twenty-ui/display';
-import { IconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-
-const DocumentViewer = lazy(() =>
-  import('@/activities/files/components/DocumentViewer').then((module) => ({
-    default: module.DocumentViewer,
-  })),
-);
-
-const GLOBAL_FILE_PREVIEW_MODAL_ID = 'global-file-preview-modal';
-
-const StyledModalHeader = styled.div`
-  align-items: center;
-  border-bottom: 1px solid ${themeCssVariables.border.color.medium};
-  display: flex;
-  flex-direction: row;
-  gap: ${themeCssVariables.spacing[2]};
-  height: 60px;
-  justify-content: space-between;
-  overflow: hidden;
-  padding: ${themeCssVariables.spacing[0]} ${themeCssVariables.spacing[4]}
-    ${themeCssVariables.spacing[0]} ${themeCssVariables.spacing[4]};
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const StyledHeader = styled.div`
-  align-items: center;
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: space-between;
-  width: 100%;
-`;
-
-const StyledModalTitle = styled.div`
-  color: ${themeCssVariables.font.color.primary};
-  font-size: ${themeCssVariables.font.size.xl};
-  font-weight: ${themeCssVariables.font.weight.semiBold};
-`;
-
-const StyledButtonContainer = styled.div`
-  align-items: center;
-  display: flex;
-  gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledModalContent = styled.div`
-  height: 100%;
-  padding: ${themeCssVariables.spacing[4]};
-`;
+import { isDefined, isNonEmptyString } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
 
 const StyledLoadingContainer = styled.div`
   align-items: center;
@@ -72,24 +23,23 @@ const StyledLoadingText = styled.div`
   color: ${themeCssVariables.font.color.tertiary};
 `;
 
-export const GlobalFilePreviewModal = (): JSX.Element | null => {
+export const GlobalFilePreviewModal = () => {
   const { t } = useLingui();
   const [filePreview, setFilePreview] = useAtomState(filePreviewState);
-  const { openModal, closeModal } = useModal();
-
-  useEffect(() => {
-    if (isDefined(filePreview)) {
-      openModal(GLOBAL_FILE_PREVIEW_MODAL_ID);
-    }
-  }, [filePreview, openModal]);
+  const { closeDialog } = useDialog();
+  const hasDownloadPermission = useHasPermissionFlag(
+    PermissionFlagType.DOWNLOAD_FILE,
+  );
 
   const handleClose = () => {
-    closeModal(GLOBAL_FILE_PREVIEW_MODAL_ID);
+    closeDialog(GLOBAL_FILE_PREVIEW_MODAL_ID);
     setFilePreview(null);
   };
 
   const handleDownload = () => {
-    if (!filePreview || !filePreview.url) return;
+    if (!isDefined(filePreview) || !isNonEmptyString(filePreview.url)) {
+      return;
+    }
     downloadFile(filePreview.url, filePreview.label ?? 'file');
   };
 
@@ -99,51 +49,23 @@ export const GlobalFilePreviewModal = (): JSX.Element | null => {
 
   return (
     <>
-      {createPortal(
-        <ModalStatefulWrapper
-          modalInstanceId={GLOBAL_FILE_PREVIEW_MODAL_ID}
-          size="large"
-          isClosable
-          onClose={handleClose}
-          renderInDocumentBody
-        >
-          <StyledModalHeader>
-            <StyledHeader>
-              <StyledModalTitle>{filePreview.label}</StyledModalTitle>
-              <StyledButtonContainer>
-                <IconButton
-                  Icon={IconDownload}
-                  onClick={handleDownload}
-                  size="small"
-                />
-                <IconButton Icon={IconX} onClick={handleClose} size="small" />
-              </StyledButtonContainer>
-            </StyledHeader>
-          </StyledModalHeader>
-          <ScrollWrapper
-            componentInstanceId={`preview-modal-${filePreview.fileId ?? 'file'}`}
-          >
-            <StyledModalContent>
-              <Suspense
-                fallback={
-                  <StyledLoadingContainer>
-                    <StyledLoadingText>
-                      {t`Loading document viewer...`}
-                    </StyledLoadingText>
-                  </StyledLoadingContainer>
-                }
-              >
-                <DocumentViewer
-                  documentName={filePreview.label ?? t`Untitled`}
-                  documentUrl={filePreview.url ?? ''}
-                  documentExtension={filePreview.extension ?? ''}
-                />
-              </Suspense>
-            </StyledModalContent>
-          </ScrollWrapper>
-        </ModalStatefulWrapper>,
-        document.body,
-      )}
+      <GlobalFilePreviewOpenEffect />
+      <FilePreviewDialog
+        dialogId={GLOBAL_FILE_PREVIEW_MODAL_ID}
+        scrollWrapperId={`preview-modal-${filePreview.fileId ?? 'file'}`}
+        title={filePreview.label ?? t`File preview`}
+        documentName={filePreview.label ?? t`Untitled`}
+        documentUrl={filePreview.url ?? ''}
+        documentExtension={filePreview.extension ?? ''}
+        onClose={handleClose}
+        onDownload={hasDownloadPermission ? handleDownload : undefined}
+        downloadLabel={t`Download file`}
+        loadingFallback={
+          <StyledLoadingContainer>
+            <StyledLoadingText>{t`Loading document viewer...`}</StyledLoadingText>
+          </StyledLoadingContainer>
+        }
+      />
     </>
   );
 };

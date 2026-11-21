@@ -1,4 +1,4 @@
-import gql from 'graphql-tag';
+import { gql } from '@apollo/client';
 
 export const GET_IMPORT_JOB = gql`
   query GetImportJob($importJobId: String!) {

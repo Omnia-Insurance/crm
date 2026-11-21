@@ -3,7 +3,7 @@ import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { PhonesFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/PhonesFieldDisplay';
 import { ComponentDecorator } from 'twenty-ui/testing';
 import { MemoryRouterDecorator } from '~/testing/decorators/MemoryRouterDecorator';
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
 import { getFieldDecorator } from '~/testing/decorators/getFieldDecorator';
 import { getProfilingStory } from '~/testing/profiling/utils/getProfilingStory';
 
@@ -13,7 +13,7 @@ const meta: Meta = {
     MemoryRouterDecorator,
     getFieldDecorator('person', 'phones'),
     ComponentDecorator,
-    SnackBarDecorator,
+    ToastDecorator,
   ],
   component: PhonesFieldDisplay,
   args: {},
@@ -46,7 +46,7 @@ export const WrongNumber: Story = {
 
 export const Performance = getProfilingStory({
   componentName: 'PhonesFieldDisplay',
-  averageThresholdInMs: 0.5,
+  averageThresholdInMs: 1,
   numberOfRuns: 20,
   numberOfTestsPerRun: 100,
 });

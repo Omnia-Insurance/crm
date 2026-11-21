@@ -1,16 +1,14 @@
 import { useDropdownContextCurrentContentId } from '@/dropdown-context-state-management/hooks/useDropdownContextCurrentContentId';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { ObjectOptionsDropdownContent } from '@/object-record/object-options-dropdown/components/ObjectOptionsDropdownContent';
-import { OBJECT_OPTIONS_DROPDOWN_ID } from '@/object-record/object-options-dropdown/constants/ObjectOptionsDropdownId';
+import { getObjectOptionsDropdownId } from '@/object-record/object-options-dropdown/utils/getObjectOptionsDropdownId';
 import { ObjectOptionsDropdownContext } from '@/object-record/object-options-dropdown/states/contexts/ObjectOptionsDropdownContext';
 import { type ObjectOptionsContentId } from '@/object-record/object-options-dropdown/types/ObjectOptionsContentId';
 import { RecordGroupReorderConfirmationModal } from '@/object-record/record-group/components/RecordGroupReorderConfirmationModal';
 import { useRecordGroupReorderConfirmationModal } from '@/object-record/record-group/hooks/useRecordGroupReorderConfirmationModal';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
-import { StyledHeaderDropdownButton } from '@/ui/layout/dropdown/components/StyledHeaderDropdownButton';
+import { DropdownButton } from '@/ui/layout/dropdown/components/DropdownButton';
 import { DROPDOWN_OFFSET_Y } from '@/ui/layout/dropdown/constants/DropdownOffsetY';
-import { isDropdownOpenComponentState } from '@/ui/layout/dropdown/states/isDropdownOpenComponentState';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { type ViewType } from '@/views/types/ViewType';
 import { Trans } from '@lingui/react/macro';
 
@@ -28,10 +26,7 @@ export const ObjectOptionsDropdown = ({
   const { currentContentId, handleContentChange, handleResetContent } =
     useDropdownContextCurrentContentId<ObjectOptionsContentId>();
 
-  const isDropdownOpen = useAtomComponentStateValue(
-    isDropdownOpenComponentState,
-    OBJECT_OPTIONS_DROPDOWN_ID,
-  );
+  const dropdownId = getObjectOptionsDropdownId(recordIndexId);
 
   const {
     handleRecordGroupOrderChangeWithModal,
@@ -43,12 +38,12 @@ export const ObjectOptionsDropdown = ({
   return (
     <>
       <Dropdown
-        dropdownId={OBJECT_OPTIONS_DROPDOWN_ID}
+        dropdownId={dropdownId}
         dropdownOffset={{ y: DROPDOWN_OFFSET_Y }}
         clickableComponent={
-          <StyledHeaderDropdownButton isUnfolded={isDropdownOpen}>
+          <DropdownButton>
             <Trans>Options</Trans>
-          </StyledHeaderDropdownButton>
+          </DropdownButton>
         }
         onClose={handleResetContent}
         dropdownComponents={
@@ -60,7 +55,7 @@ export const ObjectOptionsDropdown = ({
               currentContentId,
               onContentChange: handleContentChange,
               resetContent: handleResetContent,
-              dropdownId: OBJECT_OPTIONS_DROPDOWN_ID,
+              dropdownId,
               handleRecordGroupOrderChangeWithModal,
             }}
           >

@@ -1,14 +1,15 @@
 ---
 title: Docker Compose
-icon: "docker"
+description: Run Twenty in production with Docker Compose.
 ---
 
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Overview
 
 <Warning>
 Docker containers are for production hosting or self-hosting. For contributing, please check the [Local Setup](/developers/contribute/capabilities/local-setup).
 </Warning>
-
-## Overview
 
 This guide provides step-by-step instructions to install and configure the Twenty application using Docker Compose. The aim is to make the process straightforward and prevent common pitfalls that could break your setup.
 
@@ -28,12 +29,18 @@ Install the latest stable version of Twenty with a single command:
 bash <(curl -sL https://raw.githubusercontent.com/twentyhq/twenty/main/packages/twenty-docker/scripts/install.sh)
 ```
 
-To install a specific version or branch:
+To install a specific version:
 ```bash
-VERSION=vx.y.z BRANCH=branch-name bash <(curl -sL https://raw.githubusercontent.com/twentyhq/twenty/main/packages/twenty-docker/scripts/install.sh)
+VERSION=v2.38.1 bash <(curl -sL https://raw.githubusercontent.com/twentyhq/twenty/main/packages/twenty-docker/scripts/install.sh)
 ```
-- Replace x.y.z with the desired version number.
-- Replace branch-name with the name of the branch you want to install.
+- `VERSION` must be a full release tag published on [Docker Hub](https://hub.docker.com/r/twentycrm/twenty/tags), such as `v2.38.1`. Aliases such as `v2` or `latest` are not accepted.
+- The matching `docker-compose.yml` is fetched from the `twenty/<version>` git tag, so releases that predate these tags (v2.9.0 and older) can't be installed with the script.
+
+To fetch the configuration files from a branch instead, for example to test unreleased changes:
+```bash
+BRANCH=branch-name bash <(curl -sL https://raw.githubusercontent.com/twentyhq/twenty/main/packages/twenty-docker/scripts/install.sh)
+```
+- Replace branch-name with the branch to fetch `docker-compose.yml` and `.env.example` from. The image still defaults to the latest release unless `VERSION` is also set.
 
 ## Option 2: Manual steps
 Follow these steps for a manual setup.
@@ -68,11 +75,19 @@ Follow these steps for a manual setup.
 
 4. **Set the Postgres Password**
 
-    Update the `PG_DATABASE_PASSWORD` value in the .env file with a strong password without special characters.
+    Update the `PG_DATABASE_PASSWORD` value in the .env file with a strong password without special characters. The password is inserted unencoded into the Postgres connection URL, so characters such as `@`, `/`, `#` or `%` break the connection string. Generate one with:
+
+    ```bash
+    openssl rand -hex 32
+    ```
 
     ```ini
     PG_DATABASE_PASSWORD=my_strong_password
     ```
+
+<Note>
+Variables that `docker-compose.yml` forwards without a `:-` default, such as `SERVER_URL` and the `STORAGE_S3_*` variables, reach the server as an empty string when they are blank or missing in `.env`, and the server treats an empty string as a configured value rather than as unset. Keep `SERVER_URL` set, and when `STORAGE_TYPE=S_3`, set every required `STORAGE_S3_*` variable: an empty `STORAGE_S3_NAME` breaks every upload. Variables with a default in `docker-compose.yml`, such as the `PG_DATABASE_*` parts and `REDIS_URL`, fall back to that default when blank or missing.
+</Note>
 
 ### Step 2: Obtain the Docker Compose File
 
@@ -102,7 +117,7 @@ curl http://localhost:3000
 
 ### Expose Twenty to External Access
 
-By default, Twenty runs on `localhost` at port `3000`. To access it via an external domain or IP address, you need to configure the `SERVER_URL` in your `.env` file.
+By default, Twenty runs on `localhost` at port `3000`. The UI resolves the API from the browser's own origin, so it loads from any hostname that reaches the container — but still set `SERVER_URL` to your public URL: the server uses it for generated links (emails, OAuth callbacks) and to detect HTTPS for secure cookies.
 
 #### Understanding `SERVER_URL`
 
@@ -119,6 +134,8 @@ SSL (HTTPS) is required for certain browser features to work properly. While the
 For example, the clipboard API might require a secure context - some features like copy buttons throughout the application might not work without HTTPS enabled.
 
 We strongly recommend setting up Twenty behind a reverse proxy with SSL termination for optimal security and functionality.
+
+<Tip>Before exposing Twenty to the internet, read [Securing your instance](/developers/self-host/capabilities/security). Most teams can keep the app private and open only a few paths.</Tip>
 
 #### Configuring `SERVER_URL`
 
@@ -217,7 +234,7 @@ Add to your crontab (`crontab -e`):
 
 1. Stop the application:
 ```bash
-docker compose stop twenty-server twenty-front
+docker compose stop server worker
 ```
 
 2. Restore the database:
@@ -241,3 +258,10 @@ docker compose up -d
 
 If you encounter any problem, check [Troubleshooting](/developers/self-host/capabilities/troubleshooting) for solutions.
 
+## Managed Hosting
+
+<Tip>
+  Prefer not to run and maintain Twenty yourself? [Find a certified Twenty hosting partner](https://twenty.com/partners/list?categories=HOSTING&ref=docs-docker-compose) to deploy, host, and manage your instance end-to-end. *(Or reach our team: [contact@twenty.com](mailto:contact@twenty.com).)*
+</Tip>
+
+<PageBanner illustration="dev-self-host" />

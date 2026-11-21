@@ -6,9 +6,14 @@ export const GET_CHAT_MESSAGES = gql`
       id
       threadId
       turnId
+      agentId
+      isBuiltInAssistant
+      senderApplicationId
+      senderWorkspaceMemberId
       role
       status
       createdAt
+      processedAt
       parts {
         id
         messageId
@@ -23,7 +28,6 @@ export const GET_CHAT_MESSAGES = gql`
         state
         providerExecuted
         errorMessage
-        errorDetails
         sourceUrlSourceId
         sourceUrlUrl
         sourceUrlTitle
@@ -38,10 +42,20 @@ export const GET_CHAT_MESSAGES = gql`
         providerMetadata
         createdAt
       }
+      reactions {
+        emoji
+        workspaceMemberIds
+        agentIds
+        hasAssistantReacted
+      }
     }
     chatStreamCatchupChunks(threadId: $threadId) {
       chunks
       maxSeq
+      error {
+        code
+        message
+      }
     }
   }
 `;

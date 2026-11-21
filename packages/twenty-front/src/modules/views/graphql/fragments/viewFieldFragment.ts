@@ -10,8 +10,8 @@ export const VIEW_FIELD_FRAGMENT = gql`
     size
     aggregateOperation
     viewFieldGroupId
+    # OMNIA-CUSTOM: relation sub-field columns (contract C6)
     subFieldName
-    isOverridden
     isActive
     createdAt
     updatedAt

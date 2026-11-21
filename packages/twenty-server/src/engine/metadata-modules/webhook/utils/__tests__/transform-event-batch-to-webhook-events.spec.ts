@@ -3,27 +3,17 @@ import type { ObjectRecordEvent } from 'twenty-shared/database-events';
 import { type WorkspaceEventBatch } from 'src/engine/workspace-event-emitter/types/workspace-event-batch.type';
 import type { WebhookEntity } from 'src/engine/metadata-modules/webhook/entities/webhook.entity';
 import { transformEventBatchToWebhookEvents } from 'src/engine/metadata-modules/webhook/utils/transform-event-batch-to-webhook-events';
-import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { getFlatObjectMetadataMock } from 'src/engine/metadata-modules/flat-object-metadata/__mocks__/get-flat-object-metadata.mock';
 
-const mockObjectMetadata: FlatObjectMetadata = {
+const mockObjectMetadata = getFlatObjectMetadataMock({
   id: 'id',
+  universalIdentifier: 'id',
   nameSingular: 'nameSingular',
   namePlural: 'namePlural',
   workspaceId: 'workspaceId',
   labelSingular: 'Label Singular',
   labelPlural: 'Label Plural',
-  isCustom: false,
-  isRemote: false,
-  isActive: true,
-  isSystem: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  universalIdentifier: 'id',
-  fieldIds: [],
-  indexMetadataIds: [],
-  viewIds: [],
-  applicationId: null,
-} as unknown as FlatObjectMetadata;
+});
 
 describe('transformEventBatchToWebhookEvents', () => {
   it('should transform properly', () => {
@@ -245,5 +235,54 @@ describe('transformEventBatchToWebhookEvents', () => {
     });
 
     expect(resultWithoutEventDate).toEqual(expectedResultWithoutEventDate);
+  });
+
+  it('should include position-only update events', () => {
+    const workspaceEventBatch: WorkspaceEventBatch<ObjectRecordEvent> = {
+      workspaceId: 'workspaceId',
+      objectMetadata: mockObjectMetadata,
+      name: 'objectNameSingular.updated',
+      events: [
+        {
+          recordId: 'recordId-1',
+          properties: {
+            after: { id: 'id-1', nameSingular: 'nameSingular-1' },
+            updatedFields: ['position'],
+          },
+        },
+        {
+          recordId: 'recordId-2',
+          properties: {
+            after: { id: 'id-2', nameSingular: 'nameSingular-2' },
+            updatedFields: ['nameSingular', 'position'],
+          },
+        },
+      ],
+    };
+
+    const webhooks = [
+      {
+        id: 'webhook-id',
+        targetUrl: 'targetUrl',
+        secret: 'secret',
+      },
+    ] as WebhookEntity[];
+
+    const result = transformEventBatchToWebhookEvents({
+      workspaceEventBatch,
+      webhooks,
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result[0].record).toEqual({
+      id: 'id-1',
+      nameSingular: 'nameSingular-1',
+    });
+    expect(result[0].updatedFields).toEqual(['position']);
+    expect(result[1].record).toEqual({
+      id: 'id-2',
+      nameSingular: 'nameSingular-2',
+    });
+    expect(result[1].updatedFields).toEqual(['nameSingular', 'position']);
   });
 });

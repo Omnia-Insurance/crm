@@ -2,20 +2,25 @@ import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObject
 import { isLabelIdentifierField } from '@/object-metadata/utils/isLabelIdentifierField';
 import { isRecordFieldReadOnly } from '@/object-record/read-only/utils/isRecordFieldReadOnly';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
+import {
+  FieldContext,
+  type GenericFieldContextType,
+} from '@/object-record/record-field/ui/contexts/FieldContext';
 import { isFieldRelationManyToOne } from '@/object-record/record-field/ui/types/guards/isFieldRelationManyToOne';
 import { isFieldRelationOneToMany } from '@/object-record/record-field/ui/types/guards/isFieldRelationOneToMany';
-import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
 import { getTargetObjectMetadataIdsFromField } from '@/object-record/record-field/ui/utils/junction/getTargetObjectMetadataIdsFromField';
-import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
+import { isUsableJunctionConfig } from '@/object-record/record-field/ui/utils/junction/isUsableJunctionConfig';
+import { resolveJunctionConfig } from '@/object-record/record-field/ui/utils/junction/resolveJunctionConfig';
+import { buildRelationSubFieldDefinition } from '@/object-record/record-field/utils/buildRelationSubFieldDefinition';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowContext';
 import { RecordTableUpdateContext } from '@/object-record/record-table/contexts/RecordTableUpdateContext';
 import { isRecordTableCellsNonEditableComponentState } from '@/object-record/record-table/states/isRecordTableCellsNonEditableComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useContext, useMemo, type ReactNode } from 'react';
-import { isDefined } from 'twenty-shared/utils';
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
 type RecordTableCellFieldContextGenericProps = {
   recordField: RecordField;
   children: ReactNode;
@@ -25,7 +30,8 @@ export const RecordTableCellFieldContextGeneric = ({
   recordField,
   children,
 }: RecordTableCellFieldContextGenericProps) => {
-  const { recordId, isRecordReadOnly } = useRecordTableRowContextOrThrow();
+  const { recordId, isRecordReadOnly, restrictedFieldNames } =
+    useRecordTableRowContextOrThrow();
 
   const isRecordTableCellsNonEditable = useAtomComponentStateValue(
     isRecordTableCellsNonEditableComponentState,
@@ -36,109 +42,111 @@ export const RecordTableCellFieldContextGeneric = ({
 
   const {
     objectPermissionsByObjectMetadataId,
+    fieldMetadataItemByFieldMetadataItemId,
     fieldDefinitionByFieldMetadataItemId,
   } = useRecordIndexContextOrThrow();
 
-  let fieldDefinition =
+  const fieldDefinition =
     fieldDefinitionByFieldMetadataItemId[recordField.fieldMetadataItemId];
-
-  // OMNIA-CUSTOM: For sub-field columns, override the field definition to inject
-  // subFieldName into metadata so FieldDisplay routes to RelationSubFieldDisplay.
-  // We also look up the sub-field's type/label from the target object metadata.
-  if (recordField.subFieldName && fieldDefinition) {
-    const targetObjectNameSingular = (
-      fieldDefinition.metadata as Record<string, unknown>
-    ).relationObjectMetadataNameSingular as string | undefined;
-
-    const targetObjectMetadata = targetObjectNameSingular
-      ? objectMetadataItems.find(
-          (item) => item.nameSingular === targetObjectNameSingular,
-        )
-      : undefined;
-
-    const subFieldMeta = targetObjectMetadata?.fields.find(
-      (f) => f.name === recordField.subFieldName && f.isActive,
-    );
-
-    fieldDefinition = {
-      ...fieldDefinition,
-      fieldMetadataId: `${fieldDefinition.fieldMetadataId}.${recordField.subFieldName}`,
-      label: `${fieldDefinition.label} / ${subFieldMeta?.label ?? recordField.subFieldName}`,
-      type: (subFieldMeta?.type ?? fieldDefinition.type) as any,
-      isUIReadOnly: true,
-      metadata: {
-        ...fieldDefinition.metadata,
-        subFieldName: recordField.subFieldName,
-        isUIReadOnly: true,
-      } as any,
-    };
-  }
+  const fieldMetadataItem =
+    fieldMetadataItemByFieldMetadataItemId[recordField.fieldMetadataItemId];
 
   const updateRecord = useContext(RecordTableUpdateContext);
 
-  let hasObjectReadPermissions = objectPermissions.canReadObjectRecords;
+  const { fieldMetadataItemId, subFieldName } = recordField;
 
-  // todo @guillim : adjust this to handle morph relations permissions display
-  if (
-    isFieldRelationManyToOne(fieldDefinition) ||
-    isFieldRelationOneToMany(fieldDefinition)
-  ) {
-    const relationObjectMetadataId =
-      fieldDefinition.metadata.relationObjectMetadataId;
+  // OMNIA-CUSTOM: relation sub-field column ("Lead / Date of Birth"); null when the role cannot read the field
+  const relationSubFieldDefinition = useMemo(
+    () =>
+      isNonEmptyString(subFieldName) && isDefined(fieldDefinition)
+        ? buildRelationSubFieldDefinition({
+            relationFieldDefinition: fieldDefinition,
+            subFieldName,
+            objectMetadataItems,
+          })
+        : undefined,
+    [fieldDefinition, subFieldName, objectMetadataItems],
+  );
 
-    const relationObjectPermissions = getObjectPermissionsForObject(
-      objectPermissionsByObjectMetadataId,
-      relationObjectMetadataId,
-    );
+  // OMNIA-CUSTOM: memoized (one value per cell), so every hook runs before upstream's early return
+  const fieldContextValue = useMemo<GenericFieldContextType | null>(() => {
+    if (!isDefined(fieldMetadataItem)) {
+      return null;
+    }
 
-    hasObjectReadPermissions = relationObjectPermissions.canReadObjectRecords;
+    let hasObjectReadPermissions = canReachSomeRecords({
+      objectRecordsPermissions: objectPermissions,
+      operationType: 'read',
+    });
+    let isInvalidJunctionRelation = false;
 
+    // todo @guillim : adjust this to handle morph relations permissions display
     if (
-      hasObjectReadPermissions &&
-      hasJunctionConfig(fieldDefinition.metadata.settings)
+      isFieldRelationManyToOne(fieldDefinition) ||
+      isFieldRelationOneToMany(fieldDefinition)
     ) {
-      const junctionConfig = getJunctionConfig({
-        settings: fieldDefinition.metadata.settings,
+      const relationObjectMetadataId =
+        fieldDefinition.metadata.relationObjectMetadataId;
+
+      const relationObjectPermissions = getObjectPermissionsForObject(
+        objectPermissionsByObjectMetadataId,
         relationObjectMetadataId,
-        sourceObjectMetadataId: objectMetadataItem.id,
-        objectMetadataItems,
+      );
+
+      hasObjectReadPermissions = canReachSomeRecords({
+        objectRecordsPermissions: relationObjectPermissions,
+        operationType: 'read',
       });
 
-      if (isDefined(junctionConfig)) {
-        const targetObjectMetadataIds = junctionConfig.targetFields.flatMap(
-          getTargetObjectMetadataIdsFromField,
-        );
+      if (hasObjectReadPermissions) {
+        const junctionConfig = resolveJunctionConfig({
+          settings: fieldDefinition.metadata.settings,
+          relationObjectMetadataId,
+          relationTargetFieldMetadataId:
+            fieldDefinition.metadata.relationFieldMetadataId,
+          sourceObjectMetadataId: objectMetadataItem.id,
+          objectMetadataItems,
+        });
 
-        if (targetObjectMetadataIds.length > 0) {
-          hasObjectReadPermissions = targetObjectMetadataIds.some(
-            (targetId) =>
-              getObjectPermissionsForObject(
-                objectPermissionsByObjectMetadataId,
-                targetId,
-              ).canReadObjectRecords,
+        if (isDefined(junctionConfig)) {
+          isInvalidJunctionRelation = !isUsableJunctionConfig(junctionConfig);
+
+          if (isInvalidJunctionRelation) {
+            hasObjectReadPermissions = false;
+          }
+
+          const targetObjectMetadataIds = junctionConfig.targetFields.flatMap(
+            getTargetObjectMetadataIdsFromField,
           );
+
+          if (targetObjectMetadataIds.length > 0) {
+            hasObjectReadPermissions = targetObjectMetadataIds.some(
+              (targetId) =>
+                canReachSomeRecords({
+                  objectRecordsPermissions: getObjectPermissionsForObject(
+                    objectPermissionsByObjectMetadataId,
+                    targetId,
+                  ),
+                  operationType: 'read',
+                }),
+            );
+          }
         }
       }
     }
-  }
 
-  // OMNIA-CUSTOM: Memoize context value — this component renders per cell
-  // (O(rows × fields)). Without memoization, every parent re-render creates
-  // a new object reference, forcing all FieldContext consumers to re-render.
-  const useUpdateRecordHook = useMemo(
-    () =>
-      updateRecord
-        ? (): [(params: any) => void, any] => [updateRecord, {}]
-        : undefined,
-    [updateRecord],
-  );
+    const isFieldRestricted = restrictedFieldNames.includes(
+      fieldDefinition.metadata.fieldName,
+    );
 
-  const contextValue = useMemo(
-    () => ({
-      fieldMetadataItemId: recordField.fieldMetadataItemId,
+    // OMNIA-CUSTOM: the checks above use the base relation, so an unreadable target shows "Not shared"
+    const isRelationSubFieldColumn = isNonEmptyString(subFieldName);
+
+    return {
+      fieldMetadataItemId,
       recordId,
-      fieldDefinition: fieldDefinition,
-      useUpdateRecord: useUpdateRecordHook,
+      fieldDefinition: relationSubFieldDefinition ?? fieldDefinition,
+      useUpdateRecord: updateRecord ? () => [updateRecord, {}] : undefined,
       isLabelIdentifier: isLabelIdentifierField({
         fieldMetadataItem: {
           id: fieldDefinition.fieldMetadataId,
@@ -148,36 +156,46 @@ export const RecordTableCellFieldContextGeneric = ({
       }),
       displayedMaxRows: 1,
       isRecordFieldReadOnly:
+        isRelationSubFieldColumn ||
         isRecordTableCellsNonEditable ||
+        isInvalidJunctionRelation ||
+        isFieldRestricted ||
         isRecordFieldReadOnly({
           isRecordReadOnly: isRecordReadOnly ?? false,
-          isSystemObject: objectMetadataItem.isSystem,
-          objectPermissions,
-          fieldMetadataItem: {
-            id: fieldDefinition.fieldMetadataId,
-            isUIReadOnly: fieldDefinition.metadata.isUIReadOnly ?? false,
-            isCustom: fieldDefinition.metadata.isCustom ?? false,
-          },
+          objectMetadataId: objectMetadataItem.id,
+          fieldMetadataItem,
           fieldDefinition,
           objectPermissionsByObjectMetadataId,
         }),
-      isForbidden: !hasObjectReadPermissions,
-    }),
-    [
-      recordField.fieldMetadataItemId,
-      recordId,
-      fieldDefinition,
-      useUpdateRecordHook,
-      objectMetadataItem,
-      isRecordTableCellsNonEditable,
-      isRecordReadOnly,
-      objectPermissions,
-      hasObjectReadPermissions,
-      objectPermissionsByObjectMetadataId,
-    ],
-  );
+      isForbidden:
+        !hasObjectReadPermissions ||
+        isFieldRestricted ||
+        relationSubFieldDefinition === null,
+    };
+  }, [
+    fieldMetadataItem,
+    fieldDefinition,
+    relationSubFieldDefinition,
+    subFieldName,
+    fieldMetadataItemId,
+    recordId,
+    updateRecord,
+    objectMetadataItem,
+    objectMetadataItems,
+    objectPermissions,
+    objectPermissionsByObjectMetadataId,
+    restrictedFieldNames,
+    isRecordReadOnly,
+    isRecordTableCellsNonEditable,
+  ]);
+
+  if (!isDefined(fieldContextValue)) {
+    return null;
+  }
 
   return (
-    <FieldContext.Provider value={contextValue}>{children}</FieldContext.Provider>
+    <FieldContext.Provider value={fieldContextValue}>
+      {children}
+    </FieldContext.Provider>
   );
 };

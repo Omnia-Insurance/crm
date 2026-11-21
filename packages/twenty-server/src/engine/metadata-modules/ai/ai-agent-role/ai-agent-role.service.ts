@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
+import { MEMBER_ROLE_UNIVERSAL_IDENTIFIER } from 'twenty-shared/constants';
 import { isDefined } from 'twenty-shared/utils';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, Not } from 'typeorm';
 
 import {
   AiException,
@@ -12,18 +12,36 @@ import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/ag
 import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
 import { RoleTargetService } from 'src/engine/metadata-modules/role-target/services/role-target.service';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
-
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 @Injectable()
 export class AiAgentRoleService {
   constructor(
-    @InjectRepository(AgentEntity)
-    private readonly agentRepository: Repository<AgentEntity>,
-    @InjectRepository(RoleEntity)
-    private readonly roleRepository: Repository<RoleEntity>,
-    @InjectRepository(RoleTargetEntity)
-    private readonly roleTargetRepository: Repository<RoleTargetEntity>,
+    @InjectWorkspaceScopedRepository(AgentEntity)
+    private readonly agentRepository: WorkspaceScopedRepository<AgentEntity>,
+    @InjectWorkspaceScopedRepository(RoleEntity)
+    private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
+    @InjectWorkspaceScopedRepository(RoleTargetEntity)
+    private readonly roleTargetRepository: WorkspaceScopedRepository<RoleTargetEntity>,
     private readonly roleTargetService: RoleTargetService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
+
+  public async findAgentRoleId({
+    workspaceId,
+    agentId,
+  }: {
+    workspaceId: string;
+    agentId: string;
+  }): Promise<string | undefined> {
+    const { flatRoleTargetByAgentIdMaps } =
+      await this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatRoleTargetByAgentIdMaps',
+      ]);
+
+    return flatRoleTargetByAgentIdMaps[agentId]?.roleId;
+  }
 
   public async assignRoleToAgent({
     workspaceId,
@@ -61,12 +79,14 @@ export class AiAgentRoleService {
     workspaceId: string;
     agentId: string;
   }): Promise<void> {
-    const existingRoleTarget = await this.roleTargetRepository.findOne({
-      where: {
-        agentId,
-        workspaceId,
+    const existingRoleTarget = await this.roleTargetRepository.findOne(
+      workspaceId,
+      {
+        where: {
+          agentId,
+        },
       },
-    });
+    );
 
     if (!isDefined(existingRoleTarget)) {
       throw new AiException(
@@ -85,10 +105,9 @@ export class AiAgentRoleService {
     roleId: string,
     workspaceId: string,
   ): Promise<AgentEntity[]> {
-    const roleTargets = await this.roleTargetRepository.find({
+    const roleTargets = await this.roleTargetRepository.find(workspaceId, {
       where: {
         roleId,
-        workspaceId,
         agentId: Not(IsNull()),
       },
     });
@@ -101,11 +120,8 @@ export class AiAgentRoleService {
       return [];
     }
 
-    const agents = await this.agentRepository.find({
-      where: {
-        id: In(agentIds),
-        workspaceId,
-      },
+    const agents = await this.agentRepository.find(workspaceId, {
+      where: { id: In(agentIds) },
     });
 
     return agents;
@@ -120,8 +136,8 @@ export class AiAgentRoleService {
     workspaceId: string;
     roleId: string;
   }) {
-    const agent = await this.agentRepository.findOne({
-      where: { id: agentId, workspaceId },
+    const agent = await this.agentRepository.findOne(workspaceId, {
+      where: { id: agentId },
     });
 
     if (!agent) {
@@ -131,8 +147,8 @@ export class AiAgentRoleService {
       );
     }
 
-    const role = await this.roleRepository.findOne({
-      where: { id: roleId, workspaceId },
+    const role = await this.roleRepository.findOne(workspaceId, {
+      where: { id: roleId },
     });
 
     if (!role) {
@@ -149,13 +165,15 @@ export class AiAgentRoleService {
       );
     }
 
-    const existingRoleTarget = await this.roleTargetRepository.findOne({
-      where: {
-        agentId,
-        roleId,
-        workspaceId,
+    const existingRoleTarget = await this.roleTargetRepository.findOne(
+      workspaceId,
+      {
+        where: {
+          agentId,
+          roleId,
+        },
       },
-    });
+    );
 
     return {
       roleToAssignIsSameAsCurrentRole: Boolean(existingRoleTarget),
@@ -171,12 +189,13 @@ export class AiAgentRoleService {
     roleTargetId: string;
     workspaceId: string;
   }): Promise<void> {
-    const role = await this.roleRepository.findOne({
-      where: { id: roleId, workspaceId },
+    const role = await this.roleRepository.findOne(workspaceId, {
+      where: { id: roleId },
     });
 
     if (
       !isDefined(role) ||
+      role.universalIdentifier === MEMBER_ROLE_UNIVERSAL_IDENTIFIER ||
       !role.canBeAssignedToAgents ||
       role.canBeAssignedToUsers ||
       role.canBeAssignedToApiKeys
@@ -184,16 +203,22 @@ export class AiAgentRoleService {
       return;
     }
 
-    const remainingAssignments = await this.roleTargetRepository.count({
-      where: {
-        roleId,
-        workspaceId,
-        id: Not(roleTargetId),
+    const remainingAssignments = await this.roleTargetRepository.count(
+      workspaceId,
+      {
+        where: {
+          roleId,
+          id: Not(roleTargetId),
+        },
       },
-    });
+    );
 
     if (remainingAssignments === 0) {
-      await this.roleRepository.delete({ id: roleId, workspaceId });
+      await this.roleRepository.delete(workspaceId, { id: roleId });
+      await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+        'flatRoleMaps',
+        'flatRolePermissionFlagMaps',
+      ]);
     }
   }
 }

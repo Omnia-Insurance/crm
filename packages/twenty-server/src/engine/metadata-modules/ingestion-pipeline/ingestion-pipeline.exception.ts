@@ -38,9 +38,7 @@ export class IngestionPipelineException extends CustomException<IngestionPipelin
   constructor(
     message: string,
     code: IngestionPipelineExceptionCode,
-    {
-      userFriendlyMessage,
-    }: { userFriendlyMessage?: MessageDescriptor } = {},
+    { userFriendlyMessage }: { userFriendlyMessage?: MessageDescriptor } = {},
   ) {
     super(message, code, {
       userFriendlyMessage:

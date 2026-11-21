@@ -1,5 +1,6 @@
 import { msg } from '@lingui/core/macro';
-import { type PageLayoutWidgetVerticalListPosition } from 'twenty-shared/types';
+import { PageLayoutWidgetVerticalListHeightBehavior } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
   PageLayoutWidgetExceptionCode,
@@ -9,7 +10,7 @@ import {
 import { type FlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/types/failed-flat-entity-validation.type';
 
 export const validatePageLayoutWidgetVerticalListPosition = (
-  position: PageLayoutWidgetVerticalListPosition,
+  position: { index: number; heightBehavior?: string },
   widgetTitle: string,
 ): FlatEntityValidationError[] => {
   const errors: FlatEntityValidationError[] = [];
@@ -37,6 +38,24 @@ export const validatePageLayoutWidgetVerticalListPosition = (
         `index ${position.index} must be an integer`,
       ),
       userFriendlyMessage: msg`Widget index must be an integer`,
+    });
+  }
+
+  if (
+    isDefined(position.heightBehavior) &&
+    !Object.values<string>(PageLayoutWidgetVerticalListHeightBehavior).includes(
+      position.heightBehavior,
+    )
+  ) {
+    errors.push({
+      code: PageLayoutWidgetExceptionCode.INVALID_PAGE_LAYOUT_WIDGET_DATA,
+      message: generatePageLayoutWidgetExceptionMessage(
+        PageLayoutWidgetExceptionMessageKey.INVALID_WIDGET_POSITION,
+        widgetTitle,
+        undefined,
+        `height behavior ${position.heightBehavior} is not supported`,
+      ),
+      userFriendlyMessage: msg`Widget height behavior is not supported`,
     });
   }
 

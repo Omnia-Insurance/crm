@@ -1,0 +1,78 @@
+import { Injectable } from '@nestjs/common';
+
+import { type UsageRefusal } from 'src/engine/core-modules/billing/types/usage-refusal.type';
+import { UsageLimitQuotaService } from 'src/engine/core-modules/usage-limit/services/usage-limit-quota.service';
+import { UsageQuotaAdmissionService } from 'src/engine/core-modules/usage-limit/services/usage-quota-admission.service';
+import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
+import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
+import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
+import { type UsageSpenders } from 'src/engine/core-modules/usage/types/usage-spenders.type';
+import { buildEmailQuotaCost } from 'src/modules/emailing/utils/build-email-quota-cost.util';
+import { computeEmailCreditsUsedMicro } from 'src/modules/emailing/utils/compute-email-credits-used-micro.util';
+
+type EmailUsageScope = {
+  workspaceId: string;
+  spenders: UsageSpenders;
+};
+
+type EmailSendScope = EmailUsageScope & { emailCount?: number };
+
+@Injectable()
+export class EmailBillingService {
+  constructor(
+    private readonly usageQuotaAdmissionService: UsageQuotaAdmissionService,
+    private readonly usageLimitQuotaService: UsageLimitQuotaService,
+  ) {}
+
+  async validateEmailSendOrThrow({
+    workspaceId,
+    spenders,
+    emailCount,
+  }: EmailSendScope): Promise<void> {
+    await this.usageQuotaAdmissionService.assertUsageAllowed({
+      workspaceId,
+      resourceType: UsageResourceType.EMAIL,
+      operationType: UsageOperationType.EMAIL_SEND,
+      spenders,
+      cost: buildEmailQuotaCost(emailCount),
+    });
+  }
+
+  async findEmailSendRefusal({
+    workspaceId,
+    spenders,
+    emailCount,
+  }: EmailSendScope): Promise<UsageRefusal | null> {
+    return this.usageQuotaAdmissionService.findUsageRefusal({
+      workspaceId,
+      resourceType: UsageResourceType.EMAIL,
+      operationType: UsageOperationType.EMAIL_SEND,
+      spenders,
+      cost: buildEmailQuotaCost(emailCount),
+    });
+  }
+
+  async billSentEmails({
+    workspaceId,
+    sentEmailCount,
+    spenders,
+  }: EmailUsageScope & { sentEmailCount: number }): Promise<void> {
+    if (sentEmailCount <= 0) {
+      return;
+    }
+
+    await this.usageLimitQuotaService.charge({
+      workspaceId,
+      events: [
+        {
+          resourceType: UsageResourceType.EMAIL,
+          operationType: UsageOperationType.EMAIL_SEND,
+          creditsUsedMicro: computeEmailCreditsUsedMicro(sentEmailCount),
+          quantity: sentEmailCount,
+          unit: UsageUnit.INVOCATION,
+          spenders,
+        },
+      ],
+    });
+  }
+}

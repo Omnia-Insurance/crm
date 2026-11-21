@@ -1,11 +1,13 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 
 import {
+  i18n,
   type I18n,
   type MessageOptions,
   type Messages,
   setupI18n,
 } from '@lingui/core';
+import { compileMessage } from '@lingui/message-utils/compileMessage';
 import { type APP_LOCALES, SOURCE_LOCALE } from 'twenty-shared/translations';
 
 import { messages as afMessages } from 'src/engine/core-modules/i18n/locales/generated/af-ZA';
@@ -17,10 +19,12 @@ import { messages as deMessages } from 'src/engine/core-modules/i18n/locales/gen
 import { messages as elMessages } from 'src/engine/core-modules/i18n/locales/generated/el-GR';
 import { messages as enMessages } from 'src/engine/core-modules/i18n/locales/generated/en';
 import { messages as esMessages } from 'src/engine/core-modules/i18n/locales/generated/es-ES';
+import { messages as faMessages } from 'src/engine/core-modules/i18n/locales/generated/fa-IR';
 import { messages as fiMessages } from 'src/engine/core-modules/i18n/locales/generated/fi-FI';
 import { messages as frMessages } from 'src/engine/core-modules/i18n/locales/generated/fr-FR';
 import { messages as heMessages } from 'src/engine/core-modules/i18n/locales/generated/he-IL';
 import { messages as huMessages } from 'src/engine/core-modules/i18n/locales/generated/hu-HU';
+import { messages as hyMessages } from 'src/engine/core-modules/i18n/locales/generated/hy-AM';
 import { messages as itMessages } from 'src/engine/core-modules/i18n/locales/generated/it-IT';
 import { messages as jaMessages } from 'src/engine/core-modules/i18n/locales/generated/ja-JP';
 import { messages as koMessages } from 'src/engine/core-modules/i18n/locales/generated/ko-KR';
@@ -32,10 +36,12 @@ import { messages as ptBRMessages } from 'src/engine/core-modules/i18n/locales/g
 import { messages as ptPTMessages } from 'src/engine/core-modules/i18n/locales/generated/pt-PT';
 import { messages as roMessages } from 'src/engine/core-modules/i18n/locales/generated/ro-RO';
 import { messages as ruMessages } from 'src/engine/core-modules/i18n/locales/generated/ru-RU';
-import { messages as srMessages } from 'src/engine/core-modules/i18n/locales/generated/sr-Cyrl';
+import { messages as srCyrlMessages } from 'src/engine/core-modules/i18n/locales/generated/sr-Cyrl';
+import { messages as srLatnMessages } from 'src/engine/core-modules/i18n/locales/generated/sr-Latn';
 import { messages as svMessages } from 'src/engine/core-modules/i18n/locales/generated/sv-SE';
 import { messages as trMessages } from 'src/engine/core-modules/i18n/locales/generated/tr-TR';
 import { messages as ukMessages } from 'src/engine/core-modules/i18n/locales/generated/uk-UA';
+import { messages as uzMessages } from 'src/engine/core-modules/i18n/locales/generated/uz-UZ';
 import { messages as viMessages } from 'src/engine/core-modules/i18n/locales/generated/vi-VN';
 import { messages as zhHansMessages } from 'src/engine/core-modules/i18n/locales/generated/zh-CN';
 import { messages as zhHantMessages } from 'src/engine/core-modules/i18n/locales/generated/zh-TW';
@@ -46,6 +52,11 @@ export class I18nService implements OnModuleInit {
     {} as Record<keyof typeof APP_LOCALES, I18n>;
 
   async loadTranslations() {
+    // The global singleton backs server-side t`` with no compiled catalog, so it needs a runtime compiler; since lingui 5.9 it also throws unless a locale is active.
+    i18n.setMessagesCompiler(compileMessage);
+    i18n.load(SOURCE_LOCALE, enMessages);
+    i18n.activate(SOURCE_LOCALE);
+
     const messagesByLocale: Record<keyof typeof APP_LOCALES, Messages> = {
       en: enMessages,
       'pseudo-en': pseudoEnMessages,
@@ -57,10 +68,12 @@ export class I18nService implements OnModuleInit {
       'de-DE': deMessages,
       'el-GR': elMessages,
       'es-ES': esMessages,
+      'fa-IR': faMessages,
       'fi-FI': fiMessages,
       'fr-FR': frMessages,
       'he-IL': heMessages,
       'hu-HU': huMessages,
+      'hy-AM': hyMessages,
       'it-IT': itMessages,
       'ja-JP': jaMessages,
       'ko-KR': koMessages,
@@ -71,10 +84,12 @@ export class I18nService implements OnModuleInit {
       'pt-PT': ptPTMessages,
       'ro-RO': roMessages,
       'ru-RU': ruMessages,
-      'sr-Cyrl': srMessages,
+      'sr-Cyrl': srCyrlMessages,
+      'sr-Latn': srLatnMessages,
       'sv-SE': svMessages,
       'tr-TR': trMessages,
       'uk-UA': ukMessages,
+      'uz-UZ': uzMessages,
       'vi-VN': viMessages,
       'zh-CN': zhHansMessages,
       'zh-TW': zhHantMessages,
@@ -85,6 +100,7 @@ export class I18nService implements OnModuleInit {
     ).forEach(([locale, messages]) => {
       const localeI18n = setupI18n();
 
+      localeI18n.setMessagesCompiler(compileMessage);
       localeI18n.load(locale, messages);
       localeI18n.activate(locale);
 

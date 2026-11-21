@@ -1,11 +1,11 @@
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { isNonEmptyArray } from '@sniptt/guards';
 import { produce } from 'immer';
-import { type OmniaObjectPermission } from '@/settings/roles/types/OmniaRoleExtensions';
+import { type ObjectPermission } from '~/generated-metadata/graphql';
 
 export const getRoleWithUpsertedObjectPermission = (
   role: RoleWithPartialMembers,
-  objectPermissionToUpsert: OmniaObjectPermission,
+  objectPermissionToUpsert: ObjectPermission,
 ) => {
   return produce(role, (draftRole) => {
     if (!isNonEmptyArray(draftRole.objectPermissions)) {

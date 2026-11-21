@@ -1,42 +1,58 @@
-import { type PermissionFlagType } from '@/constants';
+import {
+  type FieldPermissionGrant,
+  type ObjectPermissionGrant,
+  type RolePermissionGrants,
+} from '@/application/rolePermissionGrantsSchema';
 import { type SyncableEntityOptions } from '@/application/syncableEntityOptionsType';
+import {
+  type RowLevelPermissionPredicateGroupLogicalOperator,
+  type RowLevelPermissionPredicateOperand,
+  type RowLevelPermissionPredicateValue,
+} from '@/types';
 
-export type ObjectPermissionManifest = SyncableEntityOptions & {
+export type ObjectPermissionManifest = Partial<SyncableEntityOptions> &
+  ObjectPermissionGrant & {
+    // OMNIA-CUSTOM: sidebar visibility and edit window ride on the manifest by
+    // intersection; the strict grant schema is shared with AI run scopes.
+    showInSidebar?: boolean | null;
+    editWindowMinutes?: number | null;
+  };
+
+export type FieldPermissionManifest = Partial<SyncableEntityOptions> &
+  FieldPermissionGrant;
+
+export type RowLevelPermissionPredicateGroupManifest = SyncableEntityOptions & {
   objectUniversalIdentifier: string;
-  canReadObjectRecords?: boolean;
-  canUpdateObjectRecords?: boolean;
-  canSoftDeleteObjectRecords?: boolean;
-  canDestroyObjectRecords?: boolean;
-  showInSidebar?: boolean;
-  editWindowMinutes?: number | null;
+  logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
+  parentPredicateGroupUniversalIdentifier?: string | null;
+  position?: number | null;
 };
 
-export type FieldPermissionManifest = SyncableEntityOptions & {
+export type RowLevelPermissionPredicateManifest = SyncableEntityOptions & {
   objectUniversalIdentifier: string;
   fieldUniversalIdentifier: string;
-  canReadFieldValue?: boolean;
-  canUpdateFieldValue?: boolean;
+  operand: RowLevelPermissionPredicateOperand;
+  value?: RowLevelPermissionPredicateValue | null;
+  subFieldName?: string | null;
+  workspaceMemberFieldUniversalIdentifier?: string | null;
+  workspaceMemberSubFieldName?: string | null;
+  predicateGroupUniversalIdentifier?: string | null;
+  position?: number | null;
 };
 
-export type PermissionFlagManifest = SyncableEntityOptions & {
-  flag: PermissionFlagType;
-};
-
-export type RoleManifest = SyncableEntityOptions & {
-  label: string;
-  description?: string;
-  icon?: string;
-  canUpdateAllSettings?: boolean;
-  canAccessAllTools?: boolean;
-  canReadAllObjectRecords?: boolean;
-  canUpdateAllObjectRecords?: boolean;
-  canSoftDeleteAllObjectRecords?: boolean;
-  canDestroyAllObjectRecords?: boolean;
-  showAllObjectsInSidebar?: boolean;
-  canBeAssignedToUsers?: boolean;
-  canBeAssignedToAgents?: boolean;
-  canBeAssignedToApiKeys?: boolean;
-  objectPermissions?: ObjectPermissionManifest[];
-  fieldPermissions?: FieldPermissionManifest[];
-  permissionFlags?: PermissionFlagManifest[];
-};
+export type RoleManifest = SyncableEntityOptions &
+  Omit<RolePermissionGrants, 'objectPermissions' | 'fieldPermissions'> & {
+    label: string;
+    description?: string;
+    icon?: string;
+    // OMNIA-CUSTOM: role-wide sidebar default and edit window (see above).
+    showAllObjectsInSidebar?: boolean;
+    editWindowMinutes?: number | null;
+    canBeAssignedToUsers?: boolean;
+    canBeAssignedToAgents?: boolean;
+    canBeAssignedToApiKeys?: boolean;
+    objectPermissions?: ObjectPermissionManifest[];
+    fieldPermissions?: FieldPermissionManifest[];
+    rowLevelPermissionPredicates?: RowLevelPermissionPredicateManifest[];
+    rowLevelPermissionPredicateGroups?: RowLevelPermissionPredicateGroupManifest[];
+  };

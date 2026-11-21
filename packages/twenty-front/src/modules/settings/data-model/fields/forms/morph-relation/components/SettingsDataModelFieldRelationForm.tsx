@@ -1,7 +1,6 @@
 import { Controller, useFormContext } from 'react-hook-form';
 import { z } from 'zod';
 
-import { StyledContainer } from '@/keyboard-shortcut-menu/components/KeyboardShortcutMenuStyles';
 import { SettingsMorphRelationMultiSelect } from '@/settings/components/SettingsMorphRelationMultiSelect';
 import { FIELD_NAME_MAXIMUM_LENGTH } from '@/settings/data-model/constants/FieldNameMaximumLength';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
@@ -14,12 +13,20 @@ import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetada
 import { IconPicker } from '@/ui/input/components/IconPicker';
 import { Select } from '@/ui/input/components/Select';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { RelationType } from '~/generated-metadata/graphql';
+
+const StyledContainer = styled.div`
+  gap: ${themeCssVariables.spacing[2]};
+  padding-bottom: ${themeCssVariables.spacing[4]};
+  padding-left: ${themeCssVariables.spacing[4]};
+  padding-right: ${themeCssVariables.spacing[4]};
+  padding-top: ${themeCssVariables.spacing[1]};
+`;
 
 const StyledSelectsContainer = styled.div<{ isMobile: boolean }>`
   display: grid;
@@ -40,14 +47,6 @@ const StyledInputsContainer = styled.div`
   gap: ${themeCssVariables.spacing[2]};
   width: 100%;
 `;
-
-const RELATION_TYPE_OPTIONS = Object.entries(RELATION_TYPES).map(
-  ([value, { label, Icon }]) => ({
-    label,
-    value: value as RelationType,
-    Icon,
-  }),
-);
 
 export const settingsDataModelFieldMorphRelationFormSchema = z.object({
   morphRelationObjectMetadataIds: z.array(z.uuid()).min(1),
@@ -121,6 +120,14 @@ export const SettingsDataModelFieldRelationForm = ({
     );
   const isMobile = useIsMobile();
 
+  const relationTypeOptions = Object.entries(RELATION_TYPES).map(
+    ([value, { label, Icon }]) => ({
+      label: t(label),
+      value: value as RelationType,
+      Icon,
+    }),
+  );
+
   return (
     <StyledContainer>
       <StyledSelectsContainer isMobile={isMobile}>
@@ -135,7 +142,7 @@ export const SettingsDataModelFieldRelationForm = ({
               fullWidth
               disabled={disabled || disableRelationEdition}
               value={value}
-              options={RELATION_TYPE_OPTIONS}
+              options={relationTypeOptions}
               onChange={onChange}
             />
           )}
@@ -171,11 +178,11 @@ export const SettingsDataModelFieldRelationForm = ({
           defaultValue={defaultIconOnDestination}
           render={({ field: { onChange, value } }) => (
             <IconPicker
-              disabled={disableFieldEdition}
+              disabled={disabled || disableFieldEdition}
               dropdownId="field-destination-icon-picker"
               selectedIconKey={value ?? undefined}
               onChange={({ iconKey }) => onChange(iconKey)}
-              variant="primary"
+              variant="outline"
             />
           )}
         />
@@ -186,7 +193,7 @@ export const SettingsDataModelFieldRelationForm = ({
           render={({ field: { onChange, value } }) => (
             <SettingsTextInput
               instanceId="relation-field-label"
-              disabled={disableFieldEdition}
+              disabled={disabled || disableFieldEdition}
               placeholder={t`Field name`}
               value={value}
               onChange={onChange}

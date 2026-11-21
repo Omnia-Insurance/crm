@@ -1,42 +1,33 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
-import { IsNull, Not, Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
 
-import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
+import { WorkspaceDerivedCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-derived-cache-provider.service';
 
-import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
-import { WorkspaceCache } from 'src/engine/workspace-cache/decorators/workspace-cache.decorator';
+import { WorkspaceDerivedCache } from 'src/engine/workspace-cache/decorators/workspace-derived-cache.decorator';
+import { type WorkspaceCacheDataMap } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
 
 @Injectable()
-@WorkspaceCache('apiKeyRoleMap')
-export class WorkspaceApiKeyRoleMapCacheService extends WorkspaceCacheProvider<
-  Record<string, string>
+@WorkspaceDerivedCache('apiKeyRoleMap')
+export class WorkspaceApiKeyRoleMapCacheService extends WorkspaceDerivedCacheProvider<
+  'apiKeyRoleMap',
+  'flatRoleTargetMaps'
 > {
-  constructor(
-    @InjectRepository(RoleTargetEntity)
-    private readonly roleTargetRepository: Repository<RoleTargetEntity>,
-  ) {
-    super();
-  }
+  readonly sourceKeyName = 'flatRoleTargetMaps';
 
-  async computeForCache(workspaceId: string): Promise<Record<string, string>> {
-    const roleTargetsMap = await this.roleTargetRepository.find({
-      where: {
-        workspaceId,
-        apiKeyId: Not(IsNull()),
-      },
-    });
+  protected computeFromSource(
+    flatRoleTargetMaps: WorkspaceCacheDataMap['flatRoleTargetMaps'],
+  ): Record<string, string> {
+    const apiKeyRoleMap: Record<string, string> = {};
 
-    return roleTargetsMap.reduce(
-      (acc, roleTarget) => {
-        if (roleTarget.apiKeyId) {
-          acc[roleTarget.apiKeyId] = roleTarget.roleId;
-        }
+    for (const flatRoleTarget of Object.values(
+      flatRoleTargetMaps.byUniversalIdentifier,
+    )) {
+      if (isDefined(flatRoleTarget?.apiKeyId)) {
+        apiKeyRoleMap[flatRoleTarget.apiKeyId] = flatRoleTarget.roleId;
+      }
+    }
 
-        return acc;
-      },
-      {} as Record<string, string>,
-    );
+    return apiKeyRoleMap;
   }
 }

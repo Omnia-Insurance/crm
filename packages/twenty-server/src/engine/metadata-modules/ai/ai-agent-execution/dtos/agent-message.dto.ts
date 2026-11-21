@@ -4,6 +4,7 @@ import { IsDateString } from 'class-validator';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { AgentMessagePartDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/agent-message-part.dto';
+import { AgentMessageReactionSummaryDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/agent-message-reaction-summary.dto';
 
 @ObjectType('AgentMessage')
 export class AgentMessageDTO {
@@ -20,6 +21,20 @@ export class AgentMessageDTO {
   agentId: string | null;
 
   @Field()
+  isBuiltInAssistant: boolean;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  senderApplicationId: string | null;
+
+  // Fronts cached from the release before still query it for up to a day,
+  // and a query naming an unknown field fails as a whole
+  @Field(() => UUIDScalarType, { nullable: true })
+  senderUserWorkspaceId: string | null;
+
+  @Field(() => UUIDScalarType, { nullable: true })
+  senderWorkspaceMemberId: string | null;
+
+  @Field()
   role: 'system' | 'user' | 'assistant';
 
   @Field()
@@ -27,6 +42,9 @@ export class AgentMessageDTO {
 
   @Field(() => [AgentMessagePartDTO])
   parts: AgentMessagePartDTO[];
+
+  @Field(() => [AgentMessageReactionSummaryDTO])
+  reactions: AgentMessageReactionSummaryDTO[];
 
   @IsDateString()
   @Field(() => Date, { nullable: true })

@@ -1,0 +1,124 @@
+import { styled } from '@linaria/react';
+import { type ReactNode } from 'react';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { IconRefresh } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+
+import { AiChatThreadList } from '@/ai/components/AiChatThreadList';
+import { type AgentChatThreadRecord } from '@/ai/types/AgentChatThreadRecord';
+import { SkeletonLoader } from '@/activities/components/SkeletonLoader';
+import { AnimatedPlaceholder } from '@/ui/feedback/empty-state/components/AnimatedPlaceholder/AnimatedPlaceholder';
+import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { useCurrentSidePanelRoutedPath } from '@/side-panel/routing/hooks/useCurrentSidePanelRoutedPath';
+import { getRecordShowParamsFromPath } from '@/side-panel/routing/utils/getRecordShowParamsFromPath';
+import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
+import { EmptyState } from '@/ui/feedback/empty-state/components/EmptyState';
+import { ErrorState } from '@/ui/feedback/empty-state/components/ErrorState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useLingui } from '@lingui/react/macro';
+
+const StyledThreadsContainer = styled.div`
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+`;
+
+type ChatThreadsCardContentProps = {
+  loading: boolean;
+  error?: unknown;
+  onRetry: () => void;
+  onDetachThread: (threadId: string) => void;
+  threads: AgentChatThreadRecord[];
+  hasNextPage?: boolean;
+  pagination?: ReactNode;
+};
+
+export const ChatThreadsCardContent = ({
+  loading,
+  error,
+  onRetry,
+  onDetachThread,
+  threads,
+  hasNextPage = false,
+  pagination,
+}: ChatThreadsCardContentProps) => {
+  const { t } = useLingui();
+  const { openRecordInSidePanel } = useOpenRecordInSidePanel();
+  const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
+  const sidePanelRoutedPath = useCurrentSidePanelRoutedPath();
+  const sidePanelRecord = isDefined(sidePanelRoutedPath)
+    ? getRecordShowParamsFromPath(sidePanelRoutedPath)
+    : null;
+  const sidePanelThreadId =
+    isSidePanelOpened &&
+    sidePanelRecord?.objectNameSingular ===
+      StandardObjectNameSingular.AgentChatThread
+      ? sidePanelRecord.objectRecordId
+      : undefined;
+  const isThreadsEmpty = !isNonEmptyArray(threads);
+
+  if (loading && isThreadsEmpty) {
+    return <SkeletonLoader />;
+  }
+
+  if (isDefined(error) && isThreadsEmpty) {
+    return (
+      <ErrorState.Root>
+        <AnimatedPlaceholder type="errorIndex" />
+        <ErrorState.Content>
+          <ErrorState.Title>
+            {t`We couldn't load the conversations`}
+          </ErrorState.Title>
+          <ErrorState.Description>
+            {t`Something went wrong while fetching this record's conversations.`}
+          </ErrorState.Description>
+        </ErrorState.Content>
+        <Button
+          startIcon={<IconRefresh />}
+          onClick={onRetry}
+          variant="outline"
+        >{t`Try again`}</Button>
+      </ErrorState.Root>
+    );
+  }
+
+  if (isThreadsEmpty && !hasNextPage) {
+    return (
+      <EmptyState.Root>
+        <AnimatedPlaceholder type="emptyInbox" />
+        <EmptyState.Content>
+          <EmptyState.Title>{t`No conversations`}</EmptyState.Title>
+          <EmptyState.Description>
+            {t`Conversations linked to this record will appear here.`}
+          </EmptyState.Description>
+        </EmptyState.Content>
+      </EmptyState.Root>
+    );
+  }
+
+  return (
+    <StyledThreadsContainer>
+      <AiChatThreadList
+        threads={threads}
+        variant="compact"
+        selectedThreadIds={
+          isDefined(sidePanelThreadId) ? [sidePanelThreadId] : []
+        }
+        onThreadClick={({ id }) =>
+          openRecordInSidePanel({
+            recordId: id,
+            objectNameSingular: StandardObjectNameSingular.AgentChatThread,
+          })
+        }
+        onDetachThread={onDetachThread}
+      />
+      {pagination}
+    </StyledThreadsContainer>
+  );
+};

@@ -16,7 +16,9 @@ export class WorkspaceSchemaColumnManagerService {
     tableName: string;
     columnDefinitions: WorkspaceSchemaColumnDefinition[];
   }): Promise<void> {
-    if (columnDefinitions.length === 0) return;
+    if (columnDefinitions.length === 0) {
+      return;
+    }
 
     const addColumnClauses = columnDefinitions.map(
       (column) => `ADD COLUMN ${buildSqlColumnDefinition(column)}`,
@@ -39,7 +41,9 @@ export class WorkspaceSchemaColumnManagerService {
     columnNames: string[];
     cascade?: boolean;
   }): Promise<void> {
-    if (columnNames.length === 0) return;
+    if (columnNames.length === 0) {
+      return;
+    }
 
     const cascadeClause = cascade ? ' CASCADE' : '';
     const dropClauses = columnNames.map(
@@ -103,5 +107,38 @@ export class WorkspaceSchemaColumnManagerService {
     const sql = computeDefaultValueSqlQuery();
 
     await queryRunner.query(sql);
+  }
+
+  async alterColumnNullable({
+    queryRunner,
+    schemaName,
+    tableName,
+    columnName,
+    isNullable,
+    backfillValue,
+  }: {
+    queryRunner: QueryRunner;
+    schemaName: string;
+    tableName: string;
+    columnName: string;
+    isNullable: boolean;
+    backfillValue?: string;
+  }): Promise<void> {
+    const tableRef = `${escapeIdentifier(schemaName)}.${escapeIdentifier(tableName)}`;
+    const columnRef = escapeIdentifier(columnName);
+
+    if (
+      !isNullable &&
+      backfillValue !== undefined &&
+      backfillValue !== 'NULL'
+    ) {
+      await queryRunner.query(
+        `UPDATE ${tableRef} SET ${columnRef} = ${backfillValue} WHERE ${columnRef} IS NULL`,
+      );
+    }
+
+    await queryRunner.query(
+      `ALTER TABLE ${tableRef} ALTER COLUMN ${columnRef} ${isNullable ? 'DROP NOT NULL' : 'SET NOT NULL'}`,
+    );
   }
 }

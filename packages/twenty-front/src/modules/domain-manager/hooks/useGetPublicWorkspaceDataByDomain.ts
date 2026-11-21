@@ -1,6 +1,7 @@
 import { workspacePublicDataState } from '@/auth/states/workspacePublicDataState';
 import { clientConfigApiStatusState } from '@/client-config/states/clientConfigApiStatusState';
 import { isMultiWorkspaceEnabledState } from '@/client-config/states/isMultiWorkspaceEnabledState';
+import { useIsCurrentLocationOnBareFrontDomain } from '@/domain-manager/hooks/useIsCurrentLocationOnBareFrontDomain';
 import { useIsCurrentLocationOnDefaultDomain } from '@/domain-manager/hooks/useIsCurrentLocationOnDefaultDomain';
 import { useOrigin } from '@/domain-manager/hooks/useOrigin';
 import { useRedirectToDefaultDomain } from '@/domain-manager/hooks/useRedirectToDefaultDomain';
@@ -16,6 +17,7 @@ import { GetPublicWorkspaceDataByDomainDocument } from '~/generated-metadata/gra
 
 export const useGetPublicWorkspaceDataByDomain = () => {
   const { isDefaultDomain } = useIsCurrentLocationOnDefaultDomain();
+  const { isBareFrontDomain } = useIsCurrentLocationOnBareFrontDomain();
   const isMultiWorkspaceEnabled = useAtomStateValue(
     isMultiWorkspaceEnabledState,
   );
@@ -40,6 +42,7 @@ export const useGetPublicWorkspaceDataByDomain = () => {
       skip:
         !clientConfigApiStatus.isSaved ||
         (isMultiWorkspaceEnabled && isDefaultDomain) ||
+        isBareFrontDomain ||
         isDefined(workspacePublicData),
     },
   );
@@ -64,7 +67,6 @@ export const useGetPublicWorkspaceDataByDomain = () => {
 
   useEffect(() => {
     if (error) {
-      // Only redirect to default domain if it's a workspace not found error
       if (CombinedGraphQLErrors.is(error)) {
         const isWorkspaceNotFoundError = error.errors?.some(
           (graphQLError) => graphQLError.extensions?.code === 'NOT_FOUND',
@@ -81,8 +83,8 @@ export const useGetPublicWorkspaceDataByDomain = () => {
   }, [error, redirectToDefaultDomain]);
 
   return {
-    loading,
-    data: data?.getPublicWorkspaceDataByDomain,
+    loading: isDefined(workspacePublicData) ? false : loading,
+    data: workspacePublicData,
     error,
   };
 };

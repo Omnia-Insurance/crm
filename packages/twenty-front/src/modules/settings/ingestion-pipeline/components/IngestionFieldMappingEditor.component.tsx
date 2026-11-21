@@ -1,75 +1,66 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useState } from 'react';
-import { IconPlus, IconTrash } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { IconButton } from 'twenty-ui/components/input';
+import { IconArrowRight, IconPlus, IconTrash } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
+import { v4 } from 'uuid';
 
-import { TextInput } from '@/ui/input/components/TextInput';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
+import {
+  type CreateIngestionFieldMappingInput,
+  type IngestionFieldMappingFragmentFragment,
+  type UpdateIngestionFieldMappingInputUpdates,
+} from '~/generated-metadata/graphql';
 
-import { type IngestionFieldMapping } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+type EditableMappingField =
+  | 'sourceFieldPath'
+  | 'targetFieldName'
+  | 'targetCompositeSubField';
+
+type NewMapping = Record<EditableMappingField, string> & {
+  temporaryId: string;
+};
 
 type IngestionFieldMappingEditorProps = {
   pipelineId: string;
-  targetObjectNameSingular: string;
-  mappings: IngestionFieldMapping[];
+  mappings: IngestionFieldMappingFragmentFragment[];
   onSaveMappings: (
-    inputs: Omit<IngestionFieldMapping, 'id'>[],
-  ) => Promise<IngestionFieldMapping[]>;
+    inputs: CreateIngestionFieldMappingInput[],
+  ) => Promise<unknown>;
   onUpdateMapping: (
     id: string,
-    update: Partial<Omit<IngestionFieldMapping, 'id' | 'pipelineId'>>,
-  ) => Promise<IngestionFieldMapping>;
+    update: UpdateIngestionFieldMappingInputUpdates,
+  ) => Promise<unknown>;
   onDeleteMapping: (id: string) => Promise<void>;
 };
 
-type LocalMapping = {
-  tempId: string;
-  sourceFieldPath: string;
-  targetFieldName: string;
-  targetCompositeSubField: string;
-  relationTargetObjectName: string;
-  relationMatchFieldName: string;
-  relationAutoCreate: boolean;
+const MAPPING_FIELD_PLACEHOLDERS: Record<EditableMappingField, string> = {
+  sourceFieldPath: doNotTranslate('data.firstName'),
+  targetFieldName: doNotTranslate('name'),
+  targetCompositeSubField: doNotTranslate('firstName'),
 };
 
-const StyledTable = styled.div`
+const StyledEditor = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${themeCssVariables.spacing[1]};
+  gap: ${themeCssVariables.spacing[2]};
 `;
 
 const StyledRow = styled.div`
   align-items: center;
-  display: flex;
+  display: grid;
   gap: ${themeCssVariables.spacing[2]};
+  grid-template-columns: 1fr ${themeCssVariables.spacing[4]} 1fr 1fr ${themeCssVariables.spacing[8]};
 `;
 
-const StyledFieldCell = styled.div`
-  flex: 1;
-`;
-
-const StyledArrow = styled.div`
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.lg};
-  padding: 0 ${themeCssVariables.spacing[1]};
-`;
-
-const StyledDeleteButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: ${themeCssVariables.spacing[1]};
-  color: ${themeCssVariables.font.color.tertiary};
-  display: flex;
-  align-items: center;
-
-  &:hover {
-    color: ${themeCssVariables.color.red};
-  }
-`;
-
-const StyledHeader = styled(StyledRow)`
+const StyledHeaderRow = styled(StyledRow)`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
   color: ${themeCssVariables.font.color.tertiary};
   font-size: ${themeCssVariables.font.size.sm};
@@ -77,19 +68,55 @@ const StyledHeader = styled(StyledRow)`
   padding-bottom: ${themeCssVariables.spacing[1]};
 `;
 
+const StyledArrow = styled.span`
+  align-items: center;
+  color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
+  justify-content: center;
+`;
+
 const StyledButtonRow = styled.div`
   display: flex;
   gap: ${themeCssVariables.spacing[2]};
-  padding-top: ${themeCssVariables.spacing[2]};
+  padding-top: ${themeCssVariables.spacing[1]};
 `;
 
-let tempIdCounter = 0;
+const getMappingDraftKey = (mappingId: string, field: EditableMappingField) =>
+  `${mappingId}:${field}`;
 
-const createTempId = (): string => {
-  tempIdCounter++;
+const getMappingFieldUpdate = (
+  mapping: IngestionFieldMappingFragmentFragment,
+  field: EditableMappingField,
+  draftValue: string,
+): UpdateIngestionFieldMappingInputUpdates | null => {
+  const trimmedValue = draftValue.trim();
 
-  return `temp-${tempIdCounter}`;
+  if (field === 'targetCompositeSubField') {
+    const targetCompositeSubField = isNonEmptyString(trimmedValue)
+      ? trimmedValue
+      : null;
+
+    return targetCompositeSubField === mapping.targetCompositeSubField
+      ? null
+      : { targetCompositeSubField };
+  }
+
+  // Source and target paths are required, so emptying one reverts it
+  if (!isNonEmptyString(trimmedValue) || trimmedValue === mapping[field]) {
+    return null;
+  }
+
+  return field === 'sourceFieldPath'
+    ? { sourceFieldPath: trimmedValue }
+    : { targetFieldName: trimmedValue };
 };
+
+const createEmptyNewMapping = (): NewMapping => ({
+  temporaryId: v4(),
+  sourceFieldPath: '',
+  targetFieldName: '',
+  targetCompositeSubField: '',
+});
 
 export const IngestionFieldMappingEditor = ({
   pipelineId,
@@ -99,180 +126,239 @@ export const IngestionFieldMappingEditor = ({
   onDeleteMapping,
 }: IngestionFieldMappingEditorProps) => {
   const { t } = useLingui();
-  const [newMappings, setNewMappings] = useState<LocalMapping[]>([]);
+  const theme = useTheme();
+  const { enqueueToast } = useToast();
+  const [newMappings, setNewMappings] = useState<NewMapping[]>([]);
+  const [mappingDrafts, setMappingDrafts] = useState<Record<string, string>>(
+    {},
+  );
   const [isSaving, setIsSaving] = useState(false);
 
-  const addRow = () => {
-    setNewMappings([
-      ...newMappings,
-      {
-        tempId: createTempId(),
-        sourceFieldPath: '',
-        targetFieldName: '',
-        targetCompositeSubField: '',
-        relationTargetObjectName: '',
-        relationMatchFieldName: '',
-        relationAutoCreate: false,
-      },
-    ]);
+  const columnLabels: Record<EditableMappingField, string> = {
+    sourceFieldPath: t`Source field path`,
+    targetFieldName: t`Target CRM field`,
+    targetCompositeSubField: t`Sub-field`,
+  };
+
+  const getDisplayedMappingValue = (
+    mapping: IngestionFieldMappingFragmentFragment,
+    field: EditableMappingField,
+  ) =>
+    mappingDrafts[getMappingDraftKey(mapping.id, field)] ??
+    mapping[field] ??
+    '';
+
+  const setMappingDraft = (draftKey: string, value: string) => {
+    setMappingDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [draftKey]: value,
+    }));
+  };
+
+  const removeMappingDraft = (draftKey: string, committedValue: string) => {
+    setMappingDrafts((currentDrafts) => {
+      if (currentDrafts[draftKey] !== committedValue) {
+        return currentDrafts;
+      }
+
+      const { [draftKey]: _committedDraft, ...remainingDrafts } = currentDrafts;
+
+      return remainingDrafts;
+    });
+  };
+
+  // Saved on blur rather than per keystroke, so typing never races the save
+  const commitMappingDraft = async (
+    mapping: IngestionFieldMappingFragmentFragment,
+    field: EditableMappingField,
+  ) => {
+    const draftKey = getMappingDraftKey(mapping.id, field);
+    const draftValue = mappingDrafts[draftKey];
+
+    if (!isDefined(draftValue)) {
+      return;
+    }
+
+    const update = getMappingFieldUpdate(mapping, field, draftValue);
+
+    try {
+      if (isDefined(update)) {
+        await onUpdateMapping(mapping.id, update);
+      }
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
+    } finally {
+      removeMappingDraft(draftKey, draftValue);
+    }
+  };
+
+  const handleDeleteMapping = async (mappingId: string) => {
+    try {
+      await onDeleteMapping(mappingId);
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
+    }
+  };
+
+  const addNewMapping = () => {
+    setNewMappings([...newMappings, createEmptyNewMapping()]);
   };
 
   const updateNewMapping = (
-    tempId: string,
-    field: keyof LocalMapping,
-    value: string | boolean,
+    temporaryId: string,
+    field: EditableMappingField,
+    value: string,
   ) => {
     setNewMappings(
-      newMappings.map((m) =>
-        m.tempId === tempId ? { ...m, [field]: value } : m,
+      newMappings.map((newMapping) =>
+        newMapping.temporaryId === temporaryId
+          ? { ...newMapping, [field]: value }
+          : newMapping,
       ),
     );
   };
 
-  const removeNewMapping = (tempId: string) => {
-    setNewMappings(newMappings.filter((m) => m.tempId !== tempId));
+  const removeNewMapping = (temporaryId: string) => {
+    setNewMappings(
+      newMappings.filter(
+        (newMapping) => newMapping.temporaryId !== temporaryId,
+      ),
+    );
   };
 
   const saveNewMappings = async () => {
-    const validMappings = newMappings.filter(
-      (m) => m.sourceFieldPath && m.targetFieldName,
+    const completeNewMappings = newMappings.filter(
+      (newMapping) =>
+        isNonEmptyString(newMapping.sourceFieldPath.trim()) &&
+        isNonEmptyString(newMapping.targetFieldName.trim()),
     );
 
-    if (validMappings.length === 0) return;
+    if (completeNewMappings.length === 0) {
+      return;
+    }
 
     setIsSaving(true);
+
     try {
       await onSaveMappings(
-        validMappings.map((m, index) => ({
+        completeNewMappings.map((newMapping, index) => ({
           pipelineId,
-          sourceFieldPath: m.sourceFieldPath,
-          targetFieldName: m.targetFieldName,
-          targetCompositeSubField: m.targetCompositeSubField || null,
+          sourceFieldPath: newMapping.sourceFieldPath.trim(),
+          targetFieldName: newMapping.targetFieldName.trim(),
+          targetCompositeSubField:
+            newMapping.targetCompositeSubField.trim() || null,
           transform: null,
-          relationTargetObjectName: m.relationTargetObjectName || null,
-          relationMatchFieldName: m.relationMatchFieldName || null,
-          relationAutoCreate: m.relationAutoCreate,
+          relationTargetObjectName: null,
+          relationMatchFieldName: null,
+          relationAutoCreate: false,
           position: mappings.length + index,
         })),
       );
       setNewMappings([]);
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
     } finally {
       setIsSaving(false);
     }
   };
 
+  const arrow = (
+    <StyledArrow>
+      <IconArrowRight size={theme.icon.size.md} stroke={theme.icon.stroke.sm} />
+    </StyledArrow>
+  );
+
   return (
-    <StyledTable>
-      <StyledHeader>
-        <StyledFieldCell>{t`Source Field Path`}</StyledFieldCell>
-        <StyledArrow />
-        <StyledFieldCell>{t`Target CRM Field`}</StyledFieldCell>
-        <StyledFieldCell>{t`Sub-field`}</StyledFieldCell>
-        <div style={{ width: 32 }} />
-      </StyledHeader>
+    <StyledEditor>
+      <StyledHeaderRow>
+        <span>{columnLabels.sourceFieldPath}</span>
+        <span />
+        <span>{columnLabels.targetFieldName}</span>
+        <span>{columnLabels.targetCompositeSubField}</span>
+        <span />
+      </StyledHeaderRow>
 
-      {mappings.map((mapping) => (
-        <StyledRow key={mapping.id}>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.sourceFieldPath}
-              onChange={(value: string) =>
-                onUpdateMapping(mapping.id, { sourceFieldPath: value })
-              }
-              placeholder={t`e.g. data.firstName`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledArrow>&rarr;</StyledArrow>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.targetFieldName}
-              onChange={(value: string) =>
-                onUpdateMapping(mapping.id, { targetFieldName: value })
-              }
-              placeholder={t`e.g. name`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.targetCompositeSubField ?? ''}
-              onChange={(value: string) =>
-                onUpdateMapping(mapping.id, {
-                  targetCompositeSubField: value || undefined,
-                })
-              }
-              placeholder={t`e.g. firstName`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledDeleteButton onClick={() => onDeleteMapping(mapping.id)}>
-            <IconTrash size={16} />
-          </StyledDeleteButton>
-        </StyledRow>
-      ))}
+      {mappings.map((mapping) => {
+        const renderMappingInput = (field: EditableMappingField) => (
+          <SettingsTextInput
+            instanceId={`ingestion-field-mapping-${getMappingDraftKey(mapping.id, field)}`}
+            aria-label={columnLabels[field]}
+            placeholder={MAPPING_FIELD_PLACEHOLDERS[field]}
+            value={getDisplayedMappingValue(mapping, field)}
+            onChange={(value) =>
+              setMappingDraft(getMappingDraftKey(mapping.id, field), value)
+            }
+            onBlur={() => commitMappingDraft(mapping, field)}
+            fullWidth
+          />
+        );
 
-      {newMappings.map((mapping) => (
-        <StyledRow key={mapping.tempId}>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.sourceFieldPath}
-              onChange={(value: string) =>
-                updateNewMapping(mapping.tempId, 'sourceFieldPath', value)
-              }
-              placeholder={t`e.g. data.firstName`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledArrow>&rarr;</StyledArrow>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.targetFieldName}
-              onChange={(value: string) =>
-                updateNewMapping(mapping.tempId, 'targetFieldName', value)
-              }
-              placeholder={t`e.g. name`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledFieldCell>
-            <TextInput
-              value={mapping.targetCompositeSubField}
-              onChange={(value: string) =>
-                updateNewMapping(
-                  mapping.tempId,
-                  'targetCompositeSubField',
-                  value,
-                )
-              }
-              placeholder={t`e.g. firstName`}
-              fullWidth
-            />
-          </StyledFieldCell>
-          <StyledDeleteButton onClick={() => removeNewMapping(mapping.tempId)}>
-            <IconTrash size={16} />
-          </StyledDeleteButton>
-        </StyledRow>
-      ))}
+        return (
+          <StyledRow key={mapping.id}>
+            {renderMappingInput('sourceFieldPath')}
+            {arrow}
+            {renderMappingInput('targetFieldName')}
+            {renderMappingInput('targetCompositeSubField')}
+            <IconButton
+              variant="ghost"
+              size="md"
+              aria-label={t`Remove mapping`}
+              onClick={() => handleDeleteMapping(mapping.id)}
+            >
+              <IconTrash />
+            </IconButton>
+          </StyledRow>
+        );
+      })}
+
+      {newMappings.map((newMapping) => {
+        const renderNewMappingInput = (field: EditableMappingField) => (
+          <SettingsTextInput
+            instanceId={`ingestion-new-field-mapping-${newMapping.temporaryId}:${field}`}
+            aria-label={columnLabels[field]}
+            placeholder={MAPPING_FIELD_PLACEHOLDERS[field]}
+            value={newMapping[field]}
+            onChange={(value) =>
+              updateNewMapping(newMapping.temporaryId, field, value)
+            }
+            fullWidth
+          />
+        );
+
+        return (
+          <StyledRow key={newMapping.temporaryId}>
+            {renderNewMappingInput('sourceFieldPath')}
+            {arrow}
+            {renderNewMappingInput('targetFieldName')}
+            {renderNewMappingInput('targetCompositeSubField')}
+            <IconButton
+              variant="ghost"
+              size="md"
+              aria-label={t`Remove mapping`}
+              onClick={() => removeNewMapping(newMapping.temporaryId)}
+            >
+              <IconTrash />
+            </IconButton>
+          </StyledRow>
+        );
+      })}
 
       <StyledButtonRow>
         <Button
-          Icon={IconPlus}
-          title={t`Add Mapping`}
-          variant="secondary"
-          size="small"
-          onClick={addRow}
-        />
+          startIcon={<IconPlus />}
+          size="sm"
+          variant="outline"
+          onClick={addNewMapping}
+        >{t`Add mapping`}</Button>
         {newMappings.length > 0 && (
           <Button
-            title={isSaving ? t`Saving...` : t`Save New Mappings`}
-            variant="primary"
-            size="small"
+            size="sm"
+            variant="outline"
+            loading={isSaving}
             onClick={saveNewMappings}
-            disabled={isSaving}
-          />
+          >{t`Save new mappings`}</Button>
         )}
       </StyledButtonRow>
-    </StyledTable>
+    </StyledEditor>
   );
 };

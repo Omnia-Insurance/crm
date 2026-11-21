@@ -1,164 +1,45 @@
-import { randomUUID } from 'crypto';
-
-import { isDefined } from 'class-validator';
 import { RELATION_NESTED_QUERY_KEYWORDS } from 'twenty-shared/constants';
-import {
-  type EntityTarget,
-  type ObjectLiteral,
-  type SelectQueryBuilder,
-} from 'typeorm';
+import { FieldMetadataType, type ObjectRecord } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { type EntityTarget, type ObjectLiteral } from 'typeorm';
 import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import { v4 } from 'uuid';
 
 import { type WorkspaceInternalContext } from 'src/engine/twenty-orm/interfaces/workspace-internal-context.interface';
 
-import {
-  type ConnectObject,
-  type QueryDeepPartialEntityWithNestedRelationFields,
-} from 'src/engine/twenty-orm/entity-manager/types/query-deep-partial-entity-with-nested-relation-fields.type';
+import { RelationType } from 'src/engine/metadata-modules/field-metadata/interfaces/relation-type.interface';
+import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
+import { isFieldMetadataEntityOfType } from 'src/engine/utils/is-field-metadata-of-type.util';
+
+import { type QueryDeepPartialEntityWithNestedRelationFields } from 'src/engine/twenty-orm/entity-manager/types/query-deep-partial-entity-with-nested-relation-fields.type';
 import { type RelationConnectQueryConfig } from 'src/engine/twenty-orm/entity-manager/types/relation-connect-query-config.type';
 import {
   type RelationConnectQueryFieldsByEntityIndex,
+  type RelationCreateQueryFieldsByEntityIndex,
   type RelationDisconnectQueryFieldsByEntityIndex,
 } from 'src/engine/twenty-orm/entity-manager/types/relation-nested-query-fields-by-entity-index.type';
 import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
+  TwentyOrmException,
+  TwentyOrmExceptionCode,
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { formatConnectRecordNotFoundErrorMessage } from 'src/engine/twenty-orm/field-operations/relation-nested-queries/utils/formatConnectRecordNotFoundErrorMessage.util';
-import { type WorkspaceSelectQueryBuilder } from 'src/engine/twenty-orm/repository/workspace-select-query-builder';
 import { computeRelationConnectQueryConfigs } from 'src/engine/twenty-orm/utils/compute-relation-connect-query-configs.util';
 import { createSqlWhereTupleInClause } from 'src/engine/twenty-orm/utils/create-sql-where-tuple-in-clause.utils';
 import { extractNestedRelationFieldsByEntityIndex } from 'src/engine/twenty-orm/utils/extract-nested-relation-fields-by-entity-index.util';
 import { getAssociatedRelationFieldName } from 'src/engine/twenty-orm/utils/get-associated-relation-field-name.util';
 import { getObjectMetadataFromEntityTarget } from 'src/engine/twenty-orm/utils/get-object-metadata-from-entity-target.util';
-import { getRecordToConnectFields } from 'src/engine/twenty-orm/utils/get-record-to-connect-fields.util';
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return isDefined(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Safely reads a string-keyed property from an object without casting.
- */
-export function getProperty(obj: Record<string, unknown>, key: string): unknown {
-  return obj[key];
-}
-
-/**
- * Extracts the `createData` from an entity's connect object for the given
- * connect field name, or returns `undefined` if not present.
- */
-function extractCreateData<Entity extends ObjectLiteral>(
-  entity: QueryDeepPartialEntityWithNestedRelationFields<Entity>,
-  connectFieldName: string,
-): Record<string, unknown> | undefined {
-  const fieldValue: unknown = Object.entries(entity).find(
-    ([key]) => key === connectFieldName,
-  )?.[1];
-
-  if (!isRecord(fieldValue)) return undefined;
-
-  const connect = getProperty(fieldValue, RELATION_NESTED_QUERY_KEYWORDS.CONNECT);
-
-  if (!isRecord(connect)) return undefined;
-
-  const where = getProperty(connect, RELATION_NESTED_QUERY_KEYWORDS.CONNECT_WHERE);
-
-  if (!isRecord(where)) return undefined;
-
-  const createData = getProperty(connect, 'createData');
-
-  if (!isRecord(createData)) return undefined;
-
-  return createData;
-}
-
-/**
- * Extracts the `connect.where` from an entity's connect object, which
- * contains the unique constraint fields (e.g., phone) used for matching.
- */
-function extractConnectWhere<Entity extends ObjectLiteral>(
-  entity: QueryDeepPartialEntityWithNestedRelationFields<Entity>,
-  connectFieldName: string,
-): Record<string, unknown> | undefined {
-  const fieldValue: unknown = Object.entries(entity).find(
-    ([key]) => key === connectFieldName,
-  )?.[1];
-
-  if (!isRecord(fieldValue)) return undefined;
-
-  const connect = getProperty(
-    fieldValue,
-    RELATION_NESTED_QUERY_KEYWORDS.CONNECT,
-  );
-
-  if (!isRecord(connect)) return undefined;
-
-  const where = getProperty(
-    connect,
-    RELATION_NESTED_QUERY_KEYWORDS.CONNECT_WHERE,
-  );
-
-  if (!isRecord(where)) return undefined;
-
-  return where;
-}
-
-/**
- * Extracts the `id` field from an entity, or `undefined` if not set.
- */
-function getEntityId<Entity extends ObjectLiteral>(
-  entity: QueryDeepPartialEntityWithNestedRelationFields<Entity>,
-): string | undefined {
-  const id: unknown = Object.entries(entity).find(
-    ([key]) => key === 'id',
-  )?.[1];
-
-  return typeof id === 'string' ? id : undefined;
-}
-
-/**
- * Gets the schema-qualified table name for a target object by looking it up
- * in the connection's entity metadata. Falls back to the bare table name
- * if no metadata is found.
- */
-export function getSchemaQualifiedTable<Entity extends ObjectLiteral>(
-  queryBuilder:
-    | WorkspaceSelectQueryBuilder<Entity>
-    | SelectQueryBuilder<Entity>,
-  targetObjectName: string,
-): string {
-  const entityMeta = queryBuilder.connection.entityMetadatas.find(
-    (meta) => meta.name === targetObjectName || meta.tableName === targetObjectName,
-  );
-
-  if (entityMeta?.schema) {
-    return `"${entityMeta.schema}"."${entityMeta.tableName}"`;
-  }
-
-  return `"${targetObjectName}"`;
-}
-
-export type ImportRecordWarning = {
-  entityIndex: number;
-  recordId?: string;
-  fieldName: string;
-  connectFieldName: string;
-  targetObjectName: string;
-  condition: string;
-  reason: 'CONNECT_NOT_FOUND' | 'CONNECT_AMBIGUOUS' | 'CONNECT_CREATE_FAILED';
-};
+import { getNestedRelationFieldNames } from 'src/engine/twenty-orm/utils/get-nested-relation-field-names.util';
 
 export class RelationNestedQueries {
   private readonly internalContext: WorkspaceInternalContext;
-  private importWarnings: ImportRecordWarning[] = [];
+  private readonly repository: WorkspaceRepository;
 
-  constructor(internalContext: WorkspaceInternalContext) {
-    this.internalContext = internalContext;
-  }
-
-  getImportWarnings(): ImportRecordWarning[] {
-    return this.importWarnings;
+  constructor(repository: WorkspaceRepository) {
+    this.repository = repository;
+    this.internalContext = repository.internalContext;
   }
 
   prepareNestedRelationQueries<Entity extends ObjectLiteral>(
@@ -167,14 +48,29 @@ export class RelationNestedQueries {
       | QueryDeepPartialEntityWithNestedRelationFields<Entity>,
     target: EntityTarget<Entity>,
   ):
-    | [RelationConnectQueryConfig[], RelationDisconnectQueryFieldsByEntityIndex]
+    | [
+        RelationConnectQueryConfig[],
+        RelationDisconnectQueryFieldsByEntityIndex,
+        RelationCreateQueryFieldsByEntityIndex,
+      ]
     | null {
     const entitiesArray = Array.isArray(entities) ? entities : [entities];
+    const objectMetadata = getObjectMetadataFromEntityTarget(
+      target,
+      this.internalContext,
+    );
 
     const {
       relationConnectQueryFieldsByEntityIndex,
+      relationCreateQueryFieldsByEntityIndex,
       relationDisconnectQueryFieldsByEntityIndex,
-    } = extractNestedRelationFieldsByEntityIndex(entitiesArray);
+    } = extractNestedRelationFieldsByEntityIndex(
+      entitiesArray,
+      getNestedRelationFieldNames({
+        flatObjectMetadata: objectMetadata,
+        flatFieldMetadataMaps: this.internalContext.flatFieldMetadataMaps,
+      }),
+    );
 
     const connectConfig = this.prepareRelationConnect(
       entitiesArray,
@@ -183,8 +79,13 @@ export class RelationNestedQueries {
     );
 
     return connectConfig.length > 0 ||
+      Object.keys(relationCreateQueryFieldsByEntityIndex).length > 0 ||
       Object.keys(relationDisconnectQueryFieldsByEntityIndex).length > 0
-      ? [connectConfig, relationDisconnectQueryFieldsByEntityIndex]
+      ? [
+          connectConfig,
+          relationDisconnectQueryFieldsByEntityIndex,
+          relationCreateQueryFieldsByEntityIndex,
+        ]
       : null;
   }
 
@@ -213,9 +114,8 @@ export class RelationNestedQueries {
   async processRelationNestedQueries<Entity extends ObjectLiteral>({
     entities,
     relationNestedConfig,
-    queryBuilder,
-    isUpsert = false,
-    parentObjectName,
+    createRecords,
+    target,
   }: {
     entities:
       | QueryDeepPartialEntityWithNestedRelationFields<Entity>[]
@@ -223,18 +123,20 @@ export class RelationNestedQueries {
     relationNestedConfig: [
       RelationConnectQueryConfig[],
       RelationDisconnectQueryFieldsByEntityIndex,
+      RelationCreateQueryFieldsByEntityIndex,
     ];
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>;
-    isUpsert?: boolean;
-    parentObjectName?: string;
+    createRecords?: (options: {
+      targetObjectMetadata: FlatObjectMetadata;
+      records: Partial<ObjectRecord>[];
+    }) => Promise<ObjectRecord[]>;
+    target: EntityTarget<Entity>;
   }): Promise<QueryDeepPartialEntity<Entity>[]> {
     const entitiesArray = Array.isArray(entities) ? entities : [entities];
 
     const [
       relationConnectQueryConfigs,
       relationDisconnectQueryFieldsByEntityIndex,
+      relationCreateQueryFieldsByEntityIndex,
     ] = relationNestedConfig;
 
     const updatedEntitiesWithDisconnect = this.processRelationDisconnect({
@@ -242,559 +144,199 @@ export class RelationNestedQueries {
       relationDisconnectQueryFieldsByEntityIndex,
     });
 
-    const updatedEntitiesWithConnect = await this.processRelationConnect({
+    const updatedEntitiesWithCreate = await this.processRelationCreate({
       entities: updatedEntitiesWithDisconnect,
+      target,
+      relationCreateQueryFieldsByEntityIndex,
+      createRecords,
+    });
+
+    const updatedEntitiesWithConnect = await this.processRelationConnect({
+      entities: updatedEntitiesWithCreate,
       relationConnectQueryConfigs,
-      queryBuilder,
-      isUpsert,
-      parentObjectName,
     });
 
     return updatedEntitiesWithConnect;
   }
 
+  private async processRelationCreate<Entity extends ObjectLiteral>({
+    entities,
+    target,
+    relationCreateQueryFieldsByEntityIndex,
+    createRecords,
+  }: {
+    entities: QueryDeepPartialEntityWithNestedRelationFields<Entity>[];
+    target: EntityTarget<Entity>;
+    relationCreateQueryFieldsByEntityIndex: RelationCreateQueryFieldsByEntityIndex;
+    createRecords?: (options: {
+      targetObjectMetadata: FlatObjectMetadata;
+      records: Partial<ObjectRecord>[];
+    }) => Promise<ObjectRecord[]>;
+  }): Promise<QueryDeepPartialEntityWithNestedRelationFields<Entity>[]> {
+    if (Object.keys(relationCreateQueryFieldsByEntityIndex).length === 0) {
+      return entities;
+    }
+    if (!isDefined(createRecords)) {
+      throw new TwentyOrmException(
+        'Nested relation create is not supported in this operation',
+        TwentyOrmExceptionCode.INVALID_PARAMETER,
+      );
+    }
+
+    const objectMetadata = getObjectMetadataFromEntityTarget(
+      target,
+      this.internalContext,
+    );
+    const { fieldIdByName } = buildFieldMapsFromFlatObjectMetadata(
+      this.internalContext.flatFieldMetadataMaps,
+      objectMetadata,
+    );
+    const groups = new Map<
+      string,
+      {
+        targetObjectMetadata: FlatObjectMetadata;
+        entries: {
+          entityIndex: number;
+          fieldName: string;
+          record: Partial<ObjectRecord>;
+        }[];
+      }
+    >();
+
+    for (const [entityIndex, fields] of Object.entries(
+      relationCreateQueryFieldsByEntityIndex,
+    )) {
+      for (const [fieldName, createObject] of Object.entries(fields)) {
+        const fieldMetadata = findFlatEntityByIdInFlatEntityMaps({
+          flatEntityId: fieldIdByName[fieldName],
+          flatEntityMaps: this.internalContext.flatFieldMetadataMaps,
+        });
+
+        if (
+          !isDefined(fieldMetadata) ||
+          (!isFieldMetadataEntityOfType(
+            fieldMetadata,
+            FieldMetadataType.RELATION,
+          ) &&
+            !isFieldMetadataEntityOfType(
+              fieldMetadata,
+              FieldMetadataType.MORPH_RELATION,
+            )) ||
+          fieldMetadata.settings?.relationType !== RelationType.MANY_TO_ONE ||
+          !isDefined(fieldMetadata.relationTargetObjectMetadataId)
+        ) {
+          throw new TwentyOrmException(
+            `Create is not allowed for ${fieldName} on ${objectMetadata.nameSingular}`,
+            TwentyOrmExceptionCode.INVALID_PARAMETER,
+          );
+        }
+
+        const joinColumnName = getAssociatedRelationFieldName(fieldName);
+        const entity = entities[Number(entityIndex)];
+        const entityRecord = entity as Record<string, unknown>;
+
+        if (isDefined(entityRecord[joinColumnName])) {
+          throw new TwentyOrmException(
+            `Cannot provide both ${fieldName}.create and ${joinColumnName}`,
+            TwentyOrmExceptionCode.INVALID_PARAMETER,
+          );
+        }
+
+        const targetObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+          flatEntityId: fieldMetadata.relationTargetObjectMetadataId,
+          flatEntityMaps: this.internalContext.flatObjectMetadataMaps,
+        });
+
+        if (!isDefined(targetObjectMetadata)) {
+          throw new TwentyOrmException(
+            `Target object metadata not found for ${fieldName}`,
+            TwentyOrmExceptionCode.MALFORMED_METADATA,
+          );
+        }
+
+        const group = groups.get(targetObjectMetadata.id) ?? {
+          targetObjectMetadata,
+          entries: [],
+        };
+
+        group.entries.push({
+          entityIndex: Number(entityIndex),
+          fieldName,
+          record: createObject[RELATION_NESTED_QUERY_KEYWORDS.CREATE],
+        });
+        groups.set(targetObjectMetadata.id, group);
+      }
+    }
+
+    const updatedEntities = entities.map((entity) => ({ ...entity }));
+
+    for (const { targetObjectMetadata, entries } of groups.values()) {
+      const recordsWithIds = entries.map(({ record }) => ({
+        ...record,
+        id: record.id ?? v4(),
+      }));
+      const createdRecords = await createRecords({
+        targetObjectMetadata,
+        records: recordsWithIds,
+      });
+
+      if (createdRecords.length !== entries.length) {
+        throw new TwentyOrmException(
+          `Expected ${entries.length} created ${targetObjectMetadata.namePlural} records, received ${createdRecords.length}`,
+          TwentyOrmExceptionCode.INVALID_PARAMETER,
+        );
+      }
+
+      const createdRecordIds = new Set(
+        createdRecords.map(({ id }) => id).filter(isDefined),
+      );
+
+      entries.forEach(({ entityIndex, fieldName }, index) => {
+        const createdRecordId = recordsWithIds[index].id;
+
+        if (!createdRecordIds.has(createdRecordId)) {
+          throw new TwentyOrmException(
+            `Created ${targetObjectMetadata.nameSingular} record ${createdRecordId} was not returned`,
+            TwentyOrmExceptionCode.INVALID_PARAMETER,
+          );
+        }
+
+        updatedEntities[entityIndex] = {
+          ...updatedEntities[entityIndex],
+          [getAssociatedRelationFieldName(fieldName)]: createdRecordId,
+          [fieldName]: null,
+        };
+      });
+    }
+
+    return updatedEntities;
+  }
+
   private async processRelationConnect<Entity extends ObjectLiteral>({
     entities,
     relationConnectQueryConfigs,
-    queryBuilder,
-    isUpsert = false,
-    parentObjectName,
   }: {
     entities: QueryDeepPartialEntityWithNestedRelationFields<Entity>[];
     relationConnectQueryConfigs: RelationConnectQueryConfig[];
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>;
-    isUpsert?: boolean;
-    parentObjectName?: string;
   }): Promise<QueryDeepPartialEntity<Entity>[]> {
-    if (relationConnectQueryConfigs.length === 0) return entities;
-
-    this.importWarnings = [];
+    if (relationConnectQueryConfigs.length === 0) {
+      return entities;
+    }
 
     const recordsToConnectWithConfig = await this.executeConnectQueries(
       relationConnectQueryConfigs,
-      queryBuilder,
     );
-
-    // For upserts, create missing related records instead of failing,
-    // then update connected records with createData (email, name, address)
-    if (isUpsert) {
-      await this.createMissingConnectRecords(
-        recordsToConnectWithConfig,
-        queryBuilder,
-        entities,
-      );
-
-      await this.applyCreateDataUpdates(
-        recordsToConnectWithConfig,
-        queryBuilder,
-        entities,
-      );
-    }
 
     const updatedEntities = this.updateEntitiesWithRecordToConnectId<Entity>(
       entities,
       recordsToConnectWithConfig,
-      isUpsert,
     );
 
     return updatedEntities;
   }
 
-  /**
-   * For upsert operations, resolves missing connect records by:
-   * 1. Trying a fallback lookup using createData fields (email, name, etc.)
-   *    when the primary unique-constraint lookup found no match
-   * 2. Creating new records in the target table with full data as a last resort
-   */
-  private async createMissingConnectRecords<Entity extends ObjectLiteral>(
-    recordsToConnectWithConfig: [
-      RelationConnectQueryConfig,
-      Record<string, unknown>[],
-    ][],
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-    entities: QueryDeepPartialEntityWithNestedRelationFields<Entity>[],
-  ): Promise<void> {
-    for (const [
-      connectQueryConfig,
-      recordsToConnect,
-    ] of recordsToConnectWithConfig) {
-      const seenConditionKeys = new Set<string>();
-      const missingEntries: {
-        condition: [string, unknown][];
-        entityIndex: number;
-      }[] = [];
-
-      for (const [entityIndexStr, condition] of Object.entries(
-        connectQueryConfig.recordToConnectConditionByEntityIndex,
-      )) {
-        const matches = recordsToConnect.filter((record) =>
-          condition.every(([field, value]) => record[field] === value),
-        );
-
-        if (matches.length > 0) continue;
-
-        const conditionKey = JSON.stringify(condition);
-
-        if (seenConditionKeys.has(conditionKey)) continue;
-        seenConditionKeys.add(conditionKey);
-
-        missingEntries.push({
-          condition,
-          entityIndex: Number(entityIndexStr),
-        });
-      }
-
-      if (missingEntries.length === 0) continue;
-
-      // Step 1: Try fallback lookups — first using fullRecordToConnectCondition
-      // (for ID-priority scenarios), then using createData fields from the entity
-      for (const entry of missingEntries) {
-        // 1a: Try full condition fallback (for ID-priority filtered scenarios)
-        const fullConditions =
-          connectQueryConfig.fullRecordToConnectConditionByEntityIndex ?? {};
-        const fullCondition = fullConditions[entry.entityIndex];
-
-        if (isDefined(fullCondition) && fullCondition.length > 0) {
-          const resolved = await this.tryFallbackLookup(
-            fullCondition,
-            connectQueryConfig,
-            recordsToConnect,
-            queryBuilder,
-            entry.entityIndex,
-          );
-
-          if (resolved) continue;
-        }
-
-        // 1b: Try createData fallback — search by email, then verify name
-        // similarity (≥95%) to avoid matching spouses who share an email.
-        const entity = entities[entry.entityIndex];
-        const createData = extractCreateData(
-          entity,
-          connectQueryConfig.connectFieldName,
-        );
-
-        if (createData !== undefined) {
-          const resolved = await this.tryCreateDataFallback(
-            createData,
-            connectQueryConfig,
-            recordsToConnect,
-            queryBuilder,
-            entry.entityIndex,
-          );
-
-          if (resolved) continue;
-        }
-      }
-
-      // Step 2: Create missing records that couldn't be resolved via fallback
-      for (const entry of missingEntries) {
-        const currentCondition =
-          connectQueryConfig.recordToConnectConditionByEntityIndex[
-            entry.entityIndex
-          ];
-        const alreadyResolved = recordsToConnect.some((record) =>
-          currentCondition.every(([field, value]) => record[field] === value),
-        );
-
-        if (alreadyResolved) continue;
-
-        // Build the new record using condition data + createData for richer records
-        const entity = entities[entry.entityIndex];
-        const createData = extractCreateData(
-          entity,
-          connectQueryConfig.connectFieldName,
-        );
-
-        const now = new Date().toISOString();
-        const newRecord: Record<string, unknown> = {
-          id: randomUUID(),
-          createdAt: now,
-          updatedAt: now,
-        };
-
-        // Add the connect condition fields (e.g., phone number)
-        for (const [field, value] of entry.condition) {
-          newRecord[field] = value;
-        }
-
-        // Add createData fields (name, email, address, etc.)
-        if (createData !== undefined) {
-          for (const [field, value] of this.flattenCreateData(createData)) {
-            if (!(field in newRecord)) {
-              newRecord[field] = value;
-            }
-          }
-        }
-
-        try {
-          const qualifiedTable = getSchemaQualifiedTable(
-            queryBuilder,
-            connectQueryConfig.targetObjectName,
-          );
-          const columns = Object.keys(newRecord);
-          const colList = columns.map((c) => `"${c}"`).join(', ');
-          const paramList = columns.map((_, i) => `$${i + 1}`).join(', ');
-          const values = columns.map((c) => newRecord[c]);
-
-          await queryBuilder.connection.query(
-            `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${paramList})`,
-            values,
-          );
-
-          recordsToConnect.push(newRecord);
-        } catch (error) {
-          console.warn(
-            `[createMissingConnectRecords] Failed to create ${connectQueryConfig.targetObjectName}:`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * Try a fallback lookup against the target table using the given conditions.
-   * If exactly one record matches, add it to results and rewrite the entity's
-   * condition to use the matched record's ID.
-   */
-  private async tryFallbackLookup<Entity extends ObjectLiteral>(
-    conditions: [string, unknown][],
-    connectQueryConfig: RelationConnectQueryConfig,
-    recordsToConnect: Record<string, unknown>[],
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-    entityIndex: number,
-  ): Promise<boolean> {
-    try {
-      queryBuilder.expressionMap.aliases = [];
-      queryBuilder.expressionMap.mainAlias = undefined;
-
-      let fallbackQuery = queryBuilder
-        .select('*')
-        .from(
-          connectQueryConfig.targetObjectName,
-          connectQueryConfig.targetObjectName,
-        );
-
-      for (const [field, value] of conditions) {
-        fallbackQuery = fallbackQuery.andWhere(
-          `"${connectQueryConfig.targetObjectName}"."${field}" = :fb_${field}`,
-          { [`fb_${field}`]: value },
-        );
-      }
-
-      fallbackQuery = fallbackQuery.andWhere(
-        `"${connectQueryConfig.targetObjectName}"."deletedAt" IS NULL`,
-      );
-
-      const fallbackResults = await fallbackQuery.getRawMany();
-
-      if (fallbackResults.length === 1) {
-        const matched = fallbackResults[0];
-        const matchedId = matched?.id;
-
-        if (typeof matchedId !== 'string') return false;
-
-        recordsToConnect.push(matched);
-
-        connectQueryConfig.recordToConnectConditionByEntityIndex[entityIndex] =
-          [['id', matchedId]];
-
-        return true;
-      }
-    } catch {
-      // Fallback query failed
-    }
-
-    return false;
-  }
-
-  /**
-   * Fallback lookup using createData. Tries two strategies:
-   * 1. Email lookup + ≥95% Jaro-Winkler name similarity (avoids spouse matches)
-   * 2. Exact name match — for records missing contact info entirely
-   *    (only accepts if exactly 1 record matches the full name)
-   */
-  private async tryCreateDataFallback<Entity extends ObjectLiteral>(
-    createData: Record<string, unknown>,
-    connectQueryConfig: RelationConnectQueryConfig,
-    recordsToConnect: Record<string, unknown>[],
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-    entityIndex: number,
-  ): Promise<boolean> {
-    const flat = this.flattenCreateData(createData);
-    const emailValue = flat.find(([k]) => k === 'emailsPrimaryEmail')?.[1];
-    const expectedFirst = String(
-      flat.find(([k]) => k === 'nameFirstName')?.[1] ?? '',
-    ).toLowerCase();
-    const expectedLast = String(
-      flat.find(([k]) => k === 'nameLastName')?.[1] ?? '',
-    ).toLowerCase();
-    const expectedFull = `${expectedFirst} ${expectedLast}`.trim();
-    const table = connectQueryConfig.targetObjectName;
-
-    // Strategy 1: Email + name similarity
-    if (emailValue) {
-      const matched = await this.lookupByEmailWithNameCheck(
-        table,
-        emailValue,
-        expectedFull,
-        queryBuilder,
-      );
-
-      if (matched) {
-        return this.acceptFallbackMatch(
-          matched,
-          connectQueryConfig,
-          recordsToConnect,
-          entityIndex,
-        );
-      }
-    }
-
-    // Strategy 2: Exact name match — for records with missing contact info.
-    // Only accept if exactly 1 non-deleted record matches the full name.
-    if (expectedFirst.length > 0 && expectedLast.length > 0) {
-      const matched = await this.lookupByExactName(
-        table,
-        expectedFirst,
-        expectedLast,
-        queryBuilder,
-      );
-
-      if (matched) {
-        return this.acceptFallbackMatch(
-          matched,
-          connectQueryConfig,
-          recordsToConnect,
-          entityIndex,
-        );
-      }
-    }
-
-    return false;
-  }
-
-  private async lookupByEmailWithNameCheck<Entity extends ObjectLiteral>(
-    table: string,
-    email: string,
-    expectedFull: string,
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-  ): Promise<Record<string, unknown> | null> {
-    try {
-      queryBuilder.expressionMap.aliases = [];
-      queryBuilder.expressionMap.mainAlias = undefined;
-
-      const results = await queryBuilder
-        .select('*')
-        .from(table, table)
-        .where(`"${table}"."emailsPrimaryEmail" = :cd_email`, { cd_email: email })
-        .andWhere(`"${table}"."deletedAt" IS NULL`)
-        .getRawMany();
-
-      if (results.length === 0) return null;
-
-      if (expectedFull.length === 0) {
-        return results.length === 1 ? results[0] : null;
-      }
-
-      let bestMatch: Record<string, unknown> | null = null;
-      let bestScore = 0;
-
-      for (const record of results) {
-        const recordFirst = String(record.nameFirstName ?? '').toLowerCase();
-        const recordLast = String(record.nameLastName ?? '').toLowerCase();
-        const recordFull = `${recordFirst} ${recordLast}`.trim();
-        const similarity = stringSimilarity(expectedFull, recordFull);
-
-        if (similarity >= 0.95 && similarity > bestScore) {
-          bestScore = similarity;
-          bestMatch = record;
-        }
-      }
-
-      return bestMatch;
-    } catch {
-      return null;
-    }
-  }
-
-  private async lookupByExactName<Entity extends ObjectLiteral>(
-    table: string,
-    firstName: string,
-    lastName: string,
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-  ): Promise<Record<string, unknown> | null> {
-    try {
-      queryBuilder.expressionMap.aliases = [];
-      queryBuilder.expressionMap.mainAlias = undefined;
-
-      const results = await queryBuilder
-        .select('*')
-        .from(table, table)
-        .where(`LOWER("${table}"."nameFirstName") = :fn`, { fn: firstName })
-        .andWhere(`LOWER("${table}"."nameLastName") = :ln`, { ln: lastName })
-        .andWhere(`"${table}"."deletedAt" IS NULL`)
-        .getRawMany();
-
-      // Only accept if exactly 1 record — multiple means ambiguous
-      return results.length === 1 ? results[0] : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private acceptFallbackMatch(
-    matched: Record<string, unknown>,
-    connectQueryConfig: RelationConnectQueryConfig,
-    recordsToConnect: Record<string, unknown>[],
-    entityIndex: number,
-  ): boolean {
-    const matchedId = matched.id;
-
-    if (typeof matchedId !== 'string') return false;
-
-    recordsToConnect.push(matched);
-
-    connectQueryConfig.recordToConnectConditionByEntityIndex[entityIndex] =
-      [['id', matchedId]];
-
-    return true;
-  }
-
-  /**
-   * After connecting entities to their related records, update those records
-   * with ALL available data from the CSV row:
-   * - createData fields (email, name, address — relation update fields)
-   * - connect.where fields (phone — the unique constraint used for matching)
-   *
-   * This ensures that re-importing a CSV actually updates lead data.
-   */
-  private async applyCreateDataUpdates<Entity extends ObjectLiteral>(
-    recordsToConnectWithConfig: [
-      RelationConnectQueryConfig,
-      Record<string, unknown>[],
-    ][],
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
-    entities: QueryDeepPartialEntityWithNestedRelationFields<Entity>[],
-  ): Promise<void> {
-    for (const [
-      connectQueryConfig,
-      recordsToConnect,
-    ] of recordsToConnectWithConfig) {
-      for (const [entityIndexStr, condition] of Object.entries(
-        connectQueryConfig.recordToConnectConditionByEntityIndex,
-      )) {
-        const entityIndex = Number(entityIndexStr);
-        const entity = entities[entityIndex];
-        const fieldName = connectQueryConfig.connectFieldName;
-
-        const createData = extractCreateData(entity, fieldName);
-        const connectWhere = extractConnectWhere(entity, fieldName);
-
-        // Nothing to update if neither createData nor connectWhere exist
-        if (createData === undefined && connectWhere === undefined) continue;
-
-        // Find the matched record
-        const matchedRecord = recordsToConnect.find((record) =>
-          condition.every(([field, value]) => record[field] === value),
-        );
-
-        const matchedId = matchedRecord?.id;
-
-        if (typeof matchedId !== 'string') continue;
-
-        // Merge connect.where fields (phone) + createData fields (email, name, address)
-        const allFields: [string, string][] = [];
-
-        if (connectWhere !== undefined) {
-          allFields.push(...this.flattenCreateData(connectWhere));
-        }
-
-        if (createData !== undefined) {
-          for (const pair of this.flattenCreateData(createData)) {
-            // Don't duplicate fields already from connectWhere
-            if (!allFields.some(([k]) => k === pair[0])) {
-              allFields.push(pair);
-            }
-          }
-        }
-
-        if (allFields.length === 0) continue;
-
-        const qualifiedTable = getSchemaQualifiedTable(
-          queryBuilder,
-          connectQueryConfig.targetObjectName,
-        );
-
-        try {
-          const setCols = allFields
-            .map(([col], i) => `"${col}" = $${i + 1}`)
-            .join(', ');
-          const values = allFields.map(([, val]) => val);
-          const idParamIndex = values.length + 1;
-
-          await queryBuilder.connection.query(
-            `UPDATE ${qualifiedTable} SET ${setCols}, "updatedAt" = NOW() WHERE "id" = $${idParamIndex}::uuid`,
-            [...values, matchedId],
-          );
-        } catch (error) {
-          console.warn(
-            `[applyCreateDataUpdates] Failed to update ${connectQueryConfig.targetObjectName} id=${matchedId}:`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-    }
-  }
-
-  /**
-   * Flatten createData (which uses composite object notation like
-   * `{ name: { firstName: "X" } }`) into DB column pairs like
-   * `[["nameFirstName", "X"]]`.
-   */
-  private flattenCreateData(
-    createData: Record<string, unknown>,
-  ): [string, string][] {
-    const result: [string, string][] = [];
-
-    for (const [fieldName, value] of Object.entries(createData)) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        // Composite field — flatten subfields
-        for (const [subKey, subValue] of Object.entries(value)) {
-          if (isDefined(subValue) && subValue !== '') {
-            const columnName = `${fieldName}${subKey.charAt(0).toUpperCase()}${subKey.slice(1)}`;
-
-            result.push([columnName, String(subValue)]);
-          }
-        }
-      } else if (isDefined(value) && value !== '') {
-        result.push([fieldName, String(value)]);
-      }
-    }
-
-    return result;
-  }
-
-  private async executeConnectQueries<Entity extends ObjectLiteral>(
+  private async executeConnectQueries(
     relationConnectQueryConfigs: RelationConnectQueryConfig[],
-    queryBuilder:
-      | WorkspaceSelectQueryBuilder<Entity>
-      | SelectQueryBuilder<Entity>,
   ): Promise<[RelationConnectQueryConfig, Record<string, unknown>[]][]> {
     const allRecordsToConnectWithConfig: [
       RelationConnectQueryConfig,
@@ -807,17 +349,11 @@ export class RelationNestedQueries {
         connectQueryConfig.targetObjectName,
       );
 
-      queryBuilder.expressionMap.aliases = [];
-      queryBuilder.expressionMap.mainAlias = undefined;
-
-      const recordsToConnect = await queryBuilder
-        .select(getRecordToConnectFields(connectQueryConfig))
-        .where(clause, parameters)
-        .from(
-          connectQueryConfig.targetObjectName,
-          connectQueryConfig.targetObjectName,
-        )
-        .getRawMany();
+      const recordsToConnect = await this.fetchRecordsToConnect({
+        connectQueryConfig,
+        clause,
+        parameters,
+      });
 
       allRecordsToConnectWithConfig.push([
         connectQueryConfig,
@@ -828,13 +364,46 @@ export class RelationNestedQueries {
     return allRecordsToConnectWithConfig;
   }
 
+  private async fetchRecordsToConnect({
+    connectQueryConfig,
+    clause,
+    parameters,
+  }: {
+    connectQueryConfig: RelationConnectQueryConfig;
+    clause: string;
+    parameters: Record<string, unknown>;
+  }): Promise<Record<string, unknown>[]> {
+    const targetObjectName = connectQueryConfig.targetObjectName;
+    const targetObjectMetadataId =
+      this.internalContext.objectIdByNameSingular[targetObjectName];
+
+    if (!isDefined(targetObjectMetadataId)) {
+      throw new TwentyOrmException(
+        `Target object metadata not found for ${targetObjectName}`,
+        TwentyOrmExceptionCode.MALFORMED_METADATA,
+      );
+    }
+
+    const targetQueryBuilder = this.repository
+      .getRepositoryForObjectMetadataId(targetObjectMetadataId)
+      .createQueryBuilder(targetObjectName);
+
+    targetQueryBuilder.select([]);
+    targetQueryBuilder.addSelect(`"${targetObjectName}"."id"`, 'id');
+
+    for (const [field] of connectQueryConfig.recordToConnectConditions[0]) {
+      targetQueryBuilder.addSelect(`"${targetObjectName}"."${field}"`, field);
+    }
+
+    return targetQueryBuilder.where(clause, parameters).getRawMany();
+  }
+
   private updateEntitiesWithRecordToConnectId<Entity extends ObjectLiteral>(
     entities: QueryDeepPartialEntityWithNestedRelationFields<Entity>[],
     recordsToConnectWithConfig: [
       RelationConnectQueryConfig,
       Record<string, unknown>[],
     ][],
-    isUpsert = false,
   ): QueryDeepPartialEntity<Entity>[] {
     return entities.map((entity, index) => {
       for (const [
@@ -853,35 +422,6 @@ export class RelationNestedQueries {
           );
 
           if (recordToConnect.length !== 1) {
-            // For upserts with an existing record ID, skip the failed connect
-            // and preserve the existing relation in the database rather than
-            // failing the entire import batch.
-            const entityId = getEntityId(entity);
-
-            if (isUpsert && isDefined(entityId)) {
-              this.importWarnings.push({
-                entityIndex: index,
-                recordId: entityId,
-                fieldName: connectQueryConfig.relationFieldName,
-                connectFieldName: connectQueryConfig.connectFieldName,
-                targetObjectName: connectQueryConfig.targetObjectName,
-                condition:
-                  connectQueryConfig.recordToConnectConditionByEntityIndex[index]
-                    .map(([field, value]) => `${field} = ${value}`)
-                    .join(' AND '),
-                reason:
-                  recordToConnect.length === 0
-                    ? 'CONNECT_NOT_FOUND'
-                    : 'CONNECT_AMBIGUOUS',
-              });
-
-              entity = {
-                ...entity,
-                [connectQueryConfig.connectFieldName]: null,
-              };
-              continue;
-            }
-
             const { errorMessage, userFriendlyMessage } =
               formatConnectRecordNotFoundErrorMessage(
                 connectQueryConfig.connectFieldName,
@@ -889,9 +429,9 @@ export class RelationNestedQueries {
                 connectQueryConfig.recordToConnectConditionByEntityIndex[index],
               );
 
-            throw new TwentyORMException(
+            throw new TwentyOrmException(
               errorMessage,
-              TwentyORMExceptionCode.CONNECT_RECORD_NOT_FOUND,
+              TwentyOrmExceptionCode.CONNECT_RECORD_NOT_FOUND,
               {
                 userFriendlyMessage,
               },
@@ -921,7 +461,9 @@ export class RelationNestedQueries {
       const nestedRelationDisconnectFields =
         relationDisconnectQueryFieldsByEntityIndex[index];
 
-      if (!isDefined(nestedRelationDisconnectFields)) return entity;
+      if (!isDefined(nestedRelationDisconnectFields)) {
+        return entity;
+      }
 
       for (const [disconnectFieldName, disconnectObject] of Object.entries(
         nestedRelationDisconnectFields ?? {},
@@ -939,70 +481,4 @@ export class RelationNestedQueries {
       return entity;
     });
   }
-}
-
-/**
- * Jaro-Winkler similarity (0–1). Gives extra weight to common prefixes,
- * making it well-suited for person name matching.
- */
-export function stringSimilarity(a: string, b: string): number {
-  if (a === b) return 1;
-  if (a.length === 0 || b.length === 0) return 0;
-
-  const jaro = jaroSimilarity(a, b);
-
-  // Winkler prefix bonus (up to 4 chars, scaling factor 0.1)
-  let prefixLen = 0;
-  const maxPrefix = Math.min(4, a.length, b.length);
-
-  while (prefixLen < maxPrefix && a[prefixLen] === b[prefixLen]) {
-    prefixLen++;
-  }
-
-  return jaro + prefixLen * 0.1 * (1 - jaro);
-}
-
-export function jaroSimilarity(a: string, b: string): number {
-  const aLen = a.length;
-  const bLen = b.length;
-  const matchWindow = Math.max(0, Math.floor(Math.max(aLen, bLen) / 2) - 1);
-
-  const aMatched = new Array<boolean>(aLen).fill(false);
-  const bMatched = new Array<boolean>(bLen).fill(false);
-
-  let matches = 0;
-  let transpositions = 0;
-
-  // Find matches
-  for (let i = 0; i < aLen; i++) {
-    const lo = Math.max(0, i - matchWindow);
-    const hi = Math.min(bLen - 1, i + matchWindow);
-
-    for (let j = lo; j <= hi; j++) {
-      if (bMatched[j] || a[i] !== b[j]) continue;
-      aMatched[i] = true;
-      bMatched[j] = true;
-      matches++;
-      break;
-    }
-  }
-
-  if (matches === 0) return 0;
-
-  // Count transpositions
-  let k = 0;
-
-  for (let i = 0; i < aLen; i++) {
-    if (!aMatched[i]) continue;
-
-    while (!bMatched[k]) k++;
-
-    if (a[i] !== b[k]) transpositions++;
-    k++;
-  }
-
-  return (
-    (matches / aLen + matches / bLen + (matches - transpositions / 2) / matches) /
-    3
-  );
 }

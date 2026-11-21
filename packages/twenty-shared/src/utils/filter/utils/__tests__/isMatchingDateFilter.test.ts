@@ -1,3 +1,4 @@
+import { type DateFilter } from '@/types';
 import { isMatchingDateFilter } from '@/utils/filter/utils/isMatchingDateFilter';
 
 describe('isMatchingDateFilter', () => {
@@ -82,6 +83,45 @@ describe('isMatchingDateFilter', () => {
     });
   });
 
+  describe('null or undefined value', () => {
+    it.each([null, undefined])(
+      'does not throw and returns false for comparison operators (value: %s)',
+      (value) => {
+        const comparisonFilters: DateFilter[] = [
+          { eq: testDate },
+          { neq: testDate },
+          { gt: testDate },
+          { gte: testDate },
+          { lt: testDate },
+          { lte: testDate },
+          { in: [testDate] },
+        ];
+
+        for (const dateFilter of comparisonFilters) {
+          expect(isMatchingDateFilter({ dateFilter, value })).toBe(false);
+        }
+      },
+    );
+
+    it.each([null, undefined])(
+      'matches "is: NULL" for an empty value (value: %s)',
+      (value) => {
+        expect(
+          isMatchingDateFilter({ dateFilter: { is: 'NULL' }, value }),
+        ).toBe(true);
+      },
+    );
+
+    it.each([null, undefined])(
+      'does not match "is: NOT_NULL" for an empty value (value: %s)',
+      (value) => {
+        expect(
+          isMatchingDateFilter({ dateFilter: { is: 'NOT_NULL' }, value }),
+        ).toBe(false);
+      },
+    );
+  });
+
   describe('gt', () => {
     it('value is greater than gt filter', () => {
       expect(
@@ -156,6 +196,72 @@ describe('isMatchingDateFilter', () => {
           value: testDate,
         }),
       ).toBe(false);
+    });
+  });
+  describe('Date object values', () => {
+    const testDateObject = new Date(testDate);
+
+    it('matches a gte filter', () => {
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { gte: '2023-12-18T12:15:29.810Z' },
+          value: testDateObject,
+        }),
+      ).toBe(true);
+    });
+
+    it('matches an lt filter', () => {
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { lt: '2023-12-20T12:15:29.810Z' },
+          value: testDateObject,
+        }),
+      ).toBe(true);
+
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { lt: '2023-12-18T12:15:29.810Z' },
+          value: testDateObject,
+        }),
+      ).toBe(false);
+    });
+
+    it('matches an eq filter', () => {
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { eq: testDate },
+          value: testDateObject,
+        }),
+      ).toBe(true);
+    });
+
+    it('matches an in filter', () => {
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { in: [testDate] },
+          value: testDateObject,
+        }),
+      ).toBe(true);
+
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { in: ['2023-12-18T12:15:29.810Z'] },
+          value: testDateObject,
+        }),
+      ).toBe(false);
+    });
+
+    it('matches the relative date range a view filter generates', () => {
+      expect(
+        isMatchingDateFilter({
+          dateFilter: { gte: '2023-12-19T00:00:00.000Z' },
+          value: testDateObject,
+        }) &&
+          isMatchingDateFilter({
+            dateFilter: { lt: '2023-12-20T00:00:00.000Z' },
+            value: testDateObject,
+          }),
+      ).toBe(true);
     });
   });
 });

@@ -1,32 +1,28 @@
 import { styled } from '@linaria/react';
 
-import { ObjectOptionsDropdown } from '@/object-record/object-options-dropdown/components/ObjectOptionsDropdown';
 import { RecordBoardContainer } from '@/object-record/record-board/components/RecordBoardContainer';
+import { RecordGroupTabsPortalProvider } from '@/object-record/record-group/components/RecordGroupTabsPortalProvider';
 import { RecordIndexTableContainer } from '@/object-record/record-index/components/RecordIndexTableContainer';
-import { RecordIndexViewBarEffect } from '@/object-record/record-index/components/RecordIndexViewBarEffect';
 import { recordIndexViewTypeState } from '@/object-record/record-index/states/recordIndexViewTypeState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 
-import { InformationBannerWrapper } from '@/information-banner/components/InformationBannerWrapper';
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 // OMNIA-CUSTOM: carrier picker step for the reconciliation run wizard
 import { ReconciliationCarrierPickerModal } from '@/reconciliation/components/ReconciliationCarrierPickerModal';
-import { SpreadsheetImportProvider } from '@/spreadsheet-import/provider/components/SpreadsheetImportProvider';
 
 import { RecordIndexCalendarContainer } from '@/object-record/record-index/components/RecordIndexCalendarContainer';
 import { RecordIndexEmptyStateNotShared } from '@/object-record/record-index/components/RecordIndexEmptyStateNotShared';
 import { RecordIndexFiltersToContextStoreEffect } from '@/object-record/record-index/components/RecordIndexFiltersToContextStoreEffect';
 import { useHasCurrentViewNonReadableFields } from '@/object-record/record-index/hooks/useHasCurrentViewNonReadableFields';
-import { ViewBar } from '@/views/components/ViewBar';
+import { RecordList } from '@/object-record/record-list/components/RecordList';
 import { ViewType } from '@/views/types/ViewType';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-
   width: 100%;
 `;
 
@@ -38,73 +34,55 @@ const StyledContainerWithPadding = styled.div`
 `;
 
 export const RecordIndexContainer = () => {
-  const recordIndexViewType = useAtomStateValue(recordIndexViewTypeState);
+  const recordIndexViewType = useAtomComponentStateValue(
+    recordIndexViewTypeState,
+  );
 
-  const {
-    objectNamePlural,
-    recordIndexId,
-    objectMetadataItem,
-    objectNameSingular,
-  } = useRecordIndexContextOrThrow();
+  const { recordIndexId, objectMetadataItem, objectNameSingular } =
+    useRecordIndexContextOrThrow();
 
   const { hasCurrentViewNonReadableFields, nonReadableViewFieldInfo } =
     useHasCurrentViewNonReadableFields(objectMetadataItem);
 
   return (
-    <>
-      <StyledContainer>
-        <InformationBannerWrapper />
-        {/* OMNIA-CUSTOM: carrier picker for the reconciliation run wizard */}
-        {objectNameSingular === 'reconciliation' && (
-          <ReconciliationCarrierPickerModal />
-        )}
-        <SpreadsheetImportProvider>
-          <ViewBar
-            isReadOnly={hasCurrentViewNonReadableFields}
-            viewBarId={recordIndexId}
-            optionsDropdownButton={
-              <ObjectOptionsDropdown
-                recordIndexId={recordIndexId}
-                objectMetadataItem={objectMetadataItem}
-                viewType={recordIndexViewType ?? ViewType.TABLE}
-              />
-            }
-          />
-          <RecordIndexViewBarEffect
-            objectNamePlural={objectNamePlural}
-            viewBarId={recordIndexId}
-          />
-        </SpreadsheetImportProvider>
-        {hasCurrentViewNonReadableFields ? (
-          <RecordIndexEmptyStateNotShared
-            nonReadableViewFieldInfo={nonReadableViewFieldInfo}
-          />
-        ) : (
-          <>
-            <RecordIndexFiltersToContextStoreEffect />
-            {recordIndexViewType === ViewType.TABLE && (
+    <StyledContainer>
+      {/* OMNIA-CUSTOM: carrier picker for the reconciliation run wizard */}
+      {objectNameSingular === 'reconciliation' && (
+        <ReconciliationCarrierPickerModal />
+      )}
+      {hasCurrentViewNonReadableFields ? (
+        <RecordIndexEmptyStateNotShared
+          nonReadableViewFieldInfo={nonReadableViewFieldInfo}
+        />
+      ) : (
+        <>
+          <RecordIndexFiltersToContextStoreEffect />
+          {recordIndexViewType === ViewType.TABLE && (
+            <RecordGroupTabsPortalProvider>
               <RecordIndexTableContainer recordTableId={recordIndexId} />
-            )}
-            {recordIndexViewType === ViewType.KANBAN && (
-              <StyledContainerWithPadding>
-                <RecordBoardContainer
-                  recordBoardId={recordIndexId}
-                  viewBarId={recordIndexId}
-                  objectNameSingular={objectNameSingular}
-                />
-              </StyledContainerWithPadding>
-            )}
-            {recordIndexViewType === ViewType.CALENDAR && (
-              <StyledContainerWithPadding>
-                <RecordIndexCalendarContainer
-                  recordCalendarInstanceId={recordIndexId}
-                  viewBarInstanceId={recordIndexId}
-                />
-              </StyledContainerWithPadding>
-            )}
-          </>
-        )}
-      </StyledContainer>
-    </>
+            </RecordGroupTabsPortalProvider>
+          )}
+          {recordIndexViewType === ViewType.KANBAN && (
+            <StyledContainerWithPadding>
+              <RecordBoardContainer
+                recordBoardId={recordIndexId}
+                viewBarId={recordIndexId}
+                objectNameSingular={objectNameSingular}
+              />
+            </StyledContainerWithPadding>
+          )}
+          {recordIndexViewType === ViewType.CALENDAR && (
+            <StyledContainerWithPadding>
+              <RecordIndexCalendarContainer />
+            </StyledContainerWithPadding>
+          )}
+          {recordIndexViewType === ViewType.LIST && (
+            <StyledContainerWithPadding>
+              <RecordList />
+            </StyledContainerWithPadding>
+          )}
+        </>
+      )}
+    </StyledContainer>
   );
 };

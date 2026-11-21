@@ -5,6 +5,7 @@
     "esModuleInterop": false,
     "allowSyntheticDefaultImports": true,
     "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
     "alwaysStrict": true,
     "noImplicitAny": true,
     "strictBindCallApply": false,
@@ -20,6 +21,5 @@
     "**/__mocks__/**/*",
     "jest.config.mjs",
     "vite.config.*.ts"
-  ],
-  "exclude": ["src/individual-entry.ts"]
+  ]
 }

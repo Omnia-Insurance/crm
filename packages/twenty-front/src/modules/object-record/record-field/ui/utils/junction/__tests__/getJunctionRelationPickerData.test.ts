@@ -1,0 +1,253 @@
+import { getPermittedFields } from '@/object-metadata/utils/getPermittedFields';
+import { getJunctionRelationPickerData } from '@/object-record/record-field/ui/utils/junction/getJunctionRelationPickerData';
+import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
+import { getObjectMorphJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getObjectMorphJunctionConfig';
+import { isUsableJunctionConfig } from '@/object-record/record-field/ui/utils/junction/isUsableJunctionConfig';
+import { resolveJunctionConfig } from '@/object-record/record-field/ui/utils/junction/resolveJunctionConfig';
+import { isDefined } from 'twenty-shared/utils';
+import { getMockFieldMetadataItemOrThrow } from '~/testing/utils/getMockFieldMetadataItemOrThrow';
+import { getMockObjectMetadataItemOrThrow } from '~/testing/utils/getMockObjectMetadataItemOrThrow';
+import { getTestEnrichedObjectMetadataItemsMock } from '~/testing/utils/getTestEnrichedObjectMetadataItemsMock';
+
+describe('getJunctionRelationPickerData', () => {
+  it('uses morph targets instead of junction records as picker items', () => {
+    const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock();
+    const taskObjectMetadata = getMockObjectMetadataItemOrThrow('task');
+    const taskTargetObjectMetadata =
+      getMockObjectMetadataItemOrThrow('taskTarget');
+    const companyObjectMetadata = getMockObjectMetadataItemOrThrow('company');
+    const personObjectMetadata = getMockObjectMetadataItemOrThrow('person');
+
+    const junctionConfig = getObjectMorphJunctionConfig({
+      objectMetadata: taskObjectMetadata,
+      objectMetadataItems,
+    });
+
+    expect(junctionConfig).not.toBeNull();
+
+    if (!isDefined(junctionConfig)) {
+      throw new Error('Task morph junction config not found');
+    }
+
+    const { pickableMorphItems, searchableObjectMetadataItems } =
+      getJunctionRelationPickerData({
+        junctionRecords: [
+          {
+            id: 'task-target-company-id',
+            __typename: 'TaskTarget',
+            targetCompany: { id: 'company-id' },
+          },
+          {
+            id: 'task-target-person-id',
+            __typename: 'TaskTarget',
+            targetPerson: { id: 'person-id' },
+          },
+        ],
+        junctionConfig,
+        objectMetadataItems,
+      });
+
+    expect(pickableMorphItems).toEqual([
+      {
+        recordId: 'company-id',
+        objectMetadataId: companyObjectMetadata.id,
+        isSelected: true,
+        isMatchingSearchFilter: true,
+      },
+      {
+        recordId: 'person-id',
+        objectMetadataId: personObjectMetadata.id,
+        isSelected: true,
+        isMatchingSearchFilter: true,
+      },
+    ]);
+
+    const searchableObjectMetadataIds = searchableObjectMetadataItems.map(
+      ({ id }) => id,
+    );
+    const morphTargetObjectMetadataIds = junctionConfig.targetFields.flatMap(
+      (targetField) =>
+        targetField.morphRelations?.map(
+          ({ targetObjectMetadata }) => targetObjectMetadata.id,
+        ) ?? [],
+    );
+
+    expect([...searchableObjectMetadataIds].sort()).toEqual(
+      [...morphTargetObjectMetadataIds].sort(),
+    );
+    expect(searchableObjectMetadataIds).not.toContain(
+      taskTargetObjectMetadata.id,
+    );
+  });
+
+  it('keeps terminal records and metadata for a regular junction', () => {
+    const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock();
+    const personObjectMetadata = getMockObjectMetadataItemOrThrow('person');
+    const companyObjectMetadata = getMockObjectMetadataItemOrThrow('company');
+    const previousCompaniesField = getMockFieldMetadataItemOrThrow({
+      objectMetadataItem: personObjectMetadata,
+      fieldName: 'previousCompanies',
+    });
+
+    const junctionConfig = getJunctionConfig({
+      settings: previousCompaniesField.settings,
+      relationObjectMetadataId:
+        previousCompaniesField.relation?.targetObjectMetadata.id ?? '',
+      relationTargetFieldMetadataId:
+        previousCompaniesField.relation?.targetFieldMetadata.id,
+      sourceObjectMetadataId: personObjectMetadata.id,
+      objectMetadataItems,
+    });
+
+    expect(junctionConfig).not.toBeNull();
+
+    if (junctionConfig === null) {
+      throw new Error('Previous companies junction config not found');
+    }
+
+    const { pickableMorphItems, searchableObjectMetadataItems } =
+      getJunctionRelationPickerData({
+        junctionRecords: [
+          {
+            id: 'employment-history-id',
+            __typename: 'EmploymentHistory',
+            company: { id: 'company-id' },
+          },
+        ],
+        junctionConfig,
+        objectMetadataItems,
+      });
+
+    expect(pickableMorphItems).toEqual([
+      {
+        recordId: 'company-id',
+        objectMetadataId: companyObjectMetadata.id,
+        isSelected: true,
+        isMatchingSearchFilter: true,
+      },
+    ]);
+    expect(searchableObjectMetadataItems.map(({ id }) => id)).toEqual([
+      companyObjectMetadata.id,
+    ]);
+  });
+
+  it('uses terminal records when editing the inverse side of a junction', () => {
+    const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock();
+    const rocketObjectMetadata = getMockObjectMetadataItemOrThrow('rocket');
+    const taskObjectMetadata = getMockObjectMetadataItemOrThrow('task');
+    const taskTargetObjectMetadata =
+      getMockObjectMetadataItemOrThrow('taskTarget');
+    const taskTargetsField = getMockFieldMetadataItemOrThrow({
+      objectMetadataItem: rocketObjectMetadata,
+      fieldName: 'taskTargets',
+    });
+
+    const junctionConfig = resolveJunctionConfig({
+      settings: taskTargetsField.settings,
+      relationObjectMetadataId:
+        taskTargetsField.relation?.targetObjectMetadata.id ?? '',
+      relationTargetFieldMetadataId:
+        taskTargetsField.relation?.targetFieldMetadata.id,
+      sourceObjectMetadataId: rocketObjectMetadata.id,
+      objectMetadataItems,
+    });
+
+    expect(junctionConfig?.direction).toBe('reverse');
+
+    if (!isUsableJunctionConfig(junctionConfig)) {
+      throw new Error('Reverse task junction config not found');
+    }
+
+    const { pickableMorphItems, searchableObjectMetadataItems } =
+      getJunctionRelationPickerData({
+        junctionRecords: [
+          {
+            id: 'task-target-id',
+            __typename: 'TaskTarget',
+            task: { id: 'task-id' },
+          },
+        ],
+        junctionConfig,
+        objectMetadataItems,
+      });
+
+    expect(pickableMorphItems).toEqual([
+      {
+        recordId: 'task-id',
+        objectMetadataId: taskObjectMetadata.id,
+        isSelected: true,
+        isMatchingSearchFilter: true,
+      },
+    ]);
+    expect(searchableObjectMetadataItems.map(({ id }) => id)).toEqual([
+      taskObjectMetadata.id,
+    ]);
+    expect(searchableObjectMetadataItems.map(({ id }) => id)).not.toContain(
+      taskTargetObjectMetadata.id,
+    );
+  });
+
+  it('only offers morph targets the role can update', () => {
+    const taskObjectMetadata = getMockObjectMetadataItemOrThrow('task');
+    const taskTargetObjectMetadata =
+      getMockObjectMetadataItemOrThrow('taskTarget');
+    const companyObjectMetadata = getMockObjectMetadataItemOrThrow('company');
+    const companyTargetUneditableFields = (
+      getMockFieldMetadataItemOrThrow({
+        objectMetadataItem: taskTargetObjectMetadata,
+        fieldName: 'target',
+      }).morphRelations ?? []
+    )
+      .filter(
+        ({ targetObjectMetadata }) =>
+          targetObjectMetadata.id === companyObjectMetadata.id,
+      )
+      .map(({ sourceFieldMetadata }) => sourceFieldMetadata.id);
+
+    const objectMetadataItems = getTestEnrichedObjectMetadataItemsMock().map(
+      (objectMetadataItem) =>
+        objectMetadataItem.id === taskTargetObjectMetadata.id
+          ? {
+              ...objectMetadataItem,
+              ...getPermittedFields({
+                fields: objectMetadataItem.fields,
+                objectPermissions: {
+                  unreadableFields: [],
+                  uneditableFields: companyTargetUneditableFields,
+                },
+              }),
+            }
+          : objectMetadataItem,
+    );
+
+    const junctionConfig = getObjectMorphJunctionConfig({
+      objectMetadata: taskObjectMetadata,
+      objectMetadataItems,
+    });
+
+    if (!isDefined(junctionConfig)) {
+      throw new Error('Task morph junction config not found');
+    }
+
+    const { pickableMorphItems, searchableObjectMetadataItems } =
+      getJunctionRelationPickerData({
+        junctionRecords: [
+          {
+            id: 'task-target-company-id',
+            __typename: 'TaskTarget',
+            targetCompany: { id: 'company-id' },
+          },
+        ],
+        junctionConfig,
+        objectMetadataItems,
+      });
+
+    expect(pickableMorphItems.map(({ recordId }) => recordId)).toEqual([
+      'company-id',
+    ]);
+    expect(searchableObjectMetadataItems.map(({ id }) => id)).not.toContain(
+      companyObjectMetadata.id,
+    );
+    expect(searchableObjectMetadataItems.length).toBeGreaterThan(0);
+  });
+});

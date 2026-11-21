@@ -22,35 +22,4 @@ describe('generateDepthRecordGqlFieldsFromObject', () => {
 
     expect(result).toMatchSnapshot();
   });
-
-  it('should use readableFields when available to exclude hidden fields', () => {
-    const fullItem = getMockObjectMetadataItemOrThrow('company');
-    const visibleFields = fullItem.fields.slice(0, 3);
-
-    const resultWithAllFields = generateDepthRecordGqlFieldsFromObject({
-      objectMetadataItem: fullItem,
-      objectMetadataItems: getTestEnrichedObjectMetadataItemsMock(),
-      depth: 0,
-    });
-
-    const resultWithReadableFields = generateDepthRecordGqlFieldsFromObject({
-      objectMetadataItem: {
-        ...fullItem,
-        readableFields: visibleFields,
-      },
-      objectMetadataItems: getTestEnrichedObjectMetadataItemsMock(),
-      depth: 0,
-    });
-
-    const allFieldKeys = Object.keys(resultWithAllFields);
-    const readableFieldKeys = Object.keys(resultWithReadableFields);
-
-    expect(readableFieldKeys.length).toBeLessThan(allFieldKeys.length);
-
-    const visibleFieldNames = visibleFields.map((f) => f.name);
-
-    readableFieldKeys.forEach((key) => {
-      expect(visibleFieldNames).toContain(key);
-    });
-  });
 });

@@ -1,71 +1,109 @@
 import { registerEnumType } from '@nestjs/graphql';
 
+import {
+  CORE_PICTURE_MIME_TYPES,
+  EMAIL_IMAGE_MIME_TYPES,
+} from 'twenty-shared/constants';
 import { FileFolder } from 'twenty-shared/types';
-import { type KebabCase } from 'type-fest';
 
 registerEnumType(FileFolder, {
   name: 'FileFolder',
 });
 
+export const ANY_MIME_TYPE = 'any' as const;
+
 export type FileFolderConfig = {
   ignoreExpirationToken: boolean;
+  cacheControl: string | null;
+  allowedMimeTypes: readonly string[] | typeof ANY_MIME_TYPE;
 };
 
+export const IMMUTABLE_FILE_CACHE_CONTROL = 'private, max-age=86400, immutable';
+
+export const PUBLIC_ASSET_CACHE_CONTROL = 'public, max-age=3600';
+
+// A cached copy would 403 once the signature expires or leak a live presigned URL.
+export const PRESIGNED_URL_NO_STORE_CACHE_CONTROL = 'private, no-store';
+
 export const fileFolderConfigs: Record<FileFolder, FileFolderConfig> = {
-  [FileFolder.ProfilePicture]: {
-    ignoreExpirationToken: true,
-  },
-  [FileFolder.WorkspaceLogo]: {
-    ignoreExpirationToken: true,
-  },
-  [FileFolder.Attachment]: {
+  [FileFolder.RecordExport]: {
     ignoreExpirationToken: false,
-  },
-  [FileFolder.PersonPicture]: {
-    ignoreExpirationToken: false,
+    cacheControl: 'private, no-store',
+    allowedMimeTypes: ['text/csv'],
   },
   [FileFolder.CorePicture]: {
     ignoreExpirationToken: true,
-  },
-  [FileFolder.File]: {
-    ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: CORE_PICTURE_MIME_TYPES,
   },
   [FileFolder.AgentChat]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.BuiltLogicFunction]: {
     ignoreExpirationToken: false,
+    cacheControl: null,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.BuiltFrontComponent]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.PublicAsset]: {
     ignoreExpirationToken: true,
+    cacheControl: PUBLIC_ASSET_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.Source]: {
     ignoreExpirationToken: false,
+    cacheControl: null,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.FilesField]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.Dependencies]: {
     ignoreExpirationToken: false,
+    cacheControl: null,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.Workflow]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
   [FileFolder.EmailAttachment]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
+  },
+  [FileFolder.EmailImage]: {
+    ignoreExpirationToken: true,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: EMAIL_IMAGE_MIME_TYPES,
   },
   [FileFolder.AppTarball]: {
     ignoreExpirationToken: false,
+    cacheControl: null,
+    allowedMimeTypes: ['application/gzip'],
   },
   [FileFolder.GeneratedSdkClient]: {
     ignoreExpirationToken: false,
+    cacheControl: null,
+    allowedMimeTypes: ANY_MIME_TYPE,
   },
-  [FileFolder.Export]: {
+  [FileFolder.Dpa]: {
     ignoreExpirationToken: false,
+    cacheControl: IMMUTABLE_FILE_CACHE_CONTROL,
+    allowedMimeTypes: ANY_MIME_TYPE,
+  },
+  [FileFolder.WorkspaceDataExport]: {
+    ignoreExpirationToken: false,
+    cacheControl: 'private, no-store',
+    allowedMimeTypes: ['application/zip', 'text/csv', 'application/json'],
   },
 };
-
-export type AllowedFolders = KebabCase<keyof typeof FileFolder>;

@@ -24,7 +24,10 @@ export const getAvailableAggregationsFromObjectFields = (
         return acc;
       }
 
-      if (field.type === FieldMetadataType.RELATION) {
+      if (
+        field.type === FieldMetadataType.RELATION ||
+        field.type === FieldMetadataType.MORPH_RELATION
+      ) {
         acc[field.name] = {
           [AggregateOperations.COUNT]: 'totalCount',
         };
@@ -50,6 +53,15 @@ export const getAvailableAggregationsFromObjectFields = (
         };
       }
 
+      if (field.type === FieldMetadataType.RATING) {
+        acc[field.name] = {
+          ...acc[field.name],
+          [AggregateOperations.MIN]: `min${capitalize(field.name)}`,
+          [AggregateOperations.MAX]: `max${capitalize(field.name)}`,
+          [AggregateOperations.AVG]: `avg${capitalize(field.name)}`,
+        };
+      }
+
       if (field.type === FieldMetadataType.CURRENCY) {
         acc[field.name] = {
           ...acc[field.name],
@@ -68,7 +80,7 @@ export const getAvailableAggregationsFromObjectFields = (
         };
       }
 
-      if (isFieldMetadataDateKind(field.type) === true) {
+      if (isFieldMetadataDateKind(field.type)) {
         acc[field.name] = {
           ...acc[field.name],
           [DateAggregateOperations.EARLIEST]: `min${capitalize(field.name)}`,

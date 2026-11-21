@@ -1,4 +1,4 @@
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const TWENTY_API_URL = process.env.TWENTY_API_URL ?? 'http://localhost:2020';
@@ -11,12 +11,11 @@ process.env.TWENTY_API_URL = TWENTY_API_URL;
 process.env.TWENTY_API_KEY = TWENTY_API_KEY;
 
 export default defineConfig({
-  plugins: [
-    tsconfigPaths({
-      projects: ['tsconfig.spec.json'],
-      ignoreConfigErrors: true,
-    }),
-  ],
+  resolve: {
+    tsconfigPaths: true,
+    // tsconfig.json excludes the tests, and since vite 8.1 its paths no longer apply to them
+    alias: { src: fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     testTimeout: 120_000,
     hookTimeout: 120_000,

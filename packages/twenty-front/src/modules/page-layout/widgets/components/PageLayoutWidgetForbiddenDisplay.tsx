@@ -1,8 +1,10 @@
 import { ForbiddenFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/ForbiddenFieldDisplay';
 import { type WidgetAccessDenialInfo } from '@/page-layout/widgets/types/WidgetAccessDenialInfo';
-import { plural, t } from '@lingui/core/macro';
+import { TooltipDelay } from '@/ui/layout/tooltip/constants/TooltipDelay';
+import { plural } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { AppTooltip } from 'twenty-ui/display';
+import { Tooltip } from 'twenty-ui/primitives/surfaces';
+import { useLingui } from '@lingui/react/macro';
 
 type PageLayoutWidgetForbiddenDisplayProps = {
   widgetId: string;
@@ -13,6 +15,7 @@ export const PageLayoutWidgetForbiddenDisplay = ({
   widgetId,
   restriction,
 }: PageLayoutWidgetForbiddenDisplayProps) => {
+  const { t } = useLingui();
   const tooltipId = `widget-forbidden-tooltip-${widgetId}`;
 
   const getTooltipContent = () => {
@@ -37,15 +40,14 @@ export const PageLayoutWidgetForbiddenDisplay = ({
   };
 
   return (
-    <>
+    <Tooltip
+      delay={TooltipDelay.mediumDelay}
+      content={getTooltipContent()}
+      side="top"
+    >
       <div id={tooltipId}>
         <ForbiddenFieldDisplay />
       </div>
-      <AppTooltip
-        anchorSelect={`#${tooltipId}`}
-        content={getTooltipContent()}
-        place="top"
-      />
-    </>
+    </Tooltip>
   );
 };

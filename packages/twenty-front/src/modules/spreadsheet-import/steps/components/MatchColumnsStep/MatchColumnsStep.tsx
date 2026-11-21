@@ -1,3 +1,4 @@
+import { SpreadsheetImportStepBody } from '@/spreadsheet-import/components/SpreadsheetImportStepBody';
 import { styled } from '@linaria/react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -14,8 +15,6 @@ import { setIgnoreColumn } from '@/spreadsheet-import/utils/setIgnoreColumn';
 import { setSubColumn } from '@/spreadsheet-import/utils/setSubColumn';
 import { useDialogManager } from '@/ui/feedback/dialog-manager/hooks/useDialogManager';
 
-import { ModalContent } from 'twenty-ui/layout';
-
 import { DO_NOT_IMPORT_OPTION_KEY } from '@/spreadsheet-import/constants/DoNotImportOptionKey';
 import { ColumnGrid } from '@/spreadsheet-import/steps/components/MatchColumnsStep/components/ColumnGrid';
 import { TemplateColumn } from '@/spreadsheet-import/steps/components/MatchColumnsStep/components/TemplateColumn';
@@ -31,7 +30,7 @@ import { type SpreadsheetImportField } from '@/spreadsheet-import/types/Spreadsh
 import { useAtomFamilySelectorState } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorState';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledColumnsContainer = styled.div`
   align-items: center;
@@ -76,7 +75,8 @@ export const MatchColumnsStep = ({
   const { enqueueDialog } = useDialogManager();
   const dataExample = data.slice(0, 2);
   // OMNIA-CUSTOM: allowDuplicateFieldMatching for reconciliation
-  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } = useSpreadsheetImportInternal();
+  const { spreadsheetImportFields: fields, allowDuplicateFieldMatching } =
+    useSpreadsheetImportInternal();
   const [isLoading, setIsLoading] = useState(false);
   const [columns, setColumns] = useAtomFamilySelectorState(
     initialComputedColumnsSelector,
@@ -121,7 +121,8 @@ export const MatchColumnsStep = ({
         const field = fields.find(
           (field) => field.key === value,
         ) as unknown as SpreadsheetImportField;
-        // OMNIA-CUSTOM: Skip duplicate removal when allowDuplicateFieldMatching is set
+        // OMNIA-CUSTOM: reconciliation maps one field to several columns, so
+        // the column that already has the field keeps it
         const existingFieldIndex = allowDuplicateFieldMatching
           ? -1
           : columns.findIndex(
@@ -133,14 +134,21 @@ export const MatchColumnsStep = ({
               return setColumn(column, field, data);
             } else if (index === existingFieldIndex) {
               return setColumn(column);
-            } else {
-              return column;
             }
+            return column;
           }),
         );
       }
     },
-    [columns, onRevertIgnore, onIgnore, fields, setColumns, data],
+    [
+      columns,
+      onRevertIgnore,
+      onIgnore,
+      fields,
+      setColumns,
+      data,
+      allowDuplicateFieldMatching,
+    ],
   );
 
   const handleContinue = useCallback(
@@ -220,7 +228,7 @@ export const MatchColumnsStep = ({
           {
             title: t`Continue`,
             onClick: handleAlertOnContinue,
-            variant: 'primary',
+            variant: 'outline',
             role: 'confirm',
           },
         ],
@@ -266,7 +274,8 @@ export const MatchColumnsStep = ({
         {
           title: t`Restart`,
           onClick: onBackConfirmation,
-          accent: 'danger',
+          color: 'danger',
+          variant: 'solid',
           role: 'confirm',
         },
       ],
@@ -275,7 +284,7 @@ export const MatchColumnsStep = ({
 
   return (
     <>
-      <ModalContent noPadding isVerticallyCentered>
+      <SpreadsheetImportStepBody isCenteredHorizontally>
         <ScrollWrapper componentInstanceId="scroll-wrapper-modal-content">
           <ColumnGrid
             columns={columns}
@@ -303,7 +312,7 @@ export const MatchColumnsStep = ({
             )}
           />
         </ScrollWrapper>
-      </ModalContent>
+      </SpreadsheetImportStepBody>
       <StepNavigationButton
         onContinue={handleOnContinue}
         isLoading={isLoading}

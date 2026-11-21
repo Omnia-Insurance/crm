@@ -19,12 +19,11 @@ const DEFAULT_COMMAND_MENU_ITEM_GQL_FIELDS = `
   isPinned
   availabilityType
   availabilityObjectMetadataId
+  availabilityCoreObjectName
+  navigationTargetObjectMetadataId
   payload {
     ... on PathCommandMenuItemPayload {
       path
-    }
-    ... on ObjectMetadataCommandMenuItemPayload {
-      objectMetadataItemId
     }
   }
   applicationId

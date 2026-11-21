@@ -1,0 +1,208 @@
+/**
+ * @jest-environment node
+ */
+import { fetchComponentSourceFromNetwork } from '@/host/component-source/utils/fetchComponentSourceFromNetwork';
+
+const COMPONENT_URL =
+  'https://api.twenty.com/rest/front-components/component-id/checksum-abc.js';
+const CACHE_BUSTED_COMPONENT_URL = `${COMPONENT_URL}?cacheBust=v2`;
+const PRESIGNED_URL = 'https://s3.example.com/component.js?signed=abc';
+
+type FakeResponseInit = {
+  status?: number;
+  statusText?: string;
+  contentType?: string;
+  body?: string;
+  json?: unknown;
+};
+
+const createFakeResponse = ({
+  status = 200,
+  statusText = 'OK',
+  contentType = 'application/javascript',
+  body = '',
+  json,
+}: FakeResponseInit) =>
+  new Response(json === undefined ? body : JSON.stringify(json), {
+    status,
+    statusText,
+    headers: { 'content-type': contentType },
+  });
+
+describe('fetchComponentSourceFromNetwork', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    jest.clearAllMocks();
+  });
+
+  it('returns the raw body and forwards headers for a direct JS response', async () => {
+    const fetchMock = jest.fn(async () =>
+      createFakeResponse({ body: 'export default () => {};' }),
+    );
+
+    globalThis.fetch = fetchMock;
+
+    const source = await fetchComponentSourceFromNetwork({
+      url: COMPONENT_URL,
+      headers: { Authorization: 'Bearer token' },
+    });
+
+    expect(source).toBe('export default () => {};');
+    expect(fetchMock).toHaveBeenCalledWith(CACHE_BUSTED_COMPONENT_URL, {
+      headers: { Authorization: 'Bearer token' },
+      credentials: 'same-origin',
+    });
+  });
+
+  it('can load an app bundle without the user session', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        createFakeResponse({ body: 'export const shared = true;' }),
+      );
+    globalThis.fetch = fetchMock;
+
+    await fetchComponentSourceFromNetwork({
+      url: COMPONENT_URL,
+      headers: { Authorization: 'Bearer app-token' },
+      credentials: 'omit',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(CACHE_BUSTED_COMPONENT_URL, {
+      headers: { Authorization: 'Bearer app-token' },
+      credentials: 'omit',
+    });
+  });
+
+  it('follows the JSON handoff and fetches the presigned URL header-less', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        createFakeResponse({
+          contentType: 'application/json',
+          json: { url: PRESIGNED_URL },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createFakeResponse({ body: 'presigned bundle source' }),
+      );
+
+    globalThis.fetch = fetchMock;
+
+    const source = await fetchComponentSourceFromNetwork({
+      url: COMPONENT_URL,
+      headers: { Authorization: 'Bearer token' },
+    });
+
+    expect(source).toBe('presigned bundle source');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, CACHE_BUSTED_COMPONENT_URL, {
+      headers: { Authorization: 'Bearer token' },
+      credentials: 'same-origin',
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, PRESIGNED_URL, {
+      credentials: 'same-origin',
+    });
+  });
+
+  it('does not forward app authorization to a presigned handoff', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        createFakeResponse({
+          contentType: 'application/json',
+          json: { url: PRESIGNED_URL },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createFakeResponse({ body: 'presigned bundle source' }),
+      );
+
+    await fetchComponentSourceFromNetwork({
+      url: COMPONENT_URL,
+      headers: { Authorization: 'Bearer token' },
+      credentials: 'omit',
+    });
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      CACHE_BUSTED_COMPONENT_URL,
+      {
+        headers: {
+          Authorization: 'Bearer token',
+        },
+        credentials: 'omit',
+      },
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(2, PRESIGNED_URL, {
+      credentials: 'same-origin',
+    });
+  });
+
+  it('preserves existing query parameters when appending the cache bust parameter', async () => {
+    const fetchMock = jest.fn(async () =>
+      createFakeResponse({ body: 'export default () => {};' }),
+    );
+
+    globalThis.fetch = fetchMock;
+
+    await fetchComponentSourceFromNetwork({
+      url: `${COMPONENT_URL}?token=abc`,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${COMPONENT_URL}?token=abc&cacheBust=v2`,
+      { headers: undefined, credentials: 'same-origin' },
+    );
+  });
+
+  it('throws when the initial response is not ok', async () => {
+    const fetchMock = jest.fn(async () =>
+      createFakeResponse({ status: 404, statusText: 'Not Found' }),
+    );
+
+    globalThis.fetch = fetchMock;
+
+    await expect(
+      fetchComponentSourceFromNetwork({ url: COMPONENT_URL }),
+    ).rejects.toThrow(`Failed to fetch ${COMPONENT_URL}: 404 Not Found`);
+  });
+
+  it('throws when the JSON handoff payload is invalid', async () => {
+    const fetchMock = jest.fn(async () =>
+      createFakeResponse({
+        contentType: 'application/json',
+        json: { notUrl: 'nope' },
+      }),
+    );
+
+    globalThis.fetch = fetchMock;
+
+    await expect(
+      fetchComponentSourceFromNetwork({ url: COMPONENT_URL }),
+    ).rejects.toThrow(
+      `Invalid component source handoff response from ${COMPONENT_URL}`,
+    );
+  });
+
+  it('throws when the presigned response is not ok', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        createFakeResponse({
+          contentType: 'application/json',
+          json: { url: PRESIGNED_URL },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createFakeResponse({ status: 403, statusText: 'Forbidden' }),
+      );
+
+    globalThis.fetch = fetchMock;
+
+    await expect(
+      fetchComponentSourceFromNetwork({ url: COMPONENT_URL }),
+    ).rejects.toThrow('Failed to fetch presigned URL: 403 Forbidden');
+  });
+});

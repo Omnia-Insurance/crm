@@ -24,10 +24,7 @@ export type RelationBehavior = {
 export type RelationResolutionError = {
   rowIndex: number;
   column: string;
-  errorType:
-    | 'NOT_FOUND'
-    | 'AMBIGUOUS_MATCH'
-    | 'CONFLICT';
+  errorType: 'NOT_FOUND' | 'AMBIGUOUS_MATCH' | 'CONFLICT';
   message: string;
   conflictingRows?: number[];
   searchedValue?: string;

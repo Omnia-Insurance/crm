@@ -1,19 +1,18 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { TypeORMModule } from 'src/database/typeorm/typeorm.module';
 import { ImportJobEntity } from 'src/engine/core-modules/import-job/entities/import-job.entity';
 import { ImportJobResolver } from 'src/engine/core-modules/import-job/import-job.resolver';
 import { ImportJobService } from 'src/engine/core-modules/import-job/import-job.service';
-import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 
 @Module({
-  imports: [
-    TypeORMModule,
-    TypeOrmModule.forFeature([ImportJobEntity]),
-    SubscriptionsModule,
+  imports: [TypeOrmModule.forFeature([ImportJobEntity])],
+  providers: [
+    provideWorkspaceScopedRepository(ImportJobEntity),
+    ImportJobService,
+    ImportJobResolver,
   ],
-  providers: [ImportJobService, ImportJobResolver],
   exports: [ImportJobService],
 })
 export class ImportJobModule {}

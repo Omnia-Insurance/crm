@@ -1,20 +1,21 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
+import { getRelationIdFieldNames } from '@/object-metadata/utils/getRelationIdFieldNames';
 import { mapFieldMetadataToGraphQLQuery } from '@/object-metadata/utils/mapFieldMetadataToGraphQLQuery';
 import { shouldFieldBeQueried } from '@/object-metadata/utils/shouldFieldBeQueried';
-import { type RecordGqlFields } from '@/object-record/graphql/record-gql-fields/types/RecordGqlFields';
-import { isRecordGqlFieldsNode } from '@/object-record/graphql/utils/isRecordGraphlFieldsNode';
 import {
   FieldMetadataType,
+  type ObjectRecordsPermissions,
+  type RecordGqlFields,
   RelationType,
-  type ObjectPermissions,
 } from 'twenty-shared/types';
+import { isRecordGqlFieldsNode } from '@/object-record/graphql/utils/isRecordGraphlFieldsNode';
 import {
-  computeMorphRelationGqlFieldJoinColumnName,
+  canReachSomeRecords,
   computeMorphRelationGqlFieldName,
-  computeRelationGqlFieldJoinColumnName,
   isDefined,
 } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type MapObjectMetadataToGraphQLQueryArgs = {
   objectMetadataItems: EnrichedObjectMetadataItem[];
@@ -25,10 +26,7 @@ type MapObjectMetadataToGraphQLQueryArgs = {
   recordGqlFields?: RecordGqlFields;
   computeReferences?: boolean;
   isRootLevel?: boolean;
-  objectPermissionsByObjectMetadataId: Record<
-    string,
-    ObjectPermissions & { objectMetadataId: string }
-  >;
+  objectPermissionsByObjectMetadataId: Record<string, ObjectRecordsPermissions>;
 };
 
 export const mapObjectMetadataToGraphQLQuery = ({
@@ -48,7 +46,12 @@ export const mapObjectMetadataToGraphQLQuery = ({
       objectPermissionsByObjectMetadataId,
       objectMetadataItem.id,
     );
-    if (!objectPermission.canReadObjectRecords) {
+    if (
+      !canReachSomeRecords({
+        objectRecordsPermissions: objectPermission,
+        operationType: 'read',
+      })
+    ) {
       return '';
     }
   }
@@ -66,34 +69,12 @@ export const mapObjectMetadataToGraphQLQuery = ({
     });
 
   const manyToOneRelationGqlFieldWithFieldMetadata =
-    manyToOneRelationFields.flatMap((fieldMetadata) => {
-      const isMorphRelation =
-        fieldMetadata.type === FieldMetadataType.MORPH_RELATION;
-      if (!isMorphRelation) {
-        return {
-          gqlField: computeRelationGqlFieldJoinColumnName({
-            name: fieldMetadata.name,
-          }),
-          fieldMetadata: fieldMetadata,
-        };
-      }
-
-      if (!isDefined(fieldMetadata.morphRelations)) {
-        return [];
-      }
-
-      return fieldMetadata.morphRelations.map((morphRelation) => ({
-        gqlField: computeMorphRelationGqlFieldJoinColumnName({
-          fieldName: fieldMetadata.name,
-          relationType: morphRelation.type,
-          targetObjectMetadataNameSingular:
-            morphRelation.targetObjectMetadata.nameSingular,
-          targetObjectMetadataNamePlural:
-            morphRelation.targetObjectMetadata.namePlural,
-        }),
-        fieldMetadata: fieldMetadata,
-      }));
-    });
+    manyToOneRelationFields.flatMap((fieldMetadata) =>
+      getRelationIdFieldNames(fieldMetadata).map((gqlField) => ({
+        gqlField,
+        fieldMetadata,
+      })),
+    );
 
   const readableFields = objectMetadataItem.readableFields.filter(
     (fieldMetadata) => fieldMetadata.isActive,
@@ -152,9 +133,9 @@ export const mapObjectMetadataToGraphQLQuery = ({
     );
 
   if (!isRootLevel && computeReferences) {
-    return `{
+    return doNotTranslate(`{
       __ref
-    }`;
+    }`);
   }
   const mappedFields = gqlFieldWithFieldMetadataThatSouldBeQueried
     .map((gqlFieldWithFieldMetadata) => {
@@ -177,8 +158,8 @@ export const mapObjectMetadataToGraphQLQuery = ({
     .filter((field) => field !== '')
     .join('\n');
 
-  return `{
+  return doNotTranslate(`{
 __typename
 ${mappedFields}
-}`;
+}`);
 };

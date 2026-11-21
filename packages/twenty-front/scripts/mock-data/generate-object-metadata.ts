@@ -19,11 +19,12 @@ const METADATA_QUERY = `
           labelPlural
           description
           icon
-          isCustom
           isRemote
           isActive
           isSystem
-          isUIReadOnly
+          isAuditLogged
+          isUIEditable
+          isUICreatable
           createdAt
           updatedAt
           labelIdentifierFieldMetadataId
@@ -33,6 +34,15 @@ const METADATA_QUERY = `
           isLabelSyncedWithName
           isSearchable
           duplicateCriteria
+          searchFieldMetadataList {
+            __typename
+            id
+            fieldMetadataId
+            tsVectorFieldMetadataId
+            position
+            createdAt
+            updatedAt
+          }
           indexMetadataList {
             __typename
             id
@@ -42,7 +52,8 @@ const METADATA_QUERY = `
             indexWhereClause
             indexType
             isUnique
-            isCustom
+            applicationId
+            isSystemSideEffect
             indexFieldMetadataList {
               __typename
               id
@@ -61,12 +72,12 @@ const METADATA_QUERY = `
             label
             description
             icon
-            isCustom
             isActive
             isSystem
-            isUIReadOnly
+            isUIEditable
             isNullable
             isUnique
+            isSearchable
             createdAt
             updatedAt
             defaultValue

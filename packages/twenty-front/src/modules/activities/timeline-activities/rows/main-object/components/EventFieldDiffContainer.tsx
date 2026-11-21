@@ -1,30 +1,33 @@
 import { EventFieldDiff } from '@/activities/timeline-activities/rows/main-object/components/EventFieldDiff';
+import { findFieldMetadataItemByDiffKey } from '@/activities/timeline-activities/utils/findFieldMetadataItemByDiffKey';
 import { isDefined } from 'twenty-shared/utils';
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { ErrorBoundary } from 'react-error-boundary';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 
 type EventFieldDiffContainerProps = {
   mainObjectMetadataItem: EnrichedObjectMetadataItem;
   diffKey: string;
-  diffValue: any;
-  diffBeforeValue?: any;
+  fieldDiff: { before: unknown; after: unknown };
   eventId: string;
-  fieldMetadataItemMap: Record<string, FieldMetadataItem>;
 };
 
 export const EventFieldDiffContainer = ({
   mainObjectMetadataItem,
   diffKey,
-  diffValue,
-  diffBeforeValue,
+  fieldDiff,
   eventId,
-  fieldMetadataItemMap,
 }: EventFieldDiffContainerProps) => {
-  const fieldMetadataItem = fieldMetadataItemMap[diffKey];
+  const fieldMetadataItem = findFieldMetadataItemByDiffKey(
+    mainObjectMetadataItem.fields,
+    diffKey,
+  );
 
   if (!isDefined(fieldMetadataItem)) {
     throw new Error(
-      `Cannot find field metadata item for field name ${diffKey} on object ${mainObjectMetadataItem.nameSingular}`,
+      doNotTranslate(
+        `Cannot find field metadata item for field name ${diffKey} on object ${mainObjectMetadataItem.nameSingular}`,
+      ),
     );
   }
 
@@ -35,14 +38,18 @@ export const EventFieldDiffContainer = ({
     eventId + '--before--' + fieldMetadataItem.id;
 
   return (
-    <EventFieldDiff
-      key={diffArtificialRecordStoreId}
-      diffRecord={diffValue}
-      diffBeforeRecord={diffBeforeValue}
-      fieldMetadataItem={fieldMetadataItem}
-      mainObjectMetadataItem={mainObjectMetadataItem}
-      diffArtificialRecordStoreId={diffArtificialRecordStoreId}
-      diffBeforeArtificialRecordStoreId={diffBeforeArtificialRecordStoreId}
-    />
+    <ErrorBoundary
+      resetKeys={[diffArtificialRecordStoreId]}
+      fallbackRender={() => null}
+    >
+      <EventFieldDiff
+        key={diffArtificialRecordStoreId}
+        fieldDiff={fieldDiff}
+        fieldMetadataItem={fieldMetadataItem}
+        mainObjectMetadataItem={mainObjectMetadataItem}
+        diffArtificialRecordStoreId={diffArtificialRecordStoreId}
+        diffBeforeArtificialRecordStoreId={diffBeforeArtificialRecordStoreId}
+      />
+    </ErrorBoundary>
   );
 };

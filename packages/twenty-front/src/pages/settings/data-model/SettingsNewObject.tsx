@@ -10,7 +10,7 @@ import {
   settingsDataModelObjectAboutFormSchema,
 } from '@/settings/data-model/validation-schemas/settingsDataModelObjectAboutFormSchema';
 import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLingui } from '@lingui/react/macro';
@@ -18,9 +18,8 @@ import { useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { Section } from 'twenty-ui/components/layout';
 
 export const SettingsNewObject = () => {
   const { t } = useLingui();
@@ -77,12 +76,12 @@ export const SettingsNewObject = () => {
   return (
     // oxlint-disable-next-line react/jsx-props-no-spreading
     <FormProvider {...formConfig}>
-      <SubMenuTopBarContainer
+      <SettingsPageLayout
         title={t`New Object`}
         links={[
           {
             children: t`Workspace`,
-            href: getSettingsPath(SettingsPath.Workspace),
+            href: getSettingsPath(SettingsPath.General),
           },
           {
             children: t`Objects`,
@@ -101,8 +100,8 @@ export const SettingsNewObject = () => {
         }
       >
         <SettingsPageContainer>
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`About`}
               description={t`Define the name and description of your object`}
             />
@@ -112,9 +111,9 @@ export const SettingsNewObject = () => {
                 !isLoading ? conflictingObjectMetadataItem : undefined
               }
             />
-          </Section>
+          </Section.Root>
         </SettingsPageContainer>
-      </SubMenuTopBarContainer>
+      </SettingsPageLayout>
     </FormProvider>
   );
 };

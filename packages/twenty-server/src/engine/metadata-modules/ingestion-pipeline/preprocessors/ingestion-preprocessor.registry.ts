@@ -6,8 +6,9 @@ import { ConvosoLeadPreprocessor } from 'src/engine/metadata-modules/ingestion-p
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
 import { OldCrmPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/old-crm-policy.preprocessor';
 import { TimeCardPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/time-card.preprocessor';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
 
-export interface IngestionPreprocessor {
+export type IngestionPreprocessor = {
   preProcess(
     payload: Record<string, unknown>,
     pipeline: IngestionPipelineEntity,
@@ -22,7 +23,7 @@ export interface IngestionPreprocessor {
     pipeline: IngestionPipelineEntity,
     workspaceId: string,
   ): Promise<Record<string, unknown>[]>;
-}
+};
 
 @Injectable()
 export class IngestionPreprocessorRegistry {
@@ -75,7 +76,7 @@ export class IngestionPreprocessorRegistry {
         processedRecords.push(processed);
       } catch (error) {
         this.logger.error(
-          `Failed to preprocess record: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to preprocess record: ${getIngestionErrorLogLabel(error)}`,
         );
         // Re-throw to let job handler deal with retry logic
         throw error;

@@ -6,49 +6,60 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { ApiPath } from 'twenty-shared/types';
 
 import { RestApiExceptionFilter } from 'src/engine/api/rest/rest-api-exception.filter';
+import { isMetadataRestRequest } from 'src/engine/api/rest/metadata/utils/is-metadata-rest-request.util';
+import { paginateMetadataRestItems } from 'src/engine/api/rest/metadata/utils/paginate-metadata-rest-items.util';
+import { type AuthenticatedRequest } from 'src/engine/api/rest/types/authenticated-request.type';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { FlatEntityMapsRestApiExceptionFilter } from 'src/engine/metadata-modules/flat-entity/filters/flat-entity-maps-rest-api-exception.filter';
-import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
+import { PermissionsRestApiExceptionFilter } from 'src/engine/permissions/utils/permissions-rest-api-exception.filter';
+import { WEBHOOK_DELETE_ACCESS_POLICY } from 'src/engine/metadata-modules/webhook/constants/webhook-delete-access-policy.constant';
+import { WEBHOOK_READ_ACCESS_POLICY } from 'src/engine/metadata-modules/webhook/constants/webhook-read-access-policy.constant';
+import { WEBHOOK_WRITE_ACCESS_POLICY } from 'src/engine/metadata-modules/webhook/constants/webhook-write-access-policy.constant';
 import { CreateWebhookInput } from 'src/engine/metadata-modules/webhook/dtos/create-webhook.input';
-import { UpdateWebhookInput } from 'src/engine/metadata-modules/webhook/dtos/update-webhook.input';
+import { UpdateWebhookInputUpdates } from 'src/engine/metadata-modules/webhook/dtos/update-webhook.input';
 import { type WebhookDTO } from 'src/engine/metadata-modules/webhook/dtos/webhook.dto';
 import { WebhookService } from 'src/engine/metadata-modules/webhook/webhook.service';
 import { WorkspaceMigrationRunnerRestApiExceptionFilter } from 'src/engine/workspace-manager/workspace-migration/filters/workspace-migration-runner-rest-api-exception.filter';
+import { AuthRestApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-rest-api-exception.filter';
 
-@Controller(['rest/webhooks', 'rest/metadata/webhooks'])
-@UseGuards(
-  JwtAuthGuard,
-  WorkspaceAuthGuard,
-  SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS),
-)
+@Controller([`${ApiPath.Rest}/webhooks`, `${ApiPath.Rest}/metadata/webhooks`])
+@UseGuards(JwtAuthGuard)
 @UseFilters(
   PermissionsRestApiExceptionFilter,
   RestApiExceptionFilter,
   FlatEntityMapsRestApiExceptionFilter,
   WorkspaceMigrationRunnerRestApiExceptionFilter,
+  AuthRestApiExceptionFilter,
 )
 export class WebhookController {
   constructor(private readonly webhookService: WebhookService) {}
 
   @Get()
+  @UseGuards(AccessPolicyGuard(WEBHOOK_READ_ACCESS_POLICY))
   async findAll(
+    @Req() request: AuthenticatedRequest,
     @AuthWorkspace() workspace: WorkspaceEntity,
-  ): Promise<WebhookDTO[]> {
-    return this.webhookService.findAll(workspace.id);
+  ) {
+    const webhooks = await this.webhookService.findAll(workspace.id);
+
+    return isMetadataRestRequest(request)
+      ? paginateMetadataRestItems({ items: webhooks, request })
+      : webhooks;
   }
 
   @Get(':id')
+  @UseGuards(AccessPolicyGuard(WEBHOOK_READ_ACCESS_POLICY))
   async findOne(
     @Param('id') id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -57,34 +68,32 @@ export class WebhookController {
   }
 
   @Post()
+  @UseGuards(AccessPolicyGuard(WEBHOOK_WRITE_ACCESS_POLICY))
   async create(
     @Body() createWebhookDto: CreateWebhookInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<WebhookDTO> {
-    return this.webhookService.create(createWebhookDto, workspace.id);
+    return this.webhookService.create({
+      input: createWebhookDto,
+      workspaceId: workspace.id,
+    });
   }
 
   @Patch(':id')
+  @UseGuards(AccessPolicyGuard(WEBHOOK_WRITE_ACCESS_POLICY))
   async update(
     @Param('id') id: string,
-    @Body()
-    updateWebhookDto: {
-      targetUrl?: string;
-      operations?: string[];
-      description?: string;
-      secret?: string;
-    },
+    @Body() updateWebhookDto: UpdateWebhookInputUpdates,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<WebhookDTO> {
-    const input: UpdateWebhookInput = {
-      id,
-      update: updateWebhookDto,
-    };
-
-    return this.webhookService.update(input, workspace.id);
+    return this.webhookService.update({
+      input: { id, update: updateWebhookDto },
+      workspaceId: workspace.id,
+    });
   }
 
   @Delete(':id')
+  @UseGuards(AccessPolicyGuard(WEBHOOK_DELETE_ACCESS_POLICY))
   async remove(
     @Param('id') id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,

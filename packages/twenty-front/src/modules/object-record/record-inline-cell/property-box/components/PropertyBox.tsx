@@ -1,6 +1,6 @@
 import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { PageLayoutType } from '~/generated-metadata/graphql';
 
 interface PropertyBoxProps {
@@ -13,7 +13,7 @@ const StyledPropertyBoxContainer = styled.div<{
   noHorizontalPadding?: boolean;
 }>`
   align-self: stretch;
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.md};
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[2]};

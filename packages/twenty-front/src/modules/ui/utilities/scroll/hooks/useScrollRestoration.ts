@@ -7,7 +7,7 @@ import { isDefined } from 'twenty-shared/utils';
 
 export const useScrollRestoration = (componentInstanceId: string) => {
   const location = useLocation();
-  const storageKey = `scroll-${location.pathname}`;
+  const storageKey = `scroll-${location.pathname}-${componentInstanceId}`;
   const [isRestoring, setIsRestoring] = useState(false);
 
   const scrollWrapperScrollTop = useAtomComponentStateValue(
@@ -44,7 +44,9 @@ export const useScrollRestoration = (componentInstanceId: string) => {
   );
 
   useEffect(() => {
-    if (isRestoring) return;
+    if (isRestoring) {
+      return;
+    }
 
     if (scrollWrapperScrollTop <= SCROLL_RESTORATION_TOP_THRESHOLD_PX) {
       sessionStorage.removeItem(storageKey);

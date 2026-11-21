@@ -1,6 +1,7 @@
+import { ColoredIcon } from '@/ui/icon/components/ColoredIcon';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { getObjectColorWithFallback } from '@/object-metadata/utils/getObjectColorWithFallback';
-import { TintedIconTile, useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon/provider';
 
 export type ObjectMetadataIconInput = Pick<
   EnrichedObjectMetadataItem,
@@ -22,7 +23,7 @@ export const ObjectMetadataIcon = ({
   const Icon = getIcon(objectMetadataItem?.icon);
 
   return (
-    <TintedIconTile
+    <ColoredIcon
       Icon={Icon}
       color={getObjectColorWithFallback(objectMetadataItem)}
       size={size}

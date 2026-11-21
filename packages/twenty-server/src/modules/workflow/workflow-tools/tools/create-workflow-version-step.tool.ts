@@ -1,20 +1,19 @@
 import { isDefined } from 'twenty-shared/utils';
-import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
+import { TRIGGER_STEP_ID, WorkflowActionType } from 'twenty-shared/workflow';
 import { z } from 'zod';
 
-import type { CreateWorkflowVersionStepInput } from 'src/engine/core-modules/workflow/dtos/create-workflow-version-step.input';
+import { type CreateCoreWorkflowVersionStepInput } from 'src/engine/core-modules/workflow/dtos/create-core-workflow-version-step.input';
 import { type WorkflowVersionStepChangesDTO } from 'src/engine/core-modules/workflow/dtos/workflow-version-step-changes.dto';
-import { WorkflowActionType } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action-type.enum';
 import {
   type WorkflowToolContext,
   type WorkflowToolDependencies,
 } from 'src/modules/workflow/workflow-tools/types/workflow-tool-dependencies.type';
 
 const baseStepFields = {
-  workflowVersionId: z
+  coreWorkflowVersionId: z
     .string()
     .uuid()
-    .describe('The UUID of the workflow version to add the step to'),
+    .describe('The core workflow version UUID to add the step to'),
   parentStepId: z
     .string()
     .optional()
@@ -32,13 +31,6 @@ const baseStepFields = {
     .string()
     .optional()
     .describe('Optional ID of the step this new step should connect to'),
-  position: z
-    .object({
-      x: z.number(),
-      y: z.number(),
-    })
-    .optional()
-    .describe('Optional position coordinates for the step'),
 };
 
 const nonLogicFunctionStepTypes = Object.values(WorkflowActionType).filter(
@@ -69,7 +61,9 @@ const createWorkflowVersionStepSchema = z.discriminatedUnion('stepType', [
     defaultSettings: z
       .record(z.string(), z.unknown())
       .optional()
-      .describe('Optional default settings for the step.'),
+      .describe(
+        'Optional default settings for the step. For a CODE step, pass input.code (TypeScript exporting `main` as an async arrow function, `export const main = async (params: { ... }) => { ... }`) and input.logicFunctionInput.',
+      ),
   }),
 ]);
 
@@ -85,7 +79,13 @@ const enrichResultWithNextStep = ({
       return {
         ...result,
         nextStep:
-          'This CODE step was created with a default placeholder function. You MUST now call update_logic_function_source with the logicFunctionId from this step to define the actual code.',
+          'Unless you passed defaultSettings.input.code, this CODE step holds a placeholder in settings.input.code. You MUST then call update_workflow_version_step to set settings.input.code (TypeScript exporting `main` as an async arrow function, `export const main = async (params: { ... }) => { ... }`, whose params receive settings.input.logicFunctionInput) and settings.input.logicFunctionInput. IMPORTANT: Also provide settings.expectedOutputSchema (an example return value, e.g. { datePlus7: "2026-06-16" }) so downstream steps can reference this step\'s output variables via {{stepId.fieldName}}.',
+      };
+    case WorkflowActionType.AI_AGENT:
+      return {
+        ...result,
+        nextStep:
+          'If this AI_AGENT step runs no agent (no settings.input.agentId), it was created without instructions: you MUST now call update_workflow_version_step to set settings.input.instructions (its system prompt) and settings.input.prompt (the message sent on each run), and optionally modelId and responseFormat. Use responseFormat { type: "json", schema: { ... } } when downstream steps need to reference structured fields via {{stepId.fieldName}}, otherwise the output is referenced as {{stepId.response}}. The step reads no records until settings.input.scope grants it objects (same shape as a role manifest\'s permissions, with object universal identifiers). If it runs an agent, set settings.input.prompt: the agent supplies the instructions, model and permissions, and its response format unless the step sets settings.input.responseFormat.',
       };
     default:
       return result;
@@ -95,7 +95,7 @@ const enrichResultWithNextStep = ({
 export const createCreateWorkflowVersionStepTool = (
   deps: Pick<
     WorkflowToolDependencies,
-    'workflowVersionStepService' | 'workflowVersionStepHelpersService'
+    'coreWorkflowVersionMutationService' | 'coreWorkflowVersionWriteService'
   >,
   context: WorkflowToolContext,
 ) => ({
@@ -103,45 +103,46 @@ export const createCreateWorkflowVersionStepTool = (
   description:
     'Create a new step in a workflow version. This adds a step to the specified workflow version with the given configuration. If parentStepId is not provided, the step will be appended at the end of the workflow.',
   inputSchema: createWorkflowVersionStepSchema,
-  execute: async (parameters: CreateWorkflowVersionStepInput) => {
+  execute: async (parameters: CreateCoreWorkflowVersionStepInput) => {
     try {
+      const { workspaceId } = context;
+      const { coreWorkflowVersionId } = parameters;
+
       let effectiveParentStepId = parameters.parentStepId;
 
       if (!isDefined(effectiveParentStepId)) {
-        const workflowVersion =
-          await deps.workflowVersionStepHelpersService.getValidatedDraftWorkflowVersion(
+        const { steps } =
+          await deps.coreWorkflowVersionWriteService.getValidatedDraftCoreWorkflowVersion(
             {
-              workflowVersionId: parameters.workflowVersionId,
-              workspaceId: context.workspaceId,
+              workspaceId,
+              userWorkspaceId: context.userWorkspaceId,
+              coreWorkflowVersionId,
             },
           );
 
-        const steps = workflowVersion.steps ?? [];
+        const existingSteps = steps ?? [];
 
-        if (steps.length === 0) {
+        if (existingSteps.length === 0) {
           effectiveParentStepId = TRIGGER_STEP_ID;
         } else {
-          const leafStep = steps.filter(
+          const leafSteps = existingSteps.filter(
             (step) =>
               !isDefined(step.nextStepIds) || step.nextStepIds.length === 0,
           );
 
-          if (leafStep.length > 1) {
-            effectiveParentStepId = undefined;
-          } else {
-            effectiveParentStepId = leafStep[0]?.id;
-          }
+          effectiveParentStepId =
+            leafSteps.length > 1 ? undefined : leafSteps[0]?.id;
         }
       }
 
-      const result =
-        await deps.workflowVersionStepService.createWorkflowVersionStep({
-          workspaceId: context.workspaceId,
-          input: {
-            ...parameters,
-            parentStepId: effectiveParentStepId,
-          },
-        });
+      const result = await deps.coreWorkflowVersionMutationService.createStep({
+        workspaceId,
+        userWorkspaceId: context.userWorkspaceId,
+        input: {
+          ...parameters,
+          parentStepId: effectiveParentStepId,
+        },
+      });
 
       return enrichResultWithNextStep({
         result,

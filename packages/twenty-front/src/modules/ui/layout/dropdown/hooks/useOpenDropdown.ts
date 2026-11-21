@@ -10,6 +10,7 @@ import { type GlobalHotkeysConfig } from '@/ui/utilities/hotkey/types/GlobalHotk
 import { useAvailableComponentInstanceId } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceId';
 import { useStore } from 'jotai';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type OpenDropdownArgs = {
   dropdownComponentInstanceIdFromProps?: string;
@@ -33,15 +34,10 @@ export const useOpenDropdown = () => {
         dropdownComponentInstanceIdFromContext;
 
       if (!isDefined(dropdownComponentInstanceId)) {
-        throw new Error('Dropdown component instance ID is not defined');
+        throw new Error(
+          doNotTranslate('Dropdown component instance ID is not defined'),
+        );
       }
-
-      store.set(
-        isDropdownOpenComponentState.atomFamily({
-          instanceId: dropdownComponentInstanceId,
-        }),
-        true,
-      );
 
       setActiveDropdownFocusIdAndMemorizePrevious(dropdownComponentInstanceId);
 
@@ -60,6 +56,13 @@ export const useOpenDropdown = () => {
             false,
         },
       });
+
+      store.set(
+        isDropdownOpenComponentState.atomFamily({
+          instanceId: dropdownComponentInstanceId,
+        }),
+        true,
+      );
     },
     [
       pushFocusItemToFocusStack,

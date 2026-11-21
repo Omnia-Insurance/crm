@@ -1,12 +1,12 @@
-import { type ConfigVariableFilterCategory } from '@/settings/admin-panel/config-variables/types/ConfigVariableFilterCategory';
 import { type ConfigVariableGroupFilter } from '@/settings/admin-panel/config-variables/types/ConfigVariableGroupFilter';
 import { type ConfigVariableSourceFilter } from '@/settings/admin-panel/config-variables/types/ConfigVariableSourceFilter';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
-import { t } from '@lingui/core/macro';
-import { useState } from 'react';
-import { IconSettings } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
+import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { IconSettings } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
 import { ConfigVariableOptionsDropdownContent } from './ConfigVariableOptionsDropdownContent';
+import { useLingui } from '@lingui/react/macro';
 
 type ConfigVariableFilterDropdownProps = {
   sourceFilter: ConfigVariableSourceFilter;
@@ -27,31 +27,20 @@ export const ConfigVariableFilterDropdown = ({
   onGroupFilterChange,
   onShowHiddenChange,
 }: ConfigVariableFilterDropdownProps) => {
-  const [selectedCategory, setSelectedCategory] =
-    useState<ConfigVariableFilterCategory | null>(null);
-
-  const handleSelectCategory = (
-    category: ConfigVariableFilterCategory | null,
-  ) => {
-    setSelectedCategory(category);
-  };
-
+  const { t } = useLingui();
   return (
-    <Dropdown
-      clickableComponent={
-        <Button
-          variant="secondary"
-          size="medium"
-          title={t`Options`}
-          Icon={IconSettings}
-        />
-      }
-      dropdownId="env-var-options-dropdown"
-      dropdownOffset={{ x: 0, y: 10 }}
-      dropdownComponents={
+    <DropdownRoot dropdownId="env-var-options-dropdown" type="picker">
+      <Dropdown.Trigger
+        render={
+          <Button
+            size="md"
+            startIcon={<IconSettings />}
+            variant="outline"
+          >{t`Options`}</Button>
+        }
+      />
+      <DropdownContent align="end" sideOffset={10}>
         <ConfigVariableOptionsDropdownContent
-          selectedCategory={selectedCategory}
-          onSelectCategory={handleSelectCategory}
           sourceFilter={sourceFilter}
           groupFilter={groupFilter}
           groupOptions={groupOptions}
@@ -60,7 +49,7 @@ export const ConfigVariableFilterDropdown = ({
           onGroupFilterChange={onGroupFilterChange}
           onShowHiddenChange={onShowHiddenChange}
         />
-      }
-    />
+      </DropdownContent>
+    </DropdownRoot>
   );
 };

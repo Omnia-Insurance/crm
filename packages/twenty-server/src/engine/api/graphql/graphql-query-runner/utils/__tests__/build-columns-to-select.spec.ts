@@ -6,6 +6,7 @@ import { buildColumnsToSelect } from 'src/engine/api/graphql/graphql-query-runne
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { getFlatObjectMetadataMock } from 'src/engine/metadata-modules/flat-object-metadata/__mocks__/get-flat-object-metadata.mock';
 
 describe('buildColumnsToSelect', () => {
   const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
@@ -34,9 +35,7 @@ describe('buildColumnsToSelect', () => {
       viewFilterIds: [],
       kanbanAggregateOperationViewIds: [],
       calendarViewIds: [],
-      applicationId: null,
       label: overrides.name,
-      isCustom: false,
       isActive: true,
       isSystem: false,
       isUnique: false,
@@ -77,9 +76,8 @@ describe('buildColumnsToSelect', () => {
   const buildMockFlatObjectMetadata = (
     fieldIds: string[],
   ): FlatObjectMetadata =>
-    ({
+    getFlatObjectMetadataMock({
       id: personObjectId,
-      standardId: '20202020-e674-48e5-a542-72570eee7213',
       nameSingular: 'person',
       namePlural: 'people',
       labelSingular: 'Person',
@@ -87,7 +85,6 @@ describe('buildColumnsToSelect', () => {
       description: 'A person',
       icon: 'IconUser',
       targetTableName: 'DEPRECATED',
-      isCustom: false,
       isRemote: false,
       isActive: true,
       isSystem: false,
@@ -103,14 +100,13 @@ describe('buildColumnsToSelect', () => {
       imageIdentifierFieldMetadataId: '6bfcecc4-1866-4254-ba6b-6f22246819bb',
       isLabelSyncedWithName: false,
       workspaceId,
-      createdAt: new Date('2025-07-10T10:58:54.536Z'),
-      updatedAt: new Date('2025-07-10T10:58:54.536Z'),
+      createdAt: '2025-07-10T10:58:54.536Z',
+      updatedAt: '2025-07-10T10:58:54.536Z',
       universalIdentifier: personObjectId,
       fieldIds: fieldIds,
       indexMetadataIds: [],
       viewIds: [],
-      applicationId: null,
-    }) as unknown as FlatObjectMetadata;
+    });
 
   const buildFlatFieldMetadataMaps = (
     fields: FlatFieldMetadata[],
@@ -158,14 +154,15 @@ describe('buildColumnsToSelect', () => {
     universalIdentifiersByApplicationId: {},
   });
 
-  const companyObjectMetadata: FlatObjectMetadata = {
+  const companyObjectMetadata: FlatObjectMetadata = getFlatObjectMetadataMock({
     id: companyObjectId,
+    universalIdentifier: companyObjectId,
     nameSingular: 'company',
     namePlural: 'companies',
     fieldIds: [],
     indexMetadataIds: [],
     viewIds: [],
-  } as unknown as FlatObjectMetadata;
+  });
 
   it('should build columns to select with relation fields', () => {
     const flatObjectMetadata = buildMockFlatObjectMetadata([

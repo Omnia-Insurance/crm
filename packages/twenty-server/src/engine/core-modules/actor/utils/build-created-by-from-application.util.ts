@@ -1,9 +1,9 @@
 import { type ActorMetadata, FieldActorSource } from 'twenty-shared/types';
 
-import { type ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 
 type BuildCreatedByFromApplicationArgs = {
-  application: ApplicationEntity;
+  application: FlatApplication;
 };
 export const buildCreatedByFromApplication = ({
   application,
@@ -11,5 +11,5 @@ export const buildCreatedByFromApplication = ({
   source: FieldActorSource.APPLICATION,
   name: application.name,
   workspaceMemberId: null,
-  context: {},
+  context: { applicationId: application.id },
 });

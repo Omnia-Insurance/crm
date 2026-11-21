@@ -88,12 +88,24 @@ export const buildAttachmentStandardFlatIndexMetadatas = ({
     twentyStandardApplicationId,
     now,
   }),
-  workflowIdIndex: createStandardIndexFlatMetadata({
+  agentChatThreadIdIndex: createStandardIndexFlatMetadata({
     objectName,
     workspaceId,
     context: {
-      indexName: 'workflowIdIndex',
-      relatedFieldNames: ['targetWorkflow'],
+      indexName: 'agentChatThreadIdIndex',
+      relatedFieldNames: ['targetAgentChatThread'],
+    },
+    standardObjectMetadataRelatedEntityIds,
+    dependencyFlatEntityMaps,
+    twentyStandardApplicationId,
+    now,
+  }),
+  messageIdIndex: createStandardIndexFlatMetadata({
+    objectName,
+    workspaceId,
+    context: {
+      indexName: 'messageIdIndex',
+      relatedFieldNames: ['targetMessage'],
     },
     standardObjectMetadataRelatedEntityIds,
     dependencyFlatEntityMaps,

@@ -1,215 +1,183 @@
 import request from 'supertest';
+import {
+  activateCoreWorkflowVersion,
+  coreWorkflowGraphqlRequest,
+  createCoreWorkflow,
+  createCoreWorkflowVersionStep,
+  deactivateCoreWorkflowVersion,
+  deleteCoreWorkflows,
+  deleteLegacyWorkspaceWorkflowRecords,
+  linkCoreWorkflowToLegacyWorkspaceIds,
+  updateCoreWorkflowVersionTrigger,
+} from 'test/integration/graphql/suites/workflow/utils/core-workflow.util';
+import { findCommandMenuItems } from 'test/integration/metadata/suites/command-menu-item/utils/find-command-menu-items.util';
+
+import { type CommandMenuItemDTO } from 'src/engine/metadata-modules/command-menu-item/dtos/command-menu-item.dto';
 
 const client = request(`http://localhost:${APP_PORT}`);
 
-const testWorkflowId = 'd6f9be23-c8e6-42b2-93f5-34ee0f97f1c7';
-
 describe('workflowResolver', () => {
-  beforeAll(async () => {
-    const queryData = {
-      query: `
-        mutation CreateOneWorkflow {
-          createWorkflow(
-            data: {
-              name: "Custom Test Workflow"
-              id: "${testWorkflowId}"
-            }
-          ) {
-            id
-          }
-        }
-      `,
-    };
+  let coreWorkflowId: string;
+  let workspaceWorkflowVersionId: string;
 
-    await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryData);
+  beforeAll(async () => {
+    const createdWorkflow = await createCoreWorkflow({
+      name: 'Records API write rejection',
+    });
+
+    coreWorkflowId = createdWorkflow.coreWorkflowId;
+
+    const legacyIds = await linkCoreWorkflowToLegacyWorkspaceIds({
+      coreWorkflowId,
+      withWorkspaceRecords: true,
+    });
+
+    workspaceWorkflowVersionId = legacyIds.workspaceWorkflowVersionIds[0];
   });
 
   afterAll(async () => {
-    const queryData = {
-      query: `
-        mutation DestroyOneWorkflow {
-          destroyWorkflow(id: "${testWorkflowId}") {
-            id
-          }
-        }
-      `,
-    };
-
-    await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryData);
+    await deleteCoreWorkflows({ coreWorkflowIds: [coreWorkflowId] });
+    await deleteLegacyWorkspaceWorkflowRecords({
+      workspaceWorkflowVersionIds: [workspaceWorkflowVersionId],
+    });
   });
 
-  it('should create workflow subEntities', async () => {
-    const queryData = {
-      query: `
-        query FindOneWorkflow {
-          workflow(filter: {id: {eq: "${testWorkflowId}"}}) {
-            id
-            deletedAt
-            versions {
-              edges {
-                node {
-                  id
-                  deletedAt
-                  steps
-                }
-              }
-            }
-          }
-        }
-      `,
-    };
-
+  it.each([
+    {
+      operation: 'updateWorkflowVersion',
+      buildQuery: () =>
+        `mutation { updateWorkflowVersion(id: "${workspaceWorkflowVersionId}", data: { name: "Renamed" }) { id } }`,
+    },
+    {
+      operation: 'deleteWorkflowVersion',
+      buildQuery: () =>
+        `mutation { deleteWorkflowVersion(id: "${workspaceWorkflowVersionId}") { id } }`,
+    },
+    {
+      operation: 'destroyWorkflowVersion',
+      buildQuery: () =>
+        `mutation { destroyWorkflowVersion(id: "${workspaceWorkflowVersionId}") { id } }`,
+    },
+  ])('rejects $operation through the records API', async ({ buildQuery }) => {
     const response = await client
       .post('/graphql')
       .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryData);
+      .send({ query: buildQuery() });
 
-    expect(response.status).toBe(200);
-    expect(response.body.errors).toBeUndefined();
+    expect(response.body.errors?.[0]?.message).toBe('Method not allowed.');
+  });
+});
 
-    const workflow = response.body.data.workflow;
+const COMMAND_MENU_ITEM_GQL_FIELDS = `
+  id
+  coreWorkflowVersionId
+  engineComponentKey
+  label
+  shortLabel
+`;
 
-    expect(workflow.id).toBe(testWorkflowId);
-    expect(workflow.deletedAt).toBeNull();
-    expect(workflow.versions.edges.length).toBeGreaterThan(0);
-    expect(workflow.versions.edges[0].node.deletedAt).toBeNull();
+const findCommandMenuItemForWorkflowVersion = async (
+  coreWorkflowVersionId: string,
+): Promise<CommandMenuItemDTO | undefined> => {
+  const { data } = await findCommandMenuItems({
+    input: undefined,
+    gqlFields: COMMAND_MENU_ITEM_GQL_FIELDS,
   });
 
-  it('should delete workflow subEntities', async () => {
-    const deleteQueryData = {
+  return data?.commandMenuItems.find(
+    (item) => item.coreWorkflowVersionId === coreWorkflowVersionId,
+  );
+};
+
+describe('workflowResolver command menu item label', () => {
+  const initialWorkflowName = 'Command Menu Label Sync Test';
+  let coreWorkflowId: string | null = null;
+  let coreWorkflowVersionId: string | null = null;
+
+  const renameWorkflow = async (name: string) => {
+    await coreWorkflowGraphqlRequest({
       query: `
-        mutation DeleteOneWorkflow {
-          deleteWorkflow(id: "${testWorkflowId}") {
+        mutation UpdateCoreWorkflow($input: UpdateCoreWorkflowInput!) {
+          updateCoreWorkflow(input: $input) {
             id
           }
         }
       `,
-    };
+      variables: { input: { coreWorkflowId, name } },
+    });
+  };
 
-    const deleteResponse = await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(deleteQueryData);
+  beforeAll(async () => {
+    const coreWorkflow = await createCoreWorkflow({
+      name: initialWorkflowName,
+    });
 
-    expect(deleteResponse.status).toBe(200);
+    coreWorkflowId = coreWorkflow.coreWorkflowId;
+    coreWorkflowVersionId = coreWorkflow.coreWorkflowVersionId;
 
-    const queryData = {
-      query: `
-        query FindWorkflow {
-          workflow(filter: {
-            id: { eq: "${testWorkflowId}" },
-            not: { deletedAt: { is: NULL } }
-          }) {
-            id
-            deletedAt
-          }
-        }
-      `,
-    };
+    await updateCoreWorkflowVersionTrigger({
+      coreWorkflowVersionId,
+      trigger: {
+        name: 'Manual Trigger',
+        type: 'MANUAL',
+        settings: { outputSchema: {} },
+        nextStepIds: [],
+        position: { x: 0, y: 0 },
+      },
+    });
 
-    const response = await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryData);
+    await createCoreWorkflowVersionStep({
+      coreWorkflowVersionId,
+      stepType: 'FIND_RECORDS',
+    });
 
-    expect(response.status).toBe(200);
-    expect(response.body.errors).toBeUndefined();
-
-    const workflow = response.body.data.workflow;
-
-    expect(workflow.id).toBe(testWorkflowId);
-    expect(workflow.deletedAt).not.toBeNull();
-
-    const queryWorkflowVersionsData = {
-      query: `
-        query FindManyWorkflowVersions {
-          workflowVersions(filter: {
-            workflowId: { eq: "${testWorkflowId}" },
-            not: { deletedAt: { is: NULL } }
-          }) {
-            edges {
-              node {
-                id
-                deletedAt
-              }
-            }
-          }
-        }
-      `,
-    };
-
-    const workflowVersionsResponse = await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryWorkflowVersionsData);
-
-    expect(workflowVersionsResponse.status).toBe(200);
-    expect(workflowVersionsResponse.body.errors).toBeUndefined();
-
-    const workflowVersions =
-      workflowVersionsResponse.body.data.workflowVersions;
-
-    expect(workflowVersions.edges.length).toBeGreaterThan(0);
-    expect(workflowVersions.edges[0].node.deletedAt).not.toBeNull();
+    await activateCoreWorkflowVersion({ coreWorkflowVersionId });
   });
 
-  it('should restore workflow subEntities', async () => {
-    const restoreQueryData = {
-      query: `
-        mutation RestoreOneWorkflow {
-          restoreWorkflow(id: "${testWorkflowId}") {
-            id
-          }
-        }
-      `,
-    };
+  afterAll(async () => {
+    if (coreWorkflowVersionId) {
+      await deactivateCoreWorkflowVersion({ coreWorkflowVersionId });
+    }
 
-    const restoreResponse = await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(restoreQueryData);
+    if (coreWorkflowId) {
+      await deleteCoreWorkflows({ coreWorkflowIds: [coreWorkflowId] });
+    }
+  });
 
-    expect(restoreResponse.status).toBe(200);
+  it('labels the command menu item with the workflow name on activation', async () => {
+    const commandMenuItem = await findCommandMenuItemForWorkflowVersion(
+      coreWorkflowVersionId as string,
+    );
 
-    const queryData = {
-      query: `
-        query FindOneWorkflow {
-          workflow(filter: {id: {eq: "${testWorkflowId}"}}) {
-            id
-            deletedAt
-            versions {
-              edges {
-                node {
-                  id
-                  deletedAt
-                  steps
-                }
-              }
-            }
-          }
-        }
-      `,
-    };
+    expect(commandMenuItem).toBeDefined();
+    expect(commandMenuItem?.engineComponentKey).toBe(
+      'TRIGGER_WORKFLOW_VERSION',
+    );
+    expect(commandMenuItem?.label).toBe(initialWorkflowName);
+    expect(commandMenuItem?.shortLabel).toBe(initialWorkflowName);
+  });
 
-    const response = await client
-      .post('/graphql')
-      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
-      .send(queryData);
+  it('updates the command menu item label when the workflow is renamed', async () => {
+    const renamedWorkflowName = 'Renamed Command Menu Workflow';
 
-    expect(response.status).toBe(200);
-    expect(response.body.errors).toBeUndefined();
+    await renameWorkflow(renamedWorkflowName);
 
-    const workflow = response.body.data.workflow;
+    const commandMenuItem = await findCommandMenuItemForWorkflowVersion(
+      coreWorkflowVersionId as string,
+    );
 
-    expect(workflow.id).toBe(testWorkflowId);
-    expect(workflow.deletedAt).toBeNull();
-    expect(workflow.versions.edges.length).toBeGreaterThan(0);
-    expect(workflow.versions.edges[0].node.deletedAt).toBeNull();
+    expect(commandMenuItem?.label).toBe(renamedWorkflowName);
+    expect(commandMenuItem?.shortLabel).toBe(renamedWorkflowName);
+  });
+
+  it('falls back to "Untitled Workflow" when the workflow name is cleared', async () => {
+    await renameWorkflow('');
+
+    const commandMenuItem = await findCommandMenuItemForWorkflowVersion(
+      coreWorkflowVersionId as string,
+    );
+
+    expect(commandMenuItem?.label).toBe('Untitled Workflow');
+    expect(commandMenuItem?.shortLabel).toBe('Untitled Workflow');
   });
 });

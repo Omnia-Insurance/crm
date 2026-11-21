@@ -1,5 +1,3 @@
-import { FieldDisplay } from '@/object-record/record-field/ui/components/FieldDisplay';
-import { FieldInput } from '@/object-record/record-field/ui/components/FieldInput';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
 import { useGetButtonIcon } from '@/object-record/record-field/ui/hooks/useGetButtonIcon';
 import { useIsFieldInputOnly } from '@/object-record/record-field/ui/hooks/useIsFieldInputOnly';
@@ -8,7 +6,7 @@ import {
   type RecordInlineCellContextProps,
 } from '@/object-record/record-inline-cell/components/RecordInlineCellContext';
 import { useContext, type ReactNode } from 'react';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon/provider';
 
 type RecordInlineCellAnchoredPortalContextProps = {
   children: ReactNode;
@@ -39,8 +37,6 @@ export const RecordInlineCellAnchoredPortalContext = ({
     labelWidth: fieldDefinition.labelWidth,
     showLabel: fieldDefinition.showLabel,
     isCentered,
-    editModeContent: <FieldInput />,
-    displayModeContent: <FieldDisplay />,
     isDisplayModeFixHeight: isDisplayModeFixHeight,
     editModeContentOnly: isFieldInputOnly,
     loading: false,

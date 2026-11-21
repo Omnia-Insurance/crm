@@ -1,25 +1,25 @@
 import { useParams } from 'react-router-dom';
 import { useDebouncedCallback } from 'use-debounce';
 
-import { CoreObjectNameSingular, SettingsPath } from 'twenty-shared/types';
-import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useImpersonationSession } from '@/auth/hooks/useImpersonationSession';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { SettingsTabBar } from '@/settings/components/layout/SettingsTabBar';
 import { SettingsRolesQueryEffect } from '@/settings/roles/components/SettingsRolesQueryEffect';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
-import { TabList } from '@/ui/layout/tab-list/components/TabList';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTabIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { t } from '@lingui/core/macro';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { getSettingsPath } from 'twenty-shared/utils';
-import { IconInfoCircle, IconLockOpen } from 'twenty-ui/display';
+import { StandardObjectNameSingular, SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { IconInfoCircle, IconLock } from 'twenty-ui/icon';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
+import { currentUserState } from '@/auth/states/currentUserState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { isImpersonatingState } from '@/auth/states/isImpersonatingState';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
@@ -29,10 +29,11 @@ import { useWorkspaceMemberRoles } from '@/settings/members/hooks/useWorkspaceMe
 import { type WorkspaceMember } from '@/workspace-member/types/WorkspaceMember';
 import { useMutation } from '@apollo/client/react';
 import {
-  PermissionFlagType,
   DeleteUserWorkspaceDocument,
   ImpersonateDocument,
+  PermissionFlagType,
 } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 const SETTINGS_WORKSPACE_MEMBER_TABS = {
   COMPONENT_INSTANCE_ID: 'settings-workspace-member-tabs',
@@ -45,16 +46,20 @@ const SETTINGS_WORKSPACE_MEMBER_TABS = {
 const DELETE_MEMBER_MODAL_ID = 'workspace-member-delete-modal';
 
 export const SettingsWorkspaceMember = () => {
+  const { t } = useLingui();
   const { workspaceMemberId = '' } = useParams();
   const navigateSettings = useNavigateSettings();
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
-  const { openModal, closeModal } = useModal();
+  const { enqueueToast } = useToast();
+  const { openDialog, closeDialog } = useDialog();
+  const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const { startImpersonating } = useImpersonationSession();
   const [impersonate] = useMutation(ImpersonateDocument);
   const isImpersonating = useAtomStateValue(isImpersonatingState);
   const canImpersonate =
     useHasPermissionFlag(PermissionFlagType.IMPERSONATE) && !isImpersonating;
+  const canManageTwoFactorAuthenticationRecovery =
+    useHasPermissionFlag(PermissionFlagType.SECURITY) && !isImpersonating;
 
   const {
     roles,
@@ -63,7 +68,7 @@ export const SettingsWorkspaceMember = () => {
   } = useWorkspaceMemberRoles(workspaceMemberId);
 
   const { record: member, loading } = useFindOneRecord<WorkspaceMember>({
-    objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
+    objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
     objectRecordId: workspaceMemberId,
     recordGqlFields: {
       id: true,
@@ -97,15 +102,16 @@ export const SettingsWorkspaceMember = () => {
       }
       try {
         await updateOneRecord({
-          objectNameSingular: CoreObjectNameSingular.WorkspaceMember,
+          objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
           idToUpdate: member.id,
           updateOneRecordInput: {
             name: { firstName, lastName },
           },
         });
       } catch (error) {
-        enqueueErrorSnackBar({
-          message:
+        enqueueToast({
+          status: 'error',
+          children:
             error instanceof Error
               ? error.message
               : t`Error while saving the name`,
@@ -116,17 +122,23 @@ export const SettingsWorkspaceMember = () => {
   );
 
   const handleDeleteMember = async () => {
-    if (!member?.id) return;
+    if (!member?.id) {
+      return;
+    }
     try {
       await deleteUserFromWorkspace({
         variables: { workspaceMemberIdToDelete: member.id },
       });
-      enqueueSuccessSnackBar({ message: t`Member removed from workspace` });
-      closeModal(DELETE_MEMBER_MODAL_ID);
+      enqueueToast({
+        status: 'success',
+        children: t`Member removed from workspace`,
+      });
+      closeDialog(DELETE_MEMBER_MODAL_ID);
       navigateSettings(SettingsPath.WorkspaceMembersPage);
     } catch (error) {
-      enqueueErrorSnackBar({
-        message:
+      enqueueToast({
+        status: 'error',
+        children:
           error instanceof Error
             ? error.message
             : t`Unable to delete member right now`,
@@ -136,10 +148,21 @@ export const SettingsWorkspaceMember = () => {
 
   const handleImpersonate = async () => {
     if (!member?.userId || !currentWorkspace?.id) {
-      enqueueErrorSnackBar({
-        message: t`Cannot impersonate selected user`,
-        options: { duration: 2000 },
+      enqueueToast({
+        status: 'error',
+        children: t`Cannot impersonate selected user`,
+        duration: 2000,
       });
+      return;
+    }
+
+    if (!isDefined(currentUser?.id) || member.userId === currentUser.id) {
+      enqueueToast({
+        status: 'error',
+        children: t`You cannot impersonate your own account`,
+        duration: 2000,
+      });
+
       return;
     }
 
@@ -150,12 +173,14 @@ export const SettingsWorkspaceMember = () => {
       },
       onCompleted: async (data) => {
         const { loginToken } = data.impersonate;
+
         await startImpersonating(loginToken.token);
       },
       onError: () => {
-        enqueueErrorSnackBar({
-          message: t`Cannot impersonate selected user`,
-          options: { duration: 2000 },
+        enqueueToast({
+          status: 'error',
+          children: t`Cannot impersonate selected user`,
+          duration: 2000,
         });
       },
     });
@@ -167,12 +192,12 @@ export const SettingsWorkspaceMember = () => {
     <>
       <SettingsRolesQueryEffect />
       {isLoading ? null : (
-        <SubMenuTopBarContainer
+        <SettingsPageLayout
           title={`${member.name.firstName} ${member.name.lastName}`}
           links={[
             {
               children: t`Workspace`,
-              href: getSettingsPath(SettingsPath.Workspace),
+              href: getSettingsPath(SettingsPath.General),
             },
             {
               children: t`Members`,
@@ -182,9 +207,9 @@ export const SettingsWorkspaceMember = () => {
               children: `${member.name.firstName} ${member.name.lastName}`,
             },
           ]}
-        >
-          <SettingsPageContainer>
-            <TabList
+          secondaryBar={
+            <SettingsTabBar
+              aria-label={t`Member details`}
               tabs={[
                 {
                   id: SETTINGS_WORKSPACE_MEMBER_TABS.TABS_IDS.INFOS,
@@ -194,18 +219,35 @@ export const SettingsWorkspaceMember = () => {
                 {
                   id: SETTINGS_WORKSPACE_MEMBER_TABS.TABS_IDS.PERMISSIONS,
                   title: t`Permissions`,
-                  Icon: IconLockOpen,
+                  Icon: IconLock,
                 },
               ]}
               componentInstanceId={tabListComponentId}
             />
-
+          }
+        >
+          <SettingsPageContainer>
             {activeTabId === SETTINGS_WORKSPACE_MEMBER_TABS.TABS_IDS.INFOS && (
               <MemberInfosTab
                 member={member}
-                onImpersonate={canImpersonate ? handleImpersonate : undefined}
+                onImpersonate={
+                  canImpersonate &&
+                  isDefined(member.userId) &&
+                  isDefined(currentUser?.id) &&
+                  member.userId !== currentUser.id
+                    ? handleImpersonate
+                    : undefined
+                }
                 onNameChange={debouncedUpdateName}
-                onDelete={() => openModal(DELETE_MEMBER_MODAL_ID)}
+                onDelete={() => openDialog(DELETE_MEMBER_MODAL_ID)}
+                twoFactorAuthenticationRecoveryUserId={
+                  canManageTwoFactorAuthenticationRecovery &&
+                  isDefined(member.userId) &&
+                  isDefined(currentUser?.id) &&
+                  member.userId !== currentUser.id
+                    ? member.userId
+                    : undefined
+                }
               />
             )}
 
@@ -219,15 +261,15 @@ export const SettingsWorkspaceMember = () => {
             )}
           </SettingsPageContainer>
 
-          <ConfirmationModal
-            modalInstanceId={DELETE_MEMBER_MODAL_ID}
+          <ConfirmationDialog
+            dialogId={DELETE_MEMBER_MODAL_ID}
             title={t`Remove member from workspace`}
-            subtitle={t`This action cannot be undone. This will permanently remove this member from this workspace and remove them from all their assignments.`}
+            subtitle={t`This action cannot be undone. This member will be removed and unassigned from their records. Their synced emails and calendars will stop syncing and be reassigned to you.`}
             onConfirmClick={handleDeleteMember}
             confirmButtonText={t`Remove member`}
             loading={isDeleting}
           />
-        </SubMenuTopBarContainer>
+        </SettingsPageLayout>
       )}
     </>
   );

@@ -1,16 +1,11 @@
-import { type ToolSet } from 'ai';
+import { asSchema, type ToolExecuteFunction, type ToolSet } from 'ai';
 import { type ToolCategory } from 'twenty-shared/ai';
+import { isDefined } from 'twenty-shared/utils';
 
+import { buildInvalidToolArgumentsOutput } from 'src/engine/core-modules/tool-provider/utils/build-invalid-tool-arguments-output.util';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 
-// Invokes a tool from a factory-generated ToolSet by name. Used by providers
-// whose tools are produced as opaque AI-SDK ToolSet closures (view, metadata,
-// workflow, dashboard, view-field) and which therefore cannot dispatch by
-// executionRef alone.
-//
-// The factory closures expect a `loadingMessage` field (added by the chat UX
-// wrapper) and a ToolExecutionOptions object; neither is meaningful when the
-// executor is invoking them internally, so we pass empty defaults.
+// For providers whose tools are opaque AI-SDK ToolSet closures and so cannot dispatch by executionRef.
 export const executeToolFromToolSet = async (
   toolSet: ToolSet,
   toolName: string,
@@ -25,8 +20,26 @@ export const executeToolFromToolSet = async (
     );
   }
 
-  return tool.execute(
-    { loadingMessage: '', ...args },
-    { toolCallId: '', messages: [] },
-  ) as Promise<ToolOutput>;
+  // The AI SDK only validates input for tools it calls itself, not for registry dispatch.
+  const validation = await asSchema(tool.inputSchema).validate?.(args);
+
+  if (isDefined(validation) && !validation.success) {
+    return buildInvalidToolArgumentsOutput({
+      toolName,
+      error: validation.error,
+    });
+  }
+
+  // ToolSet widens execute to a union no argument satisfies; these tools take no per-tool context.
+  const execute = tool.execute as ToolExecuteFunction<
+    unknown,
+    ToolOutput,
+    undefined
+  >;
+
+  return execute(isDefined(validation) ? validation.value : args, {
+    toolCallId: '',
+    messages: [],
+    context: undefined,
+  }) as Promise<ToolOutput>;
 };

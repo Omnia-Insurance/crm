@@ -1,16 +1,17 @@
-import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
-// OMNIA-CUSTOM: Reconciliation wizard intercept
-import { useOpenReconciliationWizard } from '@/reconciliation/hooks/useOpenReconciliationWizard';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { useDraftRecordDefaults } from '@/object-record/hooks/useDraftRecordDefaults';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
-import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
+import { getFieldMetadataItemGqlFieldName } from '@/object-metadata/utils/getFieldMetadataItemGqlFieldName';
+import { useCreateNewRecord } from '@/object-record/hooks/useCreateNewRecord';
+import { recordGroupDefinitionsComponentSelector } from '@/object-record/record-group/states/selectors/recordGroupDefinitionsComponentSelector';
+import { recordIndexGroupFieldMetadataItemComponentState } from '@/object-record/record-index/states/recordIndexGroupFieldMetadataComponentState';
+import { recordIndexRecordIdsByGroupComponentFamilyState } from '@/object-record/record-index/states/recordIndexRecordIdsByGroupComponentFamilyState';
 import { useBuildRecordInputFromFilters } from '@/object-record/record-table/hooks/useBuildRecordInputFromFilters';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { type OnRecordCreated } from '@/object-record/types/OnRecordCreated';
+import { useAtomComponentFamilyStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateCallbackState';
+import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
-import { isDefined } from 'twenty-shared/utils';
-import { v4 } from 'uuid';
+import { findByProperty, isDefined } from 'twenty-shared/utils';
 
 type UseCreateNewIndexRecordProps = {
   objectMetadataItem: EnrichedObjectMetadataItem;
@@ -21,75 +22,78 @@ export const useCreateNewIndexRecord = ({
   objectMetadataItem,
   instanceId,
 }: UseCreateNewIndexRecordProps) => {
+  const recordGroupDefinitions = useAtomComponentSelectorValue(
+    recordGroupDefinitionsComponentSelector,
+    instanceId,
+  );
+
   const store = useStore();
+  const recordIndexRecordIdsByGroupCallbackState =
+    useAtomComponentFamilyStateCallbackState(
+      recordIndexRecordIdsByGroupComponentFamilyState,
+      instanceId,
+    );
 
-  const { openRecordInSidePanel } = useOpenRecordInSidePanel();
-
-  // OMNIA-CUSTOM: Open reconciliation wizard instead of side panel
-  const { openReconciliationWizard } = useOpenReconciliationWizard();
+  const recordIndexGroupFieldMetadataItem = useAtomComponentStateValue(
+    recordIndexGroupFieldMetadataItemComponentState,
+    instanceId,
+  );
 
   const { buildRecordInputFromFilters } = useBuildRecordInputFromFilters({
     objectMetadataItem,
     instanceId,
   });
 
-  const { buildDraftSeeds } = useDraftRecordDefaults({ objectMetadataItem });
+  const onRecordCreated = useCallback<OnRecordCreated>(
+    ({ record: createdRecord, recordInput }) => {
+      if (isDefined(recordIndexGroupFieldMetadataItem)) {
+        const recordGroup = recordGroupDefinitions.find(
+          findByProperty(
+            'value',
+            createdRecord[
+              getFieldMetadataItemGqlFieldName(
+                recordIndexGroupFieldMetadataItem,
+              )
+            ],
+          ),
+        );
 
-  const openDraftInSidePanel = useCallback(
-    (recordInput?: Partial<ObjectRecord>) => {
-      // OMNIA-CUSTOM: Intercept reconciliation object creation → open wizard.
-      // Returns the promise so HeadlessEngineCommandWrapperEffect awaits it
-      // before unmounting (otherwise the data-loading refs get torn down).
-      if (objectMetadataItem.nameSingular === 'reconciliation') {
-        return openReconciliationWizard();
+        if (isDefined(recordGroup)) {
+          const currentRecordIds = store
+            .get(recordIndexRecordIdsByGroupCallbackState(recordGroup.id))
+            .filter((recordId) => recordId !== createdRecord.id);
+
+          if (recordInput?.position === 'first') {
+            const newRecordIds = [createdRecord.id, ...currentRecordIds];
+
+            store.set(
+              recordIndexRecordIdsByGroupCallbackState(recordGroup.id),
+              newRecordIds,
+            );
+          } else {
+            const newRecordIds = [...currentRecordIds, createdRecord.id];
+
+            store.set(
+              recordIndexRecordIdsByGroupCallbackState(recordGroup.id),
+              newRecordIds,
+            );
+          }
+        }
       }
-
-      const recordId = v4();
-      const { position, ...restRecordInput } = recordInput ?? {};
-
-      const { seedValues: draftSeeds, rlsFieldNames } = buildDraftSeeds({
-        includeRestrictedFields: true,
-      });
-      const recordInputFromFilters = buildRecordInputFromFilters();
-
-      const seedValues = {
-        id: recordId,
-        ...draftSeeds,
-        ...recordInputFromFilters,
-        ...restRecordInput,
-      } as ObjectRecord;
-
-      // 1. Seed draft in record store
-      store.set(recordStoreFamilyState.atomFamily(recordId), seedValues);
-
-      // 2. Track as draft with metadata
-      const draftMap = new Map(store.get(draftRecordIdsState.atom));
-      draftMap.set(recordId, {
-        objectNameSingular: objectMetadataItem.nameSingular,
-        objectMetadataItem,
-        hiddenFieldNames: new Set(['position', ...rlsFieldNames]),
-        extraRecordInput: isDefined(position) ? { position } : {},
-      });
-      store.set(draftRecordIdsState.atom, draftMap);
-
-      // 3. Open side panel with draft
-      openRecordInSidePanel({
-        recordId,
-        objectNameSingular: objectMetadataItem.nameSingular,
-        isNewRecord: true,
-      });
     },
     [
       store,
-      buildDraftSeeds,
-      buildRecordInputFromFilters,
-      objectMetadataItem,
-      openRecordInSidePanel,
-      openReconciliationWizard,
+      recordGroupDefinitions,
+      recordIndexGroupFieldMetadataItem,
+      recordIndexRecordIdsByGroupCallbackState,
     ],
   );
 
-  return {
-    openDraftInSidePanel,
-  };
+  const { createNewRecord } = useCreateNewRecord({
+    objectMetadataItem,
+    buildRecordInput: buildRecordInputFromFilters,
+    onRecordCreated,
+  });
+
+  return { createNewIndexRecord: createNewRecord };
 };

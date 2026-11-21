@@ -14,13 +14,19 @@ import { FeatureFlagKey, FileFolder } from 'twenty-shared/types';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
 
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { ApiKeyEntity } from 'src/engine/core-modules/api-key/api-key.entity';
+import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { ApplicationDTO } from 'src/engine/core-modules/application/dtos/application.dto';
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { fromFlatApplicationToApplicationDto } from 'src/engine/core-modules/application/utils/from-flat-application-to-application-dto.util';
+import { getScopedCallingApplication } from 'src/engine/core-modules/application/utils/get-scoped-calling-application.util';
 import { type AuthContextUser } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
 import { BillingEntitlementDTO } from 'src/engine/core-modules/billing/dtos/billing-entitlement.dto';
+import { BillingCustomerEntity } from 'src/engine/core-modules/billing/entities/billing-customer.entity';
 import { BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
+import { BillingPortalWorkspaceService } from 'src/engine/core-modules/billing/services/billing-portal.workspace-service';
+import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
 import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
 import { DomainValidRecords } from 'src/engine/core-modules/dns-manager/dtos/domain-valid-records';
 import { DnsManagerService } from 'src/engine/core-modules/dns-manager/services/dns-manager.service';
@@ -30,17 +36,20 @@ import { EnterprisePlanService } from 'src/engine/core-modules/enterprise/servic
 import { FeatureFlagDTO } from 'src/engine/core-modules/feature-flag/dtos/feature-flag.dto';
 import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
 import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
-import { FileService } from 'src/engine/core-modules/file/services/file.service';
 import { PreventNestToAutoLogGraphqlErrorsFilter } from 'src/engine/core-modules/graphql/filters/prevent-nest-to-auto-log-graphql-errors.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserWorkspaceService } from 'src/engine/core-modules/user-workspace/user-workspace.service';
+import { WorkspaceAiDataPolicyService } from 'src/engine/metadata-modules/ai/ai-models/services/workspace-ai-data-policy.service';
+import { AiDataPolicyDTO } from 'src/engine/core-modules/workspace/dtos/ai-data-policy.dto';
 import { ActivateWorkspaceInput } from 'src/engine/core-modules/workspace/dtos/activate-workspace-input';
 import {
   type AuthProvidersDTO,
   PublicWorkspaceDataDTO,
   PublicWorkspaceDataSummaryDTO,
 } from 'src/engine/core-modules/workspace/dtos/public-workspace-data.dto';
+import { UpdateWorkspaceAllowedEmbeddingOriginsInput } from 'src/engine/core-modules/workspace/dtos/update-workspace-allowed-embedding-origins.input';
+import { UpdateWorkspaceIframeMediaPermissionsInput } from 'src/engine/core-modules/workspace/dtos/update-workspace-iframe-media-permissions.input';
 import { UpdateWorkspaceInput } from 'src/engine/core-modules/workspace/dtos/update-workspace-input';
 import { WorkspaceUrlsDTO } from 'src/engine/core-modules/workspace/dtos/workspace-urls.dto';
 import { WorkspaceService } from 'src/engine/core-modules/workspace/services/workspace.service';
@@ -53,24 +62,22 @@ import {
   WorkspaceExceptionCode,
   WorkspaceNotFoundDefaultError,
 } from 'src/engine/core-modules/workspace/workspace.exception';
-import { AuthApiKey } from 'src/engine/decorators/auth/auth-api-key.decorator';
+import { AuthApplication } from 'src/engine/decorators/auth/auth-application.decorator';
 import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
 import { AuthUser } from 'src/engine/decorators/auth/auth-user.decorator';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { AllowSuspendedWorkspace } from 'src/engine/decorators/auth/allow-suspended-workspace.decorator';
 import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { UserAuthGuard } from 'src/engine/guards/user-auth.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
-import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-graphql-api-exception.filter';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
 import { RoleDTO } from 'src/engine/metadata-modules/role/dtos/role.dto';
 import { RoleService } from 'src/engine/metadata-modules/role/role.service';
-import { fromRoleEntityToRoleDto } from 'src/engine/metadata-modules/role/utils/fromRoleEntityToRoleDto.util';
 import { ViewDTO } from 'src/engine/metadata-modules/view/dtos/view.dto';
 import { ViewService } from 'src/engine/metadata-modules/view/services/view.service';
 import { getRequest } from 'src/utils/extract-request';
-import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+
 const OriginHeader = createParamDecorator(
   (_: unknown, ctx: ExecutionContext) => {
     const request = getRequest(ctx);
@@ -84,6 +91,7 @@ const OriginHeader = createParamDecorator(
 @UseFilters(
   PreventNestToAutoLogGraphqlErrorsFilter,
   PermissionsGraphqlApiExceptionFilter,
+  AuthGraphqlApiExceptionFilter,
 )
 export class WorkspaceResolver {
   constructor(
@@ -91,10 +99,12 @@ export class WorkspaceResolver {
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly userWorkspaceService: UserWorkspaceService,
     private readonly twentyConfigService: TwentyConfigService,
-    private readonly fileService: FileService,
     private readonly fileUrlService: FileUrlService,
     private readonly billingSubscriptionService: BillingSubscriptionService,
+    private readonly billingPortalWorkspaceService: BillingPortalWorkspaceService,
+    private readonly billingService: BillingService,
     private readonly featureFlagService: FeatureFlagService,
+    private readonly workspaceAiDataPolicyService: WorkspaceAiDataPolicyService,
     private readonly roleService: RoleService,
     private readonly viewService: ViewService,
     private readonly dnsManagerService: DnsManagerService,
@@ -104,9 +114,24 @@ export class WorkspaceResolver {
   ) {}
 
   @Query(() => WorkspaceEntity)
-  @UseGuards(WorkspaceAuthGuard, NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: true,
+      },
+      requiredPermissionFlags: [],
+    }),
+  )
   async currentWorkspace(@AuthWorkspace() { id }: WorkspaceEntity) {
-    const workspace = await this.workspaceService.findById(id);
+    const workspace = await this.workspaceService.findOneWorkspaceById(id);
 
     assert(workspace, 'Workspace not found');
 
@@ -114,22 +139,55 @@ export class WorkspaceResolver {
   }
 
   @Mutation(() => WorkspaceEntity)
-  @UseGuards(UserAuthGuard, WorkspaceAuthGuard, NoPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: false,
+        oauthClient: false,
+        application: false,
+      },
+      requiredPermissionFlags: [],
+    }),
+  )
   async activateWorkspace(
-    @Args('data') data: ActivateWorkspaceInput,
+    // ignored, kept only because removing it would break the schema
+    @Args('data') _data: ActivateWorkspaceInput,
     @AuthUser() user: AuthContextUser,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ) {
-    return await this.workspaceService.activateWorkspace(user, workspace, data);
+    return await this.workspaceService.activateWorkspace(user, workspace);
   }
 
   @Mutation(() => WorkspaceEntity)
-  @UseGuards(WorkspaceAuthGuard, CustomPermissionGuard)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: false,
+      },
+      requiredPermissionFlags: [],
+    }),
+    CustomPermissionGuard,
+  )
   async updateWorkspace(
     @Args('data') data: UpdateWorkspaceInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
-    @AuthApiKey() apiKey: ApiKeyEntity | undefined,
+    @AuthApplication({ allowUndefined: true })
+    application: FlatApplication | undefined,
   ) {
     try {
       return await this.workspaceService.updateWorkspaceById({
@@ -138,18 +196,73 @@ export class WorkspaceResolver {
           id: workspace.id,
         },
         userWorkspaceId,
-        apiKey,
+        application,
       });
     } catch (error) {
       workspaceGraphqlApiExceptionHandler(error);
     }
   }
 
-  @ResolveField(() => String, { nullable: true })
-  async routerModel(
-    @Parent() _workspace: WorkspaceEntity,
-  ): Promise<string | null> {
-    return 'auto';
+  @Mutation(() => WorkspaceEntity)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: true,
+      },
+      requiredPermissionFlags: [PermissionFlagType.SECURITY],
+    }),
+  )
+  async updateWorkspaceAllowedEmbeddingOrigins(
+    @Args('data') data: UpdateWorkspaceAllowedEmbeddingOriginsInput,
+    @AuthWorkspace() workspace: WorkspaceEntity,
+  ) {
+    try {
+      return await this.workspaceService.updateWorkspaceAllowedEmbeddingOrigins(
+        workspace.id,
+        data,
+      );
+    } catch (error) {
+      workspaceGraphqlApiExceptionHandler(error);
+    }
+  }
+
+  @Mutation(() => WorkspaceEntity)
+  @UseGuards(
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: false,
+          workspaceAgnostic: false,
+        },
+        apiKey: false,
+        oauthClient: false,
+        application: false,
+      },
+      requiredPermissionFlags: [PermissionFlagType.SECURITY],
+    }),
+  )
+  async updateWorkspaceIframeMediaPermissions(
+    @Args('data') input: UpdateWorkspaceIframeMediaPermissionsInput,
+    @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
+  ) {
+    try {
+      return await this.workspaceService.updateWorkspaceIframeMediaPermissions({
+        workspaceId,
+        input,
+      });
+    } catch (error) {
+      workspaceGraphqlApiExceptionHandler(error);
+    }
   }
 
   @ResolveField(() => [FeatureFlagDTO], { nullable: true })
@@ -165,13 +278,34 @@ export class WorkspaceResolver {
     );
   }
 
+  @ResolveField(() => AiDataPolicyDTO, { nullable: true })
+  async aiDataPolicy(
+    @Parent() workspace: WorkspaceEntity,
+  ): Promise<AiDataPolicyDTO | null> {
+    return this.workspaceAiDataPolicyService.findStoredAiDataPolicy(workspace);
+  }
+
   @Mutation(() => WorkspaceEntity)
   @UseGuards(
-    WorkspaceAuthGuard,
-    SettingsPermissionGuard(PermissionFlagType.WORKSPACE),
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: false,
+      },
+      requiredPermissionFlags: [PermissionFlagType.WORKSPACE],
+    }),
   )
+  @AllowSuspendedWorkspace()
   async deleteCurrentWorkspace(@AuthWorkspace() { id }: WorkspaceEntity) {
-    return this.workspaceService.deleteWorkspace(id);
+    await this.workspaceService.suspendWorkspace(id);
+    return this.workspaceService.deleteWorkspace(id, true);
   }
 
   @ResolveField(() => [BillingSubscriptionEntity])
@@ -191,6 +325,19 @@ export class WorkspaceResolver {
     }
   }
 
+  @ResolveField(() => String, { nullable: true })
+  inviteHash(
+    @Parent() workspace: WorkspaceEntity,
+    @AuthApplication({ allowUndefined: true })
+    application: FlatApplication | undefined,
+  ): string | null {
+    if (isDefined(getScopedCallingApplication(application))) {
+      return null;
+    }
+
+    return workspace.inviteHash ?? null;
+  }
+
   @ResolveField(() => RoleDTO, { nullable: true })
   async defaultRole(
     @Parent() workspace: WorkspaceEntity,
@@ -199,42 +346,7 @@ export class WorkspaceResolver {
       return null;
     }
 
-    const defaultRoleEntity = await this.roleService.getRoleById(
-      workspace.defaultRoleId,
-      workspace.id,
-    );
-
-    return isDefined(defaultRoleEntity)
-      ? fromRoleEntityToRoleDto(defaultRoleEntity)
-      : null;
-  }
-
-  @ResolveField(() => String, { nullable: true })
-  async fastModel(
-    @Parent() workspace: WorkspaceEntity,
-  ): Promise<string | null> {
-    return workspace.fastModel;
-  }
-
-  @ResolveField(() => String, { nullable: true })
-  async smartModel(
-    @Parent() workspace: WorkspaceEntity,
-  ): Promise<string | null> {
-    return workspace.smartModel;
-  }
-
-  @ResolveField(() => [String], { nullable: true })
-  async enabledAiModelIds(
-    @Parent() workspace: WorkspaceEntity,
-  ): Promise<string[]> {
-    return workspace.enabledAiModelIds;
-  }
-
-  @ResolveField(() => Boolean, { nullable: false })
-  async useRecommendedModels(
-    @Parent() workspace: WorkspaceEntity,
-  ): Promise<boolean> {
-    return workspace.useRecommendedModels;
+    return this.roleService.getRoleById(workspace.defaultRoleId, workspace.id);
   }
 
   @ResolveField(() => ApplicationDTO, { nullable: true })
@@ -253,7 +365,7 @@ export class WorkspaceResolver {
         workspaceCustomFlatApplication,
       );
     } catch {
-      // Temporary should be removed after CreateWorkspaceCustomApplicationCommand is run
+      // TODO: remove this fallback, added while workspaces were being backfilled with a custom application
       return null;
     }
   }
@@ -283,6 +395,36 @@ export class WorkspaceResolver {
     });
   }
 
+  @ResolveField(() => Boolean)
+  async isTrialAvailable(
+    @Parent() workspace: WorkspaceEntity,
+    @AuthUser({ allowUndefined: true }) user: AuthContextUser | undefined,
+  ): Promise<boolean> {
+    if (
+      !isDefined(user) ||
+      (await this.billingService.hasWorkspaceAnySubscription(workspace.id))
+    ) {
+      return false;
+    }
+
+    return !(await this.billingPortalWorkspaceService.hasReachedTrialLimit({
+      userId: user.id,
+      userEmail: user.email,
+      workspaceId: workspace.id,
+    }));
+  }
+
+  @ResolveField(() => BillingCustomerEntity, { nullable: true })
+  async billingCustomer(
+    @Parent() workspace: WorkspaceEntity,
+  ): Promise<BillingCustomerEntity | null> {
+    if (!this.twentyConfigService.isBillingEnabled()) {
+      return null;
+    }
+
+    return this.billingSubscriptionService.getBillingCustomer(workspace.id);
+  }
+
   @ResolveField(() => Number)
   async workspaceMembersCount(
     @Parent() workspace: WorkspaceEntity,
@@ -308,11 +450,6 @@ export class WorkspaceResolver {
     return this.billingSubscriptionService.getWorkspaceEntitlements(
       workspace.id,
     );
-  }
-
-  @ResolveField(() => Boolean)
-  hasValidEnterpriseKey(): boolean {
-    return this.enterprisePlanService.hasValidEnterpriseKey();
   }
 
   @ResolveField(() => Boolean)
@@ -370,6 +507,7 @@ export class WorkspaceResolver {
 
   @Query(() => PublicWorkspaceDataDTO)
   @UseGuards(PublicEndpointGuard, NoPermissionGuard)
+  @AllowSuspendedWorkspace()
   async getPublicWorkspaceDataByDomain(
     @OriginHeader() originHeader: string,
     @Args('origin', { nullable: true }) origin?: string,
@@ -467,8 +605,20 @@ export class WorkspaceResolver {
 
   @Mutation(() => DomainValidRecords, { nullable: true })
   @UseGuards(
-    WorkspaceAuthGuard,
-    SettingsPermissionGuard(PermissionFlagType.WORKSPACE),
+    AccessPolicyGuard({
+      authPrincipals: {
+        userSession: {
+          standard: true,
+          impersonated: true,
+          playground: true,
+          workspaceAgnostic: false,
+        },
+        apiKey: true,
+        oauthClient: true,
+        application: true,
+      },
+      requiredPermissionFlags: [PermissionFlagType.WORKSPACE],
+    }),
   )
   async checkCustomDomainValidRecords(
     @AuthWorkspace() workspace: WorkspaceEntity,

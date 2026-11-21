@@ -7,6 +7,7 @@ import { WorkflowDiagramStepNodeEditableContent } from '@/workflow/workflow-diag
 import '@xyflow/react/dist/style.css';
 import { useStore } from 'jotai';
 import { useEffect } from 'react';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { isDefined } from 'twenty-shared/utils';
 import { CatalogDecorator, type CatalogStory } from 'twenty-ui/testing';
 import { ReactflowDecorator } from '~/testing/decorators/ReactflowDecorator';
@@ -48,6 +49,10 @@ export default meta;
 
 type Story = StoryObj<typeof WorkflowDiagramStepNodeEditableContent>;
 
+const onChangeNode = fn();
+const onDuplicateNode = fn();
+const onDelete = fn();
+
 const ALL_STEPS = [
   {
     nodeType: 'trigger',
@@ -55,10 +60,6 @@ const ALL_STEPS = [
     name: 'Record is Created',
     hasNextStepIds: true,
     stepId: 'trigger',
-    position: {
-      x: 0,
-      y: 0,
-    },
   },
   {
     nodeType: 'trigger',
@@ -66,10 +67,6 @@ const ALL_STEPS = [
     name: 'Manual',
     hasNextStepIds: true,
     stepId: 'step1',
-    position: {
-      x: 0,
-      y: 150,
-    },
   },
   {
     nodeType: 'action',
@@ -77,10 +74,6 @@ const ALL_STEPS = [
     name: 'Create Record',
     hasNextStepIds: true,
     stepId: 'step2',
-    position: {
-      x: 0,
-      y: 300,
-    },
   },
   {
     nodeType: 'action',
@@ -88,10 +81,6 @@ const ALL_STEPS = [
     name: 'Update Record',
     hasNextStepIds: true,
     stepId: 'step3',
-    position: {
-      x: 0,
-      y: 450,
-    },
   },
   {
     nodeType: 'action',
@@ -99,10 +88,6 @@ const ALL_STEPS = [
     name: 'Delete Record',
     hasNextStepIds: true,
     stepId: 'step4',
-    position: {
-      x: 0,
-      y: 600,
-    },
   },
   {
     nodeType: 'action',
@@ -110,10 +95,6 @@ const ALL_STEPS = [
     name: 'Send Email',
     hasNextStepIds: true,
     stepId: 'step5',
-    position: {
-      x: 0,
-      y: 750,
-    },
   },
   {
     nodeType: 'action',
@@ -121,10 +102,6 @@ const ALL_STEPS = [
     name: 'Code',
     hasNextStepIds: true,
     stepId: 'step6',
-    position: {
-      x: 0,
-      y: 900,
-    },
   },
   {
     nodeType: 'action',
@@ -132,10 +109,6 @@ const ALL_STEPS = [
     name: 'HTTP Request',
     hasNextStepIds: true,
     stepId: 'step7',
-    position: {
-      x: 0,
-      y: 1050,
-    },
   },
 ] satisfies WorkflowDiagramStepNodeData[];
 
@@ -147,6 +120,9 @@ export const Catalog: CatalogStory<
     id: 'story-node',
     data: ALL_STEPS[0],
     selected: false,
+    onChangeNode,
+    onDuplicateNode,
+    onDelete,
   },
   parameters: {
     pseudo: { hover: ['.hover'] },
@@ -161,7 +137,11 @@ export const Catalog: CatalogStory<
         {
           name: 'step type',
           values: ALL_STEPS,
-          props: (data: WorkflowDiagramStepNodeData) => ({ data }),
+          props: (data: WorkflowDiagramStepNodeData) => ({
+            data,
+            onDuplicateNode:
+              data.nodeType === 'action' ? onDuplicateNode : undefined,
+          }),
         },
         {
           name: 'selected',
@@ -190,4 +170,47 @@ export const Catalog: CatalogStory<
     CatalogDecorator,
     ReactflowDecorator,
   ],
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const optionsButtons = await canvas.findAllByRole('button', {
+      name: 'Node options',
+    });
+
+    expect(optionsButtons).toHaveLength(ALL_STEPS.length);
+
+    const canvasBody = within(canvasElement.ownerDocument.body);
+
+    const triggerOptionsButton = optionsButtons[0];
+
+    await userEvent.click(triggerOptionsButton);
+
+    await canvasBody.findByText('Change node');
+    expect(canvasBody.queryByText('Duplicate node')).not.toBeInTheDocument();
+
+    await userEvent.click(triggerOptionsButton);
+
+    await waitFor(() => {
+      expect(canvasBody.queryByText('Change node')).not.toBeInTheDocument();
+    });
+
+    const firstActionStepIndex = ALL_STEPS.findIndex(
+      (step) => step.nodeType === 'action',
+    );
+
+    await userEvent.click(optionsButtons[firstActionStepIndex]);
+
+    await canvasBody.findByText('Duplicate node');
+    const changeNodeAction = await canvasBody.findByRole('menuitem', {
+      name: 'Change node',
+    });
+    await waitFor(() => expect(changeNodeAction).toHaveFocus());
+
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    await waitFor(() => {
+      expect(args.onDuplicateNode).toHaveBeenCalledTimes(1);
+    });
+    expect(args.onChangeNode).not.toHaveBeenCalled();
+    expect(args.onDelete).not.toHaveBeenCalled();
+  },
 };

@@ -1,16 +1,15 @@
 import {
   type FieldMetadataTypesToTestForCreateInputValidation,
   type FieldMetadataTypesToTestForFilterInputValidation,
-} from 'test/integration/graphql/suites/inputs-validation/types/field-metadata-type-to-test';
+} from 'test/integration/graphql/suites/inputs-validation/types/field-metadata-type-to-test.type';
 import {
+  type FieldMetadataComplexOption,
   type FieldMetadataSettingsMapping,
   FieldMetadataType,
   RelationType,
   type FieldMetadataMultiItemSettings,
   type RelationCreationPayload,
 } from 'twenty-shared/types';
-
-import { type FieldMetadataComplexOption } from 'src/engine/metadata-modules/field-metadata/dtos/options.input';
 
 type FieldMetadataCreationInput = {
   name: string;
@@ -31,11 +30,13 @@ export const getFieldMetadataCreationInputs = (
   targetObjectMetadata2Id: string,
 ) => {
   const fieldInputsMap: {
-    [K in Exclude<
-      | FieldMetadataTypesToTestForCreateInputValidation
-      | FieldMetadataTypesToTestForFilterInputValidation,
-      'ACTOR' | 'POSITION'
-    >]: FieldMetadataCreationInput | FieldMetadataCreationInput[];
+    [
+      K in Exclude<
+        | FieldMetadataTypesToTestForCreateInputValidation
+        | FieldMetadataTypesToTestForFilterInputValidation,
+        'ACTOR' | 'POSITION'
+      >
+    ]: FieldMetadataCreationInput | FieldMetadataCreationInput[];
   } = {
     [FieldMetadataType.RICH_TEXT]: {
       name: 'richTextField',
@@ -134,7 +135,7 @@ export const getFieldMetadataCreationInputs = (
           value: 'OPTION_1',
           color: 'green',
           position: 1,
-          id: '26c602c3-cba9-4d83-92d4-4ba7dbae2f31',
+          id: '4f1c2b7e-8d3a-4e61-9b52-7a0d6c1e3f84',
         },
       ],
       objectMetadataId,
@@ -220,18 +221,6 @@ export const getFieldMetadataCreationInputs = (
           },
         ],
       },
-      // {
-      //   name: 'oneToManyRelationField',
-      //   label: 'oneToManyRelationField',
-      //   type: FieldMetadataType.RELATION,
-      //   objectMetadataId,
-      //   relationCreationPayload: {
-      //     targetObjectMetadataId: targetObjectMetadata1Id,
-      //     targetFieldLabel: 'manyToOneTargetRelationField',
-      //     targetFieldIcon: 'IconListOpportunity',
-      //     type: RelationType.ONE_TO_MANY,
-      //   },
-      // },
     ],
   };
 

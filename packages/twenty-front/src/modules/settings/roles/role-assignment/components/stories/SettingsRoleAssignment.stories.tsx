@@ -6,8 +6,9 @@ import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAt
 import { UserContext } from '@/users/contexts/UserContext';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { isDefined } from 'twenty-shared/utils';
-import { ComponentDecorator, RouterDecorator } from 'twenty-ui/testing';
+import { ComponentDecorator } from 'twenty-ui/testing';
 import { mockedRoles } from '~/testing/mock-data/generated/metadata/roles/mock-roles-data';
+import { MemoryRouterDecorator } from '~/testing/decorators/MemoryRouterDecorator';
 
 const SettingsRoleAssignmentWrapper = (
   args: React.ComponentProps<typeof SettingsRoleAssignment>,
@@ -20,8 +21,7 @@ const SettingsRoleAssignmentWrapper = (
   const role = mockedRoles.find((role) => role.id === args.roleId);
 
   if (isDefined(role)) {
-    // Mock roles don't include Omnia-custom fields; safe to cast in tests
-    setSettingsDraftRole(role as never);
+    setSettingsDraftRole(role);
   }
 
   return <SettingsRoleAssignment roleId={args.roleId} />;
@@ -42,7 +42,7 @@ const meta: Meta<typeof SettingsRoleAssignmentWrapper> = {
         <Story />
       </UserContext.Provider>
     ),
-    RouterDecorator,
+    MemoryRouterDecorator,
     ComponentDecorator,
   ],
 };

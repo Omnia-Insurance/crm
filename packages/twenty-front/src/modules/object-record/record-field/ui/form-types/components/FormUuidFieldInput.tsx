@@ -1,14 +1,14 @@
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
 import { FormFieldInputInnerContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputInnerContainer';
 import { FormFieldInputRowContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputRowContainer';
 import { VariableChipStandalone } from '@/object-record/record-field/ui/form-types/components/VariableChipStandalone';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
-import { TextInput } from '@/ui/field/input/components/TextInput';
-import { InputLabel } from '@/ui/input/components/InputLabel';
-import { isStandaloneVariableString } from '@/workflow/utils/isStandaloneVariableString';
-import { t } from '@lingui/core/macro';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
+import { StyledTextInput } from '@/ui/field/input/components/TextInput';
+import { Field } from 'twenty-ui/primitives/input';
+import { isStandaloneVariableString } from 'twenty-shared/workflow';
 import { useId, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 type FormUuidFieldInputProps = {
   label?: string;
@@ -27,6 +27,7 @@ export const FormUuidFieldInput = ({
   readonly,
   VariablePicker,
 }: FormUuidFieldInputProps) => {
+  const { t } = useLingui();
   const instanceId = useId();
 
   const [draftValue, setDraftValue] = useState<
@@ -87,7 +88,7 @@ export const FormUuidFieldInput = ({
 
   return (
     <FormFieldInputContainer>
-      {label ? <InputLabel htmlFor={instanceId}>{label}</InputLabel> : null}
+      {label ? <Field.Label htmlFor={instanceId}>{label}</Field.Label> : null}
 
       <FormFieldInputRowContainer>
         <FormFieldInputInnerContainer
@@ -95,13 +96,13 @@ export const FormUuidFieldInput = ({
           hasRightElement={isDefined(VariablePicker) && !readonly}
         >
           {draftValue.type === 'static' ? (
-            <TextInput
-              instanceId={instanceId}
+            <StyledTextInput
+              id={instanceId}
+              autoComplete="off"
               placeholder={placeholder ?? t`Enter a UUID`}
               value={draftValue.value}
-              copyButton={false}
               disabled={readonly}
-              onChange={handleChange}
+              onChange={(event) => handleChange(event.target.value)}
             />
           ) : (
             <VariableChipStandalone

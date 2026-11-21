@@ -1,36 +1,26 @@
 import { type WorkflowDiagram } from '@/workflow/workflow-diagram/types/WorkflowDiagram';
-import Dagre from '@dagrejs/dagre';
+import { computeWorkflowDiagramLayoutPositions } from '@/workflow/workflow-diagram/utils/computeWorkflowDiagramLayoutPositions';
+import { isDefined } from 'twenty-shared/utils';
+import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
 
 export const getOrganizedDiagram = (
   diagram: WorkflowDiagram,
 ): WorkflowDiagram => {
-  const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-  graph.setGraph({
-    ranksep: 80, // Vertical distance between 2 nodes
-    nodesep: 200, // Horizontal distance between 2 nodes
-    rankdir: 'TB',
-  });
+  const positionByNodeId = computeWorkflowDiagramLayoutPositions(diagram);
 
-  diagram.edges.forEach((edge) => graph.setEdge(edge.source, edge.target));
-  diagram.nodes.forEach((node) =>
-    graph.setNode(node.id, {
-      width: node.measured?.width ?? 0,
-      height: node.measured?.height ?? 0,
-    }),
-  );
-
-  Dagre.layout(graph);
+  // Keeps the trigger in place when a new branch widens the layout, so the viewport does not jump
+  const horizontalOffset = positionByNodeId.get(TRIGGER_STEP_ID)?.x ?? 0;
 
   return {
     nodes: diagram.nodes.map((node) => {
-      const position = graph.node(node.id);
+      const position = positionByNodeId.get(node.id);
 
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
-      const x = position.x - position.width / 2;
-      const y = position.y - position.height / 2;
-
-      return { ...node, position: { x, y } };
+      return isDefined(position) && !node.dragging
+        ? {
+            ...node,
+            position: { x: position.x - horizontalOffset, y: position.y },
+          }
+        : node;
     }),
     edges: diagram.edges,
   };

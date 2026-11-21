@@ -22,6 +22,8 @@ describe('isRecordFilterOperandExpectingValue', () => {
     ViewFilterOperand.IS_BEFORE,
     ViewFilterOperand.IS_AFTER,
     ViewFilterOperand.IS_RELATIVE,
+    // OMNIA-CUSTOM: workflow-only operand, takes a relative date like IS_RELATIVE.
+    ViewFilterOperand.IS_NOT_RELATIVE,
     ViewFilterOperand.VECTOR_SEARCH,
   ];
 

@@ -14,21 +14,24 @@ import { useMutation } from '@apollo/client/react';
 import {
   type RowLevelPermissionPredicateGroupLogicalOperator,
   type RowLevelPermissionPredicateOperand,
+  type Role,
   CreateOneRoleDocument,
   UpdateOneRoleDocument,
   UpsertFieldPermissionsDocument,
   UpsertObjectPermissionsDocument,
   UpsertPermissionFlagsDocument,
 } from '~/generated-metadata/graphql';
-import { type OmniaRole } from '@/settings/roles/types/OmniaRoleExtensions';
-import { getDirtyFields } from '~/utils/getDirtyFields';
+import { getRoleDirtyFields } from '@/settings/roles/role/utils/getRoleDirtyFields';
+// OMNIA-CUSTOM: save-time All records / Matching records resolver (contract C1)
+import { resolveObjectRecordsAccessForFilteredObject } from '@/settings/roles/role/utils/resolveObjectRecordsAccessForFilteredObject';
 
-const ROLE_BASIC_KEYS: Array<keyof OmniaRole> = [
+const ROLE_BASIC_KEYS: Array<keyof Role> = [
   'label',
   'description',
   'icon',
   'canUpdateAllSettings',
   'canAccessAllTools',
+  'canAccessAllAgentChatChannels',
   'canReadAllObjectRecords',
   'canUpdateAllObjectRecords',
   'canSoftDeleteAllObjectRecords',
@@ -36,8 +39,16 @@ const ROLE_BASIC_KEYS: Array<keyof OmniaRole> = [
   'canBeAssignedToUsers',
   'canBeAssignedToAgents',
   'canBeAssignedToApiKeys',
+  // OMNIA-CUSTOM: role-wide edit window and sidebar defaults (contracts C3, C4)
   'editWindowMinutes',
   'showAllObjectsInSidebar',
+];
+
+const ALL_OBJECT_RECORDS_GRANT_KEYS: Array<keyof Role> = [
+  'canReadAllObjectRecords',
+  'canUpdateAllObjectRecords',
+  'canSoftDeleteAllObjectRecords',
+  'canDestroyAllObjectRecords',
 ];
 
 export const useSaveDraftRoleToDB = ({
@@ -72,7 +83,10 @@ export const useSaveDraftRoleToDB = ({
     roleId,
   );
 
-  const dirtyFields = getDirtyFields(settingsDraftRole, settingsPersistedRole);
+  const dirtyFields = getRoleDirtyFields(
+    settingsDraftRole,
+    settingsPersistedRole,
+  );
 
   const fieldPermissionsThatShouldntBeCreatedBecauseTheyAreUseless =
     settingsDraftRole.fieldPermissions?.filter((fieldPermissionToFilter) => {
@@ -136,6 +150,8 @@ export const useSaveDraftRoleToDB = ({
           icon: settingsDraftRole.icon,
           canUpdateAllSettings: settingsDraftRole.canUpdateAllSettings,
           canAccessAllTools: settingsDraftRole.canAccessAllTools,
+          canAccessAllAgentChatChannels:
+            settingsDraftRole.canAccessAllAgentChatChannels,
           canReadAllObjectRecords: settingsDraftRole.canReadAllObjectRecords,
           canUpdateAllObjectRecords:
             settingsDraftRole.canUpdateAllObjectRecords,
@@ -146,11 +162,10 @@ export const useSaveDraftRoleToDB = ({
           canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
           canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
           canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
-          // Omnia-custom fields not in generated CreateRoleInput type
-          ...({ editWindowMinutes: settingsDraftRole.editWindowMinutes,
-          showAllObjectsInSidebar:
-            settingsDraftRole.showAllObjectsInSidebar } as Record<string, unknown>),
-        },
+          // OMNIA-CUSTOM: role-wide edit window and sidebar defaults (contracts C3, C4)
+          editWindowMinutes: settingsDraftRole.editWindowMinutes,
+          showAllObjectsInSidebar: settingsDraftRole.showAllObjectsInSidebar,
+        } satisfies Partial<Role>,
       },
       refetchQueries: [getOperationName(GET_ROLES) ?? ''],
     });
@@ -164,9 +179,101 @@ export const useSaveDraftRoleToDB = ({
     await upsertRolePermissions(createdRoleId);
     await assignEntitiesToRole(createdRoleId);
 
-    if (isDefined(onSuccess)) {
-      await onSuccess(createdRoleId);
-    }
+    return createdRoleId;
+  };
+
+  const rowLevelPermissionObjectMetadataIds = new Set(
+    (settingsDraftRole.rowLevelPermissionPredicates ?? []).map(
+      ({ objectMetadataId }) => objectMetadataId,
+    ),
+  );
+  const persistedRowLevelPermissionObjectMetadataIds = new Set(
+    (settingsPersistedRole?.rowLevelPermissionPredicates ?? []).map(
+      ({ objectMetadataId }) => objectMetadataId,
+    ),
+  );
+
+  // Rules carry the grant of a filtered object, so a change to either side rewrites both
+  const shouldSyncObjectRecordsGrants =
+    isDefined(dirtyFields.objectPermissions) ||
+    isDefined(dirtyFields.rowLevelPermissionPredicates) ||
+    isDefined(dirtyFields.rowLevelPermissionPredicateGroups) ||
+    // OMNIA-CUSTOM: the draft rule holds the All records / Matching records choice (contract C1)
+    isDefined(dirtyFields.rowLevelPermissionRules) ||
+    (rowLevelPermissionObjectMetadataIds.size > 0 &&
+      ALL_OBJECT_RECORDS_GRANT_KEYS.some((key) => key in dirtyFields));
+
+  const upsertObjectPermissionsForRole = async (targetRoleId: string) => {
+    const objectMetadataIdsToResolve = [
+      ...new Set([
+        ...rowLevelPermissionObjectMetadataIds,
+        ...persistedRowLevelPermissionObjectMetadataIds,
+      ]),
+    ];
+
+    await upsertObjectPermissions({
+      variables: {
+        upsertObjectPermissionsInput: {
+          roleId: targetRoleId,
+          objectPermissions: [
+            ...(settingsDraftRole.objectPermissions ?? [])
+              .filter(
+                ({ objectMetadataId }) =>
+                  !objectMetadataIdsToResolve.includes(objectMetadataId),
+              )
+              .map((objectPermission) => ({
+                objectMetadataId: objectPermission.objectMetadataId,
+                canReadObjectRecords: objectPermission.canReadObjectRecords,
+                canUpdateObjectRecords: objectPermission.canUpdateObjectRecords,
+                canSoftDeleteObjectRecords:
+                  objectPermission.canSoftDeleteObjectRecords,
+                canDestroyObjectRecords:
+                  objectPermission.canDestroyObjectRecords,
+                // OMNIA-CUSTOM: re-sent rows keep their sidebar visibility and edit window (contracts C3, C4)
+                showInSidebar: objectPermission.showInSidebar,
+                editWindowMinutes: objectPermission.editWindowMinutes,
+              })),
+            ...objectMetadataIdsToResolve.map((objectMetadataId) => {
+              const objectPermission =
+                settingsDraftRole.objectPermissions?.find(
+                  (draftObjectPermission) =>
+                    draftObjectPermission.objectMetadataId === objectMetadataId,
+                );
+
+              // OMNIA-CUSTOM: operations on all records keep their object-level grant and matching ones are
+              // an explicit false, so agents keep reading every Policy while editing their own (contract C1)
+              if (rowLevelPermissionObjectMetadataIds.has(objectMetadataId)) {
+                return {
+                  objectMetadataId,
+                  ...resolveObjectRecordsAccessForFilteredObject({
+                    role: settingsDraftRole,
+                    objectMetadataId,
+                  }).objectRecordsGrant,
+                  showInSidebar: objectPermission?.showInSidebar,
+                  editWindowMinutes: objectPermission?.editWindowMinutes,
+                };
+              }
+
+              return {
+                objectMetadataId,
+                canReadObjectRecords:
+                  objectPermission?.canReadObjectRecords ?? null,
+                canUpdateObjectRecords:
+                  objectPermission?.canUpdateObjectRecords ?? null,
+                canSoftDeleteObjectRecords:
+                  objectPermission?.canSoftDeleteObjectRecords ?? null,
+                canDestroyObjectRecords:
+                  objectPermission?.canDestroyObjectRecords ?? null,
+                // OMNIA-CUSTOM: sidebar visibility and edit window survive the filter removal (contracts C3, C4)
+                showInSidebar: objectPermission?.showInSidebar,
+                editWindowMinutes: objectPermission?.editWindowMinutes,
+              };
+            }),
+          ],
+        },
+      },
+      refetchQueries: [getOperationName(GET_ROLES) ?? ''],
+    });
   };
 
   const updateExistingRole = async () => {
@@ -196,6 +303,8 @@ export const useSaveDraftRoleToDB = ({
               icon: settingsDraftRole.icon,
               canUpdateAllSettings: settingsDraftRole.canUpdateAllSettings,
               canAccessAllTools: settingsDraftRole.canAccessAllTools,
+              canAccessAllAgentChatChannels:
+                settingsDraftRole.canAccessAllAgentChatChannels,
               canReadAllObjectRecords:
                 settingsDraftRole.canReadAllObjectRecords,
               canUpdateAllObjectRecords:
@@ -207,8 +316,10 @@ export const useSaveDraftRoleToDB = ({
               canBeAssignedToUsers: settingsDraftRole.canBeAssignedToUsers,
               canBeAssignedToAgents: settingsDraftRole.canBeAssignedToAgents,
               canBeAssignedToApiKeys: settingsDraftRole.canBeAssignedToApiKeys,
-              // Omnia-custom fields not in generated UpdateRolePayload type
-              ...({ editWindowMinutes: settingsDraftRole.editWindowMinutes } as Record<string, unknown>),
+              // OMNIA-CUSTOM: role-wide edit window and sidebar defaults (contracts C3, C4)
+              editWindowMinutes: settingsDraftRole.editWindowMinutes,
+              showAllObjectsInSidebar:
+                settingsDraftRole.showAllObjectsInSidebar,
             },
           },
         },
@@ -216,27 +327,8 @@ export const useSaveDraftRoleToDB = ({
       });
     }
 
-    if (isDefined(dirtyFields.objectPermissions)) {
-      await upsertObjectPermissions({
-        variables: {
-          upsertObjectPermissionsInput: {
-            roleId: roleId,
-            objectPermissions:
-              settingsDraftRole.objectPermissions?.map((objectPermission) => ({
-                objectMetadataId: objectPermission.objectMetadataId,
-                canReadObjectRecords: objectPermission.canReadObjectRecords,
-                canUpdateObjectRecords: objectPermission.canUpdateObjectRecords,
-                canSoftDeleteObjectRecords:
-                  objectPermission.canSoftDeleteObjectRecords,
-                canDestroyObjectRecords:
-                  objectPermission.canDestroyObjectRecords,
-                editWindowMinutes: objectPermission.editWindowMinutes,
-                showInSidebar: objectPermission.showInSidebar,
-              })) ?? [],
-          },
-        },
-        refetchQueries: [getOperationName(GET_ROLES) ?? ''],
-      });
+    if (shouldSyncObjectRecordsGrants) {
+      await upsertObjectPermissionsForRole(roleId);
     }
 
     if (isNonEmptyArray(fieldPermissionsToUpsert) === true) {
@@ -257,12 +349,11 @@ export const useSaveDraftRoleToDB = ({
       });
     }
 
-    if (
-      isDefined(dirtyFields.rowLevelPermissionPredicates) ||
-      isDefined(dirtyFields.rowLevelPermissionPredicateGroups)
-    ) {
+    if (shouldSyncObjectRecordsGrants) {
       await upsertRowLevelPermissionPredicatesForRole(roleId);
     }
+
+    return roleId;
   };
 
   const upsertRowLevelPermissionPredicatesForRole = async (
@@ -332,6 +423,13 @@ export const useSaveDraftRoleToDB = ({
         objectUsedGroupIds.has(group.id),
       );
 
+      // OMNIA-CUSTOM: the rule grants only the operations restricted to matching records, every flag explicit (contract C1)
+      const { rowLevelPermissionRuleGrant } =
+        resolveObjectRecordsAccessForFilteredObject({
+          role: settingsDraftRole,
+          objectMetadataId,
+        });
+
       await upsertRowLevelPermissionPredicates({
         variables: {
           input: {
@@ -340,7 +438,7 @@ export const useSaveDraftRoleToDB = ({
             predicates: objectPredicates.map((predicate) => ({
               id: predicate.id,
               fieldMetadataId: predicate.fieldMetadataId,
-              scope: predicate.scope!,
+              relationFieldMetadataId: predicate.relationFieldMetadataId,
               operand: predicate.operand as RowLevelPermissionPredicateOperand,
               value: predicate.value,
               subFieldName: predicate.subFieldName,
@@ -353,10 +451,11 @@ export const useSaveDraftRoleToDB = ({
               positionInRowLevelPermissionPredicateGroup:
                 predicate.positionInRowLevelPermissionPredicateGroup,
             })),
+            // OMNIA-CUSTOM: every rule flag explicit, create follows update (contract C1)
+            ...rowLevelPermissionRuleGrant,
             predicateGroups: objectPredicateGroups.map((group) => ({
               id: group.id,
               objectMetadataId,
-              scope: group.scope!,
               parentRowLevelPermissionPredicateGroupId:
                 group.parentRowLevelPermissionPredicateGroupId,
               logicalOperator:
@@ -388,27 +487,8 @@ export const useSaveDraftRoleToDB = ({
       });
     }
 
-    if (isDefined(dirtyFields.objectPermissions)) {
-      await upsertObjectPermissions({
-        variables: {
-          upsertObjectPermissionsInput: {
-            roleId: targetRoleId,
-            objectPermissions:
-              settingsDraftRole.objectPermissions?.map((objectPermission) => ({
-                objectMetadataId: objectPermission.objectMetadataId,
-                canReadObjectRecords: objectPermission.canReadObjectRecords,
-                canUpdateObjectRecords: objectPermission.canUpdateObjectRecords,
-                canSoftDeleteObjectRecords:
-                  objectPermission.canSoftDeleteObjectRecords,
-                canDestroyObjectRecords:
-                  objectPermission.canDestroyObjectRecords,
-                editWindowMinutes: objectPermission.editWindowMinutes,
-                showInSidebar: objectPermission.showInSidebar,
-              })) ?? [],
-          },
-        },
-        refetchQueries: [getOperationName(GET_ROLES) ?? ''],
-      });
+    if (shouldSyncObjectRecordsGrants) {
+      await upsertObjectPermissionsForRole(targetRoleId);
     }
 
     if (isNonEmptyArray(fieldPermissionsToUpsert) === true) {
@@ -429,10 +509,7 @@ export const useSaveDraftRoleToDB = ({
       });
     }
 
-    if (
-      isDefined(dirtyFields.rowLevelPermissionPredicates) ||
-      isDefined(dirtyFields.rowLevelPermissionPredicateGroups)
-    ) {
+    if (shouldSyncObjectRecordsGrants) {
       await upsertRowLevelPermissionPredicatesForRole(targetRoleId);
     }
   };
@@ -469,19 +546,17 @@ export const useSaveDraftRoleToDB = ({
         apiKeyIds: settingsDraftRole.apiKeys.map((apiKey) => apiKey.id),
       });
     }
-
-    if (isDefined(onSuccess)) {
-      await onSuccess(roleId);
-    }
   };
 
   const saveDraftRoleToDB = async () => {
     removeUselessFieldPermissions();
 
-    if (isCreateMode) {
-      await createNewRole();
-    } else {
-      await updateExistingRole();
+    const savedRoleId = isCreateMode
+      ? await createNewRole()
+      : await updateExistingRole();
+
+    if (isDefined(savedRoleId) && isDefined(onSuccess)) {
+      await onSuccess(savedRoleId);
     }
   };
 

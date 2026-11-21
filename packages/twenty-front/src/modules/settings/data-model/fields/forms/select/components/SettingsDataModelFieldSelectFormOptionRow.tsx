@@ -1,63 +1,31 @@
 import { type FieldMetadataItemOption } from '@/object-metadata/types/FieldMetadataItem';
-import { AdvancedSettingsWrapper } from '@/settings/components/AdvancedSettingsWrapper';
 import { OPTION_VALUE_MAXIMUM_LENGTH } from '@/settings/data-model/constants/OptionValueMaximumLength';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { useColorLabels } from '@/ui/input/hooks/useColorLabels';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
-import { t } from '@lingui/core/macro';
+import { isDefined } from 'twenty-shared/utils';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import {
-  ColorSample,
   IconCheck,
   IconDotsVertical,
   IconGripVertical,
   IconTrash,
   IconX,
-} from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
-import {
-  type ColorLabels,
-  MenuItem,
-  MenuItemSelectColor,
-} from 'twenty-ui/navigation';
-import { computeOptionValueFromLabel } from '~/pages/settings/data-model/utils/computeOptionValueFromLabel';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { MAIN_COLOR_NAMES } from 'twenty-ui/theme';
+} from 'twenty-ui/icon';
+import { ColorSample } from 'twenty-ui/primitives/data-display';
+import { Collapsible } from 'twenty-ui/primitives/layout';
+import { MAIN_COLOR_NAMES, useTheme, themeCssVariables } from 'twenty-ui/theme';
 
-const useColorLabels = (): ColorLabels => ({
-  gray: t`Gray`,
-  tomato: t`Tomato`,
-  red: t`Red`,
-  ruby: t`Ruby`,
-  crimson: t`Crimson`,
-  pink: t`Pink`,
-  plum: t`Plum`,
-  purple: t`Purple`,
-  violet: t`Violet`,
-  iris: t`Iris`,
-  cyan: t`Cyan`,
-  turquoise: t`Turquoise`,
-  sky: t`Sky`,
-  blue: t`Blue`,
-  jade: t`Jade`,
-  green: t`Green`,
-  grass: t`Grass`,
-  mint: t`Mint`,
-  lime: t`Lime`,
-  bronze: t`Bronze`,
-  gold: t`Gold`,
-  brown: t`Brown`,
-  orange: t`Orange`,
-  amber: t`Amber`,
-  yellow: t`Yellow`,
-});
+import { computeOptionValueFromLabel } from '@/object-metadata/utils/computeOptionValueFromLabel';
+import { useLingui } from '@lingui/react/macro';
 
 type SettingsDataModelFieldSelectFormOptionRowProps = {
   className?: string;
   isDefault?: boolean;
+  isApiValueVisible: boolean;
   onChange: (value: FieldMetadataItemOption) => void;
   onRemove?: () => void;
   onSetAsDefault?: () => void;
@@ -71,7 +39,7 @@ type SettingsDataModelFieldSelectFormOptionRowProps = {
 const StyledRow = styled.div`
   align-items: center;
   display: flex;
-  height: ${themeCssVariables.spacing[6]};
+  min-height: ${themeCssVariables.spacing[6]};
   padding: ${themeCssVariables.spacing['1.5']} 0;
 `;
 
@@ -109,6 +77,7 @@ const StyledLightIconButtonContainer = styled.span`
 export const SettingsDataModelFieldSelectFormOptionRow = ({
   className,
   isDefault,
+  isApiValueVisible,
   onChange,
   onRemove,
   onSetAsDefault,
@@ -118,13 +87,11 @@ export const SettingsDataModelFieldSelectFormOptionRow = ({
   isNewRow,
   fieldIsNullable,
 }: SettingsDataModelFieldSelectFormOptionRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const colorLabels = useColorLabels();
   const SELECT_COLOR_DROPDOWN_ID = `select-color-dropdown-${option.id}`;
   const SELECT_ACTIONS_DROPDOWN_ID = `select-actions-dropdown-${option.id}`;
-
-  const { closeDropdown: closeColorDropdown } = useCloseDropdown();
-  const { closeDropdown: closeActionsDropdown } = useCloseDropdown();
 
   const shouldForbidRemoveAsDefault = isDefault && !fieldIsNullable;
 
@@ -136,57 +103,52 @@ export const SettingsDataModelFieldSelectFormOptionRow = ({
     <StyledRow className={className}>
       <StyledIconGripVerticalContainer>
         <IconGripVertical
-          style={{
-            minWidth: theme.icon.size.md,
-          }}
           size={theme.icon.size.md}
           stroke={theme.icon.stroke.sm}
           color={theme.font.color.extraLight}
         />
       </StyledIconGripVerticalContainer>
-      <AdvancedSettingsWrapper animationDimension="width" hideDot>
-        <StyledOptionInputContainer>
-          <SettingsTextInput
-            instanceId={`select-option-value-${option.id}`}
-            value={option.value}
-            onChange={(input) =>
-              onChange({
-                ...option,
-                value: computeOptionValueFromLabel(input),
-              })
-            }
-            RightIcon={isDefault ? IconCheck : undefined}
-            maxLength={OPTION_VALUE_MAXIMUM_LENGTH}
-          />
-        </StyledOptionInputContainer>
-      </AdvancedSettingsWrapper>
-      <Dropdown
-        dropdownId={SELECT_COLOR_DROPDOWN_ID}
-        dropdownPlacement="bottom-start"
-        clickableComponent={
-          <StyledColorSampleContainer>
-            <ColorSample colorName={option.color} />
-          </StyledColorSampleContainer>
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <DropdownMenuItemsContainer>
-              {MAIN_COLOR_NAMES.map((colorName) => (
-                <MenuItemSelectColor
-                  key={colorName}
-                  onClick={() => {
-                    onChange({ ...option, color: colorName });
-                    closeColorDropdown(SELECT_COLOR_DROPDOWN_ID);
-                  }}
-                  color={colorName}
-                  selected={colorName === option.color}
-                  colorLabels={colorLabels}
-                />
-              ))}
-            </DropdownMenuItemsContainer>
-          </DropdownContent>
-        }
-      />
+      <Collapsible.Root open={isApiValueVisible}>
+        <Collapsible.Panel dimension="width" containAnimation={false}>
+          <StyledOptionInputContainer>
+            <SettingsTextInput
+              instanceId={`select-option-value-${option.id}`}
+              value={option.value}
+              onChange={(input) =>
+                onChange({
+                  ...option,
+                  value: computeOptionValueFromLabel(input),
+                })
+              }
+              RightIcon={isDefault ? IconCheck : undefined}
+              maxLength={OPTION_VALUE_MAXIMUM_LENGTH}
+            />
+          </StyledOptionInputContainer>
+        </Collapsible.Panel>
+      </Collapsible.Root>
+      <DropdownRoot dropdownId={SELECT_COLOR_DROPDOWN_ID} type="picker">
+        <Dropdown.Trigger
+          render={<StyledColorSampleContainer />}
+          nativeButton={false}
+          aria-label={t`Color`}
+        >
+          <ColorSample colorName={option.color} />
+        </Dropdown.Trigger>
+        <DropdownContent align="start">
+          <Dropdown.Section>
+            {MAIN_COLOR_NAMES.map((colorName) => (
+              <Dropdown.OptionItem
+                key={colorName}
+                selected={colorName === option.color}
+                onSelect={() => onChange({ ...option, color: colorName })}
+                startIcon={<ColorSample colorName={colorName} />}
+              >
+                {colorLabels[colorName]}
+              </Dropdown.OptionItem>
+            ))}
+          </Dropdown.Section>
+        </DropdownContent>
+      </DropdownRoot>
       <StyledOptionInputContainer>
         <SettingsTextInput
           instanceId={`select-option-label-${option.id}`}
@@ -210,57 +172,44 @@ export const SettingsDataModelFieldSelectFormOptionRow = ({
           autoSelectOnMount={isNewRow}
         />
       </StyledOptionInputContainer>
-      <Dropdown
-        dropdownId={SELECT_ACTIONS_DROPDOWN_ID}
-        dropdownPlacement="right-start"
-        clickableComponent={
-          <StyledLightIconButtonContainer>
-            <LightIconButton
-              accent="tertiary"
-              Icon={IconDotsVertical}
-              disabled={shouldForbidRemoveAsDefault}
-            />
-          </StyledLightIconButtonContainer>
-        }
-        dropdownComponents={
-          shouldForbidRemoveAsDefault ? null : (
-            <DropdownContent>
-              <DropdownMenuItemsContainer>
-                {isDefault ? (
-                  <MenuItem
-                    LeftIcon={IconX}
-                    text={t`Remove as default`}
-                    onClick={() => {
-                      onRemoveAsDefault?.();
-                      closeActionsDropdown(SELECT_ACTIONS_DROPDOWN_ID);
-                    }}
-                  />
-                ) : (
-                  <MenuItem
-                    LeftIcon={IconCheck}
-                    text={t`Set as default`}
-                    onClick={() => {
-                      onSetAsDefault?.();
-                      closeActionsDropdown(SELECT_ACTIONS_DROPDOWN_ID);
-                    }}
-                  />
-                )}
-                {!!onRemove && !isDefault && (
-                  <MenuItem
-                    accent="danger"
-                    LeftIcon={IconTrash}
-                    text={t`Remove option`}
-                    onClick={() => {
-                      onRemove();
-                      closeActionsDropdown(SELECT_ACTIONS_DROPDOWN_ID);
-                    }}
-                  />
-                )}
-              </DropdownMenuItemsContainer>
-            </DropdownContent>
-          )
-        }
-      />
+      <DropdownRoot dropdownId={SELECT_ACTIONS_DROPDOWN_ID} type="menu">
+        <StyledLightIconButtonContainer>
+          <Dropdown.Trigger
+            disabled={shouldForbidRemoveAsDefault}
+            render={
+              <LightIconButton
+                emphasis="subtle"
+                disabled={shouldForbidRemoveAsDefault}
+                aria-label={t`More options`}
+              >
+                <IconDotsVertical />
+              </LightIconButton>
+            }
+          />
+        </StyledLightIconButtonContainer>
+        <DropdownContent side="right" align="start">
+          <Dropdown.Section>
+            {isDefault ? (
+              <Dropdown.ActionItem
+                startIcon={<IconX />}
+                onClick={() => onRemoveAsDefault?.()}
+              >{t`Remove as default`}</Dropdown.ActionItem>
+            ) : (
+              <Dropdown.ActionItem
+                startIcon={<IconCheck />}
+                onClick={() => onSetAsDefault?.()}
+              >{t`Set as default`}</Dropdown.ActionItem>
+            )}
+            {isDefined(onRemove) && !isDefault && (
+              <Dropdown.ActionItem
+                color="danger"
+                startIcon={<IconTrash />}
+                onClick={() => onRemove()}
+              >{t`Remove option`}</Dropdown.ActionItem>
+            )}
+          </Dropdown.Section>
+        </DropdownContent>
+      </DropdownRoot>
     </StyledRow>
   );
 };

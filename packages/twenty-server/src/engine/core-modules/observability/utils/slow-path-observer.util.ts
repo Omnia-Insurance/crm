@@ -1,5 +1,8 @@
 import { type LoggerService } from '@nestjs/common';
 
+import { isNumber, isUndefined } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
+
 type SlowPathContextValue = boolean | number | string | null | undefined;
 
 type SlowPathContext = Record<string, SlowPathContextValue>;
@@ -20,11 +23,11 @@ type WarnIfSlowDurationOptions = CreateSlowPathObserverOptions & {
 };
 
 const formatContextValue = (value: SlowPathContextValue) => {
-  if (value === null || value === undefined) {
+  if (!isDefined(value)) {
     return '-';
   }
 
-  if (typeof value === 'number') {
+  if (isNumber(value)) {
     return Number.isInteger(value) ? value.toString() : value.toFixed(2);
   }
 
@@ -33,7 +36,7 @@ const formatContextValue = (value: SlowPathContextValue) => {
 
 const formatContext = (context: SlowPathContext) =>
   Object.entries(context)
-    .filter(([, value]) => value !== undefined)
+    .filter(([, value]) => !isUndefined(value))
     .map(([key, value]) => `${key}=${formatContextValue(value)}`)
     .join(' ');
 
@@ -66,10 +69,10 @@ export const createSlowPathObserver = ({
   const startedAt = performance.now();
   const durations: SlowPathDurations = {};
 
-  const observeAsync = async <T>(
+  const observeAsync = async <TResult>(
     durationKey: string,
-    fn: () => Promise<T>,
-  ): Promise<T> => {
+    fn: () => Promise<TResult>,
+  ): Promise<TResult> => {
     const durationStartedAt = performance.now();
 
     try {
@@ -79,7 +82,10 @@ export const createSlowPathObserver = ({
     }
   };
 
-  const observeSync = <T>(durationKey: string, fn: () => T): T => {
+  const observeSync = <TResult>(
+    durationKey: string,
+    fn: () => TResult,
+  ): TResult => {
     const durationStartedAt = performance.now();
 
     try {

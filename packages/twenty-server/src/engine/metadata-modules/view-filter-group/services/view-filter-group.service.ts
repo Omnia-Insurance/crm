@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
-import { IsNull, type Repository } from 'typeorm';
+import { IsNull } from 'typeorm';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
 import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier-or-throw.util';
 import { fromCreateViewFilterGroupInputToFlatViewFilterGroupToCreate } from 'src/engine/metadata-modules/flat-view-filter-group/utils/from-create-view-filter-group-input-to-flat-view-filter-group-to-create.util';
-import { fromDeleteViewFilterGroupInputToFlatViewFilterGroupOrThrow } from 'src/engine/metadata-modules/flat-view-filter-group/utils/from-delete-view-filter-group-input-to-flat-view-filter-group-or-throw.util';
 import { fromDestroyViewFilterGroupInputToFlatViewFilterGroupOrThrow } from 'src/engine/metadata-modules/flat-view-filter-group/utils/from-destroy-view-filter-group-input-to-flat-view-filter-group-or-throw.util';
 import { fromUpdateViewFilterGroupInputToFlatViewFilterGroupToUpdateOrThrow } from 'src/engine/metadata-modules/flat-view-filter-group/utils/from-update-view-filter-group-input-to-flat-view-filter-group-to-update-or-throw.util';
 import { type CreateViewFilterGroupInput } from 'src/engine/metadata-modules/view-filter-group/dtos/inputs/create-view-filter-group.input';
@@ -18,14 +16,16 @@ import { type UpdateViewFilterGroupInput } from 'src/engine/metadata-modules/vie
 import { type ViewFilterGroupDTO } from 'src/engine/metadata-modules/view-filter-group/dtos/view-filter-group.dto';
 import { ViewFilterGroupEntity } from 'src/engine/metadata-modules/view-filter-group/entities/view-filter-group.entity';
 import { fromFlatViewFilterGroupToViewFilterGroupDto } from 'src/engine/metadata-modules/view-filter-group/utils/from-flat-view-filter-group-to-view-filter-group-dto.util';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 @Injectable()
 export class ViewFilterGroupService {
   constructor(
-    @InjectRepository(ViewFilterGroupEntity)
-    private readonly viewFilterGroupRepository: Repository<ViewFilterGroupEntity>,
+    @InjectWorkspaceScopedRepository(ViewFilterGroupEntity)
+    private readonly viewFilterGroupRepository: WorkspaceScopedRepository<ViewFilterGroupEntity>,
     private readonly workspaceMigrationValidateBuildAndRunService: WorkspaceMigrationValidateBuildAndRunService,
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly applicationService: ApplicationService,
@@ -186,70 +186,10 @@ export class ViewFilterGroupService {
     deleteViewFilterGroupInput: DeleteViewFilterGroupInput;
     workspaceId: string;
   }): Promise<ViewFilterGroupDTO> {
-    const { workspaceCustomFlatApplication } =
-      await this.applicationService.findWorkspaceTwentyStandardAndCustomApplicationOrThrow(
-        {
-          workspaceId,
-        },
-      );
-
-    const { flatViewFilterGroupMaps: existingFlatViewFilterGroupMaps } =
-      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatViewFilterGroupMaps'],
-        },
-      );
-
-    const optimisticallyUpdatedFlatViewFilterGroupWithDeletedAt =
-      fromDeleteViewFilterGroupInputToFlatViewFilterGroupOrThrow({
-        flatViewFilterGroupMaps: existingFlatViewFilterGroupMaps,
-        deleteViewFilterGroupInput,
-      });
-
-    const validateAndBuildResult =
-      await this.workspaceMigrationValidateBuildAndRunService.validateBuildAndRunWorkspaceMigration(
-        {
-          allFlatEntityOperationByMetadataName: {
-            viewFilterGroup: {
-              flatEntityToCreate: [],
-              flatEntityToDelete: [],
-              flatEntityToUpdate: [
-                optimisticallyUpdatedFlatViewFilterGroupWithDeletedAt,
-              ],
-            },
-          },
-          workspaceId,
-          isSystemBuild: false,
-          applicationUniversalIdentifier:
-            workspaceCustomFlatApplication.universalIdentifier,
-        },
-      );
-
-    if (validateAndBuildResult.status === 'fail') {
-      throw new WorkspaceMigrationBuilderException(
-        validateAndBuildResult,
-        'Multiple validation errors occurred while deleting view filter group',
-      );
-    }
-
-    const {
-      flatViewFilterGroupMaps: recomputedExistingFlatViewFilterGroupMaps,
-    } =
-      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
-        {
-          workspaceId,
-          flatMapsKeys: ['flatViewFilterGroupMaps'],
-        },
-      );
-
-    return fromFlatViewFilterGroupToViewFilterGroupDto(
-      findFlatEntityByUniversalIdentifierOrThrow({
-        universalIdentifier:
-          optimisticallyUpdatedFlatViewFilterGroupWithDeletedAt.universalIdentifier,
-        flatEntityMaps: recomputedExistingFlatViewFilterGroupMaps,
-      }),
-    );
+    return this.destroyOne({
+      destroyViewFilterGroupInput: deleteViewFilterGroupInput,
+      workspaceId,
+    });
   }
 
   async destroyOne({
@@ -320,12 +260,11 @@ export class ViewFilterGroupService {
   async findByWorkspaceId(
     workspaceId: string,
   ): Promise<ViewFilterGroupEntity[]> {
-    return this.viewFilterGroupRepository.find({
+    return this.viewFilterGroupRepository.find(workspaceId, {
       where: {
-        workspaceId,
         deletedAt: IsNull(),
       },
-      order: { positionInViewFilterGroup: 'ASC' },
+      order: { positionInViewFilterGroup: 'ASC', id: 'ASC' },
       relations: [
         'workspace',
         'view',
@@ -340,13 +279,12 @@ export class ViewFilterGroupService {
     workspaceId: string,
     viewId: string,
   ): Promise<ViewFilterGroupEntity[]> {
-    return this.viewFilterGroupRepository.find({
+    return this.viewFilterGroupRepository.find(workspaceId, {
       where: {
-        workspaceId,
         viewId,
         deletedAt: IsNull(),
       },
-      order: { positionInViewFilterGroup: 'ASC' },
+      order: { positionInViewFilterGroup: 'ASC', id: 'ASC' },
       relations: [
         'workspace',
         'view',
@@ -361,20 +299,22 @@ export class ViewFilterGroupService {
     id: string,
     workspaceId: string,
   ): Promise<ViewFilterGroupEntity | null> {
-    const viewFilterGroup = await this.viewFilterGroupRepository.findOne({
-      where: {
-        id,
-        workspaceId,
-        deletedAt: IsNull(),
+    const viewFilterGroup = await this.viewFilterGroupRepository.findOne(
+      workspaceId,
+      {
+        where: {
+          id,
+          deletedAt: IsNull(),
+        },
+        relations: [
+          'workspace',
+          'view',
+          'viewFilters',
+          'parentViewFilterGroup',
+          'childViewFilterGroups',
+        ],
       },
-      relations: [
-        'workspace',
-        'view',
-        'viewFilters',
-        'parentViewFilterGroup',
-        'childViewFilterGroups',
-      ],
-    });
+    );
 
     return viewFilterGroup || null;
   }

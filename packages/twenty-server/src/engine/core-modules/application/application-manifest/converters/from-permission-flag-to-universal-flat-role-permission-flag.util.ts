@@ -1,26 +1,27 @@
-import { type PermissionFlagManifest } from 'twenty-shared/application';
-import { SystemPermissionFlag } from 'twenty-shared/constants';
+import { getRolePermissionFlagUniversalIdentifier } from 'twenty-shared/application';
 
 import { type UniversalFlatRolePermissionFlag } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-role-permission-flag.type';
 
 export const fromPermissionFlagToUniversalFlatRolePermissionFlag = ({
-  permissionFlag,
+  permissionFlagUniversalIdentifier,
   roleUniversalIdentifier,
   applicationUniversalIdentifier,
   now,
 }: {
-  permissionFlag: PermissionFlagManifest;
+  permissionFlagUniversalIdentifier: string;
   roleUniversalIdentifier: string;
   applicationUniversalIdentifier: string;
   now: string;
 }): UniversalFlatRolePermissionFlag => {
   return {
-    universalIdentifier: permissionFlag.universalIdentifier,
+    universalIdentifier: getRolePermissionFlagUniversalIdentifier({
+      applicationUniversalIdentifier,
+      roleUniversalIdentifier,
+      permissionFlagUniversalIdentifier,
+    }),
     applicationUniversalIdentifier,
     roleUniversalIdentifier,
-    permissionFlagUniversalIdentifier:
-      SystemPermissionFlag[permissionFlag.flag],
-    flag: permissionFlag.flag,
+    permissionFlagUniversalIdentifier,
     createdAt: now,
     updatedAt: now,
   };

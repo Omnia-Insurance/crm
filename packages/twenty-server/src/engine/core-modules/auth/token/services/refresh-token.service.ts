@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 
 import { addMilliseconds } from 'date-fns';
 import ms from 'ms';
-import { Repository } from 'typeorm';
+import { type EntityManager, Repository } from 'typeorm';
 
 import {
   AppTokenEntity,
@@ -14,10 +14,9 @@ import {
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { type AuthToken } from 'src/engine/core-modules/auth/dto/auth-token.dto';
-import {
-  type RefreshTokenJwtPayload,
-  JwtTokenTypeEnum,
-} from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type RefreshTokenJwtPayload } from 'src/engine/core-modules/auth/types/refresh-token-jwt-payload.type';
+import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
+import { isRevokedRefreshTokenStillRenewable } from 'src/engine/core-modules/auth/utils/is-revoked-refresh-token-still-renewable.util';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
@@ -79,10 +78,14 @@ export class RefreshTokenService {
     }
 
     if (token.revokedAt) {
-      const wasRevokedBeforeGracePeriod =
-        token.revokedAt.getTime() <= Date.now() - ms(reuseGracePeriod);
+      const isStillRenewable = isRevokedRefreshTokenStillRenewable({
+        revokedAt: token.revokedAt,
+        revokedReason: token.context?.revokedReason,
+        reuseGracePeriod,
+        now: new Date(),
+      });
 
-      if (wasRevokedBeforeGracePeriod) {
+      if (!isStillRenewable) {
         // Reject the stale token but don't revoke all tokens — the most
         // common cause is a lost renewal response, not actual token theft.
         throw new AuthException(
@@ -111,6 +114,7 @@ export class RefreshTokenService {
   async generateRefreshToken(
     payload: Omit<RefreshTokenJwtPayload, 'type' | 'sub' | 'jti'>,
     isImpersonationToken: boolean = false,
+    entityManager?: EntityManager,
   ): Promise<AuthToken> {
     const expiresIn = isImpersonationToken
       ? '1d'
@@ -125,13 +129,16 @@ export class RefreshTokenService {
 
     const expiresAt = addMilliseconds(new Date().getTime(), ms(expiresIn));
 
-    const refreshToken = this.appTokenRepository.create({
+    const appTokenRepository =
+      entityManager?.getRepository(AppTokenEntity) ?? this.appTokenRepository;
+
+    const refreshToken = appTokenRepository.create({
       ...payload,
       expiresAt,
       type: AppTokenType.RefreshToken,
     });
 
-    await this.appTokenRepository.save(refreshToken);
+    await appTokenRepository.save(refreshToken);
 
     const jwtPayload: RefreshTokenJwtPayload = {
       ...payload,

@@ -17,7 +17,7 @@ import {
   PermissionsException,
   PermissionsExceptionCode,
   PermissionsExceptionMessage,
-} from 'src/engine/metadata-modules/permissions/permissions.exception';
+} from 'src/engine/permissions/permissions.exception';
 import { WorkspaceMigrationBuilderException } from 'src/engine/workspace-manager/workspace-migration/exceptions/workspace-migration-builder-exception';
 import { WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 import { type UniversalFlatObjectPermission } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-object-permission.type';
@@ -100,16 +100,6 @@ export class ObjectPermissionService {
           },
         );
       }
-
-      if (objectMetadata.isSystem === true) {
-        throw new PermissionsException(
-          PermissionsExceptionMessage.CANNOT_ADD_OBJECT_PERMISSION_ON_SYSTEM_OBJECT,
-          PermissionsExceptionCode.CANNOT_ADD_OBJECT_PERMISSION_ON_SYSTEM_OBJECT,
-          {
-            userFriendlyMessage: msg`You cannot set permissions on system objects as they are managed by the platform.`,
-          },
-        );
-      }
     }
 
     const flatEntityToCreate: (UniversalFlatObjectPermission & {
@@ -135,6 +125,7 @@ export class ObjectPermissionService {
               canUpdateObjectRecords: desired.canUpdateObjectRecords,
               canSoftDeleteObjectRecords: desired.canSoftDeleteObjectRecords,
               canDestroyObjectRecords: desired.canDestroyObjectRecords,
+              // OMNIA-CUSTOM: sidebar visibility and edit window (C3, C4)
               showInSidebar: desired.showInSidebar,
               editWindowMinutes: desired.editWindowMinutes,
             },
@@ -160,6 +151,8 @@ export class ObjectPermissionService {
           desired.canDestroyObjectRecords !== undefined
             ? desired.canDestroyObjectRecords
             : current.canDestroyObjectRecords;
+        // OMNIA-CUSTOM: omitted sidebar visibility and edit window stay
+        // unchanged, so callers that never send them cannot erase them.
         const effectiveShowInSidebar =
           desired.showInSidebar !== undefined
             ? desired.showInSidebar
@@ -169,11 +162,18 @@ export class ObjectPermissionService {
             ? desired.editWindowMinutes
             : current.editWindowMinutes;
 
+        const effectiveCanCreate =
+          desired.canUpdateObjectRecords !== undefined
+            ? desired.canUpdateObjectRecords
+            : current.canCreateObjectRecords;
+
         const canChanged =
           effectiveCanRead !== current.canReadObjectRecords ||
+          effectiveCanCreate !== current.canCreateObjectRecords ||
           effectiveCanUpdate !== current.canUpdateObjectRecords ||
           effectiveCanSoftDelete !== current.canSoftDeleteObjectRecords ||
           effectiveCanDestroy !== current.canDestroyObjectRecords ||
+          // OMNIA-CUSTOM: sidebar visibility and edit window changes count too
           effectiveShowInSidebar !== current.showInSidebar ||
           effectiveEditWindowMinutes !== current.editWindowMinutes;
 
@@ -187,9 +187,11 @@ export class ObjectPermissionService {
             objectMetadataUniversalIdentifier:
               current.objectMetadataUniversalIdentifier,
             canReadObjectRecords: effectiveCanRead,
+            canCreateObjectRecords: effectiveCanCreate,
             canUpdateObjectRecords: effectiveCanUpdate,
             canSoftDeleteObjectRecords: effectiveCanSoftDelete,
             canDestroyObjectRecords: effectiveCanDestroy,
+            // OMNIA-CUSTOM: sidebar visibility and edit window (C3, C4)
             showInSidebar: effectiveShowInSidebar,
             editWindowMinutes: effectiveEditWindowMinutes,
             createdAt: current.createdAt,
@@ -209,9 +211,11 @@ export class ObjectPermissionService {
           objectMetadataUniversalIdentifier:
             current.objectMetadataUniversalIdentifier,
           canReadObjectRecords: current.canReadObjectRecords,
+          canCreateObjectRecords: current.canCreateObjectRecords,
           canUpdateObjectRecords: current.canUpdateObjectRecords,
           canSoftDeleteObjectRecords: current.canSoftDeleteObjectRecords,
           canDestroyObjectRecords: current.canDestroyObjectRecords,
+          // OMNIA-CUSTOM: sidebar visibility and edit window (C3, C4)
           showInSidebar: current.showInSidebar,
           editWindowMinutes: current.editWindowMinutes,
           createdAt: current.createdAt,

@@ -1,18 +1,21 @@
+import { findChartGroupByFieldMetadataItem } from '@/page-layout/widgets/graph/utils/findChartGroupByFieldMetadataItem';
+import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { useObjectMetadataItemById } from '@/object-metadata/hooks/useObjectMetadataItemById';
 import { useAggregateRecords } from '@/object-record/hooks/useAggregateRecords';
 import { transformAggregateRawValueIntoAggregateDisplayValue } from '@/object-record/record-aggregate/utils/transformAggregateRawValueIntoAggregateDisplayValue';
 import { getAggregateOperationLabel } from '@/object-record/record-board/record-board-column/utils/getAggregateOperationLabel';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
 import { convertAggregateOperationToExtendedAggregateOperation } from '@/object-record/utils/convertAggregateOperationToExtendedAggregateOperation';
+import { CHART_NUMBER_FORMAT_DEFAULT } from '@/page-layout/widgets/graph/constants/ChartNumberFormatDefault';
 import { useGraphWidgetQueryCommon } from '@/page-layout/widgets/graph/hooks/useGraphWidgetQueryCommon';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { UserContext } from '@/users/contexts/UserContext';
-import { t } from '@lingui/core/macro';
 import { useContext, useMemo } from 'react';
 import { FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION } from 'twenty-shared/constants';
 import { findById, isDefined } from 'twenty-shared/utils';
 import { type PieChartConfiguration } from '~/generated-metadata/graphql';
-import { dateLocaleState } from '~/localization/states/dateLocaleState';
+import { dateLocaleState } from '@/localization/states/dateLocaleState';
+import { useLingui } from '@lingui/react/macro';
 
 type UsePieChartCenterMetricDataProps = {
   objectMetadataItemId: string;
@@ -30,6 +33,7 @@ export const usePieChartCenterMetricData = ({
   configuration,
   skip,
 }: UsePieChartCenterMetricDataProps): UsePieChartCenterMetricDataResult => {
+  const { t } = useLingui();
   const { objectMetadataItem } = useObjectMetadataItemById({
     objectId: objectMetadataItemId,
   });
@@ -39,22 +43,22 @@ export const usePieChartCenterMetricData = ({
     configuration,
   });
 
-  const groupByField = objectMetadataItem.fields.find(
-    (field: { id: string }) =>
-      field.id === configuration.groupByFieldMetadataId,
-  );
+  const groupByFieldName = findChartGroupByFieldMetadataItem({
+    fieldMetadataItems: objectMetadataItem.fields,
+    groupByFieldMetadataId: configuration.groupByFieldMetadataId,
+  })?.name;
 
   const centerMetricFilter = useMemo(() => {
-    if (!configuration.hideEmptyCategory || !groupByField) {
+    if (!configuration.hideEmptyCategory || !isDefined(groupByFieldName)) {
       return gqlOperationFilter;
     }
 
-    const notNullFilter = { [groupByField.name]: { is: 'NOT_NULL' as const } };
+    const notNullFilter = { [groupByFieldName]: { is: 'NOT_NULL' as const } };
 
     return isDefined(gqlOperationFilter)
       ? { and: [gqlOperationFilter, notNullFilter] }
       : notNullFilter;
-  }, [gqlOperationFilter, configuration.hideEmptyCategory, groupByField]);
+  }, [gqlOperationFilter, configuration.hideEmptyCategory, groupByFieldName]);
 
   const centerMetricAggregateOperation =
     configuration.aggregateOperation as AggregateOperations;
@@ -81,6 +85,9 @@ export const usePieChartCenterMetricData = ({
 
   const { dateFormat, timeFormat, timeZone } = useContext(UserContext);
   const dateLocale = useAtomStateValue(dateLocaleState);
+  const { numberFormat } = useNumberFormat();
+  const chartNumberFormat =
+    configuration.numberFormat ?? CHART_NUMBER_FORMAT_DEFAULT;
 
   const aggregateFieldMetadataItem = objectMetadataItem.readableFields.find(
     findById(configuration.aggregateFieldMetadataId),
@@ -111,13 +118,30 @@ export const usePieChartCenterMetricData = ({
     }
 
     return getAggregateOperationLabel(centerMetricAggregateOperation);
-  }, [centerMetricAggregateOperation]);
+  }, [centerMetricAggregateOperation, t]);
 
   const centerMetricValue = useMemo(() => {
     if (!isDefined(aggregateFieldMetadataItem)) {
-      return centerMetricData?.[FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION]?.[
-        AggregateOperations.COUNT
-      ];
+      const totalCountValue =
+        centerMetricData?.[FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION]?.[
+          AggregateOperations.COUNT
+        ];
+
+      if (!isDefined(totalCountValue)) {
+        return totalCountValue;
+      }
+
+      return transformAggregateRawValueIntoAggregateDisplayValue({
+        aggregateFieldMetadataItem,
+        aggregateOperation: extendedAggregateOperation,
+        aggregateRawValue: totalCountValue,
+        dateFormat,
+        localeCatalog: dateLocale.localeCatalog,
+        timeFormat,
+        timeZone,
+        numberFormat,
+        chartNumberFormat,
+      });
     }
 
     const aggregateRawValue =
@@ -133,6 +157,8 @@ export const usePieChartCenterMetricData = ({
       localeCatalog: dateLocale.localeCatalog,
       timeFormat,
       timeZone,
+      numberFormat,
+      chartNumberFormat,
     });
   }, [
     aggregateFieldMetadataItem,
@@ -143,6 +169,8 @@ export const usePieChartCenterMetricData = ({
     dateLocale.localeCatalog,
     timeFormat,
     timeZone,
+    numberFormat,
+    chartNumberFormat,
   ]);
 
   return {

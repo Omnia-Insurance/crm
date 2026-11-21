@@ -39,13 +39,14 @@
 import * as fs from 'fs';
 
 import { Command, Option } from 'nest-commander';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { type MergeResult } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { DEFAULT_MATCHING_CONFIG } from 'src/modules/reconciliation/engines/matching';
 import {
   DEFAULT_STATUS_ENGINE_CONFIG,
@@ -113,9 +114,6 @@ const DEFINITION_KEYS: readonly string[] = [
   'diffConfig',
   'statusVocabulary',
 ];
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -582,13 +580,13 @@ export const buildGenericCarrierConfigUpdate = (
   description:
     'Create or merge-update a carrierConfig workspace record from a JSON definition file, with pre-flight validation (run-time config boundary + status-engine registry + explicit matchingConfig.startDate). Refuses to write on any validation problem; supports --validate-only and --dry-run; never overwrites user-captured mappings.',
 })
-export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class SeedCarrierConfigCommand extends ProvisionedWorkspaceCommandRunner {
   private filePath: string;
   private validateOnly = false;
 
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
   ) {
     super(workspaceIteratorService);
   }
@@ -637,17 +635,16 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      // operator seed of admin-only reconciliation config, no requesting user
       const carrierConfigRepo =
-        await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
           'carrierConfig',
-          { shouldBypassPermissionChecks: true },
         );
 
-      const existing = (await carrierConfigRepo.findOne({
-        where: { name: definition.name } as any,
-      })) as Record<string, unknown> | null;
+      const existing = await carrierConfigRepo.findOne({
+        where: { name: definition.name },
+      });
 
       // The payload that would actually be written is the one that gets
       // pre-flighted: the merged value when a record exists (existing data
@@ -665,11 +662,7 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
 
       // --- carrier resolution (refuse if not found — a null carrierId
       // hard-fails the run at match time) ---
-      const carrierId = await this.resolveCarrierId(
-        workspaceId,
-        definition,
-        problems,
-      );
+      const carrierId = await this.resolveCarrierId(definition, problems);
 
       for (const warning of preflight.warnings) {
         this.logger.warn(`  ⚠ ${warning}`);
@@ -742,7 +735,7 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
           return;
         }
 
-        await carrierConfigRepo.update({ id: existing.id as string }, update);
+        await carrierConfigRepo.update({ id: existing.id }, update);
 
         this.logger.log(`  ✓ Merge-updated carrierConfig "${definition.name}"`);
 
@@ -768,8 +761,7 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
     }, authContext);
   }
 
-  /** Read + JSON-parse + structurally validate the --file definition.
-   *  Logs and returns null on any problem (refusal — nothing written). */
+  // Returns null after logging the refusal; nothing is written.
   private loadDefinition(): CarrierConfigDefinition | null {
     if (!this.filePath) {
       this.logger.error('--file is required');
@@ -818,26 +810,23 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
     return definition;
   }
 
-  /** Resolve the carrier record (by id when given, else by name). Pushes a
-   *  problem and returns null when it cannot be resolved. */
+  // carrierId wins over carrierName; an unresolved carrier is pushed as a problem
   private async resolveCarrierId(
-    workspaceId: string,
     definition: CarrierConfigDefinition,
     problems: string[],
   ): Promise<string | null> {
     try {
-      const carrierRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'carrier',
-        { shouldBypassPermissionChecks: true },
-      );
+      const carrierRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          'carrier',
+        );
 
       if (definition.carrierId) {
-        const carrier = (await carrierRepo.findOne({
-          where: { id: definition.carrierId } as any,
-        })) as Record<string, unknown> | null;
+        const carrier = await carrierRepo.findOne({
+          where: { id: definition.carrierId },
+        });
 
-        if (!carrier) {
+        if (!isDefined(carrier)) {
           problems.push(
             `carrierId: no carrier record with id "${definition.carrierId}" — create the carrier record first (onboarding step 1).`,
           );
@@ -845,14 +834,14 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
           return null;
         }
 
-        return carrier.id as string;
+        return carrier.id;
       }
 
-      const carrier = (await carrierRepo.findOne({
-        where: { name: definition.carrierName } as any,
-      })) as Record<string, unknown> | null;
+      const carrier = await carrierRepo.findOne({
+        where: { name: definition.carrierName },
+      });
 
-      if (!carrier) {
+      if (!isDefined(carrier)) {
         problems.push(
           `carrierName: no carrier record named "${definition.carrierName}" — create the carrier record first (onboarding step 1).`,
         );
@@ -860,7 +849,7 @@ export class SeedCarrierConfigCommand extends ActiveOrSuspendedWorkspaceCommandR
         return null;
       }
 
-      return carrier.id as string;
+      return carrier.id;
     } catch (error) {
       problems.push(
         `could not query the carrier object (${

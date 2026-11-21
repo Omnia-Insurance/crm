@@ -10,6 +10,8 @@ import {
   BillingException,
   BillingExceptionCode,
 } from 'src/engine/core-modules/billing/billing.exception';
+import { NOT_ENDED_SUBSCRIPTION_STATUSES } from 'src/engine/core-modules/billing/constants/not-ended-subscription-statuses.constant';
+import { type SubscriptionStatus } from 'src/engine/core-modules/billing/enums/billing-subscription-status.enum';
 import { StripeSDKService } from 'src/engine/core-modules/billing/stripe/stripe-sdk/services/stripe-sdk.service';
 import { type SubscriptionWithSchedule } from 'src/engine/core-modules/billing/types/billing-subscription-with-schedule.type';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -68,11 +70,31 @@ export class StripeSubscriptionScheduleService {
     })) as SubscriptionWithSchedule;
   }
 
+  async listCustomerNotEndedSubscriptionsWithSchedule(
+    stripeCustomerId: string,
+  ) {
+    const subscriptions = await this.stripe.subscriptions
+      .list({
+        customer: stripeCustomerId,
+        expand: ['data.schedule'],
+        limit: 100,
+      })
+      .autoPagingToArray({ limit: 1000 });
+
+    return subscriptions.filter((subscription) =>
+      NOT_ENDED_SUBSCRIPTION_STATUSES.includes(
+        subscription.status as SubscriptionStatus,
+      ),
+    ) as SubscriptionWithSchedule[];
+  }
+
   async updateSchedule(
     scheduleId: string,
     params: Stripe.SubscriptionScheduleUpdateParams,
   ) {
-    if (!this.stripe) throw new Error('Billing is disabled');
+    if (!this.stripe) {
+      throw new Error('Billing is disabled');
+    }
 
     return await this.stripe.subscriptionSchedules.update(scheduleId, {
       ...params,
@@ -81,7 +103,9 @@ export class StripeSubscriptionScheduleService {
   }
 
   async createSubscriptionSchedule(stripeSubscriptionId: string) {
-    if (!this.stripe) throw new Error('Billing is disabled');
+    if (!this.stripe) {
+      throw new Error('Billing is disabled');
+    }
 
     const schedule = await this.stripe.subscriptionSchedules.create({
       from_subscription: stripeSubscriptionId,
@@ -100,7 +124,7 @@ export class StripeSubscriptionScheduleService {
       await this.getSubscriptionWithSchedule(stripeSubscriptionId);
 
     if (!isDefined(subscriptionWithSchedule.schedule)) {
-      return {};
+      return { subscription: subscriptionWithSchedule };
     }
 
     const { currentPhase, nextPhase } = this.getPhases(
@@ -112,10 +136,11 @@ export class StripeSubscriptionScheduleService {
         subscriptionWithSchedule.schedule.id,
       );
 
-      return {};
+      return { subscription: subscriptionWithSchedule };
     }
 
     return {
+      subscription: subscriptionWithSchedule,
       schedule: subscriptionWithSchedule.schedule,
       currentPhase,
       nextPhase,
@@ -123,7 +148,9 @@ export class StripeSubscriptionScheduleService {
   }
 
   releaseSubscriptionSchedule(scheduleId: string) {
-    if (!this.stripe) throw new Error('Billing is disabled');
+    if (!this.stripe) {
+      throw new Error('Billing is disabled');
+    }
 
     return this.stripe.subscriptionSchedules.release(scheduleId);
   }

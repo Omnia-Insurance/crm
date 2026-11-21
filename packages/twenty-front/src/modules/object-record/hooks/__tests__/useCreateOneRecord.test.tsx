@@ -1,6 +1,7 @@
+import { gql, InMemoryCache } from '@apollo/client';
 import { act, renderHook } from '@testing-library/react';
 
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import {
   query,
   responseData,
@@ -12,6 +13,7 @@ import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMeta
 const PERSON_ID = 'a7286b9a-c039-4a89-9567-2dfa7953cda9';
 
 jest.mock('uuid', () => ({
+  ...jest.requireActual('uuid'),
   v4: jest.fn(() => 'a7286b9a-c039-4a89-9567-2dfa7953cda9'),
 }));
 
@@ -49,7 +51,7 @@ describe('useCreateOneRecord', () => {
     const { result } = renderHook(
       () =>
         useCreateOneRecord({
-          objectNameSingular: CoreObjectNameSingular.Person,
+          objectNameSingular: StandardObjectNameSingular.Person,
         }),
       {
         wrapper: Wrapper,
@@ -64,5 +66,66 @@ describe('useCreateOneRecord', () => {
 
     expect(mocks[0].result).toHaveBeenCalled();
     expect(mockRefetchAggregateQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps cached counts when the server rejects the record', async () => {
+    const rejectedInput = { name: { firstName: 'Jane', lastName: 'Doe' } };
+    const cachedPeopleQuery = gql`
+      query CachedPeople {
+        people {
+          totalCount
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `;
+    const cache = new InMemoryCache();
+
+    cache.writeQuery({
+      query: cachedPeopleQuery,
+      data: {
+        people: { __typename: 'PersonConnection', totalCount: 5, edges: [] },
+      },
+    });
+
+    const RejectingWrapper = getJestMetadataAndApolloMocksWrapper({
+      cache,
+      apolloMocks: [
+        {
+          request: {
+            query,
+            variables: { input: { ...rejectedInput, id: PERSON_ID } },
+          },
+          error: new Error('A code is required'),
+        },
+      ],
+    });
+
+    const { result } = renderHook(
+      () =>
+        useCreateOneRecord({
+          objectNameSingular: StandardObjectNameSingular.Person,
+        }),
+      { wrapper: RejectingWrapper },
+    );
+
+    await act(async () => {
+      await expect(
+        result.current.createOneRecord(rejectedInput),
+      ).rejects.toThrow('A code is required');
+    });
+
+    expect(
+      cache.readQuery<{ people: { totalCount: number } }>({
+        query: cachedPeopleQuery,
+      })?.people.totalCount,
+    ).toBe(5);
+    expect(mockRefetchAggregateQueries).toHaveBeenCalledTimes(1);
+    expect(mockRefetchAggregateQueries).toHaveBeenCalledWith({
+      objectMetadataNamePlural: 'people',
+    });
   });
 });

@@ -5,12 +5,15 @@ import { ALL_METADATA_NAME } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
-import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsExceptionCode } from 'src/engine/permissions/permissions.exception';
 import { FailedFlatEntityValidation } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/types/failed-flat-entity-validation.type';
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
 import { FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
 import { UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { validateFieldPermissionGrantsNoDisabledAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-field-permission-grants-no-disabled-action.util';
+import { getRoleNotEditableErrors } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/get-role-not-editable-errors.util';
 import { validateRoleBelongsToCallerApplication } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-role-belongs-to-caller-application.util';
+import { isSameRowLevelPermissionPredicateGroup } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/is-same-row-level-permission-predicate-group.util';
 
 @Injectable()
 export class FlatFieldPermissionValidatorService {
@@ -73,13 +76,9 @@ export class FlatFieldPermissionValidatorService {
         }),
       );
 
-      if (!referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
-      }
+      validationResult.errors.push(
+        ...getRoleNotEditableErrors({ flatRole: referencedRole, buildOptions }),
+      );
     }
 
     const referencedObjectMetadata = findFlatEntityByUniversalIdentifier({
@@ -110,6 +109,18 @@ export class FlatFieldPermissionValidatorService {
       });
     }
 
+    validationResult.errors.push(
+      ...validateFieldPermissionGrantsNoDisabledAction({
+        flatFieldPermission: flatFieldPermissionToValidate,
+        flatFieldMetadata: referencedFieldMetadata,
+        flatRole: referencedRole,
+        applicationDefaultRoleUniversalIdentifier:
+          buildOptions.applicationDefaultRoleUniversalIdentifier,
+        workspaceCustomApplicationUniversalIdentifier:
+          buildOptions.workspaceCustomApplicationUniversalIdentifier,
+      }),
+    );
+
     const duplicateForSameRoleObjectField = Object.values(
       optimisticFlatFieldPermissionMaps.byUniversalIdentifier,
     ).filter(
@@ -121,6 +132,10 @@ export class FlatFieldPermissionValidatorService {
           flatFieldPermissionToValidate.objectMetadataUniversalIdentifier &&
         fp.fieldMetadataUniversalIdentifier ===
           flatFieldPermissionToValidate.fieldMetadataUniversalIdentifier &&
+        isSameRowLevelPermissionPredicateGroup({
+          fieldPermission: fp,
+          otherFieldPermission: flatFieldPermissionToValidate,
+        }) &&
         fp.universalIdentifier !==
           flatFieldPermissionToValidate.universalIdentifier,
     );
@@ -196,13 +211,9 @@ export class FlatFieldPermissionValidatorService {
         }),
       );
 
-      if (!referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
-      }
+      validationResult.errors.push(
+        ...getRoleNotEditableErrors({ flatRole: referencedRole, buildOptions }),
+      );
     }
 
     if (isDefined(flatEntityUpdate.objectMetadataUniversalIdentifier)) {
@@ -237,6 +248,22 @@ export class FlatFieldPermissionValidatorService {
       }
     }
 
+    validationResult.errors.push(
+      ...validateFieldPermissionGrantsNoDisabledAction({
+        flatFieldPermission: updatedFlatFieldPermission,
+        flatFieldMetadata: findFlatEntityByUniversalIdentifier({
+          universalIdentifier:
+            updatedFlatFieldPermission.fieldMetadataUniversalIdentifier,
+          flatEntityMaps: flatFieldMetadataMaps,
+        }),
+        flatRole: referencedRole,
+        applicationDefaultRoleUniversalIdentifier:
+          buildOptions.applicationDefaultRoleUniversalIdentifier,
+        workspaceCustomApplicationUniversalIdentifier:
+          buildOptions.workspaceCustomApplicationUniversalIdentifier,
+      }),
+    );
+
     const duplicateForSameRoleObjectField = Object.values(
       optimisticFlatFieldPermissionMaps.byUniversalIdentifier,
     ).filter(
@@ -248,6 +275,10 @@ export class FlatFieldPermissionValidatorService {
           updatedFlatFieldPermission.objectMetadataUniversalIdentifier &&
         fp.fieldMetadataUniversalIdentifier ===
           updatedFlatFieldPermission.fieldMetadataUniversalIdentifier &&
+        isSameRowLevelPermissionPredicateGroup({
+          fieldPermission: fp,
+          otherFieldPermission: updatedFlatFieldPermission,
+        }) &&
         fp.universalIdentifier !== universalIdentifier,
     );
 
@@ -268,6 +299,7 @@ export class FlatFieldPermissionValidatorService {
       flatFieldPermissionMaps: optimisticFlatFieldPermissionMaps,
       flatRoleMaps,
     },
+    buildOptions,
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.fieldPermission
   >): FailedFlatEntityValidation<'fieldPermission', 'delete'> {
@@ -297,12 +329,13 @@ export class FlatFieldPermissionValidatorService {
         flatEntityMaps: flatRoleMaps,
       });
 
-      if (isDefined(referencedRole) && !referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
+      if (isDefined(referencedRole)) {
+        validationResult.errors.push(
+          ...getRoleNotEditableErrors({
+            flatRole: referencedRole,
+            buildOptions,
+          }),
+        );
       }
     }
 

@@ -15,11 +15,20 @@ spec:
       app.kubernetes.io/name: {{ include "twenty.name" . }}
       app.kubernetes.io/component: server
   strategy:
+    {{- /* OMNIA-CUSTOM: strategy/minReadySeconds knobs for zero-downtime rollouts; unset keeps upstream */}}
+    {{- if .Values.server.strategy }}
+    {{- toYaml .Values.server.strategy | nindent 4 }}
+    {{- else if or .Values.server.dockerDataPersistence.enabled .Values.server.persistence.enabled }}
+    type: Recreate
+    {{- else }}
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 0
-  minReadySeconds: 15
+      maxUnavailable: 1
+    {{- end }}
+  {{- with .Values.server.minReadySeconds }}
+  minReadySeconds: {{ . }}
+  {{- end }}
   template:
     metadata:
       labels:
@@ -27,29 +36,34 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: server
     spec:
-      {{- /* OMNIA-CUSTOM: serviceAccountName for EKS Pod Identity (Bedrock, Transcribe, and S3 QA runtime access under AWS BAA) */}}
-      {{- with .Values.server.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end }}
-      {{- with .Values.server.nodeSelector | default .Values.nodeSelector }}
+      terminationGracePeriodSeconds: 120
+      serviceAccountName: {{ include "twenty.serviceAccountName" . }}
+      securityContext:
+{{- toYaml .Values.securityContext | nindent 8 }}
+      {{- with .Values.server.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.server.tolerations | default .Values.tolerations }}
+      {{- with .Values.server.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      terminationGracePeriodSeconds: 60
+      {{- with .Values.server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- /* OMNIA-CUSTOM: spread server replicas across nodes */}}
+      {{- with .Values.server.topologySpreadConstraints }}
       topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-          labelSelector:
-            matchLabels:
-              app.kubernetes.io/name: {{ include "twenty.name" . }}
-              app.kubernetes.io/component: server
-      securityContext:
-{{- toYaml .Values.securityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.dnsPolicy }}
+      dnsPolicy: {{ . }}
+      {{- end }}
+      {{- with .Values.server.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
         {{- if .Values.server.dockerDataPersistence.enabled }}
         - name: docker-data
@@ -95,14 +109,13 @@ spec:
             - |
               DBNAME={{ .Values.db.internal.database | default "twenty" }}
               APP_USER={{ .Values.db.internal.appUser | default "twenty_app_user" }}
-              DB_HOST={{ include "twenty.fullname" . }}-db
               export PGPASSWORD
               export APP_PASSWORD
               echo "Creating database ${DBNAME} if it doesn't exist..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname = '${DBNAME}'" | grep -q 1 || \
-              psql -h ${DB_HOST} -p 5432 -U postgres -d postgres -c "CREATE DATABASE ${DBNAME};"
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d postgres -v db="${DBNAME}" -Atc "SELECT 1 FROM pg_database WHERE datname = :'db'" | grep -q 1 || \
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d postgres -v db="${DBNAME}" -c 'CREATE DATABASE :"db";'
               echo "Creating app user ${APP_USER} if it doesn't exist..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d postgres -v app_user="${APP_USER}" -v app_password="${APP_PASSWORD}" <<'EOSQL'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d postgres -v app_user="${APP_USER}" -v app_password="${APP_PASSWORD}" <<'EOSQL'
               DO
               $do$
               BEGIN
@@ -113,60 +126,27 @@ spec:
               $do$;
               EOSQL
               echo "Creating core schema and granting permissions..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "CREATE SCHEMA IF NOT EXISTS core"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "GRANT ALL PRIVILEGES ON DATABASE ${DBNAME} TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "GRANT ALL PRIVILEGES ON SCHEMA core TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "GRANT ALL PRIVILEGES ON SCHEMA public TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA core TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA core GRANT ALL ON TABLES TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA core GRANT ALL ON SEQUENCES TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${APP_USER};"
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${APP_USER};"
-              echo "Granting permissions on workspace schemas..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "DO \$\$ DECLARE ws RECORD; BEGIN FOR ws IN SELECT nspname FROM pg_namespace WHERE nspname LIKE 'workspace_%' LOOP EXECUTE format('GRANT ALL PRIVILEGES ON SCHEMA %I TO ${APP_USER}', ws.nspname); EXECUTE format('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA %I TO ${APP_USER}', ws.nspname); EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON TABLES TO ${APP_USER}', ws.nspname); EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I GRANT ALL ON SEQUENCES TO ${APP_USER}', ws.nspname); END LOOP; END \$\$;"
-              echo "Transferring workspace table ownership to ${APP_USER}..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d ${DBNAME} -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT schemaname, tablename FROM pg_tables WHERE schemaname LIKE 'workspace_%' AND tableowner != '${APP_USER}' LOOP EXECUTE format('ALTER TABLE %I.%I OWNER TO ${APP_USER}', r.schemaname, r.tablename); END LOOP; END \$\$;"
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'CREATE SCHEMA IF NOT EXISTS core'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v db="${DBNAME}" -v app_user="${APP_USER}" -c 'GRANT ALL PRIVILEGES ON DATABASE :"db" TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'GRANT ALL PRIVILEGES ON SCHEMA core TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'GRANT ALL PRIVILEGES ON SCHEMA public TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA core TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA core GRANT ALL ON TABLES TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA core GRANT ALL ON SEQUENCES TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO :"app_user";'
+              psql -h {{ include "twenty.fullname" . }}-db -p 5432 -U postgres -d "${DBNAME}" -v app_user="${APP_USER}" -c 'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO :"app_user";'
               echo "Database ${DBNAME} is ready."
         {{- end }}
-        - name: run-migrations
-          {{- $img := include "twenty.server.image" . }}
-          image: {{ include "twenty.image.repository" $img }}:{{ include "twenty.image.tag" $img }}
-          imagePullPolicy: {{ include "twenty.image.pullPolicy" $img }}
-          command:
-            - sh
-            - -c
-            - >-
-              npx -y typeorm migration:run -d dist/database/typeorm/core/core.datasource
-          env:
-            {{- if .Values.db.enabled }}
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.fullname" . }}-db-superuser
-                  key: password
-            - name: PG_DATABASE_URL
-              value: "postgres://postgres:$(PGPASSWORD)@{{ include "twenty.fullname" . }}-db.{{ include "twenty.namespace" . }}.svc.cluster.local/{{ .Values.db.internal.database | default "twenty" }}"
-            {{- else if eq (include "twenty.db.useExternalSecret" .) "true" }}
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.dbPassword.secretName" . }}
-                  key: {{ include "twenty.dbPassword.secretKey" . }}
-            - name: PG_DATABASE_URL
-              value: {{ include "twenty.dbUrl.template" . | quote }}
-            {{- else }}
-            - name: PG_DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.dbUrl.secretName" . }}
-                  key: url
-            {{- end }}
       containers:
         - name: server
           {{- $img := include "twenty.server.image" . }}
           image: {{ include "twenty.image.repository" $img }}:{{ include "twenty.image.tag" $img }}
           imagePullPolicy: {{ include "twenty.image.pullPolicy" $img }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "20"]
           env:
             - name: SERVER_URL
               value: {{ include "twenty.serverUrl" . | quote }}
@@ -217,36 +197,22 @@ spec:
             {{- with .Values.server.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          lifecycle:
-            preStop:
-              exec:
-                command: ["sh", "-c", "sleep 15"]
           ports:
             - name: http-tcp
               containerPort: {{ include "twenty.server.containerPort" . }}
               protocol: TCP
+          {{- with .Values.server.startupProbe }}
           startupProbe:
-            httpGet:
-              path: /healthz
-              port: {{ include "twenty.server.containerPort" . }}
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 60
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.livenessProbe }}
           livenessProbe:
-            httpGet:
-              path: /healthz
-              port: {{ include "twenty.server.containerPort" . }}
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.readinessProbe }}
           readinessProbe:
-            httpGet:
-              path: /healthz
-              port: {{ include "twenty.server.containerPort" . }}
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 3
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
           volumeMounts:

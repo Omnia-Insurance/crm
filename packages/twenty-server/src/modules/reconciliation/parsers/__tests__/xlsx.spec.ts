@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 
 import { type DataSource } from 'typeorm';
 
-import { type FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
+import { type FileStorageService } from 'src/engine/core-modules/file-storage/services/file-storage.service';
 import { type FileService } from 'src/engine/core-modules/file/services/file.service';
 import {
   MAX_PARSED_ROWS,

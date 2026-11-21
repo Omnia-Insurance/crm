@@ -9,9 +9,13 @@ import {
 } from 'src/engine/metadata-modules/flat-entity/exceptions/flat-entity-maps.exception';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
 import { type MetadataFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/metadata-flat-entity.type';
-import { type MetadataToFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/types/metadata-to-flat-entity-maps-key';
+import { type MetadataToFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/types/metadata-to-flat-entity-maps-key.type';
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
+
+export type PreallocatedIdByUniversalIdentifierByMetadataName = Partial<
+  Record<AllMetadataName, Record<string, string>>
+>;
 
 type ManyToOneRelationsConfig<T extends AllMetadataName> =
   (typeof ALL_MANY_TO_ONE_METADATA_RELATIONS)[T];
@@ -27,7 +31,9 @@ type TargetMetadataNamesForUniversalForeignKeys<
   T extends AllMetadataName,
   TProvidedKeys extends string,
 > = {
-  [K in keyof ManyToOneRelationsConfig<T>]: ManyToOneRelationsConfig<T>[K] extends {
+  [
+    K in keyof ManyToOneRelationsConfig<T>
+  ]: ManyToOneRelationsConfig<T>[K] extends {
     universalForeignKey: infer _UFK extends TProvidedKeys;
     metadataName: infer MN extends AllMetadataName;
   }
@@ -52,14 +58,16 @@ type ResolvedForeignKeyIds<
     string
   >,
 > = {
-  [K in keyof ManyToOneRelationsConfig<T> as ManyToOneRelationsConfig<T>[K] extends {
-    universalForeignKey: infer UFK extends string;
-    foreignKey: infer FK extends string;
-  }
-    ? UFK extends TProvidedKeys
-      ? FK
+  [
+    K in keyof ManyToOneRelationsConfig<T> as ManyToOneRelationsConfig<T>[K] extends {
+      universalForeignKey: infer UFK extends string;
+      foreignKey: infer FK extends string;
+    }
+      ? UFK extends TProvidedKeys
+        ? FK
+        : never
       : never
-    : never]: ManyToOneRelationsConfig<T>[K] extends { isNullable: true }
+  ]: ManyToOneRelationsConfig<T>[K] extends { isNullable: true }
     ? string | null
     : string;
 };
@@ -74,6 +82,7 @@ export const resolveUniversalRelationIdentifiersToIds = <
   metadataName,
   universalForeignKeyValues,
   flatEntityMaps,
+  preallocatedIdByUniversalIdentifierByMetadataName,
 }: {
   metadataName: T;
   universalForeignKeyValues: Record<TProvidedKeys, string | null | undefined>;
@@ -81,6 +90,7 @@ export const resolveUniversalRelationIdentifiersToIds = <
     T,
     TProvidedKeys
   >;
+  preallocatedIdByUniversalIdentifierByMetadataName?: PreallocatedIdByUniversalIdentifierByMetadataName;
 }): ResolvedForeignKeyIds<T, TProvidedKeys> => {
   const relationEntries = ALL_MANY_TO_ONE_METADATA_RELATIONS[metadataName];
   const result: Record<string, string | null> = {};
@@ -127,6 +137,18 @@ export const resolveUniversalRelationIdentifiersToIds = <
 
     if (isNullable && !isDefined(universalIdentifierValue)) {
       result[foreignKey] = null;
+
+      continue;
+    }
+
+    const preallocatedId = isDefined(universalIdentifierValue)
+      ? preallocatedIdByUniversalIdentifierByMetadataName?.[
+          targetMetadataName
+        ]?.[universalIdentifierValue]
+      : undefined;
+
+    if (isDefined(preallocatedId)) {
+      result[foreignKey] = preallocatedId;
 
       continue;
     }

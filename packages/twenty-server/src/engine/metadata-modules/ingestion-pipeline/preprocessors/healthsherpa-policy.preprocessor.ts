@@ -3,7 +3,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { isDefined } from 'twenty-shared/utils';
 
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
+import { isDuplicateEntryError } from 'src/engine/twenty-orm/utils/is-duplicate-entry-error.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
 type HealthSherpaWebhookPayload = Record<string, unknown> & {
@@ -23,44 +26,36 @@ type HealthSherpaWebhookPayload = Record<string, unknown> & {
 export class HealthSherpaPolicyPreprocessor {
   private readonly logger = new Logger(HealthSherpaPolicyPreprocessor.name);
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  // Repositories skip permission checks: ingestion is system work, and the
+  // jobs run preprocessors in a system auth context
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   async preProcess(
     payload: HealthSherpaWebhookPayload,
-    pipeline: IngestionPipelineEntity,
-    workspaceId: string,
+    _pipeline: IngestionPipelineEntity,
+    _workspaceId: string,
   ): Promise<Record<string, unknown>> {
-    this.logger.log(
-      `Preprocessing Health Sherpa webhook for application ${payload.application_id}`,
-    );
+    // No application id in logs: it becomes the Policy's policy number
+    this.logger.log('Preprocessing Health Sherpa webhook');
 
     // 1. Normalize phone number
     const normalizedPhone = this.normalizePhone(payload.member_phone);
 
     // 2. Find or create Person/Lead
-    const person = await this.findOrCreatePerson(
-      payload,
-      normalizedPhone,
-      workspaceId,
-    );
+    const person = await this.findOrCreatePerson(payload, normalizedPhone);
 
     if (!person) {
       this.logger.error(
-        `Failed to find or create Person for application ${payload.application_id}`,
+        'Failed to find or create Person for a Health Sherpa application',
       );
       throw new Error('Failed to find or create Person for policy');
     }
 
     // 3. Compute display name: "<Carrier> - <ProductType>"
-    const displayName = await this.computePolicyDisplayName(
-      payload,
-      workspaceId,
-    );
+    const displayName = await this.computePolicyDisplayName(payload);
 
     // 4. Look up LTV from CarrierProduct commission
-    const ltvCommission = await this.lookupLtv(payload, workspaceId);
+    const ltvCommission = await this.lookupLtv(payload);
 
     // 5. Inject computed fields into payload
     return {
@@ -79,7 +74,6 @@ export class HealthSherpaPolicyPreprocessor {
 
   private async lookupLtv(
     payload: HealthSherpaWebhookPayload,
-    workspaceId: string,
   ): Promise<{ amountMicros: number; currencyCode: string } | null> {
     const carrierName = payload.carrier_name?.toString().trim();
     const planName = payload.plan_name?.toString().trim();
@@ -89,11 +83,10 @@ export class HealthSherpaPolicyPreprocessor {
     }
 
     try {
-      const carrierRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'carrier',
-        { shouldBypassPermissionChecks: true },
-      );
+      const carrierRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          'carrier',
+        );
 
       const carrier = await carrierRepo.findOne({
         where: { name: carrierName },
@@ -103,13 +96,10 @@ export class HealthSherpaPolicyPreprocessor {
         return null;
       }
 
-      const carrierId = (carrier as Record<string, unknown>).id as string;
-
-      const productRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'product',
-        { shouldBypassPermissionChecks: true },
-      );
+      const productRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          'product',
+        );
 
       const product = await productRepo.findOne({
         where: { name: planName },
@@ -119,13 +109,10 @@ export class HealthSherpaPolicyPreprocessor {
         return null;
       }
 
-      const productId = (product as Record<string, unknown>).id as string;
-
       return await lookupCarrierProductCommission(
-        carrierId,
-        productId,
-        workspaceId,
-        this.globalWorkspaceOrmManager,
+        carrier.id,
+        product.id,
+        this.workspaceOrmManager,
       );
     } catch (error) {
       this.logger.warn(`Failed to lookup LTV: ${error}`);
@@ -136,7 +123,6 @@ export class HealthSherpaPolicyPreprocessor {
 
   private async computePolicyDisplayName(
     payload: HealthSherpaWebhookPayload,
-    workspaceId: string,
   ): Promise<string> {
     const carrierName = payload.carrier_name?.toString().trim() || '';
     let productTypeName = '';
@@ -144,26 +130,22 @@ export class HealthSherpaPolicyPreprocessor {
     // Look up ProductType through Product -> ProductType chain
     if (payload.plan_name) {
       try {
-        const productRepo = await this.globalWorkspaceOrmManager.getRepository(
-          workspaceId,
-          'product',
-          { shouldBypassPermissionChecks: true },
-        );
+        const productRepo =
+          this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+            'product',
+          );
 
         const product = await productRepo.findOne({
           where: { name: payload.plan_name },
         });
 
         if (isDefined(product)) {
-          const productTypeId = (product as Record<string, unknown>)
-            .productTypeId as string | undefined;
+          const productTypeId = product.productTypeId as string | undefined;
 
           if (productTypeId) {
             const productTypeRepo =
-              await this.globalWorkspaceOrmManager.getRepository(
-                workspaceId,
+              this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
                 'productType',
-                { shouldBypassPermissionChecks: true },
               );
 
             const productType = await productTypeRepo.findOne({
@@ -171,8 +153,7 @@ export class HealthSherpaPolicyPreprocessor {
             });
 
             if (isDefined(productType)) {
-              productTypeName =
-                ((productType as Record<string, unknown>).name as string) || '';
+              productTypeName = (productType.name as string) || '';
             }
           }
         }
@@ -195,13 +176,9 @@ export class HealthSherpaPolicyPreprocessor {
   private async findOrCreatePerson(
     payload: HealthSherpaWebhookPayload,
     normalizedPhone: string | null,
-    workspaceId: string,
   ): Promise<{ id: string } | null> {
-    const personRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
+    const personRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('person');
 
     // Strategy 1: Find by phone number (most reliable)
     if (normalizedPhone) {
@@ -214,11 +191,9 @@ export class HealthSherpaPolicyPreprocessor {
       });
 
       if (isDefined(personByPhone)) {
-        this.logger.log(
-          `Matched Person ${(personByPhone as Record<string, unknown>).id} by phone`,
-        );
+        this.logger.log(`Matched Person ${personByPhone.id} by phone`);
 
-        return personByPhone as { id: string };
+        return personByPhone;
       }
     }
 
@@ -228,7 +203,6 @@ export class HealthSherpaPolicyPreprocessor {
         payload.policy_aor_npn,
         payload.member_first_name,
         payload.member_last_name,
-        workspaceId,
       );
 
       if (personByAgentAndName) {
@@ -253,42 +227,32 @@ export class HealthSherpaPolicyPreprocessor {
       });
 
       if (isDefined(personByEmail)) {
-        this.logger.log(
-          `Matched Person ${(personByEmail as Record<string, unknown>).id} by email`,
-        );
+        this.logger.log(`Matched Person ${personByEmail.id} by email`);
 
-        return personByEmail as { id: string };
+        return personByEmail;
       }
     }
 
     // Strategy 4: Auto-create Person
-    this.logger.log(
-      `No match found, auto-creating Person for application ${payload.application_id}`,
-    );
+    this.logger.log('No match found, auto-creating Person');
 
-    return await this.createPersonFromWebhook(
-      payload,
-      normalizedPhone,
-      workspaceId,
-    );
+    return await this.createPersonFromWebhook(payload, normalizedPhone);
   }
 
   private async findPersonByAgentAndName(
     agentNpn: string,
     firstName: string | undefined,
     lastName: string | undefined,
-    workspaceId: string,
   ): Promise<{ id: string } | null> {
     if (!firstName || !lastName) {
       return null;
     }
 
     // First, find agent by NPN
-    const agentRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'agentProfile',
-      { shouldBypassPermissionChecks: true },
-    );
+    const agentRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'agentProfile',
+      );
 
     const agent = await agentRepo.findOne({
       where: {
@@ -302,14 +266,9 @@ export class HealthSherpaPolicyPreprocessor {
       return null;
     }
 
-    const agentId = (agent as Record<string, unknown>).id as string;
-
     // Then find person assigned to this agent with matching name
-    const personRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
+    const personRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('person');
 
     const normalizedFirstName = firstName.trim().toLowerCase();
     const normalizedLastName = lastName.trim().toLowerCase();
@@ -317,16 +276,17 @@ export class HealthSherpaPolicyPreprocessor {
     // Note: This is a simplified query. You may need to adjust based on your actual schema
     const people = await personRepo.find({
       where: {
-        assignedAgentId: agentId,
+        assignedAgentId: agent.id,
       },
     });
 
     // Filter by name (case-insensitive)
     const matchedPerson = people.find((person) => {
-      const p = person as Record<string, unknown>;
-      const name = p.name as Record<string, string> | undefined;
+      const name = person.name as Record<string, string> | undefined;
 
-      if (!name) return false;
+      if (!name) {
+        return false;
+      }
 
       const personFirstName = name.firstName?.trim().toLowerCase();
       const personLastName = name.lastName?.trim().toLowerCase();
@@ -337,19 +297,15 @@ export class HealthSherpaPolicyPreprocessor {
       );
     });
 
-    return matchedPerson ? (matchedPerson as { id: string }) : null;
+    return matchedPerson ?? null;
   }
 
   private async createPersonFromWebhook(
     payload: HealthSherpaWebhookPayload,
     normalizedPhone: string | null,
-    workspaceId: string,
   ): Promise<{ id: string } | null> {
-    const personRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
+    const personRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('person');
 
     const firstName = payload.member_first_name?.toString().trim() || '';
     const lastName = payload.member_last_name?.toString().trim() || '';
@@ -380,11 +336,10 @@ export class HealthSherpaPolicyPreprocessor {
 
     // Find and assign agent if NPN present
     if (payload.policy_aor_npn) {
-      const agentRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'agentProfile',
-        { shouldBypassPermissionChecks: true },
-      );
+      const agentRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          'agentProfile',
+        );
 
       const agent = await agentRepo.findOne({
         where: {
@@ -393,51 +348,68 @@ export class HealthSherpaPolicyPreprocessor {
       });
 
       if (isDefined(agent)) {
-        personData.assignedAgentId = (agent as Record<string, unknown>).id;
+        personData.assignedAgentId = agent.id;
       }
     }
 
     try {
-      const createdPerson = await personRepo.save(personData);
+      const createdPerson = await this.savePerson(personRepo, personData);
 
-      this.logger.log(
-        `Auto-created Person ${(createdPerson as Record<string, unknown>).id} for policy ${payload.application_id}`,
-      );
+      this.logger.log(`Auto-created Person ${createdPerson.id}`);
 
-      return createdPerson as { id: string };
+      return createdPerson;
     } catch (error) {
       // Handle duplicate email error - retry without email
-      if (
-        error instanceof Error &&
-        error.message.toLowerCase().includes('duplicate')
-      ) {
-        this.logger.warn(`Duplicate email ${email}, retrying without email`);
+      if (isDuplicateEntryError(error)) {
+        this.logger.warn(
+          'Duplicate entry creating Person, retrying without email',
+        );
 
         delete personData.emails;
 
         try {
-          const createdPerson = await personRepo.save(personData);
+          const createdPerson = await this.savePerson(personRepo, personData);
 
           this.logger.log(
-            `Auto-created Person ${(createdPerson as Record<string, unknown>).id} (without email) for policy ${payload.application_id}`,
+            `Auto-created Person ${createdPerson.id} (without email)`,
           );
 
-          return createdPerson as { id: string };
+          return createdPerson;
         } catch (retryError) {
-          this.logger.error(`Failed to create Person on retry: ${retryError}`);
+          this.logger.error(
+            `Failed to create Person on retry: ${getIngestionErrorLogLabel(retryError)}`,
+          );
 
           return null;
         }
       }
 
-      this.logger.error(`Failed to create Person: ${error}`);
+      this.logger.error(
+        `Failed to create Person: ${getIngestionErrorLogLabel(error)}`,
+      );
 
       return null;
     }
   }
 
+  private async savePerson(
+    personRepo: WorkspaceRepository,
+    personData: Record<string, unknown>,
+  ): Promise<{ id: string }> {
+    const [createdPerson] = await personRepo.save(personData);
+
+    // Without an id the policy would silently lose its lead link
+    if (!isDefined(createdPerson)) {
+      throw new Error('Person save returned no record');
+    }
+
+    return createdPerson;
+  }
+
   private normalizePhone(phone: string | undefined): string | null {
-    if (!phone) return null;
+    if (!phone) {
+      return null;
+    }
 
     // Remove all non-digit characters
     const digits = phone.toString().replace(/\D/g, '');

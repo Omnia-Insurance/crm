@@ -1,6 +1,8 @@
 import { useContext } from 'react';
 
+import { useCoreRecordReferenceField } from '@/object-record/record-field/ui/hooks/useCoreRecordReferenceField';
 import { ActorFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/ActorFieldDisplay';
+import { CoreRecordReferenceFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/CoreRecordReferenceFieldDisplay';
 import { ArrayFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/ArrayFieldDisplay';
 import { BooleanFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/BooleanFieldDisplay';
 import { EmailsFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/EmailsFieldDisplay';
@@ -40,6 +42,7 @@ import { JsonFieldDisplay } from '@/object-record/record-field/ui/meta-types/dis
 import { MultiSelectFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/MultiSelectFieldDisplay';
 import { NumberFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/NumberFieldDisplay';
 import { RelationSubFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/RelationSubFieldDisplay';
+import { isRelationSubFieldDefinition } from '@/object-record/record-field/utils/isRelationSubFieldDefinition';
 import { RelationToOneFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/RelationToOneFieldDisplay';
 import { SelectFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/SelectFieldDisplay';
 import { TextFieldDisplay } from '@/object-record/record-field/ui/meta-types/display/components/TextFieldDisplay';
@@ -69,19 +72,27 @@ export const FieldDisplay = () => {
     isLabelIdentifier,
   );
 
+  const coreRecordReferenceField = useCoreRecordReferenceField({
+    objectNameSingular: fieldDefinition.metadata.objectMetadataNameSingular,
+    fieldName: fieldDefinition.metadata.fieldName,
+  });
+
   if (isDefined(isForbidden) && isForbidden) {
     return <ForbiddenFieldDisplay />;
   }
 
-  // OMNIA-CUSTOM: Relation sub-field columns delegate to
-  // RelationSubFieldDisplay which re-provides FieldContext pointing at the
-  // related record so native display components render correctly.
-  const subFieldName = (
-    fieldDefinition.metadata as Record<string, unknown>
-  ).subFieldName as string | undefined;
-
-  if (subFieldName) {
+  // OMNIA-CUSTOM: relation sub-field columns ("Lead / Date of Birth") render
+  // the related record's field through RelationSubFieldDisplay
+  if (isRelationSubFieldDefinition(fieldDefinition)) {
     return <RelationSubFieldDisplay />;
+  }
+
+  if (isDefined(coreRecordReferenceField)) {
+    return (
+      <CoreRecordReferenceFieldDisplay
+        coreRecordReferenceField={coreRecordReferenceField}
+      />
+    );
   }
 
   return isChipDisplay ? (

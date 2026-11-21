@@ -1,39 +1,72 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { ApplicationContentService } from 'src/engine/core-modules/application/application-content/application-content.service';
+import { ApplicationTranslationModule } from 'src/engine/core-modules/application/application-translation/application-translation.module';
+import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
+import { ApplicationRegistrationEntity } from 'src/engine/core-modules/application/application-registration/application-registration.entity';
+import { ApplicationGaugeService } from 'src/engine/core-modules/application/application-gauge.service';
+import { ApplicationStopModule } from 'src/engine/core-modules/application/application-stop/application-stop.module';
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
+import { ApplicationResolver } from 'src/engine/core-modules/application/application.resolver';
+import { ApplicationLookupModule } from 'src/engine/core-modules/application/application-lookup/application-lookup.module';
+import { ApplicationGrantRoleLookupModule } from 'src/engine/core-modules/application/application-grant-role-lookup/application-grant-role-lookup.module';
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
 import { WorkspaceFlatApplicationMapCacheService } from 'src/engine/core-modules/application/workspace-flat-application-map-cache.service';
 import { ApplicationVariableEntity } from 'src/engine/core-modules/application/application-variable/application-variable.entity';
-import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
-import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
+import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AgentEntity } from 'src/engine/metadata-modules/ai/ai-agent/entities/agent.entity';
 import { CommandMenuItemEntity } from 'src/engine/metadata-modules/command-menu-item/entities/command-menu-item.entity';
+import { SettingsMenuItemEntity } from 'src/engine/metadata-modules/settings-menu-item/entities/settings-menu-item.entity';
 import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
 import { FrontComponentEntity } from 'src/engine/metadata-modules/front-component/entities/front-component.entity';
 import { LogicFunctionEntity } from 'src/engine/metadata-modules/logic-function/logic-function.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+import { ApplicationRegistrationLookupModule } from 'src/engine/core-modules/application/application-registration/application-registration-lookup/application-registration-lookup.module';
 
 @Module({
   imports: [
+    ApplicationRegistrationLookupModule,
     TypeOrmModule.forFeature([
       ApplicationEntity,
+      ApplicationRegistrationEntity,
       WorkspaceEntity,
       LogicFunctionEntity,
       AgentEntity,
       FrontComponentEntity,
       CommandMenuItemEntity,
+      SettingsMenuItemEntity,
       ObjectMetadataEntity,
       ApplicationVariableEntity,
+      FileEntity,
     ]),
+    ApplicationTranslationModule,
+    ApplicationLookupModule,
+    ApplicationGrantRoleLookupModule,
+    ApplicationStopModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     WorkspaceCacheModule,
-    TwentyConfigModule,
-    FeatureFlagModule,
+    MetricsModule,
   ],
-  exports: [ApplicationService, WorkspaceFlatApplicationMapCacheService],
-  providers: [ApplicationService, WorkspaceFlatApplicationMapCacheService],
+  exports: [ApplicationService, ApplicationStopModule],
+  providers: [
+    ApplicationResolver,
+    ApplicationService,
+    ApplicationContentService,
+    ApplicationGaugeService,
+    WorkspaceFlatApplicationMapCacheService,
+    provideWorkspaceScopedRepository(AgentEntity),
+    provideWorkspaceScopedRepository(ApplicationVariableEntity),
+    provideWorkspaceScopedRepository(CommandMenuItemEntity),
+    provideWorkspaceScopedRepository(SettingsMenuItemEntity),
+    provideWorkspaceScopedRepository(FrontComponentEntity),
+    provideWorkspaceScopedRepository(LogicFunctionEntity),
+    provideWorkspaceScopedRepository(ObjectMetadataEntity),
+    provideWorkspaceScopedRepository(ApplicationEntity),
+    provideWorkspaceScopedRepository(FileEntity),
+  ],
 })
 export class ApplicationModule {}

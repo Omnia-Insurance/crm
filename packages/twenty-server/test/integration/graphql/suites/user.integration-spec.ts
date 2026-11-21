@@ -1,8 +1,16 @@
+import { randomUUID } from 'crypto';
+
+import gql from 'graphql-tag';
 import request from 'supertest';
+import { getCurrentUser } from 'test/integration/graphql/utils/get-current-user.util';
 import { signUpOperationFactory } from 'test/integration/graphql/utils/sign-up-operation-factory.util';
+import { signUpInWorkspaceAndGetAccessToken } from 'test/integration/graphql/utils/sign-up-in-workspace-and-get-access-token.util';
+import { deleteUser } from 'test/integration/graphql/utils/delete-user.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { updateConfigVariable } from 'test/integration/twenty-config/utils/update-config-variable.util';
 
 import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
-import { PermissionsExceptionMessage } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsExceptionMessage } from 'src/engine/permissions/permissions.exception';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
 const client = request(`http://localhost:${APP_PORT}`);
@@ -60,7 +68,6 @@ describe('deleteUser', () => {
   });
 
   it('should soft delete user and remove workspace relations when deleting a user in their only workspace', async () => {
-    // 1.  Arrange
     // Enable public invite link to allow sign up without personal token
     const enablePublicInviteLinkMutation = {
       query: `
@@ -85,7 +92,24 @@ describe('deleteUser', () => {
         );
       });
 
-    // Sign up a new user into the current workspace via public invite link
+    const getRolesWithMembersQuery = {
+      query: `
+        query GetRoles {
+          getRoles { id label workspaceMembers { id } }
+        }
+      `,
+    };
+
+    // Primes the memoized member cache, so a missed invalidation on join would hide the new member
+    await client
+      .post('/metadata')
+      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
+      .send(getRolesWithMembersQuery)
+      .expect(200)
+      .expect((res) => {
+        expect(res.body.errors).toBeUndefined();
+      });
+
     const testEmail = `test_user_${Date.now()}@example.com`;
     const signUpMutation = signUpOperationFactory({
       email: testEmail,
@@ -97,7 +121,6 @@ describe('deleteUser', () => {
     expect(signUpResponse.status).toBe(200);
     expect(signUpResponse.body.errors).toBeUndefined();
 
-    // Query workspace members and find the created user by email to get workspaceMemberId
     const newWorkspaceMemberQuery = {
       query: `
         query WorkspaceMember($workspaceMemberFilter: WorkspaceMemberFilterInput!) {
@@ -128,7 +151,24 @@ describe('deleteUser', () => {
     expect(createdMember).toBeDefined();
     const createdWorkspaceMemberId = createdMember.id;
 
-    // 2. Act
+    const rolesAfterJoinResponse = await client
+      .post('/metadata')
+      .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
+      .send(getRolesWithMembersQuery);
+
+    expect(rolesAfterJoinResponse.body.errors).toBeUndefined();
+    expect(
+      (
+        rolesAfterJoinResponse.body.data.getRoles as Array<{
+          workspaceMembers: Array<{ id: string }>;
+        }>
+      ).some((role) =>
+        role.workspaceMembers.some(
+          (workspaceMember) => workspaceMember.id === createdWorkspaceMemberId,
+        ),
+      ),
+    ).toBe(true);
+
     const deleteUserFromWorkspaceMutation = {
       query: `
         mutation DeleteUserFromWorkspace {
@@ -148,7 +188,6 @@ describe('deleteUser', () => {
 
     expect(deleteResponse.body.errors).toBeUndefined();
 
-    // 3. Assert
     const membersAfterDeletionResponse = await client
       .post('/graphql')
       .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
@@ -158,14 +197,6 @@ describe('deleteUser', () => {
       membersAfterDeletionResponse.body.data.workspaceMember;
 
     expect(createdMemberAfterDeletion).toBeNull();
-
-    const getRolesWithMembersQuery = {
-      query: `
-        query GetRoles {
-          getRoles { id label workspaceMembers { id } }
-        }
-      `,
-    };
 
     const rolesResponse = await client
       .post('/metadata')
@@ -184,6 +215,103 @@ describe('deleteUser', () => {
       expect(
         role.workspaceMembers.find((wm) => wm.id === createdWorkspaceMemberId),
       ).toBeUndefined();
+    }
+  });
+});
+
+describe('updateUserEmail', () => {
+  let newUserAccessToken: string | undefined;
+
+  afterEach(async () => {
+    if (newUserAccessToken) {
+      await deleteUser({
+        accessToken: newUserAccessToken,
+        expectToFail: false,
+      });
+      newUserAccessToken = undefined;
+    }
+  });
+
+  it('should update email directly when IS_EMAIL_VERIFICATION_REQUIRED is false', async () => {
+    const originalEmail = `update-email-no-verif-${randomUUID()}@example.com`;
+    const updatedEmail = `updated-${randomUUID()}@example.com`;
+
+    newUserAccessToken =
+      await signUpInWorkspaceAndGetAccessToken(originalEmail);
+
+    const updateEmailMutation = gql`
+      mutation UpdateUserEmail($newEmail: String!) {
+        updateUserEmail(newEmail: $newEmail)
+      }
+    `;
+
+    const updateResponse = await makeMetadataApiRequest(
+      {
+        query: updateEmailMutation,
+        variables: { newEmail: updatedEmail },
+      },
+      newUserAccessToken,
+    );
+
+    expect(updateResponse.status).toBe(200);
+    expect(updateResponse.body.errors).toBeUndefined();
+    expect(updateResponse.body.data.updateUserEmail).toBe(true);
+
+    const { data } = await getCurrentUser({
+      accessToken: newUserAccessToken,
+      expectToFail: false,
+    });
+
+    expect(data.currentUser.email).toBe(updatedEmail);
+  });
+
+  it('should not update email immediately when IS_EMAIL_VERIFICATION_REQUIRED is true', async () => {
+    const originalEmail = `update-email-with-verif-${randomUUID()}@example.com`;
+    const updatedEmail = `updated-verif-${randomUUID()}@example.com`;
+
+    newUserAccessToken =
+      await signUpInWorkspaceAndGetAccessToken(originalEmail);
+
+    await updateConfigVariable({
+      input: {
+        key: 'IS_EMAIL_VERIFICATION_REQUIRED',
+        value: true,
+      },
+    });
+
+    try {
+      const updateEmailMutation = gql`
+        mutation UpdateUserEmail($newEmail: String!) {
+          updateUserEmail(newEmail: $newEmail)
+        }
+      `;
+
+      const updateResponse = await makeMetadataApiRequest(
+        {
+          query: updateEmailMutation,
+          variables: { newEmail: updatedEmail },
+        },
+        newUserAccessToken,
+      );
+
+      expect(updateResponse.status).toBe(200);
+      expect(updateResponse.body.errors).toBeUndefined();
+      expect(updateResponse.body.data.updateUserEmail).toBe(true);
+
+      // Email should remain unchanged — verification email was sent but not confirmed
+      const { data } = await getCurrentUser({
+        accessToken: newUserAccessToken,
+        expectToFail: false,
+      });
+
+      expect(data.currentUser.email).toBe(originalEmail);
+    } finally {
+      await updateConfigVariable({
+        input: {
+          key: 'IS_EMAIL_VERIFICATION_REQUIRED',
+          value: false,
+        },
+      });
     }
   });
 });

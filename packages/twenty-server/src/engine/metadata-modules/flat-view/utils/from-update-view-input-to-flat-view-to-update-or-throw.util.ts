@@ -1,7 +1,9 @@
 import { t } from '@lingui/core/macro';
+import { DEFAULT_VIEW_GROUP_LOAD_LIMIT } from 'twenty-shared/constants';
 import {
   extractAndSanitizeObjectStringFields,
   isDefined,
+  isNonEmptyArray,
   trimAndRemoveDuplicatedWhitespacesFromObjectStringProperties,
 } from 'twenty-shared/utils';
 
@@ -12,8 +14,15 @@ import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-m
 import { type FlatViewGroupMaps } from 'src/engine/metadata-modules/flat-view-group/types/flat-view-group-maps.type';
 import { FLAT_VIEW_EDITABLE_PROPERTIES } from 'src/engine/metadata-modules/flat-view/constants/flat-view-editable-properties.constant';
 import { type FlatViewMaps } from 'src/engine/metadata-modules/flat-view/types/flat-view-maps.type';
+import { fromViewOverridesToUniversalOverrides } from 'src/engine/metadata-modules/flat-view/utils/from-view-overrides-to-universal-overrides.util';
 import { handleFlatViewUpdateSideEffect } from 'src/engine/metadata-modules/flat-view/utils/handle-flat-view-update-side-effect.util';
+import { validateViewGroupLoadLimitOrThrow } from 'src/engine/metadata-modules/flat-view/utils/validate-view-group-load-limit-or-throw.util';
+import { findInvalidTranslationOverrideProperties } from 'src/engine/metadata-modules/overrides/utils/find-invalid-translation-override-properties.util';
+import { isCallerOverridingEntity } from 'src/engine/metadata-modules/overrides/utils/is-caller-overriding-entity.util';
+import { mergeTranslationsIntoOverrides } from 'src/engine/metadata-modules/overrides/utils/merge-translations-into-overrides.util';
+import { sanitizeOverridableEntityInput } from 'src/engine/metadata-modules/overrides/utils/sanitize-overridable-entity-input.util';
 import { type UpdateViewInput } from 'src/engine/metadata-modules/view/dtos/inputs/update-view.input';
+import { type ViewOverrides } from 'src/engine/metadata-modules/view/entities/view.entity';
 import {
   ViewException,
   ViewExceptionCode,
@@ -21,6 +30,7 @@ import {
 import { type UniversalFlatViewGroup } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-view-group.type';
 import { type UniversalFlatView } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-view.type';
 import { mergeUpdateInExistingRecord } from 'src/utils/merge-update-in-existing-record.util';
+import { resolveEffectiveFlatEntity } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-flat-entity.util';
 
 export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
   updateViewInput: rawUpdateViewInput,
@@ -28,12 +38,16 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
   flatViewGroupMaps,
   flatFieldMetadataMaps,
   userWorkspaceId,
+  callerApplicationUniversalIdentifier,
+  workspaceCustomApplicationUniversalIdentifier,
 }: {
   updateViewInput: UpdateViewInput;
   flatViewMaps: FlatViewMaps;
   flatViewGroupMaps: FlatViewGroupMaps;
   flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
   userWorkspaceId?: string;
+  callerApplicationUniversalIdentifier: string;
+  workspaceCustomApplicationUniversalIdentifier: string;
 }): {
   flatViewToUpdate: UniversalFlatView;
   flatViewGroupsToDelete: UniversalFlatViewGroup[];
@@ -44,6 +58,8 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
       rawUpdateViewInput,
       ['id'],
     );
+
+  validateViewGroupLoadLimitOrThrow(rawUpdateViewInput.groupLoadLimit);
 
   const existingFlatViewToUpdate = findFlatEntityByIdInFlatEntityMaps({
     flatEntityId: viewToUpdateId,
@@ -57,19 +73,81 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
     );
   }
 
-  const updatedEditableFieldProperties = extractAndSanitizeObjectStringFields(
-    rawUpdateViewInput,
+  const {
+    translations: rawTranslations,
+    ...updateViewInputWithoutTranslations
+  } = rawUpdateViewInput;
+  const translations = rawTranslations ?? [];
+
+  const invalidTranslationProperties = findInvalidTranslationOverrideProperties(
+    translations,
+    'view',
+  );
+
+  if (isNonEmptyArray(invalidTranslationProperties)) {
+    throw new ViewException(
+      `Cannot translate view properties: ${invalidTranslationProperties.join(', ')}`,
+      ViewExceptionCode.INVALID_VIEW_DATA,
+    );
+  }
+
+  // NOT NULL column: null means the default, as on create and in manifests
+  const { groupLoadLimit, ...updateViewInputWithoutGroupLoadLimit } =
+    updateViewInputWithoutTranslations;
+
+  const editableProperties = extractAndSanitizeObjectStringFields(
+    {
+      ...updateViewInputWithoutGroupLoadLimit,
+      ...(groupLoadLimit !== undefined && {
+        groupLoadLimit: groupLoadLimit ?? DEFAULT_VIEW_GROUP_LOAD_LIMIT,
+      }),
+    },
     FLAT_VIEW_EDITABLE_PROPERTIES,
   );
 
-  const flatViewToUpdate = mergeUpdateInExistingRecord({
-    existing: existingFlatViewToUpdate,
-    properties: FLAT_VIEW_EDITABLE_PROPERTIES,
-    update: updatedEditableFieldProperties,
+  const shouldOverride = isCallerOverridingEntity({
+    callerApplicationUniversalIdentifier,
+    entityApplicationUniversalIdentifier:
+      existingFlatViewToUpdate.applicationUniversalIdentifier,
+    workspaceCustomApplicationUniversalIdentifier,
+    isSystemSideEffect: existingFlatViewToUpdate.isSystemSideEffect,
   });
 
+  const { overrides: sanitizedOverrides, updatedEditableProperties } =
+    sanitizeOverridableEntityInput({
+      metadataName: 'view',
+      existingFlatEntity: existingFlatViewToUpdate,
+      updatedEditableProperties: editableProperties,
+      shouldOverride,
+      callerApplicationUniversalIdentifier,
+      workspaceCustomApplicationUniversalIdentifier,
+    });
+
+  const overrides = mergeTranslationsIntoOverrides<ViewOverrides>({
+    metadataName: 'view',
+    existingOverrides: sanitizedOverrides,
+    translationEntries: translations,
+    authorUniversalIdentifier: callerApplicationUniversalIdentifier,
+    authorContext: {
+      workspaceCustomApplicationUniversalIdentifier,
+      ownerApplicationUniversalIdentifier:
+        existingFlatViewToUpdate.applicationUniversalIdentifier,
+    },
+  });
+
+  const mergedRecord = mergeUpdateInExistingRecord({
+    existing: existingFlatViewToUpdate,
+    properties: [...FLAT_VIEW_EDITABLE_PROPERTIES],
+    update: updatedEditableProperties,
+  });
+
+  const flatViewToUpdate = {
+    ...mergedRecord,
+    overrides,
+  } as UniversalFlatView;
+
   if (
-    updatedEditableFieldProperties.kanbanAggregateOperationFieldMetadataId !==
+    updatedEditableProperties.kanbanAggregateOperationFieldMetadataId !==
     undefined
   ) {
     const { kanbanAggregateOperationFieldMetadataUniversalIdentifier } =
@@ -77,7 +155,7 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
         metadataName: 'view',
         foreignKeyValues: {
           kanbanAggregateOperationFieldMetadataId:
-            flatViewToUpdate.kanbanAggregateOperationFieldMetadataId,
+            mergedRecord.kanbanAggregateOperationFieldMetadataId,
         },
         flatEntityMaps: { flatFieldMetadataMaps },
       });
@@ -86,12 +164,12 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
       kanbanAggregateOperationFieldMetadataUniversalIdentifier;
   }
 
-  if (updatedEditableFieldProperties.calendarFieldMetadataId !== undefined) {
+  if (updatedEditableProperties.calendarFieldMetadataId !== undefined) {
     const { calendarFieldMetadataUniversalIdentifier } =
       resolveEntityRelationUniversalIdentifiers({
         metadataName: 'view',
         foreignKeyValues: {
-          calendarFieldMetadataId: flatViewToUpdate.calendarFieldMetadataId,
+          calendarFieldMetadataId: mergedRecord.calendarFieldMetadataId,
         },
         flatEntityMaps: { flatFieldMetadataMaps },
       });
@@ -100,19 +178,44 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
       calendarFieldMetadataUniversalIdentifier;
   }
 
-  if (updatedEditableFieldProperties.mainGroupByFieldMetadataId !== undefined) {
+  if (updatedEditableProperties.calendarEndFieldMetadataId !== undefined) {
+    const { calendarEndFieldMetadataUniversalIdentifier } =
+      resolveEntityRelationUniversalIdentifiers({
+        metadataName: 'view',
+        foreignKeyValues: {
+          calendarEndFieldMetadataId: mergedRecord.calendarEndFieldMetadataId,
+        },
+        flatEntityMaps: { flatFieldMetadataMaps },
+      });
+
+    flatViewToUpdate.calendarEndFieldMetadataUniversalIdentifier =
+      calendarEndFieldMetadataUniversalIdentifier;
+  }
+
+  if (updatedEditableProperties.mainGroupByFieldMetadataId !== undefined) {
     const { mainGroupByFieldMetadataUniversalIdentifier } =
       resolveEntityRelationUniversalIdentifiers({
         metadataName: 'view',
         foreignKeyValues: {
-          mainGroupByFieldMetadataId:
-            flatViewToUpdate.mainGroupByFieldMetadataId,
+          mainGroupByFieldMetadataId: mergedRecord.mainGroupByFieldMetadataId,
         },
         flatEntityMaps: { flatFieldMetadataMaps },
       });
 
     flatViewToUpdate.mainGroupByFieldMetadataUniversalIdentifier =
       mainGroupByFieldMetadataUniversalIdentifier;
+  }
+
+  if (isDefined(overrides)) {
+    flatViewToUpdate.universalOverrides = fromViewOverridesToUniversalOverrides(
+      {
+        overrides,
+        fieldMetadataUniversalIdentifierById:
+          flatFieldMetadataMaps.universalIdentifierById,
+      },
+    );
+  } else {
+    flatViewToUpdate.universalOverrides = null;
   }
 
   // If changing visibility from WORKSPACE to UNLISTED, ensure createdByUserWorkspaceId is set
@@ -123,14 +226,23 @@ export const fromUpdateViewInputToFlatViewToUpdateOrThrow = ({
     existingFlatViewToUpdate.visibility === 'WORKSPACE' &&
     isDefined(userWorkspaceId)
   ) {
-    // Re-allocate the view to the current user
     flatViewToUpdate.createdByUserWorkspaceId = userWorkspaceId;
   }
 
+  const effectiveExistingFlatView = resolveEffectiveFlatEntity({
+    metadataName: 'view',
+    flatEntity: existingFlatViewToUpdate,
+  });
+
+  const effectiveFlatViewToUpdate = resolveEffectiveFlatEntity({
+    metadataName: 'view',
+    flatEntity: { ...mergedRecord, overrides },
+  });
+
   const { flatViewGroupsToDelete, flatViewGroupsToCreate } =
     handleFlatViewUpdateSideEffect({
-      fromFlatView: existingFlatViewToUpdate,
-      toFlatView: flatViewToUpdate,
+      fromFlatView: effectiveExistingFlatView,
+      toFlatView: effectiveFlatViewToUpdate,
       flatViewGroupMaps: flatViewGroupMaps,
       flatFieldMetadataMaps: flatFieldMetadataMaps,
     });

@@ -1,24 +1,27 @@
+import { getLinksVariant } from '@/object-record/spreadsheet-import/utils/getLinksVariant';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
 import { getCompositeSubFieldKey } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetCompositeSubFieldKey';
-import { COMPOSITE_FIELD_SUB_FIELD_LABELS } from '@/settings/data-model/constants/CompositeFieldSubFieldLabel';
+import { COMPOSITE_FIELD_SUB_FIELD_LABELS } from 'twenty-shared/constants';
 import { SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS } from '@/settings/data-model/constants/SettingsCompositeFieldTypeConfigs';
 import {
   type ImportedStructuredRow,
   type SpreadsheetImportTableHook,
 } from '@/spreadsheet-import/types';
 import { isNonEmptyString } from '@sniptt/guards';
-import { FieldMetadataType } from 'twenty-shared/types';
+import { t } from '@lingui/core/macro';
+import { type FieldLinksVariant, FieldMetadataType } from 'twenty-shared/types';
 import {
   getUniqueConstraintsFields,
   isDefined,
-  normalizeUrlOrigin,
+  getLinkUrlNormalizer,
 } from 'twenty-shared/utils';
 
 type Column = {
   columnName: string;
   fieldType: FieldMetadataType;
+  linksVariant?: FieldLinksVariant;
 };
 
 export const spreadsheetImportGetUnicityTableHook = (
@@ -43,10 +46,17 @@ export const spreadsheetImportGetUnicityTableHook = (
           return uniqueSubFields.map((subField) => ({
             columnName: getCompositeSubFieldKey(field, subField.subFieldName),
             fieldType: field.type,
+            linksVariant: getLinksVariant(field),
           }));
         }
 
-        return [{ columnName: field.name, fieldType: field.type }];
+        return [
+          {
+            columnName: field.name,
+            fieldType: field.type,
+            linksVariant: undefined,
+          },
+        ];
       }),
     );
   const tableHook: SpreadsheetImportTableHook = (table, addError) => {
@@ -77,7 +87,7 @@ export const spreadsheetImportGetUnicityTableHook = (
       duplicateIndices.forEach((duplicateIndex) => {
         uniqueConstraint.forEach(({ columnName }) => {
           addError(duplicateIndex, columnName, {
-            message: `This ${columnName} value already exists in your import data`,
+            message: t`This ${columnName} value already exists in your import data`,
             level: 'error',
           });
         });
@@ -95,7 +105,7 @@ const getUniqueValues = (
   uniqueConstraint: Column[],
 ) => {
   return uniqueConstraint
-    .map(({ columnName, fieldType }) => {
+    .map(({ columnName, fieldType, linksVariant }) => {
       // need to ensure the primary link url is processed before import as on server side
       if (
         fieldType === FieldMetadataType.LINKS &&
@@ -104,7 +114,9 @@ const getUniqueValues = (
             .primaryLinkUrl,
         )
       ) {
-        return normalizeUrlOrigin(row?.[columnName]?.toString().trim() || '');
+        const rawPrimaryLinkUrl = row?.[columnName]?.toString().trim() || '';
+
+        return getLinkUrlNormalizer(linksVariant)(rawPrimaryLinkUrl);
       }
 
       return row?.[columnName]?.toString().trim().toLowerCase();

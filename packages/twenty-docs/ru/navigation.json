@@ -1,0 +1,274 @@
+{
+  "tabs": {
+    "gettingStarted": {
+      "label": "Начало работы",
+      "groups": {
+        "welcome": {
+          "label": "Начало работы"
+        },
+        "coreConcepts": {
+          "label": "Основные понятия"
+        }
+      }
+    },
+    "userGuide": {
+      "label": "Руководство пользователя",
+      "groups": {
+        "userGuideOverview": {
+          "label": "Руководство пользователя"
+        },
+        "dataModel": {
+          "label": "Модель данных",
+          "groups": {
+            "dataModelReference": {
+              "label": "Справочник"
+            },
+            "dataModelHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "dataMigration": {
+          "label": "Миграция данных",
+          "groups": {
+            "dataMigrationReference": {
+              "label": "Справочник"
+            },
+            "dataMigrationHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "calendarEmails": {
+          "label": "Календарь и электронная почта",
+          "groups": {
+            "calendarEmailsReference": {
+              "label": "Справочник"
+            },
+            "calendarEmailsHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "emailCampaigns": {
+          "label": "Кампании по электронной почте",
+          "groups": {
+            "emailCampaignsHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "workflows": {
+          "label": "Рабочие процессы",
+          "groups": {
+            "workflowsReference": {
+              "label": "Справочник"
+            },
+            "workflowsHowTos": {
+              "label": "Инструкции",
+              "groups": {
+                "crmAutomations": {
+                  "label": "Автоматизации CRM"
+                },
+                "connectToOtherTools": {
+                  "label": "Подключение к другим инструментам"
+                },
+                "advancedConfigurations": {
+                  "label": "Расширенные настройки"
+                },
+                "needMoreHelp": {
+                  "label": "Нужна дополнительная помощь"
+                }
+              }
+            }
+          }
+        },
+        "ai": {
+          "label": "ИИ",
+          "groups": {
+            "aiReference": {
+              "label": "Справочник"
+            },
+            "aiHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "layout": {
+          "label": "Макет",
+          "groups": {
+            "layoutReference": {
+              "label": "Справочник",
+              "groups": {
+                "layoutViews": {
+                  "label": "Представления"
+                }
+              }
+            },
+            "layoutHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "dashboards": {
+          "label": "Панели управления",
+          "groups": {
+            "dashboardsReference": {
+              "label": "Справочник"
+            },
+            "dashboardsHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "permissionsAccess": {
+          "label": "Разрешения и доступ",
+          "groups": {
+            "permissionsAccessReference": {
+              "label": "Справочник"
+            },
+            "permissionsAccessHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "billing": {
+          "label": "Биллинг",
+          "groups": {
+            "billingReference": {
+              "label": "Справочник"
+            },
+            "billingHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "settings": {
+          "label": "Настройки",
+          "groups": {
+            "settingsReference": {
+              "label": "Справочник"
+            },
+            "settingsHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        },
+        "legal": {
+          "label": "Юридическая информация",
+          "groups": {
+            "legalHowTos": {
+              "label": "Инструкции"
+            }
+          }
+        }
+      }
+    },
+    "developers": {
+      "label": "Разработчики",
+      "groups": {
+        "developersOverview": {
+          "label": "Разработчики"
+        },
+        "apps": {
+          "label": "Приложения",
+          "groups": {
+            "appsGettingStarted": {
+              "label": "Начало работы"
+            },
+            "appsTutorial": {
+              "label": "Обучение"
+            },
+            "appsConfig": {
+              "label": "Конфигурация"
+            },
+            "appsData": {
+              "label": "Данные"
+            },
+            "appsLogic": {
+              "label": "Логика"
+            },
+            "appsLayout": {
+              "label": "Макет"
+            },
+            "appsOperations": {
+              "label": "Операции"
+            }
+          }
+        },
+        "api": {
+          "label": "API"
+        },
+        "selfHost": {
+          "label": "Самостоятельный хостинг"
+        },
+        "contribute": {
+          "label": "Внести вклад"
+        },
+        "uiLibrary": {
+          "label": "Библиотека интерфейса",
+          "groups": {
+            "uiGuides": {
+              "label": "Руководства"
+            },
+            "uiPrimitives": {
+              "label": "Примитивы",
+              "groups": {
+                "uiAccessibility": {
+                  "label": "Доступность"
+                },
+                "uiDataDisplay": {
+                  "label": "Отображение данных"
+                },
+                "uiFeedback": {
+                  "label": "Обратная связь"
+                },
+                "uiForms": {
+                  "label": "Формы"
+                },
+                "uiLayout": {
+                  "label": "Макет"
+                },
+                "uiNavigation": {
+                  "label": "Навигация"
+                },
+                "uiSurfaces": {
+                  "label": "Области отображения"
+                },
+                "uiTypography": {
+                  "label": "Типографика"
+                }
+              }
+            },
+            "uiComponents": {
+              "label": "Компоненты",
+              "groups": {
+                "uiComponentsDataDisplay": {
+                  "label": "Отображение данных"
+                },
+                "uiComponentsFeedback": {
+                  "label": "Обратная связь"
+                },
+                "uiComponentsInput": {
+                  "label": "Ввод"
+                },
+                "uiComponentsLayout": {
+                  "label": "Макет"
+                },
+                "uiComponentsNavigation": {
+                  "label": "Навигация"
+                },
+                "uiComponentsSettings": {
+                  "label": "Настройки"
+                },
+                "uiComponentsCodeEditor": {
+                  "label": "Редактор кода"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

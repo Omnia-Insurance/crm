@@ -93,7 +93,7 @@ export const RecordTableHeaderFirstCell = () => {
   return (
     <RecordTableHeaderCellContainer
       className={cx('header-cell', getRecordTableColumnFieldWidthClassName(0))}
-      key={`${recordField.fieldMetadataItemId}${recordField.subFieldName ? `.${recordField.subFieldName}` : ''}`}
+      key={recordField.fieldMetadataItemId}
       onMouseEnter={() => setIconIsVisible(true)}
       onMouseLeave={() => setIconIsVisible(false)}
       shouldDisplayBorderBottom={shouldDisplayBorderBottom}
@@ -115,7 +115,7 @@ export const RecordTableHeaderFirstCell = () => {
       )}
 
       {isRecordTableColumnResizable && (
-        <RecordTableHeaderResizeHandler recordFieldIndex={0} position="right" />
+        <RecordTableHeaderResizeHandler recordFieldIndex={0} position="end" />
       )}
     </RecordTableHeaderCellContainer>
   );

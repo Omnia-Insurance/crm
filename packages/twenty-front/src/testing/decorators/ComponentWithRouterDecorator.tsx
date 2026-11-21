@@ -1,3 +1,5 @@
+import { AppNavigatorProvider } from '@/app/components/AppNavigatorProvider';
+import { type JSX } from 'react';
 import { type Decorator } from '@storybook/react-vite';
 import {
   createMemoryRouter,
@@ -12,7 +14,7 @@ import {
   isRouteParams,
 } from '~/testing/decorators/PageDecorator';
 
-import { ComponentStorybookLayout } from '~/testing/ComponentStorybookLayout';
+import { ComponentStorybookLayout } from 'twenty-ui/testing';
 
 interface StrictArgs {
   [name: string]: unknown;
@@ -47,18 +49,25 @@ const createRouter = ({
   );
 
 export const ComponentWithRouterDecorator: Decorator = (Story, { args }) => {
+  const router = createRouter({
+    Story,
+    args,
+    initialEntries:
+      args.routePath &&
+      typeof args.routePath === 'string' &&
+      (args.routeParams === undefined || isRouteParams(args.routeParams))
+        ? [
+            computeLocation({
+              routePath: args.routePath,
+              routeParams: args.routeParams,
+            }),
+          ]
+        : [{ pathname: '/' }],
+  });
+
   return (
-    <RouterProvider
-      router={createRouter({
-        Story,
-        args,
-        initialEntries:
-          args.routePath &&
-          typeof args.routePath === 'string' &&
-          (args.routeParams === undefined || isRouteParams(args.routeParams))
-            ? [computeLocation(args.routePath, args.routeParams)]
-            : [{ pathname: '/' }],
-      })}
-    />
+    <AppNavigatorProvider router={router}>
+      <RouterProvider useTransitions={false} router={router} />
+    </AppNavigatorProvider>
   );
 };

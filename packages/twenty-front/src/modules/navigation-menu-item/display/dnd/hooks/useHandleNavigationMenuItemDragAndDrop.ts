@@ -1,8 +1,9 @@
 import { useStore } from 'jotai';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
-import type { NavigationMenuItemDropResult } from '@/navigation-menu-item/common/types/navigationMenuItemDropResult';
+import type { NavigationMenuItemDropResult } from '@/navigation-menu-item/common/types/NavigationMenuItemDropResult';
 
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { useUpdateManyNavigationMenuItems } from '@/navigation-menu-item/common/hooks/useUpdateManyNavigationMenuItems';
@@ -65,11 +66,15 @@ export const useHandleNavigationMenuItemDragAndDrop = (
 
     if (isDraftMode) {
       const draft = store.get(navigationMenuItemsDraftState.atom);
-      if (!draft) return;
+      if (!draft) {
+        return;
+      }
 
       setNavigationMenuItemsDraft(
         draft.map((item): NavigationMenuItem => {
-          if (item.id !== draggableId) return item;
+          if (item.id !== draggableId) {
+            return item;
+          }
           return { ...item, position: newPosition, ...folderUpdate };
         }),
       );
@@ -121,7 +126,9 @@ export const useHandleNavigationMenuItemDragAndDrop = (
   ) => {
     const { destination, source, draggableId } = result;
 
-    if (!destination) return;
+    if (!destination) {
+      return;
+    }
 
     if (
       destination.droppableId === source.droppableId &&
@@ -130,10 +137,14 @@ export const useHandleNavigationMenuItemDragAndDrop = (
       return;
     }
 
-    if (!isDropAllowed(source.droppableId, destination.droppableId)) return;
+    if (!isDropAllowed(source.droppableId, destination.droppableId)) {
+      return;
+    }
 
     const draggedItem = allItems.find((item) => item.id === draggableId);
-    if (!draggedItem) return;
+    if (!draggedItem) {
+      return;
+    }
 
     const destinationFolderId = extractFolderIdFromDroppableId(
       destination.droppableId,
@@ -154,7 +165,7 @@ export const useHandleNavigationMenuItemDragAndDrop = (
 
     if (destination.droppableId.startsWith(config.folderHeaderPrefix)) {
       if (destinationFolderId === null) {
-        throw new Error('Invalid folder header ID');
+        throw new Error(doNotTranslate('Invalid folder header ID'));
       }
 
       const folderList = getSortedItems().filter((item) =>
@@ -188,12 +199,11 @@ export const useHandleNavigationMenuItemDragAndDrop = (
       return;
     }
 
-    const insertBeforeIndex =
-      result.insertBeforeItemId != null
-        ? destinationList.findIndex(
-            (item) => item.id === result.insertBeforeItemId,
-          )
-        : -1;
+    const insertBeforeIndex = isDefined(result.insertBeforeItemId)
+      ? destinationList.findIndex(
+          (item) => item.id === result.insertBeforeItemId,
+        )
+      : -1;
 
     await computeAndApplyReorder(
       draggableId,

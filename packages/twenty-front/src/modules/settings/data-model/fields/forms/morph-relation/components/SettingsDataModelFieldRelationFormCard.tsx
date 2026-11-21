@@ -1,7 +1,8 @@
 import { useFormContext } from 'react-hook-form';
 
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { Separator } from '@/settings/components/Separator';
+// OMNIA-CUSTOM: soft Required rule (contract C5)
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
 import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
@@ -13,15 +14,12 @@ import { SettingsDataModelFieldRelationJunctionForm } from '@/settings/data-mode
 import { SettingsDataModelFieldRelationPreviewContent } from '@/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationPreviewContent';
 import { SettingsDataModelRelationPreviewImage } from '@/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationPreviewImageCard';
 import { SettingsDataModelRelationFieldPreviewSubWidget } from '@/settings/data-model/fields/preview/components/SettingsDataModelRelationFieldPreviewSubWidget';
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
-import { useIsFeatureEnabled } from '@/workspace/hooks/useIsFeatureEnabled';
+import { useLingui } from '@lingui/react/macro';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { isDefined } from 'twenty-shared/utils';
-import {
-  FieldMetadataType,
-  RelationType,
-  FeatureFlagKey,
-} from '~/generated-metadata/graphql';
-import { type SettingsDataModelFieldEditFormValues } from '~/pages/settings/data-model/SettingsObjectFieldEdit';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
+import { type SettingsDataModelFieldEditFormValues } from '@/settings/data-model/types/SettingsDataModelFieldEditFormValues';
 
 type SettingsDataModelFieldRelationFormCardProps = {
   existingFieldMetadataId: string;
@@ -34,14 +32,12 @@ export const SettingsDataModelFieldRelationFormCard = ({
   objectNameSingular,
   disabled = false,
 }: SettingsDataModelFieldRelationFormCardProps) => {
+  const { t } = useLingui();
   const { watch } = useFormContext<
     SettingsDataModelFieldMorphRelationFormValues &
       SettingsDataModelFieldEditFormValues
   >();
   const isMobile = useIsMobile();
-  const isJunctionRelationsEnabled = useIsFeatureEnabled(
-    FeatureFlagKey.IS_JUNCTION_RELATIONS_ENABLED,
-  );
 
   const { objectMetadataItems } = useObjectMetadataItems();
 
@@ -50,7 +46,7 @@ export const SettingsDataModelFieldRelationFormCard = ({
   );
 
   if (!sourceObjectMetadataItem) {
-    throw new Error('Object not found.');
+    throw new Error(doNotTranslate('Object not found.'));
   }
 
   const relationObjectMetadataIds: string[] = watch(
@@ -103,7 +99,7 @@ export const SettingsDataModelFieldRelationFormCard = ({
           <SettingsDataModelRelationPreviewImage
             src={relationTypeConfig.imageSrc}
             flip={relationTypeConfig.isImageFlipped}
-            alt={relationTypeConfig.label}
+            alt={t(relationTypeConfig.label)}
             isMobile={isMobile}
           />
           <SettingsDataModelRelationFieldPreviewSubWidget
@@ -134,12 +130,13 @@ export const SettingsDataModelFieldRelationFormCard = ({
             sourceObjectMetadataId={sourceObjectMetadataItem?.id}
             disabled={disabled}
           />
-          {isJunctionRelationsEnabled && (
-            <SettingsDataModelFieldRelationJunctionForm
-              objectNameSingular={objectNameSingular}
-            />
-          )}
-          <Separator />
+          <SettingsDataModelFieldRelationJunctionForm
+            objectNameSingular={objectNameSingular}
+            existingFieldMetadataId={existingFieldMetadataId}
+            disabled={disabled}
+          />
+          {/* OMNIA-CUSTOM: soft Required rule (contract C5) */}
+          <SettingsCardSeparator />
           <SettingsDataModelFieldRequiredForm
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}

@@ -1,30 +1,13 @@
 import { computeProgressText } from '@/command-menu-item/utils/computeProgressText';
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
 import { type ObjectRecordQueryProgress } from '@/object-record/types/ObjectRecordQueryProgress';
+import { SidePanelFooter } from '@/ui/layout/side-panel/components/SidePanelFooter';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
-import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 import { Key } from 'ts-key-enum';
-import { IconBoxMultiple } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-
-const StyledFooterContainer = styled.div`
-  align-items: flex-end;
-  background: ${themeCssVariables.background.primary};
-  border-top: 1px solid ${themeCssVariables.border.color.light};
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-  justify-content: flex-end;
-  padding: ${themeCssVariables.spacing[2]};
-`;
-
-const StyledFooterActions = styled.div`
-  align-items: flex-end;
-  display: flex;
-  gap: ${themeCssVariables.spacing[2]};
-`;
+import { IconBoxMultiple } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
 
 type UpdateMultipleRecordsFooterProps = {
   isUpdating: boolean;
@@ -56,26 +39,28 @@ export const UpdateMultipleRecordsFooter = ({
   });
 
   return (
-    <StyledFooterContainer>
-      <StyledFooterActions>
+    <SidePanelFooter
+      actions={[
         <Button
-          title={t`Cancel`}
-          variant="secondary"
-          size="small"
+          key="cancel"
+          size="sm"
           onClick={onCancel}
-        />
+          variant="outline"
+        >{t`Cancel`}</Button>,
         <Button
-          title={isUpdating ? t`Apply${progressText}` : t`Apply`}
-          variant="primary"
-          accent="blue"
-          size="small"
-          Icon={IconBoxMultiple}
-          isLoading={isUpdating && !progressText}
-          hotkeys={isUpdating ? undefined : ['⌘', '⏎']}
+          key="apply"
+          size="sm"
+          startIcon={<IconBoxMultiple />}
+          loading={isUpdating && !progressText}
+          shortcut={isUpdating ? undefined : ['Mod', 'Enter']}
           onClick={onUpdate}
           disabled={isUpdating || isUpdateDisabled}
-        />
-      </StyledFooterActions>
-    </StyledFooterContainer>
+          variant="solid"
+          color="accent"
+        >
+          {isUpdating ? t`Apply${progressText}` : t`Apply`}
+        </Button>,
+      ]}
+    />
   );
 };

@@ -1,25 +1,29 @@
-import { useMutation } from '@apollo/client/react';
-import { CheckCustomDomainValidRecordsDocument } from '~/generated-metadata/graphql';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
-import { isDefined } from 'twenty-shared/utils';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { customDomainRecordsState } from '@/settings/domains/states/customDomainRecordsState';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { customDomainRecordsState } from '@/settings/domains/states/customDomainRecordsState';
+import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useMutation } from '@apollo/client/react';
+import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { CheckCustomDomainValidRecordsDocument } from '~/generated-metadata/graphql';
 
 export const useCheckCustomDomainValidRecords = () => {
   const [checkCustomDomainValidRecords] = useMutation(
     CheckCustomDomainValidRecordsDocument,
   );
-  const { enqueueErrorSnackBar } = useSnackBar();
-  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { enqueueToast } = useToast();
+  const [currentWorkspace, setCurrentWorkspace] = useAtomState(
+    currentWorkspaceState,
+  );
 
   const [{ isLoading }, setCustomDomainRecords] = useAtomState(
     customDomainRecordsState,
   );
 
-  const checkCustomDomainRecords = () => {
-    if (isLoading || !currentWorkspace?.customDomain) {
+  const checkCustomDomainRecords = (
+    customDomain: string | null | undefined = currentWorkspace?.customDomain,
+  ) => {
+    if (isLoading || !customDomain) {
       return;
     }
     setCustomDomainRecords((currentState) => ({
@@ -28,16 +32,31 @@ export const useCheckCustomDomainValidRecords = () => {
     }));
     checkCustomDomainValidRecords({
       onCompleted: (data) => {
+        const validRecords = data.checkCustomDomainValidRecords;
+
         setCustomDomainRecords((currentState) => ({
           ...currentState,
           isLoading: false,
-          ...(isDefined(data.checkCustomDomainValidRecords)
-            ? { customDomainRecords: data.checkCustomDomainValidRecords }
+          ...(isDefined(validRecords)
+            ? { customDomainRecords: validRecords }
             : {}),
         }));
+
+        const nextIsCustomDomainEnabled = validRecords?.isCustomDomainEnabled;
+
+        if (isDefined(nextIsCustomDomainEnabled)) {
+          setCurrentWorkspace((previousWorkspace) =>
+            isDefined(previousWorkspace)
+              ? {
+                  ...previousWorkspace,
+                  isCustomDomainEnabled: nextIsCustomDomainEnabled,
+                }
+              : previousWorkspace,
+          );
+        }
       },
       onError: (error) => {
-        enqueueErrorSnackBar({ apolloError: error });
+        enqueueToast(getToastOptionsFromError({ error }));
         setCustomDomainRecords((currentState) => ({
           ...currentState,
           isLoading: false,

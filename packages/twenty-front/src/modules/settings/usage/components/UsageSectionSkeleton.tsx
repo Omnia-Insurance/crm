@@ -1,27 +1,18 @@
-import { useContext } from 'react';
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
 
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import { Section } from 'twenty-ui/layout';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 export const UsageSectionSkeleton = () => {
-  const { theme } = useContext(ThemeContext);
-
   return (
-    <SkeletonTheme
-      baseColor={theme.background.tertiary}
-      highlightColor={theme.background.transparent.lighter}
-      borderRadius={4}
-    >
-      <Section>
-        <Skeleton width={160} height={16} />
-        <Skeleton
-          width="100%"
-          height={200}
-          borderRadius={8}
-          style={{ marginTop: 16 }}
-        />
-      </Section>
-    </SkeletonTheme>
+    <Section.Root>
+      <SkeletonLine width={160} height={16} />
+      <SkeletonLine
+        width="100%"
+        height={200}
+        borderRadius={themeCssVariables.border.radius.mdRound}
+        style={{ marginTop: 16 }}
+      />
+    </Section.Root>
   );
 };

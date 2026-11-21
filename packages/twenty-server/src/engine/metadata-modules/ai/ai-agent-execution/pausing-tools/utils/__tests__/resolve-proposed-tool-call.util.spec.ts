@@ -1,0 +1,426 @@
+import { ToolCategory } from 'twenty-shared/ai';
+
+import { PUBLISH_FRONT_COMPONENT_TOOL } from 'src/engine/metadata-modules/ai/ai-front-component/constants/publish-front-component-tool.constant';
+import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
+import { resolveProposedToolCall } from 'src/engine/metadata-modules/ai/ai-agent-execution/pausing-tools/utils/resolve-proposed-tool-call.util';
+
+const RECORD_ID = '20202020-1c25-4d02-bf25-6aeccf7ea419';
+const COMPONENT_DRAFT = {
+  draftId: RECORD_ID,
+  checksum: 'reviewed-checksum',
+  isCurrent: true,
+};
+
+const APPROVAL_BY_OPERATION = {
+  create_one: { template: 'recordCreate' },
+  update_one: { template: 'recordUpdate' },
+  delete_one: { template: 'recordDelete' },
+  update_many: undefined,
+} as const;
+
+const buildCrudEntry = (
+  name: string,
+  operation: keyof typeof APPROVAL_BY_OPERATION,
+): ToolIndexEntry => ({
+  name,
+  label: name,
+  description: '',
+  category: 'DATABASE_CRUD' as ToolIndexEntry['category'],
+  executionRef: {
+    kind: 'database_crud',
+    objectNameSingular: 'opportunity',
+    operation,
+  },
+  approval: APPROVAL_BY_OPERATION[operation],
+});
+
+const EMAIL_BODY = {
+  type: 'doc',
+  attrs: { schemaVersion: 1 },
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hi' }] }],
+};
+
+const PUBLISH_TOOL_ENTRY: ToolIndexEntry = {
+  ...PUBLISH_FRONT_COMPONENT_TOOL,
+  label: 'Save component',
+  description: '',
+  category: ToolCategory.ACTION,
+  executionRef: {
+    kind: 'static',
+    toolId: PUBLISH_FRONT_COMPONENT_TOOL.name,
+  },
+};
+
+const findTool = async (toolName: string) =>
+  [
+    PUBLISH_TOOL_ENTRY,
+    buildCrudEntry('create_one_opportunity', 'create_one'),
+    buildCrudEntry('update_one_opportunity', 'update_one'),
+    buildCrudEntry('delete_one_opportunity', 'delete_one'),
+    buildCrudEntry('update_many_opportunities', 'update_many'),
+    {
+      name: 'send_email',
+      label: 'Send email',
+      description: '',
+      category: 'ACTION' as ToolIndexEntry['category'],
+      executionRef: { kind: 'static', toolId: 'send_email' },
+      approval: { template: 'email', alternativeToolNames: ['draft_email'] },
+    } satisfies ToolIndexEntry,
+    {
+      name: 'http_request',
+      label: 'HTTP request',
+      description: '',
+      category: 'ACTION' as ToolIndexEntry['category'],
+      executionRef: { kind: 'static', toolId: 'http_request' },
+    } satisfies ToolIndexEntry,
+  ].find((entry) => entry.name === toolName);
+
+const foundRecord = (record: Record<string, unknown>) =>
+  jest.fn().mockResolvedValue({
+    success: true,
+    message: 'Found',
+    result: { records: [record] },
+  });
+
+describe('resolveProposedToolCall', () => {
+  it('checks the draft without publishing before proposing its exact revision', async () => {
+    const executeTool = jest.fn().mockResolvedValue({
+      success: true,
+      message: 'Component draft retrieved.',
+      result: COMPONENT_DRAFT,
+    });
+    const resolution = await resolveProposedToolCall({
+      input: {
+        toolName: PUBLISH_TOOL_ENTRY.name,
+        arguments: { draftId: RECORD_ID, checksum: 'reviewed-checksum' },
+        summary: 'Save the reviewed component',
+      },
+      findTool,
+      executeTool,
+    });
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledWith({
+      toolName: 'inspect_front_component',
+      args: { draftId: RECORD_ID },
+    });
+    expect(resolution).toMatchObject({
+      proposal: {
+        toolName: PUBLISH_TOOL_ENTRY.name,
+        template: 'frontComponent',
+        arguments: { draftId: RECORD_ID, checksum: 'reviewed-checksum' },
+      },
+    });
+  });
+
+  it.each([
+    {
+      message: 'Could not inspect the draft.',
+      error: 'Component draft not found or expired.',
+    },
+    { message: 'Tool "inspect_front_component" is not available here.' },
+  ])('refuses a draft that cannot be inspected: %j', async (failure) => {
+    const resolution = await resolveProposedToolCall({
+      input: {
+        toolName: PUBLISH_TOOL_ENTRY.name,
+        arguments: { draftId: RECORD_ID, checksum: COMPONENT_DRAFT.checksum },
+        summary: 'Save the reviewed component',
+      },
+      findTool,
+      executeTool: jest.fn().mockResolvedValue({ success: false, ...failure }),
+    });
+
+    expect(resolution).toEqual({ error: failure.error ?? failure.message });
+  });
+
+  it.each([
+    { ...COMPONENT_DRAFT, isCurrent: false },
+    { ...COMPONENT_DRAFT, checksum: 'different-revision' },
+  ])('refuses a superseded or mismatched revision: %j', async (draft) => {
+    const resolution = await resolveProposedToolCall({
+      input: {
+        toolName: PUBLISH_TOOL_ENTRY.name,
+        arguments: { draftId: RECORD_ID, checksum: COMPONENT_DRAFT.checksum },
+        summary: 'Save the reviewed component',
+      },
+      findTool,
+      executeTool: jest.fn().mockResolvedValue({
+        success: true,
+        message: 'Component draft retrieved.',
+        result: draft,
+      }),
+    });
+
+    expect(resolution).toEqual({
+      error:
+        'This preview changed. Propose the draftId and checksum of the latest revision.',
+    });
+  });
+
+  it.each([undefined, { ...COMPONENT_DRAFT, draftId: 'another-draft' }])(
+    'refuses an inspection result that does not identify the requested draft: %j',
+    async (draft) => {
+      const resolution = await resolveProposedToolCall({
+        input: {
+          toolName: PUBLISH_TOOL_ENTRY.name,
+          arguments: { draftId: RECORD_ID, checksum: COMPONENT_DRAFT.checksum },
+          summary: 'Save the reviewed component',
+        },
+        findTool,
+        executeTool: jest.fn().mockResolvedValue({
+          success: true,
+          message: 'Component draft retrieved.',
+          result: draft,
+        }),
+      });
+
+      expect(resolution).toEqual({
+        error:
+          'Could not read the component draft. Use the draftId returned by preview_front_component.',
+      });
+    },
+  );
+
+  it.each([
+    { draftId: undefined, checksum: 'reviewed-checksum' },
+    { draftId: '', checksum: 'reviewed-checksum' },
+    { draftId: 42, checksum: 'reviewed-checksum' },
+    { draftId: RECORD_ID, checksum: undefined },
+    { draftId: RECORD_ID, checksum: '' },
+    { draftId: RECORD_ID, checksum: 42 },
+  ])(
+    'refuses a component publication with invalid arguments %j',
+    async (toolArguments) => {
+      const resolution = await resolveProposedToolCall({
+        input: {
+          toolName: PUBLISH_TOOL_ENTRY.name,
+          arguments: toolArguments,
+          summary: 'Save the reviewed component',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      });
+
+      expect(resolution).toEqual({
+        error:
+          'arguments.draftId and arguments.checksum must identify the component draft.',
+      });
+    },
+  );
+
+  it('refuses a tool the proposer cannot call', async () => {
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'drop_database',
+          arguments: {},
+          summary: 'Clean up',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      }),
+    ).toEqual({ error: expect.stringContaining('not available') });
+  });
+
+  it('proposes an email with a document body the person can edit, or send as a draft', async () => {
+    const toolArguments = {
+      recipients: { to: 'tim@apple.dev', cc: '', bcc: '' },
+      subject: 'Renewal',
+      body: EMAIL_BODY,
+    };
+
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'send_email',
+          arguments: toolArguments,
+          summary: 'Follow up',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      }),
+    ).toEqual({
+      proposal: {
+        toolName: 'send_email',
+        toolLabel: 'Send email',
+        summary: 'Follow up',
+        arguments: toolArguments,
+        template: 'email',
+        alternativeToolNames: ['draft_email'],
+      },
+    });
+  });
+
+  it('refuses an email the email tool would not accept', async () => {
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'send_email',
+          arguments: {
+            recipients: { to: 'tim@apple.dev', cc: '', bcc: '' },
+            subject: 'Renewal',
+            body: { type: 'paragraph' },
+          },
+          summary: 'Follow up',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      }),
+    ).toEqual({ error: expect.stringContaining('at body') });
+  });
+
+  it('refuses an email with attachments, which the card cannot show', async () => {
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'send_email',
+          arguments: {
+            recipients: { to: 'tim@apple.dev', cc: '', bcc: '' },
+            subject: 'Renewal',
+            body: '<p>Quote attached</p>',
+            files: [
+              {
+                id: '20202020-9b5e-4d0c-a4a8-7c4bd7d1e001',
+                name: 'quote.pdf',
+                size: 1024,
+                type: 'application/pdf',
+                createdAt: '2026-10-01T00:00:00.000Z',
+              },
+            ],
+          },
+          summary: 'Send the quote',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      }),
+    ).toEqual({ error: expect.stringContaining('attachments') });
+  });
+
+  it('snapshots the fields an update changes', async () => {
+    const executeTool = foundRecord({ stage: 'PROPOSAL', amount: null });
+
+    const resolution = await resolveProposedToolCall({
+      input: {
+        toolName: 'update_one_opportunity',
+        arguments: { id: RECORD_ID, stage: 'WON', amount: null },
+        summary: 'Close the deal',
+      },
+      findTool,
+      executeTool,
+    });
+
+    expect(executeTool).toHaveBeenCalledWith({
+      toolName: 'find_one_opportunity',
+      args: { id: RECORD_ID, select: ['stage', 'amount'] },
+    });
+    expect(resolution).toEqual({
+      proposal: {
+        toolName: 'update_one_opportunity',
+        toolLabel: 'update_one_opportunity',
+        summary: 'Close the deal',
+        arguments: { id: RECORD_ID, stage: 'WON', amount: null },
+        template: 'recordUpdate',
+        objectNameSingular: 'opportunity',
+        recordId: RECORD_ID,
+        currentValues: { stage: 'PROPOSAL', amount: null },
+      },
+    });
+  });
+
+  it('refuses an update of a record it cannot find', async () => {
+    const executeTool = jest.fn().mockResolvedValue({
+      success: true,
+      message: 'Found 0',
+      result: { records: [] },
+    });
+
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'update_one_opportunity',
+          arguments: { id: RECORD_ID, stage: 'WON' },
+          summary: 'Close the deal',
+        },
+        findTool,
+        executeTool,
+      }),
+    ).toEqual({ error: expect.stringContaining(RECORD_ID) });
+  });
+
+  it.each([
+    ['without a record id', { stage: 'WON' }],
+    ['without a field to change', { id: RECORD_ID }],
+  ])('refuses an update %s', async (_description, toolArguments) => {
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'update_one_opportunity',
+          arguments: toolArguments,
+          summary: 'Close the deal',
+        },
+        findTool,
+        executeTool: jest.fn(),
+      }),
+    ).toHaveProperty('error');
+  });
+
+  it('snapshots when a record to delete was last updated', async () => {
+    const executeTool = foundRecord({ updatedAt: '2026-10-01T09:00:00.000Z' });
+
+    const resolution = await resolveProposedToolCall({
+      input: {
+        toolName: 'delete_one_opportunity',
+        arguments: { id: RECORD_ID },
+        summary: 'Remove the duplicate',
+      },
+      findTool,
+      executeTool,
+    });
+
+    expect(executeTool).toHaveBeenCalledWith({
+      toolName: 'find_one_opportunity',
+      args: { id: RECORD_ID, select: ['updatedAt'] },
+    });
+    expect(resolution).toMatchObject({
+      proposal: {
+        template: 'recordDelete',
+        recordId: RECORD_ID,
+        currentValues: { updatedAt: '2026-10-01T09:00:00.000Z' },
+      },
+    });
+  });
+
+  it('refuses an update whose fields cannot all be read', async () => {
+    expect(
+      await resolveProposedToolCall({
+        input: {
+          toolName: 'update_one_opportunity',
+          arguments: { id: RECORD_ID, stage: 'WON', amount: null },
+          summary: 'Close the deal',
+        },
+        findTool,
+        executeTool: foundRecord({ stage: 'PROPOSAL' }),
+      }),
+    ).toEqual({ error: expect.stringContaining('amount') });
+  });
+
+  it.each([
+    ['create_one_opportunity', { name: 'Acme' }, 'recordCreate'],
+
+    ['update_many_opportunities', { filter: {}, data: {} }, 'generic'],
+    ['http_request', { url: 'https://example.com' }, 'generic'],
+  ])(
+    'picks a template for %s',
+    async (toolName, toolArguments, expectedTemplate) => {
+      const resolution = await resolveProposedToolCall({
+        input: { toolName, arguments: toolArguments, summary: 'Do it' },
+        findTool,
+        executeTool: foundRecord({ id: RECORD_ID }),
+      });
+
+      expect(resolution).toMatchObject({
+        proposal: { template: expectedTemplate },
+      });
+    },
+  );
+});

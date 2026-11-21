@@ -1,5 +1,6 @@
 import { styled } from '@linaria/react';
 
+import { getRecordFieldColumnKey } from '@/object-record/record-field/utils/getRecordFieldColumnKey';
 import {
   RECORD_TABLE_CHECKBOX_WIDTH_CSS_VAR,
   RECORD_TABLE_DRAG_DROP_WIDTH_CSS_VAR,
@@ -10,12 +11,13 @@ import { TABLE_Z_INDEX } from '@/object-record/record-table/constants/TableZInde
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableAggregateFooterCell } from '@/object-record/record-table/record-table-footer/components/RecordTableAggregateFooterCell';
 import { RecordTableColumnAggregateFooterCellContext } from '@/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterCellContext';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useIsMobile } from 'twenty-ui/utilities';
 
 const StyledPlaceholderDragAndDropFooterCell = styled.div`
   background-color: ${themeCssVariables.background.primary};
   bottom: 0;
-  left: 0px;
+  inset-inline-start: 0px;
   position: sticky;
   width: calc(
     var(${RECORD_TABLE_DRAG_DROP_WIDTH_CSS_VAR}) +
@@ -53,6 +55,11 @@ export const RecordTableAggregateFooter = ({
   currentRecordGroupId?: string;
 }) => {
   const { visibleRecordFields } = useRecordTableContextOrThrow();
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return null;
+  }
 
   return (
     <StyledAggregateFooterContainer>
@@ -60,7 +67,8 @@ export const RecordTableAggregateFooter = ({
       {visibleRecordFields.map((recordField, index) => {
         return (
           <RecordTableColumnAggregateFooterCellContext.Provider
-            key={`${recordField.fieldMetadataItemId}${recordField.subFieldName ? `.${recordField.subFieldName}` : ''}${currentRecordGroupId ? '-' + currentRecordGroupId : ''}`}
+            // OMNIA-CUSTOM: column key; a relation sub-field column shares fieldMetadataItemId with its relation
+            key={`${getRecordFieldColumnKey(recordField)}${currentRecordGroupId ? '-' + currentRecordGroupId : ''}`}
             value={{
               viewFieldId: recordField.id || '',
               fieldMetadataId: recordField.fieldMetadataItemId,

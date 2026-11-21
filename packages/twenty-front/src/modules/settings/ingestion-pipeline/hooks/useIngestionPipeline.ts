@@ -1,64 +1,57 @@
 import { useMutation, useQuery } from '@apollo/client/react';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
-  CREATE_INGESTION_PIPELINE,
-  DELETE_INGESTION_PIPELINE,
-  TRIGGER_INGESTION_PULL,
-  UPDATE_INGESTION_PIPELINE,
-} from '@/settings/ingestion-pipeline/graphql/ingestion-pipeline.mutations';
-import {
-  GET_INGESTION_PIPELINE,
-  GET_INGESTION_PIPELINES,
-} from '@/settings/ingestion-pipeline/graphql/ingestion-pipeline.queries';
-import { type IngestionPipeline } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+  CreateIngestionPipelineDocument,
+  type CreateIngestionPipelineInput,
+  DeleteIngestionPipelineDocument,
+  GetIngestionPipelineDocument,
+  GetIngestionPipelinesDocument,
+  TriggerIngestionPullDocument,
+  UpdateIngestionPipelineDocument,
+  type UpdateIngestionPipelineInputUpdates,
+} from '~/generated-metadata/graphql';
 
 export const useIngestionPipeline = (pipelineId?: string) => {
-  const { data, loading, error, refetch } = useQuery<{
-    ingestionPipeline: IngestionPipeline | null;
-  }>(GET_INGESTION_PIPELINE, {
-    variables: { id: pipelineId },
-    skip: !pipelineId,
+  const { data, loading, error, refetch } = useQuery(
+    GetIngestionPipelineDocument,
+    {
+      variables: { id: pipelineId ?? '' },
+      skip: !isDefined(pipelineId),
+    },
+  );
+
+  const [createMutation] = useMutation(CreateIngestionPipelineDocument, {
+    refetchQueries: [{ query: GetIngestionPipelinesDocument }],
   });
 
-  const [createMutation] = useMutation<{
-    createIngestionPipeline: IngestionPipeline;
-  }>(CREATE_INGESTION_PIPELINE, {
-    refetchQueries: [{ query: GET_INGESTION_PIPELINES }],
+  const [updateMutation] = useMutation(UpdateIngestionPipelineDocument, {
+    refetchQueries: [{ query: GetIngestionPipelinesDocument }],
   });
 
-  const [updateMutation] = useMutation<{
-    updateIngestionPipeline: IngestionPipeline;
-  }>(UPDATE_INGESTION_PIPELINE, {
-    refetchQueries: [{ query: GET_INGESTION_PIPELINES }],
+  const [deleteMutation] = useMutation(DeleteIngestionPipelineDocument, {
+    refetchQueries: [{ query: GetIngestionPipelinesDocument }],
   });
 
-  const [deleteMutation] = useMutation(DELETE_INGESTION_PIPELINE, {
-    refetchQueries: [{ query: GET_INGESTION_PIPELINES }],
-  });
+  const [triggerPullMutation] = useMutation(TriggerIngestionPullDocument);
 
-  const [triggerPullMutation] = useMutation<{
-    triggerIngestionPull: unknown;
-  }>(TRIGGER_INGESTION_PULL);
+  const createPipeline = async (input: CreateIngestionPipelineInput) => {
+    const { data: createData } = await createMutation({
+      variables: { input },
+    });
 
-  const createPipeline = async (
-    input: Omit<IngestionPipeline, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'webhookSecret'>,
-  ) => {
-    const result = await createMutation({ variables: { input } });
-
-    return result.data?.createIngestionPipeline as IngestionPipeline;
+    return createData?.createIngestionPipeline;
   };
 
   const updatePipeline = async (
     id: string,
-    update: Partial<
-      Omit<IngestionPipeline, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
-    >,
+    update: UpdateIngestionPipelineInputUpdates,
   ) => {
-    const result = await updateMutation({
+    const { data: updateData } = await updateMutation({
       variables: { input: { id, update } },
     });
 
-    return result.data?.updateIngestionPipeline as IngestionPipeline;
+    return updateData?.updateIngestionPipeline;
   };
 
   const deletePipeline = async (id: string) => {
@@ -66,11 +59,11 @@ export const useIngestionPipeline = (pipelineId?: string) => {
   };
 
   const triggerPull = async (targetPipelineId: string) => {
-    const result = await triggerPullMutation({
+    const { data: triggerData } = await triggerPullMutation({
       variables: { pipelineId: targetPipelineId },
     });
 
-    return result.data?.triggerIngestionPull;
+    return triggerData?.triggerIngestionPull;
   };
 
   return {

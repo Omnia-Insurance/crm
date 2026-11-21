@@ -7,18 +7,20 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
-
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { ApiPath } from 'twenty-shared/types';
+import { type APP_LOCALES } from 'twenty-shared/translations';
 import { isDefined } from 'twenty-shared/utils';
 
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { ApplicationTranslationCatalogService } from 'src/engine/metadata-modules/application-translation-catalog/services/application-translation-catalog.service';
+import { paginateMetadataRestItems } from 'src/engine/api/rest/metadata/utils/paginate-metadata-rest-items.util';
+import { type AuthenticatedRequest } from 'src/engine/api/rest/types/authenticated-request.type';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { RequestLocale } from 'src/engine/decorators/locale/request-locale.decorator';
 import { FlatEntityMapsRestApiExceptionFilter } from 'src/engine/metadata-modules/flat-entity/filters/flat-entity-maps-rest-api-exception.filter';
 import { CreatePageLayoutTabInput } from 'src/engine/metadata-modules/page-layout-tab/dtos/inputs/create-page-layout-tab.input';
 import { UpdatePageLayoutTabInput } from 'src/engine/metadata-modules/page-layout-tab/dtos/inputs/update-page-layout-tab.input';
@@ -31,26 +33,35 @@ import {
 } from 'src/engine/metadata-modules/page-layout-tab/exceptions/page-layout-tab.exception';
 import { PageLayoutTabRestApiExceptionFilter } from 'src/engine/metadata-modules/page-layout-tab/filters/page-layout-tab-rest-api-exception.filter';
 import { PageLayoutTabService } from 'src/engine/metadata-modules/page-layout-tab/services/page-layout-tab.service';
-import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
+import { PermissionsRestApiExceptionFilter } from 'src/engine/permissions/utils/permissions-rest-api-exception.filter';
 import { WorkspaceMigrationRunnerRestApiExceptionFilter } from 'src/engine/workspace-manager/workspace-migration/filters/workspace-migration-runner-rest-api-exception.filter';
+import { AuthRestApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-rest-api-exception.filter';
+import { PAGE_LAYOUT_TAB_READ_ACCESS_POLICY } from 'src/engine/metadata-modules/page-layout-tab/constants/page-layout-tab-read-access-policy.constant';
+import { PAGE_LAYOUT_TAB_WRITE_ACCESS_POLICY } from 'src/engine/metadata-modules/page-layout-tab/constants/page-layout-tab-write-access-policy.constant';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
-@Controller('rest/metadata/pageLayoutTabs')
-@UseGuards(WorkspaceAuthGuard)
+@Controller(`${ApiPath.Rest}/metadata/pageLayoutTabs`)
 @UseFilters(
   PermissionsRestApiExceptionFilter,
   PageLayoutTabRestApiExceptionFilter,
   FlatEntityMapsRestApiExceptionFilter,
   WorkspaceMigrationRunnerRestApiExceptionFilter,
+  AuthRestApiExceptionFilter,
 )
 export class PageLayoutTabController {
-  constructor(private readonly pageLayoutTabService: PageLayoutTabService) {}
+  constructor(
+    private readonly pageLayoutTabService: PageLayoutTabService,
+    private readonly applicationTranslationCatalogService: ApplicationTranslationCatalogService,
+  ) {}
 
   @Get()
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(PAGE_LAYOUT_TAB_READ_ACCESS_POLICY))
   async findMany(
+    @Req() request: AuthenticatedRequest,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @Query('pageLayoutId') pageLayoutId: string,
-  ): Promise<PageLayoutTabDTO[]> {
+    @RequestLocale() locale: keyof typeof APP_LOCALES | undefined,
+  ) {
     if (!isDefined(pageLayoutId)) {
       throw new PageLayoutTabException(
         generatePageLayoutTabExceptionMessage(
@@ -60,26 +71,52 @@ export class PageLayoutTabController {
       );
     }
 
-    return this.pageLayoutTabService.findByPageLayoutId({
+    const items = await this.pageLayoutTabService.findByPageLayoutId({
       workspaceId: workspace.id,
       pageLayoutId,
+    });
+
+    return paginateMetadataRestItems({
+      items:
+        await this.applicationTranslationCatalogService.resolveTranslatablePropertiesForEntities(
+          {
+            metadataName: 'pageLayoutTab',
+            entities: items,
+            locale,
+            workspaceId: workspace.id,
+          },
+        ),
+      request,
     });
   }
 
   @Get(':id')
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(AccessPolicyGuard(PAGE_LAYOUT_TAB_READ_ACCESS_POLICY))
   async findOne(
     @Param('id') id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
+    @RequestLocale() locale: keyof typeof APP_LOCALES | undefined,
   ): Promise<PageLayoutTabDTO | null> {
-    return this.pageLayoutTabService.findByIdOrThrow({
+    const pageLayoutTab = await this.pageLayoutTabService.findByIdOrThrow({
       id,
       workspaceId: workspace.id,
     });
+
+    const [resolvedPageLayoutTab] =
+      await this.applicationTranslationCatalogService.resolveTranslatablePropertiesForEntities(
+        {
+          metadataName: 'pageLayoutTab',
+          entities: [pageLayoutTab],
+          locale,
+          workspaceId: workspace.id,
+        },
+      );
+
+    return resolvedPageLayoutTab;
   }
 
   @Post()
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.LAYOUTS))
+  @UseGuards(AccessPolicyGuard(PAGE_LAYOUT_TAB_WRITE_ACCESS_POLICY))
   async create(
     @Body() input: CreatePageLayoutTabInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -91,7 +128,7 @@ export class PageLayoutTabController {
   }
 
   @Patch(':id')
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.LAYOUTS))
+  @UseGuards(AccessPolicyGuard(PAGE_LAYOUT_TAB_WRITE_ACCESS_POLICY))
   async update(
     @Param('id') id: string,
     @Body() input: UpdatePageLayoutTabInput,
@@ -105,7 +142,7 @@ export class PageLayoutTabController {
   }
 
   @Delete(':id')
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.LAYOUTS))
+  @UseGuards(AccessPolicyGuard(PAGE_LAYOUT_TAB_WRITE_ACCESS_POLICY))
   async destroy(
     @Param('id') id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,

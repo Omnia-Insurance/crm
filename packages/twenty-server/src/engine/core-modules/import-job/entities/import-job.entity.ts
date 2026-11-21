@@ -7,14 +7,23 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { OMNIA_ADD_USER_WORKSPACE_ID_TO_IMPORT_JOB_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/omnia/omnia-add-user-workspace-id-to-import-job-upgrade-command-name.constant';
 import { ImportJobStatus } from 'src/engine/core-modules/import-job/enums/import-job-status.enum';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 @Entity({ name: 'importJob', schema: 'core' })
 @Index('IDX_IMPORT_JOB_WORKSPACE_STATUS', ['workspaceId', 'status'])
 export class ImportJobEntity extends WorkspaceRelatedEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      OMNIA_ADD_USER_WORKSPACE_ID_TO_IMPORT_JOB_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ type: 'uuid', nullable: true })
+  userWorkspaceId: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   workspaceMemberId: string | null;

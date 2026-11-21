@@ -1,5 +1,5 @@
 import { type LinkMetadata } from '@/types/composite-types/links.composite-type';
-import { type FieldMetadataType } from '@/types/FieldMetadataType';
+import { FieldMetadataType } from '@/types/FieldMetadataType';
 import { type IsExactly } from '@/types/IsExactly';
 
 export const fieldMetadataDefaultValueFunctionName = {
@@ -16,8 +16,9 @@ export type FieldMetadataDefaultValueNowFunction =
   typeof fieldMetadataDefaultValueFunctionName.NOW;
 
 export type FieldMetadataDefaultValueRichText = {
-  blocknote: string | null;
-  markdown: string | null;
+  tiptap?: string | null;
+  markdown?: string | null;
+  blocknote?: string | null;
 };
 
 export type FieldMetadataDefaultValueCurrency = {
@@ -111,3 +112,17 @@ export type FieldMetadataDefaultValue<
     : T extends keyof FieldMetadataDefaultValueMapping
       ? FieldMetadataDefaultValueMapping[T]
       : never | null;
+
+export const FIELD_METADATA_TYPES_WITHOUT_DEFAULT_VALUE = [
+  FieldMetadataType.RELATION,
+  FieldMetadataType.MORPH_RELATION,
+  FieldMetadataType.FILES,
+  FieldMetadataType.TS_VECTOR,
+] as const satisfies FieldMetadataType[];
+
+export const isFieldMetadataTypeWithDefaultValue = (
+  type: FieldMetadataType,
+): boolean =>
+  !(
+    FIELD_METADATA_TYPES_WITHOUT_DEFAULT_VALUE as readonly FieldMetadataType[]
+  ).includes(type);

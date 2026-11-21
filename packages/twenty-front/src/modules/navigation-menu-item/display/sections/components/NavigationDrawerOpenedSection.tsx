@@ -1,18 +1,17 @@
 import { useIdentifyActiveNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useIdentifyActiveNavigationMenuItems';
-import { useSortedNavigationMenuItems } from '@/navigation-menu-item/display/hooks/useSortedNavigationMenuItems';
+import { useMemberSidebarObjectMetadataItems } from '@/navigation-menu-item/display/hooks/useMemberSidebarObjectMetadataItems';
+import { useNavigationMenuItemSectionItems } from '@/navigation-menu-item/display/hooks/useNavigationMenuItemSectionItems';
 import { getObjectMetadataForNavigationMenuItem } from '@/navigation-menu-item/display/object/utils/getObjectMetadataForNavigationMenuItem';
 import { NavigationDrawerSectionForObjectMetadataItems } from '@/object-metadata/components/NavigationDrawerSectionForObjectMetadataItems';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
-import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
-import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
 import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { Collapsible } from 'twenty-ui/primitives/layout';
 import { PermissionFlagType } from '~/generated-metadata/graphql';
-import { AnimatedExpandableContainer } from 'twenty-ui/layout';
 
 export const NavigationDrawerOpenedSection = () => {
   const { t } = useLingui();
@@ -22,55 +21,50 @@ export const NavigationDrawerOpenedSection = () => {
   const { objectMetadataIdForOpenedSection } =
     useIdentifyActiveNavigationMenuItems();
 
+  // OMNIA-CUSTOM: hide Opened when the sidebar already lists the object through any OBJECT, VIEW or
+  // RECORD item (upstream misses other views), or for members through their list, hidden until it loads.
   const hasLayoutsPermission = useHasPermissionFlag(PermissionFlagType.LAYOUTS);
-  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+  const workspaceSectionItems = useNavigationMenuItemSectionItems();
+  const memberSidebar = useMemberSidebarObjectMetadataItems();
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
   const views = useAtomStateValue(viewsSelector);
-  const { workspaceNavigationMenuItemsSorted } = useSortedNavigationMenuItems();
 
   const objectMetadataItem = activeObjectMetadataItems.find(
     (item) => item.id === objectMetadataIdForOpenedSection,
   );
 
-  // Omnia: also suppress the "Opened" section when the object is already
-  // visible in the workspace sidebar via showInSidebar permission.
-  const isAlreadyShownInWorkspaceSection =
-    isDefined(objectMetadataItem) &&
-    !hasLayoutsPermission &&
-    getObjectPermissionsForObject(
-      objectPermissionsByObjectMetadataId,
-      objectMetadataItem.id,
-    ).showInSidebar;
+  if (!isDefined(objectMetadataItem)) {
+    return null;
+  }
 
-  // Layout-capable users see the editable workspace tree, so use the actual
-  // navigation items to avoid showing the same object again under "Opened".
-  const isAlreadyShownInEditableWorkspaceSection =
-    isDefined(objectMetadataItem) &&
-    hasLayoutsPermission &&
-    workspaceNavigationMenuItemsSorted.some((navigationMenuItem) => {
-      const workspaceObjectMetadataItem =
-        getObjectMetadataForNavigationMenuItem(
-          navigationMenuItem,
-          objectMetadataItems,
-          views,
-        );
+  // OMNIA-CUSTOM: the sidebar de-dup described above.
+  const isAlreadyInWorkspaceSidebar = hasLayoutsPermission
+    ? workspaceSectionItems.some(
+        (navigationMenuItem) =>
+          getObjectMetadataForNavigationMenuItem(
+            navigationMenuItem,
+            objectMetadataItems,
+            views,
+          )?.id === objectMetadataItem.id,
+      )
+    : !memberSidebar.isLoaded ||
+      memberSidebar.objectMetadataItems.some(
+        (memberObjectMetadataItem) =>
+          memberObjectMetadataItem.id === objectMetadataItem.id,
+      );
 
-      return workspaceObjectMetadataItem?.id === objectMetadataItem.id;
-    });
-
-  const shouldShowOpenedSection =
-    isDefined(objectMetadataItem) &&
-    !isAlreadyShownInWorkspaceSection &&
-    !isAlreadyShownInEditableWorkspaceSection;
+  if (isAlreadyInWorkspaceSidebar) {
+    return null;
+  }
 
   return (
-    <AnimatedExpandableContainer isExpanded={shouldShowOpenedSection}>
-      <NavigationDrawerSectionForObjectMetadataItems
-        sectionTitle={t`Opened`}
-        objectMetadataItems={
-          isDefined(objectMetadataItem) ? [objectMetadataItem] : []
-        }
-      />
-    </AnimatedExpandableContainer>
+    <Collapsible.Root open>
+      <Collapsible.Panel>
+        <NavigationDrawerSectionForObjectMetadataItems
+          sectionTitle={t`Opened`}
+          objectMetadataItems={[objectMetadataItem]}
+        />
+      </Collapsible.Panel>
+    </Collapsible.Root>
   );
 };

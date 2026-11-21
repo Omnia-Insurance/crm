@@ -2,6 +2,7 @@ import { type ChartConfiguration } from '@/side-panel/pages/page-layout/types/Ch
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { isNonEmptyString } from '@sniptt/guards';
 import { assertIsDefinedOrThrow } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type AssertChartWidgetOrThrow = (
   widget: PageLayoutWidget,
@@ -15,7 +16,6 @@ const VALID_CHART_TYPES: ReadonlyArray<ChartConfiguration['__typename']> = [
   'LineChartConfiguration',
   'PieChartConfiguration',
   'AggregateChartConfiguration',
-  'GaugeChartConfiguration',
 ] as const;
 
 export const assertChartWidgetOrThrow: AssertChartWidgetOrThrow = (
@@ -23,12 +23,12 @@ export const assertChartWidgetOrThrow: AssertChartWidgetOrThrow = (
 ) => {
   assertIsDefinedOrThrow(
     widget.objectMetadataId,
-    new Error('Widget objectMetadataId is required'),
+    new Error(doNotTranslate('Widget objectMetadataId is required')),
   );
 
   assertIsDefinedOrThrow(
     widget.configuration,
-    new Error('Widget configuration is required'),
+    new Error(doNotTranslate('Widget configuration is required')),
   );
 
   if (
@@ -38,7 +38,9 @@ export const assertChartWidgetOrThrow: AssertChartWidgetOrThrow = (
     )
   ) {
     throw new Error(
-      `Expected chart configuration but got ${widget.configuration.__typename}`,
+      doNotTranslate(
+        `Expected chart configuration but got ${widget.configuration.__typename}`,
+      ),
     );
   }
 };

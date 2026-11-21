@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { canObjectBeManagedByWorkflow } from 'twenty-shared/workflow';
+import { isDefined } from 'twenty-shared/utils';
+import { canObjectBeManagedByAutomation } from 'twenty-shared/workflow';
 
 import { CommonUpdateManyQueryRunnerService } from 'src/engine/api/common/common-query-runners/common-update-many-query-runner.service';
+import { isRecordFilterEmpty } from 'src/engine/api/common/common-query-runners/utils/is-record-filter-empty.util';
 import {
   RecordCrudException,
   RecordCrudExceptionCode,
@@ -25,6 +27,15 @@ export class UpdateManyRecordsService {
   async execute(params: UpdateManyRecordsParams): Promise<ToolOutput> {
     const { objectName, filter, data, authContext } = params;
 
+    if (!isDefined(filter) || isRecordFilterEmpty(filter)) {
+      return {
+        success: false,
+        message: `Failed to update records in ${objectName}`,
+        error:
+          'Filter must not be empty — updating without a filter is not allowed',
+      };
+    }
+
     try {
       const {
         queryRunnerContext,
@@ -37,13 +48,12 @@ export class UpdateManyRecordsService {
       });
 
       if (
-        !canObjectBeManagedByWorkflow({
+        !canObjectBeManagedByAutomation({
           nameSingular: flatObjectMetadata.nameSingular,
-          isSystem: flatObjectMetadata.isSystem,
         })
       ) {
         throw new RecordCrudException(
-          'Failed to update: Object cannot be updated by workflow',
+          'Failed to update: Object cannot be updated by automation',
           RecordCrudExceptionCode.INVALID_REQUEST,
         );
       }

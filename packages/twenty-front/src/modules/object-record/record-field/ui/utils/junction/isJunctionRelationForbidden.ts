@@ -1,20 +1,17 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { getObjectPermissionsForObject } from '@/object-metadata/utils/getObjectPermissionsForObject';
-import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
 import { getTargetObjectMetadataIdsFromField } from '@/object-record/record-field/ui/utils/junction/getTargetObjectMetadataIdsFromField';
-import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
-import { type ObjectPermissions } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-
-import { type JunctionObjectMetadataItem } from './getJunctionConfig';
+import { isUsableJunctionConfig } from '@/object-record/record-field/ui/utils/junction/isUsableJunctionConfig';
+import { type JunctionObjectMetadataItem } from '@/object-record/record-field/ui/utils/junction/types/JunctionObjectMetadataItem';
+import { resolveJunctionConfig } from '@/object-record/record-field/ui/utils/junction/resolveJunctionConfig';
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
+import { type ObjectRecordsPermissions } from 'twenty-shared/types';
 
 type ObjectPermissionsByObjectMetadataId = Record<
   string,
-  ObjectPermissions & { objectMetadataId: string }
+  ObjectRecordsPermissions
 >;
 
-// Returns true if a junction field's intermediate or final target object
-// is not readable by the current user.
 export const isJunctionRelationForbidden = ({
   fieldMetadataItem,
   sourceObjectMetadataId,
@@ -26,10 +23,6 @@ export const isJunctionRelationForbidden = ({
   objectMetadataItems: JunctionObjectMetadataItem[];
   objectPermissionsByObjectMetadataId: ObjectPermissionsByObjectMetadataId;
 }): boolean => {
-  if (!hasJunctionConfig(fieldMetadataItem.settings)) {
-    return false;
-  }
-
   const junctionObjectMetadataId =
     fieldMetadataItem.relation?.targetObjectMetadata.id;
 
@@ -37,24 +30,35 @@ export const isJunctionRelationForbidden = ({
     return false;
   }
 
-  const junctionPermissions = getObjectPermissionsForObject(
-    objectPermissionsByObjectMetadataId,
-    junctionObjectMetadataId,
-  );
-
-  if (!junctionPermissions.canReadObjectRecords) {
-    return true;
-  }
-
-  const junctionConfig = getJunctionConfig({
+  const junctionConfig = resolveJunctionConfig({
     settings: fieldMetadataItem.settings,
     relationObjectMetadataId: junctionObjectMetadataId,
+    relationTargetFieldMetadataId:
+      fieldMetadataItem.relation?.targetFieldMetadata.id,
     sourceObjectMetadataId,
     objectMetadataItems,
   });
 
   if (!isDefined(junctionConfig)) {
     return false;
+  }
+
+  if (!isUsableJunctionConfig(junctionConfig)) {
+    return true;
+  }
+
+  const junctionPermissions = getObjectPermissionsForObject(
+    objectPermissionsByObjectMetadataId,
+    junctionObjectMetadataId,
+  );
+
+  if (
+    !canReachSomeRecords({
+      objectRecordsPermissions: junctionPermissions,
+      operationType: 'read',
+    })
+  ) {
+    return true;
   }
 
   const targetObjectMetadataIds = junctionConfig.targetFields.flatMap(
@@ -65,11 +69,13 @@ export const isJunctionRelationForbidden = ({
     return false;
   }
 
-  return !targetObjectMetadataIds.some(
-    (targetId) =>
-      getObjectPermissionsForObject(
+  return !targetObjectMetadataIds.some((targetId) =>
+    canReachSomeRecords({
+      objectRecordsPermissions: getObjectPermissionsForObject(
         objectPermissionsByObjectMetadataId,
         targetId,
-      ).canReadObjectRecords,
+      ),
+      operationType: 'read',
+    }),
   );
 };

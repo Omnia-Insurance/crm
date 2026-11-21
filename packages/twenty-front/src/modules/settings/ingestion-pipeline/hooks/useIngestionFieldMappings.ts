@@ -1,65 +1,65 @@
 import { useMutation, useQuery } from '@apollo/client/react';
+import { isDefined } from 'twenty-shared/utils';
 
 import {
-  CREATE_INGESTION_FIELD_MAPPING,
-  CREATE_INGESTION_FIELD_MAPPINGS,
-  DELETE_INGESTION_FIELD_MAPPING,
-  UPDATE_INGESTION_FIELD_MAPPING,
-} from '@/settings/ingestion-pipeline/graphql/ingestion-field-mapping.mutations';
-import { GET_INGESTION_FIELD_MAPPINGS } from '@/settings/ingestion-pipeline/graphql/ingestion-field-mapping.queries';
-import { type IngestionFieldMapping } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+  CreateIngestionFieldMappingDocument,
+  CreateIngestionFieldMappingsDocument,
+  type CreateIngestionFieldMappingInput,
+  DeleteIngestionFieldMappingDocument,
+  GetIngestionFieldMappingsDocument,
+  UpdateIngestionFieldMappingDocument,
+  type UpdateIngestionFieldMappingInputUpdates,
+} from '~/generated-metadata/graphql';
 
 export const useIngestionFieldMappings = (pipelineId?: string) => {
-  const { data, loading, error, refetch } = useQuery<{
-    ingestionFieldMappings: IngestionFieldMapping[];
-  }>(GET_INGESTION_FIELD_MAPPINGS, {
-    variables: { pipelineId },
-    skip: !pipelineId,
-  });
+  const { data, loading, error, refetch } = useQuery(
+    GetIngestionFieldMappingsDocument,
+    {
+      variables: { pipelineId: pipelineId ?? '' },
+      skip: !isDefined(pipelineId),
+    },
+  );
 
-  const [createMutation] = useMutation<{
-    createIngestionFieldMapping: IngestionFieldMapping;
-  }>(CREATE_INGESTION_FIELD_MAPPING);
-  const [createManyMutation] = useMutation<{
-    createIngestionFieldMappings: IngestionFieldMapping[];
-  }>(CREATE_INGESTION_FIELD_MAPPINGS);
-  const [updateMutation] = useMutation<{
-    updateIngestionFieldMapping: IngestionFieldMapping;
-  }>(UPDATE_INGESTION_FIELD_MAPPING);
-  const [deleteMutation] = useMutation(DELETE_INGESTION_FIELD_MAPPING);
+  const [createMutation] = useMutation(CreateIngestionFieldMappingDocument);
+  const [createManyMutation] = useMutation(
+    CreateIngestionFieldMappingsDocument,
+  );
+  const [updateMutation] = useMutation(UpdateIngestionFieldMappingDocument);
+  const [deleteMutation] = useMutation(DeleteIngestionFieldMappingDocument);
 
-  const createMapping = async (
-    input: Omit<IngestionFieldMapping, 'id'>,
-  ) => {
-    const result = await createMutation({ variables: { input } });
+  const createMapping = async (input: CreateIngestionFieldMappingInput) => {
+    const { data: createData } = await createMutation({
+      variables: { input },
+    });
 
     await refetch();
 
-    return result.data?.createIngestionFieldMapping as IngestionFieldMapping;
+    return createData?.createIngestionFieldMapping;
   };
 
   const createManyMappings = async (
-    inputs: Omit<IngestionFieldMapping, 'id'>[],
+    inputs: CreateIngestionFieldMappingInput[],
   ) => {
-    const result = await createManyMutation({ variables: { inputs } });
+    const { data: createData } = await createManyMutation({
+      variables: { inputs },
+    });
 
     await refetch();
 
-    return result.data
-      ?.createIngestionFieldMappings as IngestionFieldMapping[];
+    return createData?.createIngestionFieldMappings ?? [];
   };
 
   const updateMapping = async (
     id: string,
-    update: Partial<Omit<IngestionFieldMapping, 'id' | 'pipelineId'>>,
+    update: UpdateIngestionFieldMappingInputUpdates,
   ) => {
-    const result = await updateMutation({
+    const { data: updateData } = await updateMutation({
       variables: { input: { id, update } },
     });
 
     await refetch();
 
-    return result.data?.updateIngestionFieldMapping as IngestionFieldMapping;
+    return updateData?.updateIngestionFieldMapping;
   };
 
   const deleteMapping = async (id: string) => {

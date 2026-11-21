@@ -1,0 +1,480 @@
+import * as jwt from 'jsonwebtoken';
+import request from 'supertest';
+import { buildBaseManifest } from 'test/integration/metadata/suites/application/utils/build-base-manifest.util';
+import { cleanupApplicationAndAppRegistration } from 'test/integration/metadata/suites/application/utils/cleanup-application-and-app-registration.util';
+import { setupApplicationForSync } from 'test/integration/metadata/suites/application/utils/setup-application-for-sync.util';
+import { syncApplication } from 'test/integration/metadata/suites/application/utils/sync-application.util';
+import { uploadApplicationFile } from 'test/integration/metadata/suites/application/utils/upload-application-file.util';
+import { expectOneNotInternalServerErrorHttpResponseSnapshot } from 'test/integration/utils/expect-one-not-internal-server-error-http-response-snapshot.util';
+import {
+  type LogicFunctionManifest,
+  type ServerRouteTriggerSettings,
+} from 'twenty-shared/application';
+import {
+  HTTPMethod,
+  LOGIC_FUNCTION_HTTP_RESPONSE_MARKER,
+} from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+
+const OWNER_WORKSPACE_ID = SEED_APPLE_WORKSPACE_ID;
+
+const APP_UNIVERSAL_IDENTIFIER = 'd41340eb-6cc9-4383-8b04-9be7dc794bb1';
+const ROLE_UNIVERSAL_IDENTIFIER = 'e5b19f77-3e1c-4a10-9c2e-56d6b0f8a3d2';
+
+const NON_EXPOSED_FUNCTION_UNIVERSAL_IDENTIFIER =
+  '1a1f983f-5c1a-4c60-a3c8-7d0e2a4a11a1';
+const EXPOSED_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '2b2f983f-5c1a-4c60-a3c8-7d0e2a4a22b2';
+const AUTH_REQUIRED_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '3c3f983f-5c1a-4c60-a3c8-7d0e2a4a33c3';
+const TARGET_FUNCTION_UNIVERSAL_IDENTIFIER =
+  '4d4f983f-5c1a-4c60-a3c8-7d0e2a4a44d4';
+const HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '5e5f983f-5c1a-4c60-a3c8-7d0e2a4a55e5';
+const GET_HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '6f6f983f-5c1a-4c60-a3c8-7d0e2a4a66f6';
+const AUTHORIZATION_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '7a7f983f-5c1a-4c60-a3c8-7d0e2a4a77a7';
+const ROUTES_URL_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER =
+  '8b8f983f-5c1a-4c60-a3c8-7d0e2a4a88b8';
+
+const OTHER_APPLICATION_REGISTRATION_ID =
+  '9c9f983f-5c1a-4c60-a3c8-7d0e2a4a99c9';
+
+const findApplicationRegistrationId = async (): Promise<string> => {
+  const [{ id }]: { id: string }[] = await globalThis.testDataSource.query(
+    `SELECT id FROM core."applicationRegistration" WHERE "universalIdentifier" = $1`,
+    [APP_UNIVERSAL_IDENTIFIER],
+  );
+
+  return id;
+};
+
+const TARGET_FUNCTION_RESPONSE = { greeting: 'hello from target function' };
+
+// Built (ESM) handler code executed by the logic function driver. The resolver
+// routes the public request to the target function in the owner workspace.
+const RESOLVER_BUILT_HANDLER_CODE = `export const main = async () => ({
+  workspaceId: '${OWNER_WORKSPACE_ID}',
+  targetLogicFunctionUniversalIdentifier: '${TARGET_FUNCTION_UNIVERSAL_IDENTIFIER}',
+});
+`;
+
+const HANDSHAKE_RESOLVER_BUILT_HANDLER_CODE = `export const main = async (event) => ({
+  ${LOGIC_FUNCTION_HTTP_RESPONSE_MARKER}: true,
+  status: 200,
+  body: { challenge: event.body.challenge },
+});
+`;
+
+// Mirrors how a provider verifies a webhook: the challenge arrives in the query
+// string of a GET, and the answer must be the bare value, not JSON.
+const GET_HANDSHAKE_RESOLVER_BUILT_HANDLER_CODE = `export const main = async (event) => ({
+  ${LOGIC_FUNCTION_HTTP_RESPONSE_MARKER}: true,
+  status: 200,
+  headers: { 'content-type': 'text/plain' },
+  body: event.queryStringParameters['hub.challenge'],
+});
+`;
+
+const AUTHORIZATION_ECHO_RESOLVER_BUILT_HANDLER_CODE = `export const main = async (event) => ({
+  ${LOGIC_FUNCTION_HTTP_RESPONSE_MARKER}: true,
+  status: 200,
+  body: { authorization: event.headers.authorization ?? null },
+});
+`;
+
+const ROUTES_URL_ECHO_RESOLVER_BUILT_HANDLER_CODE = `export const main = async () => ({
+  ${LOGIC_FUNCTION_HTTP_RESPONSE_MARKER}: true,
+  status: 200,
+  body: { serverRoutesUrl: process.env.TWENTY_SERVER_ROUTES_URL },
+});
+`;
+
+const TARGET_BUILT_HANDLER_CODE = `export const main = async () => (${JSON.stringify(
+  TARGET_FUNCTION_RESPONSE,
+)});
+`;
+
+const buildLogicFunctionManifest = ({
+  universalIdentifier,
+  name,
+  serverRouteExposed,
+  authRequired,
+  httpMethods,
+  forwardedRequestHeaders = [],
+}: {
+  universalIdentifier: string;
+  name: string;
+  serverRouteExposed: boolean;
+  authRequired: boolean;
+  httpMethods?: ServerRouteTriggerSettings['httpMethods'];
+  forwardedRequestHeaders?: string[];
+}): LogicFunctionManifest => ({
+  universalIdentifier,
+  name,
+  handlerName: 'main',
+  sourceHandlerPath: `src/${name}.ts`,
+  builtHandlerPath: `dist/${name}.mjs`,
+  builtHandlerChecksum: `checksum-${name}`,
+  ...(authRequired
+    ? {
+        httpRouteTriggerSettings: {
+          path: `/${name}`,
+          httpMethod: HTTPMethod.POST,
+          isAuthRequired: true,
+        },
+      }
+    : {}),
+  ...(serverRouteExposed
+    ? {
+        serverRouteTriggerSettings: {
+          forwardedRequestHeaders,
+          ...(isDefined(httpMethods) ? { httpMethods } : {}),
+        },
+      }
+    : {}),
+});
+
+const uploadBuiltHandlerFile = async ({
+  builtHandlerPath,
+  builtHandlerCode,
+}: {
+  builtHandlerPath: string;
+  builtHandlerCode: string;
+}) => {
+  jest.useRealTimers();
+
+  await uploadApplicationFile({
+    applicationUniversalIdentifier: APP_UNIVERSAL_IDENTIFIER,
+    fileFolder: 'BuiltLogicFunction',
+    filePath: builtHandlerPath,
+    fileBuffer: Buffer.from(builtHandlerCode),
+    filename: builtHandlerPath.split('/').pop() as string,
+    contentType: 'application/javascript',
+    expectToFail: false,
+  });
+
+  jest.useFakeTimers();
+};
+
+describe('ServerRouteTrigger authorization (integration)', () => {
+  const baseUrl = `http://localhost:${APP_PORT}`;
+
+  beforeAll(async () => {
+    await setupApplicationForSync({
+      applicationUniversalIdentifier: APP_UNIVERSAL_IDENTIFIER,
+      name: 'Server Route Auth Test App',
+      description: 'App for testing server route trigger authorization',
+      sourcePath: 'server-route-auth-test-app',
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/exposed-resolver.mjs',
+      builtHandlerCode: RESOLVER_BUILT_HANDLER_CODE,
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/handshake-resolver.mjs',
+      builtHandlerCode: HANDSHAKE_RESOLVER_BUILT_HANDLER_CODE,
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/get-handshake-resolver.mjs',
+      builtHandlerCode: GET_HANDSHAKE_RESOLVER_BUILT_HANDLER_CODE,
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/authorization-echo-resolver.mjs',
+      builtHandlerCode: AUTHORIZATION_ECHO_RESOLVER_BUILT_HANDLER_CODE,
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/routes-url-echo-resolver.mjs',
+      builtHandlerCode: ROUTES_URL_ECHO_RESOLVER_BUILT_HANDLER_CODE,
+    });
+
+    await uploadBuiltHandlerFile({
+      builtHandlerPath: 'dist/target-function.mjs',
+      builtHandlerCode: TARGET_BUILT_HANDLER_CODE,
+    });
+
+    await syncApplication({
+      manifest: buildBaseManifest({
+        appId: APP_UNIVERSAL_IDENTIFIER,
+        roleId: ROLE_UNIVERSAL_IDENTIFIER,
+        overrides: {
+          logicFunctions: [
+            buildLogicFunctionManifest({
+              universalIdentifier: NON_EXPOSED_FUNCTION_UNIVERSAL_IDENTIFIER,
+              name: 'non-exposed-function',
+              serverRouteExposed: false,
+              authRequired: true,
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier: EXPOSED_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'exposed-resolver',
+              serverRouteExposed: true,
+              authRequired: false,
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier: AUTH_REQUIRED_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'auth-required-resolver',
+              serverRouteExposed: true,
+              authRequired: true,
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier: HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'handshake-resolver',
+              serverRouteExposed: true,
+              authRequired: false,
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier: GET_HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'get-handshake-resolver',
+              serverRouteExposed: true,
+              authRequired: false,
+              httpMethods: [HTTPMethod.GET, HTTPMethod.POST],
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier:
+                AUTHORIZATION_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'authorization-echo-resolver',
+              serverRouteExposed: true,
+              authRequired: false,
+              forwardedRequestHeaders: ['authorization'],
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier:
+                ROUTES_URL_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER,
+              name: 'routes-url-echo-resolver',
+              serverRouteExposed: true,
+              authRequired: false,
+            }),
+            buildLogicFunctionManifest({
+              universalIdentifier: TARGET_FUNCTION_UNIVERSAL_IDENTIFIER,
+              name: 'target-function',
+              serverRouteExposed: false,
+              authRequired: false,
+            }),
+          ],
+        },
+      }),
+      expectToFail: false,
+    });
+  }, 60000);
+
+  afterAll(async () => {
+    await cleanupApplicationAndAppRegistration({
+      applicationUniversalIdentifier: APP_UNIVERSAL_IDENTIFIER,
+    });
+  }, 60000);
+
+  describe('POST /webhooks/server/:universalIdentifier (public, unauthenticated)', () => {
+    it('rejects an owner-workspace function without serverRouteTriggerSettings before executing it', async () => {
+      const response = await request(baseUrl)
+        .post(`/webhooks/server/${NON_EXPOSED_FUNCTION_UNIVERSAL_IDENTIFIER}`)
+        .send({ any: 'payload' });
+
+      expect(response.status).toBe(404);
+      expectOneNotInternalServerErrorHttpResponseSnapshot({
+        status: response.status,
+        body: response.body,
+      });
+    });
+
+    it('dispatches a server-route-exposed resolver, queues the target, and acks with 200', async () => {
+      const response = await request(baseUrl)
+        .post(`/webhooks/server/${EXPOSED_RESOLVER_UNIVERSAL_IDENTIFIER}`)
+        .send({ any: 'payload' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ queued: true });
+    }, 60000);
+
+    it('answers the caller with the response returned by the resolver', async () => {
+      const response = await request(baseUrl)
+        .post(`/webhooks/server/${HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`)
+        .send({ type: 'url_verification', challenge: 'abc123' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ challenge: 'abc123' });
+    }, 60000);
+
+    it('gives the resolver the server routes URL of its application registration', async () => {
+      const applicationRegistrationId = await findApplicationRegistrationId();
+
+      const response = await request(baseUrl)
+        .post(
+          `/webhooks/server/${applicationRegistrationId}/${ROUTES_URL_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+        )
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body.serverRoutesUrl).toMatch(
+        new RegExp(`/webhooks/server/${applicationRegistrationId}$`),
+      );
+    }, 60000);
+
+    it('answers through the application registration scoped route', async () => {
+      const applicationRegistrationId = await findApplicationRegistrationId();
+
+      const response = await request(baseUrl)
+        .post(
+          `/webhooks/server/${applicationRegistrationId}/${HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+        )
+        .send({ type: 'url_verification', challenge: 'abc123' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ challenge: 'abc123' });
+    }, 60000);
+
+    it('does not find a resolver under another application registration', async () => {
+      const response = await request(baseUrl)
+        .post(
+          `/webhooks/server/${OTHER_APPLICATION_REGISTRATION_ID}/${HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+        )
+        .send({ type: 'url_verification', challenge: 'abc123' });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('does not expose a function without server route settings through the scoped route', async () => {
+      const applicationRegistrationId = await findApplicationRegistrationId();
+
+      const response = await request(baseUrl)
+        .post(
+          `/webhooks/server/${applicationRegistrationId}/${TARGET_FUNCTION_UNIVERSAL_IDENTIFIER}`,
+        )
+        .send({});
+
+      expect(response.status).toBe(404);
+    });
+
+    it('forwards a third-party JWT to a resolver that asked for it', async () => {
+      const thirdPartyToken = jwt.sign(
+        {
+          iss: 'https://api.botframework.com',
+          aud: 'bot-app-id',
+          type: 'ACCESS',
+        },
+        'third-party-signing-key',
+      );
+
+      const response = await request(baseUrl)
+        .post(
+          `/webhooks/server/${AUTHORIZATION_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+        )
+        .set('Authorization', `Bearer ${thirdPartyToken}`)
+        .send({ any: 'payload' });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        authorization: `Bearer ${thirdPartyToken}`,
+      });
+    }, 60000);
+
+    it.each([
+      ['as a bearer token', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`],
+      ['with trailing content', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN} x`],
+      ['without a scheme', APPLE_JANE_ADMIN_ACCESS_TOKEN],
+      ['as a session token', 'Bearer sess_abc123'],
+    ])(
+      'never forwards a Twenty credential %s',
+      async (_, authorization) => {
+        const response = await request(baseUrl)
+          .post(
+            `/webhooks/server/${AUTHORIZATION_ECHO_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+          )
+          .set('Authorization', authorization)
+          .send({ any: 'payload' });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ authorization: null });
+      },
+      60000,
+    );
+
+    it('rejects a server-route-exposed resolver that requires authentication before executing it', async () => {
+      const response = await request(baseUrl)
+        .post(`/webhooks/server/${AUTH_REQUIRED_RESOLVER_UNIVERSAL_IDENTIFIER}`)
+        .send({ any: 'payload' });
+
+      expect(response.status).toBe(403);
+      expectOneNotInternalServerErrorHttpResponseSnapshot({
+        status: response.status,
+        body: response.body,
+      });
+    });
+  });
+
+  describe('GET /webhooks/server/:universalIdentifier (public, unauthenticated)', () => {
+    it('rejects a GET on a resolver that did not declare it', async () => {
+      const response = await request(baseUrl).get(
+        `/webhooks/server/${EXPOSED_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+      );
+
+      expect(response.status).toBe(405);
+      expectOneNotInternalServerErrorHttpResponseSnapshot({
+        status: response.status,
+        body: response.body,
+      });
+    });
+
+    // Express dispatches HEAD to the GET handler, so it reaches the same gate.
+    it('rejects a HEAD on a resolver that did not declare it', async () => {
+      const response = await request(baseUrl).head(
+        `/webhooks/server/${EXPOSED_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+      );
+
+      expect(response.status).toBe(405);
+    });
+
+    it('answers the verification challenge of a resolver that declared GET', async () => {
+      const response = await request(baseUrl)
+        .get(`/webhooks/server/${GET_HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`)
+        .query({
+          'hub.mode': 'subscribe',
+          'hub.challenge': 'challenge-abc123',
+          'hub.verify_token': 'a-token',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/plain');
+      expect(response.text).toBe('challenge-abc123');
+    }, 60000);
+
+    // HEAD is not an HTTPMethod a resolver can declare, so it stays rejected even
+    // on a route that answers GET, rather than executing the function for a
+    // request that cannot carry the challenge back.
+    it('rejects a HEAD on a resolver that declared GET', async () => {
+      const response = await request(baseUrl).head(
+        `/webhooks/server/${GET_HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`,
+      );
+
+      expect(response.status).toBe(405);
+    });
+
+    it('still dispatches a POST on a resolver that declared both methods', async () => {
+      const response = await request(baseUrl)
+        .post(`/webhooks/server/${GET_HANDSHAKE_RESOLVER_UNIVERSAL_IDENTIFIER}`)
+        .send({ any: 'payload' });
+
+      expect(response.status).toBe(200);
+    }, 60000);
+
+    it('answers 404, not 405, for an identifier that resolves to nothing', async () => {
+      const response = await request(baseUrl).get(
+        `/webhooks/server/${NON_EXPOSED_FUNCTION_UNIVERSAL_IDENTIFIER}`,
+      );
+
+      expect(response.status).toBe(404);
+      expectOneNotInternalServerErrorHttpResponseSnapshot({
+        status: response.status,
+        body: response.body,
+      });
+    });
+  });
+});

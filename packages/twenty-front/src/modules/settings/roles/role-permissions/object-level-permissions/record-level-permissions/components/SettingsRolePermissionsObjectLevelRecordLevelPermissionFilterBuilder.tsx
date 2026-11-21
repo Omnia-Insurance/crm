@@ -4,22 +4,22 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { RecordFilterGroupsComponentInstanceContext } from '@/object-record/record-filter-group/states/context/RecordFilterGroupsComponentInstanceContext';
 import { RecordFiltersComponentInstanceContext } from '@/object-record/record-filter/states/context/RecordFiltersComponentInstanceContext';
 import { SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent';
-import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
+import { useWorkspaceSurfaceScopedComponentInstanceId } from '@/ui/layout/hooks/useWorkspaceSurfaceScopedComponentInstanceId';
 
 type SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderProps =
   {
     roleId: string;
-    scope: RowLevelPermissionPredicateScope;
     objectMetadataItem: EnrichedObjectMetadataItem;
   };
 
 export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilder =
   ({
     roleId,
-    scope,
     objectMetadataItem,
   }: SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderProps) => {
-    const instanceId = `record-level-permission-filter-${roleId}-${objectMetadataItem.id}-${scope}`;
+    const instanceId = useWorkspaceSurfaceScopedComponentInstanceId(
+      `record-level-permission-filter-${roleId}-${objectMetadataItem.id}`,
+    );
 
     return (
       <RecordFilterGroupsComponentInstanceContext.Provider
@@ -28,7 +28,6 @@ export const SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilde
         <RecordFiltersComponentInstanceContext.Provider value={{ instanceId }}>
           <SettingsRolePermissionsObjectLevelRecordLevelPermissionFilterBuilderContent
             roleId={roleId}
-            scope={scope}
             objectMetadataItem={objectMetadataItem}
           />
         </RecordFiltersComponentInstanceContext.Provider>

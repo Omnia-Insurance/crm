@@ -5,7 +5,8 @@ import { getWorkflowDiagramColors } from '@/workflow/workflow-diagram/utils/getW
 import { styled } from '@linaria/react';
 import { Handle, Position, type HandleProps } from '@xyflow/react';
 import { useMemo, type CSSProperties } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 const HANDLE_SCALE_ON_HOVER = 1.5;
 
@@ -13,6 +14,7 @@ const StyledHandleContainer = styled.div`
   & .react-flow__handle {
     background: var(--handle-bg);
     border-color: var(--handle-border-color);
+    corner-shape: round;
     height: ${NODE_HANDLE_HEIGHT_PX}px;
     opacity: var(--handle-opacity, 1);
     transform: var(--handle-transform);
@@ -72,8 +74,9 @@ export const WorkflowDiagramHandleSource = ({
   const dynamicStyles = useMemo(() => {
     const isRight = position === Position.Right;
     const transform = isRight ? 'translate(50%, -50%)' : 'translate(-50%, 50%)';
-    // oxlint-disable-next-line lingui/no-unlocalized-strings
-    const transformOrigin = isRight ? 'top right' : 'bottom left';
+    const transformOrigin = doNotTranslate(
+      isRight ? 'top right' : 'bottom left',
+    );
 
     let bg: string;
     let borderColor: string;

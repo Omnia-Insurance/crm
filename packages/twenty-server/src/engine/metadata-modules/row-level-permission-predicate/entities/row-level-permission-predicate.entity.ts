@@ -3,7 +3,6 @@
 import {
   RowLevelPermissionPredicate,
   RowLevelPermissionPredicateOperand,
-  RowLevelPermissionPredicateScope,
   RowLevelPermissionPredicateValue,
 } from 'twenty-shared/types';
 import {
@@ -19,10 +18,14 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { ADD_ROW_LEVEL_PERMISSION_RULE_LINKS_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-58/add-row-level-permission-rule-links-upgrade-command-name.constant';
+import { ADD_RELATION_FIELD_METADATA_ID_TO_ROW_LEVEL_PERMISSION_PREDICATE_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-55/add-relation-field-metadata-id-to-row-level-permission-predicate-upgrade-command-name.constant';
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
+import { RowLevelPermissionRuleEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-rule.entity';
 import { SyncableEntity } from 'src/engine/workspace-manager/types/syncable-entity.interface';
 import { JsonbProperty } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/jsonb-property.type';
 
@@ -33,7 +36,9 @@ import { JsonbProperty } from 'src/engine/workspace-manager/workspace-migration/
   'objectMetadataId',
 ])
 @Index('IDX_RLPP_FIELD_METADATA_ID', ['fieldMetadataId'])
+@Index('IDX_RLPP_RELATION_FIELD_METADATA_ID', ['relationFieldMetadataId'])
 @Index('IDX_RLPP_GROUP_ID', ['rowLevelPermissionPredicateGroupId'])
+@Index('IDX_RLPP_RULE_ID', ['rowLevelPermissionRuleId'])
 @Index('IDX_RLPP_WORKSPACE_MEMBER_FIELD_METADATA_ID', [
   'workspaceMemberFieldMetadataId',
 ])
@@ -49,11 +54,32 @@ export class RowLevelPermissionPredicateEntity
   @Column({ nullable: false, type: 'uuid' })
   fieldMetadataId: string;
 
-  @ManyToOne(() => FieldMetadataEntity, {
-    onDelete: 'CASCADE',
-  })
+  @ManyToOne(
+    () => FieldMetadataEntity,
+    (fieldMetadata) => fieldMetadata.rowLevelPermissionPredicates,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
   @JoinColumn({ name: 'fieldMetadataId' })
   fieldMetadata: Relation<FieldMetadataEntity>;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_RELATION_FIELD_METADATA_ID_TO_ROW_LEVEL_PERMISSION_PREDICATE_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: true, type: 'uuid' })
+  relationFieldMetadataId: string | null;
+
+  @ManyToOne(
+    () => FieldMetadataEntity,
+    (fieldMetadata) => fieldMetadata.relationRowLevelPermissionPredicates,
+    {
+      onDelete: 'CASCADE',
+    },
+  )
+  @JoinColumn({ name: 'relationFieldMetadataId' })
+  relationFieldMetadata: Relation<FieldMetadataEntity> | null;
 
   @Column({ nullable: false, type: 'uuid' })
   objectMetadataId: string;
@@ -72,14 +98,6 @@ export class RowLevelPermissionPredicateEntity
   })
   operand: RowLevelPermissionPredicateOperand;
 
-  @Column({
-    nullable: false,
-    type: 'enum',
-    enum: Object.values(RowLevelPermissionPredicateScope),
-    default: RowLevelPermissionPredicateScope.ALL,
-  })
-  scope: RowLevelPermissionPredicateScope;
-
   @Column({ nullable: true, type: 'jsonb' })
   value: JsonbProperty<RowLevelPermissionPredicateValue> | null;
 
@@ -92,14 +110,33 @@ export class RowLevelPermissionPredicateEntity
   @Column({ nullable: true, type: 'text', default: null })
   workspaceMemberSubFieldName: string | null;
 
-  @ManyToOne(() => FieldMetadataEntity, {
-    onDelete: 'SET NULL',
-  })
+  @ManyToOne(
+    () => FieldMetadataEntity,
+    (fieldMetadata) =>
+      fieldMetadata.workspaceMemberRowLevelPermissionPredicates,
+    {
+      onDelete: 'SET NULL',
+    },
+  )
   @JoinColumn({ name: 'workspaceMemberFieldMetadataId' })
   workspaceMemberFieldMetadata: Relation<FieldMetadataEntity> | null;
 
   @Column({ nullable: true, type: 'uuid' })
   rowLevelPermissionPredicateGroupId: string | null;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_ROW_LEVEL_PERMISSION_RULE_LINKS_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: true, type: 'uuid' })
+  rowLevelPermissionRuleId: string | null;
+
+  @ManyToOne(() => RowLevelPermissionRuleEntity, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'rowLevelPermissionRuleId' })
+  rowLevelPermissionRule: Relation<RowLevelPermissionRuleEntity> | null;
 
   @Column({ nullable: true, type: 'double precision' })
   positionInRowLevelPermissionPredicateGroup: number | null;

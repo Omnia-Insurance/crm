@@ -1,4 +1,4 @@
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 
 export type UniqueFieldCondition = [field: string, value: string];
 
@@ -9,13 +9,8 @@ export type RelationConnectQueryConfig = {
   recordToConnectConditions: UniqueConstraintCondition[];
   relationFieldName: string;
   connectFieldName: string;
-  uniqueConstraintFields: FlatFieldMetadata[];
+  uniqueConstraintFields: OrmFlatFieldMetadata[];
   recordToConnectConditionByEntityIndex: {
-    [entityIndex: number]: UniqueConstraintCondition;
-  };
-  /** Full condition including all unique fields (before ID-priority filtering).
-   *  Used for fallback lookups when ID-based matching fails during upserts. */
-  fullRecordToConnectConditionByEntityIndex?: {
     [entityIndex: number]: UniqueConstraintCondition;
   };
 };

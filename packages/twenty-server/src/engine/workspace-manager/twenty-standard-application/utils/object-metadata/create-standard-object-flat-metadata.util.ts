@@ -1,4 +1,9 @@
 import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
+import { ObjectOpenRecordIn } from 'twenty-shared/types';
+import {
+  type DisableableObjectPermissionAction,
+  TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
+} from 'twenty-shared/application';
 
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { type AllStandardObjectFieldName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-field-name.type';
@@ -16,7 +21,10 @@ export type CreateStandardObjectContext<O extends AllStandardObjectName> = {
   isSystem?: boolean;
   isSearchable?: boolean;
   isAuditLogged?: boolean;
-  isUIReadOnly?: boolean;
+  isUIEditable?: boolean;
+  isUICreatable?: boolean;
+  disabledObjectPermissionActions?: DisableableObjectPermissionAction[];
+  openRecordIn?: ObjectOpenRecordIn;
   shortcut?: string | null;
   duplicateCriteria?: string[][] | null;
   labelIdentifierFieldMetadataName: AllStandardObjectFieldName<O>;
@@ -28,6 +36,21 @@ export type CreateStandardObjectArgs<
 > = StandardBuilderArgs<'objectMetadata'> & {
   objectName: O;
   context: CreateStandardObjectContext<O>;
+};
+
+const getStandardFieldUniversalIdentifier = <O extends AllStandardObjectName>({
+  objectName,
+  fieldName,
+}: {
+  objectName: O;
+  fieldName: AllStandardObjectFieldName<O>;
+}): string => {
+  const standardObjectFields: Record<
+    PropertyKey,
+    { universalIdentifier: string }
+  > = STANDARD_OBJECTS[objectName].fields;
+
+  return standardObjectFields[fieldName].universalIdentifier;
 };
 
 export const createStandardObjectFlatMetadata = <
@@ -44,7 +67,10 @@ export const createStandardObjectFlatMetadata = <
     isSystem = false,
     isSearchable = false,
     isAuditLogged = true,
-    isUIReadOnly = false,
+    isUIEditable = true,
+    isUICreatable = true,
+    disabledObjectPermissionActions,
+    openRecordIn = ObjectOpenRecordIn.USER_CHOICE,
     shortcut = null,
     duplicateCriteria = null,
     labelIdentifierFieldMetadataName,
@@ -56,17 +82,17 @@ export const createStandardObjectFlatMetadata = <
   now,
 }: CreateStandardObjectArgs<O>): FlatObjectMetadata => {
   const labelIdentifierFieldMetadataUniversalIdentifier =
-    // @ts-expect-error ignore
-    STANDARD_OBJECTS[nameSingular as keyof typeof STANDARD_OBJECTS].fields[
-      labelIdentifierFieldMetadataName
-    ].universalIdentifier;
+    getStandardFieldUniversalIdentifier({
+      objectName: nameSingular,
+      fieldName: labelIdentifierFieldMetadataName,
+    });
 
   const imageIdentifierFieldMetadataUniversalIdentifier =
     imageIdentifierFieldMetadataName
-      ? // @ts-expect-error ignore
-        STANDARD_OBJECTS[nameSingular as keyof typeof STANDARD_OBJECTS].fields[
-          imageIdentifierFieldMetadataName
-        ].universalIdentifier
+      ? getStandardFieldUniversalIdentifier({
+          objectName: nameSingular,
+          fieldName: imageIdentifierFieldMetadataName,
+        })
       : null;
 
   return {
@@ -80,15 +106,17 @@ export const createStandardObjectFlatMetadata = <
     color: null,
     description,
     icon,
-    isCustom: false,
     isRemote: false,
     isActive: true,
     isSystem,
     isSearchable,
     isAuditLogged,
-    isUIReadOnly,
+    isUIEditable,
+    isUICreatable,
+    disabledObjectPermissionActions: disabledObjectPermissionActions ?? null,
+    openRecordIn,
     isLabelSyncedWithName: false,
-    standardOverrides: null,
+    overrides: null,
     duplicateCriteria,
     shortcut,
     labelIdentifierFieldMetadataId:
@@ -103,18 +131,29 @@ export const createStandardObjectFlatMetadata = <
     targetTableName: 'DEPRECATED',
     fieldIds: [],
     indexMetadataIds: [],
+    searchFieldMetadataIds: [],
+    navigationMenuItemIds: [],
+    commandMenuItemIds: [],
     objectPermissionIds: [],
     fieldPermissionIds: [],
+    rowLevelPermissionRuleIds: [],
     viewIds: [],
+    pageLayoutIds: [],
     createdAt: now,
     updatedAt: now,
     id: standardObjectMetadataRelatedEntityIds[nameSingular].id,
-    applicationUniversalIdentifier: twentyStandardApplicationId,
+    applicationUniversalIdentifier:
+      TWENTY_STANDARD_APPLICATION_UNIVERSAL_IDENTIFIER,
     fieldUniversalIdentifiers: [],
     objectPermissionUniversalIdentifiers: [],
     fieldPermissionUniversalIdentifiers: [],
+    rowLevelPermissionRuleUniversalIdentifiers: [],
     viewUniversalIdentifiers: [],
     indexMetadataUniversalIdentifiers: [],
+    searchFieldMetadataUniversalIdentifiers: [],
+    pageLayoutUniversalIdentifiers: [],
+    navigationMenuItemUniversalIdentifiers: [],
+    commandMenuItemUniversalIdentifiers: [],
     labelIdentifierFieldMetadataUniversalIdentifier,
     imageIdentifierFieldMetadataUniversalIdentifier,
   };

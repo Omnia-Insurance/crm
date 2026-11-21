@@ -4,13 +4,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { type ConnectedAccountProvider } from 'twenty-shared/types';
 import { EntityManager, Repository } from 'typeorm';
 
+import { PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { type WorkspaceMemberWorkspaceEntity } from 'src/modules/workspace-member/standard-objects/workspace-member.workspace-entity';
 
 export type CreateConnectedAccountInput = {
@@ -18,8 +17,8 @@ export type CreateConnectedAccountInput = {
   connectedAccountId: string;
   handle: string;
   provider: ConnectedAccountProvider;
-  accessToken: string;
-  refreshToken: string;
+  accessToken: PlaintextString;
+  refreshToken: PlaintextString;
   accountOwnerId: string;
   scopes: string[];
   transactionManager: EntityManager;
@@ -28,7 +27,7 @@ export type CreateConnectedAccountInput = {
 @Injectable()
 export class CreateConnectedAccountService {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
@@ -50,19 +49,10 @@ export class CreateConnectedAccountService {
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const workspaceContext = getWorkspaceContext();
-      const rolePermissionConfig = resolveRolePermissionConfig({
-        authContext,
-        userWorkspaceRoleMap: workspaceContext.userWorkspaceRoleMap,
-        apiKeyRoleMap: workspaceContext.apiKeyRoleMap,
-      });
-
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
       const workspaceMemberRepo =
-        await this.globalWorkspaceOrmManager.getRepository<WorkspaceMemberWorkspaceEntity>(
-          workspaceId,
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<WorkspaceMemberWorkspaceEntity>(
           'workspaceMember',
-          rolePermissionConfig ?? undefined,
         );
 
       const member = await workspaceMemberRepo.findOne({
@@ -87,6 +77,9 @@ export class CreateConnectedAccountService {
 
       const userWorkspaceId = userWorkspace.id;
 
+      // Boundary: tokens entering here were just issued by the external
+      // OAuth provider (Google / Microsoft / app), so we brand them as
+      // plaintext before handing them to the encryption service.
       const { encryptedAccessToken, encryptedRefreshToken } =
         this.connectedAccountTokenEncryptionService.encryptTokenPair({
           accessToken,

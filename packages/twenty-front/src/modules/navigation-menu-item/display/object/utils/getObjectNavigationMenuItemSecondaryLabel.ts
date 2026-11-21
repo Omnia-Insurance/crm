@@ -1,23 +1,30 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { t } from '@lingui/core/macro';
 
 type GetObjectNavigationMenuItemSecondaryLabelProps = {
   objectMetadataItems: Pick<
     EnrichedObjectMetadataItem,
-    'nameSingular' | 'labelSingular'
+    'nameSingular' | 'labelSingular' | 'labelPlural'
   >[];
   navigationMenuItemObjectNameSingular: string;
+  isView?: boolean;
 };
 
 export const getObjectNavigationMenuItemSecondaryLabel = ({
   objectMetadataItems,
   navigationMenuItemObjectNameSingular,
+  isView = false,
 }: GetObjectNavigationMenuItemSecondaryLabelProps) => {
   if (navigationMenuItemObjectNameSingular === 'view') {
-    return 'View';
+    return t`View`;
   }
 
-  return objectMetadataItems.find(
+  const objectMetadataItem = objectMetadataItems.find(
     (objectMetadataItem) =>
       objectMetadataItem.nameSingular === navigationMenuItemObjectNameSingular,
-  )?.labelSingular;
+  );
+
+  return isView
+    ? objectMetadataItem?.labelPlural
+    : objectMetadataItem?.labelSingular;
 };

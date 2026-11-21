@@ -1,31 +1,38 @@
+import { StyledAuthContent } from '@/auth/components/StyledAuthContent';
 import { styled } from '@linaria/react';
-import { useContext, useEffect, useState } from 'react';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Key } from 'ts-key-enum';
 import { AppPath } from 'twenty-shared/types';
 
+import { AppConnectionHeader } from '@/applications/components/AppConnectionHeader';
+import { AuthorizeActionButtons } from '@/applications/components/AuthorizeActionButtons';
+import { getKnownOAuthClientLogoUrl } from '@/applications/utils/getKnownOAuthClientLogoUrl';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useRedirect } from '@/domain-manager/hooks/useRedirect';
+import { useGlobalHotkeys } from '@/ui/utilities/hotkey/hooks/useGlobalHotkeys';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useQuery, useMutation } from '@apollo/client/react';
-import { isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'twenty-shared/utils';
+import { useMutation, useQuery } from '@apollo/client/react';
+import { getUrlSafely, isDefined } from 'twenty-shared/utils';
 import {
-  Avatar,
-  H1Title,
-  H1TitleFontColor,
-  IconDatabase,
-  IconRefresh,
-  IconUserCircle,
   type IconComponent,
-} from 'twenty-ui/display';
-import { MainButton } from 'twenty-ui/input';
-import { ModalContent } from 'twenty-ui/layout';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+  IconDatabase,
+  IconUserCircle,
+} from 'twenty-ui/icon';
+import { Heading } from 'twenty-ui/primitives/typography';
+import {
+  useTheme,
+  useThemeColorScheme,
+  themeCssVariables,
+} from 'twenty-ui/theme';
 import {
   AuthorizeAppDocument,
   FindApplicationRegistrationByClientIdDocument,
 } from '~/generated-metadata/graphql';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 const StyledCardWrapper = styled.div`
   --oauth-modal-content-max-width: calc(
@@ -59,70 +66,11 @@ const StyledHeader = styled.div`
   width: 100%;
 `;
 
-const StyledAppLogoTile = styled.div`
-  align-items: center;
-  backdrop-filter: ${themeCssVariables.blur.strong};
-  background: ${themeCssVariables.background.primary};
-  border-radius: ${themeCssVariables.border.radius.md};
-  box-shadow: ${themeCssVariables.boxShadow.strong};
-  box-sizing: border-box;
-  display: flex;
-  flex-shrink: 0;
-  height: ${themeCssVariables.spacing[12]};
-  justify-content: center;
-  padding: ${themeCssVariables.spacing[1]};
-  width: ${themeCssVariables.spacing[12]};
-`;
-
-const StyledAppLogo = styled.img`
-  border-radius: ${themeCssVariables.border.radius.sm};
-  height: ${themeCssVariables.spacing[10]};
-  object-fit: cover;
-  width: ${themeCssVariables.spacing[10]};
-`;
-
-const StyledLinkIconContainer = styled.div`
-  align-items: center;
-  background: ${themeCssVariables.background.primary};
-  border-radius: ${themeCssVariables.border.radius.rounded};
-  box-shadow: ${themeCssVariables.boxShadow.strong};
-  color: ${themeCssVariables.font.color.primary};
-  display: flex;
-  flex-shrink: 0;
-  height: ${themeCssVariables.spacing[6]};
-  justify-content: center;
-  width: ${themeCssVariables.spacing[6]};
-`;
-
-const StyledOAuthTitle = styled(H1Title)`
-  margin: 0;
+const StyledOAuthTitle = styled(Heading)`
   max-width: min(100%, var(--oauth-modal-content-max-width));
   padding-bottom: ${themeCssVariables.spacing[1]};
   text-wrap: balance;
   width: max-content;
-`;
-
-const StyledButtonContainer = styled.div`
-  display: grid;
-  gap: ${themeCssVariables.spacing[3]};
-  grid-template-columns: repeat(
-    2,
-    minmax(${themeCssVariables.spacing[0]}, 1fr)
-  );
-  margin-top: ${themeCssVariables.spacing[8]};
-  width: 100%;
-`;
-
-const StyledCancelLinkContainer = styled.div`
-  min-width: 0;
-
-  a {
-    display: block;
-  }
-`;
-
-const StyledAuthorizeButton = styled(MainButton)`
-  box-shadow: none;
 `;
 
 const StyledPermissionSection = styled.div`
@@ -180,6 +128,21 @@ const StyledScopeIcon = styled.div`
   justify-content: center;
 `;
 
+const StyledRedirectNotice = styled.p`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-family: ${themeCssVariables.font.family};
+  font-size: ${themeCssVariables.font.size.sm};
+  line-height: ${themeCssVariables.text.lineHeight.lg};
+  margin: ${themeCssVariables.spacing[6]} 0 0;
+  overflow-wrap: anywhere;
+  padding-left: ${themeCssVariables.spacing[1]};
+`;
+
+const StyledRedirectHost = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-weight: ${themeCssVariables.font.weight.medium};
+`;
+
 const StyledErrorText = styled.div`
   color: ${themeCssVariables.color.red};
   font-size: ${themeCssVariables.font.size.sm};
@@ -195,10 +158,12 @@ const OAUTH_SCOPE_ICONS: { [scope: string]: IconComponent | undefined } = {
 
 export const Authorize = () => {
   const { t } = useLingui();
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
+  const colorScheme = useThemeColorScheme();
   const navigate = useNavigateApp();
   const [searchParam] = useSearchParams();
   const { redirect } = useRedirect();
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
 
   const oauthScopeLabels: { [scope: string]: string | undefined } = {
     api: t`Access your workspace data`,
@@ -212,6 +177,7 @@ export const Authorize = () => {
   const redirectUrl =
     searchParam.get('redirect_uri') ?? searchParam.get('redirectUrl');
   const state = searchParam.get('state');
+  const issuer = searchParam.get('iss');
 
   const {
     data,
@@ -224,18 +190,31 @@ export const Authorize = () => {
 
   const applicationRegistration = data?.findApplicationRegistrationByClientId;
   const [authorizeApp] = useMutation(AuthorizeAppDocument);
-  const [hasLogoError, setHasLogoError] = useState(false);
   const [authorizeError, setAuthorizeError] = useState<string | null>(null);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   const shouldRedirectToNotFound =
-    !isDefined(clientId) || (!loading && !isDefined(applicationRegistration));
+    !isDefined(clientId) ||
+    !isDefined(redirectUrl) ||
+    (!loading && !isDefined(applicationRegistration));
 
   useEffect(() => {
     if (shouldRedirectToNotFound) {
       navigate(AppPath.NotFound);
     }
   }, [shouldRedirectToNotFound, navigate]);
+
+  const appendThemeToUrl = (urlString: string) => {
+    try {
+      const url = new URL(urlString);
+
+      url.searchParams.set('theme', colorScheme);
+
+      return url.toString();
+    } catch {
+      return urlString;
+    }
+  };
 
   const handleAuthorize = async () => {
     if (isDefined(clientId) && isDefined(redirectUrl)) {
@@ -248,9 +227,10 @@ export const Authorize = () => {
           codeChallenge: codeChallenge ?? undefined,
           redirectUrl,
           state: state ?? undefined,
+          issuer: issuer ?? undefined,
         },
         onCompleted: (responseData) => {
-          redirect(responseData.authorizeApp.redirectUrl);
+          redirect(appendThemeToUrl(responseData.authorizeApp.redirectUrl));
         },
         onError: (error) => {
           setIsAuthorizing(false);
@@ -262,69 +242,86 @@ export const Authorize = () => {
     }
   };
 
+  useGlobalHotkeys({
+    keys: [Key.Enter],
+    callback: (keyboardEvent) => {
+      if (
+        keyboardEvent.target instanceof HTMLButtonElement ||
+        loading ||
+        isAuthorizing ||
+        !isDefined(applicationRegistration)
+      ) {
+        return;
+      }
+
+      handleAuthorize();
+    },
+    containsModifier: false,
+    dependencies: [
+      loading,
+      isAuthorizing,
+      applicationRegistration,
+      clientId,
+      redirectUrl,
+    ],
+    options: {
+      preventDefault: false,
+    },
+  });
+
   if (isDefined(queryError)) {
     return (
-      <ModalContent isVerticallyCentered isHorizontallyCentered>
+      <StyledAuthContent>
         <StyledCardWrapper>
-          <ModalContent contentPadding={10}>
-            <StyledOAuthTitle
-              title={<Trans>Something went wrong</Trans>}
-              fontColor={H1TitleFontColor.Primary}
-            />
+          <StyledAuthContent
+            style={{ alignItems: 'stretch', justifyContent: 'flex-start' }}
+          >
+            <StyledOAuthTitle level={2} size="lg">
+              <Trans>Something went wrong</Trans>
+            </StyledOAuthTitle>
             <StyledErrorText>
               {t`Unable to load application details. Please try again later.`}
             </StyledErrorText>
-          </ModalContent>
+          </StyledAuthContent>
         </StyledCardWrapper>
-      </ModalContent>
+      </StyledAuthContent>
     );
   }
 
-  if (loading || !applicationRegistration) {
+  if (loading || !applicationRegistration || !isDefined(redirectUrl)) {
     return null;
   }
 
   const appName = applicationRegistration.name;
-  const appLogoUrl = applicationRegistration.logoUrl;
   const requestedScopes: string[] = applicationRegistration.oAuthScopes ?? [];
-
-  const showLogoImage = isNonEmptyString(appLogoUrl) && !hasLogoError;
+  const redirectHost = getUrlSafely(redirectUrl)?.host;
+  const appLogoUrl =
+    applicationRegistration.logoUrl ?? getKnownOAuthClientLogoUrl(redirectHost);
+  const workspaceName = currentWorkspace?.displayName;
 
   return (
-    <ModalContent isVerticallyCentered isHorizontallyCentered>
+    <StyledAuthContent>
       <StyledCardWrapper>
         <StyledHeader>
-          <StyledAppLogoTile>
-            <StyledAppLogo src="/images/integrations/twenty-logo.svg" alt="" />
-          </StyledAppLogoTile>
-          <StyledLinkIconContainer aria-hidden>
-            <IconRefresh
-              size={theme.icon.size.md}
-              stroke={theme.icon.stroke.sm}
-            />
-          </StyledLinkIconContainer>
-          <StyledAppLogoTile>
-            {showLogoImage ? (
-              <StyledAppLogo
-                src={appLogoUrl}
-                alt=""
-                onError={() => setHasLogoError(true)}
-              />
-            ) : (
-              <Avatar
-                size="xl"
-                placeholder={appName}
-                placeholderColorSeed={appName}
-                type="squared"
-              />
-            )}
-          </StyledAppLogoTile>
-        </StyledHeader>
-        <ModalContent contentPadding={10}>
-          <StyledOAuthTitle
-            title={<Trans>Connect {appName} to your account</Trans>}
-            fontColor={H1TitleFontColor.Primary}
+          <AppConnectionHeader
+            appLogoUrl={appLogoUrl}
+            appName={appName}
+            workspaceLogoUrl={getAbsoluteImageUrl(currentWorkspace?.logo)}
+            workspaceName={workspaceName}
           />
+        </StyledHeader>
+        <StyledAuthContent
+          style={{ alignItems: 'stretch', justifyContent: 'flex-start' }}
+        >
+          <StyledOAuthTitle level={2} size="lg">
+            {isNonEmptyString(workspaceName) ? (
+              <Trans>
+                Connect {appName} to {workspaceName}
+              </Trans>
+            ) : (
+              <Trans>Connect {appName} to your account</Trans>
+            )}
+          </StyledOAuthTitle>
           {requestedScopes.length > 0 && (
             <StyledPermissionSection>
               <StyledPermissionIntro>
@@ -349,29 +346,24 @@ export const Authorize = () => {
               </StyledScopeList>
             </StyledPermissionSection>
           )}
+          {isNonEmptyString(redirectHost) && (
+            <StyledRedirectNotice>
+              <Trans>
+                After you connect, you will be redirected to{' '}
+                <StyledRedirectHost>{redirectHost}</StyledRedirectHost>
+              </Trans>
+            </StyledRedirectNotice>
+          )}
           {authorizeError && (
             <StyledErrorText>{authorizeError}</StyledErrorText>
           )}
-          <StyledButtonContainer>
-            <StyledCancelLinkContainer>
-              <UndecoratedLink to={AppPath.Index} fullWidth>
-                <MainButton
-                  title={t`Cancel`}
-                  variant="secondary"
-                  fullWidth
-                  disabled={isAuthorizing}
-                />
-              </UndecoratedLink>
-            </StyledCancelLinkContainer>
-            <StyledAuthorizeButton
-              title={isAuthorizing ? t`Authorizing...` : t`Authorize`}
-              onClick={handleAuthorize}
-              disabled={isAuthorizing}
-              fullWidth
-            />
-          </StyledButtonContainer>
-        </ModalContent>
+          <AuthorizeActionButtons
+            onCancel={() => navigate(AppPath.Index)}
+            onAuthorize={handleAuthorize}
+            isLoading={isAuthorizing}
+          />
+        </StyledAuthContent>
       </StyledCardWrapper>
-    </ModalContent>
+    </StyledAuthContent>
   );
 };

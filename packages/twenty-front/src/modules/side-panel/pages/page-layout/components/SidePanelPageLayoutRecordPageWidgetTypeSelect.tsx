@@ -1,7 +1,9 @@
+import { AppMenuItemIcon } from '@/applications/components/AppMenuItemIcon';
 import { CommandMenuItem } from '@/command-menu/components/CommandMenuItem';
 import { FIND_MANY_FRONT_COMPONENTS } from '@/front-components/graphql/queries/findManyFrontComponents';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useInsertCreatedWidgetAtContext } from '@/page-layout/hooks/useInsertCreatedWidgetAtContext';
+import { useCreateRecordPageNoteWidget } from '@/page-layout/hooks/useCreateRecordPageNoteWidget';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { pageLayoutEditingWidgetIdComponentState } from '@/page-layout/states/pageLayoutEditingWidgetIdComponentState';
 import { widgetCreationTargetTabIdComponentState } from '@/page-layout/states/widgetCreationTargetTabIdComponentState';
@@ -18,33 +20,45 @@ import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { SidePanelList } from '@/side-panel/components/SidePanelList';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useNavigatePageLayoutSidePanel } from '@/side-panel/pages/page-layout/hooks/useNavigatePageLayoutSidePanel';
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { getFrontComponentWidgetTypeSelectItemId } from '@/side-panel/pages/page-layout/utils/getFrontComponentWidgetTypeSelectItemId';
+import { isFrontComponentAvailableInWidgetPicker } from '@/side-panel/pages/page-layout/utils/isFrontComponentAvailableInWidgetPicker';
 import { resolveWidgetTypeSelectTargetTabId } from '@/side-panel/pages/page-layout/utils/resolveWidgetTypeSelectTargetTabId';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useQuery } from '@apollo/client/react';
-import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { SidePanelPages } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { IconApps, IconList } from 'twenty-ui/display';
+import {
+  IconApps,
+  IconListDetails,
+  IconListSearch,
+  IconNotes,
+} from 'twenty-ui/icon';
 import { v4 as uuidv4 } from 'uuid';
 import {
   type FrontComponent,
   PageLayoutTabLayoutMode,
+  PageLayoutType,
   WidgetConfigurationType,
   WidgetType,
 } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
-  const { pageLayoutId, objectNameSingular: targetObjectNameSingular } =
-    usePageLayoutIdFromContextStore();
+  const { t } = useLingui();
+  const {
+    pageLayoutId,
+    targetRecordIdentifier: { targetObjectNameSingular },
+  } = usePageLayoutSidePanelTarget();
 
   const { closeSidePanelMenu } = useSidePanelMenu();
+  const { createRecordPageNoteWidget } =
+    useCreateRecordPageNoteWidget(pageLayoutId);
 
   const { navigatePageLayoutSidePanel } = useNavigatePageLayoutSidePanel();
 
@@ -135,7 +149,14 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
     frontComponents: FrontComponent[];
   }>(FIND_MANY_FRONT_COMPONENTS);
 
-  const frontComponents = frontComponentsData?.frontComponents ?? [];
+  const frontComponents = (frontComponentsData?.frontComponents ?? []).filter(
+    (frontComponent) =>
+      isFrontComponentAvailableInWidgetPicker({
+        frontComponent,
+        pageLayoutType: PageLayoutType.RECORD_PAGE,
+        objectMetadataId: objectMetadataItem.id,
+      }),
+  );
 
   const frontComponentsWithSelectItemId = frontComponents.map(
     (frontComponent) => ({
@@ -171,7 +192,7 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
     }));
 
     setPageLayoutEditingWidgetId(widgetId);
-    insertCreatedWidgetAtContext(widgetId);
+    insertCreatedWidgetAtContext({ newWidgetId: widgetId });
 
     navigatePageLayoutSidePanel({
       sidePanelPage: SidePanelPages.RecordPageFieldsSettings,
@@ -242,7 +263,7 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
     }));
 
     setPageLayoutEditingWidgetId(widgetId);
-    insertCreatedWidgetAtContext(widgetId);
+    insertCreatedWidgetAtContext({ newWidgetId: widgetId });
 
     navigatePageLayoutSidePanel({
       sidePanelPage: SidePanelPages.RecordPageFieldSettings,
@@ -262,6 +283,18 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
     tabId,
   ]);
 
+  const handleCreateNoteWidget = () => {
+    const replacePositionIndex = getExistingWidgetPositionIndex();
+    removeExistingWidgetIfReplacing();
+
+    const newWidget = createRecordPageNoteWidget({
+      tabId,
+      positionIndex: replacePositionIndex,
+    });
+
+    insertCreatedWidgetAtContext({ newWidgetId: newWidget.id });
+  };
+
   const handleCreateFrontComponentWidget = useCallback(
     (frontComponent: FrontComponent) => {
       const replacePositionIndex = getExistingWidgetPositionIndex();
@@ -277,6 +310,8 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
         __typename: 'PageLayoutWidget',
         id: widgetId,
         applicationId: '',
+        universalIdentifier: widgetId,
+        isSystemSideEffect: false,
         isActive: true,
         pageLayoutTabId: tabId,
         title: frontComponent.name,
@@ -285,13 +320,6 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
           __typename: 'FrontComponentConfiguration',
           configurationType: WidgetConfigurationType.FRONT_COMPONENT,
           frontComponentId: frontComponent.id,
-        },
-        gridPosition: {
-          __typename: 'GridPosition',
-          row: 0,
-          column: 0,
-          rowSpan: 1,
-          columnSpan: 12,
         },
         position: {
           __typename: 'PageLayoutWidgetVerticalListPosition',
@@ -310,7 +338,7 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
       }));
 
       setPageLayoutEditingWidgetId(widgetId);
-      insertCreatedWidgetAtContext(widgetId);
+      insertCreatedWidgetAtContext({ newWidgetId: widgetId });
 
       closeSidePanelMenu();
     },
@@ -329,26 +357,36 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
   const selectableItemIds = [
     'fields',
     'field',
+    'note',
     ...frontComponentsWithSelectItemId.map(({ selectItemId }) => selectItemId),
   ];
 
   return (
     <SidePanelList selectableItemIds={selectableItemIds}>
-      <SidePanelGroup heading={t`Widget type`}>
+      <SidePanelGroup heading={t`Standard widgets`}>
         <SelectableListItem itemId="fields" onEnter={handleCreateFieldsWidget}>
           <CommandMenuItem
-            Icon={IconList}
-            label={t`Fields`}
+            Icon={IconListDetails}
+            label={t`Fields group`}
             id="fields"
             onClick={handleCreateFieldsWidget}
           />
         </SelectableListItem>
         <SelectableListItem itemId="field" onEnter={handleCreateFieldWidget}>
           <CommandMenuItem
-            Icon={IconList}
+            Icon={IconListSearch}
             label={t`Field`}
             id="field"
             onClick={handleCreateFieldWidget}
+          />
+        </SelectableListItem>
+        <SelectableListItem itemId="note" onEnter={handleCreateNoteWidget}>
+          <CommandMenuItem
+            Icon={IconNotes}
+            label={t`Note`}
+            description={t`Static text shared across all record pages`}
+            id="note"
+            onClick={handleCreateNoteWidget}
           />
         </SelectableListItem>
       </SidePanelGroup>
@@ -363,7 +401,12 @@ export const SidePanelPageLayoutRecordPageWidgetTypeSelect = () => {
                 onEnter={() => handleCreateFrontComponentWidget(frontComponent)}
               >
                 <CommandMenuItem
-                  Icon={IconApps}
+                  LeftComponent={
+                    <AppMenuItemIcon
+                      Icon={IconApps}
+                      applicationId={frontComponent.applicationId}
+                    />
+                  }
                   label={frontComponent.name}
                   id={selectItemId}
                   onClick={() =>

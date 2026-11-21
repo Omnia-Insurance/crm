@@ -1,9 +1,22 @@
+import { Logger } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { IngestionRelationResolverService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-relation-resolver.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
-const workspaceId = 'workspace-1';
+const buildLeadSourceRef = ({
+  matchValue,
+  autoCreate,
+}: {
+  matchValue: string;
+  autoCreate: boolean;
+}) => ({
+  __relation: true,
+  targetObjectName: 'leadSource',
+  matchFieldName: 'name',
+  matchValue,
+  autoCreate,
+});
 
 describe('IngestionRelationResolverService', () => {
   let service: IngestionRelationResolverService;
@@ -11,7 +24,9 @@ describe('IngestionRelationResolverService', () => {
     findOne: jest.Mock;
     save: jest.Mock;
   };
-  let mockOrmManager: jest.Mocked<GlobalWorkspaceOrmManager>;
+  let mockOrmManager: {
+    getRepositoryWithoutPermissionChecks: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockRepository = {
@@ -19,14 +34,18 @@ describe('IngestionRelationResolverService', () => {
       save: jest.fn(),
     };
 
+    mockOrmManager = {
+      getRepositoryWithoutPermissionChecks: jest
+        .fn()
+        .mockReturnValue(mockRepository),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IngestionRelationResolverService,
         {
-          provide: GlobalWorkspaceOrmManager,
-          useValue: {
-            getRepository: jest.fn().mockResolvedValue(mockRepository),
-          },
+          provide: WorkspaceOrmManager,
+          useValue: mockOrmManager,
         },
       ],
     }).compile();
@@ -34,11 +53,10 @@ describe('IngestionRelationResolverService', () => {
     service = module.get<IngestionRelationResolverService>(
       IngestionRelationResolverService,
     );
-    mockOrmManager = module.get(GlobalWorkspaceOrmManager);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('createCache', () => {
@@ -58,93 +76,106 @@ describe('IngestionRelationResolverService', () => {
         email: 'john@example.com',
       };
 
-      const cache = service.createCache();
-      const result = await service.resolveRelations(record, workspaceId, cache);
+      const result = await service.resolveRelations(
+        record,
+        service.createCache(),
+      );
 
       expect(result).toEqual(record);
-      expect(mockOrmManager.getRepository).not.toHaveBeenCalled();
+      expect(
+        mockOrmManager.getRepositoryWithoutPermissionChecks,
+      ).not.toHaveBeenCalled();
     });
 
     it('should resolve a relation ref to an existing record ID', async () => {
-      const record = {
-        name: { firstName: 'John' },
-        leadSourceId: {
-          __relation: true,
-          targetObjectName: 'leadSource',
-          matchFieldName: 'name',
-          matchValue: 'Facebook',
-          autoCreate: false,
-        },
-      };
-
       mockRepository.findOne.mockResolvedValue({
         id: 'lead-source-fb',
         name: 'Facebook',
       });
 
-      const cache = service.createCache();
-      const result = await service.resolveRelations(record, workspaceId, cache);
+      const result = await service.resolveRelations(
+        {
+          name: { firstName: 'John' },
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'Facebook',
+            autoCreate: false,
+          }),
+        },
+        service.createCache(),
+      );
 
       expect(result.leadSourceId).toBe('lead-source-fb');
+      expect(
+        mockOrmManager.getRepositoryWithoutPermissionChecks,
+      ).toHaveBeenCalledWith('leadSource');
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { name: 'Facebook' },
       });
     });
 
-    it('should auto-create related record when not found and autoCreate is true', async () => {
-      const record = {
-        leadSourceId: {
-          __relation: true,
-          targetObjectName: 'leadSource',
-          matchFieldName: 'name',
-          matchValue: 'TikTok',
-          autoCreate: true,
-        },
-      };
-
+    it('should link the id of an auto-created record from the saved rows', async () => {
       mockRepository.findOne.mockResolvedValue(null);
-      mockRepository.save.mockResolvedValue({
-        id: 'new-lead-source',
-        name: 'TikTok',
-      });
+      mockRepository.save.mockResolvedValue([
+        { id: 'new-lead-source', name: 'TikTok' },
+      ]);
 
       const cache = service.createCache();
-      const result = await service.resolveRelations(record, workspaceId, cache);
+      const result = await service.resolveRelations(
+        {
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'TikTok',
+            autoCreate: true,
+          }),
+        },
+        cache,
+      );
 
       expect(result.leadSourceId).toBe('new-lead-source');
       expect(mockRepository.save).toHaveBeenCalledWith({ name: 'TikTok' });
+      expect(cache.get('leadSource:name:TikTok')).toBe('new-lead-source');
+    });
+
+    it('should drop the relation instead of linking undefined when the save returns no row', async () => {
+      mockRepository.findOne.mockResolvedValue(null);
+      mockRepository.save.mockResolvedValue([]);
+
+      const cache = service.createCache();
+      const result = await service.resolveRelations(
+        {
+          name: { firstName: 'John' },
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'TikTok',
+            autoCreate: true,
+          }),
+        },
+        cache,
+      );
+
+      expect(result).not.toHaveProperty('leadSourceId');
+      expect(result.name).toEqual({ firstName: 'John' });
+      expect(cache.size).toBe(0);
     });
 
     it('should delete field when relation not found and autoCreate is false', async () => {
-      const record = {
-        name: { firstName: 'John' },
-        leadSourceId: {
-          __relation: true,
-          targetObjectName: 'leadSource',
-          matchFieldName: 'name',
-          matchValue: 'Unknown',
-          autoCreate: false,
-        },
-      };
-
       mockRepository.findOne.mockResolvedValue(null);
 
-      const cache = service.createCache();
-      const result = await service.resolveRelations(record, workspaceId, cache);
+      const result = await service.resolveRelations(
+        {
+          name: { firstName: 'John' },
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'Unknown',
+            autoCreate: false,
+          }),
+        },
+        service.createCache(),
+      );
 
       expect(result.leadSourceId).toBeUndefined();
       expect(result.name).toEqual({ firstName: 'John' });
+      expect(mockRepository.save).not.toHaveBeenCalled();
     });
 
     it('should use cache for repeated lookups', async () => {
-      const makeRef = (value: string) => ({
-        __relation: true,
-        targetObjectName: 'leadSource',
-        matchFieldName: 'name',
-        matchValue: value,
-        autoCreate: false,
-      });
-
       mockRepository.findOne.mockResolvedValue({
         id: 'cached-id',
         name: 'Facebook',
@@ -152,46 +183,59 @@ describe('IngestionRelationResolverService', () => {
 
       const cache = service.createCache();
 
-      // First call — hits database
       await service.resolveRelations(
-        { leadSourceId: makeRef('Facebook') },
-        workspaceId,
+        {
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'Facebook',
+            autoCreate: false,
+          }),
+        },
         cache,
       );
 
-      // Second call — should use cache
       await service.resolveRelations(
-        { leadSourceId: makeRef('Facebook') },
-        workspaceId,
+        {
+          leadSourceId: buildLeadSourceRef({
+            matchValue: 'Facebook',
+            autoCreate: false,
+          }),
+        },
         cache,
       );
 
-      // Only one DB call should have been made
       expect(mockRepository.findOne).toHaveBeenCalledTimes(1);
       expect(cache.size).toBe(1);
     });
 
-    it('should handle errors gracefully and remove the field', async () => {
-      const record = {
-        name: { firstName: 'John' },
-        leadSourceId: {
-          __relation: true,
-          targetObjectName: 'leadSource',
-          matchFieldName: 'name',
-          matchValue: 'Facebook',
-          autoCreate: false,
-        },
-      };
+    it('should handle errors gracefully without logging the match value', async () => {
+      const warnSpy = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
 
-      mockOrmManager.getRepository.mockRejectedValue(
-        new Error('Object not found'),
+      mockOrmManager.getRepositoryWithoutPermissionChecks.mockImplementation(
+        () => {
+          throw new Error('Object not found');
+        },
       );
 
-      const cache = service.createCache();
-      const result = await service.resolveRelations(record, workspaceId, cache);
+      const result = await service.resolveRelations(
+        {
+          name: { firstName: 'John' },
+          phoneOwnerId: {
+            __relation: true,
+            targetObjectName: 'person',
+            matchFieldName: 'phone',
+            matchValue: '5551234567',
+            autoCreate: false,
+          },
+        },
+        service.createCache(),
+      );
 
-      expect(result.leadSourceId).toBeUndefined();
+      expect(result.phoneOwnerId).toBeUndefined();
       expect(result.name).toEqual({ firstName: 'John' });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0][0])).not.toContain('5551234567');
     });
   });
 });

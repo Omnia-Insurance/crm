@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/name: {{ include "twenty.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/component: redis
+  {{- /* OMNIA-CUSTOM: never delete queued BullMQ data on helm uninstall or rollback */}}
   annotations:
     helm.sh/resource-policy: keep
 spec:

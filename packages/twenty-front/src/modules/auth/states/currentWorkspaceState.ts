@@ -16,9 +16,14 @@ export type CurrentWorkspace = Pick<
   | 'activationStatus'
   | 'billingSubscriptions'
   | 'billingEntitlements'
+  | 'billingCustomer'
   | 'currentBillingSubscription'
+  | 'isTrialAvailable'
   | 'workspaceMembersCount'
   | 'isPublicInviteLinkEnabled'
+  | 'isCampaignClickTrackingEnabled'
+  | 'isCampaignOpenTrackingEnabled'
+  | 'workspaceDiscoverability'
   | 'isGoogleAuthEnabled'
   | 'isGoogleAuthBypassEnabled'
   | 'isMicrosoftAuthEnabled'
@@ -26,33 +31,43 @@ export type CurrentWorkspace = Pick<
   | 'isPasswordAuthEnabled'
   | 'isPasswordAuthBypassEnabled'
   | 'isCustomDomainEnabled'
-  | 'hasValidEnterpriseKey'
+  | 'iframeMediaPermissions'
   | 'hasValidSignedEnterpriseKey'
   | 'hasValidEnterpriseValidityToken'
   | 'subdomain'
   | 'customDomain'
   | 'workspaceUrls'
-  | 'metadataVersion'
   | 'isTwoFactorAuthenticationEnforced'
   | 'trashRetentionDays'
   | 'eventLogRetentionDays'
-  | 'fastModel'
-  | 'smartModel'
+  | 'aiChatModelTier'
+  | 'aiChatAssistantProfile'
+  | 'aiChatDirectMessageAssistantMode'
+  | 'aiChatInboxAssistantMode'
+  | 'aiAgentModelTier'
+  | 'isAutoModelSelectionEnabled'
+  | 'aiModelIdByTier'
   | 'aiAdditionalInstructions'
+  | 'aiDataPolicy'
   | 'editableProfileFields'
-  | 'enabledAiModelIds'
-  | 'useRecommendedModels'
   | 'isInternalMessagesImportEnabled'
 > & {
   defaultRole?: Omit<Role, 'workspaceMembers' | 'agents' | 'apiKeys'> | null;
   workspaceCustomApplication: Pick<Application, 'id'> | null;
   installedApplications: Pick<
     Application,
-    'id' | 'name' | 'universalIdentifier' | 'logo'
+    | 'id'
+    | 'name'
+    | 'description'
+    | 'universalIdentifier'
+    | 'logoUrl'
+    | 'createdAt'
   >[];
 };
 
 export const currentWorkspaceState = createAtomState<CurrentWorkspace | null>({
   key: 'currentWorkspaceState',
   defaultValue: null,
+  useLocalStorage: true,
+  localStorageOptions: { getOnInit: true },
 });

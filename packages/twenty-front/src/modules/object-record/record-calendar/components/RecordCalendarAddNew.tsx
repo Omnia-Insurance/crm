@@ -1,18 +1,24 @@
+import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { getFieldPermissions } from '@/object-metadata/utils/getFieldPermissions';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
-import { isFieldMetadataReadOnlyByPermissions } from '@/object-record/read-only/utils/internal/isFieldMetadataReadOnlyByPermissions';
 import { useRecordCalendarContextOrThrow } from '@/object-record/record-calendar/contexts/RecordCalendarContext';
+import { isRecordCalendarReadOnlyComponentState } from '@/object-record/record-calendar/states/isRecordCalendarReadOnlyComponentState';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
-import { recordIndexCalendarFieldMetadataIdState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdState';
+import { recordIndexCalendarFieldMetadataIdComponentState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdComponentState';
 import { useCreateNewIndexRecord } from '@/object-record/record-table/hooks/useCreateNewIndexRecord';
+import { RecordTableWidgetContext } from '@/object-record/record-table-widget/contexts/RecordTableWidgetContext';
+import { canCreateRecordsForObjectMetadataItem } from '@/object-record/utils/canCreateRecordsForObjectMetadataItem';
 import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUserTimezone';
 import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
 import { type Temporal } from 'temporal-polyfill';
-import { IconPlus } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { FieldMetadataType } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { IconPlus } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledButtonContainer = styled.div`
   height: auto;
@@ -27,10 +33,15 @@ type RecordCalendarAddNewProps = {
 export const RecordCalendarAddNew = ({
   cardDate,
 }: RecordCalendarAddNewProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const isRecordCalendarReadOnly = useAtomComponentStateValue(
+    isRecordCalendarReadOnlyComponentState,
+  );
+
+  const theme = useTheme();
   const { userTimezone } = useUserTimezone();
   const { objectMetadataItem } = useRecordCalendarContextOrThrow();
-  const { openDraftInSidePanel } = useCreateNewIndexRecord({
+  const { createNewIndexRecord } = useCreateNewIndexRecord({
     objectMetadataItem,
   });
 
@@ -38,14 +49,12 @@ export const RecordCalendarAddNew = ({
     objectMetadataItem.id,
   );
 
-  const hasObjectUpdatePermissions = objectPermissions.canUpdateObjectRecords;
-
   const hasAnySoftDeleteFilterOnView = useAtomComponentSelectorValue(
     hasAnySoftDeleteFilterOnViewComponentSelector,
   );
 
-  const recordIndexCalendarFieldMetadataId = useAtomStateValue(
-    recordIndexCalendarFieldMetadataIdState,
+  const recordIndexCalendarFieldMetadataId = useAtomComponentStateValue(
+    recordIndexCalendarFieldMetadataIdComponentState,
   );
 
   const calendarFieldMetadataItem = objectMetadataItem.fields.find(
@@ -53,16 +62,25 @@ export const RecordCalendarAddNew = ({
   );
 
   const isCalendarFieldReadOnly = calendarFieldMetadataItem
-    ? isFieldMetadataReadOnlyByPermissions({
+    ? calendarFieldMetadataItem.isUIEditable === false ||
+      !getFieldPermissions({
         objectPermissions,
         fieldMetadataId: calendarFieldMetadataItem.id,
-      })
+      }).canUpdateField
     : false;
 
+  // Creating through a nested relation or junction needs a record picker only the table layout offers.
+  const recordTableWidgetContext = useContext(RecordTableWidgetContext);
+
   if (
+    isDefined(recordTableWidgetContext?.nestedRelationCreateThrough) ||
+    isDefined(recordTableWidgetContext?.junctionCreateThrough) ||
+    isRecordCalendarReadOnly ||
     hasAnySoftDeleteFilterOnView === true ||
-    hasObjectUpdatePermissions === false ||
-    objectMetadataItem.isSystem === true ||
+    !canCreateRecordsForObjectMetadataItem({
+      objectPermissions,
+      objectMetadataItem,
+    }) ||
     calendarFieldMetadataItem === undefined ||
     isCalendarFieldReadOnly === true
   ) {
@@ -72,16 +90,26 @@ export const RecordCalendarAddNew = ({
   return (
     <StyledButtonContainer>
       <Button
-        onClick={() => {
-          openDraftInSidePanel({
-            [calendarFieldMetadataItem.name]: cardDate
-              .toZonedDateTime(userTimezone)
-              .toInstant()
-              .toString(),
+        aria-label={t`Create record`}
+        onClick={async (event) => {
+          event.stopPropagation();
+
+          const startDateTime = cardDate.toZonedDateTime({
+            timeZone: userTimezone,
+          });
+          const startValue =
+            calendarFieldMetadataItem.type === FieldMetadataType.DATE
+              ? cardDate.toString()
+              : startDateTime.toInstant().toString();
+
+          await createNewIndexRecord({
+            [calendarFieldMetadataItem.name]: startValue,
           });
         }}
-        variant="tertiary"
-        Icon={() => <IconPlus size={theme.icon.size.sm} />}
+        size="md"
+        type="button"
+        startIcon={<IconPlus size={theme.icon.size.sm} />}
+        variant="ghost"
       />
     </StyledButtonContainer>
   );

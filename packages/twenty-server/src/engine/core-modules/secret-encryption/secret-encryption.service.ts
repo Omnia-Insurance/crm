@@ -1,7 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
+import { type EncryptedString } from 'src/engine/core-modules/secret-encryption/branded-strings/encrypted-string.type';
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
+import {
+  SecretEncryptionException,
+  SecretEncryptionExceptionCode,
+} from 'src/engine/core-modules/secret-encryption/exceptions/secret-encryption.exception';
 import { EnvironmentConfigDriver } from 'src/engine/core-modules/twenty-config/drivers/environment-config.driver';
 
 import { computeEncryptionKeyId } from './utils/compute-encryption-key-id.util';
@@ -20,13 +26,11 @@ type VersionedOptions = {
 
 @Injectable()
 export class SecretEncryptionService {
-  private readonly logger = new Logger(SecretEncryptionService.name);
-  private hasLoggedLegacyCtrDecryption = false;
-
   constructor(
     private readonly environmentConfigDriver: EnvironmentConfigDriver,
   ) {}
 
+  // TODO: migrate legacy CTR callers to the branded enc:v2 envelope.
   public encrypt(value: string): string {
     if (!isDefined(value)) {
       return value;
@@ -39,9 +43,8 @@ export class SecretEncryptionService {
     return encryptAesCtr({ plaintext: value, rawKey: primary });
   }
 
-  // Legacy CTR has no integrity tag, so a wrong key produces an arbitrary
-  // byte sequence rather than throwing. Rotation of these rows requires
-  // migrating the consumer to the versioned envelope first.
+  // CTR has no integrity tag, so a wrong key yields garbage instead of throwing:
+  // migrate a caller to enc:v2 before rotating the key its rows use.
   public decrypt(value: string): string {
     if (!isDefined(value)) {
       return value;
@@ -68,28 +71,7 @@ export class SecretEncryptionService {
     return this.maskDecryptedValue(this.decrypt(value), mask);
   }
 
-  public decryptAndMaskVersioned({
-    value,
-    mask,
-    workspaceId,
-  }: {
-    value: string;
-    mask: string;
-    workspaceId?: string;
-  }): string {
-    if (!isDefined(value)) {
-      return value;
-    }
-
-    return this.maskDecryptedValue(
-      this.decryptVersioned(value, { workspaceId }),
-      mask,
-    );
-  }
-
-  private maskDecryptedValue(decryptedValue: string, mask: string): string {
-    // Visible-char count caps at 5 and at one-tenth of the secret length, so
-    // short secrets reveal nothing and longer secrets reveal a stable prefix.
+  public maskDecryptedValue(decryptedValue: string, mask: string): string {
     const visibleCharsCount = Math.min(
       5,
       Math.floor(decryptedValue.length / 10),
@@ -98,7 +80,10 @@ export class SecretEncryptionService {
     return `${decryptedValue.slice(0, visibleCharsCount)}${mask}`;
   }
 
-  public encryptVersioned(value: string, opts: VersionedOptions = {}): string {
+  public encryptVersioned(
+    value: PlaintextString,
+    opts: VersionedOptions = {},
+  ): EncryptedString {
     if (!isDefined(value)) {
       return value;
     }
@@ -113,45 +98,41 @@ export class SecretEncryptionService {
     });
     const keyId = computeEncryptionKeyId({ rawKey: primary });
 
-    return formatSecretEncryptionEnvelopeV2({ keyId, payloadBase64 });
+    return formatSecretEncryptionEnvelopeV2({
+      keyId,
+      payloadBase64,
+    }) as EncryptedString;
   }
 
-  public decryptVersioned(value: string, opts: VersionedOptions = {}): string {
+  public decryptVersionedOrThrow(
+    value: EncryptedString,
+    opts: VersionedOptions = {},
+  ): PlaintextString {
     if (!isDefined(value)) {
       return value;
     }
 
     const parsed = parseSecretEncryptionEnvelopeOrThrow({ value });
 
-    if (parsed.version === 2) {
-      const keys = resolveEncryptionKeysOrThrow({
-        environmentConfigDriver: this.environmentConfigDriver,
-      });
-      const rawKey = pickEncryptionKeyByKeyIdOrThrow({
-        keyId: parsed.keyId,
-        keys,
-      });
-
-      return decryptAesGcmV2OrThrow({
-        payloadBase64: parsed.payload,
-        rawKey,
-        workspaceId: opts.workspaceId,
-      });
+    if (parsed.version !== 2) {
+      throw new SecretEncryptionException(
+        'Expected an enc:v2 envelope but received a non-versioned value. The 2.5 encryption backfill instance commands must have run before this value can be decrypted.',
+        SecretEncryptionExceptionCode.UNKNOWN_ENVELOPE_VERSION,
+      );
     }
 
-    this.warnLegacyCtrDecryptionOnce();
+    const keys = resolveEncryptionKeysOrThrow({
+      environmentConfigDriver: this.environmentConfigDriver,
+    });
+    const rawKey = pickEncryptionKeyByKeyIdOrThrow({
+      keyId: parsed.keyId,
+      keys,
+    });
 
-    return this.decrypt(value);
-  }
-
-  private warnLegacyCtrDecryptionOnce(): void {
-    if (this.hasLoggedLegacyCtrDecryption) {
-      return;
-    }
-
-    this.hasLoggedLegacyCtrDecryption = true;
-    this.logger.warn(
-      'Decrypted a legacy unprefixed AES-CTR ciphertext. These rows should be re-encrypted into the enc:v2 envelope in a follow-up migration.',
-    );
+    return decryptAesGcmV2OrThrow({
+      payloadBase64: parsed.payload,
+      rawKey,
+      workspaceId: opts.workspaceId,
+    }) as PlaintextString;
   }
 }

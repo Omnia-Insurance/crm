@@ -1,4 +1,5 @@
-import { FieldMetadataType } from '../../types/FieldMetadataType';
+import { FieldMetadataType } from '@/types/FieldMetadataType';
+import { isDefined } from '@/utils/validation/isDefined';
 
 type CoerceFieldDiffValueForRecordUpdateOptions = {
   fieldType?: string | null;
@@ -15,9 +16,7 @@ const shouldCoerceToNumber = ({
   fieldType,
   currentValue,
 }: CoerceFieldDiffValueForRecordUpdateOptions) =>
-  (fieldType !== null &&
-    fieldType !== undefined &&
-    NUMERIC_FIELD_TYPES.has(fieldType)) ||
+  (isDefined(fieldType) && NUMERIC_FIELD_TYPES.has(fieldType)) ||
   typeof currentValue === 'number';
 
 export const coerceFieldDiffValueForRecordUpdate = (

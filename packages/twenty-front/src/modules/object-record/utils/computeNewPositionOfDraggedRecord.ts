@@ -1,4 +1,5 @@
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { sortByProperty } from '~/utils/array/sortByProperty';
 
 export type RecordWithPosition = {
@@ -22,7 +23,9 @@ export const computeNewPositionOfDraggedRecord = ({
   );
 
   if (!isDefined(targetItem)) {
-    throw new Error(`Cannot find item to move for id : ${idOfTargetItem}`);
+    throw new Error(
+      doNotTranslate(`Cannot find item to move for id : ${idOfTargetItem}`),
+    );
   }
 
   if (idOfItemToMove === idOfTargetItem) {
@@ -53,46 +56,45 @@ export const computeNewPositionOfDraggedRecord = ({
 
   if (shouldGoToFirstPosition) {
     return targetPosition - 1;
-  } else {
-    if (itemToMoveIsNotInTable) {
-      const itemBeforeTargetItem =
-        sortedRecordsByAscendingPosition[indexOfTargetItem - 1];
-
-      const intermediaryPosition =
-        targetItem.position -
-        (targetItem.position - itemBeforeTargetItem.position) / 2;
-
-      return intermediaryPosition;
-    }
-
-    const shouldGoAfterTargetItem = indexOfItemToMove < indexOfTargetItem;
-
-    if (shouldGoAfterTargetItem) {
-      const itemAfterTargetItem =
-        sortedRecordsByAscendingPosition[indexOfTargetItem + 1];
-
-      if (!isDefined(itemAfterTargetItem)) {
-        return targetItem.position + 1;
-      }
-
-      const intermediaryPosition =
-        targetItem.position +
-        (itemAfterTargetItem.position - targetItem.position) / 2;
-
-      return intermediaryPosition;
-    } else {
-      const itemBeforeTargetItem =
-        sortedRecordsByAscendingPosition[indexOfTargetItem - 1];
-
-      if (!isDefined(itemBeforeTargetItem)) {
-        return targetItem.position - 1;
-      }
-
-      const intermediaryPosition =
-        targetItem.position -
-        (targetItem.position - itemBeforeTargetItem.position) / 2;
-
-      return intermediaryPosition;
-    }
   }
+  if (itemToMoveIsNotInTable) {
+    const itemBeforeTargetItem =
+      sortedRecordsByAscendingPosition[indexOfTargetItem - 1];
+
+    const intermediaryPosition =
+      targetItem.position -
+      (targetItem.position - itemBeforeTargetItem.position) / 2;
+
+    return intermediaryPosition;
+  }
+
+  const shouldGoAfterTargetItem = indexOfItemToMove < indexOfTargetItem;
+
+  if (shouldGoAfterTargetItem) {
+    const itemAfterTargetItem =
+      sortedRecordsByAscendingPosition[indexOfTargetItem + 1];
+
+    if (!isDefined(itemAfterTargetItem)) {
+      return targetItem.position + 1;
+    }
+
+    const intermediaryPosition =
+      targetItem.position +
+      (itemAfterTargetItem.position - targetItem.position) / 2;
+
+    return intermediaryPosition;
+  }
+
+  const itemBeforeTargetItem =
+    sortedRecordsByAscendingPosition[indexOfTargetItem - 1];
+
+  if (!isDefined(itemBeforeTargetItem)) {
+    return targetItem.position - 1;
+  }
+
+  const intermediaryPosition =
+    targetItem.position -
+    (targetItem.position - itemBeforeTargetItem.position) / 2;
+
+  return intermediaryPosition;
 };

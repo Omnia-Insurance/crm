@@ -1,0 +1,71 @@
+import { join, resolve } from 'path';
+
+import { ASSET_PATH } from 'src/constants/assets-path';
+import { HTTP_TOOL_TIMEOUT_MS } from 'src/engine/core-modules/tool/tools/http-tool/constants/http-tool-timeout-ms.constant';
+
+export const UPDATE_FUNCTION_DURATION_TIMEOUT_IN_SECONDS = 60;
+export const CREDENTIALS_DURATION_IN_SECONDS = 60 * 60;
+
+export const LAMBDA_CLIENT_MAX_ATTEMPTS = 8;
+export const LAMBDA_CLIENT_RETRY_MODE = 'adaptive' as const;
+
+export const YARN_INSTALL_LAMBDA_TIMEOUT_SECONDS = 300;
+export const YARN_INSTALL_LAMBDA_MEMORY_MB = 4096;
+export const BUILDER_LAMBDA_TIMEOUT_SECONDS = 60;
+export const BUILDER_LAMBDA_MEMORY_MB = 512;
+export const EXECUTOR_LAMBDA_MEMORY_MB = 512;
+export const EXECUTOR_LAMBDA_TIMEOUT_SECONDS = 900;
+export const LAMBDA_EPHEMERAL_STORAGE_MB = 4096;
+
+export const LAMBDA_CLIENT_REQUEST_TIMEOUT_MS =
+  (EXECUTOR_LAMBDA_TIMEOUT_SECONDS + 60) * 1000;
+export const LAMBDA_CLIENT_MAX_SOCKETS = 500;
+export const LAMBDA_CLIENT_CONNECTION_TIMEOUT_MS = 60_000;
+
+export const COMMON_LAYER_NAME_PREFIX = 'twenty-common-layer';
+export const YARN_INSTALL_FUNCTION_NAME_PREFIX = 'twenty-yarn-install';
+export const BUILDER_FUNCTION_NAME_PREFIX = 'twenty-builder';
+
+export const SDK_LAYER_PREFIX_IN_ZIP = 'nodejs/node_modules/twenty-client-sdk';
+
+export const LAMBDA_PREBUILT_BUNDLE_CHECKSUM_TAG = 'twenty:bundle-checksum';
+export const LAMBDA_SDK_CLIENT_CHECKSUM_TAG = 'twenty:sdk-client-checksum';
+export const PREBUILT_BUNDLE_FILE_NAME = 'prebuilt-logic-function.mjs';
+
+export const LAMBDA_FUNCTION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const BUILD_LOCK_TTL_MS = 120_000;
+export const BUILD_LOCK_RETRY_MS = 1_000;
+export const BUILD_LOCK_MAX_RETRIES = 480;
+
+export const PREBUILT_INSTALL_LOCK_TTL_MS = 180_000;
+export const PREBUILT_INSTALL_LOCK_RETRY_MS = 1_000;
+export const PREBUILT_INSTALL_LOCK_MAX_RETRIES = 180;
+
+export const YARN_INSTALL_HANDLER_PATH = resolve(
+  __dirname,
+  join(
+    ASSET_PATH,
+    'engine/core-modules/logic-function/logic-function-drivers/constants/yarn-install/index.mjs',
+  ),
+);
+
+export const BUILDER_HANDLER_PATH = resolve(
+  __dirname,
+  join(
+    ASSET_PATH,
+    'engine/core-modules/logic-function/logic-function-drivers/constants/builder/index.mjs',
+  ),
+);
+
+export const HTTP_EGRESS_FUNCTION_NAME_PREFIX = 'twenty-http-egress';
+export const HTTP_EGRESS_LAMBDA_MEMORY_MB = 512;
+// Leaves the handler time to start and return after the request itself times out.
+export const HTTP_EGRESS_LAMBDA_TIMEOUT_SECONDS =
+  HTTP_TOOL_TIMEOUT_MS / 1000 + 5;
+// Synchronous invokes cap payloads at 6 MB each way, before JSON escaping.
+export const HTTP_EGRESS_LAMBDA_MAX_PAYLOAD_SIZE_BYTES = 4 * 1024 * 1024;
+export const HTTP_EGRESS_LAMBDA_MAX_INVOKE_PAYLOAD_BYTES = 5_500_000;
+export const HTTP_EGRESS_LAMBDA_INVOKE_OVERHEAD_MS = 10_000;
+export const HTTP_EGRESS_LAMBDA_MAX_INVOKE_ATTEMPTS = 3;
+export const HTTP_EGRESS_LAMBDA_RATE_LIMIT_RETRY_DELAY_MS = 250;

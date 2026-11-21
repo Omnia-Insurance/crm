@@ -1,15 +1,16 @@
 import { type WorkflowFindRecordsAction } from '@/workflow/types/Workflow';
 import { WorkflowEditActionFindRecords } from '@/workflow/workflow-steps/workflow-actions/find-records-action/components/WorkflowEditActionFindRecords';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
-import { ComponentDecorator, RouterDecorator } from 'twenty-ui/testing';
+import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { ComponentDecorator } from 'twenty-ui/testing';
 import { ObjectMetadataItemsDecorator } from '~/testing/decorators/ObjectMetadataItemsDecorator';
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
 import { WorkflowStepActionDrawerDecorator } from '~/testing/decorators/WorkflowStepActionDrawerDecorator';
 import { WorkflowStepDecorator } from '~/testing/decorators/WorkflowStepDecorator';
 import { WorkspaceDecorator } from '~/testing/decorators/WorkspaceDecorator';
 import { graphqlMocks } from '~/testing/graphqlMocks';
 import { getWorkflowNodeIdMock } from '~/testing/mock-data/workflow';
+import { MemoryRouterDecorator } from '~/testing/decorators/MemoryRouterDecorator';
 
 const DEFAULT_ACTION = {
   id: getWorkflowNodeIdMock(),
@@ -24,7 +25,7 @@ const DEFAULT_ACTION = {
     outputSchema: {},
     errorHandlingOptions: {
       retryOnFailure: {
-        value: false,
+        value: 0,
       },
       continueOnFailure: {
         value: false,
@@ -47,8 +48,8 @@ const meta: Meta<typeof WorkflowEditActionFindRecords> = {
     WorkflowStepDecorator,
     ComponentDecorator,
     ObjectMetadataItemsDecorator,
-    SnackBarDecorator,
-    RouterDecorator,
+    ToastDecorator,
+    MemoryRouterDecorator,
     WorkspaceDecorator,
   ],
 };
@@ -62,6 +63,113 @@ export const Default: Story = {
     actionOptions: {
       onActionUpdate: fn(),
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'People' }),
+    );
+
+    const dropdown = within(
+      await screen.findByRole('dialog', { name: 'Object' }),
+    );
+    const options = dropdown.getAllByRole('option');
+
+    expect(
+      options.indexOf(dropdown.getByRole('option', { name: 'People' })),
+    ).toBeLessThan(
+      options.indexOf(
+        dropdown.getByRole('option', { name: 'Calendar events' }),
+      ),
+    );
+
+    await userEvent.type(dropdown.getByRole('searchbox'), 'Person');
+    expect(dropdown.getByRole('option', { name: 'People' })).toBeVisible();
+    expect(
+      dropdown.queryByRole('option', { name: 'Companies' }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Object' }),
+      ).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: 'People' }));
+
+    expect(
+      await screen.findByRole('searchbox', { name: 'Search' }),
+    ).toHaveValue('');
+    expect(
+      await screen.findByRole('option', { name: 'Companies' }),
+    ).toBeVisible();
+
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+const onActionUpdateMock = fn();
+
+export const KeepsLimitAndOffsetWhenObjectChanges: Story = {
+  args: {
+    action: {
+      ...DEFAULT_ACTION,
+      settings: {
+        ...DEFAULT_ACTION.settings,
+        input: {
+          objectName: 'person',
+          limit: 100,
+          offset: 20,
+          filter: { recordFilters: [], recordFilterGroups: [] },
+          orderBy: { recordSorts: [] },
+        },
+      },
+    },
+    actionOptions: {
+      onActionUpdate: onActionUpdateMock,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    onActionUpdateMock.mockClear();
+
+    const canvas = within(canvasElement);
+
+    await userEvent.click(await canvas.findByText('People'));
+
+    await userEvent.type(
+      await screen.findByPlaceholderText('Search'),
+      'Companies',
+    );
+
+    await userEvent.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('dialog', { name: 'Object' }),
+      ).not.toBeInTheDocument();
+    });
+
+    await waitFor(
+      () => {
+        expect(onActionUpdateMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            settings: expect.objectContaining({
+              input: expect.objectContaining({
+                objectName: 'company',
+                limit: 100,
+                offset: 20,
+                filter: undefined,
+                orderBy: undefined,
+              }),
+            }),
+          }),
+        );
+      },
+      { timeout: 3000 },
+    );
   },
 };
 
@@ -80,7 +188,7 @@ export const DisabledWithEmptyValues: Story = {
 
     {
       const searchInputInSelectDropdown =
-        canvas.queryByPlaceholderText('Search');
+        screen.queryByPlaceholderText('Search');
 
       expect(searchInputInSelectDropdown).not.toBeInTheDocument();
     }

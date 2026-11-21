@@ -1,102 +1,144 @@
-import { useStore } from 'jotai';
+import { useLingui } from '@lingui/react/macro';
 import { useCallback } from 'react';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 import { v4 } from 'uuid';
 
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { useBuildRecordInputFromRLSPredicates } from '@/object-record/hooks/useBuildRecordInputFromRLSPredicates';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
-import { useDraftRecordDefaults } from '@/object-record/hooks/useDraftRecordDefaults';
-import { type TaskTarget } from '@/activities/types/TaskTarget';
-import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
-import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
+import { useObjectMorphJunctionConfigOrThrow } from '@/object-record/record-field/ui/hooks/useObjectMorphJunctionConfigOrThrow';
+import { createRecordWithAttachmentHandler } from '@/object-record/record-field/ui/meta-types/input/utils/createRecordWithAttachmentHandler';
+import { findTargetFieldInfo } from '@/object-record/record-field/ui/utils/junction/findTargetFieldInfo';
+import { useRecordCreationForm } from '@/object-record/record-form/hooks/useRecordCreationForm';
 import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
 
-/**
- * Opens the side panel with a *draft* task (not yet persisted) targeting
- * a reviewItem. The task only commits to the API when the reviewer types
- * a title and clicks Create — accidental clicks of "Create task" on the
- * review row leave nothing behind.
- *
- * Mirrors the lead/policy creation pattern in `useCreateNewIndexRecord`:
- *   1. Generate a fresh recordId.
- *   2. Seed `recordStoreFamilyState[recordId]` with task defaults.
- *   3. Register `recordId` in `draftRecordIdsState` so the side panel
- *      renders it in draft mode.
- *   4. Pass `onRecordCreated` so the TaskTarget linking task → reviewItem
- *      is created exactly when the task itself is created (not before).
- *   5. The caller's `onTaskCreated` callback fires AFTER the link is in
- *      place — used to auto-flip review-item decision to FLAG_AUDIT.
- */
+type UseOpenCreateAuditTaskDraftParams = {
+  onTaskCreated?: () => void | Promise<void>;
+};
+
+// Nothing is saved until the reviewer submits the task creation form, so an
+// accidental "Create task" click on a review row leaves no record behind.
 export const useOpenCreateAuditTaskDraft = ({
   onTaskCreated,
-}: {
-  onTaskCreated?: () => void | Promise<void>;
-} = {}) => {
-  const store = useStore();
+}: UseOpenCreateAuditTaskDraftParams = {}) => {
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
 
   const { objectMetadataItem: taskObjectMetadataItem } = useObjectMetadataItem({
-    objectNameSingular: CoreObjectNameSingular.Task,
+    objectNameSingular: StandardObjectNameSingular.Task,
   });
+  const { objectMetadataItems } = useObjectMetadataItems();
 
-  const { buildDraftSeeds } = useDraftRecordDefaults({
-    objectMetadataItem: taskObjectMetadataItem,
-  });
-
-  const { createOneRecord: createOneTaskTarget } =
-    useCreateOneRecord<TaskTarget>({
-      objectNameSingular: CoreObjectNameSingular.TaskTarget,
-      shouldMatchRootQueryFilter: true,
+  const { junctionObjectMetadata, sourceJoinColumnName } =
+    useObjectMorphJunctionConfigOrThrow({
+      objectNameSingular: StandardObjectNameSingular.Task,
     });
 
+  const { createOneRecord: createOneTask } = useCreateOneRecord({
+    objectNameSingular: StandardObjectNameSingular.Task,
+  });
+  const { createOneRecord: createOneTaskTarget } = useCreateOneRecord({
+    objectNameSingular: junctionObjectMetadata.nameSingular,
+    shouldMatchRootQueryFilter: true,
+  });
+  const { updateOneRecord } = useUpdateOneRecord();
+
+  const { buildRecordInputFromRLSPredicates } =
+    useBuildRecordInputFromRLSPredicates({
+      objectMetadataItem: taskObjectMetadataItem,
+    });
+  const { requestRecordCreation } = useRecordCreationForm();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
+
+  const reviewItemObjectMetadataItem = objectMetadataItems.find(
+    (objectMetadataItem) => objectMetadataItem.nameSingular === 'reviewItem',
+  );
+
+  const reviewItemJoinColumnName = isDefined(reviewItemObjectMetadataItem)
+    ? findTargetFieldInfo(
+        junctionObjectMetadata.fields,
+        reviewItemObjectMetadataItem.id,
+        objectMetadataItems,
+      )?.joinColumnName
+    : undefined;
 
   const openCreateAuditTaskDraft = useCallback(
     ({ reviewItemId }: { reviewItemId: string }) => {
-      const taskId = v4();
+      if (!isDefined(reviewItemJoinColumnName)) {
+        enqueueToast({
+          status: 'error',
+          children: t`Tasks cannot be linked to review items in this workspace.`,
+        });
+        return;
+      }
 
-      const { seedValues, rlsFieldNames } = buildDraftSeeds({
-        includeRestrictedFields: true,
-      });
-
-      store.set(recordStoreFamilyState.atomFamily(taskId), {
-        id: taskId,
-        ...seedValues,
-      } as ObjectRecord);
-
-      const draftMap = new Map(store.get(draftRecordIdsState.atom));
-      draftMap.set(taskId, {
-        objectNameSingular: CoreObjectNameSingular.Task,
-        objectMetadataItem: taskObjectMetadataItem,
-        hiddenFieldNames: new Set(['position', ...rlsFieldNames]),
-        extraRecordInput: {},
-        onRecordCreated: async (createdTask) => {
-          if (!isDefined(createdTask?.id)) return;
-
+      // The form calls createRecord again after a failed Create; the handler
+      // reuses the task it already saved, so a retry never inserts a second one.
+      const createTaskLinkedToReviewItem = createRecordWithAttachmentHandler({
+        fieldMetadataItems: taskObjectMetadataItem.fields,
+        createRecord: (recordInput) =>
+          createOneTask({ ...recordInput, id: v4() }),
+        updateRecord: async ({ recordId, recordInput }) => {
+          await updateOneRecord({
+            objectNameSingular: StandardObjectNameSingular.Task,
+            idToUpdate: recordId,
+            updateOneRecordInput: recordInput,
+          });
+        },
+        attachRecord: async (taskId) => {
           await createOneTaskTarget({
-            taskId: createdTask.id,
-            targetReviewItemId: reviewItemId,
-          } as Partial<TaskTarget>);
-
-          await onTaskCreated?.();
+            id: v4(),
+            [sourceJoinColumnName]: taskId,
+            [reviewItemJoinColumnName]: reviewItemId,
+          });
         },
       });
-      store.set(draftRecordIdsState.atom, draftMap);
 
-      openRecordInSidePanel({
-        recordId: taskId,
-        objectNameSingular: CoreObjectNameSingular.Task,
-        isNewRecord: true,
-      });
+      const createAuditTask = async () => {
+        try {
+          const createdTask = await requestRecordCreation({
+            objectMetadataItem: taskObjectMetadataItem,
+            initialDraftRecord: buildRecordInputFromRLSPredicates(),
+            canCreateAnother: false,
+            createRecord: createTaskLinkedToReviewItem,
+          });
+
+          if (!isDefined(createdTask)) {
+            return;
+          }
+
+          openRecordInSidePanel({
+            recordId: createdTask.id,
+            objectNameSingular: StandardObjectNameSingular.Task,
+          });
+
+          // Runs once the form has settled, so a failure here cannot re-run the creation.
+          await onTaskCreated?.();
+        } catch (error) {
+          enqueueToast(getToastOptionsFromError({ error }));
+        }
+      };
+
+      void createAuditTask();
     },
     [
-      store,
-      buildDraftSeeds,
-      taskObjectMetadataItem,
+      buildRecordInputFromRLSPredicates,
+      createOneTask,
       createOneTaskTarget,
-      openRecordInSidePanel,
+      enqueueToast,
       onTaskCreated,
+      openRecordInSidePanel,
+      requestRecordCreation,
+      reviewItemJoinColumnName,
+      sourceJoinColumnName,
+      t,
+      taskObjectMetadataItem,
+      updateOneRecord,
     ],
   );
 

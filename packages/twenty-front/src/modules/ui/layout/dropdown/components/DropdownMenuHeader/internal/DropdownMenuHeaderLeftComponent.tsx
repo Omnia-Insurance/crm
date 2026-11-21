@@ -1,12 +1,13 @@
-import { type MouseEvent, type ReactElement, useContext } from 'react';
 import { styled } from '@linaria/react';
+import { type MouseEvent, type ReactElement } from 'react';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { type IconComponent } from 'twenty-ui/icon';
 import {
   type Avatar,
   type AvatarProps,
-  type IconComponent,
-} from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+} from 'twenty-ui/primitives/data-display';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledNonClickableStartIcon = styled.div`
   align-items: center;
@@ -40,17 +41,20 @@ export const DropdownMenuHeaderLeftComponent = ({
     }
   | Record<never, never>
 )) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   return (
     <>
       {'Icon' in props &&
         (onClick ? (
           <LightIconButton
-            Icon={props.Icon}
-            accent="tertiary"
-            size="small"
+            emphasis="subtle"
+            size="sm"
             onClick={onClick}
-          />
+            aria-label={t`Go back`}
+          >
+            <props.Icon />
+          </LightIconButton>
         ) : (
           <StyledNonClickableStartIcon>
             <props.Icon

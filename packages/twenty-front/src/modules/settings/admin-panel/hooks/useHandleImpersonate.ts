@@ -2,18 +2,23 @@ import { useState } from 'react';
 
 import { useMutation } from '@apollo/client/react';
 import { AppPath } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 
-import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useImpersonationSession } from '@/auth/hooks/useImpersonationSession';
+import { currentUserState } from '@/auth/states/currentUserState';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { useRedirectToWorkspaceDomain } from '@/domain-manager/hooks/useRedirectToWorkspaceDomain';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useToast } from 'twenty-ui/components/feedback';
 import { ImpersonateDocument } from '~/generated-metadata/graphql';
 import { getWorkspaceUrl } from '~/utils/getWorkspaceUrl';
+import { useLingui } from '@lingui/react/macro';
 
 export const useHandleImpersonate = () => {
+  const { t } = useLingui();
+  const currentUser = useAtomStateValue(currentUserState);
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
   const { startImpersonating } = useImpersonationSession();
   const { redirectToWorkspaceDomain } = useRedirectToWorkspaceDomain();
   const [impersonate] = useMutation(ImpersonateDocument);
@@ -22,6 +27,15 @@ export const useHandleImpersonate = () => {
   );
 
   const handleImpersonate = async (userId: string, workspaceId: string) => {
+    if (!isDefined(currentUser?.id) || userId === currentUser.id) {
+      enqueueToast({
+        status: 'error',
+        children: t`You cannot impersonate your own account`,
+      });
+
+      return;
+    }
+
     setImpersonatingUserId(userId);
 
     await impersonate({
@@ -36,16 +50,17 @@ export const useHandleImpersonate = () => {
           return;
         }
 
-        return redirectToWorkspaceDomain(
-          getWorkspaceUrl(workspace.workspaceUrls),
-          AppPath.Verify,
-          { loginToken: loginToken.token },
-          '_blank',
-        );
+        return redirectToWorkspaceDomain({
+          baseUrl: getWorkspaceUrl(workspace.workspaceUrls),
+          pathname: AppPath.Verify,
+          searchParams: { loginToken: loginToken.token },
+          target: '_blank',
+        });
       },
       onError: (error) => {
-        enqueueErrorSnackBar({
-          message: `Failed to impersonate user. ${error.message}`,
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to impersonate user. ${error.message}`,
         });
       },
     }).finally(() => {

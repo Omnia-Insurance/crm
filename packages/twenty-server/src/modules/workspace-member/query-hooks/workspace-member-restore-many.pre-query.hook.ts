@@ -9,13 +9,11 @@ import {
   PermissionsException,
   PermissionsExceptionCode,
   PermissionsExceptionMessage,
-} from 'src/engine/metadata-modules/permissions/permissions.exception';
+} from 'src/engine/permissions/permissions.exception';
 import { WorkspaceNotFoundDefaultError } from 'src/engine/core-modules/workspace/workspace.exception';
 
 @WorkspaceQueryHook(`workspaceMember.restoreMany`)
-export class WorkspaceMemberRestoreManyPreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
+export class WorkspaceMemberRestoreManyPreQueryHook implements WorkspacePreQueryHookInstance {
   constructor() {}
 
   async execute(

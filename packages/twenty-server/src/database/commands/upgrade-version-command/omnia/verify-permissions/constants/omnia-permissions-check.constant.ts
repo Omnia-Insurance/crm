@@ -1,0 +1,15 @@
+export const OMNIA_PERMISSIONS_CHECK = {
+  ruleLink: 'rule-link',
+  ruleGrants: 'rule-grants',
+  ruleFilter: 'rule-filter',
+  predicateTree: 'predicate-tree',
+  phiAllRecordsGrant: 'phi-all-records-grant',
+  policyAgentOwnership: 'policy-agent-ownership',
+  relationHopTargetWrite: 'relation-hop-target-write',
+  reconciliationLockdown: 'reconciliation-lockdown',
+  phiEgressCommandGate: 'phi-egress-command-gate',
+  recordAccessFeatureFlags: 'record-access-feature-flags',
+  navigationCommandActivation: 'navigation-command-activation',
+  readRestrictedSearchableField: 'read-restricted-searchable-field',
+  standardObjectLockdown: 'standard-object-lockdown',
+} as const;

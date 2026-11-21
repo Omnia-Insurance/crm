@@ -1,3 +1,7 @@
+import { MAX_RECURRING_CHARGE_MICRO_CREDITS_PER_UNIT } from 'twenty-shared/application';
+import { MAX_ALLOWED_IFRAME_ORIGINS } from 'twenty-shared/constants';
+import { FieldMetadataType } from 'twenty-shared/types';
+
 import { defineApplication } from '@/sdk/define';
 
 describe('defineApplication', () => {
@@ -12,7 +16,11 @@ describe('defineApplication', () => {
     const result = defineApplication(config);
 
     expect(result.success).toBe(true);
-    expect(result.config).toEqual(config);
+    expect(result.config).toEqual({
+      ...config,
+      logo: undefined,
+      galleryImages: [],
+    });
     expect(result.errors).toEqual([]);
   });
 
@@ -34,7 +42,11 @@ describe('defineApplication', () => {
     const result = defineApplication(config);
 
     expect(result.success).toBe(true);
-    expect(result.config).toEqual(config);
+    expect(result.config).toEqual({
+      ...config,
+      logo: undefined,
+      galleryImages: [],
+    });
     expect(result.config?.applicationVariables).toBeDefined();
     expect(result.config?.defaultRoleUniversalIdentifier).toBe(
       '68bb56f3-8300-4cb5-8cc3-8da9ee66f1b2',
@@ -71,6 +83,505 @@ describe('defineApplication', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/deprecated/i);
     expect(warnings[0]).toMatch(/defineApplicationRole/);
+  });
+
+  it('should warn when category is not a known ApplicationCategory', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      category: 'NotARealCategory',
+    });
+
+    const warnings = result.warnings ?? [];
+
+    expect(result.success).toBe(true);
+    expect(
+      warnings.some((warning) => warning.includes('NotARealCategory')),
+    ).toBe(true);
+  });
+
+  it('should not warn when category is a known ApplicationCategory', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      category: 'Data',
+    });
+
+    expect(result.warnings ?? []).toEqual([]);
+  });
+
+  it('should warn when a server variable is both required and deprecated', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      serverVariables: {
+        API_KEY: { isRequired: true, isDeprecated: true },
+      },
+    });
+
+    const warnings = result.warnings ?? [];
+
+    expect(result.success).toBe(true);
+    expect(warnings.some((warning) => warning.includes('API_KEY'))).toBe(true);
+  });
+
+  it('should warn when an application variable is both required and deprecated', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        API_KEY: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          isSecret: true,
+          isRequired: true,
+          isDeprecated: true,
+        },
+      },
+    });
+
+    const warnings = result.warnings ?? [];
+
+    expect(result.success).toBe(true);
+    expect(warnings.some((warning) => warning.includes('API_KEY'))).toBe(true);
+  });
+
+  it('should not warn when an application variable is only required', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        API_KEY: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          isSecret: true,
+          isRequired: true,
+        },
+      },
+    });
+
+    expect(result.warnings ?? []).toEqual([]);
+  });
+
+  it('should accept a user application variable', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        RECORD_MY_MEETINGS: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          type: FieldMetadataType.BOOLEAN,
+          scope: 'USER',
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should accept a user application variable with a default value', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        RECORD_MY_MEETINGS: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          type: FieldMetadataType.BOOLEAN,
+          value: true,
+          scope: 'USER',
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should accept a secret and required user application variable', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        API_KEY: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          isSecret: true,
+          isRequired: true,
+          scope: 'USER',
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should return error when an application variable scope is unknown', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      applicationVariables: {
+        RECORD_MY_MEETINGS: {
+          universalIdentifier: 'c2d4e6f8-1a3b-4c5d-8e7f-9a0b1c2d3e4f',
+          scope: 'TEAM' as never,
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toEqual([
+      'Application variable "RECORD_MY_MEETINGS" must have a known scope (WORKSPACE, USER)',
+    ]);
+  });
+
+  it('should accept a billable operation mapped to a known operationType', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        operations: {
+          recordMeeting: {
+            operationType: 'CALL_RECORDING',
+            label: 'Meeting recording',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should return error when a billable operation maps to an unknown operationType', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        operations: {
+          recordMeeting: {
+            operationType: 'MEETING_RECORDING' as never,
+            label: 'Meeting recording',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(
+      (result.errors ?? []).some((error) => error.includes('recordMeeting')),
+    ).toBe(true);
+  });
+
+  it('should return error when a billable operation has an empty label', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        operations: {
+          recordMeeting: { operationType: 'CALL_RECORDING', label: '' },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      'Billable operation "recordMeeting" must have a non empty label',
+    );
+  });
+
+  it('should accept a billable operation with only a label and an icon', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        operations: {
+          enrichPerson: { label: 'Person enrichment', icon: 'IconUserSearch' },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should return error when a billable operation has an empty icon', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        operations: {
+          enrichPerson: { label: 'Person enrichment', icon: '' },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      'Billable operation "enrichPerson" must have a non empty icon when set',
+    );
+  });
+
+  it('should accept a flat and a per member recurring charge', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          platformFee: {
+            period: 'MONTH',
+            amountMicroCredits: 20_000_000,
+            label: 'Platform fee',
+          },
+          seat: {
+            period: 'MONTH',
+            amountMicroCredits: 5_000_000,
+            per: 'WORKSPACE_MEMBER',
+            label: 'Per member',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('should return error when a recurring charge has an unknown period', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          platformFee: {
+            period: 'WEEK' as never,
+            amountMicroCredits: 20_000_000,
+            label: 'Platform fee',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(
+      (result.errors ?? []).some((error) => error.includes('platformFee')),
+    ).toBe(true);
+  });
+
+  it('should return error when a recurring charge amount is not a positive integer', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          platformFee: {
+            period: 'MONTH',
+            amountMicroCredits: 0,
+            label: 'Platform fee',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      'Recurring charge "platformFee" must have a positive integer amountMicroCredits',
+    );
+  });
+
+  it('should return error when a recurring charge amount exceeds the per unit maximum', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          platformFee: {
+            period: 'MONTH',
+            amountMicroCredits: MAX_RECURRING_CHARGE_MICRO_CREDITS_PER_UNIT + 1,
+            label: 'Platform fee',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors?.[0]).toContain(
+      'exceeds the maximum amountMicroCredits',
+    );
+  });
+
+  it('should accept a recurring charge amount exactly at the per unit maximum', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          platformFee: {
+            period: 'MONTH',
+            amountMicroCredits: MAX_RECURRING_CHARGE_MICRO_CREDITS_PER_UNIT,
+            label: 'Platform fee',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('should return error when a name is both a recurring charge and a billable operation', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      billing: {
+        recurring: {
+          recordMeeting: {
+            period: 'MONTH',
+            amountMicroCredits: 20_000_000,
+            label: 'Platform fee',
+          },
+        },
+        operations: {
+          recordMeeting: {
+            operationType: 'CALL_RECORDING',
+            label: 'Meeting recording',
+          },
+        },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      '"recordMeeting" is declared both as a recurring charge and as a billable operation. Give them distinct names.',
+    );
+  });
+
+  it('should accept requested iframe media permissions for exact HTTPS origins', () => {
+    const config = {
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      requestedIframeMediaPermissions: [
+        {
+          origin: 'https://phone.example.com',
+          microphone: true,
+          camera: false,
+        },
+        { origin: 'https://video.example.com', microphone: true, camera: true },
+      ],
+    };
+
+    const result = defineApplication(config);
+
+    expect(result.success).toBe(true);
+    expect(result.config?.requestedIframeMediaPermissions).toEqual(
+      config.requestedIframeMediaPermissions,
+    );
+  });
+
+  it.each([
+    'http://phone.example.com',
+    'https://phone.example.com/',
+    'https://phone.example.com/calls',
+    'https://*.example.com',
+  ])(
+    'should return error when a requested iframe media origin is %p',
+    (origin) => {
+      const result = defineApplication({
+        universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+        displayName: 'My App',
+        description: 'My app description',
+        requestedIframeMediaPermissions: [
+          { origin, microphone: true, camera: false },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.errors).toContain(
+        `Requested iframe media origin "${origin}" must be an exact HTTPS origin, such as https://example.com`,
+      );
+    },
+  );
+
+  it('should return error when a requested iframe media permission allows no media', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      requestedIframeMediaPermissions: [
+        {
+          origin: 'https://phone.example.com',
+          microphone: false,
+          camera: false,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      'Requested iframe media origin "https://phone.example.com" must allow the microphone, the camera, or both',
+    );
+  });
+
+  it('should return error when a requested iframe media origin is declared twice', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      requestedIframeMediaPermissions: [
+        {
+          origin: 'https://phone.example.com',
+          microphone: true,
+          camera: false,
+        },
+        {
+          origin: 'https://phone.example.com',
+          microphone: false,
+          camera: true,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      'Requested iframe media origin "https://phone.example.com" is declared more than once',
+    );
+  });
+
+  it('should return error when an application requests too many iframe media origins', () => {
+    const result = defineApplication({
+      universalIdentifier: 'a9faf5f8-cf7e-4f24-9d37-fd523c30febe',
+      displayName: 'My App',
+      description: 'My app description',
+      requestedIframeMediaPermissions: Array.from(
+        { length: MAX_ALLOWED_IFRAME_ORIGINS + 1 },
+        (_, index) => ({
+          origin: `https://phone-${index}.example.com`,
+          microphone: true,
+          camera: false,
+        }),
+      ),
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain(
+      `An application can request iframe media access for up to ${MAX_ALLOWED_IFRAME_ORIGINS} origins`,
+    );
   });
 
   it('should return error when universalIdentifier is missing', () => {

@@ -8,8 +8,9 @@ import { type SpreadsheetColumn } from '@/spreadsheet-import/types/SpreadsheetCo
 import { type SpreadsheetColumns } from '@/spreadsheet-import/types/SpreadsheetColumns';
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
 import { setColumn } from '@/spreadsheet-import/utils/setColumn';
+import { isNonEmptyString } from '@sniptt/guards';
 import Fuse from 'fuse.js';
-import { isDefined } from 'twenty-shared/utils';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 
 export const getMatchedColumnsWithFuse = ({
   columns,
@@ -20,15 +21,25 @@ export const getMatchedColumnsWithFuse = ({
   columns: SpreadsheetColumns;
   fields: SpreadsheetImportFields;
   data: MatchColumnsStepProps['data'];
-  // OMNIA-CUSTOM: Pre-computed column→field matches from a saved mapping.
+  // OMNIA-CUSTOM: reconciliation's saved header -> field key map
   precomputedMatches?: Record<string, string>;
 }) => {
   const matchedColumns: SpreadsheetColumn[] = [];
 
   const fieldsToSearch = new Fuse(fields, {
-    keys: ['label'],
+    keys: [
+      {
+        name: 'label',
+        getFn: (field) =>
+          isNonEmptyArray(field.alternateMatches)
+            ? [field.label, ...field.alternateMatches]
+            : field.label,
+      },
+    ],
     includeScore: true,
     ignoreLocation: true,
+    // OMNIA-CUSTOM: stricter than upstream's 0.3 so carrier headers do not
+    // auto-match loosely related fields
     threshold: 0.2,
   });
 
@@ -38,35 +49,27 @@ export const getMatchedColumnsWithFuse = ({
   > = {};
 
   for (const column of columns) {
-    // OMNIA-CUSTOM: Check precomputed matches first (from saved carrier config).
+    // OMNIA-CUSTOM: a saved match wins and gets no suggestions; the dropdown
+    // still lists every field
     const precomputedFieldKey = precomputedMatches?.[column.header];
-    const precomputedField = precomputedFieldKey
-      ? fields.find((f) => f.key === precomputedFieldKey)
+    const precomputedField = isNonEmptyString(precomputedFieldKey)
+      ? fields.find((field) => field.key === precomputedFieldKey)
       : undefined;
 
     if (isDefined(precomputedField)) {
-      const newColumn = setColumn(column, precomputedField, data);
-
-      matchedColumns.push(newColumn);
-      // Skip suggestions for precomputed columns — the dropdown still has all
-      // fields available if the user wants to change the match.
+      matchedColumns.push(setColumn(column, precomputedField, data));
       suggestedFieldsByColumnHeader[column.header] = [];
       continue;
     }
 
-    // Fall through to Fuse.js matching for non-precomputed columns
     const fieldsThatMatch = fieldsToSearch.search(column.header);
 
     const firstMatch = fieldsThatMatch[0] ?? null;
     const secondMatch = fieldsThatMatch[1] ?? null;
 
-    // OMNIA-CUSTOM: Accept exact matches (score ≈ 0) even if a second match
-    // has a similar score. The original logic rejected matches when two fields
-    // scored identically, which happened with long relation sub-field labels
-    // that share prefixes (e.g., "Lead / Phones / Primary Phone Number" vs
-    // "Lead / Phones / Primary Phone Country Code"). Now we accept a match if
-    // it's a near-perfect score (< 0.01) OR if it's clearly better than the
-    // second match.
+    // OMNIA-CUSTOM: long relation labels share prefixes ("Lead / Phones / …")
+    // and tie, so a near-exact match wins outright; otherwise the best match
+    // must lead the next one by 0.05
     const isExactMatch =
       isDefined(firstMatch?.item) &&
       isDefined(firstMatch?.score) &&

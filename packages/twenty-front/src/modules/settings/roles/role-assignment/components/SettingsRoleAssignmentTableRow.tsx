@@ -1,22 +1,22 @@
 import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
+import { type PartialWorkspaceMember } from '@/settings/roles/types/RoleWithPartialMembers';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { UserContext } from '@/users/contexts/UserContext';
-import { useContext } from 'react';
-import { t } from '@lingui/core/macro';
-import { styled } from '@linaria/react';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import {
-  Avatar,
-  IconKey,
-  OverflowingTextWithTooltip,
-  useIcons,
-} from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { type Agent, type ApiKeyForRole } from '~/generated-metadata/graphql';
-import { dateLocaleState } from '~/localization/states/dateLocaleState';
-import { formatDateString } from '~/utils/string/formatDateString';
-import { type PartialWorkspaceMember } from '@/settings/roles/types/RoleWithPartialMembers';
+import { UserContext } from '@/users/contexts/UserContext';
+import { styled } from '@linaria/react';
+import { useContext } from 'react';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { IconKey } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Avatar } from 'twenty-ui/primitives/data-display';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { type FlatAgent } from '@/metadata-store/types/FlatAgent';
+import { type ApiKeyForRole } from '~/generated-metadata/graphql';
+import { dateLocaleState } from '@/localization/states/dateLocaleState';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
+import { formatDateString } from '@/object-record/record-field/ui/utils/formatDateString';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledIconWrapper = styled.div`
   align-items: center;
@@ -40,7 +40,7 @@ const StyledNameContainer = styled.div`
 
 export type RoleTarget =
   | { type: 'member'; data: PartialWorkspaceMember }
-  | { type: 'agent'; data: Agent }
+  | { type: 'agent'; data: FlatAgent }
   | { type: 'apiKey'; data: ApiKeyForRole };
 
 type SettingsRoleAssignmentTableRowProps = {
@@ -50,10 +50,11 @@ type SettingsRoleAssignmentTableRowProps = {
 export const SettingsRoleAssignmentTableRow = ({
   roleTarget,
 }: SettingsRoleAssignmentTableRowProps) => {
+  const { t } = useLingui();
   const currentWorkspaceMembers = useAtomStateValue(
     currentWorkspaceMembersState,
   );
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { getIcon } = useIcons();
   const { dateFormat, timeZone } = useContext(UserContext);
   const dateLocale = useAtomStateValue(dateLocaleState);
@@ -66,20 +67,22 @@ export const SettingsRoleAssignmentTableRow = ({
         );
         return (
           <Avatar
-            avatarUrl={enrichedWorkspaceMember?.avatarUrl}
-            placeholderColorSeed={enrichedWorkspaceMember?.id}
-            placeholder={enrichedWorkspaceMember?.name.firstName ?? ''}
-            type="rounded"
+            src={getAbsoluteImageUrl(enrichedWorkspaceMember?.avatarUrl)}
+            colorSeed={enrichedWorkspaceMember?.id}
+            name={enrichedWorkspaceMember?.name.firstName ?? ''}
+            shape="circle"
             size="md"
           />
         );
       }
       case 'agent': {
-        const Icon = getIcon(roleTarget.data.icon || 'IconRobot');
-        return <Icon size={theme.icon.size.md} />;
+        const Icon = getIcon(roleTarget.data.icon || 'IconLego');
+        return <Icon size={theme.icon.size.md} stroke={theme.icon.stroke.sm} />;
       }
       case 'apiKey': {
-        return <IconKey size={theme.icon.size.md} />;
+        return (
+          <IconKey size={theme.icon.size.md} stroke={theme.icon.stroke.sm} />
+        );
       }
     }
   };

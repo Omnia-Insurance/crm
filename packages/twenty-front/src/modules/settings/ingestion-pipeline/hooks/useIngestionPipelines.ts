@@ -1,12 +1,11 @@
 import { useQuery } from '@apollo/client/react';
 
-import { GET_INGESTION_PIPELINES } from '@/settings/ingestion-pipeline/graphql/ingestion-pipeline.queries';
-import { type IngestionPipeline } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+import { GetIngestionPipelinesDocument } from '~/generated-metadata/graphql';
 
 export const useIngestionPipelines = () => {
-  const { data, loading, error, refetch } = useQuery<{
-    ingestionPipelines: IngestionPipeline[];
-  }>(GET_INGESTION_PIPELINES);
+  const { data, loading, error, refetch } = useQuery(
+    GetIngestionPipelinesDocument,
+  );
 
   return {
     pipelines: data?.ingestionPipelines ?? [],

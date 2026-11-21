@@ -1,0 +1,216 @@
+import { createEmptyAllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/constant/create-empty-all-flat-entity-maps.constant';
+import { type FlatAgent } from 'src/engine/metadata-modules/flat-agent/types/flat-agent.type';
+import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type FlatLogicFunction } from 'src/engine/metadata-modules/logic-function/types/flat-logic-function.type';
+import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
+import { prepareWorkflowManifestReferences } from 'src/engine/core-modules/application/application-manifest/utils/prepare-workflow-manifest-references.util';
+
+const OWNER = 'owner';
+const object = {
+  universalIdentifier: 'object',
+  nameSingular: 'company',
+  applicationId: OWNER,
+} as FlatObjectMetadata;
+const field = {
+  universalIdentifier: 'field',
+  name: 'name',
+  objectMetadataUniversalIdentifier: 'object',
+  applicationId: OWNER,
+} as FlatFieldMetadata;
+const agent = { universalIdentifier: 'agent' } as FlatAgent;
+const codeFunction = {
+  universalIdentifier: 'code',
+  workflowActionTriggerSettings: null,
+} as FlatLogicFunction;
+const actionFunction = {
+  universalIdentifier: 'action',
+  workflowActionTriggerSettings: {},
+} as FlatLogicFunction;
+
+const proposedMaps = () => {
+  const maps = createEmptyAllFlatEntityMaps();
+  maps.flatObjectMetadataMaps.byUniversalIdentifier.object = { ...object };
+  maps.flatFieldMetadataMaps.byUniversalIdentifier.field = { ...field };
+  maps.flatAgentMaps.byUniversalIdentifier.agent = { ...agent };
+  maps.flatLogicFunctionMaps.byUniversalIdentifier.code = { ...codeFunction };
+  maps.flatLogicFunctionMaps.byUniversalIdentifier.action = {
+    ...actionFunction,
+  };
+  return maps;
+};
+
+describe('workflow manifest references', () => {
+  it('resolves function and agent output schemas from the same installation', () => {
+    const proposed = proposedMaps();
+    proposed.flatLogicFunctionMaps.byUniversalIdentifier.action!.workflowActionTriggerSettings =
+      {
+        outputSchema: [
+          { type: 'object', properties: { greeting: { type: 'string' } } },
+        ],
+      };
+    proposed.flatAgentMaps.byUniversalIdentifier.agent!.responseFormat = {
+      type: 'json',
+      schema: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string', description: 'Summary' },
+          score: { type: 'number' },
+        },
+      },
+    };
+    const references = prepareWorkflowManifestReferences({
+      existingAllFlatEntityMaps: createEmptyAllFlatEntityMaps(),
+      toAllUniversalFlatEntityMaps: proposed,
+      ownerApplicationId: OWNER,
+      idByUniversalIdentifierByMetadataName: {},
+    });
+    expect(
+      references.logicFunctionOutputSchemaByUniversalIdentifier?.get('action'),
+    ).toMatchObject({ greeting: { isLeaf: true, type: 'string' } });
+    expect(
+      references.agentOutputSchemaByUniversalIdentifier?.get('agent'),
+    ).toMatchObject({
+      summary: { isLeaf: true, type: 'string', description: 'Summary' },
+      score: { type: 'number' },
+    });
+  });
+
+  it('uses preallocated IDs without assigning them to the definitions', () => {
+    const proposed = proposedMaps();
+    const references = prepareWorkflowManifestReferences({
+      existingAllFlatEntityMaps: createEmptyAllFlatEntityMaps(),
+      toAllUniversalFlatEntityMaps: proposed,
+      ownerApplicationId: OWNER,
+      idByUniversalIdentifierByMetadataName: {
+        logicFunction: { code: 'code-id', action: 'action-id' },
+        agent: { agent: 'agent-id' },
+        fieldMetadata: { field: 'field-id' },
+      },
+    });
+    expect(
+      references.objectByUniversalIdentifier?.get('object')?.nameSingular,
+    ).toBe('company');
+    expect(references.fieldByUniversalIdentifier?.get('field')?.id).toBe(
+      'field-id',
+    );
+    expect(references.agentIdByUniversalIdentifier?.get('agent')).toBe(
+      'agent-id',
+    );
+    expect(references.logicFunctionIdByUniversalIdentifier.has('code')).toBe(
+      false,
+    );
+    expect(references.logicFunctionIdByUniversalIdentifier.get('action')).toBe(
+      'action-id',
+    );
+    expect(proposed.flatFieldMetadataMaps.byUniversalIdentifier.field?.id).toBe(
+      undefined,
+    );
+    expect(proposed.flatAgentMaps.byUniversalIdentifier.agent?.id).toBe(
+      undefined,
+    );
+    expect(
+      proposed.flatLogicFunctionMaps.byUniversalIdentifier.action?.id,
+    ).toBe(undefined);
+  });
+
+  it('allows installed dependency metadata but excludes removed application metadata', () => {
+    const installed = proposedMaps();
+    installed.flatObjectMetadataMaps.byUniversalIdentifier.standard = {
+      ...object,
+      universalIdentifier: 'standard',
+      applicationId: 'standard-application',
+    };
+    const references = prepareWorkflowManifestReferences({
+      existingAllFlatEntityMaps: installed,
+      toAllUniversalFlatEntityMaps: createEmptyAllFlatEntityMaps(),
+      ownerApplicationId: OWNER,
+      idByUniversalIdentifierByMetadataName: {},
+    });
+    expect(references.objectByUniversalIdentifier?.has('standard')).toBe(true);
+    expect(references.objectByUniversalIdentifier?.has('object')).toBe(false);
+    expect(references.fieldByUniversalIdentifier?.has('field')).toBe(false);
+    expect(references.agentIdByUniversalIdentifier?.size).toBe(0);
+  });
+
+  describe("other applications' workflow actions", () => {
+    const installedWithOtherApplicationFunctions = () => {
+      const installed = createEmptyAllFlatEntityMaps();
+      const otherApplicationFunction = (
+        overrides: Partial<FlatLogicFunction>,
+      ) =>
+        ({
+          applicationId: 'other-application',
+          deletedAt: null,
+          workflowActionTriggerSettings: {
+            outputSchema: [
+              { type: 'object', properties: { matched: { type: 'number' } } },
+            ],
+          },
+          ...overrides,
+        }) as FlatLogicFunction;
+      installed.flatLogicFunctionMaps.byUniversalIdentifier.enrich =
+        otherApplicationFunction({
+          id: 'enrich-id',
+          universalIdentifier: 'enrich',
+        });
+      installed.flatLogicFunctionMaps.byUniversalIdentifier.internal =
+        otherApplicationFunction({
+          id: 'internal-id',
+          universalIdentifier: 'internal',
+          workflowActionTriggerSettings: null,
+        });
+      installed.flatLogicFunctionMaps.byUniversalIdentifier.removed =
+        otherApplicationFunction({
+          id: 'removed-id',
+          universalIdentifier: 'removed',
+          deletedAt: '2026-10-26T00:00:00.000Z',
+        });
+      installed.flatLogicFunctionMaps.byUniversalIdentifier.dropped =
+        otherApplicationFunction({
+          id: 'dropped-id',
+          universalIdentifier: 'dropped',
+          applicationId: OWNER,
+        });
+      return installed;
+    };
+
+    it('are resolved when the owner may reference them', () => {
+      const references = prepareWorkflowManifestReferences({
+        existingAllFlatEntityMaps: installedWithOtherApplicationFunctions(),
+        toAllUniversalFlatEntityMaps: createEmptyAllFlatEntityMaps(),
+        ownerApplicationId: OWNER,
+        idByUniversalIdentifierByMetadataName: {},
+        canReferenceOtherApplicationsWorkflowActions: true,
+      });
+
+      expect(
+        references.logicFunctionIdByUniversalIdentifier.get('enrich'),
+      ).toBe('enrich-id');
+      expect(
+        references.logicFunctionOutputSchemaByUniversalIdentifier?.get(
+          'enrich',
+        ),
+      ).toMatchObject({ matched: { isLeaf: true, type: 'number' } });
+      expect(
+        references.logicFunctionIdByUniversalIdentifier.has('internal'),
+      ).toBe(false);
+      expect(
+        references.logicFunctionIdByUniversalIdentifier.has('removed'),
+      ).toBe(false);
+      expect(
+        references.logicFunctionIdByUniversalIdentifier.has('dropped'),
+      ).toBe(false);
+    });
+
+    it('are not resolved otherwise', () => {
+      const references = prepareWorkflowManifestReferences({
+        existingAllFlatEntityMaps: installedWithOtherApplicationFunctions(),
+        toAllUniversalFlatEntityMaps: createEmptyAllFlatEntityMaps(),
+        ownerApplicationId: OWNER,
+        idByUniversalIdentifierByMetadataName: {},
+      });
+
+      expect(references.logicFunctionIdByUniversalIdentifier.size).toBe(0);
+    });
+  });
+});

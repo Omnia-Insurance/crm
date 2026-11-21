@@ -4,21 +4,23 @@ import {
   WorkflowVersionStatus,
   type WorkflowVersionWorkspaceEntity,
 } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
-import { type WorkflowWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow.workspace-entity';
-import {
-  type WorkflowAction,
-  WorkflowActionType,
-} from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+import { WorkflowActionType } from 'twenty-shared/workflow';
+import { type WorkflowEntity } from 'src/engine/core-modules/workflow/entities/workflow.entity';
+import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 import {
   WorkflowTriggerException,
   WorkflowTriggerExceptionCode,
 } from 'src/modules/workflow/workflow-trigger/exceptions/workflow-trigger.exception';
 import { WorkflowTriggerType } from 'src/modules/workflow/workflow-trigger/types/workflow-trigger.type';
+import { assertWaitForEventStepIsValid } from 'src/modules/workflow/workflow-trigger/utils/assert-wait-for-event-step-is-valid.util';
 import { assertFormStepIsValid } from 'src/modules/workflow/workflow-trigger/utils/assert-form-step-is-valid.util';
 
 export function assertVersionCanBeActivated(
-  workflowVersion: WorkflowVersionWorkspaceEntity,
-  workflow: WorkflowWorkspaceEntity,
+  workflowVersion: Pick<
+    WorkflowVersionWorkspaceEntity,
+    'id' | 'status' | 'trigger' | 'steps'
+  >,
+  workflow: Pick<WorkflowEntity, 'lastPublishedVersionId'>,
 ) {
   assertVersionIsValid(workflowVersion);
 
@@ -42,7 +44,12 @@ export function assertVersionCanBeActivated(
   }
 }
 
-function assertVersionIsValid(workflowVersion: WorkflowVersionWorkspaceEntity) {
+function assertVersionIsValid(
+  workflowVersion: Pick<
+    WorkflowVersionWorkspaceEntity,
+    'id' | 'status' | 'trigger' | 'steps'
+  >,
+) {
   if (!workflowVersion.trigger) {
     throw new WorkflowTriggerException(
       'Workflow version does not contain trigger',
@@ -85,7 +92,7 @@ function assertVersionIsValid(workflowVersion: WorkflowVersionWorkspaceEntity) {
 
 function assertTriggerSettingsAreValid(
   triggerType: WorkflowTriggerType,
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   settings: any,
 ) {
   switch (triggerType) {
@@ -109,7 +116,7 @@ function assertTriggerSettingsAreValid(
   }
 }
 
-// oxlint-disable-next-line @typescripttypescript/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 function assertCronTriggerSettingsAreValid(settings: any) {
   if (!settings?.type) {
     throw new WorkflowTriggerException(
@@ -251,7 +258,7 @@ function assertCronTriggerSettingsAreValid(settings: any) {
   }
 }
 
-// oxlint-disable-next-line @typescripttypescript/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any
 function assertDatabaseEventTriggerSettingsAreValid(settings: any) {
   if (!settings?.eventName) {
     throw new WorkflowTriggerException(
@@ -268,6 +275,9 @@ function assertStepIsValid(step: WorkflowAction) {
   switch (step.type) {
     case WorkflowActionType.FORM:
       assertFormStepIsValid(step.settings);
+      break;
+    case WorkflowActionType.WAIT_FOR_EVENT:
+      assertWaitForEventStepIsValid(step.settings);
       break;
     default:
       break;

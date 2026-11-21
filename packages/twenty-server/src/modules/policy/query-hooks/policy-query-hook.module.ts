@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 import { AgentProfileModule } from 'src/modules/agent-profile/agent-profile.module';
 import { PolicyCreateManyPostQueryHook } from 'src/modules/policy/query-hooks/policy-create-many.post-query.hook';
 import { PolicyCreateManyPreQueryHook } from 'src/modules/policy/query-hooks/policy-create-many.pre-query.hook';
 import { PolicyCreateOnePostQueryHook } from 'src/modules/policy/query-hooks/policy-create-one.post-query.hook';
 import { PolicyCreateOnePreQueryHook } from 'src/modules/policy/query-hooks/policy-create-one.pre-query.hook';
+import { PolicyMergeManyPreQueryHook } from 'src/modules/policy/query-hooks/policy-merge-many.pre-query.hook';
 import { PolicyUpdateManyPostQueryHook } from 'src/modules/policy/query-hooks/policy-update-many.post-query.hook';
 import { PolicyUpdateManyPreQueryHook } from 'src/modules/policy/query-hooks/policy-update-many.pre-query.hook';
 import { PolicyUpdateOnePostQueryHook } from 'src/modules/policy/query-hooks/policy-update-one.post-query.hook';
@@ -13,12 +15,13 @@ import { PolicyUpdateOnePreQueryHook } from 'src/modules/policy/query-hooks/poli
 import { PolicyWriteAuthorizationService } from 'src/modules/policy/services/policy-write-authorization.service';
 
 @Module({
-  imports: [AgentProfileModule, WorkspaceCacheModule],
+  imports: [AgentProfileModule, PermissionsModule, WorkspaceCacheModule],
   providers: [
     PolicyCreateOnePreQueryHook,
     PolicyCreateManyPreQueryHook,
     PolicyUpdateOnePreQueryHook,
     PolicyUpdateManyPreQueryHook,
+    PolicyMergeManyPreQueryHook,
     PolicyCreateOnePostQueryHook,
     PolicyCreateManyPostQueryHook,
     PolicyUpdateOnePostQueryHook,

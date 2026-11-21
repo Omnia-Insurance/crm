@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 
 import { type IngestionLogDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/ingestion-log.dto';
 import { IngestionLogEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-log.entity';
@@ -10,6 +10,8 @@ import { type IngestionError } from 'src/engine/metadata-modules/ingestion-pipel
 @Injectable()
 export class IngestionLogService {
   constructor(
+    // No workspaceId column: reads are scoped through the owning pipeline
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(IngestionLogEntity)
     private readonly logRepository: Repository<IngestionLogEntity>,
   ) {}
@@ -35,10 +37,14 @@ export class IngestionLogService {
 
   async findByPipelineId(
     pipelineId: string,
+    workspaceId: string,
     limit = 50,
   ): Promise<IngestionLogDTO[]> {
     const logs = await this.logRepository.find({
-      where: { pipelineId },
+      where: {
+        pipelineId,
+        pipeline: { workspaceId, deletedAt: IsNull() },
+      },
       order: { startedAt: 'DESC' },
       take: limit,
     });

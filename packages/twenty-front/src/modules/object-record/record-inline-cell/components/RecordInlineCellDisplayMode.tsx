@@ -1,8 +1,10 @@
 import { styled } from '@linaria/react';
 
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
+import { useGetSecondaryFieldButton } from '@/object-record/record-field/ui/hooks/useGetSecondaryFieldButton';
 import { useIsFieldEmpty } from '@/object-record/record-field/ui/hooks/useIsFieldEmpty';
 import { useIsFieldInputOnly } from '@/object-record/record-field/ui/hooks/useIsFieldInputOnly';
+// OMNIA-CUSTOM: soft required-field indicator (contract C5)
 import { useIsFieldRequired } from '@/object-record/record-field/ui/hooks/useIsFieldRequired';
 import {
   useRecordInlineCellContext,
@@ -11,8 +13,9 @@ import {
 import { RecordInlineCellButton } from '@/object-record/record-inline-cell/components/RecordInlineCellEditButton';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
+// OMNIA-CUSTOM: width 100% so the hover and click target spans the whole value column
 const StyledRecordInlineCellNormalModeOuterContainer = styled.div<
   Pick<
     RecordInlineCellContextProps,
@@ -24,7 +27,7 @@ const StyledRecordInlineCellNormalModeOuterContainer = styled.div<
     isHovered && !readonly && !disableHoverEffect
       ? themeCssVariables.background.transparent.light
       : 'transparent'};
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.md};
   cursor: ${({ isHovered, readonly }) =>
     isHovered && !readonly ? 'pointer' : 'default'};
   display: flex;
@@ -56,26 +59,24 @@ const StyledRecordInlineCellNormalModeInnerContainer = styled.div`
   white-space: nowrap;
 `;
 
-// OMNIA-CUSTOM: Required field indicators are only enabled in sidebar widgets
-// (via showRequiredIndicator context flag), not in table cells where 900+
-// jotai subscriptions crashed mobile Safari within 6-10 seconds.
+// OMNIA-CUSTOM: red placeholder for an empty required field. Only cells that opt in through
+// showRequiredIndicator mount RequiredEmptyField: 900+ store subscriptions in tables crashed
+// mobile Safari.
 const StyledEmptyField = styled.div<{ isRequired?: boolean }>`
   align-items: center;
   color: ${({ isRequired }) =>
-    isRequired
+    isRequired === true
       ? themeCssVariables.color.red
       : themeCssVariables.font.color.light};
   display: flex;
   height: 20px;
 `;
 
-// Sub-component that calls useIsFieldRequired — only rendered when
-// showRequiredIndicator is true, keeping hook subscriptions out of table cells.
-const RequiredEmptyField = ({
-  emptyPlaceHolder,
-}: {
+type RequiredEmptyFieldProps = {
   emptyPlaceHolder: string;
-}) => {
+};
+
+const RequiredEmptyField = ({ emptyPlaceHolder }: RequiredEmptyFieldProps) => {
   const isRequired = useIsFieldRequired();
 
   return (
@@ -95,8 +96,11 @@ export const RecordInlineCellDisplayMode = ({
 }>) => {
   const { t } = useLingui();
 
-  const { editModeContentOnly, label, buttonIcon, readonly, showRequiredIndicator } =
+  const { editModeContentOnly, label, buttonIcon, readonly } =
     useRecordInlineCellContext();
+
+  // OMNIA-CUSTOM: soft required-field indicator (contract C5)
+  const { showRequiredIndicator } = useRecordInlineCellContext();
 
   const { isForbidden } = useContext(FieldContext);
 
@@ -107,6 +111,11 @@ export const RecordInlineCellDisplayMode = ({
     !readonly &&
     !isFieldEmpty &&
     !editModeContentOnly;
+
+  const secondaryButtons = useGetSecondaryFieldButton();
+
+  const showSecondaryButtons =
+    isHovered && !isFieldEmpty && !editModeContentOnly && !isForbidden;
 
   const isFieldInputOnly = useIsFieldInputOnly();
 
@@ -127,7 +136,7 @@ export const RecordInlineCellDisplayMode = ({
           {shouldShowValue ? (
             children
           ) : shouldShowEmptyPlaceholder ? (
-            showRequiredIndicator ? (
+            showRequiredIndicator === true ? (
               <RequiredEmptyField emptyPlaceHolder={emptyPlaceHolder} />
             ) : (
               <StyledEmptyField>{emptyPlaceHolder}</StyledEmptyField>
@@ -135,6 +144,15 @@ export const RecordInlineCellDisplayMode = ({
           ) : null}
         </StyledRecordInlineCellNormalModeInnerContainer>
       </StyledRecordInlineCellNormalModeOuterContainer>
+      {showSecondaryButtons &&
+        secondaryButtons.map((button) => (
+          <RecordInlineCellButton
+            key={button.ariaLabel}
+            Icon={button.Icon}
+            onClick={button.onClick}
+            ariaLabel={button.ariaLabel}
+          />
+        ))}
       {showEditButton && (
         <RecordInlineCellButton Icon={buttonIcon} onClick={onClick} />
       )}

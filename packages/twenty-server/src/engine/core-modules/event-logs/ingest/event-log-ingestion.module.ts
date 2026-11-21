@@ -1,0 +1,72 @@
+import { Logger, Module } from '@nestjs/common';
+
+import { isNonEmptyString } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
+
+import { ClickHouseModule } from 'src/database/clickhouse/clickhouse.module';
+import { ClickHouseEventSink } from 'src/engine/core-modules/event-logs/ingest/clickhouse-event.sink';
+import { ConsoleEventSink } from 'src/engine/core-modules/event-logs/ingest/console-event.sink';
+import { CreateEventLogFromInternalEvent } from 'src/engine/core-modules/event-logs/ingest/create-event-log-from-internal-event';
+import {
+  getAvailableSinkNames,
+  KNOWN_SINK_NAMES,
+} from 'src/engine/core-modules/event-logs/ingest/event-sink-availability';
+import {
+  EVENT_SINKS,
+  type EventSink,
+} from 'src/engine/core-modules/event-logs/ingest/event-sink';
+import { ForwardEventLogFromEntityEventsToDbQueue } from 'src/engine/core-modules/event-logs/ingest/forward-event-log-from-entity-events-to-db-queue';
+import { WorkspaceEventSinkService } from 'src/engine/core-modules/event-logs/ingest/workspace-event-sink.service';
+import { EventLogLiveModule } from 'src/engine/core-modules/event-logs/live/event-log-live.module';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+
+const eventSinksProvider = {
+  provide: EVENT_SINKS,
+  useFactory: (
+    twentyConfigService: TwentyConfigService,
+    clickHouseEventSink: ClickHouseEventSink,
+    consoleEventSink: ConsoleEventSink,
+  ): EventSink[] => {
+    const sinkByName: Record<string, EventSink> = {
+      clickhouse: clickHouseEventSink,
+      console: consoleEventSink,
+    };
+
+    const configuredSinkNames = twentyConfigService.get('EVENT_SINKS');
+
+    const knownSinkNames: readonly string[] = KNOWN_SINK_NAMES;
+
+    const unknownSinkNames = configuredSinkNames.filter(
+      (name) => !knownSinkNames.includes(name.toLowerCase()),
+    );
+
+    if (unknownSinkNames.length > 0) {
+      new Logger('WorkspaceEventSinks').warn(
+        `Ignoring unknown EVENT_SINKS: ${unknownSinkNames.join(', ')}`,
+      );
+    }
+
+    return getAvailableSinkNames(configuredSinkNames, {
+      hasClickhouseUrl: isNonEmptyString(
+        twentyConfigService.get('CLICKHOUSE_URL'),
+      ),
+    })
+      .map((name) => sinkByName[name.toLowerCase()])
+      .filter(isDefined);
+  },
+  inject: [TwentyConfigService, ClickHouseEventSink, ConsoleEventSink],
+};
+
+@Module({
+  imports: [ClickHouseModule, EventLogLiveModule],
+  providers: [
+    ClickHouseEventSink,
+    ConsoleEventSink,
+    eventSinksProvider,
+    WorkspaceEventSinkService,
+    CreateEventLogFromInternalEvent,
+    ForwardEventLogFromEntityEventsToDbQueue,
+  ],
+  exports: [WorkspaceEventSinkService],
+})
+export class EventLogIngestionModule {}

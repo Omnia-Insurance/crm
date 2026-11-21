@@ -1,0 +1,112 @@
+import { Injectable } from '@nestjs/common';
+
+import DataLoader from 'dataloader';
+import { type APP_LOCALES } from 'twenty-shared/translations';
+
+import { ApplicationTranslationCatalogService } from 'src/engine/metadata-modules/application-translation-catalog/services/application-translation-catalog.service';
+import {
+  FIELD_FILTER_COLUMN_BY_FILTER_FIELD,
+  type FieldFilterInput,
+} from 'src/engine/metadata-modules/field-metadata/dtos/field-filter.input';
+import { type FieldMetadataDTO } from 'src/engine/metadata-modules/field-metadata/dtos/field-metadata.dto';
+import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
+import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
+import { findManyFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
+import { fromFlatFieldMetadataToFieldMetadataDto } from 'src/engine/metadata-modules/flat-field-metadata/utils/from-flat-field-metadata-to-field-metadata-dto.util';
+import { isMorphRelationTargetFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-relation-target-flat-field-metadata.util';
+import { type ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
+import { type CursorConnection } from 'src/engine/metadata-modules/pagination/dtos/cursor-connection-type.factory';
+import { type CursorPagingInput } from 'src/engine/metadata-modules/pagination/dtos/cursor-paging.input';
+import { applyMetadataFilterToItems } from 'src/engine/metadata-modules/pagination/utils/apply-metadata-filter-to-items.util';
+import { findManyItemsWithCursorPagination } from 'src/engine/metadata-modules/pagination/utils/find-many-items-with-cursor-pagination.util';
+import { resolveEffectiveTranslatedFlatEntity } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-translated-flat-entity.util';
+
+export type FieldMetadataConnectionLoaderPayload = {
+  workspaceId: string;
+  objectMetadata: Pick<ObjectMetadataEntity, 'id'>;
+  locale?: keyof typeof APP_LOCALES;
+  filter: FieldFilterInput;
+  paging: CursorPagingInput;
+};
+
+@Injectable()
+export class FieldMetadataConnectionLoaderFactory {
+  constructor(
+    private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
+    private readonly applicationTranslationCatalogService: ApplicationTranslationCatalogService,
+  ) {}
+
+  create(): DataLoader<
+    FieldMetadataConnectionLoaderPayload,
+    CursorConnection<FieldMetadataDTO>
+  > {
+    return new DataLoader<
+      FieldMetadataConnectionLoaderPayload,
+      CursorConnection<FieldMetadataDTO>
+    >(async (dataLoaderParams: FieldMetadataConnectionLoaderPayload[]) => {
+      const locale = dataLoaderParams[0].locale;
+      const workspaceId = dataLoaderParams[0].workspaceId;
+      const { flatFieldMetadataMaps, flatObjectMetadataMaps } =
+        await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+          {
+            workspaceId,
+            flatMapsKeys: ['flatFieldMetadataMaps', 'flatObjectMetadataMaps'],
+          },
+        );
+
+      const connections = dataLoaderParams.map(
+        ({ objectMetadata, paging, filter }) => {
+          const flatObjectMetadata = findFlatEntityByIdInFlatEntityMapsOrThrow({
+            flatEntityId: objectMetadata.id,
+            flatEntityMaps: flatObjectMetadataMaps,
+          });
+          const flatFieldMetadatas =
+            findManyFlatEntityByIdInFlatEntityMapsOrThrow({
+              flatEntityIds: flatObjectMetadata.fieldIds,
+              flatEntityMaps: flatFieldMetadataMaps,
+            });
+          const filteredFlatFieldMetadatas = applyMetadataFilterToItems({
+            items: flatFieldMetadatas.filter(
+              (flatFieldMetadata) =>
+                !isMorphRelationTargetFlatFieldMetadata(flatFieldMetadata),
+            ),
+            filter,
+            columnByFilterField: FIELD_FILTER_COLUMN_BY_FILTER_FIELD,
+          });
+
+          return findManyItemsWithCursorPagination({
+            items: filteredFlatFieldMetadatas,
+            paging,
+          });
+        },
+      );
+      const selectedFlatFieldMetadatas = connections.flatMap((connection) =>
+        connection.edges.map(({ node }) => node),
+      );
+      const getI18nContext =
+        await this.applicationTranslationCatalogService.getI18nContextByApplicationId(
+          {
+            applicationIds: selectedFlatFieldMetadatas.map(
+              (flatFieldMetadata) => flatFieldMetadata.applicationId,
+            ),
+            locale,
+            workspaceId,
+          },
+        );
+
+      return connections.map((connection) => ({
+        ...connection,
+        edges: connection.edges.map((edge) => ({
+          ...edge,
+          node: fromFlatFieldMetadataToFieldMetadataDto(
+            resolveEffectiveTranslatedFlatEntity({
+              metadataName: 'fieldMetadata',
+              flatEntity: edge.node,
+              i18nContext: getI18nContext(edge.node.applicationId),
+            }),
+          ),
+        })),
+      }));
+    });
+  }
+}

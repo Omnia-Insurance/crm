@@ -2,28 +2,44 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { config } from 'dotenv';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { DataSource, type Repository } from 'typeorm';
 
-import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
+import { CommandShutdownService } from 'src/database/commands/command-runners/command-shutdown.service';
+import {
+  type WorkspaceIteratorArgs,
+  type WorkspaceIteratorReport,
+  WorkspaceIteratorService,
+} from 'src/database/commands/command-runners/workspace-iterator.service';
+import { CoreEntityCacheService } from 'src/engine/core-entity-cache/services/core-entity-cache.service';
+import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { InstanceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/instance-command-runner.service';
 import { UpgradeMigrationService } from 'src/engine/core-modules/upgrade/services/upgrade-migration.service';
 import {
   UpgradeSequenceReaderService,
+  type FastInstanceUpgradeStep,
+  type SlowInstanceUpgradeStep,
   type UpgradeStep,
   type WorkspaceUpgradeStep,
 } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-reader.service';
+import { type TwentyAllVersion } from 'src/engine/core-modules/upgrade/constants/twenty-all-versions.constant';
 import { UpgradeSequenceRunnerService } from 'src/engine/core-modules/upgrade/services/upgrade-sequence-runner.service';
-import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
+import { UpgradeStatusCacheService } from 'src/engine/core-modules/upgrade/services/upgrade-status-cache.service';
 import { UpgradeStatusService } from 'src/engine/core-modules/upgrade/services/upgrade-status.service';
 import { WorkspaceCommandRunnerService } from 'src/engine/core-modules/upgrade/services/workspace-command-runner.service';
 import { UpgradeMigrationEntity } from 'src/engine/core-modules/upgrade/upgrade-migration.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { UpgradeAwareEntityMetadataAdapter } from 'src/engine/twenty-orm/upgrade-aware/upgrade-aware-entity-metadata.adapter';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import {
   SEED_APPLE_WORKSPACE_ID,
   SEED_EMPTY_WORKSPACE_3_ID,
   SEED_EMPTY_WORKSPACE_4_ID,
   SEED_YCOMBINATOR_WORKSPACE_ID,
 } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { createWorkspace } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-workspace.util';
 import { WorkspaceVersionService } from 'src/engine/workspace-manager/workspace-version/services/workspace-version.service';
 
 jest.useRealTimers();
@@ -38,38 +54,129 @@ export const WS_2 = SEED_YCOMBINATOR_WORKSPACE_ID;
 export const WS_3 = SEED_EMPTY_WORKSPACE_3_ID;
 export const WS_4 = SEED_EMPTY_WORKSPACE_4_ID;
 
+const FK_WORKSPACE_FIXTURES = [
+  {
+    workspaceId: WS_3,
+    applicationId: 'f1c0ffee-0000-4000-8000-0000000000c3',
+    subdomain: 'upgrade-test-fixture-3',
+  },
+  {
+    workspaceId: WS_4,
+    applicationId: 'f1c0ffee-0000-4000-8000-0000000000c4',
+    subdomain: 'upgrade-test-fixture-4',
+  },
+];
+
+export const seedEmptyWorkspaces = async (dataSource: DataSource) => {
+  const queryRunner = dataSource.createQueryRunner();
+
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    for (const {
+      workspaceId,
+      applicationId,
+      subdomain,
+    } of FK_WORKSPACE_FIXTURES) {
+      await createWorkspace({
+        queryRunner,
+        schemaName: 'core',
+        createWorkspaceInput: {
+          id: workspaceId,
+          displayName: subdomain,
+          subdomain,
+          inviteHash: `${subdomain}.dev-invite-hash`,
+          logo: '',
+          activationStatus: WorkspaceActivationStatus.PENDING_CREATION,
+          isTwoFactorAuthenticationEnforced: false,
+          workspaceCustomApplicationId: applicationId,
+        },
+      });
+
+      await queryRunner.manager
+        .createQueryBuilder()
+        .insert()
+        .into(ApplicationEntity)
+        .values({
+          id: applicationId,
+          universalIdentifier: applicationId,
+          name: 'upgrade-test-fixture',
+          sourcePath: '',
+          workspaceId,
+        })
+        .orIgnore()
+        .execute();
+    }
+
+    await queryRunner.commitTransaction();
+  } catch (error) {
+    await queryRunner.rollbackTransaction();
+    throw error;
+  } finally {
+    await queryRunner.release();
+  }
+};
+
 const EXECUTED_BY_VERSION = '42.42.42';
 
 const noopAsync = async () => {};
 
+const DEFAULT_STEP_VERSION: TwentyAllVersion = '1.21.0';
+
+export const makeFastInstance = (
+  name: string,
+  version: TwentyAllVersion = DEFAULT_STEP_VERSION,
+): FastInstanceUpgradeStep => ({
+  kind: 'fast-instance',
+  name,
+  command: { up: noopAsync, down: noopAsync },
+  version,
+  timestamp: 0,
+});
+
+export const makeSlowInstance = (
+  name: string,
+  version: TwentyAllVersion = DEFAULT_STEP_VERSION,
+): SlowInstanceUpgradeStep => ({
+  kind: 'slow-instance',
+  name,
+  command: { up: noopAsync, down: noopAsync, runDataMigration: noopAsync },
+  version,
+  timestamp: 0,
+});
+
+export const makeWorkspace = (
+  name: string,
+  version: TwentyAllVersion = DEFAULT_STEP_VERSION,
+): WorkspaceUpgradeStep => ({
+  kind: 'workspace',
+  name,
+  command: { runOnWorkspace: noopAsync },
+  version,
+  timestamp: 0,
+});
+
 export const makeStep = (
   kind: UpgradeStep['kind'],
   name: string,
+  version: TwentyAllVersion = DEFAULT_STEP_VERSION,
 ): UpgradeStep => {
-  const command =
-    kind === 'workspace'
-      ? { runOnWorkspace: noopAsync }
-      : kind === 'slow-instance'
-        ? { up: noopAsync, down: noopAsync, runDataMigration: noopAsync }
-        : { up: noopAsync, down: noopAsync };
-
-  return {
-    kind,
-    name,
-    command,
-    version: '1.21.0',
-    timestamp: 0,
-  } as unknown as UpgradeStep;
+  switch (kind) {
+    case 'fast-instance':
+      return makeFastInstance(name, version);
+    case 'slow-instance':
+      return makeSlowInstance(name, version);
+    case 'workspace':
+      return makeWorkspace(name, version);
+  }
 };
 
-export const makeFastInstance = (name: string) =>
-  makeStep('fast-instance', name);
-
-export const makeSlowInstance = (name: string) =>
-  makeStep('slow-instance', name);
-
-export const makeWorkspace = (name: string) =>
-  makeStep('workspace', name) as WorkspaceUpgradeStep;
+// The status service reads the version off the command name, not the step's `version` field.
+export const makeVersionedStep = (
+  kind: UpgradeStep['kind'],
+  { version, label }: { version: TwentyAllVersion; label: string },
+): UpgradeStep => makeStep(kind, `${version}_${label}_0`, version);
 
 let mockActiveWorkspaceIds: string[] = [];
 
@@ -93,7 +200,9 @@ export type IntegrationTestContext = {
   [K in keyof IntegrationTestModule]: IntegrationTestModule[K];
 };
 
-export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
+export const createUpgradeSequenceRunnerIntegrationTestModule = async ({
+  useRealWorkspaceIterator = false,
+}: { useRealWorkspaceIterator?: boolean } = {}) => {
   const dataSource = new DataSource({
     type: 'postgres',
     url: process.env.PG_DATABASE_URL,
@@ -106,6 +215,8 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
   });
 
   await dataSource.initialize();
+
+  await seedEmptyWorkspaces(dataSource);
 
   const migrationRepo: Repository<UpgradeMigrationEntity> =
     dataSource.getRepository(UpgradeMigrationEntity);
@@ -131,10 +242,10 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
       {
         provide: WorkspaceVersionService,
         useValue: {
-          getActiveOrSuspendedWorkspaceIds: jest
+          getProvisionedWorkspaceIds: jest
             .fn()
             .mockImplementation(async () => mockActiveWorkspaceIds),
-          hasActiveOrSuspendedWorkspaces: jest
+          hasProvisionedWorkspaces: jest
             .fn()
             .mockImplementation(async () => mockActiveWorkspaceIds.length > 0),
         },
@@ -144,41 +255,62 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
         useFactory: () => new UpgradeSequenceReaderService({} as any),
       },
       {
-        provide: UpgradeStatusService,
+        provide: getRepositoryToken(WorkspaceEntity),
+        useValue: dataSource.getRepository(WorkspaceEntity),
+      },
+      {
+        provide: UpgradeStatusCacheService,
         useValue: {
-          invalidateInstanceAndAllWorkspacesStatus: jest
-            .fn()
-            .mockResolvedValue(undefined),
+          getComputedAt: jest.fn().mockResolvedValue(null),
+          getBehindWorkspaceIds: jest.fn().mockResolvedValue([]),
+          getFailedWorkspaceIds: jest.fn().mockResolvedValue([]),
+          getUpToDateWorkspaceCount: jest.fn().mockResolvedValue(0),
+          write: jest.fn().mockResolvedValue(undefined),
+          invalidate: jest.fn().mockResolvedValue(undefined),
         },
       },
+      {
+        provide: CoreEntityCacheService,
+        useValue: { get: jest.fn().mockResolvedValue(null) },
+      },
+      UpgradeStatusService,
       InstanceCommandRunnerService,
       WorkspaceCommandRunnerService,
-      {
-        provide: WorkspaceIteratorService,
-        useValue: {
-          iterate: jest.fn().mockImplementation(async (args: any) => {
-            const { callback, workspaceIds } = args;
-            const ids = workspaceIds ?? [WS_1];
-            const report = { fail: [] as any[], success: [] as any[] };
+      useRealWorkspaceIterator
+        ? WorkspaceIteratorService
+        : {
+            provide: WorkspaceIteratorService,
+            useValue: {
+              iterate: jest
+                .fn()
+                .mockImplementation(async (args: WorkspaceIteratorArgs) => {
+                  const { callback, workspaceIds } = args;
+                  const ids = workspaceIds ?? [WS_1];
+                  const report: WorkspaceIteratorReport = {
+                    fail: [],
+                    success: [],
+                    interrupted: false,
+                    skipped: [],
+                  };
 
-            for (const [index, workspaceId] of ids.entries()) {
-              try {
-                await callback({
-                  workspaceId,
-                  index,
-                  total: ids.length,
-                  dataSource,
-                });
-                report.success.push({ workspaceId });
-              } catch (error) {
-                report.fail.push({ error, workspaceId });
-              }
-            }
+                  for (const [index, workspaceId] of ids.entries()) {
+                    try {
+                      await callback({
+                        workspaceId,
+                        index,
+                        total: ids.length,
+                        dataSource,
+                      });
+                      report.success.push({ workspaceId });
+                    } catch (error) {
+                      report.fail.push({ error: error as Error, workspaceId });
+                    }
+                  }
 
-            return report;
-          }),
-        },
-      },
+                  return report;
+                }),
+            },
+          },
       {
         provide: UpgradeAwareEntityMetadataAdapter,
         useValue: {
@@ -187,6 +319,18 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
           getHiddenColumnPropertyNames: jest.fn().mockReturnValue(new Set()),
         },
       },
+      {
+        provide: WorkspaceOrmManager,
+        useValue: {
+          executeInWorkspaceContext: async (callback: () => Promise<void>) =>
+            callback(),
+        },
+      },
+      {
+        provide: WorkspaceCacheService,
+        useValue: { evictWorkspaceFromLocalCache: async () => undefined },
+      },
+      CommandShutdownService,
       UpgradeSequenceRunnerService,
     ],
   }).compile();
@@ -221,6 +365,8 @@ export const createUpgradeSequenceRunnerIntegrationTestModule = async () => {
     module,
     dataSource,
     runner,
+    upgradeStatusService: module.get(UpgradeStatusService),
+    upgradeSequenceReaderService: module.get(UpgradeSequenceReaderService),
   };
 };
 
@@ -244,8 +390,7 @@ export const seedInstanceMigration = async (
     attempt?: number;
   },
 ) => {
-  // Seeds must have past timestamps so the runner's NOW()-based records
-  // always sort after them in createdAt order.
+  // Past timestamps so the runner's NOW()-based records always sort after the seeds.
   const createdAt = new Date(
     Date.now() - (1000000 - seedSequenceCounter * 1000),
   ).toISOString();
@@ -265,7 +410,14 @@ export const seedInstanceMigration = async (
     values.push(
       `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, false)`,
     );
-    args.push(name, status, attempt, EXECUTED_BY_VERSION, workspaceId, createdAt);
+    args.push(
+      name,
+      status,
+      attempt,
+      EXECUTED_BY_VERSION,
+      workspaceId,
+      createdAt,
+    );
   }
 
   await dataSource.query(
@@ -309,9 +461,68 @@ export const seedWorkspaceMigration = async (
     await dataSource.query(
       `INSERT INTO core."upgradeMigration" (name, status, attempt, "executedByVersion", "workspaceId", "createdAt", "isInitial")
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [name, status, attempt, EXECUTED_BY_VERSION, workspaceId, createdAt, isInitial],
+      [
+        name,
+        status,
+        attempt,
+        EXECUTED_BY_VERSION,
+        workspaceId,
+        createdAt,
+        isInitial,
+      ],
     );
   }
+};
+
+export const snapshotUpgradeMigrations = async (
+  dataSource: DataSource,
+): Promise<UpgradeMigrationEntity[]> =>
+  dataSource.query(
+    `SELECT id, name, status, attempt, "executedByVersion", "errorMessage", "isInitial", "workspaceId", "createdAt"
+     FROM core."upgradeMigration"`,
+  );
+
+export const restoreUpgradeMigrations = async (
+  dataSource: DataSource,
+  rows: UpgradeMigrationEntity[],
+): Promise<void> => {
+  await dataSource.query('DELETE FROM core."upgradeMigration"');
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const columnsPerRow = 9;
+  const valueGroups: string[] = [];
+  const args: unknown[] = [];
+  let paramIndex = 1;
+
+  for (const row of rows) {
+    const placeholders = Array.from(
+      { length: columnsPerRow },
+      () => `$${paramIndex++}`,
+    );
+
+    valueGroups.push(`(${placeholders.join(', ')})`);
+    args.push(
+      row.id,
+      row.name,
+      row.status,
+      row.attempt,
+      row.executedByVersion,
+      row.errorMessage,
+      row.isInitial,
+      row.workspaceId,
+      row.createdAt,
+    );
+  }
+
+  await dataSource.query(
+    `INSERT INTO core."upgradeMigration"
+       (id, name, status, attempt, "executedByVersion", "errorMessage", "isInitial", "workspaceId", "createdAt")
+     VALUES ${valueGroups.join(', ')}`,
+    args,
+  );
 };
 
 export type ExecutedMigrationRecord = {

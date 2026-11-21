@@ -81,7 +81,6 @@ export class DevSeederMetadataService {
           seed: SURVEY_RESULT_CUSTOM_OBJECT_SEED,
           fields: SURVEY_RESULT_CUSTOM_FIELD_SEEDS,
         },
-        // Junction objects (minimal pivots)
         { seed: EMPLOYMENT_HISTORY_CUSTOM_OBJECT_SEED },
         { seed: PET_CARE_AGREEMENT_CUSTOM_OBJECT_SEED },
       ],
@@ -100,7 +99,6 @@ export class DevSeederMetadataService {
         },
       ],
       junctionFields: [
-        // Employment History: Person <-> Company
         {
           sourceObjectName: 'person',
           name: 'previousCompanies',
@@ -119,7 +117,6 @@ export class DevSeederMetadataService {
           targetFieldLabel: 'Company',
           targetFieldIcon: 'IconBuildingSkyscraper',
         },
-        // Pet Care Agreement: Pet -> caretakers
         {
           sourceObjectName: PET_CUSTOM_OBJECT_SEED.nameSingular,
           name: 'caretakers',
@@ -131,7 +128,6 @@ export class DevSeederMetadataService {
         },
       ],
       junctionConfigs: [
-        // Employment History junction configs
         {
           objectName: 'person',
           fieldName: 'previousCompanies',
@@ -142,7 +138,6 @@ export class DevSeederMetadataService {
           fieldName: 'previousEmployees',
           junctionTargetFieldRef: `${EMPLOYMENT_HISTORY_CUSTOM_OBJECT_SEED.nameSingular}.person`,
         },
-        // Pet Care Agreement junction configs
         {
           objectName: PET_CUSTOM_OBJECT_SEED.nameSingular,
           fieldName: 'caretakers',
@@ -234,6 +229,7 @@ export class DevSeederMetadataService {
     objectMetadataSeed: ObjectMetadataSeed;
   }): Promise<void> {
     await this.objectMetadataService.createOneObject({
+      shouldDeferActions: false,
       createObjectInput: objectMetadataSeed,
       workspaceId,
     });
@@ -264,6 +260,7 @@ export class DevSeederMetadataService {
     }));
 
     await this.fieldMetadataService.createManyFields({
+      shouldDeferActions: false,
       createFieldInputs,
       workspaceId,
     });
@@ -360,6 +357,7 @@ export class DevSeederMetadataService {
     );
 
     await this.fieldMetadataService.updateOneField({
+      shouldDeferActions: false,
       workspaceId,
       updateFieldInput: {
         id: fieldId,
@@ -426,6 +424,7 @@ export class DevSeederMetadataService {
     }));
 
     await this.fieldMetadataService.createManyFields({
+      shouldDeferActions: false,
       createFieldInputs,
       workspaceId,
     });
@@ -451,6 +450,7 @@ export class DevSeederMetadataService {
     }
 
     await this.fieldMetadataService.createManyFields({
+      shouldDeferActions: false,
       createFieldInputs: [
         {
           type: FieldMetadataType.RELATION,

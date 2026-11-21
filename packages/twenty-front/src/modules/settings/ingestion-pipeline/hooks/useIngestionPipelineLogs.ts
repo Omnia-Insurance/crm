@@ -1,18 +1,15 @@
 import { useQuery } from '@apollo/client/react';
+import { isDefined } from 'twenty-shared/utils';
 
-import { GET_INGESTION_LOGS } from '@/settings/ingestion-pipeline/graphql/ingestion-log.queries';
-import { type IngestionLog } from '@/settings/ingestion-pipeline/types/ingestion-pipeline.types';
+import { GetIngestionLogsDocument } from '~/generated-metadata/graphql';
 
-export const useIngestionPipelineLogs = (
-  pipelineId?: string,
-  limit = 50,
-) => {
-  const { data, loading, error, refetch } = useQuery<{
-    ingestionLogs: IngestionLog[];
-  }>(GET_INGESTION_LOGS, {
-    variables: { pipelineId, limit },
-    skip: !pipelineId,
-    pollInterval: 10000,
+const INGESTION_LOGS_POLL_INTERVAL_MS = 10_000;
+
+export const useIngestionPipelineLogs = (pipelineId?: string, limit = 50) => {
+  const { data, loading, error, refetch } = useQuery(GetIngestionLogsDocument, {
+    variables: { pipelineId: pipelineId ?? '', limit },
+    skip: !isDefined(pipelineId),
+    pollInterval: INGESTION_LOGS_POLL_INTERVAL_MS,
   });
 
   return {

@@ -1,3 +1,4 @@
+import { getLinksVariant } from '@/object-record/spreadsheet-import/utils/getLinksVariant';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
@@ -18,15 +19,29 @@ import {
   type SpreadsheetImportFields,
 } from '@/spreadsheet-import/types';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { type MessageDescriptor } from '@lingui/core';
+import { COMPOSITE_FIELD_SUB_FIELD_LABELS } from 'twenty-shared/constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import {
   assertUnreachable,
   getUniqueConstraintsFields,
   isDefined,
 } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
+
+const getSourceLocaleAlternateMatches = ({
+  label,
+  sourceLocaleLabel,
+}: {
+  label: string;
+  sourceLocaleLabel: string;
+}): Partial<SpreadsheetImportField> =>
+  label === sourceLocaleLabel ? {} : { alternateMatches: [sourceLocaleLabel] };
 
 export const useBuildSpreadsheetImportFields = () => {
+  const { t } = useLingui();
   const { getIcon } = useIcons();
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
 
@@ -115,6 +130,8 @@ export const useBuildSpreadsheetImportFields = () => {
       fieldValidationDefinitions: getSpreadSheetFieldValidationDefinitions(
         fieldMetadataItem.type,
         fieldMetadataItem.label,
+        undefined,
+        getLinksVariant(fieldMetadataItem),
       ),
       isNestedField: false,
       ...overrides,
@@ -132,21 +149,31 @@ export const useBuildSpreadsheetImportFields = () => {
 
     SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[fieldType].subFields.forEach(
       ({ subFieldName, isImportable, subFieldLabel }) => {
-        if (!isImportable) return;
+        if (!isImportable) {
+          return;
+        }
         const label = getCompositeSubFieldLabelWithFieldLabel(
           fieldMetadataItem,
-          subFieldLabel,
+          t(subFieldLabel),
         );
 
         spreadsheetImportFields.push(
           createBaseField(fieldMetadataItem, {
             label,
+            ...getSourceLocaleAlternateMatches({
+              label,
+              sourceLocaleLabel: getCompositeSubFieldLabelWithFieldLabel(
+                fieldMetadataItem,
+                COMPOSITE_FIELD_SUB_FIELD_LABELS[fieldType][subFieldName],
+              ),
+            }),
             key: getCompositeSubFieldKey(fieldMetadataItem, subFieldName),
             fieldValidationDefinitions:
               getSpreadSheetFieldValidationDefinitions(
                 fieldMetadataItem.type,
                 label,
                 subFieldName,
+                getLinksVariant(fieldMetadataItem),
               ),
             isNestedField: true,
             isCompositeSubField: true,
@@ -173,16 +200,35 @@ export const useBuildSpreadsheetImportFields = () => {
     SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
       uniqueConstraintType
     ].subFields.forEach(
-      ({ subFieldName, isImportable, isIncludedInUniqueConstraint }) => {
-        if (!isImportable || !isIncludedInUniqueConstraint) return;
+      ({
+        subFieldName,
+        subFieldLabel,
+        isImportable,
+        isIncludedInUniqueConstraint,
+      }) => {
+        if (!isImportable || !isIncludedInUniqueConstraint) {
+          return;
+        }
+
+        const label = getRelationConnectSubFieldLabel(
+          fieldMetadataItem,
+          uniqueConstraintField,
+          t(subFieldLabel),
+        );
 
         spreadsheetImportFields.push(
           createBaseField(fieldMetadataItem, {
-            label: getRelationConnectSubFieldLabel(
-              fieldMetadataItem,
-              uniqueConstraintField,
-              subFieldName,
-            ),
+            label,
+            ...getSourceLocaleAlternateMatches({
+              label,
+              sourceLocaleLabel: getRelationConnectSubFieldLabel(
+                fieldMetadataItem,
+                uniqueConstraintField,
+                COMPOSITE_FIELD_SUB_FIELD_LABELS[uniqueConstraintType][
+                  subFieldName
+                ],
+              ),
+            }),
             key: getRelationConnectSubFieldKey(
               fieldMetadataItem,
               uniqueConstraintField,
@@ -193,6 +239,7 @@ export const useBuildSpreadsheetImportFields = () => {
                 uniqueConstraintField.type,
                 uniqueConstraintField.name,
                 subFieldName,
+                getLinksVariant(uniqueConstraintField),
               ),
             isNestedField: true,
             isCompositeSubField: true,
@@ -207,52 +254,270 @@ export const useBuildSpreadsheetImportFields = () => {
     return spreadsheetImportFields;
   };
 
+  // OMNIA-CUSTOM: fields of the related record, so a re-imported export updates them through the
+  // relation column; columns the import must not change still match, as read-only fields.
+  const createReadOnlyField = (
+    fieldMetadataItem: FieldMetadataItem,
+    overrides: Partial<SpreadsheetImportField>,
+  ) =>
+    createBaseField(fieldMetadataItem, {
+      isNestedField: true,
+      isReadOnly: true,
+      description: t`Read-only — exported for reference`,
+      fieldValidationDefinitions: [],
+      ...overrides,
+    });
+
+  const createReadOnlyCompositeSubField = ({
+    fieldMetadataItem,
+    targetFieldMetadataItem,
+    targetFieldType,
+    subFieldName,
+    subFieldLabel,
+  }: {
+    fieldMetadataItem: FieldMetadataItem;
+    targetFieldMetadataItem: FieldMetadataItem;
+    targetFieldType: CompositeFieldType;
+    subFieldName: string;
+    subFieldLabel: MessageDescriptor;
+  }) => {
+    const label = getRelationUpdateSubFieldLabel(
+      fieldMetadataItem,
+      targetFieldMetadataItem,
+      t(subFieldLabel),
+    );
+
+    return createReadOnlyField(fieldMetadataItem, {
+      label,
+      ...getSourceLocaleAlternateMatches({
+        label,
+        sourceLocaleLabel: getRelationUpdateSubFieldLabel(
+          fieldMetadataItem,
+          targetFieldMetadataItem,
+          COMPOSITE_FIELD_SUB_FIELD_LABELS[targetFieldType][subFieldName],
+        ),
+      }),
+      key: `__readOnly:${fieldMetadataItem.name}.${targetFieldMetadataItem.name}.${subFieldName}`,
+      isCompositeSubField: true,
+      compositeSubFieldKey: subFieldName,
+    });
+  };
+
   const handleCompositeFieldFromRelationUpdateField = ({
     fieldMetadataItem,
-    targetField,
+    targetFieldMetadataItem,
     targetFieldType,
   }: {
     fieldMetadataItem: FieldMetadataItem;
-    targetField: FieldMetadataItem;
+    targetFieldMetadataItem: FieldMetadataItem;
     targetFieldType: CompositeFieldType;
   }) => {
     const spreadsheetImportFields: SpreadsheetImportField[] = [];
 
     SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[targetFieldType].subFields.forEach(
-      ({ subFieldName, isImportable }) => {
-        if (!isImportable) return;
+      ({ subFieldName, subFieldLabel, isImportable }) => {
+        if (!isImportable) {
+          return;
+        }
 
         const label = getRelationUpdateSubFieldLabel(
           fieldMetadataItem,
-          targetField,
-          subFieldName as string,
+          targetFieldMetadataItem,
+          t(subFieldLabel),
         );
 
         spreadsheetImportFields.push(
           createBaseField(fieldMetadataItem, {
             label,
+            ...getSourceLocaleAlternateMatches({
+              label,
+              sourceLocaleLabel: getRelationUpdateSubFieldLabel(
+                fieldMetadataItem,
+                targetFieldMetadataItem,
+                COMPOSITE_FIELD_SUB_FIELD_LABELS[targetFieldType][subFieldName],
+              ),
+            }),
             key: getRelationUpdateSubFieldKey(
               fieldMetadataItem,
-              targetField,
-              subFieldName as string,
+              targetFieldMetadataItem,
+              subFieldName,
             ),
             fieldValidationDefinitions:
               getSpreadSheetFieldValidationDefinitions(
-                targetField.type,
+                targetFieldMetadataItem.type,
                 label,
-                subFieldName as string,
+                subFieldName,
+                getLinksVariant(targetFieldMetadataItem),
               ),
             isNestedField: true,
             isCompositeSubField: true,
-            compositeSubFieldKey: subFieldName as string,
+            compositeSubFieldKey: subFieldName,
             isRelationUpdateField: true,
-            targetFieldMetadataItem: targetField,
+            targetFieldMetadataItem,
           }),
         );
       },
     );
 
     return spreadsheetImportFields;
+  };
+
+  const handleRelationUpdateFields = ({
+    fieldMetadataItem,
+    targetObjectMetadataItem,
+    uniqueConstraintFields,
+    relationConnectFields,
+  }: {
+    fieldMetadataItem: FieldMetadataItem;
+    targetObjectMetadataItem: EnrichedObjectMetadataItem;
+    uniqueConstraintFields: FieldMetadataItem[];
+    relationConnectFields: SpreadsheetImportField[];
+  }) => {
+    const spreadsheetImportFields: SpreadsheetImportField[] = [];
+
+    const uniqueConstraintFieldIds = new Set(
+      uniqueConstraintFields.map(({ id }) => id),
+    );
+
+    const availableTargetFieldMetadataItems =
+      spreadsheetImportFilterAvailableFieldMetadataItems(
+        targetObjectMetadataItem.updatableFields,
+      );
+
+    for (const targetFieldMetadataItem of availableTargetFieldMetadataItems) {
+      if (uniqueConstraintFieldIds.has(targetFieldMetadataItem.id)) {
+        // A composite connect field matches on its unique sub-fields only
+        if (isCompositeFieldType(targetFieldMetadataItem.type)) {
+          for (const subField of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
+            targetFieldMetadataItem.type
+          ].subFields) {
+            if (
+              subField.isImportable &&
+              !subField.isIncludedInUniqueConstraint
+            ) {
+              spreadsheetImportFields.push(
+                createReadOnlyCompositeSubField({
+                  fieldMetadataItem,
+                  targetFieldMetadataItem,
+                  targetFieldType: targetFieldMetadataItem.type,
+                  subFieldName: subField.subFieldName,
+                  subFieldLabel: subField.subFieldLabel,
+                }),
+              );
+            }
+          }
+        }
+
+        continue;
+      }
+
+      if (targetFieldMetadataItem.type === FieldMetadataType.ACTOR) {
+        continue;
+      }
+
+      if (targetFieldMetadataItem.type === FieldMetadataType.RELATION) {
+        spreadsheetImportFields.push(
+          createReadOnlyField(fieldMetadataItem, {
+            label: getRelationUpdateSubFieldLabel(
+              fieldMetadataItem,
+              targetFieldMetadataItem,
+            ),
+            key: `__readOnly:${fieldMetadataItem.name}.${targetFieldMetadataItem.name}`,
+          }),
+        );
+        continue;
+      }
+
+      if (isCompositeFieldType(targetFieldMetadataItem.type)) {
+        spreadsheetImportFields.push(
+          ...handleCompositeFieldFromRelationUpdateField({
+            fieldMetadataItem,
+            targetFieldMetadataItem,
+            targetFieldType: targetFieldMetadataItem.type,
+          }),
+        );
+        continue;
+      }
+
+      const label = getRelationUpdateSubFieldLabel(
+        fieldMetadataItem,
+        targetFieldMetadataItem,
+      );
+
+      spreadsheetImportFields.push(
+        createBaseField(fieldMetadataItem, {
+          label,
+          key: getRelationUpdateSubFieldKey(
+            fieldMetadataItem,
+            targetFieldMetadataItem,
+          ),
+          fieldValidationDefinitions: getSpreadSheetFieldValidationDefinitions(
+            targetFieldMetadataItem.type,
+            label,
+          ),
+          isNestedField: true,
+          isCompositeSubField: false,
+          isRelationUpdateField: true,
+          targetFieldMetadataItem,
+        }),
+      );
+    }
+
+    // The export also writes one-to-many lists and non-importable sub-fields such as latitude
+    const readOnlyFields: SpreadsheetImportField[] = [];
+
+    for (const targetFieldMetadataItem of targetObjectMetadataItem.fields) {
+      if (
+        targetFieldMetadataItem.isActive &&
+        targetFieldMetadataItem.type === FieldMetadataType.RELATION &&
+        targetFieldMetadataItem.relation?.type === RelationType.ONE_TO_MANY
+      ) {
+        readOnlyFields.push(
+          createReadOnlyField(fieldMetadataItem, {
+            label: getRelationUpdateSubFieldLabel(
+              fieldMetadataItem,
+              targetFieldMetadataItem,
+            ),
+            key: `__readOnly:${fieldMetadataItem.name}.${targetFieldMetadataItem.name}`,
+          }),
+        );
+      }
+    }
+
+    for (const targetFieldMetadataItem of availableTargetFieldMetadataItems) {
+      if (!isCompositeFieldType(targetFieldMetadataItem.type)) {
+        continue;
+      }
+
+      for (const subField of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
+        targetFieldMetadataItem.type
+      ].subFields) {
+        if (!subField.isImportable) {
+          readOnlyFields.push(
+            createReadOnlyCompositeSubField({
+              fieldMetadataItem,
+              targetFieldMetadataItem,
+              targetFieldType: targetFieldMetadataItem.type,
+              subFieldName: subField.subFieldName,
+              subFieldLabel: subField.subFieldLabel,
+            }),
+          );
+        }
+      }
+    }
+
+    const existingLabels = new Set(
+      [...relationConnectFields, ...spreadsheetImportFields].map(({ label }) =>
+        label.toLowerCase(),
+      ),
+    );
+
+    return [
+      ...spreadsheetImportFields,
+      ...readOnlyFields.filter(
+        ({ label }) => !existingLabels.has(label.toLowerCase()),
+      ),
+    ];
   };
 
   const handleSelectField = (
@@ -290,9 +555,7 @@ export const useBuildSpreadsheetImportFields = () => {
     );
 
     if (isManyToOneRelation && isDefined(targetObjectMetadataItem)) {
-      // OMNIA-CUSTOM: Add a relation label field that matches export headers.
-      // When re-importing an exported CSV, the header says "Carrier" (not
-      // "Carrier - Name"). This field allows auto-matching for LOOKUP_ASSIGN.
+      // OMNIA-CUSTOM: matches the export's "<Relation>" column, so a re-import can look the record up by name
       spreadsheetImportFields.push(
         createBaseField(fieldMetadataItem, {
           label: fieldMetadataItem.label,
@@ -302,16 +565,14 @@ export const useBuildSpreadsheetImportFields = () => {
           fieldValidationDefinitions: [],
         }),
       );
+
       const uniqueConstraintFields = getUniqueConstraintsFields<
         FieldMetadataItem,
         EnrichedObjectMetadataItem
       >(targetObjectMetadataItem);
 
-      const connectFieldIds = new Set<string>();
-
       //todo - update logic when composite unique indexes will be supported
       for (const uniqueConstraintField of uniqueConstraintFields.flat()) {
-        connectFieldIds.add(uniqueConstraintField.id);
         if (isCompositeFieldType(uniqueConstraintField.type)) {
           spreadsheetImportFields.push(
             ...handleCompositeFieldFromRelationConnectField({
@@ -334,6 +595,14 @@ export const useBuildSpreadsheetImportFields = () => {
                 fieldMetadataItem,
                 uniqueConstraintField,
               ),
+              // OMNIA-CUSTOM: upstream exports this id as "<Relation> Id"; matching it reconnects by id (OMN-465)
+              ...(uniqueConstraintField.name === 'id'
+                ? {
+                    alternateMatches: [
+                      `${fieldMetadataItem.label} ${doNotTranslate('Id')}`,
+                    ],
+                  }
+                : {}),
               key: getRelationConnectSubFieldKey(
                 fieldMetadataItem,
                 uniqueConstraintField,
@@ -343,190 +612,15 @@ export const useBuildSpreadsheetImportFields = () => {
         }
       }
 
-      // Add update fields for all importable fields on the target object
-      const availableTargetFields =
-        spreadsheetImportFilterAvailableFieldMetadataItems(
-          targetObjectMetadataItem.updatableFields,
-        );
-
-      for (const targetField of availableTargetFields) {
-        if (connectFieldIds.has(targetField.id)) {
-          // OMNIA-CUSTOM: For composite connect fields (e.g., phones), the
-          // connect handler only generates sub-fields in the unique constraint
-          // (primaryPhoneNumber). Add the remaining sub-fields as read-only
-          // so they auto-match export CSV headers on re-import.
-          if (isCompositeFieldType(targetField.type)) {
-            const connectSubFieldNames = new Set(
-              SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
-                targetField.type
-              ].subFields
-                .filter((sf) => sf.isIncludedInUniqueConstraint)
-                .map((sf) => sf.subFieldName as string),
-            );
-
-            for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
-              targetField.type
-            ].subFields) {
-              if (
-                !sf.isImportable ||
-                connectSubFieldNames.has(sf.subFieldName as string)
-              ) {
-                continue;
-              }
-
-              spreadsheetImportFields.push(
-                createBaseField(fieldMetadataItem, {
-                  label: getRelationUpdateSubFieldLabel(
-                    fieldMetadataItem,
-                    targetField,
-                    sf.subFieldName as string,
-                  ),
-                  key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}.${sf.subFieldName as string}`,
-                  isNestedField: true,
-                  isCompositeSubField: true,
-                  compositeSubFieldKey: sf.subFieldName as string,
-                  isReadOnly: true,
-                  description: 'Read-only — exported for reference',
-                  fieldValidationDefinitions: [],
-                }),
-              );
-            }
-          }
-
-          continue;
-        }
-        if (targetField.type === FieldMetadataType.ACTOR) {
-          continue;
-        }
-
-        // OMNIA-CUSTOM: Add RELATION fields on the target object as
-        // read-only fields. They auto-match export CSV headers (e.g.,
-        // "Lead / Lead Source", "Lead / Family Members") so users don't
-        // see unmatched-column warnings, but data is stripped on import.
-        if (targetField.type === FieldMetadataType.RELATION) {
-          spreadsheetImportFields.push(
-            createBaseField(fieldMetadataItem, {
-              Icon: getIcon(fieldMetadataItem.icon),
-              isNestedField: true,
-              isCompositeSubField: false,
-              fieldMetadataItemId: fieldMetadataItem.id,
-              fieldMetadataType: FieldMetadataType.RELATION,
-              label: getRelationUpdateSubFieldLabel(
-                fieldMetadataItem,
-                targetField,
-              ),
-              key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
-              isReadOnly: true,
-              description: 'Read-only — exported for reference',
-              fieldValidationDefinitions: [],
-            }),
-          );
-          continue;
-        }
-
-        if (isCompositeFieldType(targetField.type)) {
-          spreadsheetImportFields.push(
-            ...handleCompositeFieldFromRelationUpdateField({
-              fieldMetadataItem,
-              targetField,
-              targetFieldType: targetField.type,
-            }),
-          );
-        } else {
-          spreadsheetImportFields.push(
-            createBaseField(fieldMetadataItem, {
-              Icon: getIcon(fieldMetadataItem.icon),
-              isNestedField: true,
-              isCompositeSubField: false,
-              isRelationUpdateField: true,
-              targetFieldMetadataItem: targetField,
-              fieldMetadataItemId: fieldMetadataItem.id,
-              fieldMetadataType: FieldMetadataType.RELATION,
-              fieldValidationDefinitions:
-                getSpreadSheetFieldValidationDefinitions(
-                  targetField.type,
-                  getRelationUpdateSubFieldLabel(
-                    fieldMetadataItem,
-                    targetField,
-                  ),
-                ),
-              label: getRelationUpdateSubFieldLabel(
-                fieldMetadataItem,
-                targetField,
-              ),
-              key: getRelationUpdateSubFieldKey(fieldMetadataItem, targetField),
-            }),
-          );
-        }
-      }
-
-      // OMNIA-CUSTOM: Add read-only fields for data the export includes but
-      // the import can't modify: ONE_TO_MANY relations (familyMembers),
-      // non-importable composite sub-fields (addressLat, addressLng).
-      // These ensure export CSV headers auto-match without warnings.
-      const generatedKeys = new Set(
-        spreadsheetImportFields.map((f) => f.label.toLowerCase()),
-      );
-
-      // ONE_TO_MANY relations on the target object
-      for (const targetField of targetObjectMetadataItem.fields) {
-        if (!targetField.isActive) continue;
-        if (
-          targetField.type !== FieldMetadataType.RELATION ||
-          targetField.relation?.type !== RelationType.ONE_TO_MANY
-        ) {
-          continue;
-        }
-
-        const label = getRelationUpdateSubFieldLabel(
+      // OMNIA-CUSTOM: see handleRelationUpdateFields
+      spreadsheetImportFields.push(
+        ...handleRelationUpdateFields({
           fieldMetadataItem,
-          targetField,
-        );
-
-        if (generatedKeys.has(label.toLowerCase())) continue;
-
-        spreadsheetImportFields.push(
-          createBaseField(fieldMetadataItem, {
-            label,
-            key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}`,
-            isNestedField: true,
-            isReadOnly: true,
-            description: 'Read-only — exported for reference',
-            fieldValidationDefinitions: [],
-          }),
-        );
-      }
-
-      // Non-importable composite sub-fields (addressLat, addressLng, etc.)
-      for (const targetField of availableTargetFields) {
-        if (!isCompositeFieldType(targetField.type)) continue;
-
-        for (const sf of SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS[
-          targetField.type
-        ].subFields) {
-          if (sf.isImportable) continue;
-
-          const label = getRelationUpdateSubFieldLabel(
-            fieldMetadataItem,
-            targetField,
-            sf.subFieldName as string,
-          );
-
-          if (generatedKeys.has(label.toLowerCase())) continue;
-
-          spreadsheetImportFields.push(
-            createBaseField(fieldMetadataItem, {
-              label,
-              key: `__readOnly:${fieldMetadataItem.name}.${targetField.name}.${sf.subFieldName as string}`,
-              isNestedField: true,
-              isCompositeSubField: true,
-              isReadOnly: true,
-              description: 'Read-only — exported for reference',
-              fieldValidationDefinitions: [],
-            }),
-          );
-        }
-      }
+          targetObjectMetadataItem,
+          uniqueConstraintFields: uniqueConstraintFields.flat(),
+          relationConnectFields: spreadsheetImportFields,
+        }),
+      );
     }
 
     return spreadsheetImportFields;

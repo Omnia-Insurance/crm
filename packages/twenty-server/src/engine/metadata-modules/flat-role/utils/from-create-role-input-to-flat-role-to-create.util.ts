@@ -34,17 +34,23 @@ export const fromCreateRoleInputToFlatRoleToCreate = ({
     icon: icon ?? null,
     canUpdateAllSettings: createRoleInput.canUpdateAllSettings ?? false,
     canAccessAllTools: createRoleInput.canAccessAllTools ?? false,
+    canAccessAllAgentChatChannels:
+      createRoleInput.canAccessAllAgentChatChannels ?? false,
     canReadAllObjectRecords: createRoleInput.canReadAllObjectRecords ?? false,
+    canCreateAllObjectRecords:
+      createRoleInput.canUpdateAllObjectRecords ?? false,
     canUpdateAllObjectRecords:
       createRoleInput.canUpdateAllObjectRecords ?? false,
     canSoftDeleteAllObjectRecords:
       createRoleInput.canSoftDeleteAllObjectRecords ?? false,
     canDestroyAllObjectRecords:
       createRoleInput.canDestroyAllObjectRecords ?? false,
-    showAllObjectsInSidebar: createRoleInput.showAllObjectsInSidebar ?? true,
     canBeAssignedToUsers: createRoleInput.canBeAssignedToUsers ?? true,
     canBeAssignedToAgents: createRoleInput.canBeAssignedToAgents ?? true,
     canBeAssignedToApiKeys: createRoleInput.canBeAssignedToApiKeys ?? true,
+    canBeAssignedToApplications: false,
+    // OMNIA-CUSTOM: role sidebar default and policy edit window
+    showAllObjectsInSidebar: createRoleInput.showAllObjectsInSidebar ?? true,
     editWindowMinutes: createRoleInput.editWindowMinutes ?? null,
     isEditable: true,
     workspaceId,
@@ -60,9 +66,13 @@ export const fromCreateRoleInputToFlatRoleToCreate = ({
     objectPermissionUniversalIdentifiers: [],
     rolePermissionFlagUniversalIdentifiers: [],
     fieldPermissionIds: [],
+    rowLevelPermissionRuleIds: [],
     fieldPermissionUniversalIdentifiers: [],
+    rowLevelPermissionRuleUniversalIdentifiers: [],
     rowLevelPermissionPredicateIds: [],
+    agentChatChannelRoleIds: [],
     rowLevelPermissionPredicateUniversalIdentifiers: [],
+    agentChatChannelRoleUniversalIdentifiers: [],
     rowLevelPermissionPredicateGroupIds: [],
     rowLevelPermissionPredicateGroupUniversalIdentifiers: [],
   };

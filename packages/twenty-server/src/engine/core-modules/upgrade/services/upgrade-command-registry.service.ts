@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { DiscoveryService } from '@nestjs/core';
 
-import { type ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { type ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { type WorkspaceCommandRunner } from 'src/database/commands/command-runners/workspace.command-runner';
 import {
   TWENTY_ALL_VERSIONS,
@@ -18,8 +18,8 @@ import { type SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interf
 import { isDefined } from 'twenty-shared/utils';
 
 type WorkspaceCommand =
-  | WorkspaceCommandRunner
-  | ActiveOrSuspendedWorkspaceCommandRunner;
+  | Pick<WorkspaceCommandRunner, 'runOnWorkspace'>
+  | Pick<ProvisionedWorkspaceCommandRunner, 'runOnWorkspace'>;
 
 export type RegisteredFastInstanceCommand = {
   name: string;

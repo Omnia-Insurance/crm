@@ -17,6 +17,9 @@ export const fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate =
     flatObjectMetadataMaps,
     flatViewMaps,
     flatPageLayoutMaps,
+    flatAgentChatChannelMaps,
+    flatWorkflowMaps,
+    flatAgentMaps,
   }: {
     createNavigationMenuItemInput: CreateNavigationMenuItemInput;
     workspaceId: string;
@@ -24,7 +27,12 @@ export const fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate =
     flatNavigationMenuItemMaps: FlatNavigationMenuItemMaps;
   } & Pick<
     AllFlatEntityMaps,
-    'flatObjectMetadataMaps' | 'flatViewMaps' | 'flatPageLayoutMaps'
+    | 'flatObjectMetadataMaps'
+    | 'flatViewMaps'
+    | 'flatPageLayoutMaps'
+    | 'flatAgentChatChannelMaps'
+    | 'flatWorkflowMaps'
+    | 'flatAgentMaps'
   >): FlatNavigationMenuItem => {
     const id = createNavigationMenuItemInput.id ?? uuidv4();
     const now = new Date().toISOString();
@@ -54,6 +62,9 @@ export const fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate =
       viewUniversalIdentifier,
       folderUniversalIdentifier,
       pageLayoutUniversalIdentifier,
+      agentChatChannelUniversalIdentifier,
+      workflowUniversalIdentifier,
+      agentUniversalIdentifier,
     } = resolveEntityRelationUniversalIdentifiers({
       metadataName: 'navigationMenuItem',
       foreignKeyValues: {
@@ -62,12 +73,18 @@ export const fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate =
         viewId: createNavigationMenuItemInput.viewId,
         folderId: createNavigationMenuItemInput.folderId,
         pageLayoutId: createNavigationMenuItemInput.pageLayoutId,
+        agentChatChannelId: createNavigationMenuItemInput.agentChatChannelId,
+        workflowId: createNavigationMenuItemInput.workflowId,
+        agentId: createNavigationMenuItemInput.agentId,
       },
       flatEntityMaps: {
         flatObjectMetadataMaps,
         flatViewMaps,
         flatNavigationMenuItemMaps,
         flatPageLayoutMaps,
+        flatAgentChatChannelMaps,
+        flatWorkflowMaps,
+        flatAgentMaps,
       },
     });
 
@@ -86,8 +103,16 @@ export const fromCreateNavigationMenuItemInputToFlatNavigationMenuItemToCreate =
       folderUniversalIdentifier,
       pageLayoutId: createNavigationMenuItemInput.pageLayoutId ?? null,
       pageLayoutUniversalIdentifier,
+      agentChatChannelId:
+        createNavigationMenuItemInput.agentChatChannelId ?? null,
+      agentChatChannelUniversalIdentifier,
+      workflowId: createNavigationMenuItemInput.workflowId ?? null,
+      workflowUniversalIdentifier,
+      agentId: createNavigationMenuItemInput.agentId ?? null,
+      agentUniversalIdentifier,
       name: createNavigationMenuItemInput.name ?? null,
       link: createNavigationMenuItemInput.link ?? null,
+      nativePageKey: createNavigationMenuItemInput.nativePageKey ?? null,
       icon: createNavigationMenuItemInput.icon ?? null,
       color: createNavigationMenuItemInput.color ?? null,
       position,

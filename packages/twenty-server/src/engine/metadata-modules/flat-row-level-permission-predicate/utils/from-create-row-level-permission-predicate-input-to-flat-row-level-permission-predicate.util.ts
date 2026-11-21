@@ -1,5 +1,4 @@
 import { v4 } from 'uuid';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
@@ -36,12 +35,14 @@ export const fromCreateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
 
     const {
       fieldMetadataUniversalIdentifier,
+      relationFieldMetadataUniversalIdentifier,
       rowLevelPermissionPredicateGroupUniversalIdentifier,
       workspaceMemberFieldMetadataUniversalIdentifier,
     } = resolveEntityRelationUniversalIdentifiers({
       metadataName: 'rowLevelPermissionPredicate',
       foreignKeyValues: {
         fieldMetadataId: input.fieldMetadataId,
+        relationFieldMetadataId: input.relationFieldMetadataId,
         rowLevelPermissionPredicateGroupId:
           input.rowLevelPermissionPredicateGroupId,
         workspaceMemberFieldMetadataId: input.workspaceMemberFieldMetadataId,
@@ -61,8 +62,9 @@ export const fromCreateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
       objectMetadataUniversalIdentifier,
       fieldMetadataId: input.fieldMetadataId,
       fieldMetadataUniversalIdentifier,
+      relationFieldMetadataId: input.relationFieldMetadataId ?? null,
+      relationFieldMetadataUniversalIdentifier,
       operand: input.operand,
-      scope: input.scope ?? RowLevelPermissionPredicateScope.ALL,
       value: input.value ?? null,
       subFieldName: input.subFieldName ?? null,
       workspaceMemberFieldMetadataId:
@@ -72,6 +74,8 @@ export const fromCreateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
       rowLevelPermissionPredicateGroupId:
         input.rowLevelPermissionPredicateGroupId ?? null,
       rowLevelPermissionPredicateGroupUniversalIdentifier,
+      rowLevelPermissionRuleId: null,
+      rowLevelPermissionRuleUniversalIdentifier: null,
       positionInRowLevelPermissionPredicateGroup:
         input.positionInRowLevelPermissionPredicateGroup ?? null,
       createdAt,

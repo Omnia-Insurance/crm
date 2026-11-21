@@ -4,7 +4,7 @@ import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { SidePanelPages } from 'twenty-shared/types';
-import { IconMessage } from 'twenty-ui/display';
+import { IconMessage } from 'twenty-ui/icon';
 
 export const useOpenReviewItemCommentsInSidePanel = () => {
   const { navigateSidePanelMenu, openSidePanelMenu } = useSidePanelMenu();

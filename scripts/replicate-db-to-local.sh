@@ -25,16 +25,23 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 #   SOURCE_DOMAIN=crm.omniaagent.com
 #   INCLUDE_FILE_DATA=true
 #   KEEP_CUSTOM_DOMAINS=false
-#   RUN_LOCAL_MIGRATIONS=true
-#   PURGE_LOCAL_REDIS_WORKSPACE_CACHE=true
-#   LOCAL_REDIS_URL=redis://localhost:6379
+#   RUN_LOCAL_MIGRATIONS=true             (cache:flush, upgrade, secret-encryption:rotate)
+#   PURGE_LOCAL_REDIS_WORKSPACE_CACHE=true (final cache:flush)
+#   LOCAL_REDIS_URL=(defaults to REDIS_URL in packages/twenty-server/.env, else redis://localhost:6379)
 #   K8S_NAMESPACE=twentycrm
 #   K8S_HELPER_POD=db-replication-helper
 #   K8S_HELPER_IMAGE=postgres:16-alpine
 #   PROD_APP_SECRET=
 #   LOCAL_APP_SECRET=(defaults to APP_SECRET or packages/twenty-server/.env)
+#   PROD_ENCRYPTION_KEY=(defaults to PROD_APP_SECRET; prod sets no ENCRYPTION_KEY)
+#   LOCAL_ENCRYPTION_KEY=(defaults to ENCRYPTION_KEY, packages/twenty-server/.env, then LOCAL_APP_SECRET)
 #   K8S_APP_SECRET_SECRET_NAME=tokens
 #   K8S_APP_SECRET_SECRET_KEY=accessToken
+#
+# Server commands (upgrade, secret-encryption:rotate, cache:flush) need a built
+# twenty-server dist and run against LOCAL_DATABASE_URL and LOCAL_REDIS_URL.
+# The server reloads packages/twenty-server/.env with override, so they stop if
+# it sets those (or APP_SECRET and the encryption keys) to other values.
 #
 # Usage:
 #   PROD_DATABASE_URL=... ./scripts/replicate-db-to-local.sh
@@ -72,6 +79,8 @@ Optional env vars:
   K8S_HELPER_IMAGE
   PROD_APP_SECRET
   LOCAL_APP_SECRET
+  PROD_ENCRYPTION_KEY
+  LOCAL_ENCRYPTION_KEY
   K8S_APP_SECRET_SECRET_NAME
   K8S_APP_SECRET_SECRET_KEY
 
@@ -96,55 +105,81 @@ require_command() {
 read_env_value_from_file() {
   local file_path="$1"
   local key="$2"
+  local value
 
   if [[ ! -f "$file_path" ]]; then
     return 0
   fi
 
-  grep "^${key}=" "$file_path" | tail -n 1 | cut -d'=' -f2-
+  # `|| true`: callers expand this inside defaults, where a missing key would trip errexit.
+  value="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "$file_path" | tail -n 1 | cut -d'=' -f2- || true)"
+  value="${value%$'\r'}"
+
+  # Same unquoting and inline-comment rules as dotenv.
+  if [[ "$value" =~ ^[[:space:]]*\"([^\"]*)\" ]] || [[ "$value" =~ ^[[:space:]]*\'([^\']*)\' ]]; then
+    value="${BASH_REMATCH[1]}"
+  else
+    value="${value%%#*}"
+    value="$(printf '%s' "$value" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  fi
+
+  printf '%s\n' "$value"
 }
 
-purge_local_workspace_cache() {
-  local redis_url="$1"
-  local deleted_keys=0
-  local workspace_found=false
-  local workspace_id=""
-  local cache_key=""
+# core.datasource.ts and raw.datasource.ts reload packages/twenty-server/.env with
+# override: true, so a key set there beats the value exported for a server command.
+assert_server_env_file_agrees() {
+  (
+    cd "$REPO_ROOT/packages/twenty-server"
+    PINNED_KEYS="$*" node -e '
+      const fs = require("fs");
+      const { parse } = require("dotenv");
 
-  if ! command -v redis-cli >/dev/null 2>&1; then
-    echo "WARNING: redis-cli not found, skipping local Redis workspace cache purge." >&2
-    return 0
-  fi
+      const envFile = process.env.NODE_ENV === "test" ? ".env.test" : ".env";
 
-  if ! redis-cli -u "$redis_url" PING >/dev/null 2>&1; then
-    echo "WARNING: Could not connect to local Redis at $redis_url, skipping workspace cache purge." >&2
-    return 0
-  fi
+      if (!fs.existsSync(envFile)) {
+        process.exit(0);
+      }
 
-  while IFS= read -r workspace_id; do
-    [[ -z "$workspace_id" ]] && continue
+      const fileValues = parse(fs.readFileSync(envFile));
+      const conflictingKeys = process.env.PINNED_KEYS.split(" ").filter(
+        (key) => key in fileValues && fileValues[key] !== process.env[key],
+      );
 
-    workspace_found=true
+      if (conflictingKeys.length > 0) {
+        console.error(
+          `ERROR: packages/twenty-server/${envFile} sets ${conflictingKeys.join(", ")} to other values than this restore uses, and the server would apply them. Align them (or the matching LOCAL_* variables) and re-run.`,
+        );
+        process.exit(1);
+      }
+    '
+  )
+}
 
-    while IFS= read -r cache_key; do
-      [[ -z "$cache_key" ]] && continue
-      redis-cli -u "$redis_url" DEL "$cache_key" >/dev/null
-      deleted_keys=$((deleted_keys + 1))
-    done < <(
-      {
-        redis-cli -u "$redis_url" --scan --pattern "engine:workspace:*${workspace_id}*"
-        # OMNIA-CUSTOM: core-entity workspace cache also stores Workspace rows.
-        redis-cli -u "$redis_url" --scan --pattern "engine:core-entity:*${workspace_id}*"
-      } | sort -u
-    )
-  done < <(psql "$LOCAL_DATABASE_URL" -At -v ON_ERROR_STOP=1 -c 'SELECT id FROM core."workspace";')
+run_local_server_command() {
+  (
+    cd "$REPO_ROOT"
+    export PG_DATABASE_URL="$LOCAL_DATABASE_URL"
+    export REDIS_URL="$LOCAL_REDIS_URL"
+    pinned_keys=(PG_DATABASE_URL REDIS_URL)
 
-  if [[ "$workspace_found" != "true" ]]; then
-    echo "==> No workspace IDs found, skipping local Redis workspace cache purge..."
-    return 0
-  fi
+    if [[ -n "$LOCAL_APP_SECRET" ]]; then
+      export APP_SECRET="$LOCAL_APP_SECRET"
+      pinned_keys+=(APP_SECRET)
+    fi
 
-  echo "==> Purged $deleted_keys local Redis workspace cache keys."
+    if [[ "$SHOULD_ROTATE_SECRETS" == "true" ]]; then
+      # The fallback key decrypts enc:v2 values still encrypted under the prod key.
+      export ENCRYPTION_KEY="$LOCAL_ENCRYPTION_KEY"
+      export FALLBACK_ENCRYPTION_KEY="$PROD_ENCRYPTION_KEY"
+      pinned_keys+=(ENCRYPTION_KEY FALLBACK_ENCRYPTION_KEY)
+    fi
+
+    # Explicit exit: errexit is off when a caller tests this function in an `if`.
+    assert_server_env_file_agrees "${pinned_keys[@]}" || exit 1
+
+    npx nx run twenty-server:command-no-deps -- "$@"
+  )
 }
 
 confirm() {
@@ -215,6 +250,7 @@ INCLUDE_FILE_DATA="${INCLUDE_FILE_DATA:-true}"
 KEEP_CUSTOM_DOMAINS="${KEEP_CUSTOM_DOMAINS:-false}"
 RUN_LOCAL_MIGRATIONS="${RUN_LOCAL_MIGRATIONS:-true}"
 PURGE_LOCAL_REDIS_WORKSPACE_CACHE="${PURGE_LOCAL_REDIS_WORKSPACE_CACHE:-true}"
+LOCAL_REDIS_URL="${LOCAL_REDIS_URL:-$(read_env_value_from_file "$REPO_ROOT/packages/twenty-server/.env" "REDIS_URL")}"
 LOCAL_REDIS_URL="${LOCAL_REDIS_URL:-redis://localhost:6379}"
 K8S_NAMESPACE="${K8S_NAMESPACE:-twentycrm}"
 K8S_HELPER_POD="${K8S_HELPER_POD:-db-replication-helper}"
@@ -227,6 +263,8 @@ K8S_APP_SECRET_SECRET_NAME="${K8S_APP_SECRET_SECRET_NAME:-tokens}"
 K8S_APP_SECRET_SECRET_KEY="${K8S_APP_SECRET_SECRET_KEY:-accessToken}"
 PROD_APP_SECRET="${PROD_APP_SECRET:-}"
 LOCAL_APP_SECRET="${LOCAL_APP_SECRET:-${APP_SECRET:-$(read_env_value_from_file "$REPO_ROOT/packages/twenty-server/.env" "APP_SECRET")}}"
+LOCAL_ENCRYPTION_KEY="${LOCAL_ENCRYPTION_KEY:-${ENCRYPTION_KEY:-$(read_env_value_from_file "$REPO_ROOT/packages/twenty-server/.env" "ENCRYPTION_KEY")}}"
+LOCAL_ENCRYPTION_KEY="${LOCAL_ENCRYPTION_KEY:-$LOCAL_APP_SECRET}"
 
 if [[ "$FLAG_INCLUDE_FILES" == "true" ]]; then
   INCLUDE_FILE_DATA=true
@@ -257,6 +295,17 @@ if [[ "$FLAG_VIA_K8S" == "true" ]]; then
 elif [[ "$PROD_DATABASE_URL" == "$LOCAL_DATABASE_URL" ]] || [[ "$PROD_DATABASE_URL" == "$LOCAL_MAINTENANCE_DATABASE_URL" ]]; then
   echo "ERROR: Production and local database URLs must not match." >&2
   exit 1
+fi
+
+PROD_ENCRYPTION_KEY="${PROD_ENCRYPTION_KEY:-$PROD_APP_SECRET}"
+SHOULD_ROTATE_SECRETS=false
+
+if [[ -n "$PROD_ENCRYPTION_KEY" ]] && [[ -n "$LOCAL_ENCRYPTION_KEY" ]] && [[ "$PROD_ENCRYPTION_KEY" != "$LOCAL_ENCRYPTION_KEY" ]]; then
+  SHOULD_ROTATE_SECRETS=true
+elif [[ -z "$PROD_ENCRYPTION_KEY" ]]; then
+  echo "WARNING: PROD_APP_SECRET/PROD_ENCRYPTION_KEY not set, so secrets encrypted in prod stay unreadable locally." >&2
+elif [[ "$PROD_ENCRYPTION_KEY" == "$LOCAL_ENCRYPTION_KEY" ]]; then
+  echo "WARNING: the local encryption key is the prod key, so prod OAuth tokens, TOTP seeds and app secrets in this copy are usable locally." >&2
 fi
 
 if [[ "$ASSUME_YES" != "true" ]]; then
@@ -332,10 +381,22 @@ else
   } | psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1
 fi
 
+# Tokens signed with a prod signing key verify on prod, whoever minted them.
+# The local server creates its own key on first use.
+echo "==> Deleting production JWT signing keys..."
+psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+BEGIN
+  IF to_regclass('core."signingKey"') IS NOT NULL THEN
+    DELETE FROM core."signingKey";
+  END IF;
+END $$;
+SQL
+
 if [[ -n "$PROD_APP_SECRET" ]] && [[ -n "$LOCAL_APP_SECRET" ]] && [[ "$PROD_APP_SECRET" != "$LOCAL_APP_SECRET" ]]; then
   require_command node
 
-  echo "==> Re-encrypting DB-backed sensitive config for the local APP_SECRET..."
+  echo "==> Re-encrypting legacy (pre-enc:v2) DB-backed sensitive config for the local APP_SECRET..."
   PROD_APP_SECRET="$PROD_APP_SECRET" \
   LOCAL_APP_SECRET="$LOCAL_APP_SECRET" \
   LOCAL_DATABASE_URL="$LOCAL_DATABASE_URL" \
@@ -488,6 +549,12 @@ const main = async () => {
         continue;
       }
 
+      // enc:v2 envelopes go through secret-encryption:rotate after the upgrade;
+      // the legacy AES-CTR decrypt would silently turn them into garbage.
+      if (encryptedValue.startsWith('enc:')) {
+        continue;
+      }
+
       const decryptedValue = decryptText(encryptedValue, prodAppSecret);
       const reEncryptedValue = JSON.stringify(
         encryptText(decryptedValue, localAppSecret),
@@ -518,14 +585,23 @@ elif [[ -n "$PROD_APP_SECRET" ]] && [[ -z "$LOCAL_APP_SECRET" ]]; then
 fi
 
 if [[ "$RUN_LOCAL_MIGRATIONS" == "true" ]]; then
-  echo "==> Running local server migrations and workspace upgrades..."
-  (
-    cd "$REPO_ROOT"
-    npx nx run twenty-server:database:migrate -- --include-slow
-    # OMNIA-CUSTOM: local prod restores do not go through the Docker
-    # entrypoint, so run workspace upgrade commands explicitly.
-    npx nx run twenty-server:command-no-deps -- upgrade
-  )
+  # Only `upgrade`, never database:migrate (run-instance-commands --force): that
+  # records fast commands per workspace, so a later upgrade would skip every slow
+  # and workspace command between the snapshot and the code.
+  echo "==> Running local upgrade (instance and workspace commands)..."
+  run_local_server_command cache:flush
+  run_local_server_command upgrade
+
+  # Instance config only: user OAuth tokens, TOTP seeds and app secrets stay under
+  # the prod key, so the copy holds no usable prod user or third-party credential.
+  if [[ "$SHOULD_ROTATE_SECRETS" == "true" ]] && [[ "$LOCAL_ENCRYPTION_KEY" == "replace_me_with_a_random_string" ]]; then
+    echo "WARNING: the local encryption key is the .env.example default, so DB-backed config secrets stay encrypted with the prod key." >&2
+  elif [[ "$SHOULD_ROTATE_SECRETS" == "true" ]]; then
+    echo "==> Re-encrypting DB-backed sensitive config from the prod key to the local key..."
+    run_local_server_command secret-encryption:rotate --site=sensitive-config-storage
+  fi
+elif [[ "$SHOULD_ROTATE_SECRETS" == "true" ]]; then
+  echo "WARNING: RUN_LOCAL_MIGRATIONS=false, so enc:v2 secrets stay encrypted with the prod key." >&2
 fi
 
 echo "==> Rotating tokens and rewriting DB-backed localhost URLs..."
@@ -540,10 +616,11 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DELETE FROM core."appToken" WHERE type = 'REFRESH_TOKEN';
 
+-- Revoked rows stay revoked: un-revoking them breaks the v2.58 unique index on
+-- pending two-factor recovery codes.
 UPDATE core."appToken"
 SET value = encode(gen_random_bytes(32), 'hex'),
     "expiresAt" = NOW() + INTERVAL '30 days',
-    "revokedAt" = NULL,
     "updatedAt" = NOW();
 
 WITH desired(key, value) AS (
@@ -600,8 +677,80 @@ DELETE FROM core."publicDomain";
 SQL
 fi
 
+# The copy keeps prod's webhooks, pull pipelines, SMTP account and Sentry DSNs, so
+# a local server or worker would reach them; v2.6 schemas keep webhooks per workspace.
+echo "==> Disconnecting the copy from production services..."
+psql "$LOCAL_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  workspace_schema text;
+BEGIN
+  IF to_regclass('core.webhook') IS NOT NULL THEN
+    UPDATE core.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL;
+  END IF;
+
+  IF to_regclass('core."messageChannel"') IS NOT NULL THEN
+    UPDATE core."messageChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled";
+  END IF;
+
+  IF to_regclass('core."calendarChannel"') IS NOT NULL THEN
+    UPDATE core."calendarChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled";
+  END IF;
+
+  FOR workspace_schema IN SELECT "databaseSchema" FROM core.workspace WHERE "databaseSchema" IS NOT NULL LOOP
+    IF to_regclass(format('%I.webhook', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I.webhook SET "deletedAt" = NOW() WHERE "deletedAt" IS NULL', workspace_schema);
+    END IF;
+
+    IF to_regclass(format('%I."messageChannel"', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I."messageChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled"', workspace_schema);
+    END IF;
+
+    IF to_regclass(format('%I."calendarChannel"', workspace_schema)) IS NOT NULL THEN
+      EXECUTE format('UPDATE %I."calendarChannel" SET "isSyncEnabled" = FALSE WHERE "isSyncEnabled"', workspace_schema);
+    END IF;
+  END LOOP;
+
+  IF to_regclass('core."ingestionPipeline"') IS NOT NULL THEN
+    UPDATE core."ingestionPipeline" SET "isEnabled" = FALSE WHERE "isEnabled";
+  END IF;
+END $$;
+
+UPDATE core."keyValuePair"
+SET value = to_jsonb('LOGGER'::text),
+    "updatedAt" = NOW()
+WHERE type = 'CONFIG_VARIABLE'
+  AND "workspaceId" IS NULL
+  AND "userId" IS NULL
+  AND key = 'EMAIL_DRIVER';
+
+DELETE FROM core."keyValuePair"
+WHERE type = 'CONFIG_VARIABLE'
+  AND "workspaceId" IS NULL
+  AND "userId" IS NULL
+  AND key IN ('EMAIL_SMTP_PASSWORD', 'SENTRY_DSN', 'SENTRY_FRONT_DSN');
+
+WITH updated AS (
+  UPDATE core."keyValuePair"
+  SET value = 'false'::jsonb,
+      "updatedAt" = NOW()
+  WHERE type = 'CONFIG_VARIABLE'
+    AND "workspaceId" IS NULL
+    AND "userId" IS NULL
+    AND key = 'TELEMETRY_ENABLED'
+  RETURNING key
+)
+INSERT INTO core."keyValuePair" ("key", "value", "type", "userId", "workspaceId", "createdAt", "updatedAt")
+SELECT 'TELEMETRY_ENABLED', 'false'::jsonb, 'CONFIG_VARIABLE', NULL, NULL, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM updated);
+SQL
+
 if [[ "$PURGE_LOCAL_REDIS_WORKSPACE_CACHE" == "true" ]]; then
-  purge_local_workspace_cache "$LOCAL_REDIS_URL"
+  # The URL and domain rewrites above change cached config and Workspace rows.
+  echo "==> Flushing local Redis cache..."
+  if ! run_local_server_command cache:flush; then
+    echo "WARNING: cache:flush failed (is twenty-server built?), so local Redis may serve stale prod rows." >&2
+  fi
 fi
 
 echo "==> Remaining references to '$SOURCE_DOMAIN' in DB-backed config/domain rows:"

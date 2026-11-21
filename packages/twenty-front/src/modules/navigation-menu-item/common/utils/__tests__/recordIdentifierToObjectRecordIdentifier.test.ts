@@ -1,9 +1,9 @@
 import { recordIdentifierToObjectRecordIdentifier } from '@/navigation-menu-item/common/utils/recordIdentifierToObjectRecordIdentifier';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 
-jest.mock('@/object-metadata/utils/getAvatarType', () => ({
-  getAvatarType: jest.fn(() => 'rounded'),
+jest.mock('@/object-metadata/utils/getAvatarShape', () => ({
+  getAvatarShape: jest.fn(() => 'circle'),
 }));
 
 jest.mock('@/object-metadata/utils/getBasePathToShowPage', () => ({
@@ -28,7 +28,7 @@ describe('recordIdentifierToObjectRecordIdentifier', () => {
     jest.clearAllMocks();
   });
 
-  it('should return ObjectRecordIdentifier with id, name, avatarUrl, avatarType, and linkToShowPage', () => {
+  it('should return ObjectRecordIdentifier with id, name, avatarUrl, avatarShape, and linkToShowPage', () => {
     const result = recordIdentifierToObjectRecordIdentifier({
       recordIdentifier: baseRecordIdentifier,
       objectMetadataItem: baseObjectMetadataItem,
@@ -38,7 +38,7 @@ describe('recordIdentifierToObjectRecordIdentifier', () => {
       id: 'record-123',
       name: 'John Doe',
       avatarUrl: 'https://example.com/avatar.jpg',
-      avatarType: 'rounded',
+      avatarShape: 'circle',
       linkToShowPage: '/object/person/record-123',
     });
   });
@@ -55,10 +55,10 @@ describe('recordIdentifierToObjectRecordIdentifier', () => {
   it('should return empty linkToShowPage for targets and workspace member', () => {
     const objectMetadataItems: EnrichedObjectMetadataItem[] = [
       {
-        nameSingular: CoreObjectNameSingular.NoteTarget,
+        nameSingular: StandardObjectNameSingular.NoteTarget,
       } as EnrichedObjectMetadataItem,
       {
-        nameSingular: CoreObjectNameSingular.WorkspaceMember,
+        nameSingular: StandardObjectNameSingular.WorkspaceMember,
       } as EnrichedObjectMetadataItem,
     ];
 

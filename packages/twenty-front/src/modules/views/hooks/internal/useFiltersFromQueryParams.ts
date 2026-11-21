@@ -32,9 +32,13 @@ export const useFiltersFromQueryParams = () => {
   const getFiltersFromQueryParams = useCallback(async (): Promise<
     ViewFilter[]
   > => {
-    if (!queryParamsValidation.success) return [];
+    if (!queryParamsValidation.success) {
+      return [];
+    }
 
     const filterQueryParams = queryParamsValidation.data.filter;
+    const filterDisplayValueQueryParams =
+      queryParamsValidation.data.filterDisplayValue;
 
     if (
       !isDefined(filterQueryParams) ||
@@ -59,7 +63,9 @@ export const useFiltersFromQueryParams = () => {
             (field) => field.name === baseFieldName,
           );
 
-          if (!fieldMetadataItem) return null;
+          if (!fieldMetadataItem) {
+            return null;
+          }
 
           if (isDefined(subFieldName) && isNonEmptyString(subFieldName)) {
             if (!isCompositeFieldType(fieldMetadataItem.type)) {
@@ -84,7 +90,14 @@ export const useFiltersFromQueryParams = () => {
               ? JSON.stringify(filterValueFromURL)
               : (filterValueFromURL as string);
 
-          const displayValue = filterValueAsString;
+          const displayValueFromURL =
+            filterDisplayValueQueryParams?.[fieldName]?.[
+              filterOperandFromURL as ViewFilterOperand
+            ];
+
+          const displayValue = isNonEmptyString(displayValueFromURL)
+            ? displayValueFromURL
+            : filterValueAsString;
 
           const filterId = `tmp-${[
             fieldName,

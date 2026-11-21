@@ -1,0 +1,40 @@
+import { useMemo } from 'react';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+
+import { useReadableObjectMetadataItems } from '@/object-metadata/hooks/useReadableObjectMetadataItems';
+import { sidePanelShowHiddenObjectsState } from '@/side-panel/states/sidePanelShowHiddenObjectsState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+
+type UseSearchableObjectNameSingularsParams = {
+  selectedObjectNameSingular?: string | null;
+};
+
+export const useSearchableObjectNameSingulars = ({
+  selectedObjectNameSingular = null,
+}: UseSearchableObjectNameSingularsParams = {}) => {
+  const { readableObjectMetadataItems } = useReadableObjectMetadataItems();
+  const sidePanelShowHiddenObjects = useAtomStateValue(
+    sidePanelShowHiddenObjectsState,
+  );
+
+  return useMemo(() => {
+    const isSearchableObjectNameSingular = (objectNameSingular: string) =>
+      objectNameSingular !== StandardObjectNameSingular.Workflow;
+
+    if (isDefined(selectedObjectNameSingular)) {
+      return isSearchableObjectNameSingular(selectedObjectNameSingular)
+        ? [selectedObjectNameSingular]
+        : [];
+    }
+
+    return readableObjectMetadataItems
+      .filter((item) => sidePanelShowHiddenObjects || item.isSearchable)
+      .map((item) => item.nameSingular)
+      .filter(isSearchableObjectNameSingular);
+  }, [
+    readableObjectMetadataItems,
+    selectedObjectNameSingular,
+    sidePanelShowHiddenObjects,
+  ]);
+};

@@ -1,103 +1,79 @@
-import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
-import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { styled } from '@linaria/react';
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLingui } from '@lingui/react/macro';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { isDefined } from 'twenty-shared/utils';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-import { PageContainer } from '@/ui/layout/page/components/PageContainer';
-import { PageHeader } from '@/ui/layout/page/components/PageHeader';
+import { type CoreObjectShowPageProps } from '@/object-core/types/CoreObjectShowPageProps';
+import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
 import { ReconciliationReviewPageContent } from '@/reconciliation/components/ReconciliationReviewPageContent';
+import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
+import { WorkspaceRouteUnavailable } from '@/ui/layout/page/components/WorkspaceRouteUnavailable';
+import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
+import { RecordShowPageContent } from '~/pages/object-record/RecordShowPageContent';
 
-class ReconciliationErrorBoundary extends Component<
-  { children: ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    // eslint-disable-next-line no-console
-    console.error('ReconciliationReviewPage error:', error, info);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: 24, color: '#888', textAlign: 'center' }}>
-          Something went wrong loading the reconciliation view.
-          <br />
-          <button
-            onClick={() => {
-              this.setState({ hasError: false });
-              window.location.reload();
-            }}
-            style={{ marginTop: 12 }}
-          >
-            Reload
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-const StyledMissing = styled.div`
+const StyledMissingObjects = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex: 1;
   gap: ${themeCssVariables.spacing[3]};
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
 
   code {
     background: ${themeCssVariables.background.tertiary};
-    padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
     border-radius: ${themeCssVariables.border.radius.sm};
     font-size: ${themeCssVariables.font.size.xs};
+    padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
   }
 `;
 
-export const ReconciliationReviewPage = () => {
-  const { objectRecordId } = useParams<{ objectRecordId: string }>();
+type ReconciliationReviewPageProps = CoreObjectShowPageProps;
 
-  // Check metadata exists BEFORE mounting the inner component
-  // (useFindManyRecords throws if metadata is missing — can't be skipped)
-  const reconciliationMeta = useAtomFamilySelectorValue(
+export const ReconciliationReviewPage = ({
+  objectRecordId,
+}: ReconciliationReviewPageProps) => {
+  const { t } = useLingui();
+  const workspaceSurface = useWorkspaceSurface();
+
+  const reconciliationMetadataItem = useAtomFamilySelectorValue(
     objectMetadataItemFamilySelector,
     { objectName: 'reconciliation', objectNameType: 'singular' },
   );
-  const reviewItemMeta = useAtomFamilySelectorValue(
+  const reviewItemMetadataItem = useAtomFamilySelectorValue(
     objectMetadataItemFamilySelector,
     { objectName: 'reviewItem', objectNameType: 'singular' },
   );
 
-  if (!reconciliationMeta || !reviewItemMeta) {
+  // The review needs the full page; a side panel keeps the default record page.
+  if (workspaceSurface.type === 'side-panel') {
     return (
-      <PageContainer>
-        <PageHeader title="Reconciliation" />
-        <StyledMissing>
-          Reconciliation objects not found in this workspace.
+      <RecordShowPageContent
+        parameters={{ objectNameSingular: 'reconciliation', objectRecordId }}
+      />
+    );
+  }
+
+  // The review queries reviewItem, which throws without its metadata.
+  if (
+    !isDefined(reconciliationMetadataItem) ||
+    !isDefined(reviewItemMetadataItem)
+  ) {
+    return (
+      <WorkspaceRouteUnavailable>
+        <StyledMissingObjects>
+          {t`Reconciliation objects not found in this workspace.`}
           <code>
-            npx nx run twenty-server:command
-            workspace:seed-reconciliation-objects
+            {doNotTranslate(
+              'npx nx run twenty-server:command workspace:seed-reconciliation-objects',
+            )}
           </code>
-        </StyledMissing>
-      </PageContainer>
+        </StyledMissingObjects>
+      </WorkspaceRouteUnavailable>
     );
   }
 
   return (
-    <ReconciliationErrorBoundary>
-      <ReconciliationReviewPageContent
-        objectRecordId={objectRecordId ?? ''}
-      />
-    </ReconciliationErrorBoundary>
+    <ReconciliationReviewPageContent
+      objectRecordId={objectRecordId}
+      reviewItemMetadataItem={reviewItemMetadataItem}
+    />
   );
 };

@@ -1,3 +1,4 @@
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import {
   StyledSettingsCardContent,
   StyledSettingsCardDescription,
@@ -7,16 +8,17 @@ import {
 } from '@/settings/components/SettingsOptions/SettingsCardContentBase';
 import { SettingsOptionIconCustomizer } from '@/settings/components/SettingsOptions/SettingsOptionIconCustomizer';
 import { styled } from '@linaria/react';
-import {
-  type IconComponent,
-  OverflowingTextWithTooltip,
-} from 'twenty-ui/display';
+import { isDefined } from 'twenty-shared/utils';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { type IconComponent } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 type SettingsOptionCardContentSelectProps = {
   Icon?: IconComponent;
+  LeftComponent?: React.ReactNode;
   title: React.ReactNode;
   description?: string;
-  disabled?: boolean;
+  divider?: boolean;
   children?: React.ReactNode;
 };
 
@@ -24,32 +26,56 @@ const StyledSelectContainer = styled.div`
   flex-shrink: 0;
   justify-content: flex-end;
   margin-left: auto;
-  max-width: 120px;
+  max-width: var(--settings-select-control-width, 120px);
+  width: var(--settings-select-control-width, auto);
+
+  @container settings-select-group (max-width: 520px) {
+    max-width: 100%;
+  }
+`;
+
+const StyledSelectRow = styled(StyledSettingsCardContent)`
+  @container settings-select-group (max-width: 520px) {
+    flex-wrap: wrap;
+  }
+`;
+
+const StyledSelectText = styled(StyledSettingsCardTextContainer)`
+  @container settings-select-group (max-width: 520px) {
+    flex-basis: calc(
+      100% - ${themeCssVariables.spacing[8]} - ${themeCssVariables.spacing[3]}
+    );
+  }
 `;
 
 export const SettingsOptionCardContentSelect = ({
   Icon,
+  LeftComponent,
   title,
   description,
-  disabled = false,
+  divider,
   children,
 }: SettingsOptionCardContentSelectProps) => {
   return (
-    <StyledSettingsCardContent disabled={disabled}>
-      {Icon && (
-        <StyledSettingsCardIcon>
-          <SettingsOptionIconCustomizer Icon={Icon} />
-        </StyledSettingsCardIcon>
-      )}
-      <StyledSettingsCardTextContainer>
-        <StyledSettingsCardTitle>{title}</StyledSettingsCardTitle>
-        {description && (
-          <StyledSettingsCardDescription>
-            <OverflowingTextWithTooltip text={description} />
-          </StyledSettingsCardDescription>
+    <>
+      <StyledSelectRow>
+        {(isDefined(LeftComponent) || isDefined(Icon)) && (
+          <StyledSettingsCardIcon>
+            {LeftComponent ??
+              (Icon && <SettingsOptionIconCustomizer Icon={Icon} />)}
+          </StyledSettingsCardIcon>
         )}
-      </StyledSettingsCardTextContainer>
-      <StyledSelectContainer>{children}</StyledSelectContainer>
-    </StyledSettingsCardContent>
+        <StyledSelectText>
+          <StyledSettingsCardTitle>{title}</StyledSettingsCardTitle>
+          {description && (
+            <StyledSettingsCardDescription>
+              <OverflowingTextWithTooltip text={description} />
+            </StyledSettingsCardDescription>
+          )}
+        </StyledSelectText>
+        <StyledSelectContainer>{children}</StyledSelectContainer>
+      </StyledSelectRow>
+      {divider && <SettingsCardSeparator />}
+    </>
   );
 };

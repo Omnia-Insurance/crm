@@ -1,12 +1,18 @@
 import { Transform } from 'class-transformer';
 
-const VALID_LOG_LEVELS = ['log', 'error', 'warn', 'debug', 'verbose'];
+const VALID_LOG_LEVELS = [
+  'log',
+  'error',
+  'warn',
+  'debug',
+  'verbose',
+  'performance',
+];
 
 export const CastToLogLevelArray = () =>
   Transform(({ value }: { value: string }) => toLogLevelArray(value));
 
-// oxlint-disable-next-line @typescripttypescript/no-explicit-any
-const toLogLevelArray = (value: any) => {
+const toLogLevelArray = (value: unknown) => {
   if (typeof value === 'string') {
     const rawLogLevels = value.split(',').map((level) => level.trim());
     const invalidLevels = rawLogLevels.filter(

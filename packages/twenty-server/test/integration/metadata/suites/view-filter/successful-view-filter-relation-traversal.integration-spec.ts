@@ -143,8 +143,8 @@ describe('View Filter relation-traversal round-trip should succeed', () => {
       input: {
         viewId: createdViewId,
         fieldMetadataId: personCompanyRelationFieldId,
-        operand: ViewFilterOperand.CONTAINS,
-        value: 'Acme',
+        operand: ViewFilterOperand.IS,
+        value: '["20202020-c02a-4a1b-b1a4-0f6b9b6b3b3b"]',
       },
       gqlFields: RELATION_TRAVERSAL_GQL_FIELDS,
     });

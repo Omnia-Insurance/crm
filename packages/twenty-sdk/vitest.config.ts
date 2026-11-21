@@ -1,13 +1,9 @@
-import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [
-    tsconfigPaths({
-      root: __dirname,
-      ignoreConfigErrors: true,
-    }),
-  ],
+  resolve: {
+    tsconfigPaths: true,
+  },
   test: {
     name: 'twenty-sdk',
     environment: 'node',
@@ -24,7 +20,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
-      exclude: ['src/**/*.d.ts', 'src/cli/cli.ts', 'src/**/__stories__/**'],
+      exclude: ['src/**/*.d.ts', 'src/**/__stories__/**'],
       thresholds: {
         statements: 1,
         lines: 1,

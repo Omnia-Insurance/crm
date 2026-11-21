@@ -1,6 +1,7 @@
 import { useResetFilterDropdown } from '@/object-record/object-filter-dropdown/hooks/useResetFilterDropdown';
 import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
+import { ObjectFilterDropdownComponentInstanceContext } from '@/object-record/object-filter-dropdown/states/contexts/ObjectFilterDropdownComponentInstanceContext';
+import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 
 import { objectFilterDropdownCurrentRecordFilterComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownCurrentRecordFilterComponentState';
 import { useRemoveRecordFilter } from '@/object-record/record-filter/hooks/useRemoveRecordFilter';
@@ -10,17 +11,10 @@ import { ViewBarFilterDropdownContent } from '@/views/components/ViewBarFilterDr
 import { isDefined } from 'twenty-shared/utils';
 import { ViewBarFilterButton } from './ViewBarFilterButton';
 
-// OMNIA-CUSTOM: optional `dropdownId` so multiple filter bars can coexist on
-// the same page (e.g. the reconciliation review's page-level filter and the
-// audit-comments side-panel filter). Without this they share the same
-// dropdown atom and open together.
-type ViewBarFilterDropdownProps = {
-  dropdownId?: string;
-};
-
-export const ViewBarFilterDropdown = ({
-  dropdownId = ViewBarFilterDropdownIds.MAIN,
-}: ViewBarFilterDropdownProps = {}) => {
+export const ViewBarFilterDropdown = () => {
+  const dropdownId = useAvailableComponentInstanceIdOrThrow(
+    ObjectFilterDropdownComponentInstanceContext,
+  );
   const { resetFilterDropdown } = useResetFilterDropdown();
   const { removeRecordFilter } = useRemoveRecordFilter();
 

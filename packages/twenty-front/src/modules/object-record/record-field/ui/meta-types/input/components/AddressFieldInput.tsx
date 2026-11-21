@@ -1,14 +1,13 @@
 import { useAddressField } from '@/object-record/record-field/ui/meta-types/hooks/useAddressField';
 import { type FieldAddressDraftValue } from '@/object-record/record-field/ui/types/FieldInputDraftValue';
 import { AddressInput } from '@/ui/field/input/components/AddressInput';
-
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useContext } from 'react';
 import { normalizeAddressCoordinate } from '~/utils/normalize-address-coordinate';
-import { normalizeAddressFieldValueForPersist } from '~/utils/normalize-address-field-value-for-persist';
+import { normalizeAddressFieldValueForPersist } from '@/object-record/record-field/ui/utils/normalizeAddressFieldValueForPersist';
 
 export const AddressFieldInput = () => {
   const { draftValue, setDraftValue, fieldDefinition } = useAddressField();
@@ -27,6 +26,8 @@ export const AddressFieldInput = () => {
       addressState: newAddress?.addressState ?? null,
       addressCountry: newAddress?.addressCountry ?? null,
       addressPostcode: newAddress?.addressPostcode ?? null,
+      // OMNIA-CUSTOM: legacy coordinates can be non-numeric strings, on which
+      // castAsNumberOrNull throws and takes the record layout down
       addressLat: normalizeAddressCoordinate(newAddress?.addressLat),
       addressLng: normalizeAddressCoordinate(newAddress?.addressLng),
     });
@@ -52,10 +53,13 @@ export const AddressFieldInput = () => {
     onEscape?.({ newValue: convertToAddress(newAddress) });
   };
 
-  const handleClickOutside = (
-    event: MouseEvent | TouchEvent,
-    newAddress: FieldAddressDraftValue,
-  ) => {
+  const handleClickOutside = ({
+    event,
+    newAddress,
+  }: {
+    event: MouseEvent | TouchEvent;
+    newAddress: FieldAddressDraftValue;
+  }) => {
     onClickOutside?.({ newValue: convertToAddress(newAddress), event });
   };
 

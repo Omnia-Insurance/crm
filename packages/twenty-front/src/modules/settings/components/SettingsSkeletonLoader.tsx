@@ -1,54 +1,26 @@
-import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
-import { PageBody } from '@/ui/layout/page/components/PageBody';
-import { PageHeader } from '@/ui/layout/page/components/PageHeader';
-import { styled } from '@linaria/react';
-import { useContext } from 'react';
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-
-const StyledContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-`;
-
-const StyledTitleLoaderContainer = styled.div`
-  margin: ${themeCssVariables.spacing[8]} ${themeCssVariables.spacing[8]}
-    ${themeCssVariables.spacing[2]};
-`;
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
+import { PageCardHeader } from '@/ui/layout/page/components/PageCardHeader';
+import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
+import { SKELETON_HEIGHT_SIZES } from 'twenty-ui/primitives/feedback';
 
 export const SettingsSkeletonLoader = () => {
-  const { theme } = useContext(ThemeContext);
   return (
-    <StyledContainer>
-      <PageHeader
-        title={
-          <SkeletonTheme
-            baseColor={theme.background.tertiary}
-            highlightColor={theme.background.transparent.lighter}
-            borderRadius={4}
-          >
-            <Skeleton
-              height={SKELETON_LOADER_HEIGHT_SIZES.standard.m}
-              width={120}
-            />{' '}
-          </SkeletonTheme>
-        }
-      />
-      <PageBody>
-        <StyledTitleLoaderContainer>
-          <SkeletonTheme
-            baseColor={theme.background.tertiary}
-            highlightColor={theme.background.transparent.lighter}
-            borderRadius={4}
-          >
-            <Skeleton
-              height={SKELETON_LOADER_HEIGHT_SIZES.standard.m}
-              width={200}
-            />
-          </SkeletonTheme>
-        </StyledTitleLoaderContainer>
-      </PageBody>
-    </StyledContainer>
+    <PageCardLayout
+      header={
+        <PageCardHeader
+          links={[
+            {
+              children: (
+                <SkeletonLine width={64} height={SKELETON_HEIGHT_SIZES.s} />
+              ),
+            },
+          ]}
+          title={<SkeletonLine width={120} height={SKELETON_HEIGHT_SIZES.s} />}
+        />
+      }
+      showInformationBanner={false}
+    >
+      {null}
+    </PageCardLayout>
   );
 };

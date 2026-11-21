@@ -1,23 +1,28 @@
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 
-import { ActivityTargetsInlineCell } from '@/activities/inline-cell/components/ActivityTargetsInlineCell';
-import { getActivitySummary } from '@/activities/utils/getActivitySummary';
+import { LinkifiedText } from '@/ui/field/display/components/LinkifiedText/LinkifiedText';
 import { beautifyExactDate, hasDatePassed } from '~/utils/date-utils';
 
 import { ActivityRow } from '@/activities/components/ActivityRow';
-import { useActivityTargetsComponentInstanceId } from '@/activities/inline-cell/hooks/useActivityTargetsComponentInstanceId';
-import { type Task } from '@/activities/types/Task';
-import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { StopPropagationContainer } from '@/object-record/record-board/record-board-card/components/StopPropagationContainer';
-import { RecordFieldsScopeContextProvider } from '@/object-record/record-field-list/contexts/RecordFieldsScopeContext';
-import { FieldContextProvider } from '@/object-record/record-field/ui/components/FieldContextProvider';
-import { useContext } from 'react';
-import { IconCalendar, OverflowingTextWithTooltip } from 'twenty-ui/display';
-import { Checkbox, CheckboxShape } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useActivityFieldComponentInstanceId } from '@/activities/hooks/useActivityFieldComponentInstanceId';
 import { useCompleteTask } from '@/activities/tasks/hooks/useCompleteTask';
+import { type Task } from '@/activities/types/Task';
+import { StopPropagationContainer } from '@/object-record/record-board/record-board-card/components/StopPropagationContainer';
+import { FieldContextProvider } from '@/object-record/record-field/ui/components/FieldContextProvider';
+import { useObjectMorphJunctionConfigOrThrow } from '@/object-record/record-field/ui/hooks/useObjectMorphJunctionConfigOrThrow';
+import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
+import { RecordInlineCell } from '@/object-record/record-inline-cell/components/RecordInlineCell';
+import { getRecordFieldInputInstanceId } from '@/object-record/utils/getRecordFieldInputId';
+import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { getRichTextFieldTextLines } from '@/object-record/record-field/ui/utils/getRichTextFieldTextLines';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { IconCalendar } from 'twenty-ui/icon';
+import { Checkbox } from 'twenty-ui/primitives/input';
+import { Card } from 'twenty-ui/primitives/surfaces';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledTaskBody = styled.div`
   color: ${themeCssVariables.font.color.tertiary};
@@ -84,46 +89,64 @@ const StyledCheckboxContainer = styled.div`
   display: flex;
 `;
 
-export const TaskRow = ({ task }: { task: Task }) => {
-  const { theme } = useContext(ThemeContext);
+export const TaskRow = ({
+  task,
+  divider = false,
+}: {
+  task: Task;
+  divider?: boolean;
+}) => {
+  const { t } = useLingui();
+  const theme = useTheme();
   const { openRecordInSidePanel } = useOpenRecordInSidePanel();
 
-  const body = getActivitySummary(task?.bodyV2?.blocknote ?? null);
+  const body = getRichTextFieldTextLines(task?.bodyV2)[0] ?? '';
 
   const { completeTask } = useCompleteTask(task);
 
-  const baseComponentInstanceId = `task-row-targets-${task.id}`;
-  const componentInstanceId = useActivityTargetsComponentInstanceId(
-    baseComponentInstanceId,
-  );
+  const junctionFieldName = useObjectMorphJunctionConfigOrThrow({
+    objectNameSingular: StandardObjectNameSingular.Task,
+  }).junctionField.name;
+
+  const instanceIdPrefix =
+    useActivityFieldComponentInstanceId('task-row-targets');
+  const componentInstanceId = getRecordFieldInputInstanceId({
+    recordId: task.id,
+    fieldName: junctionFieldName,
+    prefix: instanceIdPrefix,
+  });
 
   return (
     <ActivityRow
+      divider={divider}
+      label={isNonEmptyString(task.title) ? task.title : t`Task title`}
       onClick={() => {
         openRecordInSidePanel({
           recordId: task.id,
-          objectNameSingular: CoreObjectNameSingular.Task,
+          objectNameSingular: StandardObjectNameSingular.Task,
         });
       }}
     >
       <StyledLeftSideContainer>
-        <StyledCheckboxContainer
-          onClick={(e) => {
-            e.stopPropagation();
-          }}
+        <Card.Control
+          render={<StyledCheckboxContainer />}
+          onClick={(event) => event.stopPropagation()}
         >
           <Checkbox
             checked={task.status === 'DONE'}
-            shape={CheckboxShape.Rounded}
+            shape={'round'}
             onCheckedChange={completeTask}
           />
-        </StyledCheckboxContainer>
+        </Card.Control>
         <StyledTaskTitle completed={task.status === 'DONE'}>
           {task.title || <StyledPlaceholder>{t`Task title`}</StyledPlaceholder>}
         </StyledTaskTitle>
-        <StyledTaskBody>
-          <OverflowingTextWithTooltip text={body} />
-        </StyledTaskBody>
+        <Card.Control render={<StyledTaskBody />}>
+          <OverflowingTextWithTooltip
+            text={<LinkifiedText text={body} />}
+            tooltipContent={body}
+          />
+        </Card.Control>
       </StyledLeftSideContainer>
       <StyledRightSideContainer>
         {task.dueAt && (
@@ -135,30 +158,25 @@ export const TaskRow = ({ task }: { task: Task }) => {
           </StyledDueDate>
         )}
         {
-          <StyledActivityTargetsContainer>
+          <Card.Control render={<StyledActivityTargetsContainer />}>
             <FieldContextProvider
-              objectNameSingular={CoreObjectNameSingular.Task}
+              objectNameSingular={StandardObjectNameSingular.Task}
               objectRecordId={task.id}
-              fieldMetadataName="taskTargets"
+              fieldMetadataName={junctionFieldName}
               fieldPosition={0}
+              showLabel={false}
+              maxWidth={200}
+              isDisplayModeFixHeight
             >
-              <RecordFieldsScopeContextProvider
-                value={{
-                  scopeInstanceId: task.id,
-                }}
-              >
-                <StopPropagationContainer>
-                  <ActivityTargetsInlineCell
-                    activityObjectNameSingular={CoreObjectNameSingular.Task}
-                    activityRecordId={task.id}
-                    showLabel={false}
-                    maxWidth={200}
-                    componentInstanceId={componentInstanceId}
-                  />
-                </StopPropagationContainer>
-              </RecordFieldsScopeContextProvider>
+              <StopPropagationContainer>
+                <RecordFieldComponentInstanceContext.Provider
+                  value={{ instanceId: componentInstanceId }}
+                >
+                  <RecordInlineCell instanceIdPrefix={instanceIdPrefix} />
+                </RecordFieldComponentInstanceContext.Provider>
+              </StopPropagationContainer>
             </FieldContextProvider>
-          </StyledActivityTargetsContainer>
+          </Card.Control>
         }
       </StyledRightSideContainer>
     </ActivityRow>

@@ -13,6 +13,7 @@ export const useMoveTableColumn = ({ recordTableId }: useRecordTableProps) => {
 
   const { moveRecordField } = useMoveRecordField(recordTableId);
 
+  // OMNIA-CUSTOM: moves by record field id; sub-field columns share fieldMetadataItemId with their relation
   const moveTableColumn = useCallback(
     async (direction: 'left' | 'right', recordFieldId: string) => {
       unfocusRecordTableCell();

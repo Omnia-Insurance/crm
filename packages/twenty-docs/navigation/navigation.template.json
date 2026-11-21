@@ -4,7 +4,7 @@
       "label": "Getting Started",
       "groups": {
         "welcome": {
-          "label": "Welcome"
+          "label": "Getting Started"
         },
         "coreConcepts": {
           "label": "Core Concepts"
@@ -15,7 +15,7 @@
       "label": "User Guide",
       "groups": {
         "userGuideOverview": {
-          "label": "Overview"
+          "label": "User Guide"
         },
         "dataModel": {
           "label": "Data Model",
@@ -46,6 +46,14 @@
               "label": "Reference"
             },
             "calendarEmailsHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "emailCampaigns": {
+          "label": "Email Campaigns",
+          "groups": {
+            "emailCampaignsHowTos": {
               "label": "How-Tos"
             }
           }
@@ -145,6 +153,14 @@
               "label": "How-Tos"
             }
           }
+        },
+        "legal": {
+          "label": "Legal",
+          "groups": {
+            "legalHowTos": {
+              "label": "How-Tos"
+            }
+          }
         }
       }
     },
@@ -152,13 +168,16 @@
       "label": "Developers",
       "groups": {
         "developersOverview": {
-          "label": "Overview"
+          "label": "Developers"
         },
         "apps": {
           "label": "Apps",
           "groups": {
             "appsGettingStarted": {
               "label": "Getting Started"
+            },
+            "appsTutorial": {
+              "label": "Tutorial"
             },
             "appsConfig": {
               "label": "Config"
@@ -185,6 +204,69 @@
         },
         "contribute": {
           "label": "Contribute"
+        },
+        "uiLibrary": {
+          "label": "UI Library",
+          "groups": {
+            "uiGuides": {
+              "label": "Guides"
+            },
+            "uiPrimitives": {
+              "label": "Primitives",
+              "groups": {
+                "uiAccessibility": {
+                  "label": "Accessibility"
+                },
+                "uiDataDisplay": {
+                  "label": "Data display"
+                },
+                "uiFeedback": {
+                  "label": "Feedback"
+                },
+                "uiForms": {
+                  "label": "Forms"
+                },
+                "uiLayout": {
+                  "label": "Layout"
+                },
+                "uiNavigation": {
+                  "label": "Navigation"
+                },
+                "uiSurfaces": {
+                  "label": "Surfaces"
+                },
+                "uiTypography": {
+                  "label": "Typography"
+                }
+              }
+            },
+            "uiComponents": {
+              "label": "Components",
+              "groups": {
+                "uiComponentsDataDisplay": {
+                  "label": "Data display"
+                },
+                "uiComponentsFeedback": {
+                  "label": "Feedback"
+                },
+                "uiComponentsInput": {
+                  "label": "Input"
+                },
+                "uiComponentsLayout": {
+                  "label": "Layout"
+                },
+                "uiComponentsNavigation": {
+                  "label": "Navigation"
+                },
+                "uiComponentsSettings": {
+                  "label": "Settings"
+                },
+                "uiComponentsCodeEditor": {
+                  "label": "Code editor"
+                }
+              }
+            }
+          }
         }
       }
     }

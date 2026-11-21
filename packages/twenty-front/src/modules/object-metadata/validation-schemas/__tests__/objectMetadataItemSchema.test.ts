@@ -4,41 +4,35 @@ import { objectMetadataItemSchema } from '@/object-metadata/validation-schemas/o
 
 describe('objectMetadataItemSchema', () => {
   it('validates a valid object metadata item', () => {
-    // Given
     const validObjectMetadataItem =
       getTestEnrichedObjectMetadataItemsMock().find(
         (item) => item.nameSingular === 'company',
       );
 
-    // When
     const result = objectMetadataItemSchema.parse(validObjectMetadataItem);
 
-    // Then
     expect(result).toEqual(validObjectMetadataItem);
   });
 
   it('fails for an invalid object metadata item that has null labelIdentifier', () => {
-    // Given
     const validObjectMetadataItem =
       getTestEnrichedObjectMetadataItemsMock().find(
         (item) => item.nameSingular === 'company',
       );
     expect(validObjectMetadataItem).not.toBeUndefined();
-    if (validObjectMetadataItem === undefined)
+    if (validObjectMetadataItem === undefined) {
       throw new Error('Should never occur');
+    }
 
-    // When
     const result = objectMetadataItemSchema.safeParse({
       ...validObjectMetadataItem,
       labelIdentifierFieldMetadataId: null,
     });
 
-    // Then
     expect(result.success).toEqual(false);
   });
 
   it('fails for an invalid object metadata item', () => {
-    // Given
     const invalidObjectMetadataItem: Partial<
       Record<keyof EnrichedObjectMetadataItem, unknown>
     > = {
@@ -46,7 +40,6 @@ describe('objectMetadataItemSchema', () => {
       fields: 'not an array',
       icon: 'invalid icon',
       isActive: 'not a boolean',
-      isCustom: 'not a boolean',
       isSystem: 'not a boolean',
       labelIdentifierFieldMetadataId: 'not a uuid',
       labelPlural: 123,
@@ -57,12 +50,10 @@ describe('objectMetadataItemSchema', () => {
       isLabelSyncedWithName: 'not a boolean',
     };
 
-    // When
     const result = objectMetadataItemSchema.safeParse(
       invalidObjectMetadataItem,
     );
 
-    // Then
     expect(result.success).toBe(false);
   });
 

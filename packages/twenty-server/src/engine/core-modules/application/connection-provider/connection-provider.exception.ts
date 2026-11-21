@@ -27,8 +27,30 @@ const getConnectionProviderExceptionUserFriendlyMessage = (
       return msg`The connection-provider manifest is missing required fields.`;
     case ConnectionProviderExceptionCode.CONNECTION_PROVIDER_NOT_FOUND:
       return msg`Connection provider not found.`;
+    case ConnectionProviderExceptionCode.CONNECTION_NOT_FOUND:
+      return msg`Connection not found.`;
     case ConnectionProviderExceptionCode.CONNECTION_PROVIDER_NAME_ALREADY_EXISTS:
       return msg`A connection provider with this name already exists for this application.`;
+    case ConnectionProviderExceptionCode.ON_CONNECT_LOGIC_FUNCTION_NOT_FOUND:
+      return msg`The logic function to run on connect was not found.`;
+    case ConnectionProviderExceptionCode.ON_DISCONNECT_LOGIC_FUNCTION_NOT_FOUND:
+      return msg`The logic function to run on disconnect was not found.`;
+    case ConnectionProviderExceptionCode.ON_DISCONNECT_LOGIC_FUNCTION_FAILED:
+      return msg`The logic function to run on disconnect failed.`;
+    case ConnectionProviderExceptionCode.IDENTIFY_ACCOUNT_LOGIC_FUNCTION_NOT_FOUND:
+      return msg`The logic function that identifies the connected account was not found.`;
+    case ConnectionProviderExceptionCode.IDENTIFY_ACCOUNT_LOGIC_FUNCTION_FAILED:
+      return msg`We could not identify the account you authorized. Please try again.`;
+    case ConnectionProviderExceptionCode.RECONNECT_ACCOUNT_MISMATCH:
+      return msg`You authorized a different account than the one this connection belongs to.`;
+    case ConnectionProviderExceptionCode.AUTHORIZE_LOGIC_FUNCTION_NOT_FOUND:
+      return msg`The logic function that starts the connection was not found.`;
+    case ConnectionProviderExceptionCode.AUTHORIZE_LOGIC_FUNCTION_FAILED:
+      return msg`We could not start the connection. Please try again.`;
+    case ConnectionProviderExceptionCode.CALLBACK_LOGIC_FUNCTION_NOT_FOUND:
+      return msg`The logic function that completes the connection was not found.`;
+    case ConnectionProviderExceptionCode.CALLBACK_LOGIC_FUNCTION_FAILED:
+      return msg`We could not complete the connection. Please try again.`;
     default:
       assertUnreachable(code);
   }

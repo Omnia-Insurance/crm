@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 
 import { isConfigVariablesInDbEnabledState } from '@/client-config/states/isConfigVariablesInDbEnabledState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { ConfigSource, type ConfigVariable } from '~/generated-admin/graphql';
 
 const StyledHelpText = styled.div<{ color?: string }>`
@@ -71,15 +71,14 @@ export const ConfigVariableHelpText = ({
           </StyledHelpText>
         </>
       );
-    } else {
-      return (
-        <StyledHelpText>
-          {isFromEnvironment
-            ? t`Current value from server environment. Set a custom value to override.`
-            : t`Using default value. Set a custom value to override.`}
-        </StyledHelpText>
-      );
     }
+    return (
+      <StyledHelpText>
+        {isFromEnvironment
+          ? t`Current value from server environment. Set a custom value to override.`
+          : t`Using default value. Set a custom value to override.`}
+      </StyledHelpText>
+    );
   }
 
   return <StyledHelpText>{t`This should never happen`}</StyledHelpText>;

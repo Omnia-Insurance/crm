@@ -26,6 +26,7 @@ import {
   TransitionConflictError,
 } from 'src/modules/reconciliation/services/state-machine.service';
 import { parseCarrierPipelineConfig } from 'src/modules/reconciliation/types/carrier-config';
+import { buildReconciliationJobOptions } from 'src/modules/reconciliation/utils/build-reconciliation-job-options.util';
 import {
   computeConfigFingerprint,
   mergeRunWarnings,
@@ -256,12 +257,10 @@ export class ReconciliationParseJob {
       }
 
       if (parseErrors.length > 0) {
+        // Row and header only: transform errors quote the raw cell value (PHI)
         const sample = parseErrors
           .slice(0, 5)
-          .map(
-            (e) =>
-              `row ${e.rowNumber}${e.header ? ` [${e.header}]` : ''}: ${e.error}`,
-          )
+          .map((e) => `row ${e.rowNumber}${e.header ? ` [${e.header}]` : ''}`)
           .join('; ');
 
         this.logger.warn(
@@ -327,10 +326,15 @@ export class ReconciliationParseJob {
         },
       );
 
-      await this.queue.add<ReconciliationJobData>('reconciliation-match', {
-        workspaceId,
-        reconciliationId,
-      });
+      await this.queue.add<ReconciliationJobData>(
+        'reconciliation-match',
+        { workspaceId, reconciliationId },
+        buildReconciliationJobOptions({
+          workspaceId,
+          reconciliationId,
+          phase: 'match',
+        }),
+      );
 
       this.logger.log(
         `Auto-enqueued match job for reconciliation ${reconciliationId}`,

@@ -10,9 +10,8 @@ import { type ReadonlyDeep } from 'type-fest';
 import { isDefined } from 'twenty-shared/utils';
 import { uniqueEntries } from './uniqueEntries';
 
-// OMNIA-CUSTOM: param widened from `SpreadsheetImportField` to allow the
-// readonly-deep variant produced by SpreadsheetImportFields. This function
-// only reads `field`, never mutates, so accepting either is safe.
+// OMNIA-CUSTOM: precomputed matches pass a ReadonlyDeep field from
+// SpreadsheetImportFields; `field` is only read, so either type is safe
 export const setColumn = (
   oldColumn: SpreadsheetColumn,
   field?: SpreadsheetImportField | ReadonlyDeep<SpreadsheetImportField>,
@@ -58,7 +57,9 @@ export const setColumn = (
           data
             ?.flatMap((row) => {
               const value = row[oldColumn.index];
-              if (!isDefined(value)) return [];
+              if (!isDefined(value)) {
+                return [];
+              }
               return spreadsheetImportParseMultiSelectOptionsOrThrow(value);
             })
             .filter((entry) => typeof entry === 'string'),

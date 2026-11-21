@@ -2,9 +2,13 @@ import { createHash } from 'crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import type { WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace.repository';
+import { isDefined } from 'twenty-shared/utils';
+import { type ObjectLiteral } from 'typeorm';
+
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { RECONCILIATION_BOOKKEEPING_REPOSITORY_OPTIONS } from 'src/modules/reconciliation/constants/reconciliation-bookkeeping-repository-options.constant';
 
 export type ReconciliationDecisionSource = 'USER' | 'BATCH_USER' | 'AUTO_RULE';
 
@@ -98,22 +102,28 @@ const STATUS_RULE_ALLOWED_ACTIONABLE_FIELDS = new Set([
 export class ReconciliationDecisionRuleService {
   private readonly logger = new Logger(ReconciliationDecisionRuleService.name);
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   buildStatusRuleSignature(
     item: ReviewItemForDecisionRule,
     carrierName: string | null | undefined,
   ): StatusRuleSignatureResult | null {
-    if (!carrierName) return null;
-    if (item.category === 'UNMATCHED') return null;
-    if (this.hasAutoRuleBlockingFlag(item)) return null;
+    if (!carrierName) {
+      return null;
+    }
+    if (item.category === 'UNMATCHED') {
+      return null;
+    }
+    if (this.hasAutoRuleBlockingFlag(item)) {
+      return null;
+    }
     // Cancel-previous-policy actions are invisible to the diff-based
     // status-only check (the synthetic cancel diff has crmField null), so an
     // explicit guard keeps cancel-bearing items out of rule learning AND out
     // of rule matching: a rule must never silently cancel another policy.
-    if (this.hasCancelAction(item)) return null;
+    if (this.hasCancelAction(item)) {
+      return null;
+    }
     // Learning is intentionally BROADER than auto-apply: an item that also
     // carries non-status diffs (paid-through, contact, premium) still learns/
     // reinforces a status rule — the human's status approval is a valid signal
@@ -192,38 +202,29 @@ export class ReconciliationDecisionRuleService {
   ): Promise<string | null> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const reconciliationRepo =
-          await this.globalWorkspaceOrmManager.getRepository<WorkspaceRecord>(
-            workspaceId,
-            'reconciliation',
-            { shouldBypassPermissionChecks: true },
-          );
-        const carrierConfigRepo =
-          await this.globalWorkspaceOrmManager.getRepository<WorkspaceRecord>(
-            workspaceId,
-            'carrierConfig',
-            { shouldBypassPermissionChecks: true },
-          );
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const reconciliationRepo =
+        this.getSystemRepository<WorkspaceRecord>('reconciliation');
+      const carrierConfigRepo =
+        this.getSystemRepository<WorkspaceRecord>('carrierConfig');
 
-        const reconciliation = await reconciliationRepo.findOne({
-          where: { id: reconciliationId },
-        });
-        const carrierConfigId = reconciliation?.carrierConfigId;
+      const reconciliation = await reconciliationRepo.findOne({
+        where: { id: reconciliationId },
+      });
+      const carrierConfigId = reconciliation?.carrierConfigId;
 
-        if (typeof carrierConfigId !== 'string') return null;
+      if (typeof carrierConfigId !== 'string') {
+        return null;
+      }
 
-        const carrierConfig = await carrierConfigRepo.findOne({
-          where: { id: carrierConfigId },
-        });
+      const carrierConfig = await carrierConfigRepo.findOne({
+        where: { id: carrierConfigId },
+      });
 
-        return typeof carrierConfig?.name === 'string'
-          ? carrierConfig.name
-          : null;
-      },
-      authContext,
-    );
+      return typeof carrierConfig?.name === 'string'
+        ? carrierConfig.name
+        : null;
+    }, authContext);
   }
 
   async findActiveStatusRules(
@@ -231,14 +232,11 @@ export class ReconciliationDecisionRuleService {
   ): Promise<ReconciliationDecisionRuleRecord[]> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const ruleRepo = await this.getRuleRepo(workspaceId);
-
-        return ruleRepo.find({
+    return this.workspaceOrmManager.executeInWorkspaceContext(
+      async () =>
+        this.getRuleRepo().find({
           where: { ruleType: 'STATUS_UPDATE', isActive: true },
-        });
-      },
+        }),
       authContext,
     );
   }
@@ -254,66 +252,63 @@ export class ReconciliationDecisionRuleService {
     items: ReviewItemForDecisionRule[];
     createdByUserWorkspaceId?: string | null;
   }): Promise<ReconciliationDecisionRuleRecord[]> {
-    if (!carrierName || items.length === 0) return [];
+    if (!carrierName || items.length === 0) {
+      return [];
+    }
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const ruleRepo = await this.getRuleRepo(workspaceId);
-        const reviewItemRepo =
-          await this.globalWorkspaceOrmManager.getRepository<ReviewItemForDecisionRule>(
-            workspaceId,
-            'reviewItem',
-            { shouldBypassPermissionChecks: true },
-          );
-        const rules: ReconciliationDecisionRuleRecord[] = [];
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const ruleRepo = this.getRuleRepo();
+      const reviewItemRepo =
+        this.getSystemRepository<ReviewItemForDecisionRule>('reviewItem');
+      const rules: ReconciliationDecisionRuleRecord[] = [];
 
-        for (const item of items) {
-          const signatureResult = this.buildStatusRuleSignature(
-            item,
-            carrierName,
-          );
+      for (const item of items) {
+        const signatureResult = this.buildStatusRuleSignature(
+          item,
+          carrierName,
+        );
 
-          if (!signatureResult) continue;
+        if (!signatureResult) {
+          continue;
+        }
 
-          // An item already linked to this signature was counted by a
-          // previous pass (live learning or backfill) — skip the
-          // approvedCount increment so reruns are idempotent (audit 1.7).
-          const alreadyCountedForSignature =
-            item.decisionRuleSignatureHash === signatureResult.signatureHash;
+        // An item already linked to this signature was counted by a
+        // previous pass (live learning or backfill) — skip the
+        // approvedCount increment so reruns are idempotent (audit 1.7).
+        const alreadyCountedForSignature =
+          item.decisionRuleSignatureHash === signatureResult.signatureHash;
 
-          const rule = await this.upsertRule({
-            ruleRepo,
-            item,
-            signatureResult,
-            createdByUserWorkspaceId,
-            countApproval: !alreadyCountedForSignature,
+        const rule = await this.upsertRule({
+          ruleRepo,
+          item,
+          signatureResult,
+          createdByUserWorkspaceId,
+          countApproval: !alreadyCountedForSignature,
+        });
+
+        if (
+          item.decisionRuleId !== rule.id ||
+          item.decisionRuleSignatureHash !== rule.signatureHash
+        ) {
+          await reviewItemRepo.update(item.id, {
+            decisionRuleId: rule.id,
+            decisionRuleSignatureHash: rule.signatureHash,
           });
-
-          if (
-            item.decisionRuleId !== rule.id ||
-            item.decisionRuleSignatureHash !== rule.signatureHash
-          ) {
-            await reviewItemRepo.update(item.id, {
-              decisionRuleId: rule.id,
-              decisionRuleSignatureHash: rule.signatureHash,
-            });
-          }
-
-          rules.push(rule);
         }
 
-        if (rules.length > 0) {
-          this.logger.log(
-            `Learned/refreshed ${rules.length} reconciliation decision rule(s)`,
-          );
-        }
+        rules.push(rule);
+      }
 
-        return rules;
-      },
-      authContext,
-    );
+      if (rules.length > 0) {
+        this.logger.log(
+          `Learned/refreshed ${rules.length} reconciliation decision rule(s)`,
+        );
+      }
+
+      return rules;
+    }, authContext);
   }
 
   async recordAutoApplied({
@@ -325,15 +320,19 @@ export class ReconciliationDecisionRuleService {
     ruleId: string;
     count: number;
   }): Promise<void> {
-    if (count <= 0) return;
+    if (count <= 0) {
+      return;
+    }
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const ruleRepo = await this.getRuleRepo(workspaceId);
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const ruleRepo = this.getRuleRepo();
       const existing = await ruleRepo.findOne({ where: { id: ruleId } });
 
-      if (!existing) return;
+      if (!existing) {
+        return;
+      }
 
       await ruleRepo.update(ruleId, {
         autoAppliedCount: (existing.autoAppliedCount ?? 0) + count,
@@ -351,37 +350,34 @@ export class ReconciliationDecisionRuleService {
   }): Promise<number> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const ruleRepo = await this.getRuleRepo(workspaceId);
-        const activeSourceRules = await ruleRepo.find({
-          where: {
-            sourceReviewItemId,
-            isActive: true,
-          },
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const ruleRepo = this.getRuleRepo();
+      const activeSourceRules = await ruleRepo.find({
+        where: {
+          sourceReviewItemId,
+          isActive: true,
+        },
+      });
+
+      const now = new Date().toISOString();
+
+      for (const rule of activeSourceRules) {
+        await ruleRepo.update(rule.id, {
+          isActive: false,
+          deactivatedAt: now,
+          deactivationReason: `Source review item ${sourceReviewItemId} was undone by a user`,
+          lastSeenAt: now,
         });
+      }
 
-        const now = new Date().toISOString();
+      if (activeSourceRules.length > 0) {
+        this.logger.warn(
+          `Deactivated ${activeSourceRules.length} learned reconciliation rule(s) sourced from undone review item ${sourceReviewItemId}`,
+        );
+      }
 
-        for (const rule of activeSourceRules) {
-          await ruleRepo.update(rule.id, {
-            isActive: false,
-            deactivatedAt: now,
-            deactivationReason: `Source review item ${sourceReviewItemId} was undone by a user`,
-            lastSeenAt: now,
-          });
-        }
-
-        if (activeSourceRules.length > 0) {
-          this.logger.warn(
-            `Deactivated ${activeSourceRules.length} learned reconciliation rule(s) sourced from undone review item ${sourceReviewItemId}`,
-          );
-        }
-
-        return activeSourceRules.length;
-      },
-      authContext,
-    );
+      return activeSourceRules.length;
+    }, authContext);
   }
 
   /**
@@ -402,47 +398,55 @@ export class ReconciliationDecisionRuleService {
     signatureHash: string | null;
     undoneReviewItemId: string;
   }): Promise<number> {
-    if (!ruleId && !signatureHash) return 0;
+    if (!ruleId && !signatureHash) {
+      return 0;
+    }
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const ruleRepo = await this.getRuleRepo(workspaceId);
-        const rule = ruleId
-          ? await ruleRepo.findOne({ where: { id: ruleId } })
-          : await ruleRepo.findOne({
-              where: { signatureHash: signatureHash as string },
-            });
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const ruleRepo = this.getRuleRepo();
+      const rule = ruleId
+        ? await ruleRepo.findOne({ where: { id: ruleId } })
+        : await ruleRepo.findOne({
+            where: { signatureHash: signatureHash as string },
+          });
 
-        if (!rule || rule.isActive === false) return 0;
+      if (!rule || rule.isActive === false) {
+        return 0;
+      }
 
-        const now = new Date().toISOString();
+      const now = new Date().toISOString();
 
-        await ruleRepo.update(rule.id, {
-          isActive: false,
-          deactivatedAt: now,
-          deactivationReason: `Auto-applied review item ${undoneReviewItemId} was undone by a user`,
-          lastSeenAt: now,
-        });
+      await ruleRepo.update(rule.id, {
+        isActive: false,
+        deactivatedAt: now,
+        deactivationReason: `Auto-applied review item ${undoneReviewItemId} was undone by a user`,
+        lastSeenAt: now,
+      });
 
-        this.logger.warn(
-          `Deactivated learned reconciliation rule ${rule.id} after user undid auto-applied review item ${undoneReviewItemId}`,
-        );
+      this.logger.warn(
+        `Deactivated learned reconciliation rule ${rule.id} after user undid auto-applied review item ${undoneReviewItemId}`,
+      );
 
-        return 1;
-      },
-      authContext,
+      return 1;
+    }, authContext);
+  }
+
+  private getRuleRepo(): WorkspaceRepository<ReconciliationDecisionRuleRecord> {
+    return this.getSystemRepository<ReconciliationDecisionRuleRecord>(
+      'reconciliationDecisionRule',
     );
   }
 
-  private async getRuleRepo(
-    workspaceId: string,
-  ): Promise<WorkspaceRepository<ReconciliationDecisionRuleRecord>> {
-    return this.globalWorkspaceOrmManager.getRepository<ReconciliationDecisionRuleRecord>(
-      workspaceId,
-      'reconciliationDecisionRule',
-      { shouldBypassPermissionChecks: true },
+  // Learned rules and their links are pipeline bookkeeping on the admin-only
+  // reconciliation objects, kept as the system
+  private getSystemRepository<TRecord extends ObjectLiteral>(
+    objectName: string,
+  ): WorkspaceRepository<TRecord> {
+    return this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<TRecord>(
+      objectName,
+      RECONCILIATION_BOOKKEEPING_REPOSITORY_OPTIONS,
     );
   }
 
@@ -491,7 +495,7 @@ export class ReconciliationDecisionRuleService {
       };
     }
 
-    const rule = await ruleRepo.save({
+    const [rule] = await ruleRepo.save({
       name: `${signatureResult.signature.carrierName}: ${signatureResult.signature.fromStatus} -> ${signatureResult.signature.toStatus}`,
       ruleType: 'STATUS_UPDATE',
       isActive: true,
@@ -509,6 +513,12 @@ export class ReconciliationDecisionRuleService {
       lastAppliedAt: null,
     });
 
+    if (!isDefined(rule)) {
+      throw new Error(
+        `Failed to create reconciliation decision rule for signature ${signatureResult.signatureHash}`,
+      );
+    }
+
     return rule;
   }
 
@@ -520,7 +530,9 @@ export class ReconciliationDecisionRuleService {
     // A cancel action is a destructive write to ANOTHER policy — by
     // definition not "status only", even though its synthetic diff carries
     // crmField null and is invisible to the filter below (audit 1.5).
-    if (this.hasCancelAction(item)) return false;
+    if (this.hasCancelAction(item)) {
+      return false;
+    }
 
     const actionableDiffs = (item.fieldDiffs ?? []).filter(
       (diff) =>
@@ -529,7 +541,9 @@ export class ReconciliationDecisionRuleService {
         diff.bobValue !== diff.crmValue,
     );
 
-    if (actionableDiffs.length === 0) return false;
+    if (actionableDiffs.length === 0) {
+      return false;
+    }
 
     return actionableDiffs.every((diff) =>
       STATUS_RULE_ALLOWED_ACTIONABLE_FIELDS.has(diff.crmField ?? ''),
@@ -564,18 +578,24 @@ export class ReconciliationDecisionRuleService {
   private classifyStatusReason(reason: string | null | undefined): string {
     const normalized = this.normalizeReason(reason);
 
-    if (!normalized) return 'NO_REASON';
+    if (!normalized) {
+      return 'NO_REASON';
+    }
     if (normalized.includes('not eligible for commission')) {
       return 'NOT_ELIGIBLE_FOR_COMMISSION';
     }
-    if (normalized.includes('term date')) return 'TERM_DATE_PAST';
+    if (normalized.includes('term date')) {
+      return 'TERM_DATE_PAST';
+    }
     if (
       normalized.includes('effective date') &&
       normalized.includes('future')
     ) {
       return 'FUTURE_EFFECTIVE_DATE';
     }
-    if (normalized.includes('no payment data')) return 'NO_PAYMENT_DATA';
+    if (normalized.includes('no payment data')) {
+      return 'NO_PAYMENT_DATA';
+    }
     if (
       normalized.includes('predates effective') &&
       normalized.includes('payment error')
@@ -614,10 +634,18 @@ export class ReconciliationDecisionRuleService {
     const normalizedStatus = this.normalizeStatus(toStatus);
     const normalizedReason = this.normalizeReason(reason);
 
-    if (normalizedStatus.includes('PAYMENT_ERROR')) return 'PAYMENT_ERROR';
-    if (normalizedReason.includes('payment current')) return 'PAYMENT_CURRENT';
-    if (normalizedReason.includes('payment error')) return 'PAYMENT_ERROR';
-    if (normalizedStatus.includes('CANCELED')) return 'CANCELED';
+    if (normalizedStatus.includes('PAYMENT_ERROR')) {
+      return 'PAYMENT_ERROR';
+    }
+    if (normalizedReason.includes('payment current')) {
+      return 'PAYMENT_CURRENT';
+    }
+    if (normalizedReason.includes('payment error')) {
+      return 'PAYMENT_ERROR';
+    }
+    if (normalizedStatus.includes('CANCELED')) {
+      return 'CANCELED';
+    }
 
     return 'NO_PAYMENT_SIGNAL';
   }
@@ -634,8 +662,12 @@ export class ReconciliationDecisionRuleService {
     if (normalized.includes('not eligible for commission')) {
       return 'COMMISSION_ELIGIBILITY';
     }
-    if (normalized.includes('term date')) return 'TERM_DATE';
-    if (normalized.includes('effective date')) return 'EFFECTIVE_DATE';
+    if (normalized.includes('term date')) {
+      return 'TERM_DATE';
+    }
+    if (normalized.includes('effective date')) {
+      return 'EFFECTIVE_DATE';
+    }
 
     return 'NONE';
   }

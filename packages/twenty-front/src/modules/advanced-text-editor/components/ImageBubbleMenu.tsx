@@ -1,27 +1,27 @@
 import { BubbleMenuIconButton } from '@/advanced-text-editor/components/BubbleMenuIconButton';
-import { StyledBubbleMenuContainer } from '@/advanced-text-editor/components/TextBubbleMenu';
+import { BubbleMenuSeparator } from '@/advanced-text-editor/components/BubbleMenuSeparator';
+import { StyledBubbleMenuContainer } from '@/advanced-text-editor/components/StyledBubbleMenuContainer';
+import { useLiveEditorState } from '@/advanced-text-editor/hooks/useLiveEditorState';
 import { type Editor } from '@tiptap/core';
-import { useEditorState } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import {
   IconAlignCenter,
   IconAlignLeft,
   IconAlignRight,
   IconTrash,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
+import { useLingui } from '@lingui/react/macro';
 
 type ImageBubbleMenuProps = {
   editor: Editor;
 };
 
 export const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
-  const state = useEditorState({
-    editor,
-    selector: (ctx) => {
-      return {
-        align: ctx.editor.getAttributes('image').align || 'left',
-      };
-    },
+  const { t } = useLingui();
+  const state = useLiveEditorState(editor, (currentEditor) => {
+    return {
+      align: currentEditor.getAttributes('image').align || 'left',
+    };
   });
 
   const handleDelete = () => {
@@ -32,6 +32,7 @@ export const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
     {
       align: 'left',
       Icon: IconAlignLeft,
+      label: t`Align image left`,
       onClick: () =>
         editor
           .chain()
@@ -43,6 +44,7 @@ export const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
     {
       align: 'center',
       Icon: IconAlignCenter,
+      label: t`Align image center`,
       onClick: () =>
         editor
           .chain()
@@ -54,6 +56,7 @@ export const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
     {
       align: 'right',
       Icon: IconAlignRight,
+      label: t`Align image right`,
       onClick: () =>
         editor
           .chain()
@@ -76,16 +79,19 @@ export const ImageBubbleMenu = ({ editor }: ImageBubbleMenuProps) => {
       updateDelay={0}
     >
       <StyledBubbleMenuContainer>
-        {alignmentActions.map(({ align, Icon, onClick, isActive }) => (
+        {alignmentActions.map(({ label, align, Icon, onClick, isActive }) => (
           <BubbleMenuIconButton
             key={`image-align-${align}`}
+            label={label}
             Icon={Icon}
             onClick={onClick}
             isActive={isActive}
           />
         ))}
+        <BubbleMenuSeparator />
         <BubbleMenuIconButton
           key="image-delete"
+          label={t`Delete image`}
           Icon={IconTrash}
           onClick={handleDelete}
           isActive={false}

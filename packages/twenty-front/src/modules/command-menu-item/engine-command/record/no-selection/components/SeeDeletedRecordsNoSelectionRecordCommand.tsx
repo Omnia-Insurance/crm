@@ -1,14 +1,18 @@
 import { HeadlessEngineCommandWrapperEffect } from '@/command-menu-item/engine-command/components/HeadlessEngineCommandWrapperEffect';
 import { useHeadlessCommandContextApi } from '@/command-menu-item/engine-command/hooks/useHeadlessCommandContextApi';
 import { useHandleToggleTrashColumnFilter } from '@/object-record/record-index/hooks/useHandleToggleTrashColumnFilter';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 export const SeeDeletedRecordsNoSelectionRecordCommand = () => {
   const { objectMetadataItem, recordIndexId } = useHeadlessCommandContextApi();
 
   if (!isDefined(objectMetadataItem) || !isDefined(recordIndexId)) {
     throw new Error(
-      'Object metadata item and record index ID are required to see deleted records',
+      doNotTranslate(
+        'Object metadata item and record index ID are required to see deleted records',
+      ),
     );
   }
 
@@ -18,12 +22,14 @@ export const SeeDeletedRecordsNoSelectionRecordCommand = () => {
       viewBarId: recordIndexId,
       recordFiltersInstanceId: recordIndexId,
     });
+  const { closeSidePanelMenu } = useSidePanelMenu();
 
   return (
     <HeadlessEngineCommandWrapperEffect
       execute={() => {
         handleToggleTrashColumnFilter();
         toggleSoftDeleteFilterState(true);
+        closeSidePanelMenu();
       }}
     />
   );

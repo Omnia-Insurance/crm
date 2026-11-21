@@ -1,17 +1,17 @@
+import { Dropdown } from 'twenty-ui/components/navigation';
 import { useMoveWidgetToTab } from '@/page-layout/hooks/useMoveWidgetToTab';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
 import { pageLayoutEditingWidgetIdComponentState } from '@/page-layout/states/pageLayoutEditingWidgetIdComponentState';
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
+import { canVerticalListAcceptWidget } from '@/page-layout/utils/canVerticalListAcceptWidget';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { t } from '@lingui/core/macro';
-import { isDefined } from 'twenty-shared/utils';
-import { MenuItem } from 'twenty-ui/navigation';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
 import { PageLayoutTabLayoutMode } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const MoveToTabDropdownContent = () => {
-  const { pageLayoutId } = usePageLayoutIdFromContextStore();
+  const { t } = useLingui();
+  const { pageLayoutId } = usePageLayoutSidePanelTarget();
 
   const pageLayoutDraft = useAtomComponentStateValue(
     pageLayoutDraftComponentState,
@@ -25,44 +25,53 @@ export const MoveToTabDropdownContent = () => {
 
   const { moveWidgetToTab } = useMoveWidgetToTab(pageLayoutId);
 
-  const { closeDropdown } = useCloseDropdown();
-
   const currentTab = isDefined(pageLayoutEditingWidgetId)
     ? pageLayoutDraft.tabs.find((tab) =>
         tab.widgets.some((widget) => widget.id === pageLayoutEditingWidgetId),
       )
     : undefined;
 
+  const currentWidget = currentTab?.widgets.find(
+    (widget) => widget.id === pageLayoutEditingWidgetId,
+  );
+
   const eligibleTabs = pageLayoutDraft.tabs.filter(
     (tab) =>
       tab.layoutMode === PageLayoutTabLayoutMode.VERTICAL_LIST &&
-      tab.id !== currentTab?.id,
+      tab.id !== currentTab?.id &&
+      isDefined(currentWidget) &&
+      canVerticalListAcceptWidget({
+        destinationWidgets: tab.widgets,
+        widget: currentWidget,
+      }),
   );
 
   if (!isDefined(pageLayoutEditingWidgetId)) {
     return null;
   }
 
-  if (eligibleTabs.length === 0) {
+  if (!isNonEmptyArray(eligibleTabs)) {
     return (
-      <DropdownMenuItemsContainer>
-        <MenuItem text={t`No available tabs`} />
-      </DropdownMenuItemsContainer>
+      <Dropdown.Section>
+        <Dropdown.ActionItem
+          disabled
+        >{t`No available tabs`}</Dropdown.ActionItem>
+      </Dropdown.Section>
     );
   }
 
   return (
-    <DropdownMenuItemsContainer>
+    <Dropdown.Section scrollable>
       {eligibleTabs.map((tab) => (
-        <MenuItem
+        <Dropdown.ActionItem
           key={tab.id}
-          text={tab.title ?? ''}
           onClick={() => {
             moveWidgetToTab(pageLayoutEditingWidgetId, tab.id);
-            closeDropdown();
           }}
-        />
+        >
+          {tab.title ?? ''}
+        </Dropdown.ActionItem>
       ))}
-    </DropdownMenuItemsContainer>
+    </Dropdown.Section>
   );
 };

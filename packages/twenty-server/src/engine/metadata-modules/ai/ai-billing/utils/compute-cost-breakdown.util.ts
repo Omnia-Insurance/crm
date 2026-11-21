@@ -1,5 +1,4 @@
-import { type AiModelConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-config.type';
-import { ModelFamily } from 'src/engine/metadata-modules/ai/ai-models/types/model-family.enum';
+import { type AiModelCostConfig } from 'src/engine/metadata-modules/ai/ai-models/types/ai-model-cost-config.type';
 
 export type TokenUsageInput = {
   inputTokens?: number;
@@ -29,14 +28,9 @@ const safeNumber = (value: number | undefined): number => {
   return Number.isFinite(result) ? result : 0;
 };
 
-// Input token semantics differ by model family:
-//   Anthropic: inputTokens excludes cached and cache creation tokens
-//   OpenAI/xAI/Groq/Google: inputTokens includes cached tokens
-// Output token semantics also differ:
-//   Anthropic: outputTokens excludes reasoning (thinking) tokens
-//   OpenAI/xAI/Groq/Google: outputTokens includes reasoning tokens
+// every provider we use counts cache reads and writes inside inputTokens and reasoning inside outputTokens
 export const computeCostBreakdown = (
-  model: AiModelConfig,
+  model: AiModelCostConfig,
   usage: TokenUsageInput,
 ): CostBreakdown => {
   const rawInputTokens = safeNumber(usage.inputTokens);
@@ -45,19 +39,14 @@ export const computeCostBreakdown = (
   const cachedInputTokens = safeNumber(usage.cachedInputTokens);
   const cacheCreationTokens = safeNumber(usage.cacheCreationTokens);
 
-  const isAnthropicTokenReporting = model.modelFamily === ModelFamily.CLAUDE;
+  const adjustedInputTokens = Math.max(
+    0,
+    rawInputTokens - cachedInputTokens - cacheCreationTokens,
+  );
 
-  const adjustedInputTokens = isAnthropicTokenReporting
-    ? rawInputTokens
-    : Math.max(0, rawInputTokens - cachedInputTokens);
+  const adjustedOutputTokens = Math.max(0, rawOutputTokens - reasoningTokens);
 
-  const adjustedOutputTokens = isAnthropicTokenReporting
-    ? rawOutputTokens
-    : Math.max(0, rawOutputTokens - reasoningTokens);
-
-  const totalInputTokens = isAnthropicTokenReporting
-    ? rawInputTokens + cachedInputTokens + cacheCreationTokens
-    : rawInputTokens + cacheCreationTokens;
+  const totalInputTokens = rawInputTokens;
 
   const costInfo =
     model.longContextCost &&

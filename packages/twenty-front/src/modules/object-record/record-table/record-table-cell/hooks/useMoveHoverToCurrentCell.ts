@@ -6,10 +6,11 @@ import { useStore } from 'jotai';
 import { recordTableHoverPositionComponentState } from '@/object-record/record-table/states/recordTableHoverPositionComponentState';
 import { isSomeCellInEditModeComponentSelector } from '@/object-record/record-table/states/selectors/isSomeCellInEditModeComponentSelector';
 import { useAtomComponentSelectorCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorCallbackState';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
+import { useIsTouchDevice } from 'twenty-ui/utilities';
 
 export const useMoveHoverToCurrentCell = (recordTableId: string) => {
-  const setRecordTableHoverPosition = useSetAtomComponentState(
+  const recordTableHoverPosition = useAtomComponentStateCallbackState(
     recordTableHoverPositionComponentState,
     recordTableId,
   );
@@ -19,17 +20,29 @@ export const useMoveHoverToCurrentCell = (recordTableId: string) => {
     recordTableId,
   );
 
+  const isTouchDevice = useIsTouchDevice();
+
   const store = useStore();
 
   const moveHoverToCurrentCell = useCallback(
     (cellPosition: TableCellPosition) => {
-      const cellInEditMode = store.get(isSomeCellInEditMode);
-
-      if (!cellInEditMode) {
-        setRecordTableHoverPosition(cellPosition);
+      // A tap synthesises mousemove before mousedown; hovering would mount a portal that steals the click.
+      if (isTouchDevice || store.get(isSomeCellInEditMode)) {
+        return;
       }
+
+      const lastPosition = store.get(recordTableHoverPosition);
+
+      if (
+        lastPosition?.column === cellPosition.column &&
+        lastPosition?.row === cellPosition.row
+      ) {
+        return;
+      }
+
+      store.set(recordTableHoverPosition, cellPosition);
     },
-    [store, isSomeCellInEditMode, setRecordTableHoverPosition],
+    [isTouchDevice, store, isSomeCellInEditMode, recordTableHoverPosition],
   );
 
   return { moveHoverToCurrentCell };

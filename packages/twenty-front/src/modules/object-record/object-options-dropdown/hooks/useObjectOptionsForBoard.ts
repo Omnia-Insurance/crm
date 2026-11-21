@@ -1,4 +1,3 @@
-import { type OnDragEndResponder } from '@hello-pangea/dnd';
 import { useCallback, useMemo } from 'react';
 
 import { useColumnDefinitionsFromObjectMetadata } from '@/object-metadata/hooks/useColumnDefinitionsFromObjectMetadata';
@@ -12,11 +11,12 @@ import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldM
 import { recordIndexFieldDefinitionsState } from '@/object-record/record-index/states/recordIndexFieldDefinitionsState';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
 import { useSaveCurrentViewFields } from '@/views/hooks/useSaveCurrentViewFields';
 import { mapRecordFieldToViewField } from '@/views/utils/mapRecordFieldToViewField';
 import { produce } from 'immer';
 import { findByProperty, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { v4 } from 'uuid';
 import { mapArrayToObject } from '~/utils/array/mapArrayToObject';
 import { sortByProperty } from '~/utils/array/sortByProperty';
@@ -32,7 +32,7 @@ export const useObjectOptionsForBoard = ({
   recordBoardId,
 }: useObjectOptionsForBoardParams) => {
   const [recordIndexFieldDefinitions, setRecordIndexFieldDefinitions] =
-    useAtomState(recordIndexFieldDefinitionsState);
+    useAtomComponentState(recordIndexFieldDefinitionsState, recordBoardId);
 
   const { saveViewFields } = useSaveCurrentViewFields();
 
@@ -92,15 +92,17 @@ export const useObjectOptionsForBoard = ({
     [availableColumnDefinitions, recordIndexFieldDefinitionsByKey],
   );
 
-  const handleReorderBoardFields: OnDragEndResponder = useCallback(
-    (result) => {
-      if (!result.destination) {
-        return;
-      }
-
+  const handleReorderBoardFields = useCallback(
+    ({
+      recordFieldToMove,
+      targetRecordField,
+    }: {
+      recordFieldToMove: Pick<RecordField, 'id' | 'fieldMetadataItemId'>;
+      targetRecordField: Pick<RecordField, 'id'>;
+    }) => {
       const updatedRecordField = reorderVisibleRecordFields({
-        fromIndex: result.source.index - 1,
-        toIndex: result.destination.index - 1,
+        recordFieldToMove,
+        targetRecordField,
       });
 
       saveViewFields([mapRecordFieldToViewField(updatedRecordField)]);
@@ -138,8 +140,7 @@ export const useObjectOptionsForBoard = ({
   const { updateRecordField } = useUpdateRecordField(recordBoardId);
   const { upsertRecordField } = useUpsertRecordField(recordBoardId);
 
-  // Todo : this seems over complex and should at least be extracted to an util with unit test.
-  // Let's refactor this as we introduce the new viewBar
+  // TODO: overly complex; extract to a unit-tested util.
   const handleBoardFieldVisibilityChange = useCallback(
     async (
       updatedFieldDefinition: Pick<
@@ -153,10 +154,13 @@ export const useObjectOptionsForBoard = ({
 
       const shouldShowFieldMetadataItem =
         updatedFieldDefinition.isVisible === true;
+      // OMNIA-CUSTOM: a sub-field column kept from a table view shares fieldMetadataItemId with its relation;
+      // board options toggle the plain column only
       const corresponingRecordField = currentRecordFields.find(
         (recordFieldToFind) =>
           recordFieldToFind.fieldMetadataItemId ===
-          updatedFieldDefinition.fieldMetadataId,
+            updatedFieldDefinition.fieldMetadataId &&
+          !isDefined(recordFieldToFind.subFieldName),
       );
 
       const noExistingRecordField = !isDefined(corresponingRecordField);
@@ -187,7 +191,9 @@ export const useObjectOptionsForBoard = ({
           (draftRecordIndexFieldDefinitions) => {
             if (!isDefined(correspondingAvailableColumnDefinition)) {
               throw new Error(
-                `correspondingAvailableColumnDefinition is not defined this should not happen.`,
+                doNotTranslate(
+                  `correspondingAvailableColumnDefinition is not defined this should not happen.`,
+                ),
               );
             }
 

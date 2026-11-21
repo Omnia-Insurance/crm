@@ -6,11 +6,11 @@ import { getRecordIndexIdFromObjectNamePluralAndViewId } from '@/object-record/u
 import { useRecordTableWidgetFilterCallbacks } from '@/page-layout/widgets/record-table/hooks/useRecordTableWidgetFilterCallbacks';
 import { useRecordTableWidgetViewForDisplay } from '@/page-layout/widgets/record-table/hooks/useRecordTableWidgetViewForDisplay';
 import { RecordTableSettingsFiltersInitializeStateEffect } from '@/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsFiltersInitializeStateEffect';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { InputLabel } from '@/ui/input/components/internal/InputLabel/InputLabel';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledFilterSettingsContainer = styled.div`
   display: flex;
@@ -32,6 +32,7 @@ export const RecordTableSettingsFilters = ({
   pageLayoutId,
   objectMetadataId,
 }: RecordTableSettingsFiltersProps) => {
+  const { t } = useLingui();
   const { view } = useRecordTableWidgetViewForDisplay({
     viewId,
     widgetId,

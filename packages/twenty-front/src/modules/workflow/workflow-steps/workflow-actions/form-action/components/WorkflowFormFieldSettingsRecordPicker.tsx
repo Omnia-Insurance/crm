@@ -1,17 +1,18 @@
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { useObjectMetadataSelectHelpers } from '@/object-metadata/hooks/useObjectMetadataSelectHelpers';
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
 import { Select } from '@/ui/input/components/Select';
+import { InputLabel } from '@/ui/input/components/internal/InputLabel/InputLabel';
 import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
 import { type WorkflowFormActionField } from '@/workflow/workflow-steps/workflow-actions/form-action/types/WorkflowFormActionField';
 import { getDefaultFormFieldSettings } from '@/workflow/workflow-steps/workflow-actions/form-action/utils/getDefaultFormFieldSettings';
+import { getFormFieldDisplayText } from '@/workflow/workflow-steps/workflow-actions/form-action/utils/getFormFieldDisplayText';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import camelCase from 'lodash.camelcase';
-import { type SelectOption } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { type SelectOption } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 type WorkflowFormFieldSettingsRecordPickerProps = {
   field: WorkflowFormActionField;
@@ -28,6 +29,7 @@ export const WorkflowFormFieldSettingsRecordPicker = ({
   field,
   onChange,
 }: WorkflowFormFieldSettingsRecordPickerProps) => {
+  const { t } = useLingui();
   const { getSelectIconPropsFromObjectMetadataItem } =
     useObjectMetadataSelectHelpers();
   const { activeNonSystemObjectMetadataItems } =
@@ -65,7 +67,7 @@ export const WorkflowFormFieldSettingsRecordPicker = ({
             });
           }}
           withSearchInput
-          dropdownOffset={{ y: 4 }}
+          dropdownSideOffset={4}
           dropdownWidth={GenericDropdownContentWidth.ExtraLarge}
         />
       </FormFieldInputContainer>
@@ -80,7 +82,10 @@ export const WorkflowFormFieldSettingsRecordPicker = ({
             });
           }}
           defaultValue={field.label}
-          placeholder={getDefaultFormFieldSettings('RECORD').label}
+          placeholder={getFormFieldDisplayText({
+            type: 'RECORD',
+            text: getDefaultFormFieldSettings('RECORD').label,
+          })}
         />
       </FormFieldInputContainer>
     </StyledContainer>

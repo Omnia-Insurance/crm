@@ -1,86 +1,63 @@
 import { styled } from '@linaria/react';
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLingui } from '@lingui/react/macro';
+import { ErrorBoundary } from 'react-error-boundary';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { MatchedDiffView } from '@/reconciliation/components/MatchedDiffView';
+import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 import { UnmatchedView } from '@/reconciliation/components/UnmatchedView';
-import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
-type Props = {
+type ReviewItemDetailProps = {
   item: ReviewItemRecord | null;
   reconciliationId: string;
   onDecisionMade?: (itemId: string) => void;
 };
 
 const StyledDetail = styled.main`
+  background: ${themeCssVariables.background.primary};
   flex: 1;
   overflow-y: auto;
-  background: ${themeCssVariables.background.primary};
 `;
 
 const StyledEmpty = styled.div`
-  display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100%;
   color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
   font-size: ${themeCssVariables.font.size.sm};
+  height: 100%;
+  justify-content: center;
 `;
 
 const StyledError = styled.div`
-  padding: ${themeCssVariables.spacing[6]};
   color: ${themeCssVariables.font.color.danger};
   font-size: ${themeCssVariables.font.size.sm};
+  padding: ${themeCssVariables.spacing[6]};
 `;
-
-class DetailErrorBoundary extends Component<
-  { children: ReactNode; itemId: string },
-  { error: Error | null }
-> {
-  state = { error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('ReviewItemDetail error:', error, info);
-  }
-
-  componentDidUpdate(prevProps: { itemId: string }) {
-    if (prevProps.itemId !== this.props.itemId && this.state.error) {
-      this.setState({ error: null });
-    }
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <StyledError>
-          Error loading review item: {this.state.error.message}
-        </StyledError>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 export const ReviewItemDetail = ({
   item,
   reconciliationId,
   onDecisionMade,
-}: Props) => {
+}: ReviewItemDetailProps) => {
+  const { t } = useLingui();
+
   if (!item) {
     return (
       <StyledDetail>
-        <StyledEmpty>Select a review item</StyledEmpty>
+        <StyledEmpty>{t`Select a review item`}</StyledEmpty>
       </StyledDetail>
     );
   }
 
   return (
     <StyledDetail>
-      <DetailErrorBoundary itemId={item.id}>
+      {/* One broken item must not take the review list down with it */}
+      <ErrorBoundary
+        resetKeys={[item.id]}
+        fallbackRender={() => (
+          <StyledError>{t`Could not load this review item.`}</StyledError>
+        )}
+      >
         {item.category === 'UNMATCHED' ? (
           <UnmatchedView
             item={item}
@@ -94,7 +71,7 @@ export const ReviewItemDetail = ({
             onDecisionMade={onDecisionMade}
           />
         )}
-      </DetailErrorBoundary>
+      </ErrorBoundary>
     </StyledDetail>
   );
 };

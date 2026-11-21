@@ -14,6 +14,7 @@ export const formatFieldMetadataItemInput = (
       | 'settings'
       | 'isLabelSyncedWithName'
       | 'isUnique'
+      // OMNIA-CUSTOM: soft required-field rule saved from the Settings "Required" form
       | 'requiredCondition'
     >
   >,
@@ -28,6 +29,7 @@ export const formatFieldMetadataItemInput = (
     settings: input.settings,
     isLabelSyncedWithName: input.isLabelSyncedWithName,
     isUnique: input.isUnique,
+    // OMNIA-CUSTOM: soft required-field rule
     requiredCondition: input.requiredCondition,
   };
 };

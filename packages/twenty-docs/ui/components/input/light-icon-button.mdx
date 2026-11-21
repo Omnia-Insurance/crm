@@ -1,0 +1,92 @@
+---
+title: LightIconButton
+description: Present lightweight icon actions with standard or subtle emphasis.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+import { StoryEmbed } from '/snippets/ui/StoryEmbed.mdx';
+import LightIconButtonReference from '/snippets/ui/generated/components/input/light-icon-button.mdx';
+
+## Overview
+
+`LightIconButton` composes [IconButton](/ui/components/input/icon-button) with a ghost surface and a small size. Supply an accessible name and decorative icon content.
+
+<StoryEmbed
+  storyId="ui-input-button-lighticonbutton--display"
+  title="Light icon button"
+  height={100}
+/>
+
+## Usage
+
+```tsx
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconSearch } from 'twenty-ui/icon';
+
+export const SearchAction = () => (
+  <LightIconButton aria-label="Search">
+    <IconSearch />
+  </LightIconButton>
+);
+```
+
+Standard emphasis uses secondary neutral text; subtle emphasis uses tertiary text. Explicit child appearance takes precedence over ButtonGroup values, followed by the component defaults. Semantic colors retain their own contrast treatment. Small controls are 24px with a 14px icon; medium controls are 32px with a 16px icon. Compact controls use `size="xs"` and are 20px.
+
+## Visual options
+
+Compare emphasis at small and medium sizes, including selected, loading, and disabled states.
+
+<StoryEmbed
+  storyId="ui-input-button-lighticonbutton--catalog"
+  title="Light icon button emphasis, sizes, and states"
+  height={410}
+/>
+
+## State and interaction
+
+Button owns keyboard activation, disabled and loading behavior, refs, native attributes, and render composition. The native default is `type="button"`. Use `aria-pressed` for toggles and `aria-expanded` for disclosures. The application owns these states and can set `color="accent"` to highlight a selected action. Keyboard focus uses the shared focus ring.
+
+Tooltip text is optional and does not replace an accessible name from `aria-label` or `aria-labelledby`. Set `href` for a link. For application-owned routing, supply `render`, `nativeButton={false}`, and `role="link"`.
+
+## Updating existing controls
+
+Import `LightIconButton` from `twenty-ui/components`. Replace `Icon={IconPlus}` with `<IconPlus />` children, `small`/`medium` with `sm`/`md`, `accent="tertiary"` with `emphasis="subtle"`, and `testId` with `data-testid`. Replace synthetic `active` and `focus` flags with semantic state and actual keyboard focus.
+
+Replace `LightIconButtonGroup` with [ButtonGroup](/ui/primitives/input/button-group) using `attached={false}` and explicit children. Set `disabled` on unavailable actions, including actions without a click handler. Wrappers and tooltip triggers can remain around each child.
+
+## Row actions
+
+Use a passive [ListItem](/ui/primitives/navigation/list-item) with an `actions` slot for independent controls. Pass one `LightIconButton` directly, or use `ButtonGroup` for multiple buttons. Each button owns its accessible name, click handler, and disabled state. Wrap dropdown triggers directly around the button.
+
+```tsx
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconEyeOff, IconTrash } from 'twenty-ui/icon';
+import { ButtonGroup } from 'twenty-ui/primitives/input';
+import { ListItem } from 'twenty-ui/primitives/navigation';
+
+export const RecordActions = () => (
+  <ListItem
+    actions={
+      <ButtonGroup attached={false}>
+        <LightIconButton aria-label="Hide record">
+          <IconEyeOff />
+        </LightIconButton>
+        <LightIconButton aria-label="Delete record" disabled>
+          <IconTrash />
+        </LightIconButton>
+      </ButtonGroup>
+    }
+  >
+    Record
+  </ListItem>
+);
+```
+
+A button without an `onClick` handler can remain enabled when a surrounding dropdown owns its interaction. Set `disabled` explicitly for unavailable buttons. Keep independent controls beside an actionable [ListItemButton](/ui/components/navigation/list-item-button) so each retains its own focus and activation.
+
+## Props
+
+<LightIconButtonReference />
+
+<PageBanner illustration="page-cover-pointer" />

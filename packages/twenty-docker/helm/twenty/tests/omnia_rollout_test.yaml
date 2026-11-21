@@ -1,0 +1,167 @@
+# OMNIA-CUSTOM: rollout knobs, the pre-upgrade migration job and the server PDB.
+suite: omnia rollout
+templates:
+  - templates/deployment-server.yaml
+  - templates/deployment-worker.yaml
+  - templates/deployment-redis-internal.yaml
+  - templates/job-migration.yaml
+  - templates/pdb-server.yaml
+release:
+  name: my-twenty
+  namespace: default
+tests:
+  - it: server keeps the upstream Recreate strategy with persistence and no override
+    template: templates/deployment-server.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - isNull:
+          path: spec.minReadySeconds
+      - isNull:
+          path: spec.template.spec.topologySpreadConstraints
+
+  - it: server keeps the upstream rolling update without persistence
+    template: templates/deployment-server.yaml
+    set:
+      server.persistence.enabled: false
+      server.dockerDataPersistence.enabled: false
+    asserts:
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 1
+
+  - it: server renders the strategy, minReadySeconds and topology spread overrides
+    template: templates/deployment-server.yaml
+    set:
+      server.persistence.enabled: false
+      server.dockerDataPersistence.enabled: false
+      server.strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxSurge: 1
+          maxUnavailable: 0
+      server.minReadySeconds: 15
+      server.topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+    asserts:
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+      - equal:
+          path: spec.minReadySeconds
+          value: 15
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: kubernetes.io/hostname
+
+  - it: worker keeps the upstream rolling update by default
+    template: templates/deployment-worker.yaml
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 1
+
+  - it: worker renders a Recreate override
+    template: templates/deployment-worker.yaml
+    set:
+      worker.strategy:
+        type: Recreate
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - isNull:
+          path: spec.strategy.rollingUpdate
+
+  - it: redis takes redisInternal.tolerations, not the root key
+    template: templates/deployment-redis-internal.yaml
+    set:
+      tolerations:
+        - key: root-only
+          operator: Exists
+      redisInternal.tolerations:
+        - key: environment
+          operator: Equal
+          value: production
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: environment
+      - equal:
+          path: spec.strategy.rollingUpdate.maxUnavailable
+          value: 0
+
+  - it: migration job runs legacy migrations then upgrade as a pre-upgrade hook
+    template: templates/job-migration.yaml
+    asserts:
+      - isKind:
+          of: Job
+      - equal:
+          path: metadata.annotations["helm.sh/hook"]
+          value: pre-upgrade
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 3600
+      - matchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "^node dist/command/command.js omnia:run-legacy-typeorm-migrations && node dist/command/command.js cache:flush && node dist/command/command.js upgrade && node dist/command/command.js cache:flush$"
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].command[2]
+          pattern: "run-instance-commands|npx|migration:run"
+
+  - it: migration job gets the server service account, storage env and extraEnv
+    template: templates/job-migration.yaml
+    set:
+      serviceAccount.name: twenty-bedrock
+      storage.type: s3
+      storage.s3.bucket: test-bucket
+      storage.s3.region: us-east-1
+      server.extraEnv:
+        - name: DISABLE_DB_MIGRATIONS
+          value: "true"
+      server.tolerations:
+        - key: environment
+          operator: Equal
+          value: production
+          effect: NoSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: twenty-bedrock
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: STORAGE_S3_NAME
+            value: test-bucket
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DISABLE_DB_MIGRATIONS
+            value: "true"
+      - equal:
+          path: spec.template.spec.tolerations[0].key
+          value: environment
+
+  - it: server PDB renders only with more than one replica
+    template: templates/pdb-server.yaml
+    set:
+      server.replicaCount: 2
+    asserts:
+      - isKind:
+          of: PodDisruptionBudget
+      - equal:
+          path: spec.minAvailable
+          value: 1
+
+  - it: server PDB is skipped for a single replica
+    template: templates/pdb-server.yaml
+    asserts:
+      - hasDocuments:
+          count: 0

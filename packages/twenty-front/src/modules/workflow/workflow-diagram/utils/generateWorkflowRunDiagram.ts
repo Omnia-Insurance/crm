@@ -12,6 +12,7 @@ import {
 import { generateWorkflowDiagram } from '@/workflow/workflow-diagram/utils/generateWorkflowDiagram';
 import { isStepNode } from '@/workflow/workflow-diagram/utils/isStepNode';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { StepStatus, type WorkflowRunStepInfos } from 'twenty-shared/workflow';
 
 const shouldOpenStep = ({
@@ -25,10 +26,16 @@ const shouldOpenStep = ({
 }) => {
   const step = steps.find((step) => step.id === nodeId);
   const stepInfo = stepInfos?.[nodeId];
-  const isStepPending = isDefined(stepInfo) && stepInfo.status === 'PENDING';
   const isStepOpenable = isDefined(step) && ['FORM'].includes(step.type);
 
-  return isStepPending && isStepOpenable;
+  if (!isStepOpenable || !isDefined(stepInfo)) {
+    return false;
+  }
+
+  return (
+    stepInfo.status === StepStatus.PENDING ||
+    stepInfo.status === StepStatus.RUNNING
+  );
 };
 
 export const generateWorkflowRunDiagram = ({
@@ -101,7 +108,9 @@ export const generateWorkflowRunDiagram = ({
     );
 
     if (!isDefined(parentNode)) {
-      throw new Error('Expected the edge to have a parent node');
+      throw new Error(
+        doNotTranslate('Expected the edge to have a parent node'),
+      );
     }
 
     const stepInfo = stepInfos?.[parentNode.id];

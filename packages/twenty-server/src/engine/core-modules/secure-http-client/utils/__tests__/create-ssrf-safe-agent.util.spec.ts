@@ -1,19 +1,15 @@
-import { EventEmitter } from 'events';
 import * as http from 'http';
 import * as https from 'https';
-import { type Socket } from 'net';
+import { Socket } from 'net';
 
 import { createSsrfSafeAgent } from 'src/engine/core-modules/secure-http-client/utils/create-ssrf-safe-agent.util';
 
-const createMockSocket = (): Socket & { destroy: jest.Mock } => {
-  const emitter = new EventEmitter();
+const createMockSocket = (): Socket => {
+  const socket = new Socket();
 
-  return Object.assign(emitter, {
-    destroy: jest.fn(),
-    // Minimal Socket stubs to avoid type errors
-    connecting: false,
-    writable: true,
-  }) as unknown as Socket & { destroy: jest.Mock };
+  jest.spyOn(socket, 'destroy').mockReturnThis();
+
+  return socket;
 };
 
 describe('createSsrfSafeAgent', () => {
@@ -212,6 +208,84 @@ describe('createSsrfSafeAgent', () => {
       );
 
       expect(mockSocket.destroy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('allowed internal hosts', () => {
+    it('should allow an allowed private IP literal', () => {
+      const agent = createSsrfSafeAgent('http', ['192.168.1.10']);
+
+      agent.createConnection(
+        { host: '192.168.1.10' } as http.ClientRequestArgs,
+        jest.fn(),
+      );
+
+      expect(createConnectionSpy).toHaveBeenCalled();
+    });
+
+    it('should let an allowed hostname resolve to a private address', () => {
+      const agent = createSsrfSafeAgent('http', ['keycloak']);
+
+      agent.createConnection(
+        { host: 'Keycloak' } as http.ClientRequestArgs,
+        jest.fn(),
+      );
+
+      mockSocket.emit('lookup', null, '172.18.0.5', 4, 'Keycloak');
+
+      expect(mockSocket.destroy).not.toHaveBeenCalled();
+    });
+
+    it('should still block an allowed hostname that resolves to the metadata service', () => {
+      const agent = createSsrfSafeAgent('http', ['keycloak']);
+
+      agent.createConnection(
+        { host: 'keycloak' } as http.ClientRequestArgs,
+        jest.fn(),
+      );
+
+      mockSocket.emit('lookup', null, '169.254.169.254', 4, 'keycloak');
+
+      expect(mockSocket.destroy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('169.254.169.254'),
+        }),
+      );
+    });
+
+    it('should still block a link-local IP literal even when allowed', () => {
+      const agent = createSsrfSafeAgent('http', ['169.254.169.254']);
+
+      expect(() => {
+        agent.createConnection(
+          { host: '169.254.169.254' } as http.ClientRequestArgs,
+          jest.fn(),
+        );
+      }).toThrow(
+        'Request to internal IP address 169.254.169.254 is not allowed.',
+      );
+    });
+
+    it('should still block private IPs for hosts that are not allowed', () => {
+      const agent = createSsrfSafeAgent('http', ['keycloak']);
+
+      expect(() => {
+        agent.createConnection(
+          { host: '10.0.0.1' } as http.ClientRequestArgs,
+          jest.fn(),
+        );
+      }).toThrow('Request to internal IP address 10.0.0.1 is not allowed.');
+    });
+
+    it('should allow private hosts when the wildcard is set', () => {
+      const agent = createSsrfSafeAgent('http', ['*']);
+
+      agent.createConnection(
+        { host: '10.0.0.1' } as http.ClientRequestArgs,
+        jest.fn(),
+      );
+
+      expect(createConnectionSpy).toHaveBeenCalled();
     });
   });
 

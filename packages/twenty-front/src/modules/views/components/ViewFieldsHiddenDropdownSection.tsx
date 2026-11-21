@@ -1,47 +1,28 @@
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { ApplicationStackIcon } from '@/applications/components/ApplicationStackIcon';
 import { useActiveFieldMetadataItems } from '@/object-metadata/hooks/useActiveFieldMetadataItems';
+import { isManyToOneRelationField } from '@/object-metadata/utils/isManyToOneRelationField';
 import { useObjectOptionsForBoard } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsForBoard';
 import { ObjectOptionsDropdownContext } from '@/object-record/object-options-dropdown/states/contexts/ObjectOptionsDropdownContext';
+import { objectOptionsDropdownExpandedRelationFieldIdComponentState } from '@/object-record/object-options-dropdown/states/objectOptionsDropdownExpandedRelationFieldIdComponentState';
 import { useChangeRecordFieldVisibility } from '@/object-record/record-field/hooks/useChangeRecordFieldVisibility';
 import { currentRecordFieldsComponentState } from '@/object-record/record-field/states/currentRecordFieldsComponentState';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { ViewType } from '@/views/types/ViewType';
-import { isOneToManyBackReferenceSubField } from '@/views/utils/isOneToManyBackReferenceSubField';
-import { useContext, useState } from 'react';
-import { FieldMetadataType } from 'twenty-shared/types';
-import {
-  IconChevronLeft,
-  IconChevronRight,
-  IconEye,
-  useIcons,
-} from 'twenty-ui/display';
-import { MenuItem } from 'twenty-ui/navigation';
-
-// OMNIA-CUSTOM: Field types that can be displayed as relation sub-field columns
-const DISPLAYABLE_SUB_FIELD_TYPES = new Set([
-  FieldMetadataType.TEXT,
-  FieldMetadataType.NUMBER,
-  FieldMetadataType.DATE_TIME,
-  FieldMetadataType.DATE,
-  FieldMetadataType.BOOLEAN,
-  FieldMetadataType.SELECT,
-  FieldMetadataType.MULTI_SELECT,
-  FieldMetadataType.RATING,
-  FieldMetadataType.PHONES,
-  FieldMetadataType.EMAILS,
-  FieldMetadataType.FULL_NAME,
-  FieldMetadataType.ADDRESS,
-  FieldMetadataType.CURRENCY,
-  FieldMetadataType.LINKS,
-  FieldMetadataType.UUID,
-  FieldMetadataType.RELATION,
-]);
+import { useContext } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { ListItemButton } from 'twenty-ui/components/navigation';
+import { IconChevronRight, IconEye } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { ListItem } from 'twenty-ui/primitives/navigation';
+import { useLingui } from '@lingui/react/macro';
 
 export const ViewFieldsHiddenDropdownSection = () => {
-  const { viewType, objectMetadataItem, recordIndexId } = useContext(
-    ObjectOptionsDropdownContext,
-  );
+  const { t } = useLingui();
+  const { viewType, objectMetadataItem, recordIndexId, onContentChange } =
+    useContext(ObjectOptionsDropdownContext);
 
   const { changeRecordFieldVisibility } =
     useChangeRecordFieldVisibility(recordIndexId);
@@ -61,154 +42,116 @@ export const ViewFieldsHiddenDropdownSection = () => {
     currentRecordFieldsComponentState,
   );
 
+  // OMNIA-CUSTOM: a sub-field column ("Lead / Date of Birth") shares its relation's fieldMetadataItemId, so only a
+  // plain column takes a field off the hidden list
   const visibleRecordFields = currentRecordFields.filter(
-    (recordFieldToFilter) => recordFieldToFilter.isVisible === true,
+    (recordFieldToFilter) =>
+      recordFieldToFilter.isVisible === true &&
+      !isDefined(recordFieldToFilter.subFieldName),
   );
 
   const { activeFieldMetadataItems } = useActiveFieldMetadataItems({
     objectMetadataItem,
   });
 
-  // OMNIA-CUSTOM: Track which relation field is expanded for sub-field selection
-  const [expandedRelationFieldId, setExpandedRelationFieldId] = useState<
-    string | null
-  >(null);
-
-  const { objectMetadataItems } = useObjectMetadataItems();
-
   const availableFieldMetadataItemsToShow = activeFieldMetadataItems.filter(
     (fieldMetadataItemToFilter) =>
-      !visibleRecordFields.some(
-        (recordField) =>
-          recordField.fieldMetadataItemId === fieldMetadataItemToFilter.id &&
-          !recordField.subFieldName,
-      ),
-  );
-
-  // OMNIA-CUSTOM: Also show already-visible MANY_TO_ONE relations for sub-field expansion
-  const visibleRelationFields = activeFieldMetadataItems.filter(
-    (field) =>
-      field.type === FieldMetadataType.RELATION &&
-      field.relation?.type === 'MANY_TO_ONE' &&
-      visibleRecordFields.some(
-        (rf) => rf.fieldMetadataItemId === field.id && !rf.subFieldName,
-      ),
+      !visibleRecordFields
+        .map((recordField) => recordField.fieldMetadataItemId)
+        .includes(fieldMetadataItemToFilter.id),
   );
 
   const { getIcon } = useIcons();
 
-  // OMNIA-CUSTOM: If a relation field is expanded, show its sub-fields
-  if (expandedRelationFieldId) {
-    const relationField = activeFieldMetadataItems.find(
-      (f) => f.id === expandedRelationFieldId,
+  // OMNIA-CUSTOM: many-to-one relations open the relationSubFields page to add target fields as columns. Table
+  // views only: board, calendar and list cards render visible fields by field id and cannot show a sub-field
+  const canAddRelationSubFields = viewType === ViewType.TABLE;
+
+  const setObjectOptionsDropdownExpandedRelationFieldId =
+    useSetAtomComponentState(
+      objectOptionsDropdownExpandedRelationFieldIdComponentState,
     );
 
-    const targetObjectNameSingular =
-      relationField?.relation?.targetObjectMetadata?.nameSingular;
-
-    const targetObjectMetadata = objectMetadataItems.find(
-      (item) => item.nameSingular === targetObjectNameSingular,
+  const handleShowRelationSubFields = (relationFieldMetadataItemId: string) => {
+    setObjectOptionsDropdownExpandedRelationFieldId(
+      relationFieldMetadataItemId,
     );
+    onContentChange('relationSubFields');
+  };
 
-    const subFields =
-      targetObjectMetadata?.fields.filter(
-        (field) =>
-          field.isActive &&
-          !field.isSystem &&
-          DISPLAYABLE_SUB_FIELD_TYPES.has(field.type as FieldMetadataType) &&
-          // OMNIA-CUSTOM: never offer a ONE_TO_MANY back-reference to the
-          // view's own object (e.g. Product → Policies on the Policies table):
-          // it fans out to every sibling row and OOMs the export worker.
-          !isOneToManyBackReferenceSubField({
-            subFieldMetadataItem: field,
-            baseObjectNameSingular: objectMetadataItem.nameSingular,
-          }) &&
-          // Exclude sub-fields already visible
-          !visibleRecordFields.some(
-            (vf) =>
-              vf.fieldMetadataItemId === expandedRelationFieldId &&
-              vf.subFieldName === field.name,
+  const visibleRelationFieldMetadataItems = canAddRelationSubFields
+    ? activeFieldMetadataItems.filter(
+        (fieldMetadataItem) =>
+          isManyToOneRelationField(fieldMetadataItem) &&
+          visibleRecordFields.some(
+            (recordField) =>
+              recordField.fieldMetadataItemId === fieldMetadataItem.id,
           ),
-      ) ?? [];
-
-    return (
-      <DropdownMenuItemsContainer>
-        <MenuItem
-          LeftIcon={IconChevronLeft}
-          text={relationField?.label ?? 'Back'}
-          onClick={() => setExpandedRelationFieldId(null)}
-        />
-        {subFields.map((subField) => (
-          <MenuItem
-            key={subField.id}
-            LeftIcon={getIcon(subField.icon)}
-            iconButtons={[
-              {
-                Icon: IconEye,
-                onClick: () =>
-                  handleChangeFieldVisibility({
-                    fieldMetadataId: expandedRelationFieldId,
-                    isVisible: true,
-                    subFieldName: subField.name,
-                  }),
-              },
-            ]}
-            text={subField.label}
-          />
-        ))}
-      </DropdownMenuItemsContainer>
-    );
-  }
+      )
+    : [];
 
   return (
     <>
       <DropdownMenuItemsContainer>
-        {/* OMNIA-CUSTOM: Show visible relations with expand for sub-fields */}
-        {visibleRelationFields.map((fieldMetadataItem) => (
-          <MenuItem
-            key={`rel-${fieldMetadataItem.id}`}
-            LeftIcon={getIcon(fieldMetadataItem.icon)}
-            iconButtons={[
-              {
-                Icon: IconChevronRight,
-                onClick: () => setExpandedRelationFieldId(fieldMetadataItem.id),
-              },
-            ]}
-            text={`${fieldMetadataItem.label} fields...`}
-          />
-        ))}
+        {/* OMNIA-CUSTOM: visible relations, to add their sub-field columns */}
+        {visibleRelationFieldMetadataItems.map((fieldMetadataItem) => {
+          const relationFieldLabel = fieldMetadataItem.label;
+
+          return (
+            <ListItemButton
+              key={`relation-sub-fields-${fieldMetadataItem.id}`}
+              startIcon={
+                <ApplicationStackIcon
+                  Icon={getIcon(fieldMetadataItem.icon)}
+                  applicationId={fieldMetadataItem.applicationId}
+                />
+              }
+              onClick={() => handleShowRelationSubFields(fieldMetadataItem.id)}
+              hasSubmenu
+            >{t`${relationFieldLabel} fields`}</ListItemButton>
+          );
+        })}
         {availableFieldMetadataItemsToShow.length > 0 &&
           availableFieldMetadataItemsToShow.map((fieldMetadataItem) => {
-            // OMNIA-CUSTOM: MANY_TO_ONE relations get an expand chevron
-            const isManyToOneRelation =
-              fieldMetadataItem.type === FieldMetadataType.RELATION &&
-              fieldMetadataItem.relation?.type === 'MANY_TO_ONE';
-
             return (
-              <MenuItem
+              <ListItem
                 key={fieldMetadataItem.id}
-                LeftIcon={getIcon(fieldMetadataItem.icon)}
-                iconButtons={[
-                  {
-                    Icon: IconEye,
-                    onClick: () =>
-                      handleChangeFieldVisibility({
-                        fieldMetadataId: fieldMetadataItem.id,
-                        isVisible: true,
-                      }),
-                  },
-                  ...(isManyToOneRelation
-                    ? [
-                        {
-                          Icon: IconChevronRight,
-                          onClick: () =>
-                            setExpandedRelationFieldId(fieldMetadataItem.id),
-                        },
-                      ]
-                    : []),
-                ]}
-                text={fieldMetadataItem.label}
-              />
+                startIcon={
+                  <ApplicationStackIcon
+                    Icon={getIcon(fieldMetadataItem.icon)}
+                    applicationId={fieldMetadataItem.applicationId}
+                  />
+                }
+                actions={
+                  <>
+                    <LightIconButton
+                      aria-label={t`Show field`}
+                      onClick={() =>
+                        handleChangeFieldVisibility({
+                          fieldMetadataId: fieldMetadataItem.id,
+                          isVisible: true,
+                        })
+                      }
+                    >
+                      <IconEye />
+                    </LightIconButton>
+                    {/* OMNIA-CUSTOM: opens the relationSubFields page */}
+                    {canAddRelationSubFields &&
+                      isManyToOneRelationField(fieldMetadataItem) && (
+                        <LightIconButton
+                          aria-label={t`Show relation fields`}
+                          onClick={() =>
+                            handleShowRelationSubFields(fieldMetadataItem.id)
+                          }
+                        >
+                          <IconChevronRight />
+                        </LightIconButton>
+                      )}
+                  </>
+                }
+              >
+                {fieldMetadataItem.label}
+              </ListItem>
             );
           })}
       </DropdownMenuItemsContainer>

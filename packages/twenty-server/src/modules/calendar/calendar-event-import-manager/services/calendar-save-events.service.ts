@@ -1,29 +1,36 @@
 import { Injectable } from '@nestjs/common';
 
-import { Any } from 'typeorm';
-import { v4 as uuid } from 'uuid';
+import { isNonEmptyString } from '@sniptt/guards';
+import { ConnectedAccountProvider, FeatureFlagKey } from 'twenty-shared/types';
+import { assertUnreachable } from 'twenty-shared/utils';
+import { Any, In, Not } from 'typeorm';
 
-import { type CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
-import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { FeatureFlagService } from 'src/engine/core-modules/feature-flag/services/feature-flag.service';
+import { CalendarChannelEntity } from 'src/engine/metadata-modules/calendar-channel/entities/calendar-channel.entity';
+import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { type CalendarEventSharingChannel } from 'src/modules/calendar/calendar-event-import-manager/types/calendar-event-sharing-channel.type';
+import { buildCalendarEventSaveOperations } from 'src/modules/calendar/calendar-event-import-manager/utils/build-calendar-event-save-operations.util';
+import { getCalendarChannelHandles } from 'src/modules/calendar/calendar-event-import-manager/utils/get-calendar-channel-handles.util';
+import { resolveCalendarEventSharing } from 'src/modules/calendar/calendar-event-import-manager/utils/resolve-calendar-event-sharing.util';
 import { CalendarEventParticipantService } from 'src/modules/calendar/calendar-event-participant-manager/services/calendar-event-participant.service';
+import { buildCalendarEventParticipantSaveOperations } from 'src/modules/calendar/calendar-event-participant-manager/utils/build-calendar-event-participant-save-operations.util';
 import { type CalendarChannelEventAssociationWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-channel-event-association.workspace-entity';
 import { type CalendarEventWorkspaceEntity } from 'src/modules/calendar/common/standard-objects/calendar-event.workspace-entity';
-import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event';
-import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
-
-type FetchedCalendarEventWithDBEvent = {
-  fetchedCalendarEvent: FetchedCalendarEvent;
-  existingCalendarEvent: CalendarEventWorkspaceEntity | null;
-  newlyCreatedCalendarEvent: CalendarEventWorkspaceEntity | null;
-};
+import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event.type';
 
 @Injectable()
 export class CalendarSaveEventsService {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly calendarEventParticipantService: CalendarEventParticipantService,
+    private readonly featureFlagService: FeatureFlagService,
+    @InjectWorkspaceScopedRepository(CalendarChannelEntity)
+    private readonly calendarChannelRepository: WorkspaceScopedRepository<CalendarChannelEntity>,
   ) {}
 
   public async saveCalendarEventsAndEnqueueContactCreationJob(
@@ -31,293 +38,308 @@ export class CalendarSaveEventsService {
     calendarChannel: CalendarChannelEntity,
     connectedAccount: ConnectedAccountEntity,
     workspaceId: string,
-  ): Promise<void> {
+  ): Promise<{ calendarEventIds: string[] }> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const calendarEventRepository =
-          await this.globalWorkspaceOrmManager.getRepository<CalendarEventWorkspaceEntity>(
-            workspaceId,
-            'calendarEvent',
-          );
+    const isCalendarEventSharingEnabled =
+      await this.featureFlagService.isFeatureEnabled(
+        FeatureFlagKey.IS_CALENDAR_EVENT_SHARED_ACROSS_CHANNELS_ENABLED,
+        workspaceId,
+      );
 
+    const channelHandles = getCalendarChannelHandles({
+      calendarChannel,
+      connectedAccount,
+    });
+
+    const {
+      savedParticipantIds,
+      participantsOfLinkedEvents,
+      calendarEventIds,
+    } = await this.workspaceOrmManager.executeInWorkspaceContext(
+      async () => {
         const calendarChannelEventAssociationRepository =
-          await this.globalWorkspaceOrmManager.getRepository<CalendarChannelEventAssociationWorkspaceEntity>(
-            workspaceId,
+          this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<CalendarChannelEventAssociationWorkspaceEntity>(
             'calendarChannelEventAssociation',
           );
 
-        const workspaceDataSource =
-          await this.globalWorkspaceOrmManager.getGlobalWorkspaceDataSource();
+        const calendarEventRepository =
+          this.workspaceOrmManager.getRepositoryWithoutPermissionChecks<CalendarEventWorkspaceEntity>(
+            'calendarEvent',
+          );
 
-        await workspaceDataSource.transaction(
-          async (transactionManager: WorkspaceEntityManager) => {
-            const existingAssociations =
-              await calendarChannelEventAssociationRepository.find(
-                {
-                  where: {
-                    eventExternalId: Any(
-                      fetchedCalendarEvents.map((event) => event.id),
+        const existingAssociations =
+          await calendarChannelEventAssociationRepository.find({
+            where: {
+              eventExternalId: Any(
+                fetchedCalendarEvents.map((event) => event.id),
+              ),
+              calendarChannelId: calendarChannel.id,
+            },
+          });
+
+        const existingEventExternalIds = new Set(
+          existingAssociations
+            .map(({ eventExternalId }) => eventExternalId)
+            .filter(isNonEmptyString),
+        );
+
+        // Not gated by the flag: events shared before it was turned off keep their roles
+        const otherAssociationsOfExistingEvents =
+          existingAssociations.length > 0
+            ? await calendarChannelEventAssociationRepository.find({
+                where: {
+                  calendarEventId: Any(
+                    existingAssociations.map(
+                      ({ calendarEventId }) => calendarEventId,
                     ),
-                    calendarChannelId: calendarChannel.id,
-                  },
+                  ),
+                  calendarChannelId: Not(calendarChannel.id),
                 },
-                transactionManager,
+              })
+            : [];
+
+        const linkCandidateAssociations = isCalendarEventSharingEnabled
+          ? await this.findLinkCandidateAssociations({
+              calendarChannelEventAssociationRepository,
+              provider: connectedAccount.provider,
+              calendarChannelId: calendarChannel.id,
+              fetchedCalendarEvents: fetchedCalendarEvents.filter(
+                ({ id }) => !existingEventExternalIds.has(id),
+              ),
+            })
+          : [];
+
+        const otherAssociations = [
+          ...otherAssociationsOfExistingEvents,
+          ...linkCandidateAssociations,
+        ];
+
+        const otherCalendarChannels: CalendarEventSharingChannel[] =
+          otherAssociations.length > 0
+            ? await this.calendarChannelRepository.find(workspaceId, {
+                where: {
+                  id: In([
+                    ...new Set(
+                      otherAssociations.map(
+                        ({ calendarChannelId }) => calendarChannelId,
+                      ),
+                    ),
+                  ]),
+                  connectedAccount: { provider: connectedAccount.provider },
+                },
+                relations: { connectedAccount: true },
+                select: {
+                  id: true,
+                  handle: true,
+                  syncStatus: true,
+                  isSyncEnabled: true,
+                  connectedAccount: { id: true, handleAliases: true },
+                },
+              })
+            : [];
+
+        const otherCalendarChannelIds = new Set(
+          otherCalendarChannels.map(({ id }) => id),
+        );
+
+        const sharedAssociations = otherAssociations.filter(
+          ({ calendarChannelId }) =>
+            otherCalendarChannelIds.has(calendarChannelId),
+        );
+
+        const candidateCalendarEventIds = [
+          ...new Set(
+            [...existingAssociations, ...sharedAssociations].map(
+              ({ calendarEventId }) => calendarEventId,
+            ),
+          ),
+        ];
+
+        const candidateCalendarEvents =
+          candidateCalendarEventIds.length > 0
+            ? await calendarEventRepository.find({
+                where: { id: Any(candidateCalendarEventIds) },
+              })
+            : [];
+
+        const {
+          calendarEventIdToLinkByEventExternalId,
+          otherChannelIdsByCalendarEventId,
+        } = resolveCalendarEventSharing({
+          provider: connectedAccount.provider,
+          fetchedCalendarEvents,
+          existingEventExternalIds,
+          sharedAssociations,
+          iCalUidByCalendarEventId: new Map(
+            candidateCalendarEvents.map(({ id, iCalUid }) => [id, iCalUid]),
+          ),
+          isCalendarEventSharingEnabled,
+        });
+
+        const storedCalendarEventIds = [
+          ...existingAssociations.map(
+            (association) => association.calendarEventId,
+          ),
+          ...calendarEventIdToLinkByEventExternalId.values(),
+        ];
+
+        const {
+          saveOperations,
+          existingCalendarEventIds,
+          channelRoleByCalendarEventId,
+          participantsOfNewEvents,
+          participantsOfExistingEvents,
+          participantsOfLinkedEvents,
+        } = buildCalendarEventSaveOperations({
+          fetchedCalendarEvents,
+          existingAssociations,
+          existingCalendarEvents: candidateCalendarEvents,
+          calendarChannelId: calendarChannel.id,
+          channelHandles,
+          calendarEventIdToLinkByEventExternalId,
+          otherChannelIdsByCalendarEventId,
+          otherCalendarChannels,
+        });
+
+        const existingParticipants =
+          await this.calendarEventParticipantService.findCalendarEventParticipantsByCalendarEventIds(
+            { calendarEventIds: storedCalendarEventIds },
+          );
+
+        const participantOperations =
+          buildCalendarEventParticipantSaveOperations({
+            fetchedParticipants: [
+              ...participantsOfNewEvents,
+              ...participantsOfExistingEvents,
+              ...participantsOfLinkedEvents,
+            ],
+            existingParticipants,
+            channelRoleByCalendarEventId,
+            channelHandles,
+          });
+
+        await this.workspaceOrmManager.runInWorkspaceTransaction(
+          async (transactionScope) => {
+            const calendarEventRepository =
+              transactionScope.getRepositoryWithoutPermissionChecks<CalendarEventWorkspaceEntity>(
+                'calendarEvent',
               );
 
-            const existingCalendarEventIdByExternalId = new Map(
-              existingAssociations.map((association) => [
-                association.eventExternalId,
-                association.calendarEventId,
-              ]),
-            );
-
-            const existingAssociationIdByExternalId = new Map(
-              existingAssociations.map((association) => [
-                association.eventExternalId,
-                association.id,
-              ]),
-            );
-
-            const fetchedCalendarEventsWithDBEvents: FetchedCalendarEventWithDBEvent[] =
-              fetchedCalendarEvents.map(
-                (event): FetchedCalendarEventWithDBEvent => {
-                  const existingCalendarEventId =
-                    existingCalendarEventIdByExternalId.get(event.id);
-
-                  return {
-                    fetchedCalendarEvent: event,
-                    existingCalendarEvent: existingCalendarEventId
-                      ? ({
-                          id: existingCalendarEventId,
-                        } as CalendarEventWorkspaceEntity)
-                      : null,
-                    newlyCreatedCalendarEvent: null,
-                  };
-                },
+            const associationRepository =
+              transactionScope.getRepositoryWithoutPermissionChecks<CalendarChannelEventAssociationWorkspaceEntity>(
+                'calendarChannelEventAssociation',
               );
 
-            const newCalendarEventIdByExternalId = new Map<string, string>();
-
-            const newCalendarEventsToInsert = fetchedCalendarEventsWithDBEvents
-              .filter(
-                ({ existingCalendarEvent }) => existingCalendarEvent === null,
-              )
-              .map(({ fetchedCalendarEvent }) => {
-                const calendarEventId = uuid();
-
-                newCalendarEventIdByExternalId.set(
-                  fetchedCalendarEvent.id,
-                  calendarEventId,
-                );
-
-                return {
-                  id: calendarEventId,
-                  iCalUid: fetchedCalendarEvent.iCalUid,
-                  title: fetchedCalendarEvent.title,
-                  description: fetchedCalendarEvent.description,
-                  startsAt: fetchedCalendarEvent.startsAt,
-                  endsAt: fetchedCalendarEvent.endsAt,
-                  location: fetchedCalendarEvent.location,
-                  isFullDay: fetchedCalendarEvent.isFullDay,
-                  isCanceled: fetchedCalendarEvent.isCanceled,
-                  conferenceSolution: fetchedCalendarEvent.conferenceSolution,
-                  conferenceLink: {
-                    primaryLinkLabel: fetchedCalendarEvent.conferenceLinkLabel,
-                    primaryLinkUrl: fetchedCalendarEvent.conferenceLinkUrl,
-                    secondaryLinks: [],
-                  },
-                  externalCreatedAt: fetchedCalendarEvent.externalCreatedAt,
-                  externalUpdatedAt: fetchedCalendarEvent.externalUpdatedAt,
-                };
-              });
-
-            if (newCalendarEventsToInsert.length > 0) {
+            if (saveOperations.calendarEventsToInsert.length > 0) {
               await calendarEventRepository.insert(
-                newCalendarEventsToInsert,
-                transactionManager,
+                saveOperations.calendarEventsToInsert,
               );
             }
 
-            const fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents: FetchedCalendarEventWithDBEvent[] =
-              fetchedCalendarEventsWithDBEvents.map(
-                ({ fetchedCalendarEvent, existingCalendarEvent }) => {
-                  const savedCalendarEventId =
-                    newCalendarEventIdByExternalId.get(fetchedCalendarEvent.id);
-
-                  return {
-                    fetchedCalendarEvent,
-                    existingCalendarEvent,
-                    newlyCreatedCalendarEvent: savedCalendarEventId
-                      ? ({
-                          id: savedCalendarEventId,
-                        } as CalendarEventWorkspaceEntity)
-                      : null,
-                  };
-                },
-              );
-
-            const existingEventsToUpdate =
-              fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
-                .filter(
-                  ({ existingCalendarEvent }) => existingCalendarEvent !== null,
-                )
-                .map(({ fetchedCalendarEvent, existingCalendarEvent }) => {
-                  if (!existingCalendarEvent) {
-                    throw new Error(
-                      `Existing calendar event with iCalUid ${fetchedCalendarEvent.iCalUid} not found - should never happen`,
-                    );
-                  }
-
-                  return {
-                    criteria: existingCalendarEvent.id,
-                    partialEntity: {
-                      iCalUid: fetchedCalendarEvent.iCalUid,
-                      title: fetchedCalendarEvent.title,
-                      description: fetchedCalendarEvent.description,
-                      startsAt: fetchedCalendarEvent.startsAt,
-                      endsAt: fetchedCalendarEvent.endsAt,
-                      location: fetchedCalendarEvent.location,
-                      isFullDay: fetchedCalendarEvent.isFullDay,
-                      isCanceled: fetchedCalendarEvent.isCanceled,
-                      conferenceSolution:
-                        fetchedCalendarEvent.conferenceSolution,
-                      conferenceLink: {
-                        primaryLinkLabel:
-                          fetchedCalendarEvent.conferenceLinkLabel,
-                        primaryLinkUrl: fetchedCalendarEvent.conferenceLinkUrl,
-                        secondaryLinks: [],
-                      },
-                      externalCreatedAt: fetchedCalendarEvent.externalCreatedAt,
-                      externalUpdatedAt: fetchedCalendarEvent.externalUpdatedAt,
-                    },
-                  };
-                });
-
-            if (existingEventsToUpdate.length > 0) {
+            if (saveOperations.calendarEventsToUpdate.length > 0) {
               await calendarEventRepository.updateMany(
-                existingEventsToUpdate,
-                transactionManager,
+                saveOperations.calendarEventsToUpdate,
               );
             }
 
-            const calendarChannelEventAssociationsToSave: Pick<
-              CalendarChannelEventAssociationWorkspaceEntity,
-              | 'calendarEventId'
-              | 'eventExternalId'
-              | 'calendarChannelId'
-              | 'recurringEventExternalId'
-            >[] = fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
-              .filter(
-                ({ newlyCreatedCalendarEvent }) =>
-                  newlyCreatedCalendarEvent !== null,
-              )
-              .map(({ fetchedCalendarEvent, newlyCreatedCalendarEvent }) => {
-                if (!newlyCreatedCalendarEvent?.id) {
-                  throw new Error(
-                    `Calendar event id not found for event with iCalUid ${fetchedCalendarEvent.iCalUid} - should never happen`,
-                  );
-                }
-
-                return {
-                  calendarEventId: newlyCreatedCalendarEvent.id,
-                  eventExternalId: fetchedCalendarEvent.id,
-                  calendarChannelId: calendarChannel.id,
-                  recurringEventExternalId:
-                    fetchedCalendarEvent.recurringEventExternalId ?? '',
-                };
-              });
-
-            if (calendarChannelEventAssociationsToSave.length > 0) {
-              await calendarChannelEventAssociationRepository.insert(
-                calendarChannelEventAssociationsToSave,
-                transactionManager,
+            if (saveOperations.associationsToInsert.length > 0) {
+              await associationRepository.insert(
+                saveOperations.associationsToInsert,
               );
             }
 
-            const existingAssociationsToUpdate =
-              fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
-                .filter(
-                  ({ existingCalendarEvent }) => existingCalendarEvent !== null,
-                )
-                .map(({ fetchedCalendarEvent }) => ({
-                  criteria: existingAssociationIdByExternalId.get(
-                    fetchedCalendarEvent.id,
-                  )!,
-                  partialEntity: {
-                    recurringEventExternalId:
-                      fetchedCalendarEvent.recurringEventExternalId ?? '',
-                  },
-                }));
-
-            if (existingAssociationsToUpdate.length > 0) {
-              await calendarChannelEventAssociationRepository.updateMany(
-                existingAssociationsToUpdate,
-                transactionManager,
+            if (saveOperations.associationsToUpdate.length > 0) {
+              await associationRepository.updateMany(
+                saveOperations.associationsToUpdate,
               );
             }
 
-            const participantsToCreate =
-              fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
-                .filter(
-                  ({ newlyCreatedCalendarEvent }) =>
-                    newlyCreatedCalendarEvent !== null,
-                )
-                .flatMap(
-                  ({ newlyCreatedCalendarEvent, fetchedCalendarEvent }) => {
-                    if (!newlyCreatedCalendarEvent?.id) {
-                      throw new Error(
-                        `Newly created calendar event with iCalUid ${fetchedCalendarEvent.iCalUid} not found - should never happen`,
-                      );
-                    }
-
-                    return fetchedCalendarEvent.participants.map(
-                      (participant) => ({
-                        ...participant,
-                        calendarEventId: newlyCreatedCalendarEvent.id,
-                      }),
-                    );
-                  },
-                );
-
-            // todo: we should prevent duplicate rows on calendarEventAssociation by creating
-            // an index on calendarChannelId and calendarEventId
-            const participantsToUpdate =
-              fetchedCalendarEventsWithDBEventsEnrichedWithSavedEvents
-                .filter(
-                  ({ existingCalendarEvent }) => existingCalendarEvent !== null,
-                )
-                .flatMap(({ fetchedCalendarEvent, existingCalendarEvent }) => {
-                  if (!existingCalendarEvent?.id) {
-                    throw new Error(
-                      `Existing calendar event with iCalUid ${fetchedCalendarEvent.iCalUid} not found - should never happen`,
-                    );
-                  }
-
-                  return fetchedCalendarEvent.participants.map(
-                    (participant) => ({
-                      ...participant,
-                      calendarEventId: existingCalendarEvent.id,
-                    }),
-                  );
-                });
-
-            await this.calendarEventParticipantService.upsertAndDeleteCalendarEventParticipants(
+            await this.calendarEventParticipantService.writeCalendarEventParticipants(
               {
-                participantsToCreate,
-                participantsToUpdate,
-                transactionManager,
-                calendarChannel,
-                connectedAccount,
-                workspaceId,
+                operations: participantOperations,
+                transactionScope,
               },
             );
           },
         );
+
+        return {
+          savedParticipantIds: participantOperations.participantsToInsert.map(
+            (participant) => participant.id,
+          ),
+          participantsOfLinkedEvents,
+          calendarEventIds: [
+            ...saveOperations.associationsToInsert.map(
+              ({ calendarEventId }) => calendarEventId,
+            ),
+            ...existingCalendarEventIds,
+          ],
+        };
       },
       authContext,
       { lite: true },
     );
+
+    await this.calendarEventParticipantService.matchParticipantsAndEnqueueContactCreationJob(
+      {
+        savedParticipantIds,
+        participantsOfLinkedEvents,
+        calendarEventIds,
+        calendarChannel,
+        connectedAccount,
+        workspaceId,
+      },
+    );
+
+    return { calendarEventIds };
+  }
+
+  private async findLinkCandidateAssociations({
+    calendarChannelEventAssociationRepository,
+    provider,
+    calendarChannelId,
+    fetchedCalendarEvents,
+  }: {
+    calendarChannelEventAssociationRepository: WorkspaceRepository<CalendarChannelEventAssociationWorkspaceEntity>;
+    provider: ConnectedAccountProvider;
+    calendarChannelId: string;
+    fetchedCalendarEvents: FetchedCalendarEvent[];
+  }): Promise<CalendarChannelEventAssociationWorkspaceEntity[]> {
+    if (fetchedCalendarEvents.length === 0) {
+      return [];
+    }
+
+    switch (provider) {
+      case ConnectedAccountProvider.GOOGLE:
+        return calendarChannelEventAssociationRepository.find({
+          where: {
+            eventExternalId: Any(fetchedCalendarEvents.map(({ id }) => id)),
+            calendarChannelId: Not(calendarChannelId),
+          },
+        });
+      case ConnectedAccountProvider.MICROSOFT: {
+        const iCalUids = fetchedCalendarEvents
+          .map(({ iCalUid }) => iCalUid)
+          .filter(isNonEmptyString);
+
+        return iCalUids.length > 0
+          ? calendarChannelEventAssociationRepository.find({
+              where: {
+                calendarEvent: { iCalUid: Any(iCalUids) },
+                calendarChannelId: Not(calendarChannelId),
+              },
+            })
+          : [];
+      }
+      case ConnectedAccountProvider.IMAP_SMTP_CALDAV:
+      case ConnectedAccountProvider.OIDC:
+      case ConnectedAccountProvider.SAML:
+      case ConnectedAccountProvider.EMAIL_GROUP:
+      case ConnectedAccountProvider.APP:
+        return [];
+      default:
+        return assertUnreachable(provider);
+    }
   }
 }

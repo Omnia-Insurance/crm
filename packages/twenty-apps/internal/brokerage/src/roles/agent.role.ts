@@ -39,30 +39,36 @@ type BrokerageObjectPermissionConfig = NonNullable<
 
 type BrokerageRoleConfig = Omit<DefineRoleConfig, 'objectPermissions'> & {
   showAllObjectsInSidebar?: boolean;
+  editWindowMinutes?: number | null;
   objectPermissions?: BrokerageObjectPermissionConfig[];
 };
 
 const memberObjectPermission = ({
   objectUniversalIdentifier,
+  canReadObjectRecords = true,
   canUpdateObjectRecords,
   canSoftDeleteObjectRecords,
   canDestroyObjectRecords,
   showInSidebar = false,
+  editWindowMinutes,
 }: {
   objectUniversalIdentifier: string;
+  canReadObjectRecords?: boolean;
   canUpdateObjectRecords?: boolean;
   canSoftDeleteObjectRecords?: boolean;
   canDestroyObjectRecords?: boolean;
   showInSidebar?: boolean;
+  editWindowMinutes?: number | null;
 }) => ({
   objectUniversalIdentifier,
-  canReadObjectRecords: true,
+  canReadObjectRecords,
   ...(canUpdateObjectRecords === undefined ? {} : { canUpdateObjectRecords }),
   ...(canSoftDeleteObjectRecords === undefined
     ? {}
     : { canSoftDeleteObjectRecords }),
   ...(canDestroyObjectRecords === undefined ? {} : { canDestroyObjectRecords }),
   showInSidebar,
+  ...(editWindowMinutes === undefined ? {} : { editWindowMinutes }),
 });
 
 const restrictedField = ({
@@ -98,6 +104,8 @@ const agentRoleConfig: BrokerageRoleConfig = {
   canBeAssignedToUsers: true,
   canBeAssignedToApiKeys: false,
   objectPermissions: [
+    // Contract C1: these all-records grants would bypass an adopted
+    // own-leads rule (README deploy gate)
     memberObjectPermission({
       objectUniversalIdentifier:
         STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.person.universalIdentifier,
@@ -106,9 +114,13 @@ const agentRoleConfig: BrokerageRoleConfig = {
       canDestroyObjectRecords: false,
       showInSidebar: true,
     }),
+    // Contract C1: an object-level write grant would bypass the "agent is me"
+    // rule, so Policy writes only come from that rule
     memberObjectPermission({
       objectUniversalIdentifier: POLICY_OBJECT_UNIVERSAL_IDENTIFIER,
-      canUpdateObjectRecords: true,
+      canUpdateObjectRecords: false,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
       showInSidebar: true,
     }),
     memberObjectPermission({
@@ -125,6 +137,16 @@ const agentRoleConfig: BrokerageRoleConfig = {
       canSoftDeleteObjectRecords: true,
       showInSidebar: true,
     }),
+    // Contract C1: the audience rule grants dashboards. Undeclared, this deny
+    // row is deleted by every manifest sync, which reopens every dashboard
+    {
+      objectUniversalIdentifier:
+        STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.dashboard.universalIdentifier,
+      canReadObjectRecords: false,
+      canUpdateObjectRecords: false,
+      canSoftDeleteObjectRecords: false,
+      canDestroyObjectRecords: false,
+    },
     memberObjectPermission({
       objectUniversalIdentifier: FAMILY_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER,
       canUpdateObjectRecords: true,

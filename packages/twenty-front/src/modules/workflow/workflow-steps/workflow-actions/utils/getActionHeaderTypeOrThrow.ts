@@ -20,7 +20,7 @@ export const getActionHeaderTypeOrThrow = (actionType: WorkflowActionType) => {
   }
 
   if (RECORD_ACTIONS.some((action) => action.type === actionType)) {
-    return msg`Record`;
+    return msg`Data`;
   }
 
   if (AI_ACTIONS.some((action) => action.type === actionType)) {
@@ -29,6 +29,10 @@ export const getActionHeaderTypeOrThrow = (actionType: WorkflowActionType) => {
 
   if (actionType === 'LOGIC_FUNCTION') {
     return msg`Application`;
+  }
+
+  if (actionType === 'MCP_TOOL') {
+    return msg`MCP`;
   }
 
   return msg`Action`;

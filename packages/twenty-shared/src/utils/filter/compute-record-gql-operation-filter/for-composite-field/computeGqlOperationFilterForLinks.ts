@@ -1,5 +1,6 @@
 import {
-  ViewFilterOperand as RecordFilterOperand,
+  RecordFilterOperand,
+  type CompositeFieldSubFieldName,
   type LinksFilter,
   type PartialFieldMetadataItem,
 } from '@/types';
@@ -17,7 +18,7 @@ export const computeGqlOperationFilterForLinks = ({
     PartialFieldMetadataItem,
     'name' | 'type'
   >;
-  subFieldName: string | null | undefined;
+  subFieldName: CompositeFieldSubFieldName | null | undefined;
 }) => {
   const isSubFieldFilter = isNonEmptyString(subFieldName);
 
@@ -91,7 +92,6 @@ export const computeGqlOperationFilterForLinks = ({
       default: {
         throw new Error( // TODO
           `Unknown subfield name ${subFieldName}`,
-          // 'UNKNOWN_SUBFIELD_NAME',
         );
       }
     }

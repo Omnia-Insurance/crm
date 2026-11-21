@@ -1,15 +1,16 @@
-import { t } from '@lingui/core/macro';
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
+import { css, cx } from '@linaria/core';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
 import { FormFieldInputInnerContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputInnerContainer';
 import { FormFieldInputRowContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputRowContainer';
 import { TextVariableEditor } from '@/object-record/record-field/ui/form-types/components/TextVariableEditor';
 import { useTextVariableEditor } from '@/object-record/record-field/ui/form-types/hooks/useTextVariableEditor';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
-import { InputErrorHelper } from '@/ui/input/components/InputErrorHelper';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
+import { Field } from 'twenty-ui/primitives/input';
 import { useId } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { turnIntoEmptyStringIfWhitespacesOnly } from '~/utils/string/turnIntoEmptyStringIfWhitespacesOnly';
+import { useLingui } from '@lingui/react/macro';
 
 type FormRawJsonFieldInputProps = {
   label?: string;
@@ -21,7 +22,12 @@ type FormRawJsonFieldInputProps = {
   VariablePicker?: VariablePickerComponent;
   placeholder?: string;
   className?: string;
+  fullHeight?: boolean;
 };
+
+const fullHeightContainerClassName = css`
+  flex: 1;
+`;
 
 export const FormRawJsonFieldInput = ({
   label,
@@ -33,7 +39,9 @@ export const FormRawJsonFieldInput = ({
   readonly,
   VariablePicker,
   className,
+  fullHeight = false,
 }: FormRawJsonFieldInputProps) => {
+  const { t } = useLingui();
   const instanceId = useId();
 
   const editor = useTextVariableEditor({
@@ -57,11 +65,13 @@ export const FormRawJsonFieldInput = ({
   const handleVariableTagInsert = (variableName: string) => {
     if (!isDefined(editor)) {
       throw new Error(
-        'Expected the editor to be defined when a variable is selected',
+        doNotTranslate(
+          'Expected the editor to be defined when a variable is selected',
+        ),
       );
     }
 
-    editor.commands.insertVariableTag(variableName);
+    editor.chain().focus().insertVariableTag(variableName).run();
   };
 
   if (!isDefined(editor)) {
@@ -69,10 +79,12 @@ export const FormRawJsonFieldInput = ({
   }
 
   return (
-    <FormFieldInputContainer className={className}>
-      {label ? <InputLabel>{label}</InputLabel> : null}
+    <FormFieldInputContainer
+      className={cx(className, fullHeight && fullHeightContainerClassName)}
+    >
+      {label ? <Field.Label>{label}</Field.Label> : null}
 
-      <FormFieldInputRowContainer multiline>
+      <FormFieldInputRowContainer multiline fullHeight={fullHeight}>
         <FormFieldInputInnerContainer
           formFieldInputInstanceId={instanceId}
           hasRightElement={isDefined(VariablePicker) && !readonly}
@@ -90,7 +102,7 @@ export const FormRawJsonFieldInput = ({
           />
         )}
       </FormFieldInputRowContainer>
-      <InputErrorHelper>{error}</InputErrorHelper>
+      {error && <Field.Error match>{error}</Field.Error>}
     </FormFieldInputContainer>
   );
 };

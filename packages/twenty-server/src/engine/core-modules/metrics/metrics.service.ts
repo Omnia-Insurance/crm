@@ -6,12 +6,14 @@ import {
   type Meter,
   type MetricOptions,
   type ObservableGauge,
+  type ObservableResult,
 } from '@opentelemetry/api';
 import { isDefined } from 'twenty-shared/utils';
 
 import { InjectCacheStorage } from 'src/engine/core-modules/cache-storage/decorators/cache-storage.decorator';
 import { CacheStorageService } from 'src/engine/core-modules/cache-storage/services/cache-storage.service';
 import { CacheStorageNamespace } from 'src/engine/core-modules/cache-storage/types/cache-storage-namespace.enum';
+import { POD_NAME } from 'src/engine/core-modules/metrics/constants/pod-name.constant';
 import { MetricsCacheService } from 'src/engine/core-modules/metrics/metrics-cache.service';
 import { type MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 
@@ -37,21 +39,80 @@ export class MetricsService {
     options,
     callback,
     cacheValue = false,
+    perPod = false,
   }: {
     metricName: string;
     options: MetricOptions;
     callback: () => number | Promise<number>;
     cacheValue?: boolean;
+    perPod?: boolean;
+  }): ObservableGauge {
+    return this.createObservableGaugeInternal({
+      metricName,
+      options,
+      callback,
+      cacheValue,
+      observeResult: (observableResult, result) => {
+        observableResult.observe(
+          result,
+          perPod ? { pod: POD_NAME } : undefined,
+        );
+      },
+    });
+  }
+
+  createMultiObservableGauge({
+    metricName,
+    options,
+    callback,
+    cacheValue = false,
+    perPod = false,
+  }: {
+    metricName: string;
+    options: MetricOptions;
+    callback: () => Promise<Array<{ value: number; attributes: Attributes }>>;
+    cacheValue?: boolean;
+    perPod?: boolean;
+  }): ObservableGauge {
+    return this.createObservableGaugeInternal({
+      metricName,
+      options,
+      callback,
+      cacheValue,
+      observeResult: (observableResult, observations) => {
+        for (const observation of observations) {
+          observableResult.observe(
+            observation.value,
+            perPod
+              ? { ...observation.attributes, pod: POD_NAME }
+              : observation.attributes,
+          );
+        }
+      },
+    });
+  }
+
+  private createObservableGaugeInternal<T>({
+    metricName,
+    options,
+    callback,
+    cacheValue,
+    observeResult,
+  }: {
+    metricName: string;
+    options: MetricOptions;
+    callback: () => T | Promise<T>;
+    cacheValue: boolean;
+    observeResult: (observableResult: ObservableResult, result: T) => void;
   }): ObservableGauge {
     const gauge = this.getMeter().createObservableGauge(metricName, options);
 
     gauge.addCallback(async (observableResult) => {
       if (cacheValue) {
-        const cachedResult =
-          await this.healthCacheStorage.get<number>(metricName);
+        const cachedResult = await this.healthCacheStorage.get<T>(metricName);
 
         if (isDefined(cachedResult)) {
-          observableResult.observe(cachedResult);
+          observeResult(observableResult, cachedResult);
 
           return;
         }
@@ -60,7 +121,7 @@ export class MetricsService {
       try {
         const result = await callback();
 
-        observableResult.observe(result);
+        observeResult(observableResult, result);
 
         if (cacheValue) {
           await this.healthCacheStorage.set(
@@ -80,7 +141,41 @@ export class MetricsService {
     return gauge;
   }
 
-  async incrementCounter({
+  createInfoGauge({
+    metricName,
+    options,
+    attributesCallback,
+  }: {
+    metricName: string;
+    options: MetricOptions;
+    attributesCallback: () => Attributes | Promise<Attributes>;
+  }): ObservableGauge {
+    const normalizedName = metricName.endsWith('_info')
+      ? metricName
+      : `${metricName}_info`;
+
+    const gauge = this.getMeter().createObservableGauge(
+      normalizedName,
+      options,
+    );
+
+    gauge.addCallback(async (observableResult) => {
+      try {
+        const attributes = await attributesCallback();
+
+        observableResult.observe(1, attributes);
+      } catch (error) {
+        this.logger.error(
+          `Failed to collect info gauge ${normalizedName}`,
+          error,
+        );
+      }
+    });
+
+    return gauge;
+  }
+
+  async incrementCounterForEvent({
     key,
     eventId,
     attributes,
@@ -110,7 +205,7 @@ export class MetricsService {
     }
   }
 
-  async batchIncrementCounter({
+  async incrementCounterForEvents({
     key,
     eventIds,
     attributes,
@@ -128,6 +223,41 @@ export class MetricsService {
     if (shouldStoreInCache) {
       await this.metricsCacheService.updateCounter(key, eventIds);
     }
+  }
+
+  incrementCounterBy({
+    key,
+    amount,
+    attributes,
+  }: {
+    key: MetricsKeys;
+    amount: number;
+    attributes?: Attributes;
+  }): void {
+    this.getMeter().createCounter(key).add(amount, attributes);
+  }
+
+  recordHistogram({
+    key,
+    value,
+    unit,
+    attributes,
+    bucketBoundaries,
+  }: {
+    key: MetricsKeys;
+    value: number;
+    unit?: string;
+    attributes?: Attributes;
+    bucketBoundaries?: readonly number[];
+  }): void {
+    this.getMeter()
+      .createHistogram(key, {
+        unit,
+        ...(isDefined(bucketBoundaries) && {
+          advice: { explicitBucketBoundaries: [...bucketBoundaries] },
+        }),
+      })
+      .record(value, attributes);
   }
 
   async groupMetrics(

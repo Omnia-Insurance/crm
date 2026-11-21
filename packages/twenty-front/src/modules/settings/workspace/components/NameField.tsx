@@ -9,10 +9,9 @@ import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { useLingui } from '@lingui/react/macro';
 import isEmpty from 'lodash.isempty';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useMutation } from '@apollo/client/react';
 import { UpdateWorkspaceDocument } from '~/generated-metadata/graphql';
-import { isUndefinedOrNull } from '~/utils/isUndefinedOrNull';
 import { logError } from '~/utils/logError';
 
 const StyledComboInputContainer = styled.div`
@@ -46,8 +45,9 @@ export const NameField = ({
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   const debouncedUpdate = useCallback(
     useDebouncedCallback(async (name: string) => {
-      if (isEmpty(name)) return;
-      // update local state when workspace name is updated
+      if (isEmpty(name)) {
+        return;
+      }
       setCurrentWorkspace((currentValue) => {
         if (currentValue === null) {
           return null;
@@ -75,7 +75,7 @@ export const NameField = ({
 
         if (
           isDefined(result.error) ||
-          isUndefinedOrNull(result.data?.updateWorkspace)
+          !isDefined(result.data?.updateWorkspace)
         ) {
           throw result.error;
         }

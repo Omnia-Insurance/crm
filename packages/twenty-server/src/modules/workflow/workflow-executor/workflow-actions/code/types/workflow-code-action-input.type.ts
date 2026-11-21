@@ -1,7 +1,9 @@
 export type WorkflowCodeActionInput = {
-  logicFunctionId: string;
+  code?: string;
+  // Deprecated: steps created before inline code
+  logicFunctionId?: string;
   logicFunctionInput: {
-    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     [key: string]: any;
   };
 };

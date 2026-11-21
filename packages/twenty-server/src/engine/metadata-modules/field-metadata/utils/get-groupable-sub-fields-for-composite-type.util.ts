@@ -1,12 +1,15 @@
 import {
+  isCompositePropertySupportedInGroupBy,
+  isDefined,
+} from 'twenty-shared/utils';
+import {
   compositeTypeDefinitions,
   FieldMetadataType,
 } from 'twenty-shared/types';
 
-import { isCompositePropertySupportedInGroupBy } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-property-supported-in-group-by.util';
-
 export const getGroupableSubFieldsForCompositeType = (
   type: FieldMetadataType,
+  { excludeDeprecated = false }: { excludeDeprecated?: boolean } = {},
 ): string[] | null => {
   const compositeTypeDefinition = compositeTypeDefinitions.get(type);
 
@@ -15,6 +18,10 @@ export const getGroupableSubFieldsForCompositeType = (
   }
 
   return compositeTypeDefinition.properties
-    .filter(isCompositePropertySupportedInGroupBy)
+    .filter(
+      (property) =>
+        isCompositePropertySupportedInGroupBy(property) &&
+        !(excludeDeprecated && isDefined(property.deprecationReason)),
+    )
     .map((property) => property.name);
 };

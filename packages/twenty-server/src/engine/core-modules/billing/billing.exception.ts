@@ -4,34 +4,46 @@ import { type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { assertUnreachable } from 'twenty-shared/utils';
 
+import { BILLING_SEAT_LIMIT_REACHED_MESSAGE } from 'src/engine/core-modules/billing/constants/billing-seat-limit-reached-message.constant';
+import { getBillingExceptionStatusCode } from 'src/engine/core-modules/billing/utils/get-billing-exception-status-code.util';
 import { CustomException } from 'src/utils/custom-exception';
 
 export enum BillingExceptionCode {
   BILLING_CUSTOMER_NOT_FOUND = 'BILLING_CUSTOMER_NOT_FOUND',
   BILLING_PLAN_NOT_FOUND = 'BILLING_PLAN_NOT_FOUND',
+  BILLING_PLAN_NOT_ALLOWED = 'BILLING_PLAN_NOT_ALLOWED',
   BILLING_PRODUCT_NOT_FOUND = 'BILLING_PRODUCT_NOT_FOUND',
   BILLING_PRICE_NOT_FOUND = 'BILLING_PRICE_NOT_FOUND',
-  BILLING_METER_NOT_FOUND = 'BILLING_METER_NOT_FOUND',
   BILLING_SUBSCRIPTION_NOT_FOUND = 'BILLING_SUBSCRIPTION_NOT_FOUND',
   BILLING_SUBSCRIPTION_ITEM_NOT_FOUND = 'BILLING_SUBSCRIPTION_ITEM_NOT_FOUND',
   BILLING_SUBSCRIPTION_INVALID = 'BILLING_SUBSCRIPTION_INVALID',
+  BILLING_SUBSCRIPTION_ALREADY_EXISTS = 'BILLING_SUBSCRIPTION_ALREADY_EXISTS',
   BILLING_SUBSCRIPTION_EVENT_WORKSPACE_NOT_FOUND = 'BILLING_SUBSCRIPTION_EVENT_WORKSPACE_NOT_FOUND',
   BILLING_CUSTOMER_EVENT_WORKSPACE_NOT_FOUND = 'BILLING_CUSTOMER_EVENT_WORKSPACE_NOT_FOUND',
-  BILLING_ACTIVE_SUBSCRIPTION_NOT_FOUND = 'BILLING_ACTIVE_SUBSCRIPTION_NOT_FOUND',
-  BILLING_METER_EVENT_FAILED = 'BILLING_METER_EVENT_FAILED',
   BILLING_MISSING_REQUEST_BODY = 'BILLING_MISSING_REQUEST_BODY',
   BILLING_UNHANDLED_ERROR = 'BILLING_UNHANDLED_ERROR',
   BILLING_STRIPE_ERROR = 'BILLING_STRIPE_ERROR',
   BILLING_SUBSCRIPTION_NOT_IN_TRIAL_PERIOD = 'BILLING_SUBSCRIPTION_NOT_IN_TRIAL_PERIOD',
-  BILLING_SUBSCRIPTION_INTERVAL_NOT_SWITCHABLE = 'BILLING_SUBSCRIPTION_INTERVAL_NOT_SWITCHABLE',
-  BILLING_SUBSCRIPTION_INTERVAL_INVALID = 'BILLING_SUBSCRIPTION_INTERVAL_INVALID',
-  BILLING_SUBSCRIPTION_PLAN_NOT_SWITCHABLE = 'BILLING_SUBSCRIPTION_PLAN_NOT_SWITCHABLE',
   BILLING_SUBSCRIPTION_ITEM_INVALID = 'BILLING_SUBSCRIPTION_ITEM_INVALID',
   BILLING_PRICE_INVALID_TIERS = 'BILLING_PRICE_INVALID_TIERS',
   BILLING_PRICE_INVALID = 'BILLING_PRICE_INVALID',
   BILLING_SUBSCRIPTION_PHASE_NOT_FOUND = 'BILLING_SUBSCRIPTION_PHASE_NOT_FOUND',
   BILLING_TOO_MUCH_SUBSCRIPTIONS_FOUND = 'BILLING_TOO_MUCH_SUBSCRIPTIONS_FOUND',
-  BILLING_CREDITS_EXHAUSTED = 'BILLING_CREDITS_EXHAUSTED',
+  BILLING_SUBSCRIPTION_INACTIVE = 'BILLING_SUBSCRIPTION_INACTIVE',
+  BILLING_SUBSCRIPTION_NOT_CANCELED = 'BILLING_SUBSCRIPTION_NOT_CANCELED',
+  BILLING_CREDIT_AMOUNT_INVALID = 'BILLING_CREDIT_AMOUNT_INVALID',
+  BILLING_CREDIT_GRANT_NOT_FOUND = 'BILLING_CREDIT_GRANT_NOT_FOUND',
+  BILLING_CREDIT_GRANT_VALIDITY_INVALID = 'BILLING_CREDIT_GRANT_VALIDITY_INVALID',
+  BILLING_USAGE_UNAVAILABLE = 'BILLING_USAGE_UNAVAILABLE',
+  BILLING_CREDIT_GRANT_TYPE_NOT_GRANTABLE = 'BILLING_CREDIT_GRANT_TYPE_NOT_GRANTABLE',
+  BILLING_UPGRADE_INVOICE_PAYMENT_FAILED = 'BILLING_UPGRADE_INVOICE_PAYMENT_FAILED',
+  BILLING_UPGRADE_INVOICE_VOID_FAILED = 'BILLING_UPGRADE_INVOICE_VOID_FAILED',
+  BILLING_CREDIT_TOP_UP_NOT_GRANTED = 'BILLING_CREDIT_TOP_UP_NOT_GRANTED',
+  BILLING_SEAT_LIMIT_REACHED = 'BILLING_SEAT_LIMIT_REACHED',
+  BILLING_ARRANGEMENT_INVALID = 'BILLING_ARRANGEMENT_INVALID',
+  BILLING_PARTNER_CODE_INVALID = 'BILLING_PARTNER_CODE_INVALID',
+  BILLING_PARTNER_CODE_LOCKED = 'BILLING_PARTNER_CODE_LOCKED',
+  BILLING_PARTNER_CODE_NOT_ELIGIBLE = 'BILLING_PARTNER_CODE_NOT_ELIGIBLE',
 }
 
 const getBillingExceptionUserFriendlyMessage = (code: BillingExceptionCode) => {
@@ -40,26 +52,24 @@ const getBillingExceptionUserFriendlyMessage = (code: BillingExceptionCode) => {
       return msg`Billing customer not found.`;
     case BillingExceptionCode.BILLING_PLAN_NOT_FOUND:
       return msg`Billing plan not found.`;
+    case BillingExceptionCode.BILLING_PLAN_NOT_ALLOWED:
+      return msg`This plan is not available.`;
     case BillingExceptionCode.BILLING_PRODUCT_NOT_FOUND:
       return msg`Billing product not found.`;
     case BillingExceptionCode.BILLING_PRICE_NOT_FOUND:
       return msg`Billing price not found.`;
-    case BillingExceptionCode.BILLING_METER_NOT_FOUND:
-      return msg`Billing meter not found.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_NOT_FOUND:
       return msg`Subscription not found.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_ITEM_NOT_FOUND:
       return msg`Subscription item not found.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_INVALID:
       return msg`Invalid subscription.`;
+    case BillingExceptionCode.BILLING_SUBSCRIPTION_ALREADY_EXISTS:
+      return msg`This workspace already has a subscription.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_EVENT_WORKSPACE_NOT_FOUND:
       return msg`Workspace not found for subscription event.`;
     case BillingExceptionCode.BILLING_CUSTOMER_EVENT_WORKSPACE_NOT_FOUND:
       return msg`Workspace not found for customer event.`;
-    case BillingExceptionCode.BILLING_ACTIVE_SUBSCRIPTION_NOT_FOUND:
-      return msg`No active subscription found.`;
-    case BillingExceptionCode.BILLING_METER_EVENT_FAILED:
-      return msg`Failed to record billing event.`;
     case BillingExceptionCode.BILLING_MISSING_REQUEST_BODY:
       return msg`Missing request body.`;
     case BillingExceptionCode.BILLING_UNHANDLED_ERROR:
@@ -68,12 +78,6 @@ const getBillingExceptionUserFriendlyMessage = (code: BillingExceptionCode) => {
       return msg`A payment processing error occurred.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_NOT_IN_TRIAL_PERIOD:
       return msg`Subscription is not in trial period.`;
-    case BillingExceptionCode.BILLING_SUBSCRIPTION_INTERVAL_NOT_SWITCHABLE:
-      return msg`Cannot switch subscription interval.`;
-    case BillingExceptionCode.BILLING_SUBSCRIPTION_INTERVAL_INVALID:
-      return msg`Invalid subscription interval.`;
-    case BillingExceptionCode.BILLING_SUBSCRIPTION_PLAN_NOT_SWITCHABLE:
-      return msg`Cannot switch subscription plan.`;
     case BillingExceptionCode.BILLING_SUBSCRIPTION_ITEM_INVALID:
       return msg`Invalid subscription item.`;
     case BillingExceptionCode.BILLING_PRICE_INVALID_TIERS:
@@ -84,8 +88,35 @@ const getBillingExceptionUserFriendlyMessage = (code: BillingExceptionCode) => {
       return msg`Subscription phase not found.`;
     case BillingExceptionCode.BILLING_TOO_MUCH_SUBSCRIPTIONS_FOUND:
       return msg`Multiple subscriptions found where one was expected.`;
-    case BillingExceptionCode.BILLING_CREDITS_EXHAUSTED:
-      return msg`You have exhausted your credits. Please upgrade your plan to continue.`;
+    case BillingExceptionCode.BILLING_SUBSCRIPTION_INACTIVE:
+      return msg`This workspace has no active subscription.`;
+    case BillingExceptionCode.BILLING_SUBSCRIPTION_NOT_CANCELED:
+      return msg`Workspace cannot be deleted: subscription is not yet canceled.`;
+    case BillingExceptionCode.BILLING_CREDIT_AMOUNT_INVALID:
+      return msg`Invalid credit amount.`;
+    case BillingExceptionCode.BILLING_CREDIT_GRANT_NOT_FOUND:
+      return msg`Credit grant not found.`;
+    case BillingExceptionCode.BILLING_CREDIT_GRANT_VALIDITY_INVALID:
+      return msg`Credit grant must expire after it becomes effective.`;
+    case BillingExceptionCode.BILLING_USAGE_UNAVAILABLE:
+      return msg`Usage could not be read. Please try again later.`;
+    case BillingExceptionCode.BILLING_CREDIT_GRANT_TYPE_NOT_GRANTABLE:
+      return msg`This kind of credit grant cannot be created by hand.`;
+    case BillingExceptionCode.BILLING_UPGRADE_INVOICE_PAYMENT_FAILED:
+      return msg`Your payment method was declined. Please update it and try again.`;
+    case BillingExceptionCode.BILLING_UPGRADE_INVOICE_VOID_FAILED:
+    case BillingExceptionCode.BILLING_ARRANGEMENT_INVALID:
+      return msg`An unexpected billing error occurred. Please contact support.`;
+    case BillingExceptionCode.BILLING_CREDIT_TOP_UP_NOT_GRANTED:
+      return msg`Your purchased credits could not be added. Please contact support.`;
+    case BillingExceptionCode.BILLING_PARTNER_CODE_INVALID:
+      return msg`This partner code is not valid.`;
+    case BillingExceptionCode.BILLING_PARTNER_CODE_LOCKED:
+      return msg`The partner code can no longer be added or changed. Please contact support.`;
+    case BillingExceptionCode.BILLING_PARTNER_CODE_NOT_ELIGIBLE:
+      return msg`Partner codes only apply to new Twenty customers.`;
+    case BillingExceptionCode.BILLING_SEAT_LIMIT_REACHED:
+      return BILLING_SEAT_LIMIT_REACHED_MESSAGE;
     default:
       assertUnreachable(code);
   }
@@ -101,5 +132,6 @@ export class BillingException extends CustomException<BillingExceptionCode> {
       userFriendlyMessage:
         userFriendlyMessage ?? getBillingExceptionUserFriendlyMessage(code),
     });
+    this.statusCode = getBillingExceptionStatusCode(this);
   }
 }

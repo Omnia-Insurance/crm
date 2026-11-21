@@ -26,7 +26,7 @@ const generatePrimitiveValue = (valueType: string): FakeValueTypes => {
 
     return Array.from({ length: 3 }, () => generateFakeValue(elementType));
   } else if (valueType.startsWith('{') && valueType.endsWith('}')) {
-    // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     const objData: Record<string, any> = {};
 
     const properties = valueType
@@ -42,9 +42,8 @@ const generatePrimitiveValue = (valueType: string): FakeValueTypes => {
     });
 
     return objData;
-  } else {
-    return null;
   }
+  return null;
 };
 
 const generateFieldMetadataTypeValue = (

@@ -38,6 +38,7 @@ export const getOperandLabel = (
       return t`Is not empty`;
     case ViewFilterOperand.IS_RELATIVE:
       return t`Is relative`;
+    // OMNIA-CUSTOM: workflow-only date operand
     case ViewFilterOperand.IS_NOT_RELATIVE:
       return t`Is not relative`;
     case ViewFilterOperand.IS_IN_PAST:
@@ -87,6 +88,7 @@ export const getOperandLabelShort = (
       return t`: Past`;
     case ViewFilterOperand.IS_IN_FUTURE:
       return t`: Future`;
+    // OMNIA-CUSTOM: workflow-only date operand
     case ViewFilterOperand.IS_NOT_RELATIVE:
       return t`: Not relative`;
     case ViewFilterOperand.IS_TODAY:

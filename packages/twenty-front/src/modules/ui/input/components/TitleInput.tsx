@@ -1,20 +1,20 @@
-import { TextInput, type TextInputSize } from '@/ui/input/components/TextInput';
+import { TextInput } from '@/ui/input/components/TextInput';
+import { type TextInputSize } from '@/ui/input/types/TextInputSize';
 import { useRef, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
-import { useRegisterInputEvents } from '@/object-record/record-field/ui/meta-types/input/hooks/useRegisterInputEvents';
+import { useRegisterInputEvents } from '@/ui/input/hooks/useRegisterInputEvents';
 import { TitleInputAutoOpenEffect } from '@/ui/input/components/TitleInputAutoOpenEffect';
 import { usePushFocusItemToFocusStack } from '@/ui/utilities/focus/hooks/usePushFocusItemToFocusStack';
 import { useRemoveFocusItemFromFocusStackById } from '@/ui/utilities/focus/hooks/useRemoveFocusItemFromFocusStackById';
 import { FocusComponentType } from '@/ui/utilities/focus/types/FocusComponentType';
 import { styled } from '@linaria/react';
-import { OverflowingTextWithTooltip } from 'twenty-ui/display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-type InputProps = {
+type CommonInputProps = {
   instanceId: string;
   value?: string;
-  onChange: (value: string) => void;
   placeholder?: string;
   onEnter?: () => void;
   onEscape?: () => void;
@@ -24,22 +24,49 @@ type InputProps = {
   sizeVariant?: TextInputSize;
 };
 
-export type TitleInputProps = {
-  disabled?: boolean;
-  shouldFocus?: boolean;
-  onFocus?: () => void;
-} & InputProps;
+type InputProps = CommonInputProps & {
+  onChange?: (value: string) => void;
+};
+
+type TitleInputReadonlyProps = {
+  disabled: true;
+  onChange?: (value: string) => void;
+};
+
+type TitleInputEditableProps = {
+  disabled?: false;
+  onChange: (value: string) => void;
+};
+
+type TitleInputConditionallyReadonlyProps = {
+  disabled: boolean;
+  onChange: (value: string) => void;
+};
+
+type TitleInputEditionProps =
+  | TitleInputReadonlyProps
+  | TitleInputEditableProps
+  | TitleInputConditionallyReadonlyProps;
+
+export type TitleInputProps = CommonInputProps &
+  TitleInputEditionProps & {
+    shouldFocus?: boolean;
+    onFocus?: () => void;
+    textColor?: string;
+  };
 
 const StyledDiv = styled.div<{
   sizeVariant: TextInputSize;
   disabled?: boolean;
+  textColor?: string;
 }>`
   align-items: center;
   background: inherit;
   border: none;
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.md};
   box-sizing: border-box;
-  color: ${themeCssVariables.font.color.primary};
+  color: ${({ textColor }) =>
+    textColor ?? themeCssVariables.font.color.primary};
   cursor: ${({ disabled }) => (disabled ? 'default' : 'pointer')};
   display: flex;
   height: ${({ sizeVariant }) =>
@@ -52,7 +79,7 @@ const StyledDiv = styled.div<{
           : '32px'};
   overflow: hidden;
   padding: ${themeCssVariables.spacing[0]} 5px;
-  :hover {
+  &:hover {
     background: ${({ disabled }) =>
       disabled ? 'inherit' : themeCssVariables.background.transparent.light};
   }
@@ -148,6 +175,7 @@ export const TitleInput = ({
   onShiftTab,
   shouldFocus,
   onFocus,
+  textColor,
 }: TitleInputProps) => {
   const [isOpened, setIsOpened] = useState(false);
 
@@ -181,6 +209,7 @@ export const TitleInput = ({
         <StyledDiv
           sizeVariant={sizeVariant}
           disabled={disabled}
+          textColor={textColor}
           onClick={() => {
             if (!disabled) {
               setIsOpened(true);

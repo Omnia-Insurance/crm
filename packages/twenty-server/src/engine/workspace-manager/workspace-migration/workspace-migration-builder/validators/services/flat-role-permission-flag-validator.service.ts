@@ -5,11 +5,13 @@ import { ALL_METADATA_NAME } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
-import { PermissionsExceptionCode } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsExceptionCode } from 'src/engine/permissions/permissions.exception';
 import { FailedFlatEntityValidation } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/types/failed-flat-entity-validation.type';
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
 import { FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
 import { UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { getPermissionFlagNotFoundError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/get-permission-flag-not-found-error.util';
+import { getRoleNotEditableErrors } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/get-role-not-editable-errors.util';
 import { validateRoleBelongsToCallerApplication } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-role-belongs-to-caller-application.util';
 
 @Injectable()
@@ -22,8 +24,13 @@ export class FlatRolePermissionFlagValidatorService {
       flatRoleMaps,
     },
     buildOptions,
-  }: UniversalFlatEntityValidationArgs<
-    typeof ALL_METADATA_NAME.rolePermissionFlag
+  }: Pick<
+    UniversalFlatEntityValidationArgs<
+      typeof ALL_METADATA_NAME.rolePermissionFlag
+    >,
+    | 'buildOptions'
+    | 'flatEntityToValidate'
+    | 'optimisticFlatEntityMapsAndRelatedFlatEntityMaps'
   >): FailedFlatEntityValidation<'rolePermissionFlag', 'create'> {
     const validationResult = getEmptyFlatEntityValidationError({
       flatEntityMinimalInformation: {
@@ -71,33 +78,23 @@ export class FlatRolePermissionFlagValidatorService {
         }),
       );
 
-      if (!referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
-      }
+      validationResult.errors.push(
+        ...getRoleNotEditableErrors({ flatRole: referencedRole, buildOptions }),
+      );
     }
 
-    if (
-      isDefined(
+    const referencedPermissionFlag = findFlatEntityByUniversalIdentifier({
+      universalIdentifier:
         flatRolePermissionFlagToValidate.permissionFlagUniversalIdentifier,
-      )
-    ) {
-      const referencedPermissionFlag = findFlatEntityByUniversalIdentifier({
-        universalIdentifier:
-          flatRolePermissionFlagToValidate.permissionFlagUniversalIdentifier,
-        flatEntityMaps: flatPermissionFlagMaps,
-      });
+      flatEntityMaps: flatPermissionFlagMaps,
+    });
 
-      if (!isDefined(referencedPermissionFlag)) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.INVALID_SETTING,
-          message: t`Permission flag not found`,
-          userFriendlyMessage: msg`Invalid permission setting`,
-        });
-      }
+    if (!isDefined(referencedPermissionFlag)) {
+      validationResult.errors.push(
+        getPermissionFlagNotFoundError(
+          flatRolePermissionFlagToValidate.permissionFlagUniversalIdentifier,
+        ),
+      );
     }
 
     const duplicateForSameRole = Object.values(
@@ -184,28 +181,26 @@ export class FlatRolePermissionFlagValidatorService {
         }),
       );
 
-      if (!referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
-      }
+      validationResult.errors.push(
+        ...getRoleNotEditableErrors({ flatRole: referencedRole, buildOptions }),
+      );
     }
 
-    if (isDefined(flatEntityUpdate.permissionFlagUniversalIdentifier)) {
+    const updatedPermissionFlagUniversalIdentifier =
+      flatEntityUpdate.permissionFlagUniversalIdentifier;
+
+    if (isDefined(updatedPermissionFlagUniversalIdentifier)) {
       const referencedPermissionFlag = findFlatEntityByUniversalIdentifier({
-        universalIdentifier:
-          flatEntityUpdate.permissionFlagUniversalIdentifier as string,
+        universalIdentifier: updatedPermissionFlagUniversalIdentifier,
         flatEntityMaps: flatPermissionFlagMaps,
       });
 
       if (!isDefined(referencedPermissionFlag)) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.INVALID_SETTING,
-          message: t`Permission flag not found`,
-          userFriendlyMessage: msg`Invalid permission setting`,
-        });
+        validationResult.errors.push(
+          getPermissionFlagNotFoundError(
+            updatedPermissionFlagUniversalIdentifier,
+          ),
+        );
       }
     }
 
@@ -238,6 +233,7 @@ export class FlatRolePermissionFlagValidatorService {
       flatRolePermissionFlagMaps: optimisticFlatRolePermissionFlagMaps,
       flatRoleMaps,
     },
+    buildOptions,
   }: UniversalFlatEntityValidationArgs<
     typeof ALL_METADATA_NAME.rolePermissionFlag
   >): FailedFlatEntityValidation<'rolePermissionFlag', 'delete'> {
@@ -267,12 +263,13 @@ export class FlatRolePermissionFlagValidatorService {
         flatEntityMaps: flatRoleMaps,
       });
 
-      if (isDefined(referencedRole) && !referencedRole.isEditable) {
-        validationResult.errors.push({
-          code: PermissionsExceptionCode.ROLE_NOT_EDITABLE,
-          message: t`Role is not editable`,
-          userFriendlyMessage: msg`This role cannot be modified because it is a system role. Only custom roles can be edited.`,
-        });
+      if (isDefined(referencedRole)) {
+        validationResult.errors.push(
+          ...getRoleNotEditableErrors({
+            flatRole: referencedRole,
+            buildOptions,
+          }),
+        );
       }
     }
 

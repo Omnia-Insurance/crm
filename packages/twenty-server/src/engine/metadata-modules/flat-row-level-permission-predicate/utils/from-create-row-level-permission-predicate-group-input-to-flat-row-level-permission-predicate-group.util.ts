@@ -1,5 +1,4 @@
 import { v4 } from 'uuid';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
@@ -53,12 +52,18 @@ export const fromCreateRowLevelPermissionPredicateGroupInputToFlatRowLevelPermis
       objectMetadataId: input.objectMetadataId,
       objectMetadataUniversalIdentifier,
       logicalOperator: input.logicalOperator,
-      scope: input.scope ?? RowLevelPermissionPredicateScope.ALL,
       parentRowLevelPermissionPredicateGroupId:
         input.parentRowLevelPermissionPredicateGroupId ?? null,
       parentRowLevelPermissionPredicateGroupUniversalIdentifier,
+      rowLevelPermissionRuleId: null,
+      rowLevelPermissionRuleUniversalIdentifier: null,
       positionInRowLevelPermissionPredicateGroup:
         input.positionInRowLevelPermissionPredicateGroup ?? null,
+      canReadRecords: input.canReadRecords ?? false,
+      canCreateRecords: input.canUpdateRecords ?? false,
+      canUpdateRecords: input.canUpdateRecords ?? false,
+      canSoftDeleteRecords: input.canSoftDeleteRecords ?? false,
+      canDestroyRecords: input.canDestroyRecords ?? false,
       childRowLevelPermissionPredicateGroupIds: [],
       childRowLevelPermissionPredicateGroupUniversalIdentifiers: [],
       rowLevelPermissionPredicateIds: [],

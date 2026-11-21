@@ -1,32 +1,42 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+
+import { extname } from 'path';
 
 import { msg } from '@lingui/core/macro';
 import { isNonEmptyString } from '@sniptt/guards';
 import { FileFolder } from 'twenty-shared/types';
-import { Repository } from 'typeorm';
+import { isDefined } from 'twenty-shared/utils';
+
 import { v4 } from 'uuid';
 
 import { ApplicationEntity } from 'src/engine/core-modules/application/application.entity';
-import { FileStorageService } from 'src/engine/core-modules/file-storage/file-storage.service';
+import { FileStorageService } from 'src/engine/core-modules/file-storage/services/file-storage.service';
 import { FileWithSignedUrlDTO } from 'src/engine/core-modules/file/dtos/file-with-sign-url.dto';
+import { FileEntity } from 'src/engine/core-modules/file/entities/file.entity';
 import { FileUrlService } from 'src/engine/core-modules/file/file-url/file-url.service';
 import {
   FilesFieldException,
   FilesFieldExceptionCode,
 } from 'src/engine/core-modules/file/files-field/files-field.exception';
-import { extractFileInfo } from 'src/engine/core-modules/file/utils/extract-file-info.utils';
-import { sanitizeFile } from 'src/engine/core-modules/file/utils/sanitize-file.utils';
+import { buildRemoteFileExtension } from 'src/engine/core-modules/file/files-field/utils/build-remote-file-extension.util';
+import { type FileRemoteOrigin } from 'src/engine/core-modules/file/types/file-remote-origin.type';
+import { FILE_STATUS } from 'src/engine/core-modules/file/types/file-status.type';
+import { extractFileInfoOrThrow } from 'src/engine/core-modules/file/utils/extract-file-info-or-throw.utils';
+import { removeFileFolderFromFileEntityPath } from 'src/engine/core-modules/file/utils/remove-file-folder-from-file-entity-path.util';
 import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 @Injectable()
 export class FilesFieldService {
   constructor(
     private readonly fileStorageService: FileStorageService,
-    @InjectRepository(ApplicationEntity)
-    private readonly applicationRepository: Repository<ApplicationEntity>,
-    @InjectRepository(FieldMetadataEntity)
-    private readonly fieldMetadataRepository: Repository<FieldMetadataEntity>,
+    @InjectWorkspaceScopedRepository(ApplicationEntity)
+    private readonly applicationRepository: WorkspaceScopedRepository<ApplicationEntity>,
+    @InjectWorkspaceScopedRepository(FieldMetadataEntity)
+    private readonly fieldMetadataRepository: WorkspaceScopedRepository<FieldMetadataEntity>,
+    @InjectWorkspaceScopedRepository(FileEntity)
+    private readonly fileRepository: WorkspaceScopedRepository<FileEntity>,
     private readonly fileUrlService: FileUrlService,
   ) {}
 
@@ -53,38 +63,39 @@ export class FilesFieldService {
       );
     }
 
-    const { mimeType, ext } = await extractFileInfo({
+    const { ext } = await extractFileInfoOrThrow({
       file,
       filename,
     });
 
-    const sanitizedFile = sanitizeFile({ file, ext, mimeType });
-
     const fileId = v4();
     const name = `${fileId}${isNonEmptyString(ext) ? `.${ext}` : ''}`;
 
-    const fieldMetadata = await this.fieldMetadataRepository.findOneOrFail({
-      select: ['applicationId', 'universalIdentifier'],
-      where: {
-        ...(fieldMetadataId ? { id: fieldMetadataId } : {}),
-        ...(fieldMetadataUniversalIdentifier
-          ? { universalIdentifier: fieldMetadataUniversalIdentifier }
-          : {}),
-        workspaceId,
+    const fieldMetadata = await this.fieldMetadataRepository.findOneOrFail(
+      workspaceId,
+      {
+        select: ['applicationId', 'universalIdentifier'],
+        where: {
+          ...(fieldMetadataId ? { id: fieldMetadataId } : {}),
+          ...(fieldMetadataUniversalIdentifier
+            ? { universalIdentifier: fieldMetadataUniversalIdentifier }
+            : {}),
+        },
       },
-    });
+    );
 
-    const application = await this.applicationRepository.findOneOrFail({
-      where: {
-        id: fieldMetadata.applicationId,
-        workspaceId,
+    const application = await this.applicationRepository.findOneOrFail(
+      workspaceId,
+      {
+        where: {
+          id: fieldMetadata.applicationId,
+        },
       },
-    });
+    );
 
     const savedFile = await this.fileStorageService.writeFile({
-      sourceFile: sanitizedFile,
+      sourceFile: file,
       resourcePath: `${fieldMetadata.universalIdentifier}/${name}`,
-      mimeType,
       fileFolder: FileFolder.FilesField,
       applicationUniversalIdentifier: application.universalIdentifier,
       workspaceId,
@@ -103,6 +114,146 @@ export class FilesFieldService {
         fileFolder: FileFolder.FilesField,
       }),
     };
+  }
+
+  async createRemoteFiles({
+    workspaceId,
+    fieldMetadataUniversalIdentifier,
+    files,
+  }: {
+    workspaceId: string;
+    fieldMetadataUniversalIdentifier: string;
+    files: (Pick<FileEntity, 'size' | 'mimeType'> & {
+      filename: string;
+      remoteOrigin: FileRemoteOrigin;
+    })[];
+  }): Promise<{ fileId: string; label: string }[]> {
+    const fieldMetadata = await this.fieldMetadataRepository.findOneOrFail(
+      workspaceId,
+      {
+        select: ['applicationId', 'universalIdentifier'],
+        where: { universalIdentifier: fieldMetadataUniversalIdentifier },
+      },
+    );
+
+    const application = await this.applicationRepository.findOneOrFail(
+      workspaceId,
+      {
+        select: ['universalIdentifier'],
+        where: { id: fieldMetadata.applicationId },
+      },
+    );
+
+    const settings = {
+      isTemporaryFile: true,
+      toDelete: false,
+    };
+
+    const remoteFiles = files.map(
+      ({ filename, size, mimeType, remoteOrigin }) => {
+        const id = v4();
+
+        return {
+          id,
+          label: filename,
+          resourcePath: `${fieldMetadata.universalIdentifier}/${id}.${buildRemoteFileExtension(filename)}`,
+          size,
+          mimeType,
+          settings,
+          remoteOrigin,
+        };
+      },
+    );
+
+    await this.fileStorageService.createRemoteFiles({
+      workspaceId,
+      applicationUniversalIdentifier: application.universalIdentifier,
+      applicationId: fieldMetadata.applicationId,
+      fileFolder: FileFolder.FilesField,
+      files: remoteFiles,
+    });
+
+    return remoteFiles.map(({ id, label }) => ({ fileId: id, label }));
+  }
+
+  async copyFileIntoFilesField({
+    fileId,
+    workspaceId,
+    fieldMetadataId,
+  }: {
+    fileId: string;
+    workspaceId: string;
+    fieldMetadataId: string;
+  }): Promise<FileEntity> {
+    const sourceFile = await this.fileRepository.findOne(workspaceId, {
+      where: { id: fileId },
+    });
+
+    if (!isDefined(sourceFile)) {
+      throw new FilesFieldException(
+        `File ${fileId} not found`,
+        FilesFieldExceptionCode.BAD_REQUEST,
+        { userFriendlyMessage: msg`File not found.` },
+      );
+    }
+
+    if (sourceFile.status !== FILE_STATUS.UPLOADED) {
+      throw new FilesFieldException(
+        `File ${fileId} upload has not been completed`,
+        FilesFieldExceptionCode.BAD_REQUEST,
+        {
+          userFriendlyMessage: msg`The file upload has not been completed. Please retry the upload.`,
+        },
+      );
+    }
+
+    const fieldMetadata = await this.fieldMetadataRepository.findOneOrFail(
+      workspaceId,
+      {
+        select: ['applicationId', 'universalIdentifier'],
+        where: { id: fieldMetadataId },
+      },
+    );
+
+    const [sourceApplication, destinationApplication] = await Promise.all([
+      this.applicationRepository.findOneOrFail(workspaceId, {
+        select: ['universalIdentifier'],
+        where: { id: sourceFile.applicationId },
+      }),
+      this.applicationRepository.findOneOrFail(workspaceId, {
+        select: ['universalIdentifier'],
+        where: { id: fieldMetadata.applicationId },
+      }),
+    ]);
+
+    const copiedFileId = v4();
+    const extension = extname(sourceFile.path);
+    const resourcePath = `${fieldMetadata.universalIdentifier}/${copiedFileId}${extension}`;
+    const sourceFileFolder = sourceFile.path.split('/')[0] as FileFolder;
+
+    return this.fileStorageService.copyFile({
+      from: {
+        workspaceId,
+        applicationUniversalIdentifier: sourceApplication.universalIdentifier,
+        fileFolder: sourceFileFolder,
+        resourcePath: removeFileFolderFromFileEntityPath(sourceFile.path),
+      },
+      to: {
+        workspaceId,
+        applicationUniversalIdentifier:
+          destinationApplication.universalIdentifier,
+        fileFolder: FileFolder.FilesField,
+        resourcePath,
+      },
+      fileId: copiedFileId,
+      applicationId: fieldMetadata.applicationId,
+      mimeType: sourceFile.mimeType,
+      size: sourceFile.size,
+      settings: {
+        isTemporaryFile: true,
+        toDelete: false,
+      },
+    });
   }
 
   async deleteFilesFieldFile({

@@ -19,28 +19,25 @@
 import { Injectable } from '@nestjs/common';
 
 import { msg } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { type UpdateOneResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
-import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { ForbiddenError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 @Injectable()
 @WorkspaceQueryHook(`carrierConfig.updateOne`)
-export class CarrierConfigUpdateOnePreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+export class CarrierConfigUpdateOnePreQueryHook implements WorkspacePreQueryHookInstance {
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   async execute(
-    authContext: AuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: UpdateOneResolverArgs,
   ): Promise<UpdateOneResolverArgs> {
@@ -59,59 +56,52 @@ export class CarrierConfigUpdateOnePreQueryHook
       return payload;
     }
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const carrierConfigRepo =
-        await this.globalWorkspaceOrmManager.getRepository(
-          workspace.id,
-          'carrierConfig',
-          { shouldBypassPermissionChecks: true },
-        );
+    const existing = await this.workspaceOrmManager.executeInWorkspaceContext(
+      () =>
+        this.workspaceOrmManager
+          .getRepository('carrierConfig')
+          .findOne({ where: { id: payload.id } }),
+      authContext,
+    );
 
-      const existing = (await carrierConfigRepo.findOne({
-        where: { id: payload.id },
-      })) as Record<string, unknown> | null;
+    const oldName: unknown = existing?.name;
 
-      const oldName = (existing?.name as string | null | undefined) ?? null;
+    // Not a rename: record missing or hidden from the caller (the runner
+    // answers), no stored name to orphan, or the name is unchanged.
+    if (!isNonEmptyString(oldName) || oldName === newName) {
+      return payload;
+    }
 
-      // Not a rename: record missing (let the runner produce its own 404),
-      // no stored name to orphan, or the name is unchanged.
-      if (!existing || !oldName || oldName === newName) {
-        return;
-      }
-
-      const decisionRuleRepo =
-        await this.globalWorkspaceOrmManager.getRepository(
-          workspace.id,
-          'reconciliationDecisionRule',
-          { shouldBypassPermissionChecks: true },
-        );
-      const reviewItemRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspace.id,
-        'reviewItem',
-        { shouldBypassPermissionChecks: true },
+    // Integrity check over admin-only bookkeeping: only counts reach the caller
+    const [decisionRuleCount, reviewItemCount] =
+      await this.workspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          Promise.all([
+            this.workspaceOrmManager
+              .getRepositoryWithoutPermissionChecks(
+                'reconciliationDecisionRule',
+              )
+              .count({ where: { carrierName: oldName } }),
+            this.workspaceOrmManager
+              .getRepositoryWithoutPermissionChecks('reviewItem')
+              .count({ where: { carrierName: oldName } }),
+          ]),
+        buildSystemAuthContext(workspace.id),
       );
 
-      const [decisionRuleCount, reviewItemCount] = await Promise.all([
-        decisionRuleRepo.count({ where: { carrierName: oldName } }),
-        reviewItemRepo.count({ where: { carrierName: oldName } }),
-      ]);
+    if (decisionRuleCount === 0 && reviewItemCount === 0) {
+      return payload;
+    }
 
-      if (decisionRuleCount === 0 && reviewItemCount === 0) {
-        return;
-      }
-
-      throw new ForbiddenError(
-        `Blocked carrierConfig rename "${oldName}" → "${newName}": ` +
-          `${decisionRuleCount} learned decision rule(s) and ${reviewItemCount} ` +
-          `review item(s)/override(s) join on carrierName "${oldName}" and would be ` +
-          `silently orphaned (decision-rule signature hashes embed the name, so rules ` +
-          `cannot be re-keyed — only re-learned).`,
-        {
-          userFriendlyMessage: msg`Cannot rename this carrier config: ${decisionRuleCount} learned rule(s) and ${reviewItemCount} review item(s) reference the name "${oldName}" and would stop matching. Create a new carrier config instead, or remove the referencing records first.`,
-        },
-      );
-    }, authContext as WorkspaceAuthContext);
-
-    return payload;
+    throw new ForbiddenError(
+      `Blocked carrierConfig rename "${oldName}" → "${newName}": ` +
+        `${decisionRuleCount} learned decision rule(s) and ${reviewItemCount} ` +
+        `review item(s)/override(s) join on carrierName "${oldName}" and would be ` +
+        `silently orphaned (decision-rule signature hashes embed the name, so rules ` +
+        `cannot be re-keyed — only re-learned).`,
+      {
+        userFriendlyMessage: msg`Cannot rename this carrier config: ${decisionRuleCount} learned rule(s) and ${reviewItemCount} review item(s) reference the name "${oldName}" and would stop matching. Create a new carrier config instead, or remove the referencing records first.`,
+      },
+    );
   }
 }

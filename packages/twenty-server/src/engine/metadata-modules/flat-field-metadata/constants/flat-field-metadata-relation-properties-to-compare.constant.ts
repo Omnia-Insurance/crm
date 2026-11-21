@@ -4,9 +4,15 @@ export const FLAT_FIELD_METADATA_RELATION_PROPERTIES_TO_COMPARE = [
   'label',
   'description',
   'isActive',
-  'standardOverrides',
+  'overrides',
   'icon',
   'name',
+  // OMNIA-CUSTOM: Policy relation fields take a required rule (contract C5)
   'requiredCondition',
   'universalSettings',
+  'isUIEditable',
+  'isAuditLogged',
+  'isNullable',
+  'disabledFieldPermissionActions',
+  'isLabelSyncedWithName',
 ] as const satisfies (typeof ALL_UNIVERSAL_FLAT_ENTITY_PROPERTIES_TO_COMPARE_AND_STRINGIFY.fieldMetadata.propertiesToCompare)[number][];

@@ -1,7 +1,7 @@
 import { MessageParticipantRole } from 'twenty-shared/types';
 
 import { MessageDirection } from 'src/modules/messaging/common/enums/message-direction.enum';
-import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message';
+import { type MessageWithParticipants } from 'src/modules/messaging/message-import-manager/types/message.type';
 
 export const messagingGetMessagesServiceGetMessages = [
   {
@@ -25,6 +25,7 @@ export const messagingGetMessagesServiceGetMessages = [
       },
     ],
     attachments: [],
+    isDraft: false,
   },
   {
     externalId: 'AA-work-emails-external',
@@ -47,6 +48,7 @@ export const messagingGetMessagesServiceGetMessages = [
       },
     ],
     attachments: [],
+    isDraft: false,
   },
   {
     externalId: 'AA-personal-emails',
@@ -69,5 +71,6 @@ export const messagingGetMessagesServiceGetMessages = [
       },
     ],
     attachments: [],
+    isDraft: false,
   },
 ] satisfies MessageWithParticipants[];

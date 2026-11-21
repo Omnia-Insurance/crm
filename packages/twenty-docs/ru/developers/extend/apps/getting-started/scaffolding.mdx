@@ -1,0 +1,33 @@
+---
+title: Создание каркаса
+description: Создавайте сущности приложения с помощью команды добавления приложения.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Обзор
+
+Используйте автономный CLI для создания объекта, поля, логической функции или внешнего компонента:
+
+```bash
+twenty app add
+twenty app add object --name invoice --name-plural invoices --no-input
+twenty app add field --name amount --type NUMBER --object <object-uuid> --no-input
+twenty app add logic-function --name send-invoice --no-input
+twenty app add front-component --name invoice-panel --no-input
+```
+
+Без флагов интерактивные терминалы запрашивают недостающие значения. Для скриптов и агентов укажите обязательные поля и используйте `--no-input` или `--json`.
+
+При создании объекта также можно создать представление, элемент навигации и макет страницы записи:
+
+```bash
+twenty app add object --name invoice --name-plural invoices \
+  --create-view --create-navigation-menu-item --create-page-layout --no-input
+```
+
+Для других типов сущностей создайте соответствующий файл `define*`, используя `twenty-sdk/define` и действительный UUID v4. Перед синхронизацией выполните `twenty app typecheck` и `twenty app plan`.
+
+`--path` выбирает каталог приложения, а не пользовательскую выходную папку. Выполните `twenty app add --help`, чтобы просмотреть поддерживаемые параметры.
+
+<PageBanner illustration="dev-contribute" />

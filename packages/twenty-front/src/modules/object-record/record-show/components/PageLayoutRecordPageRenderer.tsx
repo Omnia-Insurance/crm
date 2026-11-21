@@ -1,68 +1,55 @@
 import { RecordPageSidePanelCommandMenu } from '@/command-menu-item/components/RecordPageSidePanelCommandMenu';
-import { RecordShowSidePanelCreateRecordButton } from '@/command-menu-item/components/RecordShowSidePanelCreateRecordButton';
-import { RecordShowSidePanelOpenRecordButton } from '@/command-menu-item/components/RecordShowSidePanelOpenRecordButton';
-import { draftRecordIdsState } from '@/object-record/record-side-panel/states/draftRecordIdsState';
-import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
-import { useDraftCombinedViolations } from '@/object-record/record-field/ui/hooks/useDraftCombinedViolations';
+import { RecordPageSidePanelPinnedCommandMenuItems } from '@/command-menu-item/components/RecordPageSidePanelPinnedCommandMenuItems';
+import { RecordPageSidePanelWidgetCommandMenuItems } from '@/command-menu-item/components/RecordPageSidePanelWidgetCommandMenuItems';
 import { InformationBannerDeletedRecord } from '@/information-banner/components/deleted-record/InformationBannerDeletedRecord';
 import { RecordShowContainerContextStoreTargetedRecordsEffect } from '@/object-record/record-show/components/RecordShowContainerContextStoreTargetedRecordsEffect';
-import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
+import { useDisplaySidePanelFooter } from '@/object-record/record-show/hooks/useDisplaySidePanelFooter';
 import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
 import { PageLayoutRenderer } from '@/page-layout/components/PageLayoutRenderer';
 import { usePageLayoutIdForRecord } from '@/page-layout/hooks/usePageLayoutIdForRecord';
+import { PageLayoutIdContext } from '@/page-layout/states/currentPageLayoutIdState';
 import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { type TargetRecordIdentifier } from '@/ui/layout/contexts/TargetRecordIdentifier';
 import { SidePanelFooter } from '@/ui/layout/side-panel/components/SidePanelFooter';
-import { sidePanelWidgetFooterCommandMenuItemsState } from '@/ui/layout/side-panel/states/sidePanelWidgetFooterCommandMenuItemsState';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { PageLayoutType } from '~/generated-metadata/graphql';
 
-import { type RelatedRecordViolation } from '@/object-record/record-field/ui/utils/getRelatedRecordViolations';
-
-const EMPTY_RELATED_VIOLATIONS: RelatedRecordViolation[] = [];
-
 const StyledShowPageBannerContainer = styled.div`
+  flex-shrink: 0;
   z-index: 1;
 `;
 
 const StyledShowPageRightContainer = styled.div`
   display: flex;
+  flex: 1;
   flex-direction: column;
-  height: 100%;
   justify-content: start;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   width: 100%;
 `;
 
-const StyledContentContainer = styled.div<{ isInSidePanel: boolean }>`
+const StyledContentContainer = styled.div`
   background: ${themeCssVariables.background.primary};
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 `;
 
 export const PageLayoutRecordPageRenderer = ({
   targetRecordIdentifier,
-  isInSidePanel,
+  isRecordIdentifierBarHidden = false,
 }: {
   targetRecordIdentifier: TargetRecordIdentifier;
-  isInSidePanel: boolean;
+  isRecordIdentifierBarHidden?: boolean;
 }) => {
-  const draftRecordIds = useAtomStateValue(draftRecordIdsState);
-  const isDraft = draftRecordIds.has(targetRecordIdentifier.id);
-  const draftMeta = draftRecordIds.get(targetRecordIdentifier.id);
-
-  const combinedViolations = useDraftCombinedViolations(
-    targetRecordIdentifier.id,
-    draftMeta,
+  const displaySidePanelFooter = useDisplaySidePanelFooter(
+    targetRecordIdentifier,
   );
-  const relatedViolations = combinedViolations?.relatedViolations ?? EMPTY_RELATED_VIOLATIONS;
-
   const recordDeletedAt = useAtomFamilySelectorValue(
     recordStoreFamilySelector,
     {
@@ -76,25 +63,8 @@ export const PageLayoutRecordPageRenderer = ({
     targetObjectNameSingular: targetRecordIdentifier.targetObjectNameSingular,
   });
 
-  const sidePanelWidgetFooterCommandMenuItems = useAtomStateValue(
-    sidePanelWidgetFooterCommandMenuItemsState,
-  );
-
-  const pinnedWidgetCommandMenuItems =
-    sidePanelWidgetFooterCommandMenuItems.filter(
-      (commandMenuItem) => commandMenuItem.isPinned !== false,
-    );
-
-  const hasPinnedWidgetCommandMenuItems =
-    pinnedWidgetCommandMenuItems.length > 0;
-
   return (
-    <>
-      <RecordShowEffect
-        objectNameSingular={targetRecordIdentifier.targetObjectNameSingular}
-        recordId={targetRecordIdentifier.id}
-      />
-
+    <PageLayoutIdContext.Provider value={pageLayoutId}>
       <RecordShowContainerContextStoreTargetedRecordsEffect
         recordId={targetRecordIdentifier.id}
       />
@@ -108,9 +78,8 @@ export const PageLayoutRecordPageRenderer = ({
         </StyledShowPageBannerContainer>
       )}
 
-      <DraftRelatedViolationsContext.Provider value={relatedViolations}>
-      <StyledShowPageRightContainer>
-        <StyledContentContainer isInSidePanel={isInSidePanel}>
+      <StyledShowPageRightContainer data-record-show-page-body="">
+        <StyledContentContainer>
           <LayoutRenderingProvider
             value={{
               targetRecordIdentifier: {
@@ -120,10 +89,10 @@ export const PageLayoutRecordPageRenderer = ({
               },
               layoutType:
                 targetRecordIdentifier.targetObjectNameSingular ===
-                CoreObjectNameSingular.Dashboard
+                StandardObjectNameSingular.Dashboard
                   ? PageLayoutType.DASHBOARD
                   : PageLayoutType.RECORD_PAGE,
-              isInSidePanel,
+              isRecordIdentifierBarHidden,
             }}
           >
             {isDefined(pageLayoutId) && (
@@ -132,51 +101,16 @@ export const PageLayoutRecordPageRenderer = ({
           </LayoutRenderingProvider>
         </StyledContentContainer>
 
-        {isInSidePanel && (
+        {displaySidePanelFooter && (
           <SidePanelFooter
             actions={[
               <RecordPageSidePanelCommandMenu key="options" />,
-              ...(hasPinnedWidgetCommandMenuItems
-                ? pinnedWidgetCommandMenuItems.map((commandMenuItem) => (
-                    <Button
-                      key={commandMenuItem.id}
-                      size="small"
-                      variant={
-                        commandMenuItem.isPrimaryCTA ? 'primary' : 'secondary'
-                      }
-                      accent={commandMenuItem.isPrimaryCTA ? 'blue' : 'default'}
-                      title={commandMenuItem.label}
-                      Icon={commandMenuItem.Icon}
-                      hotkeys={commandMenuItem.hotkeys}
-                      onClick={commandMenuItem.onClick}
-                      disabled={commandMenuItem.disabled}
-                    />
-                  ))
-                : [
-                    /* OMNIA-CUSTOM: Show "Create" for drafts, "Open" for existing records */
-                    isDraft ? (
-                      <RecordShowSidePanelCreateRecordButton
-                        key="create"
-                        objectNameSingular={
-                          targetRecordIdentifier.targetObjectNameSingular
-                        }
-                        recordId={targetRecordIdentifier.id}
-                      />
-                    ) : (
-                      <RecordShowSidePanelOpenRecordButton
-                        key="open"
-                        objectNameSingular={
-                          targetRecordIdentifier.targetObjectNameSingular
-                        }
-                        recordId={targetRecordIdentifier.id}
-                      />
-                    ),
-                  ]),
+              <RecordPageSidePanelWidgetCommandMenuItems key="widget" />,
+              <RecordPageSidePanelPinnedCommandMenuItems key="pinned" />,
             ]}
           />
         )}
       </StyledShowPageRightContainer>
-      </DraftRelatedViolationsContext.Provider>
-    </>
+    </PageLayoutIdContext.Provider>
   );
 };

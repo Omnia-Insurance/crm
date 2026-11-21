@@ -1,4 +1,4 @@
-import gql from 'graphql-tag';
+import { gql } from '@apollo/client';
 
 export const APPEND_IMPORT_JOB_ROWS = gql`
   mutation AppendImportJobRows($importJobId: String!, $rows: JSON!) {

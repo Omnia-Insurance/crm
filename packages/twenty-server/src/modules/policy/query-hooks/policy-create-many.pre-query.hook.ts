@@ -6,83 +6,76 @@ import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/works
 import { type CreateManyResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
-import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
-import { type SystemWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
-import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { AgentProfileAssignmentService } from 'src/modules/agent-profile/services/agent-profile-assignment.service';
+import { PolicyWriteAuthorizationService } from 'src/modules/policy/services/policy-write-authorization.service';
+import { buildPolicyDisplayNames } from 'src/modules/policy/utils/build-policy-display-name.util';
+import { stampSubmittedDateOnNewPolicies } from 'src/modules/policy/utils/stamp-submitted-date-on-new-policies.util';
 
-// Sets agentId and name before insert. agentId must be set here (not
-// post-query) because RLS predicates validate the record before insert
-// and may require agentId to match the current user's agent profile.
+// agentId is stamped before the insert because the "Agent is Me" rule checks it on create
 @Injectable()
 @WorkspaceQueryHook(`policy.createMany`)
-export class PolicyCreateManyPreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
+export class PolicyCreateManyPreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly agentProfileResolverService: AgentProfileResolverService,
+    private readonly agentProfileAssignmentService: AgentProfileAssignmentService,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly policyWriteAuthorizationService: PolicyWriteAuthorizationService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
   ) {}
 
   async execute(
-    authContext: AuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: CreateManyResolverArgs,
   ): Promise<CreateManyResolverArgs> {
-    const workspace = authContext.workspace;
+    if (payload.upsert === true) {
+      await this.policyWriteAuthorizationService.assertUserMayUpsertPolicies({
+        authContext,
+        records: payload.data,
+      });
+    }
 
-    if (!isDefined(workspace)) {
+    await this.agentProfileAssignmentService.assignAgentProfileToNewRecords({
+      authContext,
+      objectNameSingular: 'policy',
+      agentFieldName: 'agentId',
+      records: payload.data,
+      isUpsert: payload.upsert === true,
+    });
+
+    await stampSubmittedDateOnNewPolicies({
+      authContext,
+      records: payload.data,
+      isUpsert: payload.upsert === true,
+      workspaceCacheService: this.workspaceCacheService,
+      workspaceOrmManager: this.workspaceOrmManager,
+    });
+
+    if (
+      !payload.data.some(
+        (record) => isDefined(record.carrierId) || isDefined(record.productId),
+      )
+    ) {
       return payload;
     }
 
-    // Auto-assign agentId so RLS predicates pass on insert
-    if (isDefined(authContext.workspaceMemberId)) {
-      const agentProfileId =
-        await this.agentProfileResolverService.resolveAgentProfileId(
-          workspace.id,
-          authContext.workspaceMemberId,
-          authContext,
-        );
-
-      if (agentProfileId) {
-        for (const record of payload.data) {
-          if (!isDefined(record.agentId)) {
-            record.agentId = agentProfileId;
-          }
-        }
-      }
-    }
-
-    // Auto-derive name from carrier + product
-    const recordsWithCarrierOrProduct = payload.data.filter(
-      (record) => isDefined(record.carrierId) || isDefined(record.productId),
-    );
-
-    if (recordsWithCarrierOrProduct.length > 0) {
-      const systemAuthContext: SystemWorkspaceAuthContext = {
-        type: 'system',
-        workspace,
-      };
-
-      await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-        async () => {
-          for (const record of recordsWithCarrierOrProduct) {
-            const displayName = await buildPolicyDisplayName(
-              (record.carrierId as string) ?? null,
-              (record.productId as string) ?? null,
-              workspace.id,
-              this.globalWorkspaceOrmManager,
-            );
-
-            if (displayName) {
-              record.name = displayName;
-            }
-          }
-        },
-        systemAuthContext,
+    const displayNames =
+      await this.workspaceOrmManager.executeInWorkspaceContext(
+        () => buildPolicyDisplayNames(payload.data, this.workspaceOrmManager),
+        buildSystemAuthContext(authContext.workspace.id),
+        { lite: true },
       );
-    }
+
+    payload.data.forEach((record, index) => {
+      const displayName = displayNames[index];
+
+      if (isDefined(displayName)) {
+        record.name = displayName;
+      }
+    });
 
     return payload;
   }

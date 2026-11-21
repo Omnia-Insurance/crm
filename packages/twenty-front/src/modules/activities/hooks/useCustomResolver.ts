@@ -1,5 +1,6 @@
 import {
   type DocumentNode,
+  type ErrorLike,
   type OperationVariables,
   type TypedDocumentNode,
 } from '@apollo/client';
@@ -7,9 +8,7 @@ import { useQuery } from '@apollo/client/react';
 import { useState } from 'react';
 
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
-import { useSnackBarOnQueryError } from '@/apollo/hooks/useSnackBarOnQueryError';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
 
 type CustomResolverQueryResult<
   T extends {
@@ -23,19 +22,27 @@ export const useCustomResolver = <
   T extends {
     [key: string]: any;
   },
->(
+>({
+  query,
+  queryName,
+  objectName,
+  activityTargetableObject,
+  pageSize,
+}: {
   query:
     | DocumentNode
-    | TypedDocumentNode<CustomResolverQueryResult<T>, OperationVariables>,
-  queryName: string,
-  objectName: string,
-  activityTargetableObject: ActivityTargetableObject,
-  pageSize: number,
-): {
+    | TypedDocumentNode<CustomResolverQueryResult<T>, OperationVariables>;
+  queryName: string;
+  objectName: string;
+  activityTargetableObject: ActivityTargetableObject;
+  pageSize: number;
+}): {
+  error: ErrorLike | undefined;
   data: CustomResolverQueryResult<T> | undefined;
   firstQueryLoading: boolean;
   isFetchingMore: boolean;
   fetchMoreRecords: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 } => {
   const apolloCoreClient = useApolloCoreClient();
 
@@ -47,18 +54,13 @@ export const useCustomResolver = <
   const [isFetchingMore, setIsFetchingMore] = useState(false);
 
   const queryVariables = {
-    ...(activityTargetableObject.targetObjectNameSingular ===
-    CoreObjectNameSingular.Person
-      ? { personId: activityTargetableObject.id }
-      : activityTargetableObject.targetObjectNameSingular ===
-          CoreObjectNameSingular.Opportunity
-        ? { opportunityId: activityTargetableObject.id }
-        : { companyId: activityTargetableObject.id }),
+    objectNameSingular: activityTargetableObject.targetObjectNameSingular,
+    recordId: activityTargetableObject.id,
     page: 1,
     pageSize,
   };
 
-  const { data, loading, fetchMore, error } = useQuery<
+  const { data, loading, fetchMore, refetch, error } = useQuery<
     CustomResolverQueryResult<T>
   >(query, {
     client: apolloCoreClient,
@@ -66,8 +68,6 @@ export const useCustomResolver = <
   });
 
   const firstQueryLoading = loading && !data;
-
-  useSnackBarOnQueryError(error);
 
   const fetchMoreRecords = async () => {
     if (page.hasNextPage && !isFetchingMore && !firstQueryLoading) {
@@ -115,9 +115,11 @@ export const useCustomResolver = <
   };
 
   return {
+    error,
     data,
     firstQueryLoading,
     isFetchingMore,
     fetchMoreRecords,
+    refetch,
   };
 };

@@ -1,32 +1,21 @@
 import { useRef } from 'react';
 
-import { type Attachment } from '@/activities/files/types/Attachment';
-import { getActivityTargetObjectFieldIdName } from '@/activities/utils/getActivityTargetObjectFieldIdName';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { getRichTextFieldSerializedContent } from '@/object-record/record-field/ui/utils/getRichTextFieldSerializedContent';
 import { useIsPageLayoutInEditMode } from '@/page-layout/hooks/useIsPageLayoutInEditMode';
 import { pageLayoutEditingWidgetIdComponentState } from '@/page-layout/states/pageLayoutEditingWidgetIdComponentState';
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { StandaloneRichTextEditorContent } from '@/page-layout/widgets/standalone-rich-text/components/StandaloneRichTextEditorContent';
-import { useLayoutRenderingContext } from '@/ui/layout/contexts/LayoutRenderingContext';
 import { ScrollWrapper } from '@/ui/utilities/scroll/components/ScrollWrapper';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
-import { isDefined } from 'twenty-shared/utils';
-import {
-  PageLayoutType,
-  type StandaloneRichTextConfiguration,
-} from '~/generated-metadata/graphql';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { type StandaloneRichTextConfiguration } from '~/generated-metadata/graphql';
 
-const StyledContainer = styled.div<{ isPageLayoutInEditMode?: boolean }>`
+const StyledContainer = styled.div`
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  padding-left: ${({ isPageLayoutInEditMode }) =>
-    isPageLayoutInEditMode ? themeCssVariables.spacing[5] : 0};
   width: 100%;
 `;
 
@@ -44,40 +33,17 @@ export const StandaloneRichTextWidget = ({
     pageLayoutEditingWidgetIdComponentState,
   );
 
-  const { targetRecordIdentifier, layoutType } = useLayoutRenderingContext();
-
-  const isDashboard = layoutType === PageLayoutType.DASHBOARD;
-  const dashboardId = isDashboard ? targetRecordIdentifier?.id : undefined;
-  const attachmentTargetFieldIdName = getActivityTargetObjectFieldIdName({
-    nameSingular: CoreObjectNameSingular.Dashboard,
-  });
-
   const configuration = widget.configuration as
     | StandaloneRichTextConfiguration
     | undefined;
 
-  const currentBody = configuration?.body?.blocknote ?? '';
-
-  const { records: attachments } = useFindManyRecords<Attachment>({
-    objectNameSingular: CoreObjectNameSingular.Attachment,
-    filter: isDefined(dashboardId)
-      ? { [attachmentTargetFieldIdName]: { eq: dashboardId } }
-      : undefined,
-    skip: !isDefined(dashboardId),
-  });
+  const currentBody = getRichTextFieldSerializedContent(configuration?.body);
 
   const isThisWidgetBeingEdited = pageLayoutEditingWidgetId === widget.id;
-  const isEditable = isPageLayoutInEditMode && isThisWidgetBeingEdited;
-
-  if (!isDefined(dashboardId)) {
-    return null;
-  }
+  const isEditable = isPageLayoutInEditMode;
 
   return (
-    <StyledContainer
-      ref={containerElementRef}
-      isPageLayoutInEditMode={isPageLayoutInEditMode}
-    >
+    <StyledContainer ref={containerElementRef}>
       <ScrollWrapper
         componentInstanceId={`scroll-wrapper-rich-text-widget-${widget.id}`}
       >
@@ -85,8 +51,8 @@ export const StandaloneRichTextWidget = ({
           key={isEditable ? 'editing' : 'readonly'}
           widget={widget}
           currentBody={currentBody}
-          attachments={attachments}
           isEditable={isEditable}
+          shouldFocus={isEditable && isThisWidgetBeingEdited}
           containerElement={containerElementRef.current}
         />
       </ScrollWrapper>

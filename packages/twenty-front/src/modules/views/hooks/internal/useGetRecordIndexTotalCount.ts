@@ -6,18 +6,16 @@ import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/
 import { anyFieldFilterValueComponentState } from '@/object-record/record-filter/states/anyFieldFilterValueComponentState';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
-import { SIGN_IN_BACKGROUND_MOCK_RECORDS } from '@/sign-in-background-mock/constants/SignInBackgroundMockRecords';
-import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useGetViewGroupsFilters } from '@/views/hooks/useGetViewGroupsFilters';
+import { useGetRecordGroupVisibilityFilters } from '@/views/hooks/useGetRecordGroupVisibilityFilters';
 import {
   computeRecordGqlOperationFilter,
+  isDefined,
   turnAnyFieldFilterIntoRecordGqlFilter,
 } from 'twenty-shared/utils';
 
 export const useGetRecordIndexTotalCount = () => {
-  const showAuthModal = useShowAuthModal();
   const { objectMetadataItem } = useContextStoreObjectMetadataItemOrThrow();
 
   const currentRecordFilterGroups = useAtomComponentStateValue(
@@ -34,14 +32,19 @@ export const useGetRecordIndexTotalCount = () => {
     flattenedFieldMetadataItemsSelector,
   );
 
-  const recordGroupsVisibilityFilter = useGetViewGroupsFilters();
+  const { recordFilters: recordGroupsVisibilityFilter, recordGroupGqlFilter } =
+    useGetRecordGroupVisibilityFilters();
 
-  const filter = computeRecordGqlOperationFilter({
+  const computedFilter = computeRecordGqlOperationFilter({
     filterValueDependencies,
     recordFilters: [...currentRecordFilters, ...recordGroupsVisibilityFilter],
     recordFilterGroups: currentRecordFilterGroups,
     fieldMetadataItems: flattenedFieldMetadataItems,
   });
+
+  const filter = isDefined(recordGroupGqlFilter)
+    ? { and: [computedFilter, recordGroupGqlFilter] }
+    : computedFilter;
 
   const anyFieldFilterValue = useAtomComponentStateValue(
     anyFieldFilterValueComponentState,
@@ -49,7 +52,7 @@ export const useGetRecordIndexTotalCount = () => {
 
   const { recordGqlOperationFilter: anyFieldFilter } =
     turnAnyFieldFilterIntoRecordGqlFilter({
-      fields: objectMetadataItem.fields,
+      fields: objectMetadataItem.readableFields,
       filterValue: anyFieldFilterValue,
     });
 
@@ -61,15 +64,12 @@ export const useGetRecordIndexTotalCount = () => {
     recordGqlFieldsAggregate: {
       id: [AggregateOperations.COUNT],
     },
-    skip: showAuthModal,
   });
 
-  const totalCount = showAuthModal
-    ? SIGN_IN_BACKGROUND_MOCK_RECORDS.length
-    : data?.id?.COUNT;
+  const totalCount = data?.id?.COUNT;
 
   return {
     totalCount,
-    loading: showAuthModal ? false : loading,
+    loading,
   };
 };

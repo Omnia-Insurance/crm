@@ -15,13 +15,14 @@ export const SystemPermissionFlag = {
   LAYOUTS: '458d1ee5-ba12-5f4e-9d17-6f8c11fcd7fd',
   BILLING: '24b66701-ed97-51e4-aa63-794e1b31414c',
   AI_SETTINGS: 'e8cc4a30-c120-5925-8f5d-73d6a2247fee',
-  // OMNIA-CUSTOM
+  // OMNIA-CUSTOM: reconciliation flag; this id is already stored in prod rows.
   RECONCILIATION: '091125f0-bdb5-4c67-944f-8c4c66de4a76',
   AI: '1c7f09a7-367d-568b-a0e8-c274eccd6ee3',
   VIEWS: 'c68354c4-535d-53a9-848a-e3a6774b5fb8',
   UPLOAD_FILE: 'dc6931a9-44bd-5164-a983-3db5db837f54',
   DOWNLOAD_FILE: '6edf252f-228e-5e2f-9706-7bab7a796fd3',
   SEND_EMAIL_TOOL: '19f382a8-689d-5792-a18c-737f0ce9025f',
+  CREATE_CALENDAR_EVENT_TOOL: '5b8c104e-24d3-4e89-986b-1d9208df6cf4',
   HTTP_REQUEST_TOOL: '1bf49cf1-bb8f-5eb9-809a-5f34ea79fc6a',
   CODE_INTERPRETER_TOOL: '11f31c3a-7042-54b7-a2dd-ae31dd9e9fa2',
   IMPORT_CSV: 'c4912536-a4db-5af9-85ac-be2919c24c5e',

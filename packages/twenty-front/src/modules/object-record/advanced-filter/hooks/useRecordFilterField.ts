@@ -1,15 +1,12 @@
 import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getCompositeSubFieldLabel } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldLabel';
 import { isCompositeFieldType } from '@/object-record/object-filter-dropdown/utils/isCompositeFieldType';
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { isValidSubFieldName } from '@/settings/data-model/utils/isValidSubFieldName';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { isNonEmptyString } from '@sniptt/guards';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
-import { RelationType } from '~/generated-metadata/graphql';
+import { useIcons } from 'twenty-ui/icon/provider';
 
 export const useRecordFilterField = (recordFilterId: string) => {
   const currentRecordFilters = useAtomComponentStateValue(
@@ -24,7 +21,8 @@ export const useRecordFilterField = (recordFilterId: string) => {
     recordFilter?.fieldMetadataId ?? '',
   );
 
-  const { objectMetadataItems } = useObjectMetadataItems();
+  const { fieldMetadataItem: relationTargetFieldMetadataItem } =
+    useFieldMetadataItemById(recordFilter?.relationTargetFieldMetadataId ?? '');
 
   const { getIcon } = useIcons();
 
@@ -32,30 +30,7 @@ export const useRecordFilterField = (recordFilterId: string) => {
     ? getIcon(fieldMetadataItem?.icon)
     : undefined;
 
-  // ONE_TO_MANY relation sub-field label (e.g., "Policies > Status")
-  const isOneToManySubField =
-    isDefined(fieldMetadataItem) &&
-    fieldMetadataItem.type === FieldMetadataType.RELATION &&
-    fieldMetadataItem.relation?.type === RelationType.ONE_TO_MANY &&
-    isNonEmptyString(recordFilter?.subFieldName);
-
-  const relationSubFieldLabel = (() => {
-    if (!isOneToManySubField) {
-      return '';
-    }
-
-    const targetObject = objectMetadataItems.find(
-      (o) => o.id === fieldMetadataItem.relation?.targetObjectMetadata.id,
-    );
-    const targetField = targetObject?.fields.find(
-      (f) => f.name === recordFilter?.subFieldName,
-    );
-
-    return targetField?.label ?? recordFilter?.subFieldName ?? '';
-  })();
-
-  // Composite sub-field label (e.g., "Address / City")
-  const compositeSubFieldLabel =
+  const subFieldLabel =
     isDefined(fieldMetadataItem) &&
     isCompositeFieldType(fieldMetadataItem.type) &&
     isNonEmptyString(recordFilter?.subFieldName) &&
@@ -66,15 +41,15 @@ export const useRecordFilterField = (recordFilterId: string) => {
         )
       : '';
 
-  let label: string;
+  const fieldLabel = fieldMetadataItem?.label ?? '';
 
-  if (isNonEmptyString(relationSubFieldLabel)) {
-    label = `${recordFilter?.label} > ${relationSubFieldLabel}`;
-  } else if (isNonEmptyString(compositeSubFieldLabel)) {
-    label = `${recordFilter?.label} / ${compositeSubFieldLabel}`;
-  } else {
-    label = recordFilter?.label ?? '';
-  }
+  const baseLabel = isDefined(relationTargetFieldMetadataItem)
+    ? `${fieldLabel} → ${relationTargetFieldMetadataItem.label}`
+    : fieldLabel;
+
+  const label = isNonEmptyString(subFieldLabel)
+    ? `${baseLabel} / ${subFieldLabel}`
+    : baseLabel;
 
   return {
     label,

@@ -1,16 +1,17 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, HttpAdapterHost } from '@nestjs/core';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 
+import { WorkspaceResolverNameMapCacheModule } from 'src/engine/api/graphql/direct-execution/workspace-resolver-name-map-cache.module';
 import { WorkspaceQueryRunnerModule } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-runner.module';
 import { ActorModule } from 'src/engine/core-modules/actor/actor.module';
-import { ApplicationLogsModule } from 'src/engine/core-modules/application-logs/application-logs.module';
-import { applicationLogsModuleFactory } from 'src/engine/core-modules/application-logs/application-logs.module-factory';
 import { AdminPanelModule } from 'src/engine/core-modules/admin-panel/admin-panel.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
-import { AppTokenModule } from 'src/engine/core-modules/app-token/app-token.module';
+import { ApplicationAuthorizationModule } from 'src/engine/core-modules/application/application-authorization/application-authorization.module';
 import { ApplicationDevelopmentModule } from 'src/engine/core-modules/application/application-development/application-development.module';
+import { FrontComponentSharedDependenciesModule } from 'src/engine/core-modules/application/front-component-shared-dependencies/front-component-shared-dependencies.module';
 import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
+import { ApplicationMonitoringModule } from 'src/engine/core-modules/application/application-monitoring/application-monitoring.module';
 import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
 import { ApplicationOAuthModule } from 'src/engine/core-modules/application/application-oauth/application-oauth.module';
 import { ApplicationRegistrationModule } from 'src/engine/core-modules/application/application-registration/application-registration.module';
@@ -23,23 +24,27 @@ import { BillingWebhookModule } from 'src/engine/core-modules/billing-webhook/bi
 import { AppBillingModule } from 'src/engine/core-modules/billing/app-billing/app-billing.module';
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { BillingGraphqlApiExceptionFilter } from 'src/engine/core-modules/billing/filters/billing-graphql-api-exception.filter';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
 import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
 import { TimelineCalendarEventModule } from 'src/engine/core-modules/calendar/timeline-calendar-event.module';
 import { CaptchaModule } from 'src/engine/core-modules/captcha/captcha.module';
 import { CloudflareModule } from 'src/engine/core-modules/cloudflare/cloudflare.module';
 import { CodeInterpreterModule } from 'src/engine/core-modules/code-interpreter/code-interpreter.module';
 import { DnsManagerModule } from 'src/engine/core-modules/dns-manager/dns-manager.module';
+import { DpaModule } from 'src/engine/core-modules/dpa/dpa.module';
 import { EmailModule } from 'src/engine/core-modules/email/email.module';
 import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
 import { EnvironmentModule } from 'src/engine/core-modules/environment/environment.module';
 import { ExceptionHandlerModule } from 'src/engine/core-modules/exception-handler/exception-handler.module';
 import { exceptionHandlerModuleFactory } from 'src/engine/core-modules/exception-handler/exception-handler.module-factory';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { AccessPolicyModule } from 'src/engine/guards/access-policy/access-policy.module';
 import { FileStorageModule } from 'src/engine/core-modules/file-storage/file-storage.module';
-import { ExportJobModule } from 'src/engine/core-modules/export-job/export-job.module';
-import { ImportJobModule } from 'src/engine/core-modules/import-job/import-job.module';
 import { GeoMapModule } from 'src/engine/core-modules/geo-map/geo-map-module';
+import { GettingStartedWorkflowModule } from 'src/engine/core-modules/getting-started/getting-started-workflow.module';
+import { GettingStartedModule } from 'src/engine/core-modules/getting-started/getting-started.module';
 import { HealthModule } from 'src/engine/core-modules/health/health.module';
+import { I18nModule } from 'src/engine/core-modules/i18n/i18n.module';
 import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-connection/imap-smtp-caldav-connection.module';
 import { ImpersonationModule } from 'src/engine/core-modules/impersonation/impersonation.module';
 import { LabModule } from 'src/engine/core-modules/lab/lab.module';
@@ -49,7 +54,6 @@ import { LogicFunctionModule } from 'src/engine/core-modules/logic-function/logi
 import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
 import { messageQueueModuleFactory } from 'src/engine/core-modules/message-queue/message-queue.module-factory';
 import { TimelineMessagingModule } from 'src/engine/core-modules/messaging/timeline-messaging.module';
-import { MessagingWebhooksModule } from 'src/engine/core-modules/messaging-webhooks/messaging-webhooks.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
 import { OpenApiModule } from 'src/engine/core-modules/open-api/open-api.module';
@@ -57,7 +61,8 @@ import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public
 import { RedisClientModule } from 'src/engine/core-modules/redis-client/redis-client.module';
 import { RedisClientService } from 'src/engine/core-modules/redis-client/redis-client.service';
 import { SearchModule } from 'src/engine/core-modules/search/search.module';
-import { WorkspaceSSOModule } from 'src/engine/core-modules/sso/sso.module';
+import { WorkspaceSsoModule } from 'src/engine/core-modules/sso/sso.module';
+import { WellKnownModule } from 'src/engine/core-modules/well-known/well-known.module';
 import { TelemetryModule } from 'src/engine/core-modules/telemetry/telemetry.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
@@ -71,56 +76,58 @@ import { AiModelsModule } from 'src/engine/metadata-modules/ai/ai-models/ai-mode
 import { PageLayoutModule } from 'src/engine/metadata-modules/page-layout/page-layout.module';
 import { RoleModule } from 'src/engine/metadata-modules/role/role.module';
 import { RowLevelPermissionModule } from 'src/engine/metadata-modules/row-level-permission-predicate/row-level-permission.module';
+import { RecordShareModule } from 'src/engine/permissions/record-share/record-share.module';
 import { SubscriptionsModule } from 'src/engine/subscriptions/subscriptions.module';
+import { CodeInterpreterSessionCleanupModule } from 'src/engine/core-modules/code-interpreter/crons/code-interpreter-session-cleanup.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceEventEmitterModule } from 'src/engine/workspace-event-emitter/workspace-event-emitter.module';
-import { AgentRollupModule } from 'src/modules/agent-rollup/agent-rollup.module';
-import { ChannelSyncModule } from 'src/modules/connected-account/channel-sync/channel-sync.module';
-import { DashboardModule } from 'src/modules/dashboard/dashboard.module';
-import { SendEmailModule } from 'src/modules/messaging/message-outbound-manager/send-email.module';
-import { AuditModule } from './audit/audit.module';
+import { AiToolCallAnswerModule } from 'src/engine/metadata-modules/ai/ai-tool-call-answer/ai-tool-call-answer.module';
 import { ClientConfigModule } from './client-config/client-config.module';
-import { EventLogsModule } from './event-logs/event-logs.module';
-import { FileModule } from './file/file.module';
+import { EventLogsViewerModule } from './event-logs/event-logs-viewer.module';
+import { FileApiModule } from './file/file-api.module';
 
 @Module({
   imports: [
     EnvironmentModule,
     TwentyConfigModule.forRoot(),
     HealthModule,
-    AuditModule,
     AuthModule,
     BillingModule,
     BillingWebhookModule,
-    MessagingWebhooksModule,
     UsageModule,
     ClientConfigModule,
     FeatureFlagModule,
-    FileModule,
-    ExportJobModule,
-    ImportJobModule,
+    AccessPolicyModule,
+    FileApiModule,
+    RecordShareModule,
     RowLevelPermissionModule,
     OpenApiModule,
+    WellKnownModule,
     ApplicationRegistrationModule,
+    ApplicationMonitoringModule,
     ApplicationOAuthModule,
+    ApplicationAuthorizationModule,
     ApplicationModule,
     ApplicationInstallModule,
     ApplicationUpgradeModule,
     ApplicationDevelopmentModule,
+    FrontComponentSharedDependenciesModule,
     MarketplaceModule,
-    AppTokenModule,
     TimelineMessagingModule,
     TimelineCalendarEventModule,
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,
-    WorkspaceSSOModule,
+    WorkspaceSsoModule,
     ApprovedAccessDomainModule,
     EmailingDomainModule,
     PublicDomainModule,
     CloudflareModule,
     DnsManagerModule,
     WorkflowApiModule,
+    GettingStartedModule,
+    GettingStartedWorkflowModule,
+    AiToolCallAnswerModule,
     WorkspaceEventEmitterModule,
     ActorModule,
     TelemetryModule,
@@ -129,11 +136,10 @@ import { FileModule } from './file/file.module';
     RoleModule,
     RedisClientModule,
     WorkspaceQueryRunnerModule,
+    WorkspaceResolverNameMapCacheModule,
     GeoMapModule,
     SubscriptionsModule,
     ImapSmtpCaldavModule,
-    ChannelSyncModule,
-    SendEmailModule,
     FileStorageModule.forRoot(),
     LoggerModule.forRootAsync({
       useFactory: loggerModuleFactory,
@@ -142,15 +148,16 @@ import { FileModule } from './file/file.module';
     MetricsModule,
     MessageQueueModule.registerAsync({
       useFactory: messageQueueModuleFactory,
-      inject: [TwentyConfigService, RedisClientService, MetricsService],
+      inject: [
+        TwentyConfigService,
+        RedisClientService,
+        MetricsService,
+        EventEmitter2,
+      ],
     }),
     ExceptionHandlerModule.forRootAsync({
       useFactory: exceptionHandlerModuleFactory,
       inject: [TwentyConfigService, HttpAdapterHost],
-    }),
-    ApplicationLogsModule.forRootAsync({
-      useFactory: applicationLogsModuleFactory,
-      inject: [TwentyConfigService],
     }),
     EmailModule.forRoot(),
     CaptchaModule.forRoot(),
@@ -158,19 +165,19 @@ import { FileModule } from './file/file.module';
       wildcard: true,
     }),
     CacheStorageModule,
+    I18nModule,
     AiModelsModule,
     AiBillingModule,
     LogicFunctionModule.forRoot(),
     CodeInterpreterModule.forRoot(),
     SearchModule,
     ApiKeyModule,
+    DpaModule,
     PageLayoutModule,
     ImpersonationModule,
     TrashCleanupModule,
-    // OMNIA-CUSTOM: scheduled agent-rollup recompute (cron job processor)
-    AgentRollupModule,
-    DashboardModule,
-    EventLogsModule,
+    CodeInterpreterSessionCleanupModule,
+    EventLogsViewerModule,
     PreInstalledAppsModule,
     AppBillingModule,
   ],
@@ -179,17 +186,19 @@ import { FileModule } from './file/file.module';
       provide: APP_FILTER,
       useClass: BillingGraphqlApiExceptionFilter,
     },
+    {
+      provide: APP_FILTER,
+      useClass: PermissionsGraphqlApiExceptionFilter,
+    },
   ],
   exports: [
-    AuditModule,
+    EventLogsViewerModule,
     AuthModule,
     FeatureFlagModule,
-    TimelineMessagingModule,
-    TimelineCalendarEventModule,
     UserModule,
     WorkspaceModule,
     WorkspaceInvitationModule,
-    WorkspaceSSOModule,
+    WorkspaceSsoModule,
     ImapSmtpCaldavModule,
   ],
 })

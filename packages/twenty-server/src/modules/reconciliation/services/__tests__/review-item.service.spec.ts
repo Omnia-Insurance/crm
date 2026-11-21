@@ -1,7 +1,14 @@
 import { RECONCILIATION_AUTO_APPLY_BLOCKING_FLAGS } from 'twenty-shared/constants';
+import { isDefined } from 'twenty-shared/utils';
 import { In, IsNull } from 'typeorm';
 
-import { ForbiddenError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
+import {
+  PermissionsException,
+  PermissionsExceptionCode,
+  PermissionsExceptionMessage,
+} from 'src/engine/permissions/permissions.exception';
+import { type PolicyUpdateDenial } from 'src/modules/policy/types/policy-update-denial.type';
 import {
   ReconciliationDecisionRuleService,
   type ReconciliationDecisionRuleRecord,
@@ -18,11 +25,37 @@ const PREVIOUS_POLICY_ID = 'previous-policy-id';
 const LEAD_ID = 'lead-id';
 const OTHER_LEAD_ID = 'other-lead-id';
 const CARRIER_ID = 'carrier-id';
+const CARRIER_NAME = 'Ambetter';
 const USER_WORKSPACE_ID = 'user-workspace-id';
 const WORKSPACE_MEMBER_ID = 'workspace-member-id';
 const CANCEL_EXPIRE_DATE = '2026-05-31';
+const POLICY_CREATED_AT = '2026-06-01T00:00:00.000Z';
+
+const USER_AUTH_CONTEXT = {
+  type: 'user',
+  workspace: { id: WORKSPACE_ID },
+  userWorkspaceId: USER_WORKSPACE_ID,
+  workspaceMemberId: WORKSPACE_MEMBER_ID,
+} as unknown as WorkspaceAuthContext;
 
 type WorkspaceRecord = Record<string, unknown> & { id: string };
+
+type DecisionRuleRecord = ReconciliationDecisionRuleRecord &
+  Record<string, unknown>;
+
+type UpdateMock = jest.Mock<
+  Promise<{ affected: number }>,
+  [string, Record<string, unknown>]
+>;
+
+const STATUS_DIFF = {
+  field: 'status',
+  crmField: 'status',
+  crmObjectType: 'policy',
+  bobValue: 'CANCELED',
+  crmValue: 'ACTIVE_PLACED',
+  action: 'UPDATE',
+};
 
 const createReviewItem = (
   overrides: Record<string, unknown> = {},
@@ -41,8 +74,21 @@ const createReviewItem = (
   ...overrides,
 });
 
-type DecisionRuleRecord = ReconciliationDecisionRuleRecord &
-  Record<string, unknown>;
+const statusOnlyOverrides = (): Record<string, unknown> => ({
+  category: 'UPDATE',
+  matchMethod: 'POLICY_NUMBER_SINGLE',
+  statusChangeReason: 'Policy not eligible for commission',
+  flags: ['STATUS_CHANGE'],
+  fieldDiffs: [
+    {
+      field: 'status',
+      crmField: 'status',
+      crmObjectType: 'policy',
+      bobValue: 'CANCELED',
+      crmValue: 'ACTIVE_PLACED',
+    },
+  ],
+});
 
 const matchesWhere = (
   record: Record<string, unknown>,
@@ -50,40 +96,49 @@ const matchesWhere = (
 ): boolean =>
   Object.entries(where).every(([key, value]) => record[key] === value);
 
+const buildPermissionDeniedException = () =>
+  new PermissionsException(
+    PermissionsExceptionMessage.PERMISSION_DENIED,
+    PermissionsExceptionCode.PERMISSION_DENIED,
+  );
+
+const snapshotRecords = (records: Record<string, unknown>[]) =>
+  records.map((record) => ({ record, copy: { ...record } }));
+
+const restoreRecords = (snapshots: ReturnType<typeof snapshotRecords>) => {
+  for (const { record, copy } of snapshots) {
+    for (const key of Object.keys(record)) {
+      delete record[key];
+    }
+
+    Object.assign(record, copy);
+  }
+};
+
 const createService = ({
   reviewItems,
   matchedPolicy,
   policiesById = {},
+  leadsById = {},
   decisionRules = [],
-  assertUserMayWritePolicy = jest.fn().mockResolvedValue(undefined),
+  recordIdsOutsideCallerRls = [],
+  uneditableFields = [],
+  findPolicyUpdateDenials = jest.fn().mockResolvedValue([]),
 }: {
   reviewItems: Record<string, unknown>[];
   matchedPolicy: WorkspaceRecord | null;
   policiesById?: Record<string, WorkspaceRecord>;
+  leadsById?: Record<string, WorkspaceRecord>;
   decisionRules?: DecisionRuleRecord[];
-  assertUserMayWritePolicy?: jest.Mock;
+  // Caller permissions, enforced for user contexts only; system contexts bypass them like the engine
+  recordIdsOutsideCallerRls?: string[];
+  uneditableFields?: string[];
+  findPolicyUpdateDenials?: jest.Mock;
 }) => {
-  // The `reviewItems` array acts as the backing store: `find` returns
-  // shallow clones (like a real query would return fresh entities) and
-  // `update` writes back to the store, so multi-step flows (APPLY then UNDO,
-  // auto-apply then undo then re-run) observe their own earlier writes while
-  // the service's in-flight objects stay decoupled — exactly the production
-  // semantics the undo bookkeeping relies on.
-  const reviewItemRepo = {
-    find: jest.fn(async () => reviewItems.map((item) => ({ ...item }))),
-    count: jest.fn(
-      async ({ where }: { where: Record<string, unknown> }) =>
-        reviewItems.filter((item) => matchesWhere(item, where)).length,
-    ),
-    update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
-      const item = reviewItems.find((candidate) => candidate.id === id);
+  let currentAuthContext: WorkspaceAuthContext | undefined;
+  const policyWriteAuthContextTypes: (string | undefined)[] = [];
 
-      if (item) Object.assign(item, updates);
-    }),
-    save: jest.fn(),
-    delete: jest.fn(),
-  };
-  // Combined policy store: the matched policy plus any cancel targets, all
+  // Combined policy store: matched policies plus cancel targets, all
   // resolvable through the single prefetch IN-query (2.6).
   const policiesLookup: Record<string, WorkspaceRecord> = { ...policiesById };
 
@@ -91,33 +146,94 @@ const createService = ({
     policiesLookup[matchedPolicy.id] = matchedPolicy;
   }
 
-  const policyQueryBuilder = {
-    leftJoinAndSelect: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
-    getOne: jest.fn().mockResolvedValue(matchedPolicy),
-  };
-  const policyRepo = {
-    createQueryBuilder: jest.fn().mockReturnValue(policyQueryBuilder),
-    // Prefetch IN-query: `where.id` is a typeorm In() FindOperator whose
-    // `.value` is the id array.
+  const isCallerRestricted = () => currentAuthContext?.type === 'user';
+
+  const buildUpdate = ({
+    lookup,
+    isPermissionChecked,
+  }: {
+    lookup: Record<string, WorkspaceRecord>;
+    isPermissionChecked: boolean;
+  }): UpdateMock =>
+    jest.fn(async (id: string, updates: Record<string, unknown>) => {
+      if (lookup === policiesLookup) {
+        policyWriteAuthContextTypes.push(currentAuthContext?.type);
+      }
+
+      if (isPermissionChecked && isCallerRestricted()) {
+        if (
+          Object.keys(updates).some((field) => uneditableFields.includes(field))
+        ) {
+          throw buildPermissionDeniedException();
+        }
+
+        if (recordIdsOutsideCallerRls.includes(id)) {
+          return { affected: 0 };
+        }
+      }
+
+      const record = lookup[id];
+
+      if (!record) {
+        return { affected: 0 };
+      }
+
+      Object.assign(record, updates);
+
+      return { affected: 1 };
+    });
+
+  const buildRecordRepository = (
+    lookup: Record<string, WorkspaceRecord>,
+    isPermissionChecked: boolean,
+  ) => ({
+    // Prefetch IN-query: `where.id` is a typeorm In() whose `.value` is the id array
     find: jest.fn(async ({ where }: { where: { id: { value: string[] } } }) =>
       where.id.value
-        .map((id) => policiesLookup[id])
-        .filter((policy): policy is WorkspaceRecord => policy !== undefined),
+        .map((id) => lookup[id])
+        .filter((record): record is WorkspaceRecord => isDefined(record)),
     ),
     findOne: jest.fn(
-      async ({ where }: { where: { id: string } }) =>
-        policiesLookup[where.id] ?? null,
+      async ({ where }: { where: { id: string } }) => lookup[where.id] ?? null,
+    ),
+    update: buildUpdate({ lookup, isPermissionChecked }),
+  });
+
+  const policyRepo = buildRecordRepository(policiesLookup, true);
+  const systemPolicyRepo = buildRecordRepository(policiesLookup, false);
+  const personRepo = buildRecordRepository(leadsById, true);
+  const systemPersonRepo = buildRecordRepository(leadsById, false);
+
+  // The `reviewItems` array is the backing store: `find` returns clones (fresh
+  // entities) and `update` writes back, so multi-step flows observe their own
+  // earlier writes while the service's in-flight objects stay decoupled.
+  const reviewItemRepo = {
+    find: jest.fn(
+      async ({
+        where,
+      }: {
+        where: Record<string, unknown> | Record<string, unknown>[];
+      }) =>
+        reviewItems
+          .filter((item) => Array.isArray(where) || matchesWhere(item, where))
+          .map((item) => ({ ...item })),
+    ),
+    count: jest.fn(
+      async ({ where }: { where: Record<string, unknown> }) =>
+        reviewItems.filter((item) => matchesWhere(item, where)).length,
     ),
     update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
-      const policy = policiesLookup[id];
+      const item = reviewItems.find((candidate) => candidate.id === id);
 
-      if (policy) Object.assign(policy, updates);
+      if (item) {
+        Object.assign(item, updates);
+      }
+
+      return { affected: isDefined(item) ? 1 : 0 };
     }),
-  };
-  const personRepo = {
-    findOne: jest.fn(),
-    update: jest.fn(),
+    insert: jest.fn(async () => ({ identifiers: [], generatedMaps: [] })),
+    save: jest.fn(),
+    delete: jest.fn(async () => ({ affected: 0 })),
   };
   const reconciliationRepo = {
     findOne: jest.fn().mockResolvedValue({
@@ -136,63 +252,121 @@ const createService = ({
     update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
       const rule = decisionRules.find((candidate) => candidate.id === id);
 
-      if (rule) Object.assign(rule, updates);
+      if (rule) {
+        Object.assign(rule, updates);
+      }
+
+      return { affected: isDefined(rule) ? 1 : 0 };
     }),
-    save: jest.fn(async (rule: Record<string, unknown>) => ({
-      id: 'new-rule-id',
-      ...rule,
-    })),
+    save: jest.fn(async (rule: Record<string, unknown>) => {
+      const savedRule = { id: 'new-rule-id', ...rule } as DecisionRuleRecord;
+
+      decisionRules.push(savedRule);
+
+      return [savedRule];
+    }),
   };
-  const reposByObjectName: Record<string, unknown> = {
+  const bookkeepingRepositories: Record<string, unknown> = {
     reviewItem: reviewItemRepo,
-    policy: policyRepo,
-    person: personRepo,
     reconciliation: reconciliationRepo,
     reconciliationDecisionRule: decisionRuleRepo,
   };
-  const transaction = jest.fn(
-    async (callback: (manager: unknown) => Promise<unknown>) => callback({}),
-  );
-  const globalWorkspaceOrmManager = {
-    executeInWorkspaceContext: jest.fn(
-      async (callback: () => Promise<unknown>) => callback(),
-    ),
-    getRepository: jest.fn(
-      async (_workspaceId: string, objectName: string) =>
-        reposByObjectName[objectName],
-    ),
-    getGlobalWorkspaceDataSource: jest.fn(async () => ({ transaction })),
+  const resolveRepository =
+    (isPermissionChecked: boolean) => (objectName: string) => {
+      if (objectName === 'policy') {
+        return isPermissionChecked ? policyRepo : systemPolicyRepo;
+      }
+
+      if (objectName === 'person') {
+        return isPermissionChecked ? personRepo : systemPersonRepo;
+      }
+
+      return bookkeepingRepositories[objectName];
+    };
+  const transactionScope = {
+    workspaceId: WORKSPACE_ID,
+    getRepository: jest.fn(resolveRepository(true)),
+    getRepositoryWithoutPermissionChecks: jest.fn(resolveRepository(false)),
+    executeRawQuery: jest.fn(),
+    afterCommit: jest.fn(),
   };
-  const policyWriteAuthorizationService = {
-    assertUserMayWritePolicy,
+  // Rolls every store back when the work throws, like a real transaction
+  const runInWorkspaceTransaction = jest.fn(
+    async (work: (scope: typeof transactionScope) => Promise<unknown>) => {
+      const snapshots = snapshotRecords([
+        ...Object.values(policiesLookup),
+        ...Object.values(leadsById),
+        ...reviewItems,
+      ]);
+
+      try {
+        return await work(transactionScope);
+      } catch (error) {
+        restoreRecords(snapshots);
+        throw error;
+      }
+    },
+  );
+  const executeInWorkspaceContext = jest.fn(
+    async (callback: () => unknown, authContext?: WorkspaceAuthContext) => {
+      const previousAuthContext = currentAuthContext;
+
+      currentAuthContext = authContext;
+
+      try {
+        return await callback();
+      } finally {
+        currentAuthContext = previousAuthContext;
+      }
+    },
+  );
+  const workspaceOrmManager = {
+    executeInWorkspaceContext,
+    runInWorkspaceTransaction,
+    executeTransactionInWorkspaceContext: jest.fn(
+      async (
+        work: (scope: typeof transactionScope) => Promise<unknown>,
+        authContext?: WorkspaceAuthContext,
+      ) =>
+        executeInWorkspaceContext(
+          () => runInWorkspaceTransaction(work),
+          authContext,
+        ),
+    ),
+    getRepository: jest.fn(resolveRepository(true)),
+    getRepositoryWithoutPermissionChecks: jest.fn(resolveRepository(false)),
   };
   const stateMachine = {
     transition: jest.fn().mockResolvedValue(undefined),
     setFailed: jest.fn(),
   };
-  // The real rule service wired to the same ORM mocks: signature building,
-  // cancel detection, and rule deactivation behave exactly as in production.
+  // The real rule service on the same ORM mocks: signatures, cancel detection
+  // and rule deactivation behave exactly as in production.
   const decisionRuleService = new ReconciliationDecisionRuleService(
-    globalWorkspaceOrmManager as never,
+    workspaceOrmManager as never,
   );
 
   const service = new ReviewItemService(
-    globalWorkspaceOrmManager as never,
-    decisionRuleService as never,
-    policyWriteAuthorizationService as never,
+    workspaceOrmManager as never,
+    decisionRuleService,
+    { findPolicyUpdateDenials } as never,
     stateMachine as never,
   );
 
   return {
     service,
-    decisionRuleService,
     reviewItemRepo,
     policyRepo,
+    systemPolicyRepo,
     personRepo,
+    systemPersonRepo,
     decisionRuleRepo,
-    assertUserMayWritePolicy,
+    findPolicyUpdateDenials,
     stateMachine,
-    transaction,
+    transactionScope,
+    runInWorkspaceTransaction,
+    executeInWorkspaceContext,
+    policyWriteAuthContextTypes,
   };
 };
 
@@ -205,8 +379,49 @@ const batchApplyOne = (
     RECONCILIATION_ID,
     'APPLY',
     { reviewItemIds: [REVIEW_ITEM_ID] },
-    { learnRules: false, ...options },
+    { authContext: USER_AUTH_CONTEXT, learnRules: false, ...options },
   );
+
+const undoOne = (service: ReviewItemService) =>
+  service.batchApply(
+    WORKSPACE_ID,
+    RECONCILIATION_ID,
+    'UNDO',
+    { reviewItemIds: [REVIEW_ITEM_ID] },
+    { authContext: USER_AUTH_CONTEXT },
+  );
+
+const signatureHashFor = (item: Record<string, unknown>): string => {
+  const probe = new ReconciliationDecisionRuleService({} as never);
+  const result = probe.buildStatusRuleSignature(item as never, CARRIER_NAME);
+
+  if (!result) {
+    throw new Error('fixture is not status-only');
+  }
+
+  return result.signatureHash;
+};
+
+const createRule = (id: string, signatureHash: string): DecisionRuleRecord => ({
+  id,
+  name: 'Ambetter: ACTIVE_PLACED -> CANCELED',
+  ruleType: 'STATUS_UPDATE',
+  isActive: true,
+  signatureHash,
+  signature: null,
+  carrierName: CARRIER_NAME,
+  fromStatus: 'ACTIVE_PLACED',
+  toStatus: 'CANCELED',
+  sourceReviewItemId: 'source-item-id',
+  sourceReconciliationId: 'source-reconciliation-id',
+  createdByUserWorkspaceId: null,
+  approvedCount: 1,
+  autoAppliedCount: 0,
+  lastSeenAt: null,
+  lastAppliedAt: null,
+  deactivatedAt: null,
+  deactivationReason: null,
+});
 
 describe('ReviewItemService', () => {
   describe('previous policy cancel validation', () => {
@@ -227,14 +442,10 @@ describe('ReviewItemService', () => {
       const result = await batchApplyOne(service);
 
       expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(policyRepo.update).toHaveBeenCalledWith(
-        PREVIOUS_POLICY_ID,
-        {
-          status: 'CANCELED',
-          expirationDate: CANCEL_EXPIRE_DATE,
-        },
-        expect.anything(),
-      );
+      expect(policyRepo.update).toHaveBeenCalledWith(PREVIOUS_POLICY_ID, {
+        status: 'CANCELED',
+        expirationDate: CANCEL_EXPIRE_DATE,
+      });
     });
 
     it('skips the cancel when the target belongs to another lead', async () => {
@@ -298,14 +509,10 @@ describe('ReviewItemService', () => {
       const result = await batchApplyOne(service);
 
       expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(policyRepo.update).toHaveBeenCalledWith(
-        PREVIOUS_POLICY_ID,
-        {
-          status: 'CANCELED',
-          expirationDate: CANCEL_EXPIRE_DATE,
-        },
-        expect.anything(),
-      );
+      expect(policyRepo.update).toHaveBeenCalledWith(PREVIOUS_POLICY_ID, {
+        status: 'CANCELED',
+        expirationDate: CANCEL_EXPIRE_DATE,
+      });
     });
 
     it('skips the cancel when leadId is missing and the carrier differs', async () => {
@@ -354,25 +561,16 @@ describe('ReviewItemService', () => {
       const result = await batchApplyOne(service);
 
       expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(policyRepo.update).toHaveBeenCalledWith(
-        PREVIOUS_POLICY_ID,
-        {
-          status: 'CANCELED',
-          expirationDate: CANCEL_EXPIRE_DATE,
-        },
-        expect.anything(),
-      );
+      expect(policyRepo.update).toHaveBeenCalledWith(PREVIOUS_POLICY_ID, {
+        status: 'CANCELED',
+        expirationDate: CANCEL_EXPIRE_DATE,
+      });
     });
   });
 
   describe('undoable cancels (1.4)', () => {
     const PRIOR_STATUS = 'ACTIVE_PLACED';
     const PRIOR_EXPIRATION_DATE = '2026-12-31';
-
-    const undoOne = (service: ReviewItemService) =>
-      service.batchApply(WORKSPACE_ID, RECONCILIATION_ID, 'UNDO', {
-        reviewItemIds: [REVIEW_ITEM_ID],
-      });
 
     it('APPLY captures the cancel target prior state before cancelling, UNDO restores it exactly', async () => {
       const previousPolicy: WorkspaceRecord = {
@@ -396,8 +594,7 @@ describe('ReviewItemService', () => {
       // The prior state lands on the review item BEFORE the cancel write,
       // so a mid-flight failure can never strand an unrecoverable cancel.
       const captureCall = reviewItemRepo.update.mock.calls.find(
-        ([, updates]) =>
-          (updates as Record<string, unknown>).cancelPriorStatus !== undefined,
+        ([, updates]) => updates.cancelPriorStatus !== undefined,
       );
       const cancelCall = policyRepo.update.mock.calls.find(
         ([id]) => id === PREVIOUS_POLICY_ID,
@@ -514,101 +711,384 @@ describe('ReviewItemService', () => {
     });
   });
 
-  describe('user-initiated policy write authorization', () => {
-    const actingUserOptions = {
-      userWorkspaceId: USER_WORKSPACE_ID,
-      workspaceMemberId: WORKSPACE_MEMBER_ID,
-    };
+  describe('user-initiated authorization (Q17, option A)', () => {
+    const otherItem = (id: string, policyId: string) =>
+      createReviewItem({ id, policyId, fieldDiffs: [STATUS_DIFF] });
 
-    it('skips items the acting user may not write and counts them as skipped', async () => {
-      const { service, policyRepo, reviewItemRepo } = createService({
-        reviewItems: [createReviewItem()],
-        matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
-        assertUserMayWritePolicy: jest
-          .fn()
-          .mockRejectedValue(
-            new ForbiddenError(
-              'Editing this record violates row-level security',
-            ),
-          ),
+    const applyItems = (service: ReviewItemService, reviewItemIds: string[]) =>
+      service.batchApply(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        'APPLY',
+        { reviewItemIds },
+        { authContext: USER_AUTH_CONTEXT, learnRules: false },
+      );
+
+    it('applies an owned policy through the permission-checked repository as the acting user', async () => {
+      const matchedPolicy: WorkspaceRecord = {
+        id: MATCHED_POLICY_ID,
+        leadId: LEAD_ID,
+        status: 'ACTIVE_PLACED',
+        createdAt: new Date(POLICY_CREATED_AT),
+      };
+      const item = createReviewItem({ fieldDiffs: [STATUS_DIFF] });
+      const {
+        service,
+        policyRepo,
+        systemPolicyRepo,
+        findPolicyUpdateDenials,
+        executeInWorkspaceContext,
+        policyWriteAuthContextTypes,
+      } = createService({ reviewItems: [item], matchedPolicy });
+
+      const result = await batchApplyOne(service);
+
+      expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
+      expect(findPolicyUpdateDenials).toHaveBeenCalledTimes(1);
+      expect(findPolicyUpdateDenials).toHaveBeenCalledWith({
+        authContext: USER_AUTH_CONTEXT,
+        policies: [{ id: MATCHED_POLICY_ID, createdAt: POLICY_CREATED_AT }],
+      });
+      expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+        expect.any(Function),
+        USER_AUTH_CONTEXT,
+      );
+      expect(policyRepo.update).toHaveBeenCalledWith(MATCHED_POLICY_ID, {
+        status: 'CANCELED',
+      });
+      expect(systemPolicyRepo.update).not.toHaveBeenCalled();
+      expect(policyWriteAuthContextTypes).toEqual(['user']);
+      expect(matchedPolicy.status).toBe('CANCELED');
+      expect(item.decision).toBe('APPROVED');
+    });
+
+    it('skips and counts a foreign policy while the rest of the batch applies', async () => {
+      const foreignItem = otherItem('foreign-item', 'foreign-policy');
+      const ownedItem = otherItem('owned-item', 'owned-policy');
+      const denial: PolicyUpdateDenial = {
+        policyId: 'foreign-policy',
+        reason: 'row-level-security',
+      };
+      const { service, policyRepo } = createService({
+        reviewItems: [foreignItem, ownedItem],
+        matchedPolicy: null,
+        policiesById: {
+          'foreign-policy': { id: 'foreign-policy', status: 'ACTIVE_PLACED' },
+          'owned-policy': { id: 'owned-policy', status: 'ACTIVE_PLACED' },
+        },
+        findPolicyUpdateDenials: jest.fn().mockResolvedValue([denial]),
       });
 
-      const result = await batchApplyOne(service, actingUserOptions);
+      const result = await applyItems(service, ['foreign-item', 'owned-item']);
+
+      expect(result).toEqual({ updatedCount: 1, skippedCount: 1 });
+      expect(policyRepo.update).toHaveBeenCalledTimes(1);
+      expect(policyRepo.update).toHaveBeenCalledWith('owned-policy', {
+        status: 'CANCELED',
+      });
+      expect(foreignItem.decision).toBe('PENDING');
+      expect(ownedItem.decision).toBe('APPROVED');
+    });
+
+    it('skips an item outside the edit window', async () => {
+      const item = createReviewItem({ fieldDiffs: [STATUS_DIFF] });
+      const { service, policyRepo, reviewItemRepo } = createService({
+        reviewItems: [item],
+        matchedPolicy: { id: MATCHED_POLICY_ID, createdAt: POLICY_CREATED_AT },
+        findPolicyUpdateDenials: jest
+          .fn()
+          .mockResolvedValue([
+            { policyId: MATCHED_POLICY_ID, reason: 'edit-window' },
+          ]),
+      });
+
+      const result = await batchApplyOne(service);
 
       expect(result).toEqual({ updatedCount: 0, skippedCount: 1 });
       expect(policyRepo.update).not.toHaveBeenCalled();
       expect(reviewItemRepo.update).not.toHaveBeenCalled();
     });
 
-    it('applies items when the acting user is authorized', async () => {
-      const { service, reviewItemRepo, assertUserMayWritePolicy } =
-        createService({
-          reviewItems: [createReviewItem()],
-          matchedPolicy: {
-            id: MATCHED_POLICY_ID,
-            leadId: LEAD_ID,
-            agentId: 'agent-profile-id',
-            createdAt: '2026-06-01T00:00:00.000Z',
-          },
-        });
-
-      const result = await batchApplyOne(service, actingUserOptions);
-
-      expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(assertUserMayWritePolicy).toHaveBeenCalledTimes(1);
-      expect(assertUserMayWritePolicy).toHaveBeenCalledWith({
-        workspaceId: WORKSPACE_ID,
-        userWorkspaceId: USER_WORKSPACE_ID,
-        workspaceMemberId: WORKSPACE_MEMBER_ID,
-        policy: {
-          id: MATCHED_POLICY_ID,
-          agentId: 'agent-profile-id',
-          createdAt: '2026-06-01T00:00:00.000Z',
-        },
+    it('skips the item when its cancel target is denied, writing nothing', async () => {
+      const item = createReviewItem({
+        fieldDiffs: [STATUS_DIFF],
+        cancelPreviousPolicyId: PREVIOUS_POLICY_ID,
+        bobRowSnapshot: { __cancelExpireDate: CANCEL_EXPIRE_DATE },
       });
-      expect(reviewItemRepo.update).toHaveBeenCalledWith(
-        REVIEW_ITEM_ID,
-        expect.objectContaining({ decision: 'APPROVED' }),
-        expect.anything(),
-      );
-    });
-
-    it('authorizes the cancel target as well on user-initiated applies', async () => {
-      const { service, assertUserMayWritePolicy } = createService({
-        reviewItems: [
-          createReviewItem({
-            bobRowSnapshot: {
-              __cancelPreviousPolicyId: PREVIOUS_POLICY_ID,
-              __cancelExpireDate: CANCEL_EXPIRE_DATE,
-            },
-          }),
-        ],
+      const { service, policyRepo, findPolicyUpdateDenials } = createService({
+        reviewItems: [item],
         matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
         policiesById: {
           [PREVIOUS_POLICY_ID]: { id: PREVIOUS_POLICY_ID, leadId: LEAD_ID },
         },
-      });
-
-      await batchApplyOne(service, actingUserOptions);
-
-      expect(assertUserMayWritePolicy).toHaveBeenCalledTimes(2);
-      expect(assertUserMayWritePolicy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          policy: expect.objectContaining({ id: PREVIOUS_POLICY_ID }),
-        }),
-      );
-    });
-
-    it('does not run policy write authorization without an acting user', async () => {
-      const { service, assertUserMayWritePolicy } = createService({
-        reviewItems: [createReviewItem()],
-        matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
+        findPolicyUpdateDenials: jest
+          .fn()
+          .mockResolvedValue([
+            { policyId: PREVIOUS_POLICY_ID, reason: 'row-level-security' },
+          ]),
       });
 
       const result = await batchApplyOne(service);
 
+      expect(result).toEqual({ updatedCount: 0, skippedCount: 1 });
+      expect(findPolicyUpdateDenials).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policies: expect.arrayContaining([
+            expect.objectContaining({ id: PREVIOUS_POLICY_ID }),
+          ]),
+        }),
+      );
+      expect(policyRepo.update).not.toHaveBeenCalled();
+      expect(item.decision).toBe('PENDING');
+    });
+
+    it('skips and counts a field-permission denial, leaving its writes rolled back', async () => {
+      const premiumItem = createReviewItem({
+        id: 'premium-item',
+        policyId: 'premium-policy',
+        fieldDiffs: [
+          STATUS_DIFF,
+          {
+            field: 'premium',
+            crmField: 'premium',
+            crmObjectType: 'policy',
+            bobValue: '120',
+            crmValue: '100',
+            action: 'UPDATE',
+          },
+        ],
+      });
+      const statusItem = otherItem('status-item', 'status-policy');
+      const premiumPolicy: WorkspaceRecord = {
+        id: 'premium-policy',
+        status: 'ACTIVE_PLACED',
+        premium: 100,
+      };
+      const { service } = createService({
+        reviewItems: [premiumItem, statusItem],
+        matchedPolicy: null,
+        policiesById: {
+          'premium-policy': premiumPolicy,
+          'status-policy': { id: 'status-policy', status: 'ACTIVE_PLACED' },
+        },
+        uneditableFields: ['premium'],
+      });
+
+      const result = await applyItems(service, ['premium-item', 'status-item']);
+
+      expect(result).toEqual({ updatedCount: 1, skippedCount: 1 });
+      expect(premiumPolicy).toEqual({
+        id: 'premium-policy',
+        status: 'ACTIVE_PLACED',
+        premium: 100,
+      });
+      expect(premiumItem.decision).toBe('PENDING');
+      expect(statusItem.decision).toBe('APPROVED');
+    });
+
+    it('treats a write that reaches no row as a denial and rolls the whole item back', async () => {
+      const lead: WorkspaceRecord = { id: LEAD_ID, jobTitle: 'Old' };
+      const matchedPolicy: WorkspaceRecord = {
+        id: MATCHED_POLICY_ID,
+        leadId: LEAD_ID,
+        lead,
+        status: 'ACTIVE_PLACED',
+      };
+      const item = createReviewItem({
+        fieldDiffs: [
+          STATUS_DIFF,
+          {
+            field: 'jobTitle',
+            crmField: 'lead.jobTitle',
+            crmObjectType: 'lead',
+            bobValue: 'New',
+            crmValue: 'Old',
+            action: 'UPDATE',
+          },
+        ],
+      });
+      const { service, personRepo } = createService({
+        reviewItems: [item],
+        matchedPolicy,
+        leadsById: { [LEAD_ID]: lead },
+        recordIdsOutsideCallerRls: [LEAD_ID],
+      });
+
+      const result = await batchApplyOne(service);
+
+      expect(result).toEqual({ updatedCount: 0, skippedCount: 1 });
+      expect(personRepo.update).toHaveBeenCalledWith(LEAD_ID, {
+        jobTitle: 'New',
+      });
+      // The policy write that preceded the denied lead write was rolled back
+      expect(matchedPolicy.status).toBe('ACTIVE_PLACED');
+      expect(lead.jobTitle).toBe('Old');
+      expect(item.decision).toBe('PENDING');
+    });
+
+    it('skips an item whose lead is not readable instead of dropping its lead diffs', async () => {
+      const item = createReviewItem({
+        fieldDiffs: [
+          {
+            field: 'jobTitle',
+            crmField: 'lead.jobTitle',
+            crmObjectType: 'lead',
+            bobValue: 'New',
+            crmValue: 'Old',
+            action: 'UPDATE',
+          },
+        ],
+      });
+      const { service, personRepo } = createService({
+        reviewItems: [item],
+        matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID, lead: null },
+      });
+
+      const result = await batchApplyOne(service);
+
+      expect(result).toEqual({ updatedCount: 0, skippedCount: 1 });
+      expect(personRepo.update).not.toHaveBeenCalled();
+      expect(item.decision).toBe('PENDING');
+    });
+
+    it('skips every item without aborting when the pre-check cannot resolve principals', async () => {
+      const itemA = otherItem('item-a', 'policy-a');
+      const itemB = otherItem('item-b', 'policy-b');
+      const { service, policyRepo, stateMachine } = createService({
+        reviewItems: [itemA, itemB],
+        matchedPolicy: null,
+        policiesById: {
+          'policy-a': { id: 'policy-a' },
+          'policy-b': { id: 'policy-b' },
+        },
+        findPolicyUpdateDenials: jest
+          .fn()
+          .mockRejectedValue(new Error('principals unavailable')),
+      });
+
+      await expect(applyItems(service, ['item-a', 'item-b'])).resolves.toEqual({
+        updatedCount: 0,
+        skippedCount: 2,
+      });
+      expect(policyRepo.update).not.toHaveBeenCalled();
+      expect(stateMachine.transition).not.toHaveBeenCalled();
+      expect(itemA.decision).toBe('PENDING');
+      expect(itemB.decision).toBe('PENDING');
+    });
+
+    it('skips every item when the caller may not read the policies', async () => {
+      const { service, policyRepo } = createService({
+        reviewItems: [createReviewItem({ fieldDiffs: [STATUS_DIFF] })],
+        matchedPolicy: { id: MATCHED_POLICY_ID },
+      });
+
+      policyRepo.find.mockRejectedValue(buildPermissionDeniedException());
+
+      await expect(batchApplyOne(service)).resolves.toEqual({
+        updatedCount: 0,
+        skippedCount: 1,
+      });
+      expect(policyRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('runs the learned-rule cascade as the acting user, under the same authorization', async () => {
+      const sourceItem = createReviewItem({
+        ...statusOnlyOverrides(),
+        id: 'source-item',
+        policyId: 'source-policy',
+      });
+      const cascadeItem = createReviewItem({
+        ...statusOnlyOverrides(),
+        id: 'cascade-item',
+        policyId: 'cascade-policy',
+      });
+      const deniedCascadeItem = createReviewItem({
+        ...statusOnlyOverrides(),
+        id: 'denied-cascade-item',
+        policyId: 'denied-cascade-policy',
+      });
+      const findPolicyUpdateDenials = jest.fn(
+        async ({
+          policies,
+        }: {
+          authContext: WorkspaceAuthContext;
+          policies: { id: string }[];
+        }) =>
+          policies
+            .filter(({ id }) => id === 'denied-cascade-policy')
+            .map<PolicyUpdateDenial>(({ id }) => ({
+              policyId: id,
+              reason: 'row-level-security',
+            })),
+      );
+      const {
+        service,
+        executeInWorkspaceContext,
+        policyWriteAuthContextTypes,
+      } = createService({
+        reviewItems: [sourceItem, cascadeItem, deniedCascadeItem],
+        matchedPolicy: null,
+        policiesById: {
+          'source-policy': { id: 'source-policy', status: 'ACTIVE_PLACED' },
+          'cascade-policy': { id: 'cascade-policy', status: 'ACTIVE_PLACED' },
+          'denied-cascade-policy': {
+            id: 'denied-cascade-policy',
+            status: 'ACTIVE_PLACED',
+          },
+        },
+        findPolicyUpdateDenials,
+      });
+
+      const result = await service.batchApply(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        'APPLY',
+        { reviewItemIds: ['source-item'] },
+        { authContext: USER_AUTH_CONTEXT, carrierName: CARRIER_NAME },
+      );
+
+      expect(result).toEqual({ updatedCount: 2, skippedCount: 1 });
+      expect(cascadeItem.decision).toBe('APPROVED');
+      expect(cascadeItem.decisionSource).toBe('AUTO_RULE');
+      expect(deniedCascadeItem.decision).toBe('PENDING');
+      expect(findPolicyUpdateDenials).toHaveBeenCalledTimes(2);
+
+      for (const [{ authContext }] of findPolicyUpdateDenials.mock.calls) {
+        expect(authContext).toBe(USER_AUTH_CONTEXT);
+      }
+
+      expect(policyWriteAuthContextTypes).toEqual(['user', 'user']);
+      expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+        expect.any(Function),
+        USER_AUTH_CONTEXT,
+      );
+    });
+
+    it('keeps the system auto-apply path unrestricted by any caller', async () => {
+      const item = createReviewItem(statusOnlyOverrides());
+      const rule = createRule('rule-id', signatureHashFor(item));
+      const { service, findPolicyUpdateDenials, policyWriteAuthContextTypes } =
+        createService({
+          reviewItems: [item],
+          matchedPolicy: { id: MATCHED_POLICY_ID, status: 'ACTIVE_PLACED' },
+          decisionRules: [rule],
+          recordIdsOutsideCallerRls: [MATCHED_POLICY_ID],
+          uneditableFields: ['status'],
+        });
+
+      const result = await service.applyLearnedRulesForReconciliation(
+        WORKSPACE_ID,
+        RECONCILIATION_ID,
+        { carrierName: CARRIER_NAME, rules: [rule] },
+      );
+
       expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(assertUserMayWritePolicy).not.toHaveBeenCalled();
+      expect(item.decision).toBe('APPROVED');
+      expect(policyWriteAuthContextTypes).toEqual(['system']);
+
+      for (const [{ authContext }] of findPolicyUpdateDenials.mock.calls) {
+        expect(authContext.type).toBe('system');
+      }
     });
   });
 
@@ -634,7 +1114,12 @@ describe('ReviewItemService', () => {
         category: 'UPDATE',
         carrierPolicyNumber: CARRIER_POLICY_NUMBER,
       });
-      const { service, reviewItemRepo, transaction } = createService({
+      const {
+        service,
+        reviewItemRepo,
+        runInWorkspaceTransaction,
+        executeInWorkspaceContext,
+      } = createService({
         reviewItems: [approved],
         matchedPolicy: null,
       });
@@ -652,8 +1137,12 @@ describe('ReviewItemService', () => {
         preservedDecidedCount: 1,
         skippedDecidedDuplicateCount: 1,
       });
-      expect(transaction).toHaveBeenCalledTimes(1);
-      expect(reviewItemRepo.save).not.toHaveBeenCalled();
+      expect(runInWorkspaceTransaction).toHaveBeenCalledTimes(1);
+      expect(executeInWorkspaceContext).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ type: 'system' }),
+      );
+      expect(reviewItemRepo.insert).not.toHaveBeenCalled();
       expect(reviewItemRepo.update).not.toHaveBeenCalled();
       expect(reviewItemRepo.delete).not.toHaveBeenCalled();
     });
@@ -685,9 +1174,8 @@ describe('ReviewItemService', () => {
       expect(reviewItemRepo.update).toHaveBeenCalledWith(
         'pending-id',
         refreshed,
-        {},
       );
-      expect(reviewItemRepo.save).not.toHaveBeenCalled();
+      expect(reviewItemRepo.insert).not.toHaveBeenCalled();
       expect(reviewItemRepo.delete).not.toHaveBeenCalled();
     });
 
@@ -700,10 +1188,11 @@ describe('ReviewItemService', () => {
         carrierPolicyNumber: 'U777',
       });
       const brandNew = newMatchItem();
-      const { service, reviewItemRepo, transaction } = createService({
-        reviewItems: [stalePending],
-        matchedPolicy: null,
-      });
+      const { service, reviewItemRepo, runInWorkspaceTransaction } =
+        createService({
+          reviewItems: [stalePending],
+          matchedPolicy: null,
+        });
 
       const result = await service.reconcileMatchResults(
         WORKSPACE_ID,
@@ -713,15 +1202,11 @@ describe('ReviewItemService', () => {
 
       expect(result.createdCount).toBe(1);
       expect(result.deletedStaleCount).toBe(1);
-      expect(transaction).toHaveBeenCalledTimes(1);
-      expect(reviewItemRepo.save).toHaveBeenCalledWith(
-        [brandNew],
-        undefined,
-        {},
-      );
-      expect(reviewItemRepo.delete).toHaveBeenCalledWith(['stale-id'], {});
+      expect(runInWorkspaceTransaction).toHaveBeenCalledTimes(1);
+      expect(reviewItemRepo.insert).toHaveBeenCalledWith([brandNew]);
+      expect(reviewItemRepo.delete).toHaveBeenCalledWith(['stale-id']);
       // Safest ordering even if the transaction degrades: create before delete
-      expect(reviewItemRepo.save.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(reviewItemRepo.insert.mock.invocationCallOrder[0]).toBeLessThan(
         reviewItemRepo.delete.mock.invocationCallOrder[0],
       );
     });
@@ -747,13 +1232,11 @@ describe('ReviewItemService', () => {
       );
 
       expect(result.skippedDecidedDuplicateCount).toBe(1);
-      expect(reviewItemRepo.save).not.toHaveBeenCalled();
+      expect(reviewItemRepo.insert).not.toHaveBeenCalled();
     });
   });
 
   describe('fetchOverrides', () => {
-    const CARRIER_NAME = 'Ambetter';
-
     it('scopes the query to the carrier, with null-carrier clauses for legacy items only', async () => {
       const { service, reviewItemRepo } = createService({
         reviewItems: [],
@@ -865,60 +1348,7 @@ describe('ReviewItemService', () => {
   });
 
   describe('learned-rule auto-apply safety (1.5/1.6)', () => {
-    const CARRIER_NAME = 'Ambetter';
     const RULE_ID = 'rule-id';
-
-    const statusOnlyOverrides = (): Record<string, unknown> => ({
-      category: 'UPDATE',
-      matchMethod: 'POLICY_NUMBER_SINGLE',
-      statusChangeReason: 'Policy not eligible for commission',
-      flags: ['STATUS_CHANGE'],
-      fieldDiffs: [
-        {
-          field: 'status',
-          crmField: 'status',
-          crmObjectType: 'policy',
-          bobValue: 'CANCELED',
-          crmValue: 'ACTIVE_PLACED',
-        },
-      ],
-    });
-
-    const signatureHashFor = (item: Record<string, unknown>): string => {
-      const probe = new ReconciliationDecisionRuleService({} as never);
-      const result = probe.buildStatusRuleSignature(
-        item as never,
-        CARRIER_NAME,
-      );
-
-      if (!result) throw new Error('fixture is not status-only');
-
-      return result.signatureHash;
-    };
-
-    const createRule = (
-      id: string,
-      signatureHash: string,
-    ): ReconciliationDecisionRuleRecord & Record<string, unknown> => ({
-      id,
-      name: 'Ambetter: ACTIVE_PLACED -> CANCELED',
-      ruleType: 'STATUS_UPDATE',
-      isActive: true,
-      signatureHash,
-      signature: null,
-      carrierName: CARRIER_NAME,
-      fromStatus: 'ACTIVE_PLACED',
-      toStatus: 'CANCELED',
-      sourceReviewItemId: 'source-item-id',
-      sourceReconciliationId: 'source-reconciliation-id',
-      createdByUserWorkspaceId: null,
-      approvedCount: 1,
-      autoAppliedCount: 0,
-      lastSeenAt: null,
-      lastAppliedAt: null,
-      deactivatedAt: null,
-      deactivationReason: null,
-    });
 
     it('auto-applies a pending status-only item matching an active rule', async () => {
       const item = createReviewItem(statusOnlyOverrides());
@@ -936,13 +1366,9 @@ describe('ReviewItemService', () => {
       );
 
       expect(result).toEqual({ updatedCount: 1, skippedCount: 0 });
-      expect(policyRepo.update).toHaveBeenCalledWith(
-        MATCHED_POLICY_ID,
-        {
-          status: 'CANCELED',
-        },
-        expect.anything(),
-      );
+      expect(policyRepo.update).toHaveBeenCalledWith(MATCHED_POLICY_ID, {
+        status: 'CANCELED',
+      });
       expect(item.decision).toBe('APPROVED');
       expect(item.decisionSource).toBe('AUTO_RULE');
       expect(item.decisionRuleId).toBe(RULE_ID);
@@ -1068,9 +1494,7 @@ describe('ReviewItemService', () => {
       // 2. A user undoes it: the rule it came from is deactivated with a
       // recorded reason, and the item keeps its signature hash as a veto
       // marker while returning to PENDING.
-      await service.batchApply(WORKSPACE_ID, RECONCILIATION_ID, 'UNDO', {
-        reviewItemIds: [REVIEW_ITEM_ID],
-      });
+      await undoOne(service);
 
       expect(item.decision).toBe('PENDING');
       expect(item.decisionSource).toBeNull();
@@ -1113,9 +1537,7 @@ describe('ReviewItemService', () => {
         decisionRules: [rule],
       });
 
-      await service.batchApply(WORKSPACE_ID, RECONCILIATION_ID, 'UNDO', {
-        reviewItemIds: [REVIEW_ITEM_ID],
-      });
+      await undoOne(service);
 
       expect(rule.isActive).toBe(false);
       expect(rule.deactivationReason).toBe(
@@ -1126,20 +1548,11 @@ describe('ReviewItemService', () => {
   });
 
   describe('batch prefetch + per-item transactions (2.6)', () => {
-    const statusDiff = {
-      field: 'status',
-      crmField: 'status',
-      crmObjectType: 'policy',
-      bobValue: 'CANCELED',
-      crmValue: 'ACTIVE_PLACED',
-      action: 'UPDATE',
-    };
-
     it('prefetches all candidate policies and cancel targets in one IN-query with the lead relation', async () => {
       const itemA = createReviewItem({
         id: 'item-a',
         policyId: 'policy-a',
-        fieldDiffs: [statusDiff],
+        fieldDiffs: [STATUS_DIFF],
       });
       const itemB = createReviewItem({
         id: 'item-b',
@@ -1166,7 +1579,7 @@ describe('ReviewItemService', () => {
         RECONCILIATION_ID,
         'APPLY',
         { reviewItemIds: ['item-a', 'item-b'] },
-        { learnRules: false },
+        { authContext: USER_AUTH_CONTEXT, learnRules: false },
       );
 
       expect(result).toEqual({ updatedCount: 2, skippedCount: 0 });
@@ -1177,35 +1590,19 @@ describe('ReviewItemService', () => {
         where: { id: In(['policy-a', 'policy-b', PREVIOUS_POLICY_ID]) },
         relations: ['lead'],
       });
-      expect(policyRepo.createQueryBuilder).not.toHaveBeenCalled();
       expect(policyRepo.findOne).not.toHaveBeenCalled();
     });
 
     it('learned-rule auto-apply resolves its policies through the same single prefetch', async () => {
-      const CARRIER_NAME = 'Ambetter';
       const item = createReviewItem({
-        category: 'UPDATE',
-        matchMethod: 'POLICY_NUMBER_SINGLE',
-        statusChangeReason: 'Policy not eligible for commission',
-        flags: ['STATUS_CHANGE'],
-        fieldDiffs: [statusDiff],
+        ...statusOnlyOverrides(),
+        fieldDiffs: [STATUS_DIFF],
       });
-      const probe = new ReconciliationDecisionRuleService({} as never);
-      const signatureResult = probe.buildStatusRuleSignature(
-        item as never,
-        CARRIER_NAME,
-      );
-      const rule = {
-        id: 'rule-id',
-        name: 'rule',
-        ruleType: 'STATUS_UPDATE',
-        isActive: true,
-        signatureHash: signatureResult!.signatureHash,
-      } as ReconciliationDecisionRuleRecord;
+      const rule = createRule('rule-id', signatureHashFor(item));
       const { service, policyRepo } = createService({
         reviewItems: [item],
         matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
-        decisionRules: [rule as DecisionRuleRecord],
+        decisionRules: [rule],
       });
 
       const result = await service.applyLearnedRulesForReconciliation(
@@ -1220,56 +1617,61 @@ describe('ReviewItemService', () => {
         where: { id: In([MATCHED_POLICY_ID]) },
         relations: ['lead'],
       });
-      expect(policyRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it("wraps each item's policy, cancel, and decision writes in one transaction", async () => {
+    it("writes the item's policy, cancel and decision through one transaction scope", async () => {
       const item = createReviewItem({
         cancelPreviousPolicyId: PREVIOUS_POLICY_ID,
         bobRowSnapshot: { __cancelExpireDate: CANCEL_EXPIRE_DATE },
-        fieldDiffs: [statusDiff],
+        fieldDiffs: [STATUS_DIFF],
       });
-      const { service, transaction, policyRepo, reviewItemRepo } =
-        createService({
-          reviewItems: [item],
-          matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
-          policiesById: {
-            [PREVIOUS_POLICY_ID]: {
-              id: PREVIOUS_POLICY_ID,
-              leadId: LEAD_ID,
-              status: 'ACTIVE_PLACED',
-            },
+      const {
+        service,
+        runInWorkspaceTransaction,
+        transactionScope,
+        policyRepo,
+        reviewItemRepo,
+      } = createService({
+        reviewItems: [item],
+        matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
+        policiesById: {
+          [PREVIOUS_POLICY_ID]: {
+            id: PREVIOUS_POLICY_ID,
+            leadId: LEAD_ID,
+            status: 'ACTIVE_PLACED',
           },
-        });
+        },
+      });
 
       await batchApplyOne(service);
 
-      // One transaction for the item; every write inside carries its
-      // entity manager so the decision flag and the CRM mutations commit
-      // together.
-      expect(transaction).toHaveBeenCalledTimes(1);
-      expect(policyRepo.update.mock.calls.length).toBeGreaterThan(0);
-      expect(reviewItemRepo.update.mock.calls.length).toBeGreaterThan(0);
-      for (const call of [
-        ...policyRepo.update.mock.calls,
-        ...reviewItemRepo.update.mock.calls,
-      ] as unknown[][]) {
-        expect(call[2]).toBeDefined();
-      }
+      expect(runInWorkspaceTransaction).toHaveBeenCalledTimes(1);
+      expect(transactionScope.getRepository).toHaveBeenCalledWith('policy');
+      expect(transactionScope.getRepository).toHaveBeenCalledWith('person');
+      expect(
+        transactionScope.getRepositoryWithoutPermissionChecks,
+      ).toHaveBeenCalledWith('reviewItem', {
+        shouldSkipEventEmission: true,
+      });
+      expect(
+        transactionScope.getRepositoryWithoutPermissionChecks,
+      ).not.toHaveBeenCalledWith('policy');
+      expect(policyRepo.update).toHaveBeenCalledTimes(2);
+      expect(reviewItemRepo.update).toHaveBeenCalledTimes(2);
     });
 
     it('opens one transaction per applied item', async () => {
       const itemA = createReviewItem({
         id: 'item-a',
         policyId: 'policy-a',
-        fieldDiffs: [statusDiff],
+        fieldDiffs: [STATUS_DIFF],
       });
       const itemB = createReviewItem({
         id: 'item-b',
         policyId: 'policy-b',
-        fieldDiffs: [statusDiff],
+        fieldDiffs: [STATUS_DIFF],
       });
-      const { service, transaction } = createService({
+      const { service, runInWorkspaceTransaction } = createService({
         reviewItems: [itemA, itemB],
         matchedPolicy: null,
         policiesById: {
@@ -1283,10 +1685,10 @@ describe('ReviewItemService', () => {
         RECONCILIATION_ID,
         'APPLY',
         { reviewItemIds: ['item-a', 'item-b'] },
-        { learnRules: false },
+        { authContext: USER_AUTH_CONTEXT, learnRules: false },
       );
 
-      expect(transaction).toHaveBeenCalledTimes(2);
+      expect(runInWorkspaceTransaction).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1329,9 +1731,7 @@ describe('ReviewItemService', () => {
         matchedPolicy: { id: MATCHED_POLICY_ID, leadId: LEAD_ID },
       });
 
-      await service.batchApply(WORKSPACE_ID, RECONCILIATION_ID, 'UNDO', {
-        reviewItemIds: [REVIEW_ITEM_ID],
-      });
+      await undoOne(service);
 
       expect(stateMachine.transition).not.toHaveBeenCalled();
     });
@@ -1395,14 +1795,7 @@ describe('ReviewItemService', () => {
             crmValue: '100',
             action: 'INFO_ONLY',
           },
-          {
-            field: 'status',
-            crmField: 'status',
-            crmObjectType: 'policy',
-            bobValue: 'CANCELED',
-            crmValue: 'ACTIVE_PLACED',
-            action: 'UPDATE',
-          },
+          STATUS_DIFF,
         ],
       });
       const { service, policyRepo } = createService({
@@ -1416,11 +1809,9 @@ describe('ReviewItemService', () => {
       // Only the UPDATE diff is written; the INFO_ONLY premium diff is
       // ignored even though its crmField is populated.
       expect(policyRepo.update).toHaveBeenCalledTimes(1);
-      expect(policyRepo.update).toHaveBeenCalledWith(
-        MATCHED_POLICY_ID,
-        { status: 'CANCELED' },
-        expect.anything(),
-      );
+      expect(policyRepo.update).toHaveBeenCalledWith(MATCHED_POLICY_ID, {
+        status: 'CANCELED',
+      });
       expect(item.decision).toBe('APPROVED');
     });
   });
@@ -1430,9 +1821,8 @@ describe('ReviewItemService', () => {
       expect([...ReviewItemService.BATCH_APPROVE_BLOCKING_FLAGS]).toEqual([
         ...RECONCILIATION_AUTO_APPLY_BLOCKING_FLAGS,
       ]);
-      // decision-rule.service.ts keeps its own literal list (the file is
-      // frozen by the fork's no-touch policy); this assertion pins it to
-      // the shared source so any drift fails CI.
+      // decision-rule.service.ts keeps its own literal list; this assertion
+      // pins it to the shared source so any drift fails CI.
       expect([...RECONCILIATION_AUTO_RULE_BLOCKING_FLAGS]).toEqual([
         ...RECONCILIATION_AUTO_APPLY_BLOCKING_FLAGS,
       ]);

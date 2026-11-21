@@ -26,6 +26,7 @@ type FromUpdateFieldInputToFlatFieldMetadataArgs = {
   updateFieldInput: UpdateFieldInput;
   flatApplication: FlatApplication;
   isSystemBuild: boolean;
+  workspaceCustomApplicationUniversalIdentifier: string;
 } & Pick<
   AllFlatEntityMaps,
   | 'flatObjectMetadataMaps'
@@ -52,6 +53,7 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
   flatViewMaps,
   flatViewFieldMaps,
   isSystemBuild,
+  workspaceCustomApplicationUniversalIdentifier,
 }: FromUpdateFieldInputToFlatFieldMetadataArgs): FieldInputTranspilationResult<FlatFieldMetadataAndIndexToUpdate> => {
   const updateFieldInputInformalProperties =
     extractAndSanitizeObjectStringFields(rawUpdateFieldInput, [
@@ -95,13 +97,27 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
     };
   }
 
+  // OMNIA-CUSTOM: deactivating a field also takes it out of search so retired PHI stops matching
+  // (HIPAA); reactivation leaves it out. System and label-identifier fields keep upstream rules.
+  const shouldRemoveDeactivatedFieldFromSearch =
+    rawUpdateFieldInput.isActive === false &&
+    !isDefined(rawUpdateFieldInput.isSearchable) &&
+    existingFlatFieldMetadataToUpdate.isSearchable &&
+    !existingFlatFieldMetadataToUpdate.isSystem &&
+    !existingFlatFieldMetadataToUpdate.isSystemSideEffect &&
+    flatObjectMetadata.labelIdentifierFieldMetadataUniversalIdentifier !==
+      existingFlatFieldMetadataToUpdate.universalIdentifier;
+
   const { flatFieldMetadataFromTo, relatedFlatFieldMetadatasFromTo } =
     computeFlatFieldToUpdateAndRelatedFlatFieldToUpdate({
       flatFieldMetadataMaps,
       flatObjectMetadata,
       fromFlatFieldMetadata: existingFlatFieldMetadataToUpdate,
-      rawUpdateFieldInput,
+      rawUpdateFieldInput: shouldRemoveDeactivatedFieldFromSearch
+        ? { ...rawUpdateFieldInput, isSearchable: false }
+        : rawUpdateFieldInput,
       isSystemBuild,
+      workspaceCustomApplicationUniversalIdentifier,
     });
 
   const { flatFieldMetadatasToCreate, flatIndexMetadatasToCreate } =
@@ -150,7 +166,6 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
       toFlatFieldMetadata,
       flatViewMaps,
       flatViewFieldMaps,
-      flatApplication,
     });
 
     if (sideEffectResult.status === 'fail') {
@@ -172,14 +187,12 @@ export const fromUpdateFieldInputToFlatFieldMetadata = ({
       flatViewsToDelete,
       flatViewFieldsToDelete,
       flatViewsToUpdate,
-      flatFieldMetadatasToUpdate: flatFieldMetadatasToUpdateFromSideEffect,
     } = sideEffectResult.result;
 
     return {
       flatFieldMetadatasToUpdate: [
         ...accumulator.flatFieldMetadatasToUpdate,
         toFlatFieldMetadata,
-        ...flatFieldMetadatasToUpdateFromSideEffect,
       ],
       flatIndexMetadatasToUpdate: [
         ...accumulator.flatIndexMetadatasToUpdate,

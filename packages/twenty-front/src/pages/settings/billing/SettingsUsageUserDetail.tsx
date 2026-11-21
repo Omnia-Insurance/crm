@@ -1,0 +1,158 @@
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
+import { SettingsBillingLabelValueItem } from '@/settings/billing/components/internal/SettingsBillingLabelValueItem';
+import { SubscriptionInfoContainer } from '@/settings/billing/components/SubscriptionInfoContainer';
+import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { UsageBreakdownPieSection } from '@/settings/usage/components/UsageBreakdownPieSection';
+import { UsageDailyChartSection } from '@/settings/usage/components/UsageDailyChartSection';
+import { UsageSectionSkeleton } from '@/settings/usage/components/UsageSectionSkeleton';
+import { useUsageAnalyticsData } from '@/settings/usage/hooks/useUsageAnalyticsData';
+import { useUsageValueFormatter } from '@/settings/usage/hooks/useUsageValueFormatter';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { styled } from '@linaria/react';
+import { Trans, useLingui } from '@lingui/react/macro';
+
+import { useParams } from 'react-router-dom';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath } from 'twenty-shared/utils';
+import { Section } from 'twenty-ui/components/layout';
+import { Avatar } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
+
+const StyledUserHeader = styled.div`
+  align-items: center;
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+  margin-bottom: ${themeCssVariables.spacing[4]};
+`;
+
+const StyledUserInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const StyledUserName = styled.span`
+  color: ${themeCssVariables.font.color.primary};
+  font-size: ${themeCssVariables.font.size.lg};
+  font-weight: ${themeCssVariables.font.weight.semiBold};
+`;
+
+const StyledUserCredits = styled.span`
+  color: ${themeCssVariables.font.color.tertiary};
+  font-size: ${themeCssVariables.font.size.sm};
+`;
+
+export const SettingsUsageUserDetail = () => {
+  const { t } = useLingui();
+  const { t: tLingui } = useLingui();
+  const { userWorkspaceId } = useParams<{ userWorkspaceId: string }>();
+  const { formatUsageValue } = useUsageValueFormatter();
+
+  const { analytics, isInitialLoading } = useUsageAnalyticsData({
+    userWorkspaceId,
+    skip: !userWorkspaceId,
+  });
+
+  const userName = analytics?.usageByUser?.find(
+    (item) => item.key === userWorkspaceId,
+  )?.label;
+
+  const totalCredits = analytics
+    ? analytics.usageByOperationType.reduce(
+        (sum, item) => sum + item.workspaceCreditsUsed,
+        0,
+      )
+    : 0;
+
+  const displayName = userName ?? userWorkspaceId ?? '';
+
+  const hasAnyData = analytics
+    ? (analytics.userDailyUsage?.dailyUsage?.length ?? 0) > 0 ||
+      analytics.usageByOperationType.length > 0
+    : false;
+
+  const breadcrumbLinks = [
+    {
+      children: <Trans>Workspace</Trans>,
+      href: getSettingsPath(SettingsPath.General),
+    },
+    {
+      children: <Trans>Billing</Trans>,
+      href: getSettingsPath(SettingsPath.Billing),
+    },
+    {
+      children: <Trans>Usage</Trans>,
+      href: getSettingsPath(SettingsPath.Usage),
+    },
+    { children: isInitialLoading ? '' : displayName },
+  ];
+
+  if (isInitialLoading) {
+    return (
+      <SettingsPageLayout title={tLingui`User Usage`} links={breadcrumbLinks}>
+        <SettingsPageContainer>
+          <StyledUserHeader>
+            <SkeletonLine
+              width={40}
+              height={40}
+              borderRadius={themeCssVariables.border.radius.mdRound}
+            />
+            <StyledUserInfo>
+              <SkeletonLine width={160} height={16} />
+              <SkeletonLine width={100} height={13} />
+            </StyledUserInfo>
+          </StyledUserHeader>
+          <UsageSectionSkeleton />
+          <UsageSectionSkeleton />
+        </SettingsPageContainer>
+      </SettingsPageLayout>
+    );
+  }
+
+  return (
+    <SettingsPageLayout title={tLingui`User Usage`} links={breadcrumbLinks}>
+      <SettingsPageContainer>
+        <StyledUserHeader>
+          <Avatar
+            shape="circle"
+            size="xxl"
+            name={displayName}
+            colorSeed={userWorkspaceId}
+          />
+          <StyledUserInfo>
+            <StyledUserName>{displayName}</StyledUserName>
+            <StyledUserCredits>
+              {t`${formatUsageValue(totalCredits)} used`}
+            </StyledUserCredits>
+          </StyledUserInfo>
+        </StyledUserHeader>
+
+        {!hasAnyData && (
+          <Section.Root>
+            <SubscriptionInfoContainer>
+              <SettingsBillingLabelValueItem
+                label={t`No usage data`}
+                value={t`No credit consumption recorded for this user.`}
+              />
+            </SubscriptionInfoContainer>
+          </Section.Root>
+        )}
+
+        <UsageDailyChartSection
+          title={t`Daily Usage`}
+          description={t`Per-day credit consumption.`}
+          userWorkspaceId={userWorkspaceId}
+          skip={!userWorkspaceId}
+          chartId="user-daily"
+          chartLabel={t`Credits`}
+        />
+        <UsageBreakdownPieSection
+          title={t`Usage by Type`}
+          userWorkspaceId={userWorkspaceId}
+          skip={!userWorkspaceId}
+          breakdownField="operationType"
+          sectionId="user-type"
+        />
+      </SettingsPageContainer>
+    </SettingsPageLayout>
+  );
+};

@@ -1,75 +1,79 @@
+import {
+  GetCoreWorkflowVersionDocument,
+  GetCoreWorkflowVersionLegacyMappingDocument,
+} from '~/generated/graphql';
 import { useCallback } from 'react';
 
 import {
   type HeadlessCommandContextApi,
   type HeadlessEngineCommandContextApi,
 } from '@/command-menu-item/engine-command/types/HeadlessCommandContextApi';
-import { useLazyFindOneRecord } from '@/object-record/hooks/useLazyFindOneRecord';
-import { type WorkflowVersion } from '@/workflow/types/Workflow';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { isDefined } from 'twenty-shared/utils';
 import { type CommandMenuItemAvailabilityType } from '~/generated-metadata/graphql';
 
-type WorkflowVersionRecord = Pick<
-  WorkflowVersion,
-  'id' | 'workflowId' | 'trigger' | '__typename'
->;
-
 type EnrichParams = {
   headlessEngineCommandContextApi: HeadlessEngineCommandContextApi;
-  workflowVersionId: string;
+  workflowVersionId?: string;
+  coreWorkflowVersionId?: string;
   availabilityType: CommandMenuItemAvailabilityType;
   availabilityObjectMetadataId?: string | null;
 };
 
 export const useEnrichHeadlessCommandContextApiWithWorkflowVersionTriggerInformation =
   () => {
-    const { findOneRecord: findOneWorkflowVersion } =
-      useLazyFindOneRecord<WorkflowVersionRecord>({
-        objectNameSingular: CoreObjectNameSingular.WorkflowVersion,
-        recordGqlFields: { id: true, workflowId: true, trigger: true },
-      });
-
-    const fetchWorkflowVersion = useCallback(
-      async (versionId: string): Promise<WorkflowVersionRecord | undefined> => {
-        let record: WorkflowVersionRecord | undefined;
-
-        await findOneWorkflowVersion({
-          objectRecordId: versionId,
-          onCompleted: (data) => {
-            record = data;
-          },
-        });
-
-        return record;
-      },
-      [findOneWorkflowVersion],
-    );
+    const apolloCoreClient = useApolloCoreClient();
 
     const enrichHeadlessCommandContextApiWithWorkflowVersionTriggerInformation =
       useCallback(
         async ({
           headlessEngineCommandContextApi,
           workflowVersionId,
+          coreWorkflowVersionId,
           availabilityType,
           availabilityObjectMetadataId,
         }: EnrichParams): Promise<HeadlessCommandContextApi | undefined> => {
-          const workflowVersion = await fetchWorkflowVersion(workflowVersionId);
+          let resolvedCoreVersionId = coreWorkflowVersionId;
 
-          if (!isDefined(workflowVersion)) {
+          if (
+            !isDefined(resolvedCoreVersionId) &&
+            isDefined(workflowVersionId)
+          ) {
+            const { data } = await apolloCoreClient.query({
+              query: GetCoreWorkflowVersionLegacyMappingDocument,
+              variables: { workspaceWorkflowVersionId: workflowVersionId },
+              fetchPolicy: 'network-only',
+            });
+            resolvedCoreVersionId = data?.coreWorkflowVersion?.id;
+          }
+
+          if (!isDefined(resolvedCoreVersionId)) {
+            return undefined;
+          }
+
+          const { data } = await apolloCoreClient.query({
+            query: GetCoreWorkflowVersionDocument,
+            variables: { coreWorkflowVersionId: resolvedCoreVersionId },
+            fetchPolicy: 'network-only',
+          });
+          const version = data?.coreWorkflowVersion;
+
+          if (!isDefined(version) || !isDefined(version.coreWorkflowId)) {
             return undefined;
           }
 
           return {
             ...headlessEngineCommandContextApi,
-            workflowId: workflowVersion.workflowId,
-            workflowVersionId: workflowVersion.id,
-            trigger: workflowVersion.trigger,
+            workflowId: version.coreWorkflowId,
+            workflowVersionId: version.id,
+            coreWorkflowId: version.coreWorkflowId,
+            coreWorkflowVersionId: version.id,
+            trigger: version.trigger ?? null,
             availabilityType,
             availabilityObjectMetadataId,
           };
         },
-        [fetchWorkflowVersion],
+        [apolloCoreClient],
       );
 
     return {

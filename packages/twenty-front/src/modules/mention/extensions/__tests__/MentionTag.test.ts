@@ -4,6 +4,15 @@ import { Paragraph } from '@tiptap/extension-paragraph';
 import { Text } from '@tiptap/extension-text';
 
 import { MentionTag } from '@/mention/extensions/MentionTag';
+import { getMentionTagContent } from '@/mention/utils/getMentionTagContent';
+import { serializeJsonContentAsAdvancedTextEditorDocument } from '@/advanced-text-editor/utils/serializeJsonContentAsAdvancedTextEditorDocument';
+import { isAgentChatAssistantMentionedInSerializedDocument } from '@/ai/utils/isAgentChatAssistantMentionedInSerializedDocument';
+import { parseChatReferences } from '@/ai/utils/parseChatReferences';
+import { tipTapDocumentToMarkdown } from 'twenty-shared/utils';
+
+jest.mock('@/mention/components/MentionChip', () => ({
+  MentionChip: () => null,
+}));
 
 // Mock ReactNodeViewRenderer since we're testing in a non-DOM environment
 jest.mock('@tiptap/react', () => ({
@@ -42,6 +51,53 @@ describe('MentionTag', () => {
   });
 
   describe('renderText', () => {
+    it('preserves assistant identity and its saved label through editor reload and markdown export', () => {
+      const label = 'Scout Bot: [team] *helper* 100%';
+
+      editor.commands.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Ask ' },
+              {
+                type: 'mentionTag',
+                attrs: {
+                  recordId: 'agentChatAssistant',
+                  objectNameSingular: 'agentChatAssistant',
+                  label,
+                },
+              },
+              { type: 'text', text: ', @Ada wrote this.' },
+            ],
+          },
+        ],
+      });
+
+      const savedDocument = serializeJsonContentAsAdvancedTextEditorDocument(
+        editor.getJSON(),
+      );
+      const messageText = editor.getText();
+
+      editor.commands.setContent(JSON.parse(savedDocument));
+
+      expect(editor.getText()).toBe(messageText);
+      expect(tipTapDocumentToMarkdown(savedDocument)).toBe(messageText);
+      expect(parseChatReferences(messageText)).toEqual([
+        expect.objectContaining({
+          kind: 'record',
+          objectNameSingular: 'agentChatAssistant',
+          recordId: 'agentChatAssistant',
+          displayName: label,
+        }),
+      ]);
+      expect(messageText.endsWith(', @Ada wrote this.')).toBe(true);
+      expect(
+        isAgentChatAssistantMentionedInSerializedDocument(savedDocument),
+      ).toBe(true);
+    });
+
     it('should serialize a mention to [[record:...]] markdown format', () => {
       editor.commands.setContent({
         type: 'doc',
@@ -136,27 +192,17 @@ describe('MentionTag', () => {
   });
 
   describe('insertContent command', () => {
-    it('should insert a mention tag via editor commands', () => {
-      editor.commands.setContent('<p></p>');
-      editor.commands.focus();
+    it('should insert a picked record as a reference followed by a space', () => {
+      editor.commands.insertContent(
+        getMentionTagContent({
+          recordId: 'test-id',
+          objectNameSingular: 'opportunity',
+          label: 'Big Deal',
+          imageUrl: null,
+        }),
+      );
 
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: 'mentionTag',
-          attrs: {
-            recordId: 'test-id',
-            objectNameSingular: 'opportunity',
-            label: 'Big Deal',
-            imageUrl: 'https://example.com/img.png',
-          },
-        })
-        .run();
-
-      const text = editor.getText();
-
-      expect(text).toContain('[[record:opportunity:test-id:Big Deal]]');
+      expect(editor.getText()).toBe('[[record:opportunity:test-id:Big Deal]] ');
     });
   });
 
@@ -190,6 +236,46 @@ describe('MentionTag', () => {
       expect(html).toContain('data-image-url="https://example.com/task.png"');
       expect(html).toContain('data-type="mentionTag"');
       expect(html).toContain('class="mention-tag"');
+    });
+
+    it('should keep the participant flag out of the copied HTML', () => {
+      editor.commands.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'mentionTag',
+                attrs: {
+                  recordId: 'person-id',
+                  objectNameSingular: 'person',
+                  label: 'Linus',
+                },
+              },
+              {
+                type: 'mentionTag',
+                attrs: {
+                  recordId: 'member-id',
+                  objectNameSingular: 'workspaceMember',
+                  label: 'Grace',
+                  shouldAddAsParticipant: true,
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      const html = editor.getHTML();
+      const renderedMentionTexts = Array.from(
+        new DOMParser()
+          .parseFromString(html, 'text/html')
+          .querySelectorAll('.mention-tag'),
+      ).map((mention) => mention.textContent);
+
+      expect(renderedMentionTexts).toEqual(['@Linus', '@Grace']);
+      expect(html).not.toContain('shouldAddAsParticipant');
     });
   });
 });

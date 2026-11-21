@@ -57,7 +57,7 @@ export const NullLinks: Story = {
       expect(links).toHaveLength(1);
     });
 
-    const validLink = await canvas.findByText('Valid Link');
+    const validLink = await canvas.findByRole('link', { name: 'Valid Link' });
     expect(validLink).toBeVisible();
     expect(validLink).toHaveAttribute('href', 'https://www.twenty.com');
 
@@ -107,15 +107,17 @@ export const MultipleLinks: Story = {
       expect(links).toHaveLength(3);
     });
 
-    const primaryLink = await canvas.findByText('Twenty Website');
+    const primaryLink = await canvas.findByRole('link', {
+      name: 'Twenty Website',
+    });
     expect(primaryLink).toBeVisible();
     expect(primaryLink).toHaveAttribute('href', 'https://www.twenty.com');
 
-    const docsLink = await canvas.findByText('Documentation');
+    const docsLink = await canvas.findByRole('link', { name: 'Documentation' });
     expect(docsLink).toBeVisible();
     expect(docsLink).toHaveAttribute('href', 'https://docs.twenty.com');
 
-    const blogLink = await canvas.findByText('Blog');
+    const blogLink = await canvas.findByRole('link', { name: 'Blog' });
     expect(blogLink).toBeVisible();
     expect(blogLink).toHaveAttribute('href', 'https://blog.twenty.com');
   },
@@ -125,9 +127,90 @@ export const SocialMediaLinks: Story = {
   args: {
     value: {
       primaryLinkUrl: 'https://www.linkedin.com/company/twenty',
+      primaryLinkLabel: '',
+      secondaryLinks: [
+        { url: 'https://twitter.com/twentycrm', label: null },
+        {
+          url: 'https://www.instagram.com/twenty_hq',
+          label: null,
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await waitFor(() => {
+      const links = canvas.queryAllByRole('link');
+      expect(links).toHaveLength(3);
+    });
+
+    const linkedinLink = await canvas.findByRole('link', { name: 'twenty' });
+    expect(linkedinLink).toBeVisible();
+    expect(linkedinLink).toHaveAttribute(
+      'href',
+      'https://www.linkedin.com/company/twenty',
+    );
+
+    const twitterLink = await canvas.findByRole('link', { name: '@twentycrm' });
+    expect(twitterLink).toBeVisible();
+    expect(twitterLink).toHaveAttribute(
+      'href',
+      'https://twitter.com/twentycrm',
+    );
+
+    const instagramLink = await canvas.findByRole('link', {
+      name: '@twenty_hq',
+    });
+    expect(instagramLink).toBeVisible();
+    expect(instagramLink).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/twenty_hq',
+    );
+  },
+};
+
+export const InstagramLinks: Story = {
+  args: {
+    value: {
+      primaryLinkUrl: 'https://www.instagram.com/twenty_hq',
+      primaryLinkLabel: '',
+      secondaryLinks: [
+        { url: 'https://instagram.com/p/ABC123', label: null },
+        { url: 'https://instagram.com/reel/XYZ789', label: null },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await waitFor(() => {
+      const links = canvas.queryAllByRole('link');
+      expect(links).toHaveLength(3);
+    });
+
+    const handleLink = await canvas.findByRole('link', { name: '@twenty_hq' });
+    expect(handleLink).toBeVisible();
+    expect(handleLink).toHaveAttribute(
+      'href',
+      'https://www.instagram.com/twenty_hq',
+    );
+
+    const fallbackLinks = await canvas.findAllByText('Instagram');
+    expect(fallbackLinks).toHaveLength(2);
+  },
+};
+
+export const SocialLinksWithCustomLabels: Story = {
+  args: {
+    value: {
+      primaryLinkUrl: 'https://www.linkedin.com/company/twenty',
       primaryLinkLabel: 'Twenty on LinkedIn',
       secondaryLinks: [
-        { url: 'https://twitter.com/twentycrm', label: 'Twenty on Twitter' },
+        {
+          url: 'https://www.instagram.com/twenty_hq',
+          label: 'Twenty on Instagram',
+        },
       ],
     },
   },
@@ -139,18 +222,22 @@ export const SocialMediaLinks: Story = {
       expect(links).toHaveLength(2);
     });
 
-    const linkedinLink = await canvas.findByText('twenty');
+    const linkedinLink = await canvas.findByRole('link', {
+      name: 'Twenty on LinkedIn',
+    });
     expect(linkedinLink).toBeVisible();
     expect(linkedinLink).toHaveAttribute(
       'href',
       'https://www.linkedin.com/company/twenty',
     );
 
-    const twitterLink = await canvas.findByText('@twentycrm');
-    expect(twitterLink).toBeVisible();
-    expect(twitterLink).toHaveAttribute(
+    const instagramLink = await canvas.findByRole('link', {
+      name: 'Twenty on Instagram',
+    });
+    expect(instagramLink).toBeVisible();
+    expect(instagramLink).toHaveAttribute(
       'href',
-      'https://twitter.com/twentycrm',
+      'https://www.instagram.com/twenty_hq',
     );
   },
 };
@@ -171,11 +258,15 @@ export const AutomaticLabelFromURL: Story = {
       expect(links).toHaveLength(2);
     });
 
-    const primaryLink = await canvas.findByText('www.example.com');
+    const primaryLink = await canvas.findByRole('link', {
+      name: 'www.example.com',
+    });
     expect(primaryLink).toBeVisible();
     expect(primaryLink).toHaveAttribute('href', 'https://www.example.com');
 
-    const secondaryLink = await canvas.findByText('test.example.com');
+    const secondaryLink = await canvas.findByRole('link', {
+      name: 'test.example.com',
+    });
     expect(secondaryLink).toBeVisible();
     expect(secondaryLink).toHaveAttribute('href', 'https://test.example.com');
   },

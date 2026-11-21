@@ -1,0 +1,239 @@
+import { computeWorkflowManifestOutputSchema } from 'src/engine/core-modules/application/application-manifest/utils/compute-workflow-manifest-output-schema.util';
+import { buildWorkflowManifestReferenceResolvers } from 'src/engine/core-modules/application/application-manifest/utils/build-workflow-manifest-reference-resolvers.util';
+import { msg } from '@lingui/core/macro';
+import { type WorkflowStepManifest } from 'twenty-shared/application';
+import { isDefined } from 'twenty-shared/utils';
+import { workflowActionSchema } from 'twenty-shared/workflow';
+
+import { type WorkflowManifestReferences } from 'src/engine/core-modules/application/application-manifest/types/workflow-manifest-references.type';
+import {
+  ApplicationException,
+  ApplicationExceptionCode,
+} from 'src/engine/core-modules/application/application.exception';
+import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+
+export const fromWorkflowStepManifestToActionOrThrow = ({
+  step,
+  references,
+}: {
+  step: WorkflowStepManifest;
+  references: WorkflowManifestReferences;
+}): WorkflowAction => {
+  const {
+    resolve,
+    objectName,
+    field,
+    fieldReference,
+    connectedAccountIdOrThrow,
+  } = buildWorkflowManifestReferenceResolvers({
+    references,
+    subject: `Workflow step ${step.name}`,
+  });
+  let input: unknown;
+  switch (step.type) {
+    case 'LOGIC_FUNCTION':
+      input = {
+        logicFunctionId: resolve(
+          references.logicFunctionIdByUniversalIdentifier,
+          step.logicFunctionUniversalIdentifier,
+          'application workflow action',
+        ),
+        logicFunctionInput: step.input,
+      };
+      break;
+    case 'AI_AGENT': {
+      const { agentUniversalIdentifier, ...rest } = step.input;
+
+      // the scope names objects and fields by universal identifier, so it is checked rather than rewritten
+      for (const { objectUniversalIdentifier } of rest.scope
+        ?.objectPermissions ?? []) {
+        objectName(objectUniversalIdentifier);
+      }
+      for (const { objectUniversalIdentifier, fieldUniversalIdentifier } of rest
+        .scope?.fieldPermissions ?? []) {
+        field(fieldUniversalIdentifier, objectUniversalIdentifier);
+      }
+
+      input = isDefined(agentUniversalIdentifier)
+        ? {
+            ...rest,
+            agentId: resolve(
+              references.agentIdByUniversalIdentifier,
+              agentUniversalIdentifier,
+              'application agent',
+            ),
+          }
+        : rest;
+      break;
+    }
+    case 'CREATE_RECORD':
+    case 'UPDATE_RECORD':
+    case 'UPSERT_RECORD':
+    case 'DELETE_RECORD': {
+      const { objectUniversalIdentifier, ...rest } = step.input;
+      input = { ...rest, objectName: objectName(objectUniversalIdentifier) };
+      break;
+    }
+    case 'FIND_RECORDS': {
+      const { objectUniversalIdentifier, filter, orderBy, ...rest } =
+        step.input;
+      input = {
+        ...rest,
+        objectName: objectName(objectUniversalIdentifier),
+        ...(isDefined(filter)
+          ? {
+              filter: {
+                ...filter,
+                ...(isDefined(filter.recordFilters)
+                  ? {
+                      recordFilters: filter.recordFilters.map((reference) =>
+                        fieldReference(reference, objectUniversalIdentifier),
+                      ),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(isDefined(orderBy)
+          ? {
+              orderBy: {
+                ...orderBy,
+                ...(isDefined(orderBy.recordSorts)
+                  ? {
+                      recordSorts: orderBy.recordSorts.map((reference) =>
+                        fieldReference(reference, objectUniversalIdentifier),
+                      ),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+      break;
+    }
+    case 'PICK_RECORD': {
+      const { objectUniversalIdentifier, loadBalance, ...rest } = step.input;
+      input = {
+        ...rest,
+        objectName: objectName(objectUniversalIdentifier),
+        ...(isDefined(loadBalance)
+          ? {
+              loadBalance: {
+                objectNameSingular: objectName(
+                  loadBalance.objectUniversalIdentifier,
+                ),
+                fieldName: field(
+                  loadBalance.fieldUniversalIdentifier,
+                  loadBalance.objectUniversalIdentifier,
+                ).name,
+              },
+            }
+          : {}),
+      };
+      break;
+    }
+    case 'FORM':
+      input = step.input.map((formField) => {
+        if (formField.type === 'SELECT' || formField.type === 'MULTI_SELECT') {
+          const { selectedFieldUniversalIdentifier, ...settings } =
+            formField.settings ?? {};
+          if (typeof selectedFieldUniversalIdentifier !== 'string') {
+            throw new ApplicationException(
+              'Select fields require the universal identifier of the field whose options they offer',
+              ApplicationExceptionCode.INVALID_INPUT,
+              {
+                userFriendlyMessage: msg`The workflow select field must reference an existing field.`,
+              },
+            );
+          }
+          const selectedField = field(selectedFieldUniversalIdentifier);
+          if (selectedField.type !== formField.type) {
+            throw new ApplicationException(
+              `Select field ${formField.name} must reference a ${formField.type} field`,
+              ApplicationExceptionCode.INVALID_INPUT,
+              {
+                userFriendlyMessage: msg`The workflow select field must reference a field of the same type.`,
+              },
+            );
+          }
+          return {
+            ...formField,
+            settings: {
+              selectType: 'EXISTING_FIELD',
+              ...settings,
+              selectedFieldId: selectedField.id,
+            },
+          };
+        }
+        if (formField.type !== 'RECORD') {
+          return formField;
+        }
+        const { objectUniversalIdentifier, ...settings } =
+          formField.settings ?? {};
+        if (typeof objectUniversalIdentifier !== 'string') {
+          throw new ApplicationException(
+            'Record picker fields require an object universal identifier',
+            ApplicationExceptionCode.INVALID_INPUT,
+            {
+              userFriendlyMessage: msg`The workflow record picker must reference an object.`,
+            },
+          );
+        }
+        return {
+          ...formField,
+          settings: {
+            ...settings,
+            objectName: objectName(objectUniversalIdentifier),
+          },
+        };
+      });
+      break;
+    case 'FILTER':
+    case 'IF_ELSE':
+      input = {
+        ...step.input,
+        stepFilters: step.input.stepFilters.map((reference) =>
+          fieldReference(reference),
+        ),
+      };
+      break;
+    case 'SEND_EMAIL':
+    case 'DRAFT_EMAIL':
+    case 'CREATE_CALENDAR_EVENT': {
+      const { connectedAccountHandle, ...rest } = step.input;
+      input = isDefined(connectedAccountHandle)
+        ? {
+            ...rest,
+            connectedAccountId: connectedAccountIdOrThrow({
+              stepType: step.type,
+              handle: connectedAccountHandle,
+            }),
+          }
+        : rest;
+      break;
+    }
+    default:
+      input = step.input;
+  }
+  return workflowActionSchema.parse({
+    id: step.universalIdentifier,
+    name: step.name,
+    type: step.type,
+    valid: true,
+    nextStepIds: step.nextStepIds,
+    ...(isDefined(step.position) ? { position: step.position } : {}),
+    settings: {
+      input: structuredClone(input),
+      outputSchema: structuredClone(
+        computeWorkflowManifestOutputSchema({ step, references }),
+      ),
+      ...(isDefined(step.expectedOutputSchema)
+        ? { expectedOutputSchema: structuredClone(step.expectedOutputSchema) }
+        : {}),
+      errorHandlingOptions: step.errorHandlingOptions ?? {
+        retryOnFailure: { value: 0 },
+        continueOnFailure: { value: false },
+      },
+    },
+  }) as WorkflowAction;
+};

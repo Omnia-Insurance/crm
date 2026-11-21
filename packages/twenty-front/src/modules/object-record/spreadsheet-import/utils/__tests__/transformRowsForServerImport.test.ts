@@ -1,80 +1,63 @@
-import { transformRowsForServerImport } from '../transformRowsForServerImport';
+import { transformRowsForServerImport } from '@/object-record/spreadsheet-import/utils/transformRowsForServerImport';
 
-/**
- * Tests based on the actual policies.csv export format:
- *
- * Headers:
- * Id, Name, Agent / Name, Agent / NPN, Agent / Status,
- * Lead / Name / First Name, Lead / Name / Last Name,
- * Lead / Date of Birth, Lead / Gender, Lead / Lead Source,
- * Lead / Phones / Primary Phone Number, Lead / Phones / Primary Phone Country Code,
- * Lead / Phones / Primary Phone Calling Code, Lead / Phones / Additional Phones,
- * Lead / Emails / Primary Email, Lead / Emails / Additional Emails,
- * Lead / Address / Address 1, Lead / Address / Address 2,
- * Lead / Address / City, Lead / Address / State,
- * Lead / Address / Country, Lead / Address / Post Code,
- * Lead / Address / Latitude, Lead / Address / Longitude,
- * Lead / Family Members, Policy Number, Application ID, Status,
- * Submitted Date, Effective Date, Expiration Date,
- * Carrier, Product / Name, Product / Product Type,
- * Premium / Amount, Premium / Currency, Applicant Count, Old CRM Policy ID
- */
-
-// Simulates a row after buildRecordFromImportedStructuredRow + raw keys
-// The update: keys come from the raw structured row (not the built record)
+// A policy row as the dialog sends it: direct fields from buildRecordFromImportedStructuredRow,
+// plus the relation keys of the raw structured row. All values are synthetic.
 const SAMPLE_RAW_ROW: Record<string, unknown> = {
-  // Direct fields (from buildRecordFromImportedStructuredRow)
-  id: 'ef3db3f7-ad98-4a3e-8dc7-98c754780221',
-  name: 'Ambetter - ACA - Bronze',
-  policyNumber: '7909057374',
+  id: '6b8e7a52-3f0c-4d8e-9a51-2c4b7d9e1f03',
+  name: 'Example Carrier - ACA - Bronze',
+  policyNumber: 'POL-0001',
   status: 'SUBMITTED',
 
-  // Relation update keys (from raw structured row, frontend format)
-  'update:firstName-name (lead)': 'ciera',
-  'update:lastName-name (lead)': 'mays',
+  'update:firstName-name (lead)': 'Jane',
+  'update:lastName-name (lead)': 'Doe',
   'update:dateOfBirth (lead)': '',
   'update:gender (lead)': '',
-  'update:primaryPhoneNumber-phones (lead)': '9412935341',
+  'update:primaryPhoneNumber-phones (lead)': '5550100100',
   'update:primaryPhoneCountryCode-phones (lead)': 'US',
   'update:primaryPhoneCallingCode-phones (lead)': '+1',
   'update:additionalPhones-phones (lead)': '[]',
-  'update:primaryEmail-emails (lead)': 'mayscutco@gmail.com',
+  'update:primaryEmail-emails (lead)': 'jane.doe@example.com',
   'update:additionalEmails-emails (lead)': '[]',
-  'update:addressStreet1-addressCustom (lead)': '1013 7TH ST W',
+  'update:addressStreet1-addressCustom (lead)': '100 Example St',
   'update:addressStreet2-addressCustom (lead)': '',
-  'update:addressCity-addressCustom (lead)': 'bradenton',
+  'update:addressCity-addressCustom (lead)': 'Springfield',
   'update:addressState-addressCustom (lead)': 'FL',
-  'update:addressCountry-addressCustom (lead)': 'UnitedStates',
-  'update:addressPostcode-addressCustom (lead)': '34205',
+  'update:addressCountry-addressCustom (lead)': 'United States',
+  'update:addressPostcode-addressCustom (lead)': '00000',
 
-  // Agent relation update keys (should be detected)
-  'update:npn (agent)': '14516709',
+  'update:npn (agent)': '10000001',
   'update:status (agent)': 'ACTIVE',
 
-  // Relation labels
-  '__relationLabel:carrier': 'Ambetter',
-  '__relationLabel:leadSource': 'Slate U65 Leads',
+  '__relationLabel:carrier': 'Example Carrier',
+  '__relationLabel:leadSource': 'Example Lead Source',
+
+  '__readOnly:lead.familyMembers': 'Example Member',
 };
 
 describe('transformRowsForServerImport', () => {
   describe('key transformation', () => {
     it('should convert scalar update keys to dot notation', () => {
       const { transformedRows } = transformRowsForServerImport([
-        { 'update:dateOfBirth (lead)': '1984-01-31' },
+        { 'update:dateOfBirth (lead)': '1980-01-01' },
       ]);
 
-      expect(transformedRows[0]).toHaveProperty(['lead.dateOfBirth'], '1984-01-31');
-      expect(transformedRows[0]).not.toHaveProperty('update:dateOfBirth (lead)');
+      expect(transformedRows[0]).toHaveProperty(
+        ['lead.dateOfBirth'],
+        '1980-01-01',
+      );
+      expect(transformedRows[0]).not.toHaveProperty(
+        'update:dateOfBirth (lead)',
+      );
     });
 
     it('should convert composite update keys to dot notation', () => {
       const { transformedRows } = transformRowsForServerImport([
-        { 'update:primaryPhoneNumber-phones (lead)': '9412935341' },
+        { 'update:primaryPhoneNumber-phones (lead)': '5550100100' },
       ]);
 
       expect(transformedRows[0]).toHaveProperty(
         ['lead.phones.primaryPhoneNumber'],
-        '9412935341',
+        '5550100100',
       );
     });
 
@@ -86,21 +69,24 @@ describe('transformRowsForServerImport', () => {
         },
       ]);
 
-      expect(transformedRows[0]).toHaveProperty(['lead.name.firstName'], 'John');
+      expect(transformedRows[0]).toHaveProperty(
+        ['lead.name.firstName'],
+        'John',
+      );
       expect(transformedRows[0]).toHaveProperty(['lead.name.lastName'], 'Doe');
     });
 
     it('should convert address composite keys to dot notation', () => {
       const { transformedRows } = transformRowsForServerImport([
         {
-          'update:addressCity-addressCustom (lead)': 'bradenton',
+          'update:addressCity-addressCustom (lead)': 'Springfield',
           'update:addressState-addressCustom (lead)': 'FL',
         },
       ]);
 
       expect(transformedRows[0]).toHaveProperty(
         ['lead.addressCustom.addressCity'],
-        'bradenton',
+        'Springfield',
       );
       expect(transformedRows[0]).toHaveProperty(
         ['lead.addressCustom.addressState'],
@@ -110,31 +96,53 @@ describe('transformRowsForServerImport', () => {
 
     it('should convert relation label keys to plain names', () => {
       const { transformedRows } = transformRowsForServerImport([
-        { '__relationLabel:carrier': 'Ambetter' },
+        { '__relationLabel:carrier': 'Example Carrier' },
       ]);
 
-      expect(transformedRows[0]).toHaveProperty('carrier', 'Ambetter');
+      expect(transformedRows[0]).toHaveProperty('carrier', 'Example Carrier');
       expect(transformedRows[0]).not.toHaveProperty('__relationLabel:carrier');
     });
 
     it('should convert pre-normalized connect field keys to dot notation', () => {
-      // Connect keys are pre-converted to update: format by the dialog hook
       const { transformedRows } = transformRowsForServerImport([
-        { 'update:primaryPhoneNumber-phones (lead)': '5551234567' },
+        { 'update:primaryPhoneNumber-phones (lead)': '5550100101' },
       ]);
 
       expect(transformedRows[0]).toHaveProperty(
         ['lead.phones.primaryPhoneNumber'],
-        '5551234567',
+        '5550100101',
       );
     });
 
-    it('should pass through composite field keys unchanged (not treat as relations)', () => {
-      const { transformedRows, relationBehaviors } = transformRowsForServerImport([
-        { 'Amount (premium)': '55.00', 'Currency (premium)': 'USD' },
+    it('should convert the relation id connect key so a re-import reconnects by id', () => {
+      const { transformedRows } = transformRowsForServerImport([
+        { 'update:id (carrier)': '0f1d5e8a-2b3c-4d5e-8f90-a1b2c3d4e5f6' },
       ]);
 
-      // These should pass through as direct fields, NOT be parsed as relations
+      expect(transformedRows[0]).toEqual({
+        'carrier.id': '0f1d5e8a-2b3c-4d5e-8f90-a1b2c3d4e5f6',
+      });
+    });
+
+    it('should drop read-only keys', () => {
+      const { transformedRows, relationBehaviors } =
+        transformRowsForServerImport([
+          {
+            '__readOnly:lead.familyMembers': 'Example Member',
+            '__readOnly:lead.addressCustom.addressLat': '0',
+          },
+        ]);
+
+      expect(transformedRows[0]).toEqual({});
+      expect(relationBehaviors).toHaveLength(0);
+    });
+
+    it('should pass through composite field keys unchanged (not treat as relations)', () => {
+      const { transformedRows, relationBehaviors } =
+        transformRowsForServerImport([
+          { 'Amount (premium)': '55.00', 'Currency (premium)': 'USD' },
+        ]);
+
       expect(transformedRows[0]).toHaveProperty('Amount (premium)', '55.00');
       expect(transformedRows[0]).toHaveProperty('Currency (premium)', 'USD');
       expect(relationBehaviors).toHaveLength(0);
@@ -155,39 +163,39 @@ describe('transformRowsForServerImport', () => {
 
   describe('full row transformation (policies.csv format)', () => {
     it('should correctly transform a complete policy export row', () => {
-      const { transformedRows } = transformRowsForServerImport([SAMPLE_RAW_ROW]);
+      const { transformedRows } = transformRowsForServerImport([
+        SAMPLE_RAW_ROW,
+      ]);
 
       const row = transformedRows[0];
 
-      // Direct fields preserved
-      expect(row.id).toBe('ef3db3f7-ad98-4a3e-8dc7-98c754780221');
-      expect(row.name).toBe('Ambetter - ACA - Bronze');
-      expect(row.policyNumber).toBe('7909057374');
+      expect(row.id).toBe('6b8e7a52-3f0c-4d8e-9a51-2c4b7d9e1f03');
+      expect(row.name).toBe('Example Carrier - ACA - Bronze');
+      expect(row.policyNumber).toBe('POL-0001');
       expect(row.status).toBe('SUBMITTED');
 
-      // Lead sub-fields converted to dot notation
-      expect(row['lead.name.firstName']).toBe('ciera');
-      expect(row['lead.name.lastName']).toBe('mays');
-      expect(row['lead.phones.primaryPhoneNumber']).toBe('9412935341');
+      expect(row['lead.name.firstName']).toBe('Jane');
+      expect(row['lead.name.lastName']).toBe('Doe');
+      expect(row['lead.phones.primaryPhoneNumber']).toBe('5550100100');
       expect(row['lead.phones.primaryPhoneCountryCode']).toBe('US');
-      expect(row['lead.emails.primaryEmail']).toBe('mayscutco@gmail.com');
-      expect(row['lead.addressCustom.addressStreet1']).toBe('1013 7TH ST W');
-      expect(row['lead.addressCustom.addressCity']).toBe('bradenton');
+      expect(row['lead.emails.primaryEmail']).toBe('jane.doe@example.com');
+      expect(row['lead.addressCustom.addressStreet1']).toBe('100 Example St');
+      expect(row['lead.addressCustom.addressCity']).toBe('Springfield');
       expect(row['lead.addressCustom.addressState']).toBe('FL');
 
-      // Agent sub-fields converted
-      expect(row['agent.npn']).toBe('14516709');
+      expect(row['agent.npn']).toBe('10000001');
       expect(row['agent.status']).toBe('ACTIVE');
 
-      // Relation labels converted
-      expect(row['carrier']).toBe('Ambetter');
-      expect(row['leadSource']).toBe('Slate U65 Leads');
+      expect(row['carrier']).toBe('Example Carrier');
+      expect(row['leadSource']).toBe('Example Lead Source');
 
-      // No update: or __relationLabel: keys remain
       const keys = Object.keys(row);
 
-      expect(keys.every((k) => !k.startsWith('update:'))).toBe(true);
-      expect(keys.every((k) => !k.startsWith('__relationLabel:'))).toBe(true);
+      expect(keys.every((key) => !key.startsWith('update:'))).toBe(true);
+      expect(keys.every((key) => !key.startsWith('__relationLabel:'))).toBe(
+        true,
+      );
+      expect(keys.every((key) => !key.startsWith('__readOnly:'))).toBe(true);
     });
   });
 
@@ -195,13 +203,13 @@ describe('transformRowsForServerImport', () => {
     it('should detect SMART_UPDATE for relations with sub-fields', () => {
       const { relationBehaviors } = transformRowsForServerImport([
         {
-          'update:dateOfBirth (lead)': '1990-01-01',
-          'update:primaryPhoneNumber-phones (lead)': '5551234567',
+          'update:dateOfBirth (lead)': '1985-01-01',
+          'update:primaryPhoneNumber-phones (lead)': '5550100101',
         },
       ]);
 
       const leadBehavior = relationBehaviors.find(
-        (rb) => rb.relationFieldName === 'lead',
+        (relationBehavior) => relationBehavior.relationFieldName === 'lead',
       );
 
       expect(leadBehavior).toBeDefined();
@@ -211,11 +219,11 @@ describe('transformRowsForServerImport', () => {
 
     it('should detect LOOKUP_ASSIGN for relations with only labels', () => {
       const { relationBehaviors } = transformRowsForServerImport([
-        { '__relationLabel:carrier': 'Ambetter' },
+        { '__relationLabel:carrier': 'Example Carrier' },
       ]);
 
       const carrierBehavior = relationBehaviors.find(
-        (rb) => rb.relationFieldName === 'carrier',
+        (relationBehavior) => relationBehavior.relationFieldName === 'carrier',
       );
 
       expect(carrierBehavior).toBeDefined();
@@ -224,16 +232,15 @@ describe('transformRowsForServerImport', () => {
     });
 
     it('should detect SMART_UPDATE when pre-normalized connect fields present', () => {
-      // Connect keys pre-converted to update: format by dialog
       const { relationBehaviors } = transformRowsForServerImport([
         {
-          'update:primaryPhoneNumber-phones (lead)': '5551234567',
-          'update:dateOfBirth (lead)': '1990-01-01',
+          'update:primaryPhoneNumber-phones (lead)': '5550100101',
+          'update:dateOfBirth (lead)': '1985-01-01',
         },
       ]);
 
       const leadBehavior = relationBehaviors.find(
-        (rb) => rb.relationFieldName === 'lead',
+        (relationBehavior) => relationBehavior.relationFieldName === 'lead',
       );
 
       expect(leadBehavior?.behavior).toBe('SMART_UPDATE');
@@ -244,12 +251,14 @@ describe('transformRowsForServerImport', () => {
         SAMPLE_RAW_ROW,
       ]);
 
-      const names = relationBehaviors.map((rb) => rb.relationFieldName);
+      const relationFieldNames = relationBehaviors.map(
+        (relationBehavior) => relationBehavior.relationFieldName,
+      );
 
-      expect(names).toContain('lead');
-      expect(names).toContain('agent');
-      expect(names).toContain('carrier');
-      expect(names).toContain('leadSource');
+      expect(relationFieldNames).toContain('lead');
+      expect(relationFieldNames).toContain('agent');
+      expect(relationFieldNames).toContain('carrier');
+      expect(relationFieldNames).toContain('leadSource');
     });
 
     it('should use configured behaviors over auto-detected ones', () => {
@@ -265,10 +274,31 @@ describe('transformRowsForServerImport', () => {
       );
 
       const agentBehavior = relationBehaviors.find(
-        (rb) => rb.relationFieldName === 'agent',
+        (relationBehavior) => relationBehavior.relationFieldName === 'agent',
       );
 
       expect(agentBehavior?.behavior).toBe('SKIP');
+    });
+
+    it('should keep configured behaviors for relations without data', () => {
+      const { relationBehaviors } = transformRowsForServerImport(
+        [{ name: 'Test' }],
+        [
+          {
+            relationFieldName: 'carrier',
+            behavior: 'LOOKUP_ASSIGN',
+            onNotFound: 'ERROR',
+          },
+        ],
+      );
+
+      expect(relationBehaviors).toEqual([
+        {
+          relationFieldName: 'carrier',
+          behavior: 'LOOKUP_ASSIGN',
+          onNotFound: 'ERROR',
+        },
+      ]);
     });
   });
 
@@ -298,14 +328,14 @@ describe('transformRowsForServerImport', () => {
 
     it('should handle multiple rows consistently', () => {
       const { transformedRows } = transformRowsForServerImport([
-        { 'update:dateOfBirth (lead)': '1990-01-01', id: 'a' },
-        { 'update:dateOfBirth (lead)': '1985-06-15', id: 'b' },
+        { 'update:dateOfBirth (lead)': '1985-01-01', id: 'a' },
+        { 'update:dateOfBirth (lead)': '1990-01-01', id: 'b' },
         { 'update:dateOfBirth (lead)': '', id: 'c' },
       ]);
 
       expect(transformedRows).toHaveLength(3);
-      expect(transformedRows[0]['lead.dateOfBirth']).toBe('1990-01-01');
-      expect(transformedRows[1]['lead.dateOfBirth']).toBe('1985-06-15');
+      expect(transformedRows[0]['lead.dateOfBirth']).toBe('1985-01-01');
+      expect(transformedRows[1]['lead.dateOfBirth']).toBe('1990-01-01');
       expect(transformedRows[2]['lead.dateOfBirth']).toBe('');
     });
   });

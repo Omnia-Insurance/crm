@@ -1,10 +1,10 @@
-import { t } from '@lingui/core/macro';
 import {
   type ExecutionStatus,
   WorkflowStepExecutionResult,
 } from '@/workflow/components/WorkflowStepExecutionResult';
 import { type LogicFunctionTestData } from '@/workflow/workflow-steps/workflow-actions/code-action/states/logicFunctionTestDataFamilyState';
 import { LogicFunctionExecutionStatus } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const LogicFunctionExecutionResult = ({
   logicFunctionTestData,
@@ -13,10 +13,13 @@ export const LogicFunctionExecutionResult = ({
   logicFunctionTestData: LogicFunctionTestData;
   isTesting?: boolean;
 }) => {
+  const { t } = useLingui();
   const result =
     logicFunctionTestData.output.data ||
     logicFunctionTestData.output.error ||
-    '';
+    (logicFunctionTestData.output.status === LogicFunctionExecutionStatus.IDLE
+      ? t`Enter an input above then press "Test"`
+      : '');
 
   const isSuccess =
     logicFunctionTestData.output.status ===
@@ -25,12 +28,12 @@ export const LogicFunctionExecutionResult = ({
   const isError =
     logicFunctionTestData.output.status === LogicFunctionExecutionStatus.ERROR;
 
-  const duration = logicFunctionTestData.output.duration;
+  const duration = logicFunctionTestData.output.duration ?? 0;
   const status: ExecutionStatus = {
     isSuccess,
     isError,
-    successMessage: isSuccess ? t`200 OK - ${duration ?? 0}ms` : undefined,
-    errorMessage: isError ? t`500 Error - ${duration ?? 0}ms` : undefined,
+    successMessage: isSuccess ? t`200 OK - ${duration}ms` : undefined,
+    errorMessage: isError ? t`500 Error - ${duration}ms` : undefined,
   };
 
   return (

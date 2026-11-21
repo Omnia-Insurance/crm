@@ -1,0 +1,2 @@
+export const OMNIA_ADD_USER_WORKSPACE_ID_TO_IMPORT_JOB_UPGRADE_COMMAND_NAME =
+  '2.58.0_OmniaAddUserWorkspaceIdToImportJobFastInstanceCommand_1794500000000';

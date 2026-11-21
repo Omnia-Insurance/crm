@@ -4,9 +4,9 @@ export type ActiveImportJob = {
   importJobId: string;
   objectNameSingular: string;
   totalRecords: number;
-} | null;
+};
 
-export const activeImportJobState = createAtomState<ActiveImportJob>({
+export const activeImportJobState = createAtomState<ActiveImportJob | null>({
   key: 'activeImportJobState',
   defaultValue: null,
 });

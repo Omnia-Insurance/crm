@@ -16,11 +16,15 @@ import {
   type FieldRelationMetadata,
 } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { isFieldMorphRelation } from '@/object-record/record-field/ui/types/guards/isFieldMorphRelation';
+import { recordStoreFamilySelector } from '@/object-record/record-store/states/selectors/recordStoreFamilySelector';
+import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { styled } from '@linaria/react';
-import { CustomError } from 'twenty-shared/utils';
-import { IconPencil, IconPlus } from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
+import { CustomError, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { IconPencil, IconPlus } from 'twenty-ui/icon';
+import { IconButton } from 'twenty-ui/components/input';
 import { RelationType } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 type FieldWidgetRelationEditActionProps = {
   fieldDefinition:
@@ -38,6 +42,7 @@ export const FieldWidgetRelationEditAction = ({
   fieldDefinition,
   recordId,
 }: FieldWidgetRelationEditActionProps) => {
+  const { t } = useLingui();
   const { objectMetadataItems } = useObjectMetadataItems();
   const objectMetadataItem = objectMetadataItems.find(
     (item) =>
@@ -46,7 +51,7 @@ export const FieldWidgetRelationEditAction = ({
 
   if (!objectMetadataItem) {
     throw new CustomError(
-      'Object metadata item not found',
+      doNotTranslate('Object metadata item not found'),
       'OBJECT_METADATA_ITEM_NOT_FOUND',
     );
   }
@@ -72,36 +77,49 @@ export const FieldWidgetRelationEditAction = ({
 
   const isMorphRelation = isFieldMorphRelation(fieldDefinition);
 
-  const triggerIcon =
-    fieldDefinition.metadata.relationType === RelationType.MANY_TO_ONE
-      ? IconPencil
-      : IconPlus;
+  const relationValue = useAtomFamilySelectorValue(recordStoreFamilySelector, {
+    recordId,
+    fieldName: fieldDefinition.metadata.fieldName,
+  });
+
+  const hasAtLeastOneRelationRecord = Array.isArray(relationValue)
+    ? relationValue.length > 0
+    : isDefined(relationValue);
+
+  const isEditAction =
+    fieldDefinition.metadata.relationType === RelationType.MANY_TO_ONE ||
+    hasAtLeastOneRelationRecord;
+
+  const TriggerIcon = isEditAction ? IconPencil : IconPlus;
+  const triggerLabel = isEditAction ? t`Edit relation` : t`Add relation`;
 
   const dropdownTriggerClickableComponent = (
-    <StyledEditButtonWrapper>
-      <LightIconButton Icon={triggerIcon} accent="secondary" />
-    </StyledEditButtonWrapper>
+    <IconButton variant="ghost" size="sm" aria-label={triggerLabel}>
+      <TriggerIcon />
+    </IconButton>
   );
 
   return (
-    <FieldContext.Provider value={fieldContextValue}>
-      <FieldInputEventContext.Provider value={{ onSubmit: handleSubmit }}>
-        {isMorphRelation ? (
-          <RecordDetailMorphRelationSectionDropdown
-            loading={false}
-            dropdownTriggerClickableComponent={
-              dropdownTriggerClickableComponent
-            }
-          />
-        ) : (
-          <RecordDetailRelationSectionDropdown
-            loading={false}
-            dropdownTriggerClickableComponent={
-              dropdownTriggerClickableComponent
-            }
-          />
-        )}
-      </FieldInputEventContext.Provider>
-    </FieldContext.Provider>
+    <StyledEditButtonWrapper>
+      <FieldContext.Provider value={fieldContextValue}>
+        <FieldInputEventContext.Provider value={{ onSubmit: handleSubmit }}>
+          {isMorphRelation ? (
+            <RecordDetailMorphRelationSectionDropdown
+              loading={false}
+              dropdownTriggerClickableComponent={
+                dropdownTriggerClickableComponent
+              }
+            />
+          ) : (
+            <RecordDetailRelationSectionDropdown
+              loading={false}
+              dropdownTriggerClickableComponent={
+                dropdownTriggerClickableComponent
+              }
+            />
+          )}
+        </FieldInputEventContext.Provider>
+      </FieldContext.Provider>
+    </StyledEditButtonWrapper>
   );
 };

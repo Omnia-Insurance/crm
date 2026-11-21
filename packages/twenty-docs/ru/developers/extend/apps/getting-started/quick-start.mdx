@@ -1,0 +1,114 @@
+---
+title: Быстрый старт
+description: Создайте своё первое приложение Twenty с помощью автономного CLI.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Перед началом
+
+Используйте Node.js 24.5+ или 26.5+ и Yarn 4 (через Corepack: `corepack enable`; в Node 26 сначала установите его с помощью `npm install -g corepack`). Установите CLI глобально; ваше приложение сохраняет собственные зависимости SDK.
+
+<Note>
+Сборка приложений Twenty официально поддерживается только в системах Unix (macOS и Linux). В Windows работайте в WSL 2.
+</Note>
+
+## Создайте проект
+
+```bash
+npm install -g twenty
+twenty app init my-twenty-app
+cd my-twenty-app
+yarn install
+```
+
+`app init` записывает только шаблон. Он не устанавливает зависимости, не инициализирует Git, не запускает Docker, не выполняет аутентификацию и не синхронизирует. Настройте отображаемое имя и описание с помощью `--display-name` и `--description`; используйте `--path` для другого места назначения.
+
+## Подключиться к Twenty
+
+Используйте существующее рабочее пространство или запустите [локальный сервер](/ru/developers/extend/apps/getting-started/local-server), затем войдите в систему:
+
+```bash
+twenty auth login --url https://your-workspace.twenty.com --name dev
+```
+
+## Синхронизируйте изменения
+
+Для первой синхронизации явно разрешите регистрацию и установку:
+
+```bash
+twenty app apply --create
+```
+
+Затем запустите наблюдатель разработки:
+
+```bash
+twenty app dev
+```
+
+Используйте ограниченные команды для скриптов и агентов:
+
+```bash
+twenty app plan
+twenty app apply
+```
+
+`plan` предварительно просматривает изменения. `apply` однократно загружает и синхронизирует. Используйте `--no-prune`, чтобы сохранить удалённые сущности, отсутствующие в источнике, или `--yes`, чтобы разрешить удаление объектов и полей без запроса. Для всех трех команд требуется аутентифицированное удаленное подключение и владение регистрацией.
+
+## Что вы можете создать
+
+Приложения состоят из **сущностей** — каждая определена как файл TypeScript с одним `export default`:
+
+| Сущность                      | Что делает                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Объекты и поля**            | Пользовательские модели данных (почтовая открытка, счёт и т. д.) с типизированными полями                 |
+| **Логические функции**        | Серверный TypeScript, запускаемый HTTP-маршрутами, расписаниями cron или событиями базы данных            |
+| **Фронтенд-компоненты**       | React-компоненты, которые отображаются внутри интерфейса Twenty (боковая панель, виджеты, командное меню) |
+| **Навыки и агенты**           | Возможности ИИ — многократно используемые инструкции и автономные помощники                               |
+| **Представления и навигация** | Предварительно настроенные представления списков и элементы бокового меню                                 |
+| **Макеты страниц**            | Пользовательские страницы сведений о записи с вкладками и виджетами                                       |
+
+Полная справка: [Концепции](/ru/developers/extend/apps/getting-started/concepts).
+
+## Разрабатывайте с помощью навыков ИИ-агентов.
+
+Официальные навыки агентов Twenty обучают агентов для программирования полному рабочему процессу приложения: созданию каркаса, разработке сущностей, операциям синхронизации и развертывания, а также публикации на маркетплейсе. Они устанавливаются в Claude Code, Codex, Cursor, Pi и любую другую среду, поддерживаемую CLI `skills`, и работают с любым экземпляром Twenty, включая самостоятельно размещенные пользовательские домены и localhost.
+
+```bash filename="Terminal"
+# List the available skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --list
+
+# Install the scaffolding and development skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill create-app
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill develop-app
+```
+
+Каждый навык устанавливается вместе с собственной справочной документацией. Ветка `agent-skills` становится доступной после первой успешной публикации из `main`; до этого следуйте [инструкциям по локальной сборке](https://github.com/twentyhq/twenty/tree/main/packages/twenty-agent-skills#local-development).
+
+## Следующие шаги
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/ru/developers/extend/apps/config/overview" img="/images/documentation/section-overview-icons-v1/apps-config.svg">
+    <CardTitle>Конфигурация</CardTitle>
+    Идентификатор приложения, роль по умолчанию, установка и удаление хуков, публичные активы.
+  </Card>
+  <Card href="/ru/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>Данные</CardTitle>
+    Объекты, поля и двунаправленные связи.
+  </Card>
+  <Card href="/ru/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>Логика</CardTitle>
+    Логические функции, навыки, агенты, подключения и каналы обмена сообщениями.
+  </Card>
+  <Card href="/ru/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>Макет</CardTitle>
+    просмотра, навигация, макеты страниц, передние компоненты.
+  </Card>
+  <Card href="/ru/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>Операции</CardTitle>
+    CLI, тестирование, удаление, CI и публикация вашего приложения.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="dev-apps" />

@@ -1,28 +1,43 @@
+import { isNonEmptyString, isUndefined } from '@sniptt/guards';
 import { useMemo } from 'react';
 
+import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { type EnrichedObjectMetadataItem as ObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { detectJunctionBridge } from '@/object-record/record-field/ui/utils/junction/detectJunctionBridge';
-import { type RecordGqlOperationFilter } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-import { type ObjectRecordFilterInput } from '~/generated/graphql';
+import { useFindAllRecordPages } from '@/object-record/record-picker/hooks/useFindAllRecordPages';
+import { buildIdAllowlistFilter } from '@/object-record/record-picker/hooks/useLeadPolicyRecordPickerAdditionalFilter';
+import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
+import {
+  type RecordGqlFields,
+  type RecordGqlOperationFilter,
+} from 'twenty-shared/types';
+import {
+  computeRelationGqlFieldJoinColumnName,
+  isDefined,
+} from 'twenty-shared/utils';
 
-type UseJunctionBridgeFilterArgs = {
-  objectMetadataItem: ObjectMetadataItem;
+type UseJunctionBridgeFilterForRecordParams = {
+  objectMetadataItem: EnrichedObjectMetadataItem;
   fieldMetadataItem: FieldMetadataItem;
-  recordId: string;
-  objectMetadataItems: ObjectMetadataItem[];
-  recordData: Record<string, unknown> | null | undefined;
+  objectMetadataItems: EnrichedObjectMetadataItem[];
+  record: Partial<ObjectRecord> | null | undefined;
 };
 
-export const useJunctionBridgeFilter = ({
+// The search API cannot filter on a junction, so the targets linked to the
+// parent record (the products of the policy's carrier) become an id allowlist.
+// `record` is a stored record or a creation-form draft.
+export const useJunctionBridgeFilterForRecord = ({
   objectMetadataItem,
   fieldMetadataItem,
-  recordData,
   objectMetadataItems,
-}: UseJunctionBridgeFilterArgs): ObjectRecordFilterInput | undefined => {
-  const bridge = useMemo(
+  record,
+}: UseJunctionBridgeFilterForRecordParams):
+  | RecordGqlOperationFilter
+  | undefined => {
+  const junctionBridge = useMemo(
     () =>
       detectJunctionBridge({
         objectMetadataItem,
@@ -32,73 +47,142 @@ export const useJunctionBridgeFilter = ({
     [objectMetadataItem, fieldMetadataItem, objectMetadataItems],
   );
 
-  // Extract the parent (sibling) record ID from record data.
-  // Try the relation object first (e.g., recordData.carrier.id),
-  // then fall back to the FK column (e.g., recordData.carrierId).
-  const parentId = useMemo(() => {
-    if (!isDefined(bridge)) {
+  const parentRecordId = useMemo(() => {
+    if (!isDefined(junctionBridge) || !isDefined(record)) {
       return undefined;
     }
 
-    const parentFieldName = bridge.parentFieldName;
+    const parentRecordIdFromRelation = record[junctionBridge.parentFieldName]
+      ?.id as unknown;
 
-    const parentRelationValue = recordData?.[parentFieldName] as
-      | { id: string }
-      | null
-      | undefined;
-
-    if (isDefined(parentRelationValue?.id)) {
-      return parentRelationValue.id;
+    if (isNonEmptyString(parentRecordIdFromRelation)) {
+      return parentRecordIdFromRelation;
     }
 
-    // Fallback: check for the FK column value (e.g., "carrierId")
-    const fkColumnValue = recordData?.[`${parentFieldName}Id`] as
-      | string
-      | null
-      | undefined;
+    const parentRecordIdFromJoinColumn = record[
+      computeRelationGqlFieldJoinColumnName({
+        name: junctionBridge.parentFieldName,
+      })
+    ] as unknown;
 
-    if (isDefined(fkColumnValue) && typeof fkColumnValue === 'string') {
-      return fkColumnValue;
-    }
+    return isNonEmptyString(parentRecordIdFromJoinColumn)
+      ? parentRecordIdFromJoinColumn
+      : undefined;
+  }, [junctionBridge, record]);
 
-    return undefined;
-  }, [bridge, recordData]);
+  const junctionRecordsFilter = useMemo(
+    () =>
+      isDefined(junctionBridge)
+        ? { [junctionBridge.sourceJoinColumnName]: { eq: parentRecordId } }
+        : undefined,
+    [junctionBridge, parentRecordId],
+  );
 
-  const junctionFilter: RecordGqlOperationFilter | undefined = isDefined(bridge)
-    ? isDefined(parentId)
-      ? { [bridge.sourceJoinColumnName]: { eq: parentId } }
-      : undefined
-    : undefined;
+  const junctionRecordGqlFields = useMemo<RecordGqlFields>(
+    () =>
+      isDefined(junctionBridge)
+        ? { id: true, [junctionBridge.targetJoinColumnName]: true }
+        : { id: true },
+    [junctionBridge],
+  );
 
-  // When bridge is null, skip is true so the query won't execute.
-  // We still need a valid objectNameSingular because useFindManyRecords
-  // unconditionally calls useObjectMetadataItem (React hooks can't be conditional),
-  // which throws on empty string. Use 'person' as a safe placeholder.
-  const { records: junctionRecords } = useFindManyRecords({
-    objectNameSingular: bridge?.junctionObjectNameSingular ?? 'person',
-    filter: junctionFilter,
-    skip: !isDefined(bridge) || !isDefined(parentId),
+  // useFindAllRecordPages needs a known object even when skipped
+  const { records: junctionRecords, loading } = useFindAllRecordPages({
+    objectNameSingular:
+      junctionBridge?.junctionObjectNameSingular ??
+      objectMetadataItem.nameSingular,
+    filter: junctionRecordsFilter,
+    recordGqlFields: junctionRecordGqlFields,
+    skip: !isDefined(junctionBridge) || !isDefined(parentRecordId),
   });
 
   return useMemo(() => {
-    if (!isDefined(bridge) || !isDefined(parentId)) {
+    if (!isDefined(junctionBridge) || !isDefined(parentRecordId)) {
       return undefined;
     }
 
-    const targetIds = junctionRecords
-      .map(
-        (record) => record[bridge.targetJoinColumnName] as string | undefined,
-      )
-      .filter((id): id is string => isDefined(id));
-
-    if (targetIds.length === 0) {
-      // Use a non-existent UUID to match zero records. The backend rejects
-      // empty arrays in `in` filters, so we pass a sentinel value instead.
-      return {
-        id: { eq: '00000000-0000-0000-0000-000000000000' },
-      } as ObjectRecordFilterInput;
+    if (loading) {
+      return buildIdAllowlistFilter([]);
     }
 
-    return { id: { in: targetIds } } as ObjectRecordFilterInput;
-  }, [bridge, parentId, junctionRecords]);
+    return buildIdAllowlistFilter(
+      junctionRecords
+        .map(
+          (junctionRecord) =>
+            junctionRecord[junctionBridge.targetJoinColumnName],
+        )
+        .filter(isNonEmptyString),
+    );
+  }, [junctionBridge, junctionRecords, loading, parentRecordId]);
+};
+
+// Index views (table, board, calendar) store only their visible columns, so a
+// row may lack the parent: it is then fetched, and nothing is offered until it
+// arrives or if the fetch fails
+export const useJunctionBridgeFilter = ({
+  recordId,
+  ...junctionBridgeFilterParams
+}: Omit<UseJunctionBridgeFilterForRecordParams, 'record'> & {
+  recordId: string;
+}): RecordGqlOperationFilter | undefined => {
+  const { objectMetadataItem, fieldMetadataItem, objectMetadataItems } =
+    junctionBridgeFilterParams;
+
+  const recordStore = useAtomFamilyStateValue(recordStoreFamilyState, recordId);
+
+  const parentFieldName = useMemo(
+    () =>
+      detectJunctionBridge({
+        objectMetadataItem,
+        fieldMetadataItem,
+        objectMetadataItems,
+      })?.parentFieldName,
+    [objectMetadataItem, fieldMetadataItem, objectMetadataItems],
+  );
+
+  const parentJoinColumnName = isDefined(parentFieldName)
+    ? computeRelationGqlFieldJoinColumnName({ name: parentFieldName })
+    : undefined;
+
+  // A loaded empty relation is null; undefined means the column was not loaded
+  const isParentMissingFromStore =
+    isDefined(recordStore) &&
+    isDefined(parentFieldName) &&
+    isDefined(parentJoinColumnName) &&
+    isUndefined(recordStore[parentFieldName]) &&
+    isUndefined(recordStore[parentJoinColumnName]);
+
+  const parentRecordGqlFields = useMemo<RecordGqlFields>(
+    () =>
+      isDefined(parentJoinColumnName)
+        ? { id: true, [parentJoinColumnName]: true }
+        : { id: true },
+    [parentJoinColumnName],
+  );
+
+  const {
+    record: recordWithParent,
+    loading: recordWithParentLoading,
+    error: recordWithParentError,
+  } = useFindOneRecord({
+    objectNameSingular: objectMetadataItem.nameSingular,
+    objectRecordId: recordId,
+    recordGqlFields: parentRecordGqlFields,
+    skip: !isParentMissingFromStore,
+  });
+
+  const junctionBridgeFilter = useJunctionBridgeFilterForRecord({
+    ...junctionBridgeFilterParams,
+    record: isParentMissingFromStore ? recordWithParent : recordStore,
+  });
+
+  const isParentUnresolved =
+    isParentMissingFromStore &&
+    (recordWithParentLoading || isDefined(recordWithParentError));
+
+  return useMemo(
+    () =>
+      isParentUnresolved ? buildIdAllowlistFilter([]) : junctionBridgeFilter,
+    [isParentUnresolved, junctionBridgeFilter],
+  );
 };

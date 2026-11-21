@@ -59,7 +59,6 @@ describe('Generate Column Definitions', () => {
         isArray: false,
         isNullable: true,
         isPrimary: false,
-        isUnique: false,
         default: 'NULL',
       });
     });
@@ -104,7 +103,6 @@ describe('Generate Column Definitions', () => {
         isArray: true,
         isNullable: true,
         isPrimary: false,
-        isUnique: false,
         default: 'NULL',
       });
     });
@@ -126,7 +124,6 @@ describe('Generate Column Definitions', () => {
         workspaceId,
       });
 
-      // Relations without join columns must return empty array
       expect(columns).toStrictEqual([]);
     });
 
@@ -157,7 +154,6 @@ describe('Generate Column Definitions', () => {
         type: 'uuid',
         isNullable: true,
         isPrimary: false,
-        isUnique: false,
         default: null,
         isArray: false,
       });
@@ -195,11 +191,9 @@ describe('Generate Column Definitions', () => {
         'homeAddressAddressLng',
       ]);
 
-      // All composite columns must inherit parent nullable constraint
       columns.forEach((column) => {
         expect(column.isNullable).toBe(true);
         expect(column.isPrimary).toBe(false);
-        expect(column.isUnique).toBe(false);
         expect(column.default).toBe('NULL');
       });
     });
@@ -233,7 +227,6 @@ describe('Generate Column Definitions', () => {
         type: 'numeric',
         isNullable: true,
         isPrimary: false,
-        isUnique: false,
         default: "'100000000'::numeric",
       });
 
@@ -242,7 +235,6 @@ describe('Generate Column Definitions', () => {
         type: 'text',
         isNullable: true,
         isPrimary: false,
-        isUnique: false,
         default: "'USD'::text",
       });
     });
@@ -354,7 +346,6 @@ describe('Generate Column Definitions', () => {
           type: 'text',
           isNullable: true,
           isPrimary: false,
-          isUnique: false,
           default: 'NULL',
           isArray: false,
         },
@@ -382,7 +373,6 @@ describe('Generate Column Definitions', () => {
           type: 'boolean',
           isNullable: true,
           isPrimary: false,
-          isUnique: false,
           default: "'true'::boolean",
           isArray: false,
         },
@@ -411,7 +401,6 @@ describe('Generate Column Definitions', () => {
           type: 'text',
           isNullable: true,
           isPrimary: false,
-          isUnique: false,
           default: 'NULL',
           isArray: false,
         },
@@ -438,7 +427,6 @@ describe('Generate Column Definitions', () => {
           type: 'uuid',
           isNullable: true,
           isPrimary: false,
-          isUnique: false,
           default: 'NULL',
           isArray: false,
         },

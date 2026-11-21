@@ -24,7 +24,12 @@ import {
   useFloating,
 } from '@floating-ui/react';
 import { styled } from '@linaria/react';
-import { type MouseEvent, type ReactNode, useCallback } from 'react';
+import {
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useLayoutEffect,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { type Keys } from 'react-hotkeys-hook';
 import { isDefined } from 'twenty-shared/utils';
@@ -47,6 +52,7 @@ const StyledClickableComponent = styled.div<{
 export type DropdownProps = {
   clickableComponent?: ReactNode;
   clickableComponentWidth?: Width;
+  clickableComponentRole?: 'button' | 'presentation';
   dropdownComponents: ReactNode;
   hotkey?: {
     key: Keys;
@@ -54,8 +60,8 @@ export type DropdownProps = {
   globalHotkeysConfig?: Partial<GlobalHotkeysConfig>;
   dropdownId: string;
   dropdownPlacement?: Placement;
+  positionReference?: HTMLElement | null;
   dropdownOffset?: DropdownOffset;
-  dropdownStrategy?: 'fixed' | 'absolute';
   onClickOutside?: () => void;
   onClose?: () => void;
   onOpen?: () => void;
@@ -77,12 +83,13 @@ export const Dropdown = ({
   dropdownId,
   globalHotkeysConfig,
   dropdownPlacement = 'bottom-end',
-  dropdownStrategy = 'absolute',
+  positionReference,
   dropdownOffset,
   onClickOutside,
   onClose,
   onOpen,
   clickableComponentWidth = 'auto',
+  clickableComponentRole = 'button',
   excludedClickOutsideIds,
   isDropdownInModal = false,
   disableClickForClickableComponent = false,
@@ -169,12 +176,24 @@ export const Dropdown = ({
       }),
     ],
     whileElementsMounted: autoUpdate,
-    strategy: dropdownStrategy,
+    strategy: 'fixed',
   });
+
+  useLayoutEffect(() => {
+    if (!isDefined(positionReference)) {
+      return;
+    }
+    // Keep the original trigger for click-outside handling.
+    const trigger = refs.domReference.current;
+    refs.setPositionReference(positionReference);
+    return () => refs.setPositionReference(trigger);
+  }, [positionReference, refs]);
 
   const handleClickableComponentClick = useCallback(
     async (event: MouseEvent) => {
-      if (disableClickForClickableComponent) return;
+      if (disableClickForClickableComponent) {
+        return;
+      }
       event.stopPropagation();
       event.preventDefault();
 
@@ -191,6 +210,8 @@ export const Dropdown = ({
     ],
   );
 
+  const hasInteractiveClickableComponent = clickableComponentRole === 'button';
+
   return (
     <DropdownComponentInstanceContext.Provider
       value={{ instanceId: dropdownId }}
@@ -199,10 +220,16 @@ export const Dropdown = ({
         <StyledClickableComponent
           ref={refs.setReference}
           onClick={handleClickableComponentClick}
-          aria-controls={`${dropdownId}-options`}
-          aria-expanded={isDropdownOpen}
-          aria-haspopup={true}
-          role="button"
+          aria-controls={
+            hasInteractiveClickableComponent
+              ? `${dropdownId}-options`
+              : undefined
+          }
+          aria-expanded={
+            hasInteractiveClickableComponent ? isDropdownOpen : undefined
+          }
+          aria-haspopup={hasInteractiveClickableComponent || undefined}
+          role={clickableComponentRole}
           width={clickableComponentWidth}
         >
           {clickableComponent}

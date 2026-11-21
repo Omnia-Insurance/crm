@@ -1,21 +1,21 @@
+import { ListItemButton } from 'twenty-ui/components/navigation';
+import { SelectOptionIcon } from '@/ui/input/components/SelectOptionIcon';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { useObjectOptionsDropdown } from '@/object-record/object-options-dropdown/hooks/useObjectOptionsDropdown';
-import { recordIndexCalendarFieldMetadataIdState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdState';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { recordIndexCalendarFieldMetadataIdComponentState } from '@/object-record/record-index/states/recordIndexCalendarFieldMetadataIdComponentState';
+import { LegacyDropdownContent } from '@/ui/layout/dropdown/components/LegacyDropdownContent';
 import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
 import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { DropdownMenuSearchInput } from '@/ui/layout/dropdown/components/DropdownMenuSearchInput';
 import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
-import { useGetCurrentViewOnly } from '@/views/hooks/useGetCurrentViewOnly';
+import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
 import { useUpdateCurrentView } from '@/views/hooks/useUpdateCurrentView';
 import { useGetAvailableFieldsForCalendar } from '@/views/view-picker/hooks/useGetAvailableFieldsForCalendar';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
-import { isFieldMetadataDateKind } from 'twenty-shared/utils';
-import { IconChevronLeft, IconSettings, useIcons } from 'twenty-ui/display';
-import { MenuItem, MenuItemSelect } from 'twenty-ui/navigation';
+import { IconChevronLeft, IconSettings } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
 
 export const ObjectOptionsDropdownCalendarFieldsContent = () => {
   const { t } = useLingui();
@@ -25,20 +25,18 @@ export const ObjectOptionsDropdownCalendarFieldsContent = () => {
   const { objectMetadataItem, resetContent, closeDropdown } =
     useObjectOptionsDropdown();
 
-  const { currentView } = useGetCurrentViewOnly();
   const { updateCurrentView } = useUpdateCurrentView();
-  const { navigateToDateFieldSettings } = useGetAvailableFieldsForCalendar();
+  const { availableFieldsForCalendar, navigateToDateFieldSettings } =
+    useGetAvailableFieldsForCalendar();
 
-  const setRecordIndexCalendarFieldMetadataId = useSetAtomState(
-    recordIndexCalendarFieldMetadataIdState,
-  );
-  const availableFieldsForCalendar = objectMetadataItem.fields.filter((field) =>
-    isFieldMetadataDateKind(field.type),
-  );
+  const [
+    recordIndexCalendarFieldMetadataId,
+    setRecordIndexCalendarFieldMetadataId,
+  ] = useAtomComponentState(recordIndexCalendarFieldMetadataIdComponentState);
 
-  const calendarFieldMetadata = currentView?.calendarFieldMetadataId
+  const calendarFieldMetadata = recordIndexCalendarFieldMetadataId
     ? objectMetadataItem.fields.find(
-        (field) => field.id === currentView.calendarFieldMetadataId,
+        (field) => field.id === recordIndexCalendarFieldMetadataId,
       )
     : undefined;
 
@@ -50,18 +48,25 @@ export const ObjectOptionsDropdownCalendarFieldsContent = () => {
     fieldMetadataItem: FieldMetadataItem,
   ) => {
     setRecordIndexCalendarFieldMetadataId(fieldMetadataItem.id);
-    await updateCurrentView({
-      calendarFieldMetadataId: fieldMetadataItem.id,
-    });
+
+    try {
+      await updateCurrentView({
+        calendarFieldMetadataId: fieldMetadataItem.id,
+        calendarEndFieldMetadataId: null,
+      });
+    } catch (error) {
+      setRecordIndexCalendarFieldMetadataId(recordIndexCalendarFieldMetadataId);
+      throw error;
+    }
     closeDropdown();
   };
 
   return (
-    <DropdownContent>
+    <LegacyDropdownContent>
       <DropdownMenuHeader
         StartComponent={
           <DropdownMenuHeaderLeftComponent
-            onClick={() => resetContent()}
+            onClick={resetContent}
             Icon={IconChevronLeft}
           />
         }
@@ -77,26 +82,31 @@ export const ObjectOptionsDropdownCalendarFieldsContent = () => {
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer>
         {filteredCalendarFields.map((fieldMetadataItem) => (
-          <MenuItemSelect
+          <ListItemButton
             key={fieldMetadataItem.id}
-            selected={fieldMetadataItem.id === calendarFieldMetadata?.id}
             onClick={() => handleCalendarFieldChange(fieldMetadataItem)}
-            LeftIcon={getIcon(fieldMetadataItem.icon)}
-            text={fieldMetadataItem.label}
-          />
+            role="option"
+            aria-selected={fieldMetadataItem.id === calendarFieldMetadata?.id}
+            selected={fieldMetadataItem.id === calendarFieldMetadata?.id}
+            indicator="check"
+            startIcon={
+              <SelectOptionIcon Icon={getIcon(fieldMetadataItem.icon)} />
+            }
+          >
+            {fieldMetadataItem.label}
+          </ListItemButton>
         ))}
       </DropdownMenuItemsContainer>
       <DropdownMenuSeparator />
       <DropdownMenuItemsContainer scrollable={false}>
-        <MenuItem
-          LeftIcon={IconSettings}
-          text={t`Create date field`}
+        <ListItemButton
+          startIcon={<IconSettings />}
           onClick={() => {
             navigateToDateFieldSettings();
             closeDropdown();
           }}
-        />
+        >{t`Create date field`}</ListItemButton>
       </DropdownMenuItemsContainer>
-    </DropdownContent>
+    </LegacyDropdownContent>
   );
 };

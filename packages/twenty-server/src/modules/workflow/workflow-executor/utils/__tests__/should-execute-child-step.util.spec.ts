@@ -1,41 +1,22 @@
 import { StepStatus } from 'twenty-shared/workflow';
 
-import { shouldExecuteChildStep } from 'src/modules/workflow/workflow-executor/utils/should-execute-child-step.util';
 import {
-  type WorkflowAction,
-  WorkflowActionType,
-} from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+  createMockCodeStep,
+  createMockIfElseStep,
+} from 'src/modules/workflow/workflow-executor/utils/create-mock-workflow-steps.util';
+import { shouldExecuteChildStep } from 'src/modules/workflow/workflow-executor/utils/should-execute-child-step.util';
+
+const CHILD_STEP_ID = 'child-step-under-test';
 
 describe('shouldExecuteChildStep', () => {
   const parentSteps = [
-    {
-      id: 'parent-1',
-      type: WorkflowActionType.CODE,
-      settings: {
-        errorHandlingOptions: {
-          continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
-        },
-        outputSchema: {},
-      },
-      nextStepIds: [],
-    } as unknown as WorkflowAction,
-    {
-      id: 'parent-2',
-      type: WorkflowActionType.SEND_EMAIL,
-      settings: {
-        errorHandlingOptions: {
-          continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
-        },
-        outputSchema: {},
-      },
-      nextStepIds: [],
-    } as unknown as WorkflowAction,
+    createMockCodeStep('parent-1'),
+    createMockCodeStep('parent-2'),
   ];
 
   it('should return true when there are no parent steps', () => {
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: [],
       stepInfos: {},
     });
@@ -54,6 +35,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -72,6 +54,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -90,6 +73,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -99,42 +83,9 @@ describe('shouldExecuteChildStep', () => {
 
   it('should return true when one parent succeeded and others are mix of stopped and skipped', () => {
     const multiParentSteps = [
-      {
-        id: 'parent-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-      {
-        id: 'parent-2',
-        type: WorkflowActionType.SEND_EMAIL,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-      {
-        id: 'parent-3',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
+      createMockCodeStep('parent-1'),
+      createMockCodeStep('parent-2'),
+      createMockCodeStep('parent-3'),
     ];
 
     const stepInfos = {
@@ -150,6 +101,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: multiParentSteps,
       stepInfos,
     });
@@ -168,6 +120,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -186,6 +139,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -204,6 +158,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -222,6 +177,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -240,6 +196,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -258,6 +215,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -276,6 +234,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -294,6 +253,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -302,20 +262,7 @@ describe('shouldExecuteChildStep', () => {
   });
 
   it('should handle single parent step successfully', () => {
-    const singleParent = [
-      {
-        id: 'parent-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-    ];
+    const singleParent = [createMockCodeStep('parent-1')];
 
     const stepInfos = {
       'parent-1': {
@@ -324,6 +271,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: singleParent,
       stepInfos,
     });
@@ -332,20 +280,7 @@ describe('shouldExecuteChildStep', () => {
   });
 
   it('should return false when single parent has stopped without success', () => {
-    const singleParent = [
-      {
-        id: 'parent-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-    ];
+    const singleParent = [createMockCodeStep('parent-1')];
 
     const stepInfos = {
       'parent-1': {
@@ -354,6 +289,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: singleParent,
       stepInfos,
     });
@@ -369,6 +305,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -378,42 +315,9 @@ describe('shouldExecuteChildStep', () => {
 
   it('should work correctly with multiple successful parents', () => {
     const multiParentSteps = [
-      {
-        id: 'parent-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-      {
-        id: 'parent-2',
-        type: WorkflowActionType.SEND_EMAIL,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-      {
-        id: 'parent-3',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
+      createMockCodeStep('parent-1'),
+      createMockCodeStep('parent-2'),
+      createMockCodeStep('parent-3'),
     ];
 
     const stepInfos = {
@@ -423,6 +327,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: multiParentSteps,
       stepInfos,
     });
@@ -431,20 +336,10 @@ describe('shouldExecuteChildStep', () => {
   });
 
   it('should return false with large number of parents when none succeeded', () => {
-    const manyParentSteps = Array.from({ length: 25 }, (_, i) => ({
-      id: `parent-${i + 1}`,
-      type: WorkflowActionType.CODE,
-      settings: {
-        errorHandlingOptions: {
-          continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
-        },
-        outputSchema: {},
-      },
-      nextStepIds: [],
-    })) as unknown as WorkflowAction[];
+    const manyParentSteps = Array.from({ length: 25 }, (_, i) =>
+      createMockCodeStep(`parent-${i + 1}`),
+    );
 
-    // All parents stopped or skipped, none succeeded
     const stepInfos = Object.fromEntries(
       manyParentSteps.map((step, i) => [
         step.id,
@@ -453,6 +348,7 @@ describe('shouldExecuteChildStep', () => {
     );
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: manyParentSteps,
       stepInfos,
     });
@@ -471,6 +367,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps,
       stepInfos,
     });
@@ -479,20 +376,7 @@ describe('shouldExecuteChildStep', () => {
   });
 
   it('should return false when single parent is FAILED_SAFELY', () => {
-    const singleParent = [
-      {
-        id: 'parent-1',
-        type: WorkflowActionType.CODE,
-        settings: {
-          errorHandlingOptions: {
-            continueOnFailure: { value: false },
-            retryOnFailure: { value: false },
-          },
-          outputSchema: {},
-        },
-        nextStepIds: [],
-      } as unknown as WorkflowAction,
-    ];
+    const singleParent = [createMockCodeStep('parent-1')];
 
     const stepInfos = {
       'parent-1': {
@@ -501,6 +385,7 @@ describe('shouldExecuteChildStep', () => {
     };
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: singleParent,
       stepInfos,
     });
@@ -509,20 +394,10 @@ describe('shouldExecuteChildStep', () => {
   });
 
   it('should return false with large number of parents when not all completed', () => {
-    const manyParentSteps = Array.from({ length: 25 }, (_, i) => ({
-      id: `parent-${i + 1}`,
-      type: WorkflowActionType.CODE,
-      settings: {
-        errorHandlingOptions: {
-          continueOnFailure: { value: false },
-          retryOnFailure: { value: false },
-        },
-        outputSchema: {},
-      },
-      nextStepIds: [],
-    })) as unknown as WorkflowAction[];
+    const manyParentSteps = Array.from({ length: 25 }, (_, i) =>
+      createMockCodeStep(`parent-${i + 1}`),
+    );
 
-    // First parent succeeded, rest are still running
     const stepInfos = Object.fromEntries(
       manyParentSteps.map((step, i) => [
         step.id,
@@ -531,8 +406,103 @@ describe('shouldExecuteChildStep', () => {
     );
 
     const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
       parentSteps: manyParentSteps,
       stepInfos,
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it('should not execute a not-taken branch target also listed in the if/else nextStepIds', () => {
+    const ifElseParent = createMockIfElseStep(
+      'if-else',
+      [
+        { id: 'if-branch', filterGroupId: 'fg', nextStepIds: ['if-child'] },
+        { id: 'else-branch', nextStepIds: ['else-child'] },
+      ],
+      ['if-child', 'else-child'],
+    );
+
+    const stepInfos = {
+      'if-else': {
+        status: StepStatus.SUCCESS,
+        result: { matchingBranchId: 'if-branch' },
+      },
+    };
+
+    expect(
+      shouldExecuteChildStep({
+        childStepId: 'else-child',
+        parentSteps: [ifElseParent],
+        stepInfos,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldExecuteChildStep({
+        childStepId: 'if-child',
+        parentSteps: [ifElseParent],
+        stepInfos,
+      }),
+    ).toBe(true);
+  });
+
+  it('should return true when the only parent failed and continues on failure', () => {
+    const continuingParent = createMockCodeStep(
+      'continuing-parent',
+      [CHILD_STEP_ID],
+      {
+        continueOnFailure: true,
+      },
+    );
+
+    const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
+      parentSteps: [continuingParent],
+      stepInfos: {
+        'continuing-parent': {
+          status: StepStatus.FAILED_SAFELY,
+          error: 'some error',
+        },
+      },
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it('should return false when the only parent failed safely without continuing on failure', () => {
+    const parent = createMockCodeStep('plain-parent', [CHILD_STEP_ID]);
+
+    const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
+      parentSteps: [parent],
+      stepInfos: {
+        'plain-parent': {
+          status: StepStatus.FAILED_SAFELY,
+          error: 'some error',
+        },
+      },
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it('should return false when a continuing parent was failed safely by cascade', () => {
+    const continuingParent = createMockCodeStep(
+      'continuing-parent',
+      [CHILD_STEP_ID],
+      {
+        continueOnFailure: true,
+      },
+    );
+
+    const result = shouldExecuteChildStep({
+      childStepId: CHILD_STEP_ID,
+      parentSteps: [continuingParent],
+      stepInfos: {
+        'continuing-parent': { status: StepStatus.FAILED_SAFELY },
+      },
     });
 
     expect(result).toBe(false);

@@ -1,54 +1,187 @@
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { objectMetadataItemFamilySelector } from '@/object-metadata/states/objectMetadataItemFamilySelector';
+import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
+import { resolveOpenRecordIn } from '@/object-record/record-index/utils/resolveOpenRecordIn';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { type FrontComponentToolCall } from 'twenty-sdk/front-component';
+import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
+  buildFrontComponentStorageNamespace,
+  clearFrontComponentStorage,
+  deleteFrontComponentStorageItem,
+  setFrontComponentStorageItem,
   type FrontComponentExecutionContext,
   type FrontComponentHostCommunicationApi,
 } from 'twenty-front-component-renderer';
-import { type AppPath, type EnqueueSnackbarParams } from 'twenty-shared/types';
+import { type AppLocale } from 'twenty-shared/translations';
+import {
+  AppPath,
+  FieldMetadataType,
+  ObjectOpenRecordIn,
+  OpenRecordIn,
+  SidePanelPages,
+  type EnqueueSnackbarParams,
+  type RecordGqlOperationFilter,
+} from 'twenty-shared/types';
 
+import { serializePlainTextAsAdvancedTextEditorDocument } from '@/advanced-text-editor/utils/serializePlainTextAsAdvancedTextEditorDocument';
+import { useOpenAskAiPageWithPreprompt } from '@/ai/hooks/useOpenAskAiPageWithPreprompt';
 import { currentUserState } from '@/auth/states/currentUserState';
 import { useCommandMenuConfirmationModal } from '@/command-menu-item/confirmation-modal/hooks/useCommandMenuConfirmationModal';
 import { useUnmountCommand } from '@/command-menu-item/engine-command/hooks/useUnmountEngineCommand';
 import { commandMenuItemProgressFamilyState } from '@/command-menu-item/states/commandMenuItemProgressFamilyState';
-import { useRequestApplicationTokenRefresh } from '@/front-components/hooks/useRequestApplicationTokenRefresh';
+import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
+import { contextStoreRecordShowParentViewComponentState } from '@/context-store/states/contextStoreRecordShowParentViewComponentState';
+import { useDirectFileUpload } from '@/file/hooks/useDirectFileUpload';
+import { useFrontComponentApplicationTokenPair } from '@/front-components/hooks/useFrontComponentApplicationTokenPair';
+import { getMediaFileExtension } from '@/front-components/media-session/utils/getMediaFileExtension';
+import { isNonEmptyBlob } from '@/front-components/utils/isNonEmptyBlob';
+import { setRecordPageActiveTabId } from '@/page-layout/utils/setRecordPageActiveTabId';
 import { useNavigateSidePanel } from '@/side-panel/hooks/useNavigateSidePanel';
+import { useOpenComposeEmailInSidePanel } from '@/side-panel/hooks/useOpenComposeEmailInSidePanel';
+import { useOpenFrontComponentInSidePanel } from '@/side-panel/hooks/useOpenFrontComponentInSidePanel';
+import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
+import { useOpenRichTextInSidePanel } from '@/side-panel/hooks/useOpenRichTextInSidePanel';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { isPageLayoutSidePanelPage } from '@/side-panel/pages/page-layout/utils/isPageLayoutSidePanelPage';
+import { useOpenRoutedPageInSidePanel } from '@/side-panel/routing/hooks/useOpenRoutedPageInSidePanel';
 import { sidePanelSearchState } from '@/side-panel/states/sidePanelSearchState';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { openRecordInPreferenceState } from '@/workspace-member/states/openRecordInPreferenceState';
+import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
-import { assertUnreachable, isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
+import { useStore } from 'jotai';
+import { CustomError, getAppPath, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useToast } from 'twenty-ui/components/feedback';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useIsMobile } from 'twenty-ui/utilities';
+import { FileFolder } from '~/generated-metadata/graphql';
+import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
+
+const FRONT_COMPONENT_CLIPBOARD_MAX_LENGTH = 64 * 1024;
+const FRONT_COMPONENT_CLIPBOARD_RATE_LIMIT_MS = 1000;
+
+const FRONT_COMPONENT_UPLOAD_FILE_NAME_MAX_LENGTH = 200;
+
+const CONFIRM_BUTTON_ACCENT_TO_COLOR = {
+  blue: 'accent',
+  default: 'neutral',
+  danger: 'danger',
+} as const;
+
+type OpenSidePanelPageParams = Parameters<
+  FrontComponentHostCommunicationApi['openSidePanelPage']
+>[0];
+
+type AskAiOpenSidePanelPageParams = Extract<
+  OpenSidePanelPageParams,
+  { page: SidePanelPages.AskAI }
+>;
+
+// Runtime-only compatibility for front components built with older SDKs.
+type LegacyOpenSidePanelPageParams =
+  | {
+      page: SidePanelPages.RoutedPage;
+      path: string;
+      pageTitle?: string;
+      resetNavigationStack?: boolean;
+    }
+  | {
+      page: SidePanelPages.ViewRecord;
+      recordId: string;
+      objectNameSingular: string;
+      tab?: string;
+      resetNavigationStack?: boolean;
+    }
+  | (Omit<AskAiOpenSidePanelPageParams, 'page'> & {
+      page: SidePanelPages.Copilot;
+    })
+  | {
+      page: SidePanelPages.ViewRecords;
+      pageTitle?: string;
+      pageIcon?: string;
+      shouldResetSearchState?: boolean;
+    };
+
+const sanitizeUploadFileName = (fileName: string, mimeType: string): string => {
+  const withoutSeparators = fileName.replace(/[/\\\u0000-\u001f]/g, '').trim();
+
+  if (withoutSeparators === '') {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    return `upload-${timestamp}.${getMediaFileExtension(mimeType)}`;
+  }
+
+  return withoutSeparators.slice(
+    0,
+    FRONT_COMPONENT_UPLOAD_FILE_NAME_MAX_LENGTH,
+  );
+};
 
 export const useFrontComponentExecutionContext = ({
   frontComponentId,
+  applicationId,
   commandMenuItemId,
   selectedRecordIds,
+  selectedRecordsFilter,
+  objectNameSingular,
+  timelineActivityId,
+  toolCall,
+  colorScheme,
 }: {
   frontComponentId: string;
+  applicationId: string;
   commandMenuItemId?: string;
   selectedRecordIds?: string[];
+  selectedRecordsFilter?: RecordGqlOperationFilter | null;
+  objectNameSingular?: string;
+  timelineActivityId?: string;
+  toolCall?: FrontComponentToolCall;
+  colorScheme: 'light' | 'dark';
 }): {
   executionContext: FrontComponentExecutionContext;
   frontComponentHostCommunicationApi: FrontComponentHostCommunicationApi;
+  storageNamespace?: string;
 } => {
   const currentUser = useAtomStateValue(currentUserState);
   const navigateApp = useNavigateApp();
-  const { requestAccessTokenRefresh } = useRequestApplicationTokenRefresh({
-    frontComponentId,
-  });
+  const location = useLocation();
+  const store = useStore();
+  const { requestApplicationAccessTokenRefresh } =
+    useFrontComponentApplicationTokenPair();
   const { openConfirmationModal } = useCommandMenuConfirmationModal();
+  const { openAskAiPageWithPreprompt } = useOpenAskAiPageWithPreprompt();
   const { navigateSidePanel } = useNavigateSidePanel();
+  const { openRecordInSidePanel: openRecordInSidePanelInternal } =
+    useOpenRecordInSidePanel();
+  const { openRoutedPageInSidePanel } = useOpenRoutedPageInSidePanel();
+  const { openRichTextInSidePanel } = useOpenRichTextInSidePanel();
+  const { openComposeEmailInSidePanel } = useOpenComposeEmailInSidePanel();
+  const { openFrontComponentInSidePanel } = useOpenFrontComponentInSidePanel();
+  const isMobile = useIsMobile();
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const selectedObjectMetadataItem = useAtomFamilySelectorValue(
+    objectMetadataItemFamilySelector,
+    {
+      objectName: objectNameSingular ?? '',
+      objectNameType: 'singular',
+    },
+  );
   const setSidePanelSearch = useSetAtomState(sidePanelSearchState);
   const { getIcon } = useIcons();
   const unmountEngineCommand = useUnmountCommand();
-  const {
-    enqueueSuccessSnackBar,
-    enqueueErrorSnackBar,
-    enqueueInfoSnackBar,
-    enqueueWarningSnackBar,
-  } = useSnackBar();
+  const { enqueueToast } = useToast();
   const { closeSidePanelMenu } = useSidePanelMenu();
+  const { copyToClipboardWithoutSuccessToast } = useCopyToClipboard();
+  const { uploadFile: uploadFileToFilesField } = useDirectFileUpload();
+  const { i18n } = useLingui();
+  // oxlint-disable-next-line twenty/no-state-useref
+  const lastCopyToClipboardCallAtRef = useRef<number>(Number.NEGATIVE_INFINITY);
   const setCommandMenuItemProgress = useSetAtomFamilyState(
     commandMenuItemProgressFamilyState,
     commandMenuItemId ?? '',
@@ -60,6 +193,27 @@ export const useFrontComponentExecutionContext = ({
     queryParams,
     options,
   ) => {
+    if (to === AppPath.RecordShowPage) {
+      const targetObjectNameSingular = (
+        params as { objectNameSingular?: string | null } | undefined
+      )?.objectNameSingular;
+
+      const parentViewAtom =
+        contextStoreRecordShowParentViewComponentState.atomFamily({
+          instanceId: MAIN_CONTEXT_STORE_INSTANCE_ID,
+        });
+
+      const parentView = store.get(parentViewAtom);
+
+      if (
+        isDefined(parentView) &&
+        isDefined(targetObjectNameSingular) &&
+        parentView.parentViewObjectNameSingular !== targetObjectNameSingular
+      ) {
+        store.set(parentViewAtom, undefined);
+      }
+    }
+
     navigateApp(
       to as AppPath,
       params as Parameters<typeof navigateApp>[1],
@@ -69,26 +223,219 @@ export const useFrontComponentExecutionContext = ({
   };
 
   const openSidePanelPage: FrontComponentHostCommunicationApi['openSidePanelPage'] =
-    async ({ page, pageTitle, pageIcon, shouldResetSearchState }) => {
+    async (params: OpenSidePanelPageParams | LegacyOpenSidePanelPageParams) => {
+      if ('to' in params) {
+        if (params.to.includes(':') && !isDefined(params.params)) {
+          throw new CustomError(
+            doNotTranslate(`Missing params for side-panel route: ${params.to}`),
+            'FRONT_COMPONENT_SIDE_PANEL_ROUTE_PARAMS_REQUIRED',
+          );
+        }
+
+        const path = getAppPath(
+          params.to,
+          params.params as never,
+          params.queryParams,
+        );
+        const pathWithHash = isNonEmptyString(params.hash)
+          ? `${path}#${encodeURIComponent(params.hash)}`
+          : path;
+
+        const pageId = openRoutedPageInSidePanel({
+          path: pathWithHash,
+          pageTitle: params.pageTitle,
+          resetNavigationStack: params.resetNavigationStack,
+        });
+
+        if (!isDefined(pageId)) {
+          throw new CustomError(
+            doNotTranslate(`Unsupported side-panel route: ${pathWithHash}`),
+            'FRONT_COMPONENT_UNSUPPORTED_SIDE_PANEL_ROUTE',
+          );
+        }
+
+        return;
+      }
+
+      if (params.page === SidePanelPages.RoutedPage) {
+        const pageId = openRoutedPageInSidePanel({
+          path: params.path,
+          pageTitle: params.pageTitle,
+          resetNavigationStack: params.resetNavigationStack,
+        });
+
+        if (!isDefined(pageId)) {
+          throw new CustomError(
+            doNotTranslate(`Unsupported side-panel route: ${params.path}`),
+            'FRONT_COMPONENT_UNSUPPORTED_SIDE_PANEL_ROUTE',
+          );
+        }
+
+        return;
+      }
+
+      if (params.page === SidePanelPages.ViewRecords) {
+        throw new CustomError(
+          doNotTranslate(
+            'ViewRecords is no longer supported. Open AppPath.RecordIndexPage with typed params instead.',
+          ),
+          'FRONT_COMPONENT_VIEW_RECORDS_UNSUPPORTED',
+        );
+      }
+
+      if (params.page === SidePanelPages.Copilot) {
+        return openSidePanelPage({
+          ...params,
+          page: SidePanelPages.AskAI,
+        });
+      }
+
+      if (params.page === SidePanelPages.ViewRecord) {
+        const { recordId, objectNameSingular, tab, resetNavigationStack } =
+          params;
+
+        const objectMetadataItem = objectMetadataItems.find(
+          (item) => item.nameSingular === objectNameSingular,
+        );
+
+        const resolvedOpenRecordIn = resolveOpenRecordIn({
+          objectOpenRecordIn:
+            objectMetadataItem?.openRecordIn ?? ObjectOpenRecordIn.USER_CHOICE,
+          openRecordInPreference: store.get(openRecordInPreferenceState.atom),
+          canDisplaySidePanel: !isMobile,
+        });
+
+        if (resolvedOpenRecordIn === OpenRecordIn.RECORD_PAGE) {
+          if (isDefined(tab)) {
+            setRecordPageActiveTabId({
+              recordId,
+              objectNameSingular,
+              tabId: tab,
+              store,
+            });
+          }
+
+          await navigate(AppPath.RecordShowPage, {
+            objectNameSingular,
+            objectRecordId: recordId,
+          });
+
+          return;
+        }
+
+        openRecordInSidePanelInternal({
+          recordId,
+          objectNameSingular,
+          tab,
+          resetNavigationStack,
+        });
+
+        return;
+      }
+
+      if (params.page === SidePanelPages.EditRichText) {
+        openRichTextInSidePanel(
+          params.recordId,
+          params.objectNameSingular,
+          params.fieldName,
+        );
+
+        return;
+      }
+
+      if (params.page === SidePanelPages.ComposeEmail) {
+        openComposeEmailInSidePanel({
+          connectedAccountId: params.connectedAccountId,
+          threadId: params.threadId,
+          defaultTo: params.defaultTo,
+          defaultSubject: params.defaultSubject,
+          defaultInReplyTo: params.defaultInReplyTo,
+          pageTitle: params.pageTitle,
+          pageIcon: isDefined(params.pageIcon)
+            ? getIcon(params.pageIcon)
+            : undefined,
+        });
+
+        return;
+      }
+
+      if (params.page === SidePanelPages.ViewFrontComponent) {
+        const recordContext =
+          isDefined(params.objectNameSingular) ||
+          isDefined(params.selectedRecordIds) ||
+          isDefined(params.recordId)
+            ? {
+                objectNameSingular: params.objectNameSingular,
+                selectedRecordIds:
+                  params.selectedRecordIds ??
+                  (isDefined(params.recordId) ? [params.recordId] : undefined),
+              }
+            : undefined;
+
+        openFrontComponentInSidePanel({
+          frontComponentId: params.frontComponentId,
+          pageTitle: params.pageTitle,
+          pageIcon: getIcon(params.pageIcon),
+          resetNavigationStack: params.resetNavigationStack,
+          recordContext,
+        });
+
+        return;
+      }
+
+      if (
+        params.page === SidePanelPages.AskAI &&
+        isDefined(params.preprompt) &&
+        isNonEmptyString(params.preprompt.text)
+      ) {
+        openAskAiPageWithPreprompt({
+          serializedDocument: serializePlainTextAsAdvancedTextEditorDocument(
+            params.preprompt.text,
+          ),
+          mode: params.preprompt.mode,
+          model: params.preprompt.model,
+        });
+
+        if (params.shouldResetSearchState === true) {
+          setSidePanelSearch('');
+        }
+
+        return;
+      }
+
+      if (isPageLayoutSidePanelPage(params.page)) {
+        throw new CustomError(
+          doNotTranslate(
+            `${params.page} edits the page layout it was opened from and cannot be opened by a front component`,
+          ),
+          'FRONT_COMPONENT_PAGE_LAYOUT_SIDE_PANEL_PAGE_UNSUPPORTED',
+        );
+      }
+
       navigateSidePanel({
-        page,
-        pageTitle,
-        pageIcon: getIcon(pageIcon),
+        page: params.page,
+        pageTitle: params.pageTitle,
+        pageIcon: getIcon(params.pageIcon),
       });
 
-      if (shouldResetSearchState === true) {
+      if (params.shouldResetSearchState === true) {
         setSidePanelSearch('');
       }
     };
 
   const openCommandConfirmationModal: FrontComponentHostCommunicationApi['openCommandConfirmationModal'] =
-    async ({ title, subtitle, confirmButtonText, confirmButtonAccent }) => {
+    async ({
+      title,
+      subtitle,
+      confirmButtonText,
+      confirmButtonAccent = 'danger',
+    }) => {
       openConfirmationModal({
         caller: { type: 'frontComponent', frontComponentId },
         title,
         subtitle,
         confirmButtonText,
-        confirmButtonAccent,
+        confirmButtonColor: CONFIRM_BUTTON_ACCENT_TO_COLOR[confirmButtonAccent],
       });
     };
 
@@ -100,28 +447,13 @@ export const useFrontComponentExecutionContext = ({
       detailedMessage,
       dedupeKey,
     }: EnqueueSnackbarParams) => {
-      const snackBarOptions = {
+      enqueueToast({
+        children: message,
+        status: variant,
         duration,
-        detailedMessage,
+        description: detailedMessage,
         dedupeKey,
-      };
-
-      switch (variant) {
-        case 'error':
-          enqueueErrorSnackBar({ message, options: snackBarOptions });
-          break;
-        case 'info':
-          enqueueInfoSnackBar({ message, options: snackBarOptions });
-          break;
-        case 'warning':
-          enqueueWarningSnackBar({ message, options: snackBarOptions });
-          break;
-        case 'success':
-          enqueueSuccessSnackBar({ message, options: snackBarOptions });
-          break;
-        default:
-          assertUnreachable(variant);
-      }
+      });
     };
 
   const executionContext: FrontComponentExecutionContext = {
@@ -129,6 +461,25 @@ export const useFrontComponentExecutionContext = ({
     userId: currentUser?.id ?? null,
     recordId: selectedRecordIds?.length === 1 ? selectedRecordIds[0] : null,
     selectedRecordIds: selectedRecordIds ?? [],
+    selectedRecordsFilter: selectedRecordsFilter ?? null,
+    selectedObjectMetadata: isDefined(selectedObjectMetadataItem)
+      ? {
+          id: selectedObjectMetadataItem.id,
+          nameSingular: selectedObjectMetadataItem.nameSingular,
+          namePlural: selectedObjectMetadataItem.namePlural,
+        }
+      : null,
+    timelineActivityId: timelineActivityId ?? null,
+    toolCall,
+    colorScheme,
+    // The host is always configured with APP_LOCALES, so this is a valid AppLocale.
+    locale: i18n.locale as AppLocale,
+    location: {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+      origin: window.location.origin,
+    },
   };
 
   const unmountFrontComponent: FrontComponentHostCommunicationApi['unmountFrontComponent'] =
@@ -152,6 +503,132 @@ export const useFrontComponentExecutionContext = ({
       setCommandMenuItemProgress(Math.max(0, Math.min(100, progress)));
     };
 
+  const copyToClipboard: FrontComponentHostCommunicationApi['copyToClipboard'] =
+    async (text) => {
+      if (!isNonEmptyString(text)) {
+        return;
+      }
+
+      if (text.length > FRONT_COMPONENT_CLIPBOARD_MAX_LENGTH) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        now - lastCopyToClipboardCallAtRef.current <
+        FRONT_COMPONENT_CLIPBOARD_RATE_LIMIT_MS
+      ) {
+        return;
+      }
+      lastCopyToClipboardCallAtRef.current = now;
+
+      // Front components show their own toast; a host one would stack on top.
+      await copyToClipboardWithoutSuccessToast(text);
+    };
+
+  const hostUploadFile: FrontComponentHostCommunicationApi['uploadFile'] =
+    async (file, params) => {
+      // Sandboxed input; fieldMetadataId is mandatory since a file uploaded outside a FILES field could never be attached and would leak.
+      if (
+        !isNonEmptyBlob(file) ||
+        !isDefined(params) ||
+        !isNonEmptyString(params.fieldMetadataId)
+      ) {
+        return { status: 'failed', reason: 'invalid-params' };
+      }
+
+      // A non-FILES target would fail at attach time, stranding the uploaded file.
+      const { fieldMetadataItem } = getFieldMetadataItemById({
+        fieldMetadataId: params.fieldMetadataId,
+        objectMetadataItems,
+      });
+
+      if (fieldMetadataItem?.type !== FieldMetadataType.FILES) {
+        return { status: 'failed', reason: 'invalid-params' };
+      }
+
+      const fileName = sanitizeUploadFileName(
+        isNonEmptyString(params.fileName) ? params.fileName : '',
+        file.type,
+      );
+
+      try {
+        const uploadedFile = await uploadFileToFilesField(
+          new File([file], fileName, { type: file.type }),
+          {
+            fileFolder: FileFolder.FilesField,
+            fieldMetadataId: params.fieldMetadataId,
+          },
+        );
+
+        return {
+          status: 'uploaded',
+          file: {
+            fileId: uploadedFile.id,
+            path: uploadedFile.path,
+            url: uploadedFile.url,
+            size: uploadedFile.size,
+            mimeType: file.type.split(';')[0],
+          },
+        };
+      } catch {
+        return { status: 'failed', reason: 'upload-failed' };
+      }
+    };
+
+  const currentUserId = currentUser?.id;
+
+  const storageNamespace = isDefined(currentUserId)
+    ? buildFrontComponentStorageNamespace({
+        applicationId,
+        userId: currentUserId,
+      })
+    : undefined;
+
+  const requireStorageNamespace = (): string => {
+    if (!isDefined(storageNamespace)) {
+      throw new CustomError(
+        doNotTranslate('Device storage requires a signed-in user'),
+        'FRONT_COMPONENT_STORAGE_REQUIRES_SIGNED_IN_USER',
+      );
+    }
+
+    return storageNamespace;
+  };
+
+  const storageSet: FrontComponentHostCommunicationApi['storageSet'] = async ({
+    storageType,
+    key,
+    serializedValue,
+  }) => {
+    setFrontComponentStorageItem({
+      namespace: requireStorageNamespace(),
+      storageType,
+      key,
+      serializedValue,
+    });
+  };
+
+  const storageDelete: FrontComponentHostCommunicationApi['storageDelete'] =
+    async ({ storageType, key }) => {
+      deleteFrontComponentStorageItem({
+        namespace: requireStorageNamespace(),
+        storageType,
+        key,
+      });
+    };
+
+  const storageClear: FrontComponentHostCommunicationApi['storageClear'] =
+    async ({ storageType }) => {
+      clearFrontComponentStorage({
+        namespace: requireStorageNamespace(),
+        storageType,
+      });
+    };
+
+  const requestAccessTokenRefresh: FrontComponentHostCommunicationApi['requestAccessTokenRefresh'] =
+    () => requestApplicationAccessTokenRefresh(applicationId);
+
   const frontComponentHostCommunicationApi: FrontComponentHostCommunicationApi =
     {
       navigate,
@@ -162,10 +639,16 @@ export const useFrontComponentExecutionContext = ({
       unmountFrontComponent,
       closeSidePanel,
       updateProgress,
+      copyToClipboard,
+      uploadFile: hostUploadFile,
+      storageSet,
+      storageDelete,
+      storageClear,
     };
 
   return {
     executionContext,
     frontComponentHostCommunicationApi,
+    storageNamespace,
   };
 };

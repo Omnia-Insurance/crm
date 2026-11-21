@@ -1,5 +1,5 @@
+import { metadataStoreStorage } from '@/metadata-store/storage/metadataStoreStorage';
 import { createAtomFamilyState } from '@/ui/utilities/state/jotai/utils/createAtomFamilyState';
-import { createCompressedLocalStorage } from '@/ui/utilities/state/jotai/utils/createCompressedLocalStorage';
 
 export type MetadataEntityStoreStatus =
   | 'empty'
@@ -31,9 +31,8 @@ export const ALL_METADATA_ENTITY_KEYS = [
   'skills',
   'rowLevelPermissionPredicates',
   'rowLevelPermissionPredicateGroups',
-  // TODO: clarify what really is metadata  (syncable entity?)
-  // vs 'core engine entity' or 'broadcastable entity'
-  'agentChatThreads',
+  // TODO: clarify what is metadata (syncable entity?) vs core engine or broadcastable entity
+  'applications',
 ] as const;
 
 export type MetadataEntityKey = (typeof ALL_METADATA_ENTITY_KEYS)[number];
@@ -52,18 +51,14 @@ const METADATA_STORE_ITEM_INITIAL_VALUE: MetadataStoreItem = {
   status: 'empty',
 };
 
-// OMNIA-CUSTOM: Use compressed localStorage persistence. Our workspace metadata
-// (952 fields, 593 view fields, 23 entity types × current+draft) exceeds
-// Safari's 5MB localStorage quota when stored as raw JSON. lz-string UTF-16
-// compression reduces the payload ~80-90%, keeping it within limits while
-// preserving the upstream's synchronous stale-while-revalidate loading.
+export const METADATA_STORE_KEY_PREFIX = 'metadataStoreState__';
+
 export const metadataStoreState = createAtomFamilyState<
   MetadataStoreItem,
   MetadataEntityKey
 >({
   key: 'metadataStoreState',
   defaultValue: METADATA_STORE_ITEM_INITIAL_VALUE,
-  useLocalStorage: true,
+  storage: metadataStoreStorage,
   localStorageOptions: { getOnInit: true },
-  customStringStorage: createCompressedLocalStorage(),
 });

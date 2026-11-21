@@ -7,9 +7,7 @@ describe('applyFieldTransform', () => {
 
   describe('uppercase', () => {
     it('should uppercase a string', () => {
-      expect(applyFieldTransform('hello', { type: 'uppercase' })).toBe(
-        'HELLO',
-      );
+      expect(applyFieldTransform('hello', { type: 'uppercase' })).toBe('HELLO');
     });
 
     it('should return non-string values unchanged', () => {
@@ -19,17 +17,13 @@ describe('applyFieldTransform', () => {
 
   describe('lowercase', () => {
     it('should lowercase a string', () => {
-      expect(applyFieldTransform('HELLO', { type: 'lowercase' })).toBe(
-        'hello',
-      );
+      expect(applyFieldTransform('HELLO', { type: 'lowercase' })).toBe('hello');
     });
   });
 
   describe('trim', () => {
     it('should trim whitespace', () => {
-      expect(applyFieldTransform('  hello  ', { type: 'trim' })).toBe(
-        'hello',
-      );
+      expect(applyFieldTransform('  hello  ', { type: 'trim' })).toBe('hello');
     });
   });
 
@@ -56,7 +50,7 @@ describe('applyFieldTransform', () => {
   describe('numberScale', () => {
     it('should multiply a number value', () => {
       expect(
-        applyFieldTransform(1.50, { type: 'numberScale', multiplier: 1000000 }),
+        applyFieldTransform(1.5, { type: 'numberScale', multiplier: 1000000 }),
       ).toBe(1500000);
     });
 

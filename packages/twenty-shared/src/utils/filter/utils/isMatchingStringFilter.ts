@@ -1,5 +1,5 @@
 import { type StringFilter } from '@/types';
-import escapeRegExp from 'lodash.escaperegexp';
+import { convertLikePatternToRegexOrThrow } from '@/utils/filter/utils/convertLikePatternToRegexOrThrow';
 
 export const isMatchingStringFilter = ({
   stringFilter,
@@ -15,17 +15,30 @@ export const isMatchingStringFilter = ({
     case stringFilter.neq !== undefined: {
       return value !== stringFilter.neq;
     }
+    case stringFilter.gt !== undefined: {
+      return value > stringFilter.gt;
+    }
+    case stringFilter.gte !== undefined: {
+      return value >= stringFilter.gte;
+    }
+    case stringFilter.lt !== undefined: {
+      return value < stringFilter.lt;
+    }
+    case stringFilter.lte !== undefined: {
+      return value <= stringFilter.lte;
+    }
     case stringFilter.like !== undefined: {
-      const escapedPattern = escapeRegExp(stringFilter.like);
-      const regexPattern = escapedPattern.replace(/%/g, '.*');
-      const regexCaseSensitive = new RegExp(`^${regexPattern}$`);
+      const regexCaseSensitive = convertLikePatternToRegexOrThrow({
+        pattern: stringFilter.like,
+      });
 
       return regexCaseSensitive.test(value);
     }
     case stringFilter.ilike !== undefined: {
-      const escapedPattern = escapeRegExp(stringFilter.ilike);
-      const regexPattern = escapedPattern.replace(/%/g, '.*');
-      const regexCaseInsensitive = new RegExp(`^${regexPattern}$`, 'i');
+      const regexCaseInsensitive = convertLikePatternToRegexOrThrow({
+        pattern: stringFilter.ilike,
+        isCaseInsensitive: true,
+      });
 
       return regexCaseInsensitive.test(value);
     }

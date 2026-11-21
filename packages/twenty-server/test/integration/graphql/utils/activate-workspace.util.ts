@@ -2,19 +2,17 @@ import gql from 'graphql-tag';
 import { type CommonResponseBody } from 'test/integration/metadata/types/common-response-body.type';
 import { warnIfErrorButNotExpectedToFail } from 'test/integration/metadata/utils/warn-if-error-but-not-expected-to-fail.util';
 import { warnIfNoErrorButExpectedToFail } from 'test/integration/metadata/utils/warn-if-no-error-but-expected-to-fail.util';
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 
 type ActivateWorkspaceUtilArgs = {
   accessToken: string;
-  displayName: string;
   expectToFail?: boolean;
 };
 
 export const activateWorkspace = async ({
   accessToken,
-  displayName,
   expectToFail,
 }: ActivateWorkspaceUtilArgs): CommonResponseBody<{
   activateWorkspace: WorkspaceEntity;
@@ -32,13 +30,11 @@ export const activateWorkspace = async ({
     }
   `;
 
-  const response = await makeMetadataAPIRequest(
+  const response = await makeMetadataApiRequest(
     {
       query: mutation,
       variables: {
-        input: {
-          displayName,
-        },
+        input: {},
       },
     },
     accessToken,

@@ -1,19 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
+import { msg } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 import { Request } from 'express';
 import { match } from 'path-to-regexp';
 import { assertIsDefinedOrThrow, isDefined } from 'twenty-shared/utils';
-import { IsNull, Not, Repository } from 'typeorm';
+import { IsNull, Not } from 'typeorm';
 import { HTTPMethod } from 'twenty-shared/types';
+import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
+import { AuthException } from 'src/engine/core-modules/auth/auth.exception';
+import { isUsageRefusedError } from 'src/engine/core-modules/billing/utils/is-usage-refused-error.util';
 import { AccessTokenService } from 'src/engine/core-modules/auth/token/services/access-token.service';
+import { type RawAuthContext } from 'src/engine/core-modules/auth/types/raw-auth-context.type';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import {
   RouteTriggerException,
   RouteTriggerExceptionCode,
 } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/exceptions/route-trigger.exception';
-import { buildLogicFunctionEvent } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/build-logic-function-event.util';
+import { LogicFunctionTriggerService } from 'src/engine/core-modules/logic-function/logic-function-trigger/logic-function-trigger.service';
+import { type RouteTriggerResponse } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/route-trigger-response.util';
+import { sanitizeRouteTriggerPath } from 'src/engine/core-modules/logic-function/logic-function-trigger/triggers/route/utils/sanitize-route-trigger-path.util';
 import {
   LogicFunctionException,
   LogicFunctionExceptionCode,
@@ -22,9 +31,22 @@ import { LogicFunctionEntity } from 'src/engine/metadata-modules/logic-function/
 import {
   LogicFunctionExecutionException,
   LogicFunctionExecutionExceptionCode,
-  LogicFunctionExecutorService,
 } from 'src/engine/core-modules/logic-function/logic-function-executor/logic-function-executor.service';
 import { CustomException } from 'src/utils/custom-exception';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+
+type RouteTriggerWorkspace = Pick<
+  WorkspaceEntity,
+  'activationStatus' | 'id' | 'subdomain'
+>;
+
+type RouteTriggerRequestContext = {
+  workspace: RouteTriggerWorkspace;
+  applicationId: string | null;
+  isPublicDomain: boolean;
+  authenticationContext: RawAuthContext | undefined;
+};
 
 @Injectable()
 export class RouteTriggerService {
@@ -32,26 +54,58 @@ export class RouteTriggerService {
 
   constructor(
     private readonly accessTokenService: AccessTokenService,
-    private readonly logicFunctionExecutorService: LogicFunctionExecutorService,
+    private readonly logicFunctionTriggerService: LogicFunctionTriggerService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
-    @InjectRepository(LogicFunctionEntity)
-    private readonly logicFunctionRepository: Repository<LogicFunctionEntity>,
+    private readonly twentyConfigService: TwentyConfigService,
+    @InjectWorkspaceScopedRepository(LogicFunctionEntity)
+    private readonly logicFunctionRepository: WorkspaceScopedRepository<LogicFunctionEntity>,
   ) {}
 
-  private async getLogicFunctionWithPathParamsOrFail({
+  private async resolveAuthenticationContextForWorkspaceFallback({
     request,
-    httpMethod,
+    workspaceFromHost,
   }: {
     request: Request;
-    httpMethod: HTTPMethod;
-  }): Promise<{
-    logicFunction: LogicFunctionEntity;
-    pathParams: Partial<Record<string, string | string[]>>;
-  }> {
+    workspaceFromHost: RouteTriggerWorkspace | undefined;
+  }): Promise<RawAuthContext | undefined> {
+    if (
+      isDefined(workspaceFromHost) ||
+      !isNonEmptyString(request.headers.authorization)
+    ) {
+      return undefined;
+    }
+
+    try {
+      return await this.accessTokenService.validateTokenByRequest(request);
+    } catch (error) {
+      if (error instanceof AuthException) {
+        return undefined;
+      }
+
+      throw error;
+    }
+  }
+
+  private async resolveRouteTriggerRequestContextOrFail(
+    request: Request,
+  ): Promise<RouteTriggerRequestContext> {
     const host = `${request.protocol}://${request.get('host')}`;
 
-    const { workspace, publicDomain } =
-      await this.workspaceDomainsService.resolveWorkspaceAndPublicDomain(host);
+    const {
+      workspace: workspaceFromHost,
+      publicDomain,
+      isPublicDomain,
+    } = await this.workspaceDomainsService.resolveWorkspaceAndPublicDomain(
+      host,
+    );
+
+    const authenticationContext =
+      await this.resolveAuthenticationContextForWorkspaceFallback({
+        request,
+        workspaceFromHost,
+      });
+
+    const workspace = workspaceFromHost ?? authenticationContext?.workspace;
 
     assertIsDefinedOrThrow(
       workspace,
@@ -61,20 +115,33 @@ export class RouteTriggerService {
       ),
     );
 
-    // App-scoped public domain → restrict matches to that app's logic functions.
-    const applicationId = publicDomain?.applicationId ?? null;
+    if (workspace.activationStatus === WorkspaceActivationStatus.SUSPENDED) {
+      throw new RouteTriggerException(
+        'Workspace is suspended',
+        RouteTriggerExceptionCode.WORKSPACE_SUSPENDED,
+      );
+    }
 
-    const logicFunctionsWithHttpRouteTrigger =
-      await this.logicFunctionRepository.find({
-        where: {
-          workspaceId: workspace.id,
-          httpRouteTriggerSettings: Not(IsNull()),
-          ...(isDefined(applicationId) ? { applicationId } : {}),
-        },
-      });
+    return {
+      workspace,
+      applicationId: publicDomain?.applicationId ?? null,
+      isPublicDomain,
+      authenticationContext,
+    };
+  }
 
-    const requestPath = request.path.replace(/^\/s\//, '/');
-
+  private findLogicFunctionWithPathParamsOrFail({
+    httpMethod,
+    logicFunctionsWithHttpRouteTrigger,
+    requestPath,
+  }: {
+    httpMethod: HTTPMethod;
+    logicFunctionsWithHttpRouteTrigger: LogicFunctionEntity[];
+    requestPath: string;
+  }): {
+    logicFunction: LogicFunctionEntity;
+    pathParams: Partial<Record<string, string | string[]>>;
+  } {
     for (const logicFunction of logicFunctionsWithHttpRouteTrigger) {
       const httpRouteSettings = logicFunction.httpRouteTriggerSettings;
 
@@ -104,31 +171,56 @@ export class RouteTriggerService {
     );
   }
 
-  private async validateWorkspaceFromRequest({
-    request,
-    workspaceId,
+  private assertLegacyRouteIsServableOrThrow({
+    logicFunction,
+    workspace,
+    isPublicDomain,
   }: {
-    request: Request;
-    workspaceId: string;
+    logicFunction: LogicFunctionEntity;
+    workspace: RouteTriggerWorkspace;
+    isPublicDomain: boolean;
   }) {
-    const authContext =
-      await this.accessTokenService.validateTokenByRequest(request);
-
-    if (!isDefined(authContext.workspace)) {
-      throw new RouteTriggerException(
-        'Workspace not found',
-        RouteTriggerExceptionCode.WORKSPACE_NOT_FOUND,
-      );
+    if (isPublicDomain) {
+      return;
     }
 
-    if (authContext.workspace.id !== workspaceId) {
-      throw new RouteTriggerException(
-        'You are not authorized',
-        RouteTriggerExceptionCode.FORBIDDEN_EXCEPTION,
-      );
+    const cutoffIso = this.twentyConfigService.get(
+      'LOGIC_FUNCTION_LEGACY_ROUTE_CUTOFF',
+    );
+
+    if (!isNonEmptyString(cutoffIso)) {
+      return;
     }
 
-    return authContext;
+    const publicFunctionUrl =
+      this.workspaceDomainsService.buildPublicFunctionUrl({
+        workspace,
+        path: logicFunction.httpRouteTriggerSettings?.path ?? '/',
+      });
+
+    if (!isDefined(publicFunctionUrl)) {
+      return;
+    }
+
+    const cutoffDate = new Date(cutoffIso);
+
+    if (Number.isNaN(cutoffDate.getTime())) {
+      return;
+    }
+
+    if (logicFunction.createdAt.getTime() >= cutoffDate.getTime()) {
+      this.logger.warn(
+        `Logic function ${logicFunction.id} was requested on the deprecated /s/ route but is only served on ${publicFunctionUrl}`,
+      );
+
+      throw new RouteTriggerException(
+        `Logic function ${logicFunction.id} is no longer served on the legacy /s/ route`,
+        RouteTriggerExceptionCode.LEGACY_ROUTE_DEPRECATED,
+        {
+          userFriendlyMessage: msg`This endpoint has moved. Call it at ${publicFunctionUrl} instead.`,
+        },
+      );
+    }
   }
 
   private mapErrorToRouteTriggerCode(
@@ -143,14 +235,18 @@ export class RouteTriggerService {
       }
     }
 
-    if (
-      error instanceof LogicFunctionException &&
-      error.code === LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND
-    ) {
-      return RouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND;
+    if (error instanceof LogicFunctionException) {
+      switch (error.code) {
+        case LogicFunctionExceptionCode.LOGIC_FUNCTION_NOT_FOUND:
+          return RouteTriggerExceptionCode.LOGIC_FUNCTION_NOT_FOUND;
+        case LogicFunctionExceptionCode.LOGIC_FUNCTION_DISABLED:
+          return RouteTriggerExceptionCode.FORBIDDEN_EXCEPTION;
+        case LogicFunctionExceptionCode.LOGIC_FUNCTION_DEPENDENCIES_SIZE_EXCEEDED:
+          return RouteTriggerExceptionCode.LOGIC_FUNCTION_DEPENDENCIES_SIZE_EXCEEDED;
+      }
     }
 
-    return RouteTriggerExceptionCode.LOGIC_FUNCTION_EXECUTION_ERROR;
+    return RouteTriggerExceptionCode.ROUTE_TRIGGER_PLATFORM_ERROR;
   }
 
   async handle({
@@ -159,12 +255,30 @@ export class RouteTriggerService {
   }: {
     request: Request;
     httpMethod: HTTPMethod;
-  }) {
-    const { logicFunction, pathParams } =
-      await this.getLogicFunctionWithPathParamsOrFail({
-        request,
-        httpMethod,
+  }): Promise<{ response: RouteTriggerResponse; isPublicDomain: boolean }> {
+    const { workspace, applicationId, isPublicDomain, authenticationContext } =
+      await this.resolveRouteTriggerRequestContextOrFail(request);
+
+    const logicFunctionsWithHttpRouteTrigger =
+      await this.logicFunctionRepository.find(workspace.id, {
+        where: {
+          httpRouteTriggerSettings: Not(IsNull()),
+          ...(isDefined(applicationId) ? { applicationId } : {}),
+        },
       });
+
+    const { logicFunction, pathParams } =
+      this.findLogicFunctionWithPathParamsOrFail({
+        httpMethod,
+        logicFunctionsWithHttpRouteTrigger,
+        requestPath: sanitizeRouteTriggerPath(request.path),
+      });
+
+    this.assertLegacyRouteIsServableOrThrow({
+      logicFunction,
+      workspace,
+      isPublicDomain,
+    });
 
     const httpRouteSettings = logicFunction.httpRouteTriggerSettings;
 
@@ -172,34 +286,54 @@ export class RouteTriggerService {
     let userId: string | null = null;
 
     if (httpRouteSettings?.isAuthRequired) {
-      const authContext = await this.validateWorkspaceFromRequest({
-        request,
-        workspaceId: logicFunction.workspaceId,
-      });
+      const routeAuthenticationContext =
+        authenticationContext ??
+        (await this.accessTokenService.validateTokenByRequest(request));
 
-      userWorkspaceId = authContext.userWorkspaceId ?? null;
-      userId = authContext.user?.id ?? null;
+      if (!isDefined(routeAuthenticationContext.workspace)) {
+        throw new RouteTriggerException(
+          'Workspace not found',
+          RouteTriggerExceptionCode.WORKSPACE_NOT_FOUND,
+        );
+      }
+
+      if (routeAuthenticationContext.workspace.id !== workspace.id) {
+        throw new RouteTriggerException(
+          'You are not authorized',
+          RouteTriggerExceptionCode.FORBIDDEN_EXCEPTION,
+        );
+      }
+
+      // Routes authenticate the caller themselves, behind no AccessPolicyGuard
+      if (isDefined(routeAuthenticationContext.agentId)) {
+        throw new RouteTriggerException(
+          'This token is only accepted by MCP',
+          RouteTriggerExceptionCode.FORBIDDEN_EXCEPTION,
+        );
+      }
+
+      userWorkspaceId = routeAuthenticationContext.userWorkspaceId ?? null;
+      userId = routeAuthenticationContext.user?.id ?? null;
     }
 
-    const event = buildLogicFunctionEvent({
-      request,
-      pathParameters: pathParams,
-      forwardedRequestHeaders: httpRouteSettings?.forwardedRequestHeaders ?? [],
-      userWorkspaceId,
-    });
-
-    let result;
+    let outcome;
 
     try {
-      result = await this.logicFunctionExecutorService.execute({
-        logicFunctionId: logicFunction.id,
-        workspaceId: logicFunction.workspaceId,
-        payload: event,
-        ...(userId ? { userId } : {}),
-        ...(userWorkspaceId ? { userWorkspaceId } : {}),
+      outcome = await this.logicFunctionTriggerService.run({
+        logicFunction,
+        request,
+        pathParameters: pathParams,
+        forwardedRequestHeaders:
+          httpRouteSettings?.forwardedRequestHeaders ?? [],
+        forwardAllHeaders: isPublicDomain,
+        userId,
+        userWorkspaceId,
       });
     } catch (error) {
-      if (error instanceof RouteTriggerException) {
+      if (
+        error instanceof RouteTriggerException ||
+        isUsageRefusedError(error)
+      ) {
         throw error;
       }
 
@@ -222,17 +356,13 @@ export class RouteTriggerService {
       );
     }
 
-    if (!isDefined(result)) {
-      return result;
-    }
-
-    if (result.error) {
+    if (outcome.kind === 'userError') {
       throw new RouteTriggerException(
-        result.error.errorMessage,
-        RouteTriggerExceptionCode.LOGIC_FUNCTION_EXECUTION_ERROR,
+        outcome.errorMessage,
+        RouteTriggerExceptionCode.ROUTE_TRIGGER_USER_UNCAUGHT_ERROR,
       );
     }
 
-    return result.data;
+    return { response: outcome.response, isPublicDomain };
   }
 }

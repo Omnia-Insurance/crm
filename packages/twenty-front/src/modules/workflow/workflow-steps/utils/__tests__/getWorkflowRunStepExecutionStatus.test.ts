@@ -32,18 +32,10 @@ describe('getWorkflowRunStepExecutionStatus', () => {
                       b: null,
                     },
                   },
-                  outputSchema: {
-                    link: {
-                      tab: 'test',
-                      icon: 'IconVariable',
-                      label: 'Generate Function Output',
-                      isLeaf: true,
-                    },
-                    _outputSchemaType: 'LINK',
-                  },
+                  outputSchema: {},
                   errorHandlingOptions: {
                     retryOnFailure: {
-                      value: false,
+                      value: 0,
                     },
                     continueOnFailure: {
                       value: false,
@@ -96,18 +88,10 @@ describe('getWorkflowRunStepExecutionStatus', () => {
                       b: null,
                     },
                   },
-                  outputSchema: {
-                    link: {
-                      tab: 'test',
-                      icon: 'IconVariable',
-                      label: 'Generate Function Output',
-                      isLeaf: true,
-                    },
-                    _outputSchemaType: 'LINK',
-                  },
+                  outputSchema: {},
                   errorHandlingOptions: {
                     retryOnFailure: {
-                      value: false,
+                      value: 0,
                     },
                     continueOnFailure: {
                       value: false,
@@ -161,18 +145,10 @@ describe('getWorkflowRunStepExecutionStatus', () => {
                       b: null,
                     },
                   },
-                  outputSchema: {
-                    link: {
-                      tab: 'test',
-                      icon: 'IconVariable',
-                      label: 'Generate Function Output',
-                      isLeaf: true,
-                    },
-                    _outputSchemaType: 'LINK',
-                  },
+                  outputSchema: {},
                   errorHandlingOptions: {
                     retryOnFailure: {
-                      value: false,
+                      value: 0,
                     },
                     continueOnFailure: {
                       value: false,
@@ -193,18 +169,10 @@ describe('getWorkflowRunStepExecutionStatus', () => {
                       b: null,
                     },
                   },
-                  outputSchema: {
-                    link: {
-                      tab: 'test',
-                      icon: 'IconVariable',
-                      label: 'Generate Function Output',
-                      isLeaf: true,
-                    },
-                    _outputSchemaType: 'LINK',
-                  },
+                  outputSchema: {},
                   errorHandlingOptions: {
                     retryOnFailure: {
-                      value: false,
+                      value: 0,
                     },
                     continueOnFailure: {
                       value: false,

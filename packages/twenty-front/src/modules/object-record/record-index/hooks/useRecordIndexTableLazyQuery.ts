@@ -14,9 +14,8 @@ export const useRecordIndexTableLazyQuery = (objectNameSingular: string) => {
     objectMetadataItem,
   });
 
-  // OMNIA-CUSTOM: Use no-cache because the record table reads from jotai
-  // (recordStoreFamilyState), not Apollo cache. With Apollo 3 (no automatic
-  // cache GC), caching here causes unbounded memory growth → mobile OOM.
+  // OMNIA-CUSTOM: the table reads records from Jotai, and Apollo 4's InMemoryCache never evicts on its own,
+  // so caching every list page grew memory until mobile browsers ran out (OOM)
   const { fetchMoreRecordsLazy, queryIdentifier, findManyRecordsLazy } =
     useLazyFindManyRecords({
       ...params,

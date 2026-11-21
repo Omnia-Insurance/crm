@@ -1,12 +1,16 @@
-import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { buildRecordInputFromFilter } from '@/object-record/record-table/utils/buildRecordInputFromFilter';
-import { ViewFilterOperand } from 'twenty-shared/types';
+import {
+  FieldMetadataType,
+  RelationType,
+  ViewFilterOperand,
+} from 'twenty-shared/types';
 
 const FIELD_ID_TEXT = 'field-text-id';
 const FIELD_ID_DATE_TIME = 'field-date-time-id';
 const FIELD_ID_ADDRESS = 'field-address-id';
 const FIELD_ID_NUMBER = 'field-number-id';
+const FIELD_ID_RELATION = 'field-relation-id';
 const FIELD_ID_UNKNOWN = 'field-unknown-id';
 
 const mockObjectMetadataItem = {
@@ -14,29 +18,36 @@ const mockObjectMetadataItem = {
     {
       id: FIELD_ID_TEXT,
       name: 'companyName',
-      type: 'TEXT',
+      type: FieldMetadataType.TEXT,
       options: null,
+    },
+    {
+      id: FIELD_ID_RELATION,
+      name: 'company',
+      type: FieldMetadataType.RELATION,
+      options: null,
+      relation: { type: RelationType.MANY_TO_ONE },
     },
     {
       id: FIELD_ID_DATE_TIME,
       name: 'createdAt',
-      type: 'DATE_TIME',
+      type: FieldMetadataType.DATE_TIME,
       options: null,
     },
     {
       id: FIELD_ID_ADDRESS,
       name: 'address',
-      type: 'ADDRESS',
+      type: FieldMetadataType.ADDRESS,
       options: null,
     },
     {
       id: FIELD_ID_NUMBER,
       name: 'revenue',
-      type: 'NUMBER',
+      type: FieldMetadataType.NUMBER,
       options: null,
     },
   ],
-} as unknown as EnrichedObjectMetadataItem;
+};
 
 const createFilter = (
   overrides: Partial<RecordFilter> & Pick<RecordFilter, 'fieldMetadataId'>,
@@ -44,7 +55,7 @@ const createFilter = (
   id: 'filter-id',
   value: '',
   displayValue: '',
-  type: 'TEXT',
+  type: FieldMetadataType.TEXT,
   operand: ViewFilterOperand.CONTAINS,
   label: 'Test',
   ...overrides,
@@ -56,12 +67,13 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_TEXT,
-          type: 'TEXT',
+          type: FieldMetadataType.TEXT,
           operand: ViewFilterOperand.CONTAINS,
           value: 'Acme',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result).toEqual({ companyName: 'Acme' });
@@ -74,15 +86,19 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_DATE_TIME,
-          type: 'DATE_TIME',
+          type: FieldMetadataType.DATE_TIME,
           operand: ViewFilterOperand.IS_BEFORE,
           value: filterDate.toISOString(),
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
-    expect(result.createdAt).toEqual(new Date('2025-06-15T10:29:00.000Z'));
+    expect(typeof result.createdAt).toBe('string');
+    expect(new Date(result.createdAt as string).getTime()).toBe(
+      new Date('2025-06-15T10:29:00.000Z').getTime(),
+    );
   });
 
   it('should not subtract a minute for DATE_TIME with IS operand', () => {
@@ -92,15 +108,39 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_DATE_TIME,
-          type: 'DATE_TIME',
+          type: FieldMetadataType.DATE_TIME,
           operand: ViewFilterOperand.IS,
           value: filterDate.toISOString(),
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
-    expect(result.createdAt).toEqual(filterDate);
+    expect(typeof result.createdAt).toBe('string');
+    expect(new Date(result.createdAt as string).getTime()).toBe(
+      filterDate.getTime(),
+    );
+  });
+
+  it('should assign an ISO string (not a Date) for DATE_TIME with IS_RELATIVE operand', () => {
+    const result = buildRecordInputFromFilter({
+      currentRecordFilters: [
+        createFilter({
+          fieldMetadataId: FIELD_ID_DATE_TIME,
+          type: FieldMetadataType.DATE_TIME,
+          operand: ViewFilterOperand.IS_RELATIVE,
+          value: 'THIS_QUARTER',
+        }),
+      ],
+      objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
+    });
+
+    expect(typeof result.createdAt).toBe('string');
+    expect(() =>
+      new Date(result.createdAt as string).toISOString(),
+    ).not.toThrow();
   });
 
   it('should deep-merge a single composite address sub-field starting from empty object', () => {
@@ -108,13 +148,14 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_ADDRESS,
-          type: 'ADDRESS',
+          type: FieldMetadataType.ADDRESS,
           operand: ViewFilterOperand.CONTAINS,
           value: 'Paris',
           subFieldName: 'addressCity',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result.address).toEqual({ addressCity: 'Paris' });
@@ -125,7 +166,7 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_ADDRESS,
-          type: 'ADDRESS',
+          type: FieldMetadataType.ADDRESS,
           operand: ViewFilterOperand.CONTAINS,
           value: 'Paris',
           subFieldName: 'addressCity',
@@ -133,13 +174,14 @@ describe('buildRecordInputFromFilter', () => {
         createFilter({
           id: 'filter-id-2',
           fieldMetadataId: FIELD_ID_ADDRESS,
-          type: 'ADDRESS',
+          type: FieldMetadataType.ADDRESS,
           operand: ViewFilterOperand.CONTAINS,
           value: 'France',
           subFieldName: 'addressCountry',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result.address).toEqual({
@@ -153,12 +195,13 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_UNKNOWN,
-          type: 'TEXT',
+          type: FieldMetadataType.TEXT,
           operand: ViewFilterOperand.CONTAINS,
           value: 'something',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result).toEqual({});
@@ -169,12 +212,13 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_TEXT,
-          type: 'TEXT',
+          type: FieldMetadataType.TEXT,
           operand: ViewFilterOperand.IS_EMPTY,
           value: '',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result).toEqual({});
@@ -185,14 +229,58 @@ describe('buildRecordInputFromFilter', () => {
       currentRecordFilters: [
         createFilter({
           fieldMetadataId: FIELD_ID_NUMBER,
-          type: 'NUMBER',
+          type: FieldMetadataType.NUMBER,
           operand: ViewFilterOperand.IS,
           value: '42',
         }),
       ],
       objectMetadataItem: mockObjectMetadataItem,
+      timeZone: 'UTC',
     });
 
     expect(result).toEqual({ revenue: 42 });
+  });
+
+  it('should prefill the join column for a direct relation filter on the current record', () => {
+    const result = buildRecordInputFromFilter({
+      currentRecordFilters: [
+        createFilter({
+          fieldMetadataId: FIELD_ID_RELATION,
+          type: FieldMetadataType.RELATION,
+          operand: ViewFilterOperand.IS,
+          value: JSON.stringify({
+            isCurrentRecordSelected: true,
+            selectedRecordIds: [],
+          }),
+        }),
+      ],
+      objectMetadataItem: mockObjectMetadataItem,
+      currentRecordId: 'current-record-id',
+      timeZone: 'UTC',
+    });
+
+    expect(result).toEqual({ companyId: 'current-record-id' });
+  });
+
+  it('should skip relation traversal filters instead of prefilling the join column', () => {
+    const result = buildRecordInputFromFilter({
+      currentRecordFilters: [
+        createFilter({
+          fieldMetadataId: FIELD_ID_RELATION,
+          type: FieldMetadataType.RELATION,
+          operand: ViewFilterOperand.IS,
+          value: JSON.stringify({
+            isCurrentRecordSelected: true,
+            selectedRecordIds: [],
+          }),
+          relationTargetFieldMetadataId: 'relation-target-field-id',
+        }),
+      ],
+      objectMetadataItem: mockObjectMetadataItem,
+      currentRecordId: 'current-record-id',
+      timeZone: 'UTC',
+    });
+
+    expect(result).toEqual({});
   });
 });

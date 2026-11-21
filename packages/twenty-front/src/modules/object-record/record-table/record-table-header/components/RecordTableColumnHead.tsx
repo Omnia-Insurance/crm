@@ -1,21 +1,19 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
+import { FieldDescriptionTooltip } from '@/object-record/record-field/ui/components/FieldDescriptionTooltip';
 
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { fieldMetadataItemByIdSelector } from '@/object-metadata/states/fieldMetadataItemByIdSelector';
-import { isFieldMetadataItemLabelIdentifierSelector } from '@/object-metadata/states/isFieldMetadataItemLabelIdentifierSelector';
 import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { shouldCompactRecordTableFirstColumnComponentState } from '@/object-record/record-table/states/shouldCompactRecordTableFirstColumnComponentState';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { getRelationSubFieldMetadataItem } from '@/object-record/record-field/utils/getRelationSubFieldMetadataItem';
+import { RECORD_TABLE_CELL_CONTENT_CLASS_NAME } from '@/object-record/record-table/constants/RecordTableCellContentClassName';
+import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
-import { useIcons } from 'twenty-ui/display';
-import {
-  MOBILE_VIEWPORT,
-  ThemeContext,
-  themeCssVariables,
-} from 'twenty-ui/theme-constants';
+import { getRelationSubFieldColumnLabel } from '@/views/utils/getRelationSubFieldColumnLabel';
+import { isNonEmptyString } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
-const StyledTitle = styled.div<{ hideTitle?: boolean }>`
+const StyledTitle = styled.div`
   align-items: center;
   display: flex;
   flex-direction: row;
@@ -24,26 +22,11 @@ const StyledTitle = styled.div<{ hideTitle?: boolean }>`
   height: ${themeCssVariables.spacing[8]};
   padding-left: ${themeCssVariables.spacing[2]};
   padding-right: ${themeCssVariables.spacing[2]};
-
-  @media (max-width: ${MOBILE_VIEWPORT}px) {
-    display: ${({ hideTitle }) => (hideTitle ? 'none' : 'flex')};
-  }
 `;
 
 const StyledIcon = styled.div`
   display: flex;
   flex-shrink: 0;
-
-  & > svg {
-    height: ${themeCssVariables.icon.size.md}px;
-    width: ${themeCssVariables.icon.size.md}px;
-  }
-`;
-
-const StyledText = styled.span`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 `;
 
 type RecordTableColumnHeadProps = {
@@ -53,7 +36,7 @@ type RecordTableColumnHeadProps = {
 export const RecordTableColumnHead = ({
   recordField,
 }: RecordTableColumnHeadProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const correspondingFieldMetadataItem = useAtomFamilySelectorValue(
     fieldMetadataItemByIdSelector,
@@ -61,51 +44,41 @@ export const RecordTableColumnHead = ({
   );
 
   const { getIcon } = useIcons();
-  const { objectMetadataItems } = useObjectMetadataItems();
+  const fieldMetadataItem =
+    correspondingFieldMetadataItem.foundFieldMetadataItem;
 
-  // OMNIA-CUSTOM: For sub-field columns, resolve the label from the target object
-  let headerLabel =
-    correspondingFieldMetadataItem.foundFieldMetadataItem?.label ?? '';
-  let headerIcon =
-    correspondingFieldMetadataItem.foundFieldMetadataItem?.icon;
+  // OMNIA-CUSTOM: a relation sub-field column ("Lead / Date of Birth") takes the target field's label, icon and
+  // description. A target field the role cannot read, or a missing one, shows its raw name and nothing more
+  const { objectMetadataItems } = useRecordTableContextOrThrow();
+  const { subFieldName } = recordField;
+  const isSubFieldColumn =
+    isNonEmptyString(subFieldName) && isDefined(fieldMetadataItem);
+  const subFieldMetadataItem = isSubFieldColumn
+    ? getRelationSubFieldMetadataItem({
+        targetObjectMetadataId:
+          fieldMetadataItem.relation?.targetObjectMetadata.id,
+        subFieldName,
+        objectMetadataItems,
+      })
+    : null;
+  const label = isSubFieldColumn
+    ? getRelationSubFieldColumnLabel({
+        relationFieldLabel: fieldMetadataItem.label,
+        subFieldLabel: subFieldMetadataItem?.label ?? subFieldName,
+      })
+    : fieldMetadataItem?.label;
+  const description = isSubFieldColumn
+    ? subFieldMetadataItem?.description
+    : fieldMetadataItem?.description;
 
-  if (recordField.subFieldName && correspondingFieldMetadataItem.foundFieldMetadataItem) {
-    const targetObjName = correspondingFieldMetadataItem.foundFieldMetadataItem
-      .relation?.targetObjectMetadata?.nameSingular;
-    const targetObj = objectMetadataItems.find(
-      (o) => o.nameSingular === targetObjName,
-    );
-    const subField = targetObj?.fields.find(
-      (f) => f.name === recordField.subFieldName && f.isActive,
-    );
-    if (subField) {
-      headerLabel = `${headerLabel} / ${subField.label}`;
-      headerIcon = subField.icon ?? headerIcon;
-    }
-  }
-
-  const Icon = getIcon(headerIcon);
-
-  const isLabelIdentifier = useAtomFamilySelectorValue(
-    isFieldMetadataItemLabelIdentifierSelector,
-    { fieldMetadataItemId: recordField.fieldMetadataItemId },
-  );
-
-  const shouldCompactRecordTableFirstColumn = useAtomComponentStateValue(
-    shouldCompactRecordTableFirstColumnComponentState,
-  );
-
-  const shouldHideTitle =
-    shouldCompactRecordTableFirstColumn && isLabelIdentifier;
+  const Icon = getIcon(subFieldMetadataItem?.icon ?? fieldMetadataItem?.icon);
 
   return (
-    <StyledTitle hideTitle={shouldHideTitle}>
+    <StyledTitle className={RECORD_TABLE_CELL_CONTENT_CLASS_NAME}>
       <StyledIcon>
         <Icon size={theme.icon.size.md} />
       </StyledIcon>
-      <StyledText>
-        {headerLabel}
-      </StyledText>
+      <FieldDescriptionTooltip label={label} description={description} />
     </StyledTitle>
   );
 };

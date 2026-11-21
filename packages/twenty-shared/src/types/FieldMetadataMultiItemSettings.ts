@@ -7,5 +7,6 @@ export enum FieldMetadataSettingsOnClickAction {
 export type FieldMetadataMultiItemSettings = {
   maxNumberOfValues?: number;
   clickAction?: FieldMetadataSettingsOnClickAction;
+  // OMNIA-CUSTOM: LINKS fields holding call recordings render an audio player.
   displayAs?: 'link' | 'audio';
 };

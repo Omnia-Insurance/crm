@@ -1,12 +1,17 @@
 import {
+  DEFAULT_VIEW_GROUP_LOAD_LIMIT,
+  VIEW_GROUP_LOAD_LIMIT_OPTIONS,
+} from 'twenty-shared/constants';
+import {
   AggregateOperations,
   ViewCalendarLayout,
+  ViewKey,
   ViewOpenRecordIn,
   ViewType,
   ViewVisibility,
-  ViewKey,
 } from 'twenty-shared/types';
 
+import { ApplicationExceptionCode } from 'src/engine/core-modules/application/application.exception';
 import { fromViewManifestToUniversalFlatView } from 'src/engine/core-modules/application/application-manifest/converters/from-view-manifest-to-universal-flat-view.util';
 
 describe('fromViewManifestToUniversalFlatView', () => {
@@ -35,10 +40,11 @@ describe('fromViewManifestToUniversalFlatView', () => {
     expect(result.icon).toBe('IconList');
     expect(result.position).toBe(0);
     expect(result.isCompact).toBe(false);
-    expect(result.isCustom).toBe(true);
+    expect(result.shouldHideEmptyGroups).toBe(false);
+    expect(result.groupLoadLimit).toBe(DEFAULT_VIEW_GROUP_LOAD_LIMIT);
     expect(result.visibility).toBe(ViewVisibility.WORKSPACE);
     expect(result.openRecordIn).toBe(ViewOpenRecordIn.SIDE_PANEL);
-    expect(result.key).toBe(ViewKey.INDEX);
+    expect(result.key).toBeNull();
     expect(result.createdAt).toBe(now);
     expect(result.updatedAt).toBe(now);
   });
@@ -53,6 +59,8 @@ describe('fromViewManifestToUniversalFlatView', () => {
         icon: 'IconLayoutKanban',
         position: 3,
         isCompact: true,
+        shouldHideEmptyGroups: true,
+        groupLoadLimit: 50,
         visibility: ViewVisibility.UNLISTED,
         openRecordIn: ViewOpenRecordIn.RECORD_PAGE,
       },
@@ -64,6 +72,8 @@ describe('fromViewManifestToUniversalFlatView', () => {
     expect(result.icon).toBe('IconLayoutKanban');
     expect(result.position).toBe(3);
     expect(result.isCompact).toBe(true);
+    expect(result.shouldHideEmptyGroups).toBe(true);
+    expect(result.groupLoadLimit).toBe(50);
     expect(result.visibility).toBe(ViewVisibility.UNLISTED);
     expect(result.openRecordIn).toBe(ViewOpenRecordIn.RECORD_PAGE);
   });
@@ -111,6 +121,8 @@ describe('fromViewManifestToUniversalFlatView', () => {
     ).toBeNull();
     expect(result.calendarLayout).toBeNull();
     expect(result.calendarFieldMetadataUniversalIdentifier).toBeNull();
+    expect(result.calendarEndFieldMetadataUniversalIdentifier).toBeNull();
+    expect(result.anyFieldFilterValue).toBeNull();
   });
 
   it('should preserve calendar fields from the manifest', () => {
@@ -122,6 +134,7 @@ describe('fromViewManifestToUniversalFlatView', () => {
         type: ViewType.CALENDAR,
         calendarLayout: ViewCalendarLayout.WEEK,
         calendarFieldMetadataUniversalIdentifier: 'field-uuid-date',
+        calendarEndFieldMetadataUniversalIdentifier: 'field-uuid-end-date',
       },
       applicationUniversalIdentifier,
       now,
@@ -131,5 +144,66 @@ describe('fromViewManifestToUniversalFlatView', () => {
     expect(result.calendarFieldMetadataUniversalIdentifier).toBe(
       'field-uuid-date',
     );
+    expect(result.calendarEndFieldMetadataUniversalIdentifier).toBe(
+      'field-uuid-end-date',
+    );
   });
+
+  it('should preserve anyFieldFilterValue from the manifest', () => {
+    const result = fromViewManifestToUniversalFlatView({
+      viewManifest: {
+        universalIdentifier: 'view-uuid-6',
+        name: 'Filtered View',
+        objectUniversalIdentifier: 'object-uuid-1',
+        anyFieldFilterValue: 'search term',
+      },
+      applicationUniversalIdentifier,
+      now,
+    });
+
+    expect(result.anyFieldFilterValue).toBe('search term');
+  });
+
+  it.each(VIEW_GROUP_LOAD_LIMIT_OPTIONS)(
+    'should accept the supported groupLoadLimit %s',
+    (groupLoadLimit) => {
+      const result = fromViewManifestToUniversalFlatView({
+        viewManifest: {
+          universalIdentifier: 'view-uuid-7',
+          name: 'Grouped View',
+          objectUniversalIdentifier: 'object-uuid-1',
+          groupLoadLimit,
+        },
+        applicationUniversalIdentifier,
+        now,
+      });
+
+      expect(result.groupLoadLimit).toBe(groupLoadLimit);
+    },
+  );
+
+  it.each([0, 7, 17, 101, -8, 8.5])(
+    'should throw on the unsupported groupLoadLimit %s',
+    (groupLoadLimit) => {
+      expect(() =>
+        fromViewManifestToUniversalFlatView({
+          viewManifest: {
+            universalIdentifier: 'view-uuid-8',
+            name: 'Grouped View',
+            objectUniversalIdentifier: 'object-uuid-1',
+            groupLoadLimit,
+          },
+          applicationUniversalIdentifier,
+          now,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: ApplicationExceptionCode.INVALID_INPUT,
+          message: expect.stringContaining(
+            `unsupported groupLoadLimit ${groupLoadLimit}`,
+          ),
+        }),
+      );
+    },
+  );
 });

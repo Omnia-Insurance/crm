@@ -1,14 +1,14 @@
 import { lazy, Suspense, useState, type ReactNode } from 'react';
 
-import { NavigationSections } from '@/navigation-menu-item/common/constants/NavigationSections.constants';
+import { NavigationSections } from '@/navigation-menu-item/common/constants/NavigationSections';
 import { PageDragDropProviderMountEffect } from '@/navigation-menu-item/display/dnd/providers/PageDragDropProviderMountEffect';
 
 const LazyNavigationMenuItemDndKitProvider = lazy(() =>
-  import(
-    '@/navigation-menu-item/display/dnd/providers/NavigationMenuItemDndKitProvider'
-  ).then((m) => ({
-    default: m.NavigationMenuItemDndKitProvider,
-  })),
+  import('@/navigation-menu-item/display/dnd/providers/NavigationMenuItemDndKitProvider').then(
+    (m) => ({
+      default: m.NavigationMenuItemDndKitProvider,
+    }),
+  ),
 );
 
 type PageDragDropProviderProps = {

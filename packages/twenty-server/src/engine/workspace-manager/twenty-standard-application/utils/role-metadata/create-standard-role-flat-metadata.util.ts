@@ -14,10 +14,13 @@ export type CreateStandardRoleContext = {
   isEditable: boolean;
   canUpdateAllSettings: boolean;
   canAccessAllTools: boolean;
+  canAccessAllAgentChatChannels: boolean;
   canReadAllObjectRecords: boolean;
+  canCreateAllObjectRecords: boolean;
   canUpdateAllObjectRecords: boolean;
   canSoftDeleteAllObjectRecords: boolean;
   canDestroyAllObjectRecords: boolean;
+  // OMNIA-CUSTOM: role-wide sidebar default (C4)
   showAllObjectsInSidebar: boolean;
   canBeAssignedToUsers: boolean;
   canBeAssignedToAgents: boolean;
@@ -37,10 +40,13 @@ export const createStandardRoleFlatMetadata = ({
     isEditable,
     canUpdateAllSettings,
     canAccessAllTools,
+    canAccessAllAgentChatChannels,
     canReadAllObjectRecords,
+    canCreateAllObjectRecords,
     canUpdateAllObjectRecords,
     canSoftDeleteAllObjectRecords,
     canDestroyAllObjectRecords,
+    // OMNIA-CUSTOM: role-wide sidebar default (C4)
     showAllObjectsInSidebar,
     canBeAssignedToUsers,
     canBeAssignedToAgents,
@@ -61,15 +67,19 @@ export const createStandardRoleFlatMetadata = ({
     isEditable,
     canUpdateAllSettings,
     canAccessAllTools,
+    canAccessAllAgentChatChannels,
     canReadAllObjectRecords,
+    canCreateAllObjectRecords,
     canUpdateAllObjectRecords,
     canSoftDeleteAllObjectRecords,
     canDestroyAllObjectRecords,
+    // OMNIA-CUSTOM: role-wide sidebar default and policy edit window (C3, C4)
     showAllObjectsInSidebar,
+    editWindowMinutes: null,
     canBeAssignedToUsers,
     canBeAssignedToAgents,
     canBeAssignedToApiKeys,
-    editWindowMinutes: null,
+    canBeAssignedToApplications: false,
     workspaceId,
     applicationId: twentyStandardApplicationId,
     applicationUniversalIdentifier:
@@ -80,13 +90,17 @@ export const createStandardRoleFlatMetadata = ({
     rolePermissionFlagUniversalIdentifiers: [],
     objectPermissionUniversalIdentifiers: [],
     fieldPermissionIds: [],
+    rowLevelPermissionRuleIds: [],
     fieldPermissionUniversalIdentifiers: [],
+    rowLevelPermissionRuleUniversalIdentifiers: [],
     objectPermissionIds: [],
     roleTargetIds: [],
     roleTargetUniversalIdentifiers: [],
     rowLevelPermissionPredicateIds: [],
+    agentChatChannelRoleIds: [],
     rowLevelPermissionPredicateGroupIds: [],
     rowLevelPermissionPredicateGroupUniversalIdentifiers: [],
     rowLevelPermissionPredicateUniversalIdentifiers: [],
+    agentChatChannelRoleUniversalIdentifiers: [],
   };
 };

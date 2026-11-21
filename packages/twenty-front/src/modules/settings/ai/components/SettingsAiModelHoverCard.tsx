@@ -1,7 +1,7 @@
+import { getChipLabel } from '@/ui/field/display/utils/getChipLabel';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
-import { Chip, ChipAccent, ChipSize, ChipVariant } from 'twenty-ui/components';
+import { Chip } from 'twenty-ui/primitives/data-display';
 import {
   IconBolt,
   IconBuildingSkyscraper,
@@ -10,15 +10,15 @@ import {
   IconUsers,
   IconWindow,
   type IconComponent,
-} from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+} from 'twenty-ui/icon';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 import { type AiModelSummary } from '@/settings/ai/types/AiModelSummary';
-import { getDataResidencyDisplay } from '@/settings/ai/utils/getDataResidencyDisplay';
-import { getModelIcon } from '@/settings/ai/utils/getModelIcon';
+import { getDataResidencyDisplay } from '@/ai/utils/getDataResidencyDisplay';
+import { getModelIcon } from '@/ai/utils/getModelIcon';
 import { SettingsTableCard } from '@/settings/components/SettingsTableCard';
 import { isDefined } from 'twenty-shared/utils';
-import { formatNumber } from '~/utils/format/formatNumber';
+import { formatNumber } from '@/localization/utils/formatNumber';
 
 const StyledHoverCardWrapper = styled.div`
   border-radius: ${themeCssVariables.border.radius.md};
@@ -50,11 +50,11 @@ const formatCost = (
   const parts: string[] = [];
 
   if (isDefined(inputCost)) {
-    parts.push(`$${inputCost} in`);
+    parts.push(t`$${inputCost} in`);
   }
 
   if (isDefined(outputCost)) {
-    parts.push(`$${outputCost} out`);
+    parts.push(t`$${outputCost} out`);
   }
 
   return parts.join(' / ');
@@ -73,7 +73,7 @@ type HoverCardItem = {
 export const SettingsAiModelHoverCard = ({
   model,
 }: SettingsAiModelHoverCardProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   const ModelIcon = getModelIcon(model.modelFamily, model.providerName);
   const providerLabel = model.providerLabel ?? model.providerName ?? '—';
@@ -85,19 +85,19 @@ export const SettingsAiModelHoverCard = ({
       value: (
         <StyledChipContainer>
           <Chip
-            size={ChipSize.Small}
-            accent={ChipAccent.TextPrimary}
-            variant={ChipVariant.Static}
-            clickable={false}
-            label={model.label}
-            leftComponent={
+            size="sm"
+            color="primary"
+            variant="soft"
+            startElement={
               <ModelIcon
                 size={theme.icon.size.sm}
                 stroke={theme.icon.stroke.sm}
               />
             }
-            rightComponent={null}
-          />
+            endElement={null}
+          >
+            {getChipLabel(model.label).content}
+          </Chip>
         </StyledChipContainer>
       ),
     },
@@ -130,7 +130,7 @@ export const SettingsAiModelHoverCard = ({
             label: t`Context`,
             value: (
               <StyledValueText>
-                {`${formatNumber(model.contextWindowTokens, {
+                {t`${formatNumber(model.contextWindowTokens, {
                   abbreviate: true,
                   decimals: 1,
                 })} tokens`}
@@ -146,7 +146,7 @@ export const SettingsAiModelHoverCard = ({
             label: t`Max output`,
             value: (
               <StyledValueText>
-                {`${formatNumber(model.maxOutputTokens, {
+                {t`${formatNumber(model.maxOutputTokens, {
                   abbreviate: true,
                   decimals: 1,
                 })} tokens`}
@@ -173,7 +173,6 @@ export const SettingsAiModelHoverCard = ({
   return (
     <StyledHoverCardWrapper>
       <SettingsTableCard
-        rounded
         items={items}
         gridAutoColumns={`${themeCssVariables.spacing[30]} 1fr`}
       />

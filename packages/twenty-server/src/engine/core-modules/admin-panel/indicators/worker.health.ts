@@ -7,7 +7,7 @@ import {
 import { Queue } from 'bullmq';
 
 import { HEALTH_ERROR_MESSAGES } from 'src/engine/core-modules/admin-panel/constants/health-error-messages.constants';
-import { METRICS_FAILURE_RATE_THRESHOLD } from 'src/engine/core-modules/admin-panel/constants/metrics-failure-rate-threshold.const';
+import { METRICS_FAILURE_RATE_THRESHOLD } from 'src/engine/core-modules/admin-panel/constants/metrics-failure-rate-threshold.constant';
 import { type WorkerQueueHealth } from 'src/engine/core-modules/admin-panel/types/worker-queue-health.type';
 import { withHealthCheckTimeout } from 'src/engine/core-modules/admin-panel/utils/health-check-timeout.util';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -55,7 +55,10 @@ export class WorkerHealthIndicator {
     },
   ): Promise<WorkerQueueHealth | null> {
     const redis = this.redisClient.getQueueClient();
-    const queue = new Queue(queueName, { connection: redis });
+    const queue = new Queue(queueName, {
+      connection: redis,
+      prefix: this.redisClient.getQueuePrefix(),
+    });
 
     try {
       const workers = await queue.getWorkers();

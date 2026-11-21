@@ -1,3 +1,4 @@
+import { useFieldMetadataItemById } from '@/object-metadata/hooks/useFieldMetadataItemById';
 import { AdvancedFilterRecordFilterOperandSelectContent } from '@/object-record/advanced-filter/components/AdvancedFilterRecordFilterOperandSelectContent';
 import { getOperandLabel } from '@/object-record/object-filter-dropdown/utils/getOperandLabel';
 import { useTimeZoneAbbreviationForNowInUserTimeZone } from '@/object-record/record-filter/hooks/useTimeZoneAbbreviationForNowInUserTimeZone';
@@ -7,8 +8,8 @@ import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUs
 import { SelectControl } from '@/ui/input/components/SelectControl';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   width: 100px;
@@ -21,6 +22,7 @@ type AdvancedFilterRecordFilterOperandSelectProps = {
 export const AdvancedFilterRecordFilterOperandSelect = ({
   recordFilterId,
 }: AdvancedFilterRecordFilterOperandSelectProps) => {
+  const { t } = useLingui();
   const currentRecordFilters = useAtomComponentStateValue(
     currentRecordFiltersComponentState,
   );
@@ -33,10 +35,18 @@ export const AdvancedFilterRecordFilterOperandSelect = ({
 
   const filterType = filter?.type;
 
+  // OMNIA-CUSTOM: the filtered field is the target one when traversing; a
+  // one-to-many relation without a target only offers has any / has no
+  const { fieldMetadataItem: effectiveFieldMetadataItem } =
+    useFieldMetadataItemById(
+      filter?.relationTargetFieldMetadataId ?? filter?.fieldMetadataId ?? '',
+    );
+
   const operandsForFilterType = isDefined(filterType)
     ? getRecordFilterOperands({
         filterType,
         subFieldName: filter?.subFieldName,
+        relationType: effectiveFieldMetadataItem?.relation?.type,
       })
     : [];
 

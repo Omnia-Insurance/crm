@@ -1,24 +1,24 @@
+import { useLingui } from '@lingui/react/macro';
 import React, { useMemo } from 'react';
 
 import { getFieldLinkDefinedLinks } from '@/object-record/record-field/ui/meta-types/input/utils/getFieldLinkDefinedLinks';
 import { type FieldLinksValue } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { ExpandableList } from '@/ui/layout/expandable-list/components/ExpandableList';
+import { SocialLink } from '@/ui/field/display/components/SocialLink/SocialLink';
+import { OverflowingList } from 'twenty-ui/components/layout';
 import {
   getAbsoluteUrlOrThrow,
   getUrlHostnameOrThrow,
   isDefined,
 } from 'twenty-shared/utils';
-import {
-  AudioLink,
-  LinkType,
-  RoundedLink,
-  SocialLink,
-} from 'twenty-ui/navigation';
-import { checkUrlType } from '~/utils/checkUrlType';
+import { RoundedLink } from '@/ui/navigation/link/components/RoundedLink/RoundedLink';
+import { AudioLink } from '@/ui/navigation/link/components/AudioLink/AudioLink';
+import { checkUrlType } from '@/ui/field/display/utils/checkUrlType';
+import { isSocialLinkType } from '@/ui/field/display/utils/isSocialLinkType';
 
 type LinksDisplayProps = {
   value?: FieldLinksValue;
   onLinkClick?: (url: string, event: React.MouseEvent<HTMLElement>) => void;
+  // OMNIA-CUSTOM: 'audio' renders each link as an inline player (call recordings)
   displayAs?: 'link' | 'audio';
 };
 
@@ -27,6 +27,8 @@ export const LinksDisplay = ({
   onLinkClick,
   displayAs,
 }: LinksDisplayProps) => {
+  const { t } = useLingui();
+
   const links = useMemo(() => {
     if (!isDefined(value)) {
       return [];
@@ -44,20 +46,20 @@ export const LinksDisplay = ({
       }
       return {
         url: absoluteUrl,
-        label: label || hostname,
+        label,
+        displayLabel: label || hostname,
         type: checkUrlType(absoluteUrl),
       };
     });
   }, [value]);
 
   return (
-    <ExpandableList>
-      {links.map(({ url, label, type }, index) =>
+    <OverflowingList overflowLabel={t`Show all items`}>
+      {links.map(({ url, label, displayLabel, type }, index) =>
+        // OMNIA-CUSTOM: call recordings play inline instead of opening a link
         displayAs === 'audio' ? (
           <AudioLink key={index} src={url} />
-        ) : type === LinkType.LinkedIn ||
-          type === LinkType.Twitter ||
-          type === LinkType.Facebook ? (
+        ) : isSocialLinkType(type) ? (
           <SocialLink
             key={index}
             href={url}
@@ -69,11 +71,11 @@ export const LinksDisplay = ({
           <RoundedLink
             key={index}
             href={url}
-            label={label}
+            label={displayLabel}
             onClick={(event) => onLinkClick?.(url, event)}
           />
         ),
       )}
-    </ExpandableList>
+    </OverflowingList>
   );
 };

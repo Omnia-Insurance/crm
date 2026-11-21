@@ -1,8 +1,13 @@
+import { type CommandMenuItemDefinition } from '@/command-menu-item/types/CommandMenuItemDefinition';
+import { AppMenuItem } from '@/applications/components/AppMenuItem';
+import { useIsThirdPartyApplication } from '@/applications/hooks/useIsThirdPartyApplication';
 import { CommandMenuContext } from '@/command-menu-item/contexts/CommandMenuContext';
+import { CommandMenuItemButtonHotkeyEffect } from '@/command-menu-item/display/components/CommandMenuItemButtonHotkeyEffect';
 import { CommandListItemLoader } from '@/command-menu-item/display/components/CommandListItemLoader';
-import { interpolateCommandMenuItemFields } from '@/command-menu-item/display/utils/interpolateCommandMenuItemFields';
-import { useCommandMenuItemClick } from '@/command-menu-item/hooks/useCommandMenuItemClick';
-import { getCommandMenuItemLabel } from '@/command-menu-item/utils/getCommandMenuItemLabel';
+import { CommandMenuDropdownActionItem } from '@/command-menu-item/display/components/CommandMenuDropdownActionItem';
+import { useCommandMenuItemDisplay } from '@/command-menu-item/display/hooks/useCommandMenuItemDisplay';
+import { getCommandMenuItemButtonHotKey } from '@/command-menu-item/display/utils/getCommandMenuItemButtonHotKey';
+import { ENGINE_COMPONENT_KEYS_WITH_SUB_MENU } from '@/command-menu-item/engine-command/constants/EngineComponentKeysWithSubMenu';
 import { CommandMenuButton } from '@/command-menu/components/CommandMenuButton';
 import { CommandMenuItem } from '@/command-menu/components/CommandMenuItem';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
@@ -10,17 +15,9 @@ import { SelectableListComponentInstanceContext } from '@/ui/layout/selectable-l
 import { isSelectedItemIdComponentFamilyState } from '@/ui/layout/selectable-list/states/isSelectedItemIdComponentFamilyState';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateValue';
-import { COMMAND_MENU_DEFAULT_ICON } from '@/workflow/workflow-trigger/constants/CommandMenuDefaultIcon';
 import { styled } from '@linaria/react';
 import { useContext } from 'react';
 import { assertUnreachable, isDefined } from 'twenty-shared/utils';
-import { useIcons } from 'twenty-ui/display';
-import { Loader } from 'twenty-ui/feedback';
-import { MenuItem } from 'twenty-ui/navigation';
-import {
-  EngineComponentKey,
-  type CommandMenuItemFieldsFragment,
-} from '~/generated-metadata/graphql';
 
 const StyledPreviewWrapper = styled.div`
   cursor: not-allowed;
@@ -31,82 +28,87 @@ const StyledPreviewWrapper = styled.div`
 `;
 
 type CommandMenuItemRendererProps = {
-  item: CommandMenuItemFieldsFragment;
+  item: CommandMenuItemDefinition;
+  isPrimaryAction?: boolean;
+  shouldHideLabel?: boolean;
+  shouldShowHotKey?: boolean;
 };
 
 type CommandMenuItemButtonRendererProps = CommandMenuItemRendererProps;
 
 const CommandMenuItemButtonRenderer = ({
   item,
+  isPrimaryAction = false,
+  shouldHideLabel = false,
+  shouldShowHotKey = false,
 }: CommandMenuItemButtonRendererProps) => {
-  const { commandMenuContextApi, isInPreviewMode } =
-    useContext(CommandMenuContext);
-  const { getIcon } = useIcons();
-
-  const { iconKey, label, shortLabel } = interpolateCommandMenuItemFields(
-    item,
-    commandMenuContextApi,
-  );
-
-  const Icon = getIcon(iconKey, COMMAND_MENU_DEFAULT_ICON);
-
-  const { handleClick, disabled } = useCommandMenuItemClick({
-    item,
+  const { isInPreviewMode } = useContext(CommandMenuContext);
+  const {
     Icon,
     label,
-  });
-
-  // OMNIA-CUSTOM: Create Record CTA gets filled blue primary styling
-  const isCreateRecordAction =
-    item.engineComponentKey === EngineComponentKey.CREATE_NEW_RECORD;
+    shortLabel,
+    handleClick,
+    disabled,
+    progress,
+    isLoading,
+  } = useCommandMenuItemDisplay(item);
 
   const command = {
     key: item.id,
     label,
     shortLabel,
     Icon,
-    ...(isCreateRecordAction && {
-      buttonVariant: 'primary' as const,
-      accent: 'blue' as const,
-      isPrimaryCTA: true,
-    }),
+    hotKeys: item.hotKeys,
   };
+
+  const buttonHotKey = getCommandMenuItemButtonHotKey(item);
 
   if (isInPreviewMode) {
     return (
       <StyledPreviewWrapper>
-        <CommandMenuButton command={command} />
+        <CommandMenuButton
+          command={command}
+          hotKey={shouldShowHotKey ? buttonHotKey : undefined}
+          isPrimaryAction={isPrimaryAction}
+          shouldHideLabel={shouldHideLabel}
+        />
       </StyledPreviewWrapper>
     );
   }
 
   return (
-    <CommandMenuButton
-      command={command}
-      onClick={disabled ? undefined : handleClick}
-      disabled={disabled}
-    />
+    <>
+      {isDefined(buttonHotKey) && (
+        <CommandMenuItemButtonHotkeyEffect
+          hotKey={buttonHotKey}
+          disabled={disabled}
+          onHotkeyTriggered={handleClick}
+        />
+      )}
+      <CommandMenuButton
+        command={command}
+        hotKey={shouldShowHotKey ? buttonHotKey : undefined}
+        onClick={disabled ? undefined : handleClick}
+        disabled={disabled}
+        progress={progress}
+        loading={isLoading}
+        isPrimaryAction={isPrimaryAction}
+        shouldHideLabel={shouldHideLabel}
+      />
+    </>
   );
 };
 
+type CommandMenuItemSelectableRendererProps = Pick<
+  CommandMenuItemRendererProps,
+  'item'
+>;
+
 const CommandMenuItemSelectableRenderer = ({
   item,
-  displayType,
-}: CommandMenuItemRendererProps & {
-  displayType: 'listItem' | 'dropdownItem';
-}) => {
-  const { commandMenuContextApi } = useContext(CommandMenuContext);
-  const { getIcon } = useIcons();
-
-  const { iconKey, label } = interpolateCommandMenuItemFields(
-    item,
-    commandMenuContextApi,
-  );
-
-  const Icon = getIcon(iconKey, COMMAND_MENU_DEFAULT_ICON);
-
-  const { handleClick, disabled, progress, showDisabledLoader } =
-    useCommandMenuItemClick({ item, Icon, label });
+}: CommandMenuItemSelectableRendererProps) => {
+  const { Icon, label, handleClick, disabled, progress, isLoading } =
+    useCommandMenuItemDisplay(item);
 
   const selectableListInstanceId = useAvailableComponentInstanceIdOrThrow(
     SelectableListComponentInstanceContext,
@@ -118,6 +120,8 @@ const CommandMenuItemSelectableRenderer = ({
     selectableListInstanceId,
   );
 
+  const isThirdPartyApp = useIsThirdPartyApplication(item.applicationId);
+
   const onItemClick = () => {
     if (disabled) {
       return;
@@ -125,24 +129,18 @@ const CommandMenuItemSelectableRenderer = ({
     handleClick();
   };
 
-  if (displayType === 'listItem') {
-    const loaderComponent =
-      disabled && showDisabledLoader ? (
-        isDefined(progress) ? (
-          <CommandListItemLoader progress={progress} />
-        ) : (
-          <Loader />
-        )
-      ) : undefined;
+  const loaderComponent = isLoading ? (
+    <CommandListItemLoader progress={progress} />
+  ) : undefined;
 
+  if (isThirdPartyApp) {
     return (
       <SelectableListItem itemId={item.id} onEnter={onItemClick}>
-        <CommandMenuItem
-          id={item.id}
-          Icon={Icon}
-          label={getCommandMenuItemLabel(label)}
+        <AppMenuItem
+          applicationId={item.applicationId}
+          text={label}
           onClick={disabled ? undefined : handleClick}
-          hotKeys={item.hotKeys}
+          focused={!disabled && isSelectedItemId}
           disabled={disabled}
           RightComponent={loaderComponent}
         />
@@ -152,12 +150,17 @@ const CommandMenuItemSelectableRenderer = ({
 
   return (
     <SelectableListItem itemId={item.id} onEnter={onItemClick}>
-      <MenuItem
-        focused={isSelectedItemId}
-        LeftIcon={Icon}
-        onClick={onItemClick}
-        text={getCommandMenuItemLabel(label)}
+      <CommandMenuItem
+        id={item.id}
+        Icon={Icon}
+        label={label}
+        onClick={disabled ? undefined : handleClick}
+        hotKeys={item.hotKeys}
+        hasSubMenu={ENGINE_COMPONENT_KEYS_WITH_SUB_MENU.has(
+          item.engineComponentKey,
+        )}
         disabled={disabled}
+        RightComponent={loaderComponent}
       />
     </SelectableListItem>
   );
@@ -166,20 +169,29 @@ const CommandMenuItemSelectableRenderer = ({
 // oxlint-disable-next-line twenty/effect-components
 export const CommandMenuItemRenderer = ({
   item,
+  isPrimaryAction,
+  shouldHideLabel,
+  shouldShowHotKey,
 }: CommandMenuItemRendererProps) => {
   const { displayType } = useContext(CommandMenuContext);
 
   if (displayType === 'button') {
-    return <CommandMenuItemButtonRenderer item={item} />;
-  }
-
-  if (displayType === 'listItem' || displayType === 'dropdownItem') {
     return (
-      <CommandMenuItemSelectableRenderer
+      <CommandMenuItemButtonRenderer
         item={item}
-        displayType={displayType}
+        isPrimaryAction={isPrimaryAction}
+        shouldHideLabel={shouldHideLabel}
+        shouldShowHotKey={shouldShowHotKey}
       />
     );
+  }
+
+  if (displayType === 'listItem') {
+    return <CommandMenuItemSelectableRenderer item={item} />;
+  }
+
+  if (displayType === 'dropdownItem') {
+    return <CommandMenuDropdownActionItem item={item} />;
   }
 
   return assertUnreachable(displayType, 'Unsupported display type');

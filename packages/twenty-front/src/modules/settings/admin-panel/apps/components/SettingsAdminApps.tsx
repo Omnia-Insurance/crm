@@ -1,164 +1,331 @@
-import { AppChip } from '@/applications/components/AppChip';
+import { ApplicationDisplay } from '@/applications/components/ApplicationDisplay';
 import { useApolloAdminClient } from '@/settings/admin-panel/apollo/hooks/useApolloAdminClient';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { SettingsEmptyPlaceholder } from '@/settings/components/SettingsEmptyPlaceholder';
+import { StyledNameTableCell } from '@/settings/data-model/object-details/components/SettingsObjectItemTableRowStyledComponents';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { Table } from '@/ui/layout/table/components/Table';
 import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { useQuery } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { type ReactNode, useContext, useState } from 'react';
-import { assertUnreachable, getSettingsPath } from 'twenty-shared/utils';
+import { msg } from '@lingui/core/macro';
+import { type MessageDescriptor } from '@lingui/core';
+import { isString } from '@sniptt/guards';
+import { useState } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
-import { H2Title, IconChevronRight, IconPinned } from 'twenty-ui/display';
-import { SearchInput } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { MenuItemToggle } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-import { Tag } from 'twenty-ui/components';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { useToast } from 'twenty-ui/components/feedback';
+import { SearchInput } from 'twenty-ui/components/input';
+import { Section } from 'twenty-ui/components/layout';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
 import {
-  type ApplicationRegistrationFragmentFragment,
+  IconChevronRight,
+  IconDotsVertical,
+  IconPinned,
+  IconRefresh,
+} from 'twenty-ui/icon';
+import { Tag } from 'twenty-ui/primitives/data-display';
+import { Button } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useDebounce } from 'use-debounce';
+import {
   ApplicationRegistrationSourceType,
   FindAllApplicationRegistrationsDocument,
+  type FindAllApplicationRegistrationsQuery,
+  SyncMarketplaceCatalogDocument,
 } from '~/generated-admin/graphql';
+import { SettingsSearchFilterTrigger } from '@/settings/components/SettingsSearchFilterTrigger';
+import { useLingui } from '@lingui/react/macro';
+
+type AdminApplicationRegistration =
+  FindAllApplicationRegistrationsQuery['findAllApplicationRegistrations']['registrations'][number];
 
 const StyledTableContainer = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
   margin-top: ${themeCssVariables.spacing[3]};
 `;
 
-const TABLE_GRID = '1fr 100px 100px 100px 40px';
-const TABLE_GRID_MOBILE = '3fr 3fr 1fr 1fr 40px';
+const StyledShowMoreContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-top: ${themeCssVariables.spacing[2]};
+`;
+
+const TABLE_GRID = '1fr 120px 100px 120px 100px 40px';
+const TABLE_GRID_MOBILE = '3fr 2fr 2fr 2fr 2fr 40px';
+const PAGE_SIZE = 25;
+
+const SOURCE_TYPE_FILTER_OPTIONS: {
+  sourceType: ApplicationRegistrationSourceType;
+  label: string | MessageDescriptor;
+}[] = [
+  {
+    sourceType: ApplicationRegistrationSourceType.NPM,
+    label: doNotTranslate('NPM'),
+  },
+  {
+    sourceType: ApplicationRegistrationSourceType.TARBALL,
+    label: msg`Tarball`,
+  },
+  {
+    sourceType: ApplicationRegistrationSourceType.OAUTH_ONLY,
+    label: doNotTranslate('OAuth'),
+  },
+  { sourceType: ApplicationRegistrationSourceType.LOCAL, label: msg`Local` },
+];
 
 export const SettingsAdminApps = () => {
+  const { t } = useLingui();
   const apolloAdminClient = useApolloAdminClient();
+  const { enqueueToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
   const [showPreInstalledOnly, setShowPreInstalledOnly] = useState(false);
+  const [sourceTypeFilters, setSourceTypeFilters] = useState<
+    ApplicationRegistrationSourceType[]
+  >([ApplicationRegistrationSourceType.NPM]);
+  const [isListedFilter, setIsListedFilter] = useState<boolean | undefined>(
+    undefined,
+  );
+  const [isConfiguredFilter, setIsConfiguredFilter] = useState<
+    boolean | undefined
+  >(undefined);
 
-  const { data } = useQuery(FindAllApplicationRegistrationsDocument, {
-    client: apolloAdminClient,
-  });
+  const { data, loading, fetchMore } = useQuery(
+    FindAllApplicationRegistrationsDocument,
+    {
+      client: apolloAdminClient,
+      notifyOnNetworkStatusChange: true,
+      variables: {
+        limit: PAGE_SIZE,
+        offset: 0,
+        searchTerm: debouncedSearchQuery,
+        isPreInstalledOnly: showPreInstalledOnly,
+        sourceTypes:
+          sourceTypeFilters.length > 0 ? sourceTypeFilters : undefined,
+        isListed: isListedFilter,
+        isConfigured: isConfiguredFilter,
+      },
+    },
+  );
 
-  const registrations = data?.findAllApplicationRegistrations ?? [];
-
-  const query = searchQuery.trim().toLowerCase();
-
-  const filtered = registrations
-    .filter((registration) => {
-      if (showPreInstalledOnly && !registration.isPreInstalled) {
-        return false;
-      }
-
-      if (query.length === 0) {
-        return true;
-      }
-
-      return (
-        registration.name.toLowerCase().includes(query) ||
-        (registration.sourcePackage ?? '').toLowerCase().includes(query) ||
-        registration.universalIdentifier.toLowerCase().includes(query)
-      );
-    })
-    .toSorted((a, b) => Number(a.isConfigured) - Number(b.isConfigured));
-
-  const getFormattedSource = (
-    registration: ApplicationRegistrationFragmentFragment,
+  const toggleSourceTypeFilter = (
+    sourceType: ApplicationRegistrationSourceType,
   ) => {
-    switch (registration.sourceType) {
-      case ApplicationRegistrationSourceType.TARBALL: {
-        return 'Tarball';
-      }
-      case ApplicationRegistrationSourceType.NPM: {
-        return 'NPM';
-      }
-      case ApplicationRegistrationSourceType.OAUTH_ONLY: {
-        return 'OAuth';
-      }
-      case ApplicationRegistrationSourceType.LOCAL: {
-        return 'Local';
-      }
-      default:
-        return assertUnreachable(registration.sourceType);
+    setSourceTypeFilters((currentFilters) =>
+      currentFilters.includes(sourceType)
+        ? currentFilters.filter(
+            (currentSourceType) => currentSourceType !== sourceType,
+          )
+        : [...currentFilters, sourceType],
+    );
+  };
+
+  const [syncMarketplaceCatalog, { loading: isSyncing }] = useMutation(
+    SyncMarketplaceCatalogDocument,
+    { client: apolloAdminClient },
+  );
+
+  const handleSyncCatalog = async () => {
+    try {
+      await syncMarketplaceCatalog();
+      enqueueToast({
+        status: 'success',
+        children: t`Marketplace catalog synchronization started.`,
+      });
+    } catch {
+      enqueueToast({
+        status: 'error',
+        children: t`Failed to synchronize the marketplace catalog.`,
+      });
     }
   };
 
+  const registrations =
+    data?.findAllApplicationRegistrations.registrations ?? [];
+
+  const totalCount = data?.findAllApplicationRegistrations.totalCount ?? 0;
+
+  const hasMore = data?.findAllApplicationRegistrations.hasMore ?? false;
+
+  const handleShowMore = () => {
+    fetchMore({
+      variables: {
+        limit: PAGE_SIZE,
+        offset: registrations.length,
+      },
+      updateQuery: (previousData, { fetchMoreResult }) => {
+        if (!isDefined(fetchMoreResult)) {
+          return previousData;
+        }
+
+        return {
+          findAllApplicationRegistrations: {
+            ...fetchMoreResult.findAllApplicationRegistrations,
+            registrations: [
+              ...previousData.findAllApplicationRegistrations.registrations,
+              ...fetchMoreResult.findAllApplicationRegistrations.registrations,
+            ],
+          },
+        };
+      },
+    });
+  };
+
   return (
-    <Section>
-      <H2Title
-        title={t`All App Registrations`}
-        description={t`All application registrations across the platform, including orphaned marketplace apps`}
-      />
-      <SearchInput
-        placeholder={t`Search registrations...`}
-        value={searchQuery}
-        onChange={setSearchQuery}
-        filterDropdown={(filterButton: ReactNode) => (
-          <Dropdown
-            dropdownId="settings-admin-apps-filter-dropdown"
-            dropdownPlacement="bottom-end"
-            dropdownOffset={{ x: 0, y: 8 }}
-            clickableComponent={filterButton}
-            dropdownComponents={
-              <DropdownContent>
-                <DropdownMenuItemsContainer>
-                  <MenuItemToggle
-                    LeftIcon={IconPinned}
-                    onToggleChange={() =>
+    <>
+      <Section.Root>
+        <Section.Header
+          title={t`General`}
+          description={t`Manage the marketplace application catalog`}
+        />
+        <Button
+          startIcon={<IconRefresh />}
+          size="sm"
+          onClick={handleSyncCatalog}
+          loading={isSyncing}
+          disabled={isSyncing}
+          variant="outline"
+        >{t`Synchronize catalog`}</Button>
+      </Section.Root>
+      <Section.Root>
+        <Section.Header
+          title={t`All App Registrations`}
+          description={t`All application registrations across the platform, including orphaned marketplace apps (${totalCount} matching)`}
+        />
+        <SearchInput
+          placeholder={t`Search registrations...`}
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          actions={
+            <DropdownRoot
+              dropdownId="settings-admin-apps-filter-dropdown"
+              type="panel"
+            >
+              <SettingsSearchFilterTrigger />
+              <DropdownContent align="end" sideOffset={8}>
+                <Dropdown.Section>
+                  <SettingsRow
+                    startElement={<IconPinned />}
+                    onCheckedChange={() =>
                       setShowPreInstalledOnly(!showPreInstalledOnly)
                     }
-                    toggled={showPreInstalledOnly}
-                    text={t`Pre-installed only`}
-                    toggleSize="small"
-                  />
-                </DropdownMenuItemsContainer>
+                    checked={showPreInstalledOnly}
+                  >{t`Pre-installed only`}</SettingsRow>
+                </Dropdown.Section>
+                <Dropdown.Separator />
+                <Dropdown.Section label={t`Source`}>
+                  {SOURCE_TYPE_FILTER_OPTIONS.map(({ sourceType, label }) => (
+                    <SettingsRow
+                      key={sourceType}
+                      onCheckedChange={() => toggleSourceTypeFilter(sourceType)}
+                      checked={sourceTypeFilters.includes(sourceType)}
+                    >
+                      {isString(label) ? label : t(label)}
+                    </SettingsRow>
+                  ))}
+                </Dropdown.Section>
+                <Dropdown.Separator />
+                <Dropdown.Section label={t`Listed`}>
+                  <SettingsRow
+                    onCheckedChange={() =>
+                      setIsListedFilter(
+                        isListedFilter === true ? undefined : true,
+                      )
+                    }
+                    checked={isListedFilter === true}
+                  >{t`Listed`}</SettingsRow>
+                  <SettingsRow
+                    onCheckedChange={() =>
+                      setIsListedFilter(
+                        isListedFilter === false ? undefined : false,
+                      )
+                    }
+                    checked={isListedFilter === false}
+                  >{t`Not listed`}</SettingsRow>
+                </Dropdown.Section>
+                <Dropdown.Separator />
+                <Dropdown.Section label={t`Configured`}>
+                  <SettingsRow
+                    onCheckedChange={() =>
+                      setIsConfiguredFilter(
+                        isConfiguredFilter === true ? undefined : true,
+                      )
+                    }
+                    checked={isConfiguredFilter === true}
+                  >{t`Configured`}</SettingsRow>
+                  <SettingsRow
+                    onCheckedChange={() =>
+                      setIsConfiguredFilter(
+                        isConfiguredFilter === false ? undefined : false,
+                      )
+                    }
+                    checked={isConfiguredFilter === false}
+                  >{t`Not configured`}</SettingsRow>
+                </Dropdown.Section>
               </DropdownContent>
-            }
-          />
+            </DropdownRoot>
+          }
+        />
+        {loading && registrations.length === 0 ? (
+          <SettingsEmptyPlaceholder>{t`Loading apps...`}</SettingsEmptyPlaceholder>
+        ) : registrations.length === 0 ? (
+          <SettingsEmptyPlaceholder>{t`No apps found`}</SettingsEmptyPlaceholder>
+        ) : (
+          <StyledTableContainer>
+            <Table>
+              <TableRow
+                gridAutoColumns={TABLE_GRID}
+                mobileGridAutoColumns={TABLE_GRID_MOBILE}
+              >
+                <TableHeader>{t`Name`}</TableHeader>
+                <TableHeader>{t`Author`}</TableHeader>
+                <TableHeader align="right">{t`Listed`}</TableHeader>
+                <TableHeader align="right">{t`Installs`}</TableHeader>
+                <TableHeader align="right">{t`Configured`}</TableHeader>
+                <TableHeader></TableHeader>
+              </TableRow>
+              <TableBody>
+                {registrations.map((registration) => (
+                  <SettingsAdminAppsTableRow
+                    key={registration.id}
+                    registration={registration}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </StyledTableContainer>
         )}
-      />
-      <StyledTableContainer>
-        <Table>
-          <TableRow
-            gridAutoColumns={TABLE_GRID}
-            mobileGridAutoColumns={TABLE_GRID_MOBILE}
-          >
-            <TableHeader>{t`Name`}</TableHeader>
-            <TableHeader align="right">{t`Source`}</TableHeader>
-            <TableHeader align="right">{t`Listed`}</TableHeader>
-            <TableHeader align="right">{t`Configured`}</TableHeader>
-            <TableHeader></TableHeader>
-          </TableRow>
-          <TableBody>
-            {filtered.map((registration) => (
-              <SettingsAdminAppsTableRow
-                key={registration.id}
-                registration={registration}
-                getFormattedSource={getFormattedSource}
-              />
-            ))}
-          </TableBody>
-        </Table>
-      </StyledTableContainer>
-    </Section>
+        {hasMore && (
+          <StyledShowMoreContainer>
+            <Button
+              startIcon={<IconDotsVertical />}
+              onClick={handleShowMore}
+              disabled={loading}
+              size="sm"
+              variant="outline"
+            >{t`Show more`}</Button>
+          </StyledShowMoreContainer>
+        )}
+      </Section.Root>
+    </>
   );
 };
 
 type SettingsAdminAppsTableRowProps = {
-  registration: ApplicationRegistrationFragmentFragment;
-  getFormattedSource: (
-    registration: ApplicationRegistrationFragmentFragment,
-  ) => string;
+  registration: AdminApplicationRegistration;
 };
 
 const SettingsAdminAppsTableRow = ({
   registration,
-  getFormattedSource,
 }: SettingsAdminAppsTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   return (
     <TableRow
@@ -170,31 +337,23 @@ const SettingsAdminAppsTableRow = ({
       mobileGridAutoColumns={TABLE_GRID_MOBILE}
       isClickable
     >
-      <TableCell
-        color={themeCssVariables.font.color.primary}
-        gap={themeCssVariables.spacing[2]}
-        minWidth="0"
-        overflow="hidden"
-      >
-        <AppChip
-          size="md"
-          fallbackApplicationData={{
-            logo: registration.logoUrl,
+      <StyledNameTableCell minWidth="0" overflow="hidden">
+        <ApplicationDisplay
+          application={{
             name: registration.name,
+            logoUrl: registration.logoUrl,
           }}
         />
-      </TableCell>
-      <TableCell overflow="hidden" align="right">
-        {getFormattedSource(registration)}
-      </TableCell>
+      </StyledNameTableCell>
+      <TableCell overflow="hidden">{registration.author ?? '—'}</TableCell>
       <TableCell align="right">
         {registration.isListed ? t`Yes` : t`No`}
       </TableCell>
+      <TableCell align="right">{registration.installCount}</TableCell>
       <TableCell align="right">
-        <Tag
-          color={registration.isConfigured ? 'green' : 'red'}
-          text={registration.isConfigured ? t`Yes` : t`No`}
-        />
+        <Tag color={registration.isConfigured ? 'green' : 'red'}>
+          {registration.isConfigured ? t`Yes` : t`No`}
+        </Tag>
       </TableCell>
       <TableCell align="right">
         <IconChevronRight

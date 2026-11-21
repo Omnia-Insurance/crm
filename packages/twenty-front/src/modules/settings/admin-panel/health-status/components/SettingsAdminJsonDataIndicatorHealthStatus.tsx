@@ -2,9 +2,9 @@ import { SettingsAdminIndicatorHealthContext } from '@/settings/admin-panel/heal
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useContext } from 'react';
-import { JsonTree } from 'twenty-ui/json-visualizer';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { JsonTree } from 'twenty-ui/components/data-display';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { AdminPanelHealthServiceStatus } from '~/generated-admin/graphql';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
@@ -12,7 +12,6 @@ const StyledDetailsContainer = styled.div`
   background-color: ${themeCssVariables.background.secondary};
   border: 1px solid ${themeCssVariables.border.color.medium};
   border-radius: ${themeCssVariables.border.radius.md};
-  font-size: ${themeCssVariables.font.size.sm};
   overflow-x: auto;
   padding: ${themeCssVariables.spacing[4]};
 `;
@@ -42,7 +41,7 @@ export const SettingsAdminJsonDataIndicatorHealthStatus = () => {
   const serviceLabel = indicatorHealth.label;
 
   return (
-    <Section>
+    <Section.Root>
       {isDown && (
         <StyledErrorMessage>
           {indicatorHealth.errorMessage ||
@@ -63,6 +62,6 @@ export const SettingsAdminJsonDataIndicatorHealthStatus = () => {
           />
         </StyledDetailsContainer>
       )}
-    </Section>
+    </Section.Root>
   );
 };

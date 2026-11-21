@@ -131,7 +131,7 @@ describe('View Filter Resolver', () => {
         input: {
           fieldMetadataId: testFieldMetadataId,
           viewId: testViewId,
-          operand: ViewFilterOperand.IS,
+          operand: ViewFilterOperand.CONTAINS,
           value: 'test value',
         },
         expectToFail: false,
@@ -140,18 +140,18 @@ describe('View Filter Resolver', () => {
       expect(errors).toBeUndefined();
       expect(data.createViewFilter).toMatchObject({
         fieldMetadataId: testFieldMetadataId,
-        operand: ViewFilterOperand.IS,
+        operand: ViewFilterOperand.CONTAINS,
         value: 'test value',
         viewId: testViewId,
       });
     });
 
-    it('should create a view filter with numeric value', async () => {
+    it('should create a view filter with a numeric value payload', async () => {
       const { data, errors } = await createOneViewFilter({
         input: {
           fieldMetadataId: testFieldMetadataId,
           viewId: testViewId,
-          operand: ViewFilterOperand.GREATER_THAN_OR_EQUAL,
+          operand: ViewFilterOperand.CONTAINS,
           value: 100,
         },
         expectToFail: false,
@@ -160,18 +160,18 @@ describe('View Filter Resolver', () => {
       expect(errors).toBeUndefined();
       expect(data.createViewFilter).toMatchObject({
         fieldMetadataId: testFieldMetadataId,
-        operand: ViewFilterOperand.GREATER_THAN_OR_EQUAL,
+        operand: ViewFilterOperand.CONTAINS,
         value: 100,
         viewId: testViewId,
       });
     });
 
-    it('should create a view filter with boolean value', async () => {
+    it('should create a view filter with a boolean value payload', async () => {
       const { data, errors } = await createOneViewFilter({
         input: {
           fieldMetadataId: testFieldMetadataId,
           viewId: testViewId,
-          operand: ViewFilterOperand.IS,
+          operand: ViewFilterOperand.CONTAINS,
           value: true,
         },
         expectToFail: false,
@@ -180,10 +180,24 @@ describe('View Filter Resolver', () => {
       expect(errors).toBeUndefined();
       expect(data.createViewFilter).toMatchObject({
         fieldMetadataId: testFieldMetadataId,
-        operand: ViewFilterOperand.IS,
+        operand: ViewFilterOperand.CONTAINS,
         value: true,
         viewId: testViewId,
       });
+    });
+
+    it('should reject a view filter with an operand incompatible with the field type', async () => {
+      const { errors } = await createOneViewFilter({
+        input: {
+          fieldMetadataId: testFieldMetadataId,
+          viewId: testViewId,
+          operand: ViewFilterOperand.GREATER_THAN_OR_EQUAL,
+          value: 'test',
+        },
+        expectToFail: true,
+      });
+
+      expectOneNotInternalServerErrorSnapshot({ errors });
     });
   });
 
@@ -256,7 +270,13 @@ describe('View Filter Resolver', () => {
       expect(data.deleteViewFilter).toMatchObject({
         id: viewFilterId,
       });
-      expect(data.deleteViewFilter.deletedAt).toBeDefined();
+
+      const { data: findData } = await findViewFilters({
+        viewId: testViewId,
+        expectToFail: false,
+      });
+
+      expect(findData.getViewFilters).toEqual([]);
     });
 
     it('should throw an error when deleting non-existent view filter', async () => {
@@ -283,12 +303,6 @@ describe('View Filter Resolver', () => {
 
       const viewFilterId = createData.createViewFilter.id;
 
-      await deleteOneViewFilter({
-        input: {
-          id: viewFilterId,
-        },
-        expectToFail: false,
-      });
       const { data, errors } = await destroyOneViewFilter({
         input: { id: viewFilterId },
         expectToFail: false,

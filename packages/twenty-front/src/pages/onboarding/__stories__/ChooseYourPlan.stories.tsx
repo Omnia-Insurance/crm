@@ -1,8 +1,11 @@
 import { getOperationName } from '~/utils/getOperationName';
 import { type Meta, type StoryObj } from '@storybook/react-vite';
 import { HttpResponse, graphql } from 'msw';
-import { within } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { LIST_PLANS } from '@/settings/billing/graphql/queries/listPlans';
+import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
 import { GET_CURRENT_USER } from '@/users/graphql/queries/getCurrentUser';
 import { AppPath } from 'twenty-shared/types';
 import { OnboardingStatus } from '~/generated-metadata/graphql';
@@ -12,22 +15,44 @@ import {
   type PageDecoratorArgs,
 } from '~/testing/decorators/PageDecorator';
 import { graphqlMocks } from '~/testing/graphqlMocks';
-import { mockedOnboardingUserData } from '~/testing/mock-data/users';
+import { mockedApolloClient } from '~/testing/mockedApolloClient';
+import {
+  mockCurrentWorkspace,
+  mockedOnboardingUserData,
+} from '~/testing/mock-data/users';
 
 const meta: Meta<PageDecoratorArgs> = {
   title: 'Pages/Onboarding/ChooseYourPlan',
   component: ChooseYourPlan,
   decorators: [PageDecorator],
   args: { routePath: AppPath.PlanRequired },
+  beforeEach: async () => {
+    await mockedApolloClient.clearStore();
+
+    const previousWorkspace = jotaiStore.get(currentWorkspaceState.atom);
+
+    jotaiStore.set(currentWorkspaceState.atom, {
+      ...mockCurrentWorkspace,
+      billingSubscriptions: [],
+    });
+
+    return () => {
+      jotaiStore.set(currentWorkspaceState.atom, previousWorkspace);
+    };
+  },
   parameters: {
     msw: {
       handlers: [
         graphql.query(getOperationName(GET_CURRENT_USER) ?? '', () => {
           return HttpResponse.json({
             data: {
-              currentUser: mockedOnboardingUserData(
-                OnboardingStatus.PLAN_REQUIRED,
-              ),
+              currentUser: {
+                ...mockedOnboardingUserData(OnboardingStatus.COMPLETED),
+                currentWorkspace: {
+                  ...mockCurrentWorkspace,
+                  billingSubscriptions: [],
+                },
+              },
             },
           });
         }),
@@ -43,10 +68,66 @@ export type Story = StoryObj<typeof ChooseYourPlan>;
 
 export const Default: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = within(canvasElement.ownerDocument.body);
 
-    await canvas.findByText('Choose your Trial', undefined, {
+    await canvas.findByText('Upgrade your free trial', undefined, {
       timeout: 3000,
     });
+
+    await expect(
+      await canvas.findByRole('button', {
+        name: 'Continue, earn 2 free credits',
+      }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const TrialLimitReached: Story = {
+  beforeEach: () => {
+    jotaiStore.set(currentWorkspaceState.atom, {
+      ...mockCurrentWorkspace,
+      billingSubscriptions: [],
+      isTrialAvailable: false,
+    });
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+
+    await canvas.findByText('Start your subscription', undefined, {
+      timeout: 3000,
+    });
+
+    await expect(canvas.queryByText('Basic')).not.toBeInTheDocument();
+    await expect(
+      await canvas.findByText(
+        "You'll be charged $12 per user today, then every month.",
+      ),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByRole('button', { name: 'Continue' }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const PlansQueryError: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        graphql.query(getOperationName(LIST_PLANS) ?? '', () => {
+          return HttpResponse.json({
+            errors: [{ message: 'Internal server error' }],
+          });
+        }),
+        ...(meta.parameters?.msw.handlers ?? []),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement.ownerDocument.body);
+
+    await canvas.findByText("We couldn't load the plans", undefined, {
+      timeout: 3000,
+    });
+    await canvas.findByText('Try again');
   },
 };

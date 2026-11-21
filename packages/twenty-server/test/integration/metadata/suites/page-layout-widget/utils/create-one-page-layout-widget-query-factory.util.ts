@@ -1,9 +1,13 @@
+import { WIDGET_POSITION_GQL_FIELDS } from 'test/integration/metadata/suites/page-layout-widget/constants/widget-position-gql-fields.constant';
 import gql from 'graphql-tag';
 import { WIDGET_CONFIGURATION_GQL_FIELDS } from 'test/integration/metadata/suites/page-layout-widget/constants/widget-configuration-gql-fields.constant';
 import { type PerformMetadataQueryParams } from 'test/integration/metadata/types/perform-metadata-query.type';
 
 import { type CreatePageLayoutWidgetInput } from 'src/engine/metadata-modules/page-layout-widget/dtos/inputs/create-page-layout-widget.input';
-export type CreateOnePageLayoutWidgetFactoryInput = CreatePageLayoutWidgetInput;
+export type CreateOnePageLayoutWidgetFactoryInput = Omit<
+  CreatePageLayoutWidgetInput,
+  'configuration'
+> & { configuration?: unknown };
 
 const DEFAULT_PAGE_LAYOUT_WIDGET_GQL_FIELDS = `
   id
@@ -11,11 +15,8 @@ const DEFAULT_PAGE_LAYOUT_WIDGET_GQL_FIELDS = `
   type
   pageLayoutTabId
   objectMetadataId
-  gridPosition {
-    row
-    column
-    rowSpan
-    columnSpan
+  position {
+    ${WIDGET_POSITION_GQL_FIELDS}
   }
   configuration {
     ${WIDGET_CONFIGURATION_GQL_FIELDS}

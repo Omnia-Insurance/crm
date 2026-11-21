@@ -9,7 +9,7 @@ import { getRecordFromCache } from '@/object-record/cache/utils/getRecordFromCac
 import { getRecordFromRecordNode } from '@/object-record/cache/utils/getRecordFromRecordNode';
 import { getRecordNodeFromRecord } from '@/object-record/cache/utils/getRecordNodeFromRecord';
 import { updateRecordFromCache } from '@/object-record/cache/utils/updateRecordFromCache';
-import { type RecordGqlFields } from '@/object-record/graphql/record-gql-fields/types/RecordGqlFields';
+import { type RecordGqlFields } from 'twenty-shared/types';
 import { generateDepthRecordGqlFieldsFromObject } from '@/object-record/graphql/record-gql-fields/utils/generateDepthRecordGqlFieldsFromObject';
 import { generateDepthRecordGqlFieldsFromRecord } from '@/object-record/graphql/record-gql-fields/utils/generateDepthRecordGqlFieldsFromRecord';
 import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
@@ -20,9 +20,10 @@ import { computeOptimisticRecordFromInput } from '@/object-record/utils/computeO
 import { getUpdatedFieldsFromRecordInput } from '@/object-record/utils/getUpdatedFieldsFromRecordInput';
 import { getUpdateOneRecordMutationResponseField } from '@/object-record/utils/getUpdateOneRecordMutationResponseField';
 import { sanitizeRecordInput } from '@/object-record/utils/sanitizeRecordInput';
-import { isNull } from '@sniptt/guards';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { isNull } from '@sniptt/guards';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { buildRecordFromKeysWithSameValue } from '~/utils/array/buildRecordFromKeysWithSameValue';
 
 type UpdateOneRecordArgs<UpdatedObjectRecord> = {
@@ -58,9 +59,28 @@ export const useUpdateOneRecord = () => {
 
     if (!objectMetadataItem) {
       throw new Error(
-        `Object metadata item not found for ${objectNameSingular}`,
+        doNotTranslate(
+          `Object metadata item not found for ${objectNameSingular}`,
+        ),
       );
     }
+
+    const dispatchUpdateOneRecordOperation = (
+      updatedRecordFields: Record<string, unknown>,
+    ) =>
+      dispatchObjectRecordOperationBrowserEvent({
+        objectMetadataItem,
+        operation: {
+          type: 'update-one',
+          result: {
+            updateInput: {
+              recordId: idToUpdate,
+              updatedFields:
+                getUpdatedFieldsFromRecordInput(updatedRecordFields),
+            },
+          },
+        },
+      });
 
     const optimisticRecordInput =
       optimisticRecord ??
@@ -174,7 +194,9 @@ export const useUpdateOneRecord = () => {
         },
         update: (cache, { data }) => {
           const record = (data as Record<string, any>)?.[mutationResponseField];
-          if (!isDefined(record)) return;
+          if (!isDefined(record)) {
+            return;
+          }
 
           const recordToUpsert = getRecordFromRecordNode({
             recordNode: record,
@@ -201,7 +223,7 @@ export const useUpdateOneRecord = () => {
           optimisticRecordInput,
         ).filter((diffKey) => !cachedRecordKeys.has(diffKey));
 
-        const recordGqlFields = {
+        const recordGqlFields: RecordGqlFields = {
           ...generateDepthRecordGqlFieldsFromRecord({
             objectMetadataItem,
             objectMetadataItems,
@@ -239,6 +261,38 @@ export const useUpdateOneRecord = () => {
           upsertRecordsInStore,
         });
 
+        const optimisticallyUpdatedFieldsToRestore = Object.keys(
+          optimisticRecordInput,
+        ).reduce<Partial<ObjectRecord>>(
+          (restoredFields, fieldName) => ({
+            ...restoredFields,
+            [fieldName]: cachedRecordKeys.has(fieldName)
+              ? cachedRecord?.[fieldName]
+              : null,
+          }),
+          {},
+        );
+
+        upsertRecordsInStore({
+          partialRecords: [
+            {
+              id: idToUpdate,
+              __typename: getObjectTypename(objectMetadataItem.nameSingular),
+              ...optimisticallyUpdatedFieldsToRestore,
+            },
+          ],
+        });
+
+        // Views that lay records out by field value, like board columns, only re-sync on update events
+        dispatchUpdateOneRecordOperation(
+          Object.fromEntries(
+            Object.keys(updateOneRecordInput).map((fieldName) => [
+              fieldName,
+              cachedRecord?.[fieldName] ?? null,
+            ]),
+          ),
+        );
+
         throw error;
       });
 
@@ -250,19 +304,7 @@ export const useUpdateOneRecord = () => {
       (updatedRecord?.data as Record<string, any>)?.[mutationResponseField] ??
       null;
 
-    dispatchObjectRecordOperationBrowserEvent({
-      objectMetadataItem,
-      operation: {
-        type: 'update-one',
-        result: {
-          updateInput: {
-            recordId: idToUpdate,
-            updatedFields:
-              getUpdatedFieldsFromRecordInput(updateOneRecordInput),
-          },
-        },
-      },
-    });
+    dispatchUpdateOneRecordOperation(updateOneRecordInput);
 
     return resultRecord;
   };

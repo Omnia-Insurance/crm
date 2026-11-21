@@ -1,5 +1,5 @@
 import gql from 'graphql-tag';
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 
 const FIND_MINIMAL_METADATA_QUERY = gql`
   query FindMinimalMetadata {
@@ -11,7 +11,6 @@ const FIND_MINIMAL_METADATA_QUERY = gql`
         labelSingular
         labelPlural
         icon
-        isCustom
         isActive
         isSystem
         isRemote
@@ -32,7 +31,7 @@ const FIND_MINIMAL_METADATA_QUERY = gql`
 
 describe('minimalMetadata', () => {
   it('should return objectMetadataItems, views, and collectionHashes', async () => {
-    const response = await makeMetadataAPIRequest({
+    const response = await makeMetadataApiRequest({
       query: FIND_MINIMAL_METADATA_QUERY,
     });
 
@@ -47,7 +46,7 @@ describe('minimalMetadata', () => {
   });
 
   it('should return properly shaped objectMetadataItems', async () => {
-    const response = await makeMetadataAPIRequest({
+    const response = await makeMetadataApiRequest({
       query: FIND_MINIMAL_METADATA_QUERY,
     });
 
@@ -62,7 +61,6 @@ describe('minimalMetadata', () => {
         namePlural: expect.any(String),
         labelSingular: expect.any(String),
         labelPlural: expect.any(String),
-        isCustom: expect.any(Boolean),
         isActive: true,
         isSystem: expect.any(Boolean),
         isRemote: expect.any(Boolean),
@@ -71,7 +69,7 @@ describe('minimalMetadata', () => {
   });
 
   it('should return properly shaped views', async () => {
-    const response = await makeMetadataAPIRequest({
+    const response = await makeMetadataApiRequest({
       query: FIND_MINIMAL_METADATA_QUERY,
     });
 
@@ -89,7 +87,7 @@ describe('minimalMetadata', () => {
   });
 
   it('should return properly shaped collectionHashes', async () => {
-    const response = await makeMetadataAPIRequest({
+    const response = await makeMetadataApiRequest({
       query: FIND_MINIMAL_METADATA_QUERY,
     });
 
@@ -106,7 +104,7 @@ describe('minimalMetadata', () => {
   });
 
   it('should include well-known standard objects', async () => {
-    const response = await makeMetadataAPIRequest({
+    const response = await makeMetadataApiRequest({
       query: FIND_MINIMAL_METADATA_QUERY,
     });
 
@@ -122,7 +120,7 @@ describe('minimalMetadata', () => {
   });
 
   it('should reject requests with an invalid token', async () => {
-    const response = await makeMetadataAPIRequest(
+    const response = await makeMetadataApiRequest(
       { query: FIND_MINIMAL_METADATA_QUERY },
       INVALID_ACCESS_TOKEN,
     );

@@ -1,48 +1,61 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { type Request } from 'express';
 
+import { HttpExceptionHandlerService } from 'src/engine/core-modules/exception-handler/http-exception-handler.service';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
 import {
   ThrottlerException,
   ThrottlerExceptionCode,
 } from 'src/engine/core-modules/throttler/throttler.exception';
 import { ThrottlerService } from 'src/engine/core-modules/throttler/throttler.service';
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import {
-  IngestionPipelineException,
-  IngestionPipelineExceptionCode,
-} from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception';
-import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineWebhookController } from 'src/engine/metadata-modules/ingestion-pipeline/controllers/ingestion-pipeline-webhook.controller';
+import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { IngestionPipelineExceptionCode } from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception';
+import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 
-const workspaceId = 'workspace-1';
-const pipelineId = 'pipeline-1';
+const workspaceId = '20202020-1c25-4d02-bf25-6aeccf7ea419';
+const pipelineId = '8a3f5c1e-2b4d-4e6f-9a1b-3c5d7e9f1a2b';
+const webhookSecret = 'a'.repeat(64);
 
-const mockPipeline: IngestionPipelineEntity = {
+const mockPipeline = {
   id: pipelineId,
   workspaceId,
   name: 'Test Push Pipeline',
   mode: 'push',
   isEnabled: true,
-  webhookSecret: 'valid-secret',
+  webhookSecret,
   targetObjectNameSingular: 'person',
 } as IngestionPipelineEntity;
 
-const mockRepository = {
-  findOne: jest.fn(),
-};
-
-const mockThrottlerService = {
-  tokenBucketThrottleOrThrow: jest.fn().mockResolvedValue(99),
-};
+const buildRequest = ({
+  body,
+  headers = {},
+  query = {},
+}: {
+  body: unknown;
+  headers?: Record<string, string>;
+  query?: Record<string, string>;
+}) => ({ body, headers, query }) as unknown as Request;
 
 describe('IngestionPipelineWebhookController', () => {
   let controller: IngestionPipelineWebhookController;
+  let pipelineRepository: { findOne: jest.Mock };
+  let logService: { createPending: jest.Mock };
+  let throttlerService: { tokenBucketThrottleOrThrow: jest.Mock };
   let messageQueueService: { add: jest.Mock };
 
   beforeEach(async () => {
+    pipelineRepository = { findOne: jest.fn().mockResolvedValue(mockPipeline) };
+    logService = {
+      createPending: jest.fn().mockResolvedValue({ id: 'log-1' }),
+    };
+    throttlerService = {
+      tokenBucketThrottleOrThrow: jest.fn().mockResolvedValue(99),
+    };
     messageQueueService = { add: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -50,21 +63,17 @@ describe('IngestionPipelineWebhookController', () => {
       providers: [
         {
           provide: getRepositoryToken(IngestionPipelineEntity),
-          useValue: mockRepository,
+          useValue: pipelineRepository,
         },
+        { provide: IngestionLogService, useValue: logService },
+        { provide: ThrottlerService, useValue: throttlerService },
         {
-          provide: IngestionLogService,
-          useValue: {
-            createPending: jest.fn().mockResolvedValue({ id: 'log-1' }),
-          },
-        },
-        {
-          provide: ThrottlerService,
-          useValue: mockThrottlerService,
-        },
-        {
-          provide: 'MESSAGE_QUEUE_ingestion-queue',
+          provide: getQueueToken(MessageQueue.ingestionQueue),
           useValue: messageQueueService,
+        },
+        {
+          provide: HttpExceptionHandlerService,
+          useValue: { handleError: jest.fn() },
         },
       ],
     }).compile();
@@ -74,82 +83,95 @@ describe('IngestionPipelineWebhookController', () => {
     );
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  const makeRequest = (
-    body: unknown,
-    secret?: string,
-  ): Pick<Request, 'body' | 'headers' | 'query'> =>
-    ({
-      body,
-      headers: secret ? { 'x-webhook-secret': secret } : {},
-      query: {},
-    }) as Pick<Request, 'body' | 'headers' | 'query'>;
-
-  describe('handlePush', () => {
-    it('should process a valid push request with array body', async () => {
-      mockRepository.findOne.mockResolvedValue(mockPipeline);
-
-      const records = [
-        { firstName: 'John', phone: '+15551234567' },
-        { firstName: 'Jane', phone: '+15559876543' },
-      ];
-
+  describe('webhook secret', () => {
+    it('should accept the secret sent in the x-webhook-secret header', async () => {
       const result = await controller.handlePush(
         pipelineId,
-        makeRequest(records, 'valid-secret') as Request,
+        buildRequest({
+          body: [{ name: 'test' }],
+          headers: { 'x-webhook-secret': webhookSecret },
+        }),
       );
 
       expect(result.success).toBe(true);
-      expect(result.recordCount).toBe(2);
-      expect(result.logId).toBe('log-1');
-      expect(messageQueueService.add).toHaveBeenCalledWith(
-        'IngestionPushProcessJob',
-        expect.objectContaining({
+    });
+
+    it('should reject a request without the header', async () => {
+      await expect(
+        controller.handlePush(
           pipelineId,
-          workspaceId,
-          logId: 'log-1',
-          records,
-        }),
-        { retryLimit: 3 },
-      );
+          buildRequest({ body: [{ name: 'test' }] }),
+        ),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
+      expect(messageQueueService.add).not.toHaveBeenCalled();
     });
 
-    it('should wrap single object body in array', async () => {
-      mockRepository.findOne.mockResolvedValue(mockPipeline);
-
-      const singleRecord = { firstName: 'John', phone: '+15551234567' };
-
-      const result = await controller.handlePush(
-        pipelineId,
-        makeRequest(singleRecord, 'valid-secret') as Request,
-      );
-
-      expect(result.recordCount).toBe(1);
-      expect(messageQueueService.add).toHaveBeenCalledWith(
-        'IngestionPushProcessJob',
-        expect.objectContaining({
-          records: [singleRecord],
-        }),
-        expect.any(Object),
-      );
+    it('should reject a wrong secret', async () => {
+      await expect(
+        controller.handlePush(
+          pipelineId,
+          buildRequest({
+            body: [{ name: 'test' }],
+            headers: { 'x-webhook-secret': 'b'.repeat(64) },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
     });
 
-    it('should throw when pipeline not found', async () => {
-      mockRepository.findOne.mockResolvedValue(null);
+    it('should reject a secret of a different length', async () => {
+      await expect(
+        controller.handlePush(
+          pipelineId,
+          buildRequest({
+            body: [{ name: 'test' }],
+            headers: { 'x-webhook-secret': webhookSecret.slice(1) },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
+    });
+
+    it('should reject the secret sent as a query parameter', async () => {
+      await expect(
+        controller.handlePush(
+          pipelineId,
+          buildRequest({
+            body: [{ name: 'test' }],
+            query: { secret: webhookSecret },
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
+      expect(messageQueueService.add).not.toHaveBeenCalled();
+    });
+
+    it('should reject every push to a pipeline without a secret', async () => {
+      pipelineRepository.findOne.mockResolvedValue({
+        ...mockPipeline,
+        webhookSecret: null,
+      });
 
       await expect(
         controller.handlePush(
           pipelineId,
-          makeRequest([], 'secret') as Request,
+          buildRequest({
+            body: [{ name: 'test' }],
+            headers: { 'x-webhook-secret': '' },
+          }),
         ),
-      ).rejects.toThrow(IngestionPipelineException);
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
     });
 
-    it('should throw when pipeline is disabled', async () => {
-      mockRepository.findOne.mockResolvedValue({
+    it('should check the secret before revealing the pipeline state', async () => {
+      pipelineRepository.findOne.mockResolvedValue({
         ...mockPipeline,
         isEnabled: false,
       });
@@ -157,59 +179,110 @@ describe('IngestionPipelineWebhookController', () => {
       await expect(
         controller.handlePush(
           pipelineId,
-          makeRequest([], 'valid-secret') as Request,
+          buildRequest({ body: [{ name: 'test' }] }),
         ),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
+      });
+    });
+  });
+
+  describe('handlePush', () => {
+    const authenticatedRequest = (body: unknown) =>
+      buildRequest({ body, headers: { 'x-webhook-secret': webhookSecret } });
+
+    it('should enqueue the records as a workspace job on the ingestion queue', async () => {
+      const records = [
+        { firstName: 'John', phone: '+15551234567' },
+        { firstName: 'Jane', phone: '+15559876543' },
+      ];
+
+      const result = await controller.handlePush(
+        pipelineId,
+        authenticatedRequest(records),
+      );
+
+      expect(result).toEqual({
+        success: true,
+        pipelineId,
+        logId: 'log-1',
+        recordCount: 2,
+      });
+      expect(logService.createPending).toHaveBeenCalledWith(
+        pipelineId,
+        'push',
+        records,
+      );
+      expect(messageQueueService.add).toHaveBeenCalledWith(
+        'IngestionPushProcessJob',
+        { pipelineId, workspaceId, logId: 'log-1', records },
+        { isWorkspaceJob: true, workspaceId, retryLimit: 3 },
+      );
+    });
+
+    it('should wrap single object body in array', async () => {
+      const singleRecord = { firstName: 'John', phone: '+15551234567' };
+
+      const result = await controller.handlePush(
+        pipelineId,
+        authenticatedRequest(singleRecord),
+      );
+
+      expect(result.recordCount).toBe(1);
+      expect(messageQueueService.add).toHaveBeenCalledWith(
+        'IngestionPushProcessJob',
+        expect.objectContaining({ records: [singleRecord] }),
+        expect.any(Object),
+      );
+    });
+
+    it('should not query the database for an id that is not a UUID', async () => {
+      await expect(
+        controller.handlePush('not-a-uuid', authenticatedRequest([])),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
+      });
+      expect(pipelineRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('should throw when pipeline not found', async () => {
+      pipelineRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        controller.handlePush(pipelineId, authenticatedRequest([])),
+      ).rejects.toMatchObject({
+        code: IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
+      });
+    });
+
+    it('should throw when pipeline is disabled', async () => {
+      pipelineRepository.findOne.mockResolvedValue({
+        ...mockPipeline,
+        isEnabled: false,
+      });
+
+      await expect(
+        controller.handlePush(pipelineId, authenticatedRequest([])),
       ).rejects.toMatchObject({
         code: IngestionPipelineExceptionCode.PIPELINE_DISABLED,
       });
     });
 
     it('should throw when pipeline is not push mode', async () => {
-      mockRepository.findOne.mockResolvedValue({
+      pipelineRepository.findOne.mockResolvedValue({
         ...mockPipeline,
         mode: 'pull',
       });
 
       await expect(
-        controller.handlePush(
-          pipelineId,
-          makeRequest([], 'valid-secret') as Request,
-        ),
+        controller.handlePush(pipelineId, authenticatedRequest([])),
       ).rejects.toMatchObject({
         code: IngestionPipelineExceptionCode.INVALID_PIPELINE_INPUT,
       });
     });
 
-    it('should throw when webhook secret is invalid', async () => {
-      mockRepository.findOne.mockResolvedValue(mockPipeline);
-
-      await expect(
-        controller.handlePush(
-          pipelineId,
-          makeRequest([], 'wrong-secret') as Request,
-        ),
-      ).rejects.toMatchObject({
-        code: IngestionPipelineExceptionCode.INVALID_WEBHOOK_SECRET,
-      });
-    });
-
-    it('should accept request when pipeline has no webhook secret', async () => {
-      mockRepository.findOne.mockResolvedValue({
-        ...mockPipeline,
-        webhookSecret: null,
-      });
-
-      const result = await controller.handlePush(
-        pipelineId,
-        makeRequest([{ name: 'test' }]) as Request,
-      );
-
-      expect(result.success).toBe(true);
-    });
-
     it('should return 429 when rate limit is exceeded', async () => {
-      mockRepository.findOne.mockResolvedValue(mockPipeline);
-      mockThrottlerService.tokenBucketThrottleOrThrow.mockRejectedValue(
+      throttlerService.tokenBucketThrottleOrThrow.mockRejectedValue(
         new ThrottlerException(
           'Limit reached (100 tokens per 60000 ms)',
           ThrottlerExceptionCode.LIMIT_REACHED,
@@ -217,30 +290,17 @@ describe('IngestionPipelineWebhookController', () => {
       );
 
       await expect(
-        controller.handlePush(
-          pipelineId,
-          makeRequest([{ name: 'test' }], 'valid-secret') as Request,
-        ),
+        controller.handlePush(pipelineId, authenticatedRequest([{ a: 1 }])),
       ).rejects.toThrow(
-        expect.objectContaining({
-          status: HttpStatus.TOO_MANY_REQUESTS,
-        }),
+        expect.objectContaining({ status: HttpStatus.TOO_MANY_REQUESTS }),
       );
+      expect(messageQueueService.add).not.toHaveBeenCalled();
     });
 
-    it('should allow request when under rate limit', async () => {
-      mockRepository.findOne.mockResolvedValue(mockPipeline);
-      mockThrottlerService.tokenBucketThrottleOrThrow.mockResolvedValue(99);
+    it('should throttle per pipeline', async () => {
+      await controller.handlePush(pipelineId, authenticatedRequest([{ a: 1 }]));
 
-      const result = await controller.handlePush(
-        pipelineId,
-        makeRequest([{ name: 'test' }], 'valid-secret') as Request,
-      );
-
-      expect(result.success).toBe(true);
-      expect(
-        mockThrottlerService.tokenBucketThrottleOrThrow,
-      ).toHaveBeenCalledWith(
+      expect(throttlerService.tokenBucketThrottleOrThrow).toHaveBeenCalledWith(
         `ingestion-webhook:${pipelineId}`,
         1,
         100,

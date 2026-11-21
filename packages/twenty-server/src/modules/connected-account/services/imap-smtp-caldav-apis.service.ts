@@ -13,7 +13,7 @@ import { v4 } from 'uuid';
 import { CreateCalendarChannelService } from 'src/engine/core-modules/auth/services/create-calendar-channel.service';
 import { CreateMessageChannelService } from 'src/engine/core-modules/auth/services/create-message-channel.service';
 import { NotFoundError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
-import { type ImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import { type PlaintextImapSmtpCaldavParams } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
@@ -36,8 +36,8 @@ import {
 } from 'src/modules/messaging/message-import-manager/jobs/messaging-message-list-fetch.job';
 
 @Injectable()
-export class ImapSmtpCalDavAPIService {
-  private readonly logger = new Logger(ImapSmtpCalDavAPIService.name);
+export class ImapSmtpCalDavApiService {
+  private readonly logger = new Logger(ImapSmtpCalDavApiService.name);
 
   constructor(
     @InjectRepository(CalendarChannelEntity)
@@ -65,7 +65,7 @@ export class ImapSmtpCalDavAPIService {
     handle: string;
     userWorkspaceId: string;
     workspaceId: string;
-    connectionParameters: ImapSmtpCaldavParams;
+    connectionParameters: PlaintextImapSmtpCaldavParams;
     existingAccount?: ConnectedAccountEntity | null;
   }): Promise<string> {
     const { handle, workspaceId, userWorkspaceId } = input;
@@ -83,10 +83,16 @@ export class ImapSmtpCalDavAPIService {
     const existingAccount =
       input.existingAccount ??
       (await this.connectedAccountRepository.findOne({
-        where: { handle, userWorkspaceId, workspaceId },
+        where: {
+          handle,
+          userWorkspaceId,
+          workspaceId,
+          provider: ConnectedAccountProvider.IMAP_SMTP_CALDAV,
+        },
       }));
 
     const newOrExistingAccountId = existingAccount?.id ?? v4();
+    const wasArchived = isDefined(existingAccount?.archivedAt);
 
     const existingMessageChannel = existingAccount
       ? await this.messageChannelRepository.findOne({
@@ -126,6 +132,8 @@ export class ImapSmtpCalDavAPIService {
           userWorkspaceId,
           workspaceId,
           authFailedAt: null,
+          authFailedReason: null,
+          archivedAt: null,
         });
 
         if (shouldCreateMessageChannel) {
@@ -144,6 +152,32 @@ export class ImapSmtpCalDavAPIService {
             handle,
             transactionManager,
           });
+        }
+
+        if (
+          wasArchived &&
+          isDefined(existingMessageChannel) &&
+          isDefined(input.connectionParameters.IMAP)
+        ) {
+          await transactionManager
+            .getRepository(MessageChannelEntity)
+            .update(
+              { id: existingMessageChannel.id, workspaceId },
+              { isSyncEnabled: true },
+            );
+        }
+
+        if (
+          wasArchived &&
+          isDefined(existingCalendarChannel) &&
+          isDefined(input.connectionParameters.CALDAV)
+        ) {
+          await transactionManager
+            .getRepository(CalendarChannelEntity)
+            .update(
+              { id: existingCalendarChannel.id, workspaceId },
+              { isSyncEnabled: true },
+            );
         }
       },
     );
@@ -193,6 +227,10 @@ export class ImapSmtpCalDavAPIService {
       await this.messageQueueService.add<MessagingMessageListFetchJobData>(
         MessagingMessageListFetchJob.name,
         { workspaceId, messageChannelId: existingMessageChannel.id },
+        {
+          workspaceId,
+          isWorkspaceJob: true,
+        },
       );
     }
 
@@ -210,6 +248,10 @@ export class ImapSmtpCalDavAPIService {
       await this.calendarQueueService.add<CalendarEventListFetchJobData>(
         CalendarEventListFetchJob.name,
         { workspaceId, calendarChannelId: existingCalendarChannel.id },
+        {
+          workspaceId,
+          isWorkspaceJob: true,
+        },
       );
     }
 
