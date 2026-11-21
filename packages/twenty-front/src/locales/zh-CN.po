@@ -71,6 +71,11 @@ msgstr "加载中……"
 msgid ": Not"
 msgstr ": 不"
 
+#. js-lingui-id: zqE7XF
+#: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
+msgid ": Not relative"
+msgstr ""
+
 #. js-lingui-id: 1ORnec
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid ": NotEmpty"
@@ -90,6 +95,11 @@ msgstr "：过去"
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid ": Today{timeZoneAbbreviationSuffix}"
 msgstr ": 今天{timeZoneAbbreviationSuffix}"
+
+#. js-lingui-id: ZGWVBk
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "...and {hiddenErrorMessageCount} more"
+msgstr ""
 
 #. js-lingui-id: DRwoy1
 #: src/pages/onboarding/UpgradeFreeTrial.tsx
@@ -786,6 +796,11 @@ msgstr "{reactors} 对 {emoji} 作出了回应"
 msgid "{failedCount, plural, one {# workspace failed} other {# workspaces failed}}"
 msgstr "{failedCount, plural, one {# 个工作区失败} other {# 个工作区失败}}"
 
+#. js-lingui-id: yqpDVR
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{failureCount, plural, one {# failure} other {# failures}}"
+msgstr ""
+
 #. js-lingui-id: bPZh8X
 #: src/modules/activities/timeline-activities/rows/main-object/components/EventRowMainObjectUpdated.tsx
 msgid "{fieldCount} fields on {recordLabel}"
@@ -903,6 +918,21 @@ msgstr ""
 msgid "{keepModelId} (unavailable)"
 msgstr "{keepModelId}（不可用）"
 
+#. js-lingui-id: 7qKyXu
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{label} — cancelled"
+msgstr ""
+
+#. js-lingui-id: sC25B6
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{label} — done"
+msgstr ""
+
+#. js-lingui-id: 2a5HwC
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{label} — failed"
+msgstr ""
+
 #. js-lingui-id: Xs84Pv
 #: src/modules/ai/utils/getAiModelModeDescription.ts
 msgid "{label} (Auto)"
@@ -912,6 +942,21 @@ msgstr "{label}（自动）"
 #: src/modules/ai/utils/getAiModelPinOptions.ts
 msgid "{label} (deprecated)"
 msgstr "{label}（已弃用）"
+
+#. js-lingui-id: kY+q3P
+#: src/modules/object-record/record-form/utils/getRequiredConditionViolationMessage.ts
+msgid "{label} is required"
+msgstr ""
+
+#. js-lingui-id: SMqRKC
+#: src/modules/object-record/record-form/utils/getRequiredConditionViolationMessage.ts
+msgid "{label} is required, but you don't have permission to edit it. Ask an admin."
+msgstr ""
+
+#. js-lingui-id: oBYE28
+#: src/modules/object-record/record-form/utils/getRequiredConditionViolationMessage.ts
+msgid "{label} is required. Open the {relationLabelLowercase} to complete it."
+msgstr ""
 
 #. js-lingui-id: q8vaHD
 #: src/modules/object-core/workflows/versions/components/CoreWorkflowVersionsListItem.tsx
@@ -984,6 +1029,11 @@ msgstr "{num, selectordinal, other {{num}th}}"
 msgid "{numberOfSelectedItems} workspace members"
 msgstr "{numberOfSelectedItems} 位工作区成员"
 
+#. js-lingui-id: Vco8Ka
+#: src/modules/spreadsheet-import/utils/getImportJobLabel.ts
+msgid "{objectLabelPlural}: {phase}"
+msgstr ""
+
 #. js-lingui-id: luWGLQ
 #: src/modules/workflow/workflow-variables/utils/generate/generateWaitForEventOutputSchema.ts
 msgid "{objectLabelSingular} Before Update"
@@ -1039,6 +1089,11 @@ msgstr "{positionLabel}：{name}"
 msgid "{prefilledCount} of {fieldCount} fields prefilled"
 msgstr "{fieldCount} 个字段中已预填 {prefilledCount} 个"
 
+#. js-lingui-id: CawhjY
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{processedItems} of {totalItems} ({percent}%)"
+msgstr ""
+
 #. js-lingui-id: LA2w8d
 #: src/modules/settings/applications/components/SettingsApplicationConnectionProviderSection.tsx
 msgid "{providerDisplayName} OAuth is not yet set up by your server administrator. They need to fill in the OAuth client ID and secret on the application registration before you can add a connection."
@@ -1060,6 +1115,11 @@ msgstr "{queuedMessage}，跳过 {skipReasons}"
 #: src/modules/object-core/agents/components/CoreAgentDataAccessSection.tsx
 msgid "{readOnlyFieldCount, plural, one {Can't edit # field} other {Can't edit # fields}}"
 msgstr "{readOnlyFieldCount, plural, other {无法编辑 # 个字段}}"
+
+#. js-lingui-id: 8BvqJm
+#: src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx
+msgid "{relationFieldLabel} fields"
+msgstr ""
 
 #. js-lingui-id: ociapy
 #: src/modules/settings/two-factor-authentication/components/TwoFactorAuthenticationBackupCodesSection.tsx
@@ -1095,6 +1155,11 @@ msgstr ""
 #. js-lingui-id: hcRYEH
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsTableRow.tsx
 msgid "{revokedBy, plural, one {Revoked for {revokedBy} object} other {Revoked for {revokedBy} objects}}"
+msgstr ""
+
+#. js-lingui-id: kDXHdq
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "{roleDefault} minutes"
 msgstr ""
 
 #. js-lingui-id: OeIgEg
@@ -1297,6 +1362,11 @@ msgstr "{unreadableFieldCount, plural, other {无法查看 # 个字段}}"
 msgid "{unresolvedCount, plural, one {# other object} other {# other objects}}"
 msgstr "{unresolvedCount, plural, other {# 个其他对象}}"
 
+#. js-lingui-id: h78FMv
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "{validRecords} valid, {invalidRecords} invalid out of {totalRecords} records"
+msgstr ""
+
 #. js-lingui-id: YdwR4T
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownDefaultView.tsx
@@ -1307,6 +1377,16 @@ msgstr "{visibleFieldsCount} 已选择"
 #: src/modules/side-panel/pages/page-layout/components/record-page/SidePanelRecordPageFieldSettings.tsx
 msgid "{visibleFieldsCount} visible fields"
 msgstr "{visibleFieldsCount} 个可见字段"
+
+#. js-lingui-id: wNg0pg
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{warningCount, plural, one {{label} — done with # warning} other {{label} — done with # warnings}}"
+msgstr ""
+
+#. js-lingui-id: gKbNVP
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
+msgid "{warningCount, plural, one {{processedItems} of {totalItems} ({percent}%) · # warning} other {{processedItems} of {totalItems} ({percent}%) · # warnings}}"
+msgstr ""
 
 #. js-lingui-id: riMLMq
 #: src/modules/workflow/workflow-steps/workflow-actions/iterator-action/components/WorkflowIteratorSubStepSwitcher.tsx
@@ -1467,6 +1547,11 @@ msgstr "平均而言，1 积分足够用于其中一项"
 msgid "1 credit/user/month"
 msgstr "每用户每月 1 积分"
 
+#. js-lingui-id: vp5vfW
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "1 hour"
+msgstr ""
+
 #. js-lingui-id: 4pzLrc
 #: src/modules/settings/data-model/object-details/components/SettingsObjectRelationItemTableRow.tsx
 msgid "1 Object"
@@ -1508,11 +1593,21 @@ msgstr "1. 选择字段类型"
 msgid "1. Select an object"
 msgstr "1. 选择一个对象"
 
+#. js-lingui-id: AJLByM
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "10 minutes"
+msgstr ""
+
 #. js-lingui-id: 6WQdu8
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "100 per minute"
 msgstr "每分钟 100 次请求"
+
+#. js-lingui-id: 8gE33P
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "12 hours"
+msgstr ""
 
 #. js-lingui-id: rU05hS
 #: src/modules/settings/experience/components/DateTimeSettingsTimeFormatSelect.tsx
@@ -1523,6 +1618,11 @@ msgstr "12小时制"
 #: src/modules/settings/developers/constants/ExpirationDates.ts
 msgid "15 days"
 msgstr "15 天"
+
+#. js-lingui-id: Cz+K13
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "15 minutes"
+msgstr ""
 
 #. js-lingui-id: Wf1ux6
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
@@ -1559,6 +1659,11 @@ msgstr "200 OK"
 #: src/modules/logic-functions/components/LogicFunctionExecutionResult.tsx
 msgid "200 OK - {duration}ms"
 msgstr "200 OK - {duration}ms"
+
+#. js-lingui-id: VaA9mu
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "24 hours"
+msgstr ""
 
 #. js-lingui-id: W1k7eB
 #: src/modules/settings/experience/components/DateTimeSettingsTimeFormatSelect.tsx
@@ -1598,16 +1703,31 @@ msgstr "30+"
 msgid "4 credits/user/month"
 msgstr "每用户每月 4 积分"
 
+#. js-lingui-id: g2ANwH
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "4 hours"
+msgstr ""
+
 #. js-lingui-id: oaKnWD
 #: src/modules/navigation/constants/LogsSwitchPhrases.ts
 msgid "418 I'm a teapot"
 msgstr "418 我是茶壶"
+
+#. js-lingui-id: UtXEjp
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "48 hours"
+msgstr ""
 
 #. js-lingui-id: ts2Gq2
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "5 credits/month"
 msgstr "每月 5 积分"
+
+#. js-lingui-id: PEGxvo
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "5 minutes"
+msgstr ""
 
 #. js-lingui-id: Z2TH0F
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
@@ -1619,6 +1739,11 @@ msgstr "每分钟 50 次请求"
 #: src/modules/logic-functions/components/LogicFunctionExecutionResult.tsx
 msgid "500 Error - {duration}ms"
 msgstr "500 错误 - {duration}ms"
+
+#. js-lingui-id: rJe6vw
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "7 days"
+msgstr ""
 
 #. js-lingui-id: h28hXf
 #: src/modules/settings/developers/constants/ExpirationDates.ts
@@ -1779,6 +1904,12 @@ msgstr "关于此工作区"
 msgid "About your app"
 msgstr "关于您的应用程序"
 
+#. js-lingui-id: g3UF2V
+#: src/modules/reconciliation/components/ReconciliationInlineCellDiffValue.tsx
+#: src/modules/reconciliation/components/ReconciliationRelationNameDiffChip.tsx
+msgid "Accept"
+msgstr ""
+
 #. js-lingui-id: nJJAYH
 #: src/pages/settings/legal/SettingsLegalDpa.tsx
 msgid "Accepted and signed DPAs for this workspace, with their template version and date."
@@ -1901,6 +2032,7 @@ msgstr "操作"
 #: src/modules/log-console/constants/LogConsoleRecordChangeColumns.tsx
 #: src/modules/log-console/constants/LogConsoleRecordChangeFilterFields.tsx
 #: src/modules/log-console/constants/LogConsoleSources.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/utils/getActionHeaderTypeOrThrow.ts
 #: src/modules/workflow/workflow-variables/utils/generate/computeStepOutputSchema.ts
@@ -1999,6 +2131,7 @@ msgstr "正在激活..."
 #: src/pages/settings/applications/tabs/SettingsApplicationTimelineActivityTypeSettingsTab.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 #: src/pages/settings/profile/SettingsProfile.tsx
 msgid "Active"
 msgstr "活跃"
@@ -2255,6 +2388,11 @@ msgstr "在左侧添加列"
 msgid "Add column right"
 msgstr "在右侧添加列"
 
+#. js-lingui-id: oFsfkI
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
+msgid "Add comment"
+msgstr ""
+
 #. js-lingui-id: 3iIvQg
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
 msgid "Add conferencing"
@@ -2403,6 +2541,11 @@ msgstr "添加项目"
 msgid "Add link"
 msgstr "添加链接"
 
+#. js-lingui-id: DmudGi
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Add mapping"
+msgstr ""
+
 #. js-lingui-id: gaZXkv
 #: src/modules/navigation-menu-item/display/folder/components/NavigationMenuItemFolderDnd.tsx
 #: src/modules/navigation-menu-item/display/folder/components/NavigationMenuItemFolderNavigationDrawerItemDropdown.tsx
@@ -2526,6 +2669,7 @@ msgstr "添加收件人"
 
 #. js-lingui-id: AmiJYR
 #: src/modules/page-layout/widgets/field/components/FieldWidgetRelationEditAction.tsx
+#: src/modules/reconciliation/components/ReconciliationRecordRelationSection.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectFields.tsx
 msgid "Add relation"
 msgstr "添加关系"
@@ -3292,6 +3436,11 @@ msgstr "对齐方式"
 msgid "All"
 msgstr "全部"
 
+#. js-lingui-id: LgtP+u
+#: src/modules/reconciliation/components/ReconciliationRecordRelationSection.tsx
+msgid "All ({relationRecordsTotalCount})"
+msgstr ""
+
 #. js-lingui-id: pdOYzu
 #: src/modules/workflow/workflow-variables/utils/generate/generateFindRecordsOutputSchema.ts
 msgid "All {objectLabelPlural}"
@@ -3441,6 +3590,7 @@ msgstr "所有记录"
 
 #. js-lingui-id: rAUKN+
 #: src/modules/object-core/agents/components/CoreAgentDataAccessSection.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "All records"
 msgstr "所有记录"
 
@@ -3621,6 +3771,11 @@ msgstr "已在侧边栏中"
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
 msgid "Alt text"
 msgstr "替代文本"
+
+#. js-lingui-id: 0gPQCa
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "Always"
+msgstr ""
 
 #. js-lingui-id: Tco16H
 #: src/modules/localization/utils/formatZonedDateTimeTimePart.ts
@@ -4087,6 +4242,7 @@ msgstr "以下应用尚未经过 Twenty 审核。请自行承担使用风险。"
 #. js-lingui-id: p98xmP
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceUsageLimitsSection.tsx
 #: src/modules/settings/billing/components/SettingsBillingLimitsTable.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "Applies to"
 msgstr "适用于"
 
@@ -4095,6 +4251,31 @@ msgstr "适用于"
 #: src/modules/settings/billing/components/SettingsBillingPartnerCodeForm.tsx
 msgid "Apply"
 msgstr "应用"
+
+#. js-lingui-id: O37ITS
+#: src/modules/reconciliation/components/ReconciliationToolbar.tsx
+msgid "Apply {batchApplyCount} changes"
+msgstr ""
+
+#. js-lingui-id: J4TKSO
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Apply {batchApplyCount} high-confidence items (confidence >= {AUTO_MATCH_THRESHOLD}%) to CRM?"
+msgstr ""
+
+#. js-lingui-id: ti6bb+
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Apply {batchApplyCount} pending items in the current filter to CRM?"
+msgstr ""
+
+#. js-lingui-id: dplA3C
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Apply all"
+msgstr ""
+
+#. js-lingui-id: Kw4X8g
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Apply all failed — no changes were saved."
+msgstr ""
 
 #. js-lingui-id: 2+R4Vf
 #: src/modules/settings/admin-panel/constants/SettingsAdminFeatureFlagMetadata.ts
@@ -4105,6 +4286,11 @@ msgstr "将私密记录应用于默认不私密的对象。对于已设置记录
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
 msgid "Apply{progressText}"
 msgstr "应用{progressText}"
+
+#. js-lingui-id: ZKBmU/
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Applying (legacy state)"
+msgstr ""
 
 #. js-lingui-id: YLFgbC
 #: src/modules/ai/components/AiChatApprovalReviewDeck.tsx
@@ -4215,11 +4401,6 @@ msgstr "确定要删除 {sourceHandle} 吗？转发到此地址的入站邮件�
 #: src/pages/settings/communications/SettingsWorkspaceUnsubscribeTopicDetail.tsx
 msgid "Are you sure you want to delete {topicName}? Recipients will no longer be able to opt out of this category."
 msgstr "确定要删除 {topicName} 吗？收件人将无法再退订此类别。"
-
-#. js-lingui-id: Yz8PeY
-#: src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx
-msgid "Are you sure you want to delete this related {relationObjectLabelSingular}?<0/>This action will break all its relationships with other objects."
-msgstr "确定要删除此相关的 {relationObjectLabelSingular} 吗？<0/>此操作将断开它与其他对象的所有关系。"
 
 #. js-lingui-id: 4Li0Pw
 #: src/pages/settings/ai/components/SettingsSkillDangerZone.tsx
@@ -4774,6 +4955,11 @@ msgstr "已启用自动更新"
 msgid "Auto-creation"
 msgstr "自动创建"
 
+#. js-lingui-id: wb/0kU
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "auto-matched"
+msgstr ""
+
 #. js-lingui-id: /nv0ml
 #: src/pages/settings/applications/tabs/SettingsApplicationAutoUpdateSection.tsx
 msgid "Auto-upgrade"
@@ -5003,6 +5189,16 @@ msgstr "基础 URL 为必填项"
 msgid "Basic"
 msgstr "基础版"
 
+#. js-lingui-id: k2WQFF
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Batch apply failed."
+msgstr ""
+
+#. js-lingui-id: WO6QTf
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Batch undo failed."
+msgstr ""
+
 #. js-lingui-id: /xLNEx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
 #: src/modules/activities/emails/components/EmailComposerFields.tsx
@@ -5176,6 +5372,11 @@ msgstr "引用块"
 msgid "Blue"
 msgstr "蓝色"
 
+#. js-lingui-id: Q+P5LQ
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "BOB:"
+msgstr ""
+
 #. js-lingui-id: bGQplw
 #: src/modules/ai/components/AiChatApprovalEmailReview.tsx
 #: src/modules/ai/components/AiChatApprovalEmailReview.tsx
@@ -5284,6 +5485,11 @@ msgstr "对这个输出字段的简要解释"
 #: src/modules/workflow/workflow-steps/filters/components/WorkflowStepFilterFieldSelect.tsx
 msgid "Broken field reference. Select the field again to fix this condition."
 msgstr "字段引用已失效。请重新选择字段以修复此条件。"
+
+#. js-lingui-id: sE963A
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Broker date"
+msgstr ""
 
 #. js-lingui-id: CSDv65
 #: src/modules/ui/input/hooks/useColorLabels.ts
@@ -5600,6 +5806,7 @@ msgstr "通话录音"
 
 #. js-lingui-id: wYLT8I
 #: src/modules/onboarding/components/free-credits/OnboardingFreeCreditsPopoverContent.tsx
+#: src/modules/ui/navigation/link/components/AudioLink/AudioLink.tsx
 msgid "Call recording"
 msgstr "通话录音"
 
@@ -5694,6 +5901,7 @@ msgstr "加拿大"
 #: src/modules/media-access/components/MediaAccessSessionRow.tsx
 #: src/modules/object-core/agents/components/CoreAgentFormContent.tsx
 #: src/modules/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter.tsx
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceCreditGrantModal.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceUsageLimitModal.tsx
 #: src/modules/settings/billing/components/AddCreditCardModal.tsx
@@ -5711,6 +5919,7 @@ msgstr "加拿大"
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
 #: src/modules/ui/feedback/toast/components/__tests__/AppToaster.test.tsx
 #: src/modules/ui/feedback/toast/utils/getLocalizedToastProps.ts
 #: src/modules/ui/layout/dialog/components/ConfirmationDialog.tsx
@@ -5921,6 +6130,11 @@ msgstr "卡片"
 #: src/pages/onboarding/UpgradeFreeTrial.tsx
 msgid "Card payment is currently unavailable. Please verify your Stripe configuration or contact your workspace admin."
 msgstr "当前无法使用信用卡支付。请检查您的 Stripe 配置或联系工作区管理员。"
+
+#. js-lingui-id: qy4z57
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
+msgid "Carrier configuration"
+msgstr ""
 
 #. js-lingui-id: M1RLfx
 #: src/modules/localization/hooks/useLocaleOptions.ts
@@ -6685,6 +6899,7 @@ msgstr "剪贴板功能需要安全连接 (HTTPS)。请通过 HTTPS 访问此应
 #: src/modules/navigation-menu-item/edit/components/NavigationMenuItemAddDropdownContent.tsx
 #: src/modules/object-record/object-sort-dropdown/components/ObjectSortDropdownButton.tsx
 #: src/modules/onboarding/components/OnboardingSkipDialog.tsx
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
 #: src/modules/related-record-paths/components/SettingsObjectRelatedRecordPathPicker.tsx
 #: src/modules/settings/applications/components/SettingsApplicationScreenshotLightbox.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionMeValueSelect.tsx
@@ -6939,6 +7154,11 @@ msgstr "未匹配的列："
 msgid "Columns shown in this view, in display order"
 msgstr "此视图中显示的列（按显示顺序）"
 
+#. js-lingui-id: nV1hwF
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Comma-separated fields that identify an existing record"
+msgstr ""
+
 #. js-lingui-id: sjVfrA
 #: src/modules/ui/navigation/hooks/useShortcutAccessibleKeyLabels.ts
 msgid "Command"
@@ -7004,6 +7224,16 @@ msgstr "命令已复制到剪贴板"
 #: src/modules/settings/experience/components/NumberFormatSelect.tsx
 msgid "Commas and dot"
 msgstr "逗号和点"
+
+#. js-lingui-id: VbyRUy
+#: src/modules/reconciliation/hooks/useOpenReviewItemCommentsInSidePanel.ts
+msgid "Comments"
+msgstr ""
+
+#. js-lingui-id: miSSBQ
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Comments ({commentCount})"
+msgstr ""
 
 #. js-lingui-id: hZotg6
 #: src/modules/settings/hooks/useSettingsNavigationItems.tsx
@@ -7080,8 +7310,10 @@ msgstr "已完成"
 #: src/modules/activities/calendar/components/CalendarEventCallRecorderAvatar.tsx
 #: src/modules/ai/components/CodeExecutionDisplay.tsx
 #: src/modules/object-core/workflows/components/CoreWorkflowRunsPerDayChart.tsx
+#: src/modules/reconciliation/utils/getRunSummary.ts
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/workflow/workflow-diagram/utils/getWorkflowRunStatusTagProps.ts
 #: src/pages/settings/admin-panel/SettingsAdminInstanceStatus.tsx
 msgid "Completed"
@@ -7164,6 +7396,16 @@ msgstr "会议链接"
 msgid "Config"
 msgstr "配置"
 
+#. js-lingui-id: heNKvQ
+#: src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx
+msgid "config {configFingerprint}"
+msgstr ""
+
+#. js-lingui-id: I22M9p
+#: src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx
+msgid "Config fingerprint for this run"
+msgstr ""
+
 #. js-lingui-id: Vj43Y/
 #: src/modules/settings/admin-panel/config-variables/components/SettingsAdminConfigVariables.tsx
 msgid "Config Variables"
@@ -7176,6 +7418,7 @@ msgstr "可配置搜索字段"
 
 #. js-lingui-id: ywFj2D
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/WorkflowEditActionHttpRequest.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
 msgid "Configuration"
 msgstr "配置"
 
@@ -7215,6 +7458,11 @@ msgstr "配置和自定义日历偏好。"
 #: src/modules/settings/accounts/components/SettingsAccountsConnectionForm.tsx
 msgid "Configure CalDAV settings to sync your calendar events."
 msgstr "配置 CalDAV 设置以同步您的日历事件。"
+
+#. js-lingui-id: TTsmz3
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Configure data ingestion pipelines to sync external data into your CRM"
+msgstr ""
 
 #. js-lingui-id: ahqAfe
 #: src/pages/settings/profile/appearance/components/SettingsExperience.tsx
@@ -7610,6 +7858,7 @@ msgstr "上下文窗口必须为正整数"
 #. js-lingui-id: xGVfLh
 #: src/modules/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationRecovery.tsx
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWithCredentials.tsx
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
 #: src/modules/settings/enterprise/components/EnterprisePlanModal.tsx
 #: src/modules/spreadsheet-import/components/StepNavigationButton.tsx
 #: src/modules/spreadsheet-import/steps/components/MatchColumnsStep/MatchColumnsStep.tsx
@@ -7676,6 +7925,11 @@ msgstr "控制工作区从已连接的邮箱和日历中导入的内容"
 msgid "Control whether recipients can find and manage this topic."
 msgstr "控制收件人是否可以找到和管理此主题。"
 
+#. js-lingui-id: yvuNTW
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Control whether this pipeline is active"
+msgstr ""
+
 #. js-lingui-id: +iFqZW
 #: src/modules/settings/roles/role-settings/components/SettingsRoleApplicability.tsx
 msgid "Control which types of entities this role can be assigned to"
@@ -7730,6 +7984,11 @@ msgstr "与此记录关联的会话将显示在这里。"
 msgid "Conversations you can open will appear here."
 msgstr "您可以打开的会话将显示在这里。"
 
+#. js-lingui-id: /8YFTb
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Convoso leads sync"
+msgstr ""
+
 #. js-lingui-id: HRGl1X
 #: src/modules/settings/members/components/MemberNameFields.tsx
 #: src/modules/settings/profile/components/NameFields.tsx
@@ -7759,6 +8018,8 @@ msgstr "为您的 AI 编码工具复制 Cloudflare 设置提示"
 #: src/modules/object-record/record-field/ui/hooks/useGetSecondaryFieldButton.ts
 #: src/modules/object-record/record-field/ui/meta-types/input/components/MultiItemFieldMenuItem.tsx
 #: src/modules/settings/developers/components/ApiKeyInput.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
 #: src/modules/settings/security/components/sso/SettingsSsoOidcForm.tsx
 #: src/modules/settings/security/components/sso/SettingsSsoOidcForm.tsx
 #: src/modules/settings/security/components/sso/SettingsSsoSamlForm.tsx
@@ -7834,6 +8095,11 @@ msgstr "复制输出"
 #: src/pages/settings/profile/SettingsTwoFactorAuthenticationMethod.tsx
 msgid "Copy paste the code below"
 msgstr "粘贴下面的代码。"
+
+#. js-lingui-id: 7kOrDP
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Copy policy number"
+msgstr ""
 
 #. js-lingui-id: S+Jl8l
 #: src/modules/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationProvision.tsx
@@ -8010,6 +8276,11 @@ msgstr "无法加载运行洞察"
 #: src/modules/object-core/workflows/components/CoreWorkflowRunsTab.tsx
 msgid "Could not load runs"
 msgstr "无法加载运行记录"
+
+#. js-lingui-id: qCkWNY
+#: src/modules/reconciliation/components/ReviewItemDetail.tsx
+msgid "Could not load this review item."
+msgstr ""
 
 #. js-lingui-id: Tr0DHk
 #: src/modules/object-core/workflows/components/CoreWorkflowEditor.tsx
@@ -8414,6 +8685,17 @@ msgstr "创建备注"
 msgid "Create or Update Record"
 msgstr "创建或更新记录"
 
+#. js-lingui-id: cQbwfT
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Create pipeline"
+msgstr ""
+
+#. js-lingui-id: kvuoej
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Create policy"
+msgstr ""
+
 #. js-lingui-id: gSyzEV
 #: src/modules/onboarding/components/free-credits/OnboardingFreeCreditsPopoverContent.tsx
 #: src/pages/onboarding/CreateProfile.tsx
@@ -8517,9 +8799,11 @@ msgstr "创建、编辑和删除工作空间视图"
 
 #. js-lingui-id: d+F6q9
 #: src/modules/log-console/constants/LogConsoleRecordActions.ts
+#: src/modules/reconciliation/components/UnmatchedView.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceDataExportSection.tsx
 #: src/modules/settings/components/SettingsDatabaseEventsForm.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/pages/settings/admin-panel/SettingsAdminUserDetail.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationCommandMenuItemSettingsTab.tsx
@@ -8737,6 +9021,11 @@ msgstr "本月已使用积分"
 #: src/modules/ui/input/hooks/useColorLabels.ts
 msgid "Crimson"
 msgstr "深红色"
+
+#. js-lingui-id: lNpot1
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "CRM:"
+msgstr ""
 
 #. js-lingui-id: 6Oaeoc
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTestTab.tsx
@@ -9178,6 +9467,7 @@ msgstr "每日，保留 30 天"
 #: src/pages/settings/ai/SettingsToolDetail.tsx
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
 msgid "Danger zone"
 msgstr "危险区"
 
@@ -9497,6 +9787,11 @@ msgstr "请选择您要显示的子地址字段"
 msgid "Decrease value"
 msgstr "减小值"
 
+#. js-lingui-id: Zcp+4m
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Deduplication fields"
+msgstr ""
+
 #. js-lingui-id: ovBPCi
 #: src/modules/advanced-text-editor/components/RichTextColorDropdown.tsx
 #: src/modules/ai/components/AiModelPinSelect.tsx
@@ -9619,7 +9914,6 @@ msgstr "删除"
 #: src/modules/advanced-text-editor/components/AdvancedTextEditorBlockHandleMenu.tsx
 #: src/modules/object-core/agents/components/CoreAgentFormContent.tsx
 #: src/modules/object-core/agents/constants/CoreAgentRecordAccessLevels.ts
-#: src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx
 #: src/modules/object-record/record-field/ui/meta-types/input/components/MultiItemFieldMenuItem.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupDropdown.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminDeleteJobsConfirmationModal.tsx
@@ -9666,6 +9960,7 @@ msgstr "删除"
 #: src/pages/settings/data-model/SettingsObjectFieldEdit.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
 msgid "Delete"
 msgstr "删除"
 
@@ -9701,13 +9996,9 @@ msgstr "删除 {objectLabel} 对象？"
 
 #. js-lingui-id: 65N6Yr
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "Delete {objectLabelPlural}"
 msgstr "删除 {objectLabelPlural}"
-
-#. js-lingui-id: j8kv91
-#: src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx
-msgid "Delete {relationObjectLabelSingular}"
-msgstr "删除 {relationObjectLabelSingular}"
 
 #. js-lingui-id: wU3o2t
 #: src/modules/marketplace/utils/getRecordAccessLabel.ts
@@ -9865,6 +10156,12 @@ msgstr "删除选项"
 msgid "Delete or transfer this app registration"
 msgstr "删除或转移此应用注册"
 
+#. js-lingui-id: U3WCBj
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Delete pipeline"
+msgstr ""
+
 #. js-lingui-id: LUsa0/
 #: src/modules/workflow/workflow-steps/workflow-actions/constants/actions/DeleteRecordAction.ts
 msgid "Delete Record"
@@ -9874,11 +10171,6 @@ msgstr "删除记录"
 #: src/modules/settings/roles/role-permissions/objects-permissions/components/SettingsRolePermissionsObjectsSection.tsx
 msgid "Delete Records on All Objects"
 msgstr "删除所有对象上的记录"
-
-#. js-lingui-id: Ptdfm4
-#: src/modules/object-record/record-field-list/record-detail-section/relation/components/RecordDetailRelationRecordsListItem.tsx
-msgid "Delete Related {relationObjectLabelSingular}"
-msgstr "删除相关的 {relationObjectLabelSingular}"
 
 #. js-lingui-id: CW/kVJ
 #: src/modules/related-record-paths/components/SettingsObjectRelatedRecordPathTableRow.tsx
@@ -10109,6 +10401,7 @@ msgstr "描述你希望 AI 执行的操作..."
 #: src/modules/settings/applications/constants/ApplicationContentTypeConfigs.ts
 #: src/modules/settings/config-variables/components/ConfigVariableTable.tsx
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
 #: src/modules/settings/logic-functions/components/SettingsLogicFunctionNewForm.tsx
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
 #: src/modules/settings/roles/role-permissions/permission-flags/components/SettingsRolePermissionsSettingsTableHeader.tsx
@@ -10160,6 +10453,7 @@ msgstr "销毁 {objectLabel}"
 
 #. js-lingui-id: YI3c7h
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "Destroy {objectLabelPlural}"
 msgstr "销毁 {objectLabelPlural}"
 
@@ -10362,6 +10656,8 @@ msgstr "在 {defaultDomain} 上可被发现"
 
 #. js-lingui-id: 1QfxQT
 #: src/modules/ai/components/AiChatUserCreditsExhaustedBanner.tsx
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+#: src/modules/ui/feedback/background-job-indicator/components/BackgroundJobIndicator.tsx
 msgid "Dismiss"
 msgstr "关闭"
 
@@ -10369,6 +10665,11 @@ msgstr "关闭"
 #: src/modules/settings/emailing-domains/components/SettingsEmailingDomainAiSetup.tsx
 msgid "Dismiss AI setup prompt"
 msgstr "关闭 AI 设置提示"
+
+#. js-lingui-id: J6hrEy
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Dismissed"
+msgstr ""
 
 #. js-lingui-id: Xm/s+u
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownRecordGroupDisplayContent.tsx
@@ -10549,6 +10850,7 @@ msgstr "不导入标记为私密的事件"
 #: src/modules/ai/constants/AgentChatThreadFilterStatusLabels.ts
 #: src/modules/object-core/agents/components/CoreAgentRunStatus.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationGroupRenameInput.tsx
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
 msgid "Done"
 msgstr "已完成"
 
@@ -10742,6 +11044,7 @@ msgstr ""
 #. js-lingui-id: lkz6PL
 #: src/modules/object-core/agents/components/CoreAgentRunsContent.tsx
 #: src/modules/object-core/workflows/components/CoreWorkflowRunsTab.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/ai-agent-action/components/WorkflowRunStepLogsAiAgentDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/code-action/components/WorkflowRunStepLogsCodeDetail.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowRunStepLogsEmailDetail.tsx
@@ -10910,6 +11213,7 @@ msgstr "编辑 {objectLabel}"
 
 #. js-lingui-id: zQXUkv
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "Edit {objectLabelPlural}"
 msgstr "编辑 {objectLabelPlural}"
 
@@ -11060,6 +11364,7 @@ msgstr "编辑所有对象上的记录"
 
 #. js-lingui-id: 4QhQge
 #: src/modules/page-layout/widgets/field/components/FieldWidgetRelationEditAction.tsx
+#: src/modules/reconciliation/components/ReconciliationRecordRelationSection.tsx
 msgid "Edit relation"
 msgstr "编辑关系"
 
@@ -11105,6 +11410,11 @@ msgstr "编辑变量"
 #: src/modules/views/view-picker/components/ViewPickerContentEditMode.tsx
 msgid "Edit view"
 msgstr "编辑视图"
+
+#. js-lingui-id: FxUGg7
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "Edit window"
+msgstr ""
 
 #. js-lingui-id: 6o1M/Q
 #: src/pages/settings/general/SettingsGeneral.tsx
@@ -11426,6 +11736,8 @@ msgstr "员工"
 #: src/modules/log-console/components/LogConsoleRecordChangeDetail.tsx
 #: src/modules/object-record/record-board/record-board-column/utils/getAggregateOperationShortLabel.ts
 #: src/modules/object-record/record-inline-cell/components/RecordInlineCellDisplayMode.tsx
+#: src/modules/reconciliation/components/ReconciliationInlineCellDiffValue.tsx
+#: src/modules/reconciliation/components/ReconciliationRelationNameDiffChip.tsx
 #: src/modules/validation-rules/components/SettingsValidationRulePreview.tsx
 msgid "Empty"
 msgstr "空"
@@ -11580,6 +11892,11 @@ msgstr "结束"
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowEditActionCreateCalendarEvent.tsx
 msgid "Ends at"
 msgstr "结束时间"
+
+#. js-lingui-id: wwnsB9
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "Enforce that this field must have a value"
+msgstr ""
 
 #. js-lingui-id: Vv4JVS
 #: src/modules/settings/security/components/TwoFactorAuthenticationSwitch.tsx
@@ -12160,6 +12477,7 @@ msgstr "切换订阅时出错。"
 
 #. js-lingui-id: UirGxE
 #: src/modules/settings/application-monitoring/components/ApplicationMonitoring.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 msgid "Errors"
 msgstr "错误"
 
@@ -12481,6 +12799,11 @@ msgstr "执行 ID"
 msgid "Existing Field"
 msgstr "现有字段"
 
+#. js-lingui-id: KPxvYJ
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Existing lead found: {existingLeadFullName}. The new policy will be linked to this lead."
+msgstr ""
+
 #. js-lingui-id: ydzS9x
 #: src/modules/spreadsheet-import/provider/components/SpreadsheetImport.tsx
 msgid "Exit"
@@ -12720,6 +13043,11 @@ msgstr "表达式无效"
 msgid "External Event ID"
 msgstr "外部事件 ID"
 
+#. js-lingui-id: cmHChB
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "External systems POST data to a webhook URL"
+msgstr ""
+
 #. js-lingui-id: 07Wl2A
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 msgid "Extra credits"
@@ -12759,6 +13087,8 @@ msgstr "表情"
 #: src/modules/settings/application-monitoring/components/ApplicationMonitoringFunctionsTable.tsx
 #: src/modules/settings/application-monitoring/components/ApplicationMonitoringVersionsTable.tsx
 #: src/modules/settings/emailing-domains/utils/getEmailingDomainStatusDisplay.ts
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/workflow/workflow-diagram/utils/getWorkflowRunStatusTagProps.ts
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowRunStepLogsEmailDetail.tsx
 #: src/pages/settings/admin-panel/SettingsAdminInstanceStatus.tsx
@@ -12852,6 +13182,16 @@ msgstr "创建智能体失败"
 #: src/modules/activities/calendar/hooks/useCreateCalendarEvent.ts
 msgid "Failed to create calendar event"
 msgstr "创建日历事件失败"
+
+#. js-lingui-id: d6Ejg6
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Failed to create policy"
+msgstr ""
+
+#. js-lingui-id: z8q4aM
+#: src/modules/reconciliation/hooks/useOpenReconciliationImportDialog.ts
+msgid "Failed to create reconciliation"
+msgstr ""
 
 #. js-lingui-id: +xlTfK
 #: src/modules/object-record/hooks/useCreateOneRecord.ts
@@ -12969,6 +13309,12 @@ msgstr "无法完成文件上传"
 msgid "Failed to finalize logo upload"
 msgstr "无法完成徽标上传"
 
+#. js-lingui-id: ab8w4L
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
+msgid "Failed to flag the review item for audit."
+msgstr ""
+
 #. js-lingui-id: raSnTc
 #: src/modules/settings/admin-panel/components/SettingsAdminTwoFactorAuthenticationRecoveryCode.tsx
 #: src/modules/settings/members/components/MemberTwoFactorAuthenticationRecoverySection.tsx
@@ -13017,6 +13363,22 @@ msgstr "未能将相关记录链接到此事件"
 msgid "Failed to load agent details."
 msgstr "未能加载智能体详细信息。"
 
+#. js-lingui-id: nrBy0K
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Failed to load all review items — showing {loadedReviewItemsCount} of {totalCount}. Counts and batch actions are unavailable until the full list loads; reload to retry."
+msgstr ""
+
+#. js-lingui-id: +6uoxu
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Failed to load all review items — showing {loadedReviewItemsCount}. Counts and batch actions are unavailable until the full list loads; reload to retry."
+msgstr ""
+
+#. js-lingui-id: Gr34Md
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Failed to load all review items — the list is incomplete."
+msgstr ""
+
 #. js-lingui-id: LGNhPn
 #: src/modules/settings/billing/components/SettingsBillingPageLayout.tsx
 #: src/modules/settings/billing/components/SettingsBillingPageLayout.tsx
@@ -13033,6 +13395,16 @@ msgstr "加载 Front 组件失败：{0}"
 #: src/modules/front-components/components/FrontComponentLoadErrorToastEffect.tsx
 msgid "Failed to load front component: {errorMessage}"
 msgstr "加载 Front 组件失败：{errorMessage}"
+
+#. js-lingui-id: 0bOWK5
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Failed to load ingestion pipeline"
+msgstr ""
+
+#. js-lingui-id: n9QylU
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Failed to load ingestion pipelines"
+msgstr ""
 
 #. js-lingui-id: VxZSi+
 #: src/modules/settings/admin-panel/components/SettingsAdminServerAdmins.tsx
@@ -13065,6 +13437,11 @@ msgstr "注销其他设备失败"
 msgid "Failed to log out this device"
 msgstr "注销此设备失败"
 
+#. js-lingui-id: Hske/+
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Failed to mark the review item approved."
+msgstr ""
+
 #. js-lingui-id: cCu9vt
 #: src/modules/object-record/record-merge/hooks/useMergeRecordsActions.ts
 msgid "Failed to merge records"
@@ -13086,6 +13463,11 @@ msgstr "重新连接日历账户失败"
 #: src/pages/settings/admin-panel/SettingsAdminWorkspacesStatus.tsx
 msgid "Failed to refresh upgrade status"
 msgstr "刷新升级状态失败"
+
+#. js-lingui-id: GXzziZ
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Failed to reject the review item."
+msgstr ""
 
 #. js-lingui-id: 3YA1cX
 #: src/pages/settings/admin-panel/SettingsAdminAiProviderDetail.tsx
@@ -13378,6 +13760,11 @@ msgstr "功能启用至"
 msgid "Feedback"
 msgstr "反馈"
 
+#. js-lingui-id: 08HlXT
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Fetch data from an external API on a schedule"
+msgstr ""
+
 #. js-lingui-id: 2lOBKV
 #: src/modules/metadata-error-handler/hooks/useMetadataErrorHandler.ts
 msgid "field"
@@ -13431,6 +13818,11 @@ msgstr "字段无效"
 #: src/modules/spreadsheet-import/utils/dataMutations.ts
 msgid "Field is required"
 msgstr "字段为必填项"
+
+#. js-lingui-id: QTxpMd
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Field mappings"
+msgstr ""
 
 #. js-lingui-id: y+iJfP
 #: src/modules/spreadsheet-import/utils/dataMutations.ts
@@ -13893,6 +14285,16 @@ msgstr "请解决付款问题，以保持您的高级功能处于启用状态。
 msgid "Fix the payment issue to restore your premium features."
 msgstr "请解决付款问题，以恢复您的高级功能。"
 
+#. js-lingui-id: 82oqwI
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Flag for review"
+msgstr ""
+
+#. js-lingui-id: 3UYUtA
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Flagged"
+msgstr ""
+
 #. js-lingui-id: ylQd2j
 #: src/modules/object-core/workflows/components/CoreWorkflowShowPageTabList.tsx
 #: src/modules/side-panel/pages/workflow/action/components/SidePanelWorkflowSelectAction.tsx
@@ -13945,6 +14347,11 @@ msgstr "在 X 上关注我们"
 #: src/modules/ai/components/AiChatThreadFollowersField.tsx
 msgid "Following"
 msgstr "正在关注"
+
+#. js-lingui-id: f2Qvgz
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
+msgid "Follows See"
+msgstr ""
 
 #. js-lingui-id: q3il6U
 #: src/modules/advanced-text-editor/utils/getAdvancedTextEditorTypographySettings.ts
@@ -14534,6 +14941,16 @@ msgstr "前往工作流"
 msgid "Gold"
 msgstr "金色"
 
+#. js-lingui-id: O2asbG
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Good match — policy # and agent"
+msgstr ""
+
+#. js-lingui-id: gRhy1o
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Good match — unique policy #"
+msgstr ""
+
 #. js-lingui-id: +g90tY
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceCreditGrantModal.tsx
 msgid "Goodwill gesture after the March incident"
@@ -14780,6 +15197,11 @@ msgstr "账户名称"
 msgid "Happy"
 msgstr "开心"
 
+#. js-lingui-id: PaYwfH
+#: src/modules/object-record/advanced-filter/components/AdvancedFilterOneToManyEmptinessItems.tsx
+msgid "Has any {targetLabelPlural}"
+msgstr ""
+
 #. js-lingui-id: WsF7cD
 #: src/modules/activities/emails/components/EmailThreadMessageSender.tsx
 msgid "Has attachments"
@@ -14789,6 +15211,11 @@ msgstr "有附件"
 #: src/modules/settings/data-model/constants/RelationTypes.ts
 msgid "Has many"
 msgstr "一对多"
+
+#. js-lingui-id: gKE7V1
+#: src/modules/object-record/advanced-filter/components/AdvancedFilterOneToManyEmptinessItems.tsx
+msgid "Has no {targetLabelPlural}"
+msgstr ""
 
 #. js-lingui-id: j4eGoe
 #: src/modules/workflow/workflow-variables/constants/WorkflowPersistedOutputSchemaLabels.ts
@@ -14977,6 +15404,11 @@ msgstr "隐藏字段"
 msgid "Hidden Fields"
 msgstr "隐藏字段"
 
+#. js-lingui-id: uOjTwH
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelShowInSidebarRow.tsx
+msgid "Hidden for this object"
+msgstr ""
+
 #. js-lingui-id: 0cIXZQ
 #: src/modules/settings/security/components/SettingsSecurityAuthProvidersOptionsList.tsx
 msgid "Hidden from email-domain discovery. Members and invitees still see it."
@@ -15061,6 +15493,11 @@ msgstr "隐藏标签"
 msgid "Hide logs"
 msgstr "隐藏日志"
 
+#. js-lingui-id: w14tga
+#: src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx
+msgid "Hide run details"
+msgstr ""
+
 #. js-lingui-id: y9sG4l
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectIndexesSection.tsx
 msgid "Hide system indexes"
@@ -15129,6 +15566,11 @@ msgstr "我能帮您做什么？"
 #: src/modules/settings/billing/components/SettingsBillingCreditsSection.tsx
 msgid "How credits work"
 msgstr "积分如何运作"
+
+#. js-lingui-id: k3q0Rv
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "How data will enter the pipeline"
+msgstr ""
 
 #. js-lingui-id: nHmYga
 #: src/modules/settings/billing/components/SettingsBillingLimitForm.tsx
@@ -15594,6 +16036,11 @@ msgstr "正在导入"
 msgid "Importing {importProgress}%"
 msgstr "正在导入 {importProgress}%"
 
+#. js-lingui-id: pou4be
+#: src/modules/spreadsheet-import/utils/getImportJobLabel.ts
+msgid "Importing {objectLabelPlural}"
+msgstr ""
+
 #. js-lingui-id: YgmSaz
 #: src/modules/spreadsheet-import/steps/components/ImportDataStep.tsx
 msgid "Importing Data ..."
@@ -15615,9 +16062,15 @@ msgid "In {listName}"
 msgstr "在 {listName} 内"
 
 #. js-lingui-id: /LCAwL
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceDataExportSection.tsx
 msgid "In progress"
 msgstr "进行中"
+
+#. js-lingui-id: mUquLi
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "In review"
+msgstr ""
 
 #. js-lingui-id: 0Nl1Pt
 #: src/modules/side-panel/pages/send-campaign/components/SendCampaignRecipientsCard.tsx
@@ -15639,6 +16092,7 @@ msgstr "In-Reply-To"
 #: src/modules/settings/data-model/object-details/components/SettingsObjectRelationsTable.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectValidationRulesSection.tsx
 #: src/modules/settings/domains/components/SettingsWorkspaceDomainCard.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 msgid "Inactive"
 msgstr "未激活"
 
@@ -15681,6 +16135,11 @@ msgstr "每个席位包含"
 #: src/modules/settings/applications/components/SettingsApplicationContentSummarySection.tsx
 msgid "Includes"
 msgstr "包含"
+
+#. js-lingui-id: qAKZVu
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Incoming payload"
+msgstr ""
 
 #. js-lingui-id: mtGDyy
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceBillingContent.tsx
@@ -15774,6 +16233,25 @@ msgstr "关于当前用户的信息 (自动生成并包含在每个请求中)"
 #: src/pages/settings/members/SettingsWorkspaceMember.tsx
 msgid "Infos"
 msgstr "信息"
+
+#. js-lingui-id: TWe7Ii
+#: src/modules/settings/hooks/useSettingsNavigationItems.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Ingestion pipelines"
+msgstr ""
+
+#. js-lingui-id: 3Uj4K/
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelShowInSidebarRow.tsx
+msgid "Inherited from role"
+msgstr ""
+
+#. js-lingui-id: HegNuD
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
+msgid "Inherited from role ({roleDefaultLabel})"
+msgstr ""
 
 #. js-lingui-id: XP/nZ1
 #: src/modules/log-console/constants/LogConsoleRecordActions.ts
@@ -16137,6 +16615,11 @@ msgstr "无效的小时值 \"{newHour}\"。应为 0 到 23 之间的整数"
 msgid "Invalid hour value \"{newHour}\". Should be integer greater than 1"
 msgstr "无效的小时值 \"{newHour}\"。应为大于 1 的整数"
 
+#. js-lingui-id: qiNUlw
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "Invalid JSON. Please enter a valid JSON array or object."
+msgstr ""
+
 #. js-lingui-id: jw4O7y
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerCronForm.tsx
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerCronForm.tsx
@@ -16239,11 +16722,6 @@ msgstr "邀请链接已发送到电子邮件地址"
 msgid "Invite more"
 msgstr "邀请更多"
 
-#. js-lingui-id: x1m5RZ
-#: src/modules/navigation/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx
-msgid "Invite user"
-msgstr "邀请用户"
-
 #. js-lingui-id: d+Y+rP
 #: src/modules/onboarding/components/free-credits/OnboardingFreeCreditsPopoverContent.tsx
 #: src/pages/onboarding/InviteTeam.tsx
@@ -16274,6 +16752,11 @@ msgstr "为晚于或等于"
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid "Is before"
 msgstr "在之前"
+
+#. js-lingui-id: 5YQ+ks
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "is empty"
+msgstr ""
 
 #. js-lingui-id: Hte7bc
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
@@ -16345,6 +16828,11 @@ msgstr "不是有效的 URL"
 msgid "is not a valid UUID"
 msgstr "不是有效的 UUID"
 
+#. js-lingui-id: Y6yeW3
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "is not empty"
+msgstr ""
+
 #. js-lingui-id: ldI7NO
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid "Is not empty"
@@ -16354,6 +16842,11 @@ msgstr "不为空"
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
 msgid "Is not null"
 msgstr "不是零值"
+
+#. js-lingui-id: JsyeiC
+#: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
+msgid "Is not relative"
+msgstr ""
 
 #. js-lingui-id: jPtV7x
 #: src/modules/object-record/object-filter-dropdown/utils/getOperandLabel.ts
@@ -17068,6 +17561,11 @@ msgstr "如果不需要导入电子邮件，请留空。"
 msgid "Leave blank if you don't need to send emails."
 msgstr "如果不需要发送电子邮件，请留空。"
 
+#. js-lingui-id: CfUQPJ
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Leave comment"
+msgstr ""
+
 #. js-lingui-id: qvRaz1
 #: src/modules/settings/profile/components/DeleteAccount.tsx
 #: src/modules/settings/profile/components/DeleteAccount.tsx
@@ -17514,6 +18012,16 @@ msgstr "已加载的技能"
 msgid "Loading {formattedNames}"
 msgstr "正在加载 {formattedNames}"
 
+#. js-lingui-id: ynKyR6
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Loading all review items ({loadedReviewItemsCount} loaded) — batch actions are available once the list is complete."
+msgstr ""
+
+#. js-lingui-id: uRpIAI
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Loading all review items ({loadedReviewItemsCount} of {totalCount} loaded) — batch actions are available once the list is complete."
+msgstr ""
+
 #. js-lingui-id: 58V8TX
 #: src/modules/settings/admin-panel/apps/components/SettingsAdminApps.tsx
 msgid "Loading apps..."
@@ -17647,6 +18155,7 @@ msgstr "正在加载您的进度"
 #: src/modules/navigation-menu-item/edit/components/NavigationMenuItemAddDropdownContent.tsx
 #: src/modules/navigation-menu-item/edit/components/NavigationMenuItemAddDropdownContent.tsx
 #: src/modules/object-record/record-field/ui/form-types/components/FormWorkspaceMemberFilterValueInputDropdownContent.tsx
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminVersionDisplay.tsx
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentEntityPickerDropdown.tsx
 #: src/modules/views/hooks/useComputeRecordRelationFilterDisplayValue.tsx
@@ -17705,6 +18214,7 @@ msgstr "日志已复制为 JSON"
 
 #. js-lingui-id: FgAxTj
 #: src/modules/auth/sign-in-up/components/WorkspaceSelectionFooter.tsx
+#: src/modules/navigation/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx
 #: src/modules/navigation/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownDefaultComponents.tsx
 #: src/modules/onboarding/components/upgrade-free-trial/ChooseYourPlanErrorState.tsx
 #: src/modules/settings/profile/devices/components/SettingsDeviceSessionRowDropdownMenu.tsx
@@ -18078,6 +18588,11 @@ msgstr "手动"
 msgid "Manual configuration"
 msgstr "手动配置"
 
+#. js-lingui-id: nA7haO
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Manual match"
+msgstr ""
+
 #. js-lingui-id: FD1NX6
 #: src/modules/workflow/constants/WorkflowStepDefaultNames.ts
 msgid "Manual trigger"
@@ -18088,6 +18603,11 @@ msgstr "手动触发器"
 msgid "Manually selected for this mode."
 msgstr "已为此模式手动选择。"
 
+#. js-lingui-id: Sjsd1V
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Map source fields to CRM fields"
+msgstr ""
+
 #. js-lingui-id: lkcAoj
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
 msgid "Margin"
@@ -18097,6 +18617,11 @@ msgstr "边距"
 #: src/modules/ai/components/AiChatInboxBulkActions.tsx
 msgid "Mark all done"
 msgstr "全部标记为完成"
+
+#. js-lingui-id: 0Vx1UP
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Mark approved"
+msgstr ""
 
 #. js-lingui-id: yYix7P
 #: src/modules/keyboard-shortcut-menu/constants/KeyboardShortcutsGeneral.ts
@@ -18143,6 +18668,16 @@ msgstr "匹配 {entry}"
 #: src/modules/spreadsheet-import/steps/components/SpreadsheetImportStepperContainer.tsx
 msgid "Match Columns"
 msgstr "匹配列"
+
+#. js-lingui-id: bmVasd
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
+msgid "Matching records"
+msgstr ""
+
+#. js-lingui-id: QeO2Lu
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Matching rows…"
+msgstr ""
 
 #. js-lingui-id: CK1KXz
 #: src/modules/ai/utils/getAiModelEffortLabel.ts
@@ -18639,7 +19174,9 @@ msgid "Mobile"
 msgstr "移动端"
 
 #. js-lingui-id: zz/Wd/
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
 #: src/pages/settings/ai/components/SettingsAiModelTiersPreview.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 msgid "Mode"
 msgstr "模式"
 
@@ -18979,6 +19516,11 @@ msgstr "已移至回收站"
 msgid "ms"
 msgstr "毫秒"
 
+#. js-lingui-id: lBA5C1
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Multi-match"
+msgstr ""
+
 #. js-lingui-id: SAcUP6
 #: src/modules/settings/data-model/constants/SettingsNonCompositeFieldTypeConfigs.ts
 msgctxt "Field type"
@@ -19072,6 +19614,7 @@ msgstr "不适用"
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectSearchSection.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectValidationRulesSection.tsx
 #: src/modules/settings/developers/components/SettingsApiKeysTable.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
 #: src/modules/settings/logic-functions/components/SettingsLogicFunctionNewForm.tsx
 #: src/modules/settings/members/components/MemberInfosTab.tsx
 #: src/modules/settings/roles/components/SettingsRolesTableHeader.tsx
@@ -19103,6 +19646,7 @@ msgstr "不适用"
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeysNew.tsx
 #: src/pages/settings/general/SettingsGeneral.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 #: src/pages/settings/members/tabs/SettingsWorkspaceMembersTeamTab.tsx
 #: src/pages/settings/profile/SettingsProfile.tsx
 #: src/testing/mock-data/tableData.ts
@@ -19134,6 +19678,11 @@ msgstr "姓名详情"
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectSettings.tsx
 msgid "Name in both singular (e.g., 'Invoice') and plural (e.g., 'Invoices') forms."
 msgstr "名称的单数形式（例如，“发票”）和复数形式（例如，“发票们”）。"
+
+#. js-lingui-id: FoFmU5
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Name mismatch"
+msgstr ""
 
 #. js-lingui-id: z+6jaZ
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
@@ -19226,6 +19775,11 @@ msgstr "需要一个 Select 字段"
 msgid "Needs input"
 msgstr "需要输入"
 
+#. js-lingui-id: yKHoN3
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "needs review"
+msgstr ""
+
 #. js-lingui-id: wW3b68
 #: src/modules/log-console/constants/LogConsoleSources.tsx
 #: src/modules/log-console/constants/LogConsoleWebhookStatusColumn.tsx
@@ -19236,6 +19790,7 @@ msgstr "网络错误"
 #. js-lingui-id: qqeAJM
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceCreditGrantsTable.tsx
 #: src/modules/settings/admin-panel/constants/CreditGrantExpiryOptions.ts
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
 #: src/modules/settings/developers/constants/ExpirationDates.ts
 #: src/modules/settings/developers/utils/formatExpiration.ts
 #: src/pages/settings/ai/components/SettingsAiBehaviorModeSelect.tsx
@@ -19270,6 +19825,7 @@ msgstr "绝不由 Twenty 或提供商使用"
 #: src/modules/ui/navigation/navigation-drawer/components/NavigationDrawerItem.tsx
 #: src/pages/settings/accounts/SettingsNewAccount.tsx
 #: src/pages/settings/data-model/SettingsNewObject.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew.tsx
 msgid "New"
 msgstr "新"
 
@@ -19440,6 +19996,16 @@ msgstr "新对象"
 #: src/pages/auth/PasswordReset.tsx
 msgid "New Password"
 msgstr "新密码"
+
+#. js-lingui-id: 2llx5k
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew.tsx
+msgid "New pipeline"
+msgstr ""
+
+#. js-lingui-id: xzy2KA
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "New Policy"
+msgstr ""
 
 #. js-lingui-id: ywJUqq
 #: src/modules/settings/billing/components/internal/ResourceCreditPackagePickerModal.tsx
@@ -19696,6 +20262,11 @@ msgstr "没有活动与所选类型匹配。"
 msgid "No activity yet"
 msgstr "暂无活动"
 
+#. js-lingui-id: MzWWhz
+#: src/modules/object-record/record-form/utils/getRequiredConditionViolationMessage.ts
+msgid "No agent profile is linked to your account, so {label} can't be filled in. Ask an admin to link one."
+msgstr ""
+
 #. js-lingui-id: f9b1sj
 #: src/modules/settings/roles/role-assignment/components/SettingsRoleAssignmentTable.tsx
 msgid "No agents assigned"
@@ -19835,6 +20406,11 @@ msgstr "此日历事件尚无通话录音。"
 msgid "No calling code"
 msgstr "无国家区号"
 
+#. js-lingui-id: oxqIH+
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
+msgid "No carrier configuration"
+msgstr ""
+
 #. js-lingui-id: ydE3k+
 #: src/modules/ai/components/AiChatThreadChannelPicker.tsx
 msgid "No channel"
@@ -19859,6 +20435,16 @@ msgstr "没有聊天与您的搜索匹配"
 #: src/modules/side-panel/pages/search-ai-chats/components/SidePanelAiChatPickerRecentChats.tsx
 msgid "No chats yet"
 msgstr "暂无聊天"
+
+#. js-lingui-id: aQvXz5
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
+msgid "No comments match the current filter."
+msgstr ""
+
+#. js-lingui-id: Q8eIK/
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
+msgid "No comments yet."
+msgstr ""
 
 #. js-lingui-id: qTxPPY
 #: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelPermissionFieldSelectFieldMenu.tsx
@@ -20030,6 +20616,7 @@ msgid "No field configured"
 msgstr "未配置字段"
 
 #. js-lingui-id: /hvarH
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownRelationSubFieldsContent.tsx
 #: src/modules/side-panel/pages/page-layout/components/dropdown-content/ChartGroupByFieldSelectionDropdownContentBase.tsx
 #: src/modules/side-panel/pages/page-layout/components/dropdown-content/ChartGroupByFieldSelectionTargetObjectFieldsView.tsx
 #: src/modules/side-panel/pages/page-layout/components/dropdown-content/FieldWidgetFieldDropdownContent.tsx
@@ -20093,6 +20680,11 @@ msgstr "此工具没有输入字段"
 msgid "No install, upgrade or uninstall in this period"
 msgstr "本周期内没有安装、升级或卸载操作"
 
+#. js-lingui-id: Cb3MiN
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "No items match your filters"
+msgstr ""
+
 #. js-lingui-id: lj3GoP
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminQueueJobsTable.tsx
 msgid "No jobs found"
@@ -20125,6 +20717,7 @@ msgstr "找不到最新版本"
 
 #. js-lingui-id: qtoOYG
 #: src/modules/ai/utils/getAiChatUsageLabel.ts
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow.tsx
 #: src/modules/side-panel/pages/page-layout/components/dashboard/SidePanelDashboardRecordTableSettings.tsx
 msgid "No limit"
 msgstr "无限制"
@@ -20254,6 +20847,11 @@ msgstr "没有可用的输出"
 msgid "No parameters"
 msgstr "无参数"
 
+#. js-lingui-id: VUK1wE
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "No payload data available"
+msgstr ""
+
 #. js-lingui-id: 5pSj4j
 #: src/modules/settings/billing/effect-components/EndTrialAfterPaymentMethodEffect.tsx
 #: src/modules/settings/billing/hooks/useEndSubscriptionTrialPeriod.ts
@@ -20264,6 +20862,11 @@ msgstr "未找到付款方式。请更新您的账单明细。"
 #: src/modules/settings/roles/role-permissions/object-level-permissions/components/SettingsRolePermissionsObjectLevelSection.tsx
 msgid "No permissions have been set for individual objects."
 msgstr "尚未为个人对象设置权限。"
+
+#. js-lingui-id: 0CGa2B
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "No pipelines configured yet. Create one to start ingesting data."
+msgstr ""
 
 #. js-lingui-id: pRxlf6
 #: src/pages/settings/applications/utils/getClaimErrorContent.ts
@@ -20427,6 +21030,7 @@ msgstr "尚无规则"
 
 #. js-lingui-id: eOvDHm
 #: src/modules/object-core/workflows/components/CoreWorkflowRunsTab.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 msgid "No runs yet"
 msgstr "尚无运行记录"
 
@@ -21539,6 +22143,11 @@ msgstr "在...中打开记录"
 msgid "Open records on a dedicated page"
 msgstr "在专用页面中打开记录"
 
+#. js-lingui-id: 3qCweT
+#: src/modules/object-record/record-table/record-table-cell/components/RecordTableRelationSubFieldCellButtons.tsx
+msgid "Open related record"
+msgstr ""
+
 #. js-lingui-id: q170S2
 #: src/modules/settings/mcp/utils/buildMcpSetupCategories.tsx
 msgid "Open Replit with the Twenty remote server config."
@@ -22126,6 +22735,31 @@ msgstr ""
 msgid "Parameters"
 msgstr "参数"
 
+#. js-lingui-id: CGj3gX
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "parse error"
+msgstr ""
+
+#. js-lingui-id: rITwuO
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "parse errors"
+msgstr ""
+
+#. js-lingui-id: 9Nm0oc
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Parsed — awaiting matching"
+msgstr ""
+
+#. js-lingui-id: 7WTtNV
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Parsing file…"
+msgstr ""
+
+#. js-lingui-id: 3nRszo
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+msgid "Partial"
+msgstr ""
+
 #. js-lingui-id: 71zZ31
 #: src/modules/settings/billing/components/SettingsBillingPartnerCodeForm.tsx
 #: src/modules/settings/billing/components/SettingsBillingPartnerCodeForm.tsx
@@ -22207,6 +22841,11 @@ msgstr "在此粘贴预期的调用响应，以便稍后在工作流中使用其
 msgid "Paste or write your HTML here"
 msgstr "在此粘贴或编写您的 HTML"
 
+#. js-lingui-id: L3Xlp+
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "Paste sample JSON data to preview how records will be transformed"
+msgstr ""
+
 #. js-lingui-id: cpStVq
 #: src/modules/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationVerification.tsx
 msgid "Paste the code below"
@@ -22252,6 +22891,7 @@ msgid "Paused"
 msgstr "已暂停"
 
 #. js-lingui-id: QmXBEc
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Payment issue"
 msgstr "付款问题"
@@ -22280,6 +22920,7 @@ msgstr "PDF"
 #: src/modules/ai/components/AiChatApprovalOutcome.tsx
 #: src/modules/settings/domains/components/SettingsPublicDomainsListCard.tsx
 #: src/modules/settings/emailing-domains/utils/getEmailingDomainStatusDisplay.ts
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/settings/security/components/approvedAccessDomains/SettingsApprovedAccessDomainsListCard.tsx
 msgid "Pending"
 msgstr "待处理"
@@ -22376,6 +23017,11 @@ msgstr "周期"
 #: src/modules/settings/security/components/SettingsSecuritySettings.tsx
 msgid "Permanent deletion. Enter the number of days."
 msgstr "永久删除。 输入天数。"
+
+#. js-lingui-id: LfQbnA
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Permanently delete this pipeline"
+msgstr ""
 
 #. js-lingui-id: e7kLp1
 #: src/modules/log-console/constants/LogConsoleRecordActions.ts
@@ -22603,6 +23249,46 @@ msgstr "已固定"
 msgid "Pinned tab, always shown on the left"
 msgstr "固定选项卡，始终显示在左侧"
 
+#. js-lingui-id: JF7a91
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew.tsx
+msgid "Pipeline created"
+msgstr ""
+
+#. js-lingui-id: dl6JFY
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline deleted"
+msgstr ""
+
+#. js-lingui-id: MGP49q
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline enabled"
+msgstr ""
+
+#. js-lingui-id: JXXaLQ
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline run started"
+msgstr ""
+
+#. js-lingui-id: BjIyzH
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline settings and source configuration"
+msgstr ""
+
+#. js-lingui-id: 6dAwkH
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline status"
+msgstr ""
+
+#. js-lingui-id: snQ0bM
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Pipeline updated"
+msgstr ""
+
+#. js-lingui-id: KQ93w+
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Pipelines"
+msgstr ""
+
 #. js-lingui-id: hx1ePY
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsNumber.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/form-action/components/WorkflowFormFieldSettingsText.tsx
@@ -22712,6 +23398,11 @@ msgstr "请输入\"{confirmationValue}\"以确认您要删除此应用。与其�
 msgid "Please type \"{confirmationValue}\" to confirm you want to uninstall this application."
 msgstr ""
 
+#. js-lingui-id: MeqHKB
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Please type \"yes\" to confirm you want to delete this pipeline."
+msgstr ""
+
 #. js-lingui-id: GbtYRD
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
 msgid "Please type \"yes\" to confirm you want to delete this webhook."
@@ -22781,6 +23472,16 @@ msgstr "位置升序"
 msgid "position descending"
 msgstr "位置降序"
 
+#. js-lingui-id: +ZxA9L
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Possible match — best scored"
+msgstr ""
+
+#. js-lingui-id: 5gEG2b
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Possible match — NPN, date, and name"
+msgstr ""
+
 #. js-lingui-id: ofTr89
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
 #: src/modules/object-record/record-field/ui/form-types/components/FormAddressFieldInput.tsx
@@ -22790,6 +23491,11 @@ msgstr "位置降序"
 #: src/modules/ui/field/input/components/AddressInput.tsx
 msgid "Post Code"
 msgstr "邮政编码"
+
+#. js-lingui-id: kMnhDI
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "POST data to this URL with the webhook secret in the x-webhook-secret header"
+msgstr ""
 
 #. js-lingui-id: OKJUcC
 #: src/modules/object-metadata/hooks/useSortSubFieldChoicesForField.ts
@@ -22867,6 +23573,11 @@ msgstr "无法预览"
 #: src/modules/settings/unsubscribers/components/SettingsUnsubscribePreview.tsx
 msgid "Preview of the page recipients see when they unsubscribe"
 msgstr "收件人在退订时看到的页面预览"
+
+#. js-lingui-id: 1ESED9
+#: src/modules/reconciliation/components/UnmatchedView.tsx
+msgid "Preview of the policy record that will be created. A new lead will also be created."
+msgstr ""
 
 #. js-lingui-id: DHhJ7s
 #: src/modules/ai/components/AiChatQuestionCard.tsx
@@ -23198,6 +23909,13 @@ msgstr "公开主题会显示在收件人首选项页面上。"
 msgid "Publish your app to the marketplace so others can install it"
 msgstr "将你的应用发布到应用市场，其他人即可安装"
 
+#. js-lingui-id: e4GHWP
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Pull"
+msgstr ""
+
 #. js-lingui-id: zZk9Yz
 #: src/modules/settings/admin-panel/constants/CreditGrantTypeLabels.ts
 msgid "Purchase"
@@ -23209,6 +23927,13 @@ msgstr "购买"
 #: src/pages/settings/ai/constants/SettingsAiAssistantColorLabels.ts
 msgid "Purple"
 msgstr "紫色"
+
+#. js-lingui-id: uO9WLl
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Push"
+msgstr ""
 
 #. js-lingui-id: GUpZQM
 #: src/modules/ai/components/CodeExecutionDisplay.tsx
@@ -23458,6 +24183,11 @@ msgstr "读取您的个人资料"
 msgid "Read-only"
 msgstr "只读"
 
+#. js-lingui-id: 0nFlZG
+#: src/modules/object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields.ts
+msgid "Read-only — exported for reference"
+msgstr ""
+
 #. js-lingui-id: 6wOBcu
 #: src/pages/settings/layout/components/SettingsLayoutDetailScaffold.tsx
 msgid "Read-only {entityTypeLabel} definition shipped by this app"
@@ -23535,6 +24265,11 @@ msgstr "最近事件（最旧 → 最新）"
 msgid "Recent failed runs"
 msgstr "最近失败的运行"
 
+#. js-lingui-id: S3CuYM
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Recent pipeline execution logs"
+msgstr ""
+
 #. js-lingui-id: dF8kMd
 #: src/modules/object-core/workflows/components/CoreWorkflowRecentRunsCell.tsx
 #: src/modules/object-core/workflows/constants/WorkflowCoreTableColumns.tsx
@@ -23587,6 +24322,16 @@ msgstr "收件人将在发送时重新统计。在此之前您可以取消。"
 #: src/modules/settings/admin-panel/components/SettingsAdminChatAskQuestionsQuestion.tsx
 msgid "Recommended"
 msgstr "推荐"
+
+#. js-lingui-id: YdscgS
+#: src/modules/reconciliation/components/ReconciliationReviewPage.tsx
+msgid "Reconciliation objects not found in this workspace."
+msgstr ""
+
+#. js-lingui-id: XtVtwd
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
+msgid "Reconciliation runs need a carrier configuration record. Create a carrierConfig record linked to its carrier (or run the carrier-config seed command), then start the run again."
+msgstr ""
 
 #. js-lingui-id: gcoiFh
 #: src/modules/activities/calendar/components/CalendarEventComposerFields.tsx
@@ -23650,6 +24395,11 @@ msgstr "记录（可选）"
 #: src/modules/validation-rules/components/SettingsValidationRulePreview.tsx
 msgid "Record {displayedRecordNumber} of {recordCount}"
 msgstr "第 {displayedRecordNumber} 条记录，共 {recordCount} 条"
+
+#. js-lingui-id: BqH5cX
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "Record {recordIndex}: {errorMessage}"
+msgstr ""
 
 #. js-lingui-id: v5nqef
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
@@ -23832,6 +24582,7 @@ msgstr "记录"
 #: src/modules/settings/billing/constants/SettingsBillingPlanComparisonRows.ts
 #: src/modules/settings/billing/constants/UsageLimitResourceTypeLabels.ts
 #: src/modules/settings/billing/constants/UsageLimitUnitLabels.ts
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/settings/roles/role-permissions/object-level-permissions/components/SettingsRolePermissionsObjectLevelTableHeader.tsx
 #: src/modules/settings/usage/constants/UsageOperationTypeLabels.ts
 #: src/modules/workflow/workflow-variables/utils/generate/computeStepOutputSchema.ts
@@ -23965,9 +24716,15 @@ msgstr "在开发者设置中注册外部 MCP 服务器，并将其工具提供�
 msgid "Registered as a development instance. This instance will not be billed."
 msgstr "已注册为开发实例。此实例不会产生计费。"
 
+#. js-lingui-id: 0Uj6m3
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Reinstated"
+msgstr ""
+
 #. js-lingui-id: 1t/NnN
 #: src/modules/ai/components/internal/AiChatToolCallApprovalArgumentsCard.tsx
 #: src/modules/ai/components/internal/AiChatToolCallApprovalFrontComponentCard.tsx
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
 msgid "Reject"
 msgstr "拒绝"
 
@@ -24227,6 +24984,12 @@ msgstr "移除链接"
 msgid "Remove logo"
 msgstr "移除徽标"
 
+#. js-lingui-id: VZFGnb
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Remove mapping"
+msgstr ""
+
 #. js-lingui-id: iW2ZAl
 #: src/modules/settings/security/components/SettingsSecurityIframeMediaPermissionRow.tsx
 msgid "Remove media access for {origin}"
@@ -24478,6 +25241,7 @@ msgstr "需要身份验证"
 
 #. js-lingui-id: TMLAx2
 #: src/modules/settings/ai/components/SettingsToolParameterTable.tsx
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
 msgid "Required"
 msgstr "必填"
 
@@ -24796,6 +25560,13 @@ msgstr "逆字母顺序"
 msgid "Review additional microphone or camera access requested by this app. Members still need to enable access and approve the browser permission."
 msgstr "查看此应用请求的额外麦克风或摄像头访问权限。成员仍需启用访问权限并批准浏览器权限。"
 
+#. js-lingui-id: 8NwZGc
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Review items"
+msgstr ""
+
 #. js-lingui-id: Jlf4oD
 #: src/modules/settings/applications/components/SettingsApplicationIframeMediaPermissionsSection.tsx
 msgid "Review media access"
@@ -24971,6 +25742,7 @@ msgstr "轮询分配"
 #. js-lingui-id: Q7BPyr
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
+#: src/modules/reconciliation/utils/getRunSummary.ts
 msgid "row"
 msgstr "行"
 
@@ -25001,6 +25773,7 @@ msgstr "行级安全"
 
 #. js-lingui-id: OXexf7
 #: src/modules/advanced-text-editor/constants/RichTextBlockSlashCommands.ts
+#: src/modules/reconciliation/utils/getRunSummary.ts
 msgid "rows"
 msgstr "行"
 
@@ -25049,6 +25822,11 @@ msgstr "运行工作流并返回此处查看其执行情况"
 msgid "Run AI agents"
 msgstr "运行 AI 代理"
 
+#. js-lingui-id: D5XCKn
+#: src/modules/marketplace/constants/PermissionFlagSummaryConfigs.ts
+msgid "Run carrier reconciliation and apply review decisions"
+msgstr ""
+
 #. js-lingui-id: jaxldt
 #: src/modules/marketplace/constants/PermissionFlagSummaryConfigs.ts
 msgid "Run code"
@@ -25059,14 +25837,40 @@ msgstr "运行代码"
 msgid "Run code to analyze files and data"
 msgstr "运行代码以分析文件和数据"
 
+#. js-lingui-id: cQ4eu+
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Run failed"
+msgstr ""
+
+#. js-lingui-id: RNrsN5
+#: src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx
+msgid "Run failed — no error message recorded; check worker logs."
+msgstr ""
+
 #. js-lingui-id: UPaWvi
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionTestTab.tsx
 msgid "Run Function"
 msgstr "运行函数"
 
+#. js-lingui-id: Tkewlw
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Run history"
+msgstr ""
+
+#. js-lingui-id: Wb3E4g
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "Run now"
+msgstr ""
+
+#. js-lingui-id: gdJPPW
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "Run test"
+msgstr ""
+
 #. js-lingui-id: RiQMUh
 #: src/modules/ai/components/AiChatApprovalOutcome.tsx
 #: src/modules/object-core/agents/components/CoreAgentRunStatus.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/workflow/workflow-diagram/utils/getWorkflowRunStatusTagProps.ts
 msgid "Running"
 msgstr "正在运行"
@@ -25229,10 +26033,20 @@ msgstr "另存为草稿"
 msgid "Save as new view"
 msgstr "另存为新视图"
 
+#. js-lingui-id: y3aU20
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Save changes"
+msgstr ""
+
 #. js-lingui-id: VenpPu
 #: src/modules/object-record/record-field/ui/meta-types/input/components/MultiItemFieldSaveButton.tsx
 msgid "Save item"
 msgstr "保存项目"
+
+#. js-lingui-id: bmrHdS
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Save new mappings"
+msgstr ""
 
 #. js-lingui-id: 7byqGp
 #: src/modules/layout-customization/hooks/useEnterLayoutCustomizationMode.ts
@@ -25285,6 +26099,11 @@ msgstr "缩放"
 #: src/modules/workflow/workflow-trigger/components/CronExpressionHelper.tsx
 msgid "Schedule"
 msgstr "计划"
+
+#. js-lingui-id: hN95UD
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Schedule (cron)"
+msgstr ""
 
 #. js-lingui-id: Ys/D8h
 #: src/modules/settings/admin-panel/health-status/maintenance-mode/components/SettingsAdminMaintenanceMode.tsx
@@ -25363,9 +26182,9 @@ msgstr "SDK"
 #. js-lingui-id: A1taO8
 #: src/modules/command-menu-item/engine-command/constants/EngineComponentKeyHeadlessComponentMap.tsx
 #: src/modules/command-menu-item/engine-command/constants/EngineComponentKeyHeadlessComponentMap.tsx
+#: src/modules/navigation/components/MainNavigationDrawerContent.tsx
 #: src/modules/navigation/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownWorkspacesListComponents.tsx
 #: src/modules/navigation/components/MultiWorkspaceDropdown/internal/MultiWorkspaceDropdownWorkspacesListComponents.tsx
-#: src/modules/navigation/components/NavigationDrawerHeader.tsx
 #: src/modules/navigation/hooks/useMobileNavigationBarItems.ts
 #: src/modules/object-record/record-field/ui/form-types/components/FormWorkspaceMemberFilterValueInputDropdownContent.tsx
 #: src/modules/object-record/record-filter/utils/getRecordFilterTypeAndLabelFromFieldMetadata.ts
@@ -25924,6 +26743,7 @@ msgstr "查看{objectLabel}"
 
 #. js-lingui-id: aOvXdk
 #: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevel.tsx
+#: src/modules/settings/roles/role-permissions/object-level-permissions/record-level-permissions/components/SettingsRolePermissionsObjectLevelRecordLevelOperationsSelect.tsx
 msgid "See {objectLabelPlural}"
 msgstr "查看{objectLabelPlural}"
 
@@ -26146,6 +26966,11 @@ msgstr "选择一个菜单项"
 msgid "Select a record type"
 msgstr "选择记录类型"
 
+#. js-lingui-id: +QPg5A
+#: src/modules/reconciliation/components/ReviewItemDetail.tsx
+msgid "Select a review item"
+msgstr ""
+
 #. js-lingui-id: dE5jOH
 #: src/modules/side-panel/pages/email-block-settings/components/EmailPageStyleSection.tsx
 msgid "Select a section, columns, button or divider in the email body to edit its settings."
@@ -26233,6 +27058,11 @@ msgstr "至少选择一个可用日历以检查冲突。"
 #: src/modules/ai/components/AiChatSchedulingPreferences.tsx
 msgid "Select at least one working day."
 msgstr "至少选择一个工作日。"
+
+#. js-lingui-id: RcW90r
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
+msgid "Select carrier"
+msgstr ""
 
 #. js-lingui-id: 0yxhOL
 #: src/modules/ai/components/AiChatThreadRow.tsx
@@ -27029,6 +27859,7 @@ msgid "Show API values"
 msgstr "显示 API 值"
 
 #. js-lingui-id: tAUYYP
+#: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownRelationSubFieldsContent.tsx
 #: src/modules/page-layout/widgets/fields/components/FieldsConfigurationFieldEditor.tsx
 #: src/modules/side-panel/pages/page-layout/components/record-table-settings/RecordTableSettingsFieldVisibility.tsx
 #: src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx
@@ -27051,6 +27882,11 @@ msgstr "显示隐藏组"
 #: src/modules/side-panel/components/SidePanelObjectFilterDropdownContent.tsx
 msgid "Show hidden objects"
 msgstr "显示隐藏对象"
+
+#. js-lingui-id: OVFeC4
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelShowInSidebarRow.tsx
+msgid "Show in Sidebar"
+msgstr ""
 
 #. js-lingui-id: 5S6Ndm
 #: src/modules/ai/components/AiChatNewThreadInboxListToggle.tsx
@@ -27085,6 +27921,16 @@ msgstr "显示于"
 #: src/modules/spreadsheet-import/steps/components/ValidationStep/ValidationStep.tsx
 msgid "Show only rows with errors"
 msgstr "仅显示包含错误的行"
+
+#. js-lingui-id: Fn8bzj
+#: src/modules/views/components/ViewFieldsHiddenDropdownSection.tsx
+msgid "Show relation fields"
+msgstr ""
+
+#. js-lingui-id: oPDm5w
+#: src/modules/reconciliation/components/ReconciliationRunSummaryBanner.tsx
+msgid "Show run details"
+msgstr ""
 
 #. js-lingui-id: 9u2I/P
 #: src/modules/settings/admin-panel/constants/SettingsAdminFeatureFlagMetadata.ts
@@ -27122,6 +27968,11 @@ msgstr ""
 msgid "Shown above the fields, for example what to fill in and why"
 msgstr "显示在字段上方，例如说明填写内容及原因"
 
+#. js-lingui-id: VgfkMS
+#: src/modules/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelShowInSidebarRow.tsx
+msgid "Shown for this object"
+msgstr ""
+
 #. js-lingui-id: P7rcbf
 #: src/modules/navigation/constants/OpenRecordInOptions.ts
 #: src/modules/settings/data-model/object-details/components/tabs/ObjectOpenRecordInPicker.tsx
@@ -27158,6 +28009,11 @@ msgstr "登录或创建账户"
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWithCredentials.tsx
 msgid "Sign up"
 msgstr "注册"
+
+#. js-lingui-id: tY2bAz
+#: src/modules/auth/sign-in-up/hooks/useRedirectToTrustedExternalReturnUrl.ts
+msgid "Sign-in to {targetHostname} failed"
+msgstr ""
 
 #. js-lingui-id: mHC57v
 #: src/modules/auth/sign-in-up/components/internal/SignInUpWithCredentials.tsx
@@ -27330,6 +28186,16 @@ msgstr "跳过连接对象 (类似于多对多关系)"
 #: src/modules/settings/admin-panel/components/SettingsAdminChatAskQuestionsPart.tsx
 msgid "Skipped"
 msgstr "已跳过"
+
+#. js-lingui-id: FrZTjK
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "skipped — invalid policy #"
+msgstr ""
+
+#. js-lingui-id: lxuLM7
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "skipped before start date"
+msgstr ""
 
 #. js-lingui-id: BIZl8w
 #: src/modules/ui/input/hooks/useColorLabels.ts
@@ -27617,10 +28483,20 @@ msgstr "源代码"
 msgid "Source Email Address"
 msgstr "源电子邮件地址"
 
+#. js-lingui-id: WUNtss
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Source field path"
+msgstr ""
+
 #. js-lingui-id: Jvqt/3
 #: src/modules/ai/components/AiChatApprovalMergeReviewContent.tsx
 msgid "Source records"
 msgstr "源记录"
+
+#. js-lingui-id: +ztzfF
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Source URL"
+msgstr ""
 
 #. js-lingui-id: xqlr9R
 #: src/modules/settings/experience/components/NumberFormatSelect.tsx
@@ -27797,6 +28673,7 @@ msgstr "启动您的订阅"
 #: src/modules/object-core/agents/components/CoreAgentRunsContent.tsx
 #: src/modules/object-core/workflows/components/CoreWorkflowRecentFailedRuns.tsx
 #: src/modules/object-core/workflows/components/CoreWorkflowRunsTab.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 msgid "Started"
 msgstr "已开始"
 
@@ -27863,6 +28740,7 @@ msgstr "统计"
 #: src/modules/settings/applications/constants/ApplicationContentTypeConfigs.ts
 #: src/modules/settings/components/SettingsDnsRecordsTable.tsx
 #: src/modules/settings/data-model/object-details/components/tabs/SettingsObjectValidationRulesSection.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/pages/settings/admin-panel/SettingsAdminApplicationRegistrationClaims.tsx
 #: src/pages/settings/admin-panel/SettingsAdminIndicatorHealthStatus.tsx
 #: src/pages/settings/admin-panel/SettingsAdminInstanceStatus.tsx
@@ -27874,8 +28752,19 @@ msgstr "统计"
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 msgid "Status"
 msgstr "状态"
+
+#. js-lingui-id: R0yX4q
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Status change"
+msgstr ""
+
+#. js-lingui-id: QeNit2
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Status unknown"
+msgstr ""
 
 #. js-lingui-id: Db4W3/
 #: src/modules/object-core/workflows/constants/CoreWorkflowFilterFields.ts
@@ -28033,6 +28922,16 @@ msgstr "与此工作区关联的 Stripe 客户"
 msgid "Stripe subscription"
 msgstr "Stripe 订阅"
 
+#. js-lingui-id: FzWlx+
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Strong match — policy # and date"
+msgstr ""
+
+#. js-lingui-id: XSEW7l
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Strong match — policy #, date, and agent"
+msgstr ""
+
 #. js-lingui-id: 1CalO6
 #: src/modules/side-panel/pages/page-layout/constants/ChartSettingsHeadings.ts
 msgid "Style"
@@ -28042,6 +28941,11 @@ msgstr ""
 #: src/modules/advanced-text-editor/constants/AdvancedTextEditorBlockCatalog.ts
 msgid "Styled container for document content"
 msgstr "用于文档内容的样式化容器"
+
+#. js-lingui-id: 103a/d
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Sub-field"
+msgstr ""
 
 #. js-lingui-id: WIUeUf
 #: src/modules/settings/data-model/fields/forms/address/components/SettingsDataModelFieldAddressForm.tsx
@@ -28614,6 +29518,17 @@ msgstr "与我们的团队沟通"
 msgid "Tarball"
 msgstr "Tarball"
 
+#. js-lingui-id: W0E6sp
+#: src/modules/settings/ingestion-pipeline/components/IngestionFieldMappingEditor.component.tsx
+msgid "Target CRM field"
+msgstr ""
+
+#. js-lingui-id: 2BAv9y
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
+msgid "Target object"
+msgstr ""
+
 #. js-lingui-id: sceIIK
 #: src/modules/settings/data-model/fields/forms/morph-relation/components/SettingsDataModelFieldRelationJunctionForm.tsx
 msgid "Target relation on Junction Object"
@@ -28639,6 +29554,11 @@ msgstr "任务标题"
 #: src/modules/activities/notes/components/NoteTile.tsx
 msgid "Task Title"
 msgstr "任务标题"
+
+#. js-lingui-id: o29of0
+#: src/modules/reconciliation/hooks/useOpenCreateAuditTaskDraft.ts
+msgid "Tasks cannot be linked to review items in this workspace."
+msgstr ""
 
 #. js-lingui-id: KM6m8p
 #: src/pages/settings/members/SettingsWorkspaceMembers.tsx
@@ -28695,6 +29615,7 @@ msgid "Terms of Service"
 msgstr "服务条款"
 
 #. js-lingui-id: NnH3pK
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/settings/logic-functions/components/tabs/SettingsLogicFunctionCodeEditorTab.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/code-action/components/WorkflowEditActionCode.tsx
 #: src/modules/workflow/workflow-steps/workflow-actions/code-action/components/WorkflowEditActionCode.tsx
@@ -28711,6 +29632,11 @@ msgstr "测试"
 #: src/modules/activities/emails/hooks/useSendMessageCampaignTest.ts
 msgid "Test email sent to {0}"
 msgstr "测试邮件已发送至 {0}"
+
+#. js-lingui-id: OR/E3N
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+msgid "Test pipeline"
+msgstr ""
 
 #. js-lingui-id: XZcrB5
 #: src/modules/workflow/workflow-steps/workflow-actions/http-request-action/components/HttpRequestTestVariableInput.tsx
@@ -28935,6 +29861,12 @@ msgstr "已为您的部署解析字段的完整协议。"
 msgid "The icon your workflow trigger will display in the command menu"
 msgstr "你的工作流触发器将在命令菜单中显示的图标"
 
+#. js-lingui-id: 70Oa+F
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+#: src/modules/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog.ts
+msgid "The import could not be started. Try again."
+msgstr ""
+
 #. js-lingui-id: RYl4Q1
 #: src/modules/settings/app-preferences/components/SettingsConnectedAccountSyncStatus.tsx
 msgid "The mail server certificate is invalid"
@@ -29032,6 +29964,11 @@ msgstr "该 PDF 已由 Twenty 预先签署，并与您的法律实体和授权�
 msgid "The priority record keeps its identity"
 msgstr "优先记录保留其身份"
 
+#. js-lingui-id: qVFCc4
+#: src/modules/reconciliation/hooks/useOpenReconciliationImportDialog.ts
+msgid "The reconciliation record was not created."
+msgstr ""
+
 #. js-lingui-id: Ir4tSJ
 #: src/modules/page-layout/widgets/call-recording/utils/getCallRecordingStatusDisplayConfiguration.ts
 msgid "The recorder is joining the call…"
@@ -29065,6 +30002,21 @@ msgstr "所选记录将传递给您的工作流程"
 #. js-lingui-id: aCcfHJ
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerManual.tsx
 msgid "The selected records (up to {maxRecordsFormatted}) will be passed to your workflow"
+msgstr ""
+
+#. js-lingui-id: FcYC/J
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "The server did not apply this item — it may be outside your edit window or no longer pending."
+msgstr ""
+
+#. js-lingui-id: DzXXW0
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "The server did not approve this item — it may be outside your edit window or no longer pending."
+msgstr ""
+
+#. js-lingui-id: yQ0zOK
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "The server did not undo this item — it may be outside your edit window or not applied."
 msgstr ""
 
 #. js-lingui-id: hKKMk0
@@ -29651,6 +30603,11 @@ msgstr "此角色已分配给这些 {roleTargetDisplayName}。"
 msgid "This rule is disabled. Records are not checked against it."
 msgstr "此规则已禁用。不会依据该规则检查记录。"
 
+#. js-lingui-id: efNl8T
+#: src/modules/reconciliation/components/ReconciliationCarrierPickerModal.tsx
+msgid "This run will parse, match, and prefill column mapping using the selected carrier configuration."
+msgstr ""
+
 #. js-lingui-id: dv4ZSH
 #: src/modules/settings/unsubscribers/components/SettingsUnsubscribePreview.tsx
 msgid "This sender"
@@ -29935,6 +30892,11 @@ msgstr "收件人"
 #: src/modules/workflow/workflow-steps/workflow-actions/components/WorkflowRunStepLogsEmailDetail.tsx
 msgid "To"
 msgstr "收件人"
+
+#. js-lingui-id: rZ9HZq
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
+msgid "To do"
+msgstr ""
 
 #. js-lingui-id: ecUA8p
 #: src/modules/ai/utils/groupThreadsByDate.ts
@@ -30317,6 +31279,7 @@ msgstr "试用中"
 #: src/modules/object-core/agents/components/CoreAgentRunSource.tsx
 #: src/modules/object-core/agents/components/CoreAgentTriggersSection.tsx
 #: src/modules/settings/applications/constants/ApplicationContentTypeConfigs.ts
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/side-panel/components/SidePanelWorkflowStepInfo.tsx
 #: src/modules/workflow/workflow-diagram/workflow-nodes/components/WorkflowDiagramEmptyTriggerEditable.tsx
@@ -30765,8 +31728,30 @@ msgstr ""
 
 #. js-lingui-id: 9uI/rE
 #: src/modules/ai/components/AiChatParticipantMentionBar.tsx
+#: src/modules/reconciliation/components/ReconciliationInlineCellDiffValue.tsx
+#: src/modules/reconciliation/components/ReconciliationRelationNameDiffChip.tsx
 msgid "Undo"
 msgstr "撤销"
+
+#. js-lingui-id: CoifWI
+#: src/modules/reconciliation/components/ReconciliationReviewBody.tsx
+msgid "Undo {batchUndoCount} applied items in the current results?"
+msgstr ""
+
+#. js-lingui-id: FzhLuK
+#: src/modules/reconciliation/components/ReconciliationToolbar.tsx
+msgid "Undo {batchUndoCount} changes"
+msgstr ""
+
+#. js-lingui-id: MWrUEd
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Undo all"
+msgstr ""
+
+#. js-lingui-id: k7Axnw
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Undo all failed — no changes were reverted."
+msgstr ""
 
 #. js-lingui-id: MsoVWz
 #: src/modules/validation-rules/utils/getValidationRuleErrorMessage.ts
@@ -30867,6 +31852,7 @@ msgstr "通用标识符"
 #. js-lingui-id: Ef7StM
 #: src/modules/activities/emails/utils/getEmailIdentityDisplayName.ts
 #: src/modules/page-layout/widgets/hooks/useWidgetPermissions.ts
+#: src/modules/reconciliation/components/UnmatchedView.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminVersionContainer.tsx
 #: src/modules/settings/admin-panel/components/SettingsAdminWorkspaceContent.tsx
 #: src/modules/settings/admin-panel/health-status/components/SettingsAdminUpgradeStatusRightContainer.tsx
@@ -30894,6 +31880,8 @@ msgid "Unknown device"
 msgstr "未知设备"
 
 #. js-lingui-id: 29VNqC
+#: src/modules/settings/ingestion-pipeline/components/IngestionTestSection.component.tsx
+#: src/modules/spreadsheet-import/utils/getImportJobErrorMessages.ts
 #: src/modules/workflow/workflow-trigger/components/CronExpressionHelper.tsx
 #: src/modules/workflow/workflow-trigger/components/WorkflowEditTriggerCronForm.tsx
 #: src/utils/cron-to-human/describeCronExpression.ts
@@ -31020,6 +32008,16 @@ msgstr "未列出"
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 msgid "Unlock premium features like SSO, row-level security, and audit logs."
 msgstr "解锁包括 SSO、行级安全和审计日志在内的高级功能。"
+
+#. js-lingui-id: fAz9l3
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "unmatched"
+msgstr ""
+
+#. js-lingui-id: Hst74e
+#: src/modules/reconciliation/components/ReviewItemSidebar.tsx
+msgid "Unmatched"
+msgstr ""
 
 #. js-lingui-id: Te2H8x
 #: src/modules/settings/developers/components/SettingsApiKeysFieldItemTableRow.tsx
@@ -31151,6 +32149,7 @@ msgstr "至 {snoozedUntilDay}"
 #: src/modules/object-record/record-title-cell/components/RecordTitleCellTextFieldDisplay.tsx
 #: src/modules/object-record/record-title-cell/components/RecordTitleFullNameFieldDisplay.tsx
 #: src/modules/page-layout/hooks/usePageLayoutAddTabStrategy.ts
+#: src/modules/reconciliation/components/SidePanelReviewItemCommentsPage.tsx
 #: src/modules/ui/field/display/components/GlobalFilePreviewModal.tsx
 #: src/modules/ui/field/display/utils/getChipLabel.tsx
 #: src/pages/object-core/WorkflowCoreShowPage.tsx
@@ -31333,6 +32332,7 @@ msgstr "已更新"
 #. js-lingui-id: +b7T3G
 #: src/modules/log-console/constants/LogConsoleRecordActions.ts
 #: src/modules/settings/components/SettingsDatabaseEventsForm.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionLogTable.component.tsx
 #: src/pages/settings/admin-panel/SettingsAdminWorkspaceDetail.tsx
 #: src/pages/settings/applications/SettingsApplicationConnectionDetail.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationCommandMenuItemSettingsTab.tsx
@@ -31571,6 +32571,11 @@ msgstr "上传包含连接信息的 XML 文件"
 #: src/modules/getting-started/components/GettingStartedImportAction.tsx
 msgid "Upload your CRM export"
 msgstr "上传您的 CRM 导出文件"
+
+#. js-lingui-id: PbinjH
+#: src/modules/reconciliation/utils/getRunSummary.ts
+msgid "Uploaded — parse not started"
+msgstr ""
 
 #. js-lingui-id: XzIB4l
 #: src/modules/apollo/services/ApolloFactory.ts
@@ -32607,6 +33612,11 @@ msgstr "我们仍在等待来自支付服务提供商（Stripe）的确认。请
 msgid "We're still waiting for the payment confirmation"
 msgstr "我们仍在等待付款确认"
 
+#. js-lingui-id: KXFOph
+#: src/modules/reconciliation/components/MatchedDiffView.tsx
+msgid "Weak match — name, DOB, and date"
+msgstr ""
+
 #. js-lingui-id: LnnVIT
 #: src/modules/ai/hooks/useAgentModelCapabilities.ts
 #: src/modules/settings/usage/constants/UsageOperationTypeLabels.ts
@@ -32664,6 +33674,27 @@ msgstr "删除时需要 Webhook ID"
 #: src/modules/settings/developers/hooks/useWebhookForm.ts
 msgid "Webhook ID is required for updates"
 msgstr "更新时需要 Webhook ID"
+
+#. js-lingui-id: RxPbqz
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Webhook secret"
+msgstr ""
+
+#. js-lingui-id: 3yrjLc
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Webhook secret copied to clipboard"
+msgstr ""
+
+#. js-lingui-id: nuh/Wq
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Webhook URL"
+msgstr ""
+
+#. js-lingui-id: RLiHU1
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
+msgid "Webhook URL copied to clipboard"
+msgstr ""
 
 #. js-lingui-id: v1kQyJ
 #: src/modules/log-console/constants/LogConsoleSources.tsx
@@ -32735,11 +33766,6 @@ msgstr "欢迎来到 Twenty"
 msgid "Welcome to your workspace"
 msgstr "欢迎来到您的工作区"
 
-#. js-lingui-id: Vin3Dv
-#: src/pages/auth/SignInUp.tsx
-msgid "Welcome, {workspaceName}."
-msgstr "欢迎，{workspaceName}。"
-
 #. js-lingui-id: mAi8YZ
 #: src/modules/settings/applications/components/SettingsApplicationContentSummarySection.tsx
 msgid "What {applicationName} adds to your workspace"
@@ -32806,6 +33832,11 @@ msgstr "此代理可以使用哪些工具来完成其任务"
 msgid "Whatsapp"
 msgstr "WhatsApp"
 
+#. js-lingui-id: 1ZF9KQ
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "When"
+msgstr ""
+
 #. js-lingui-id: 8ssTdk
 #: src/modules/ai/components/AiChatSnoozeMenu.tsx
 msgid "When {assistantName} finishes"
@@ -32825,6 +33856,11 @@ msgstr "当创建来源为 \"网站\" 的新线索时，将其分配给辖区（
 #: src/modules/ai/components/suggested-prompts/default-suggested-prompts.ts
 msgid "When any deal with amount over $100,000 has its stage or amount updated, send a notification to the sales channel with the deal name, company, new stage, amount and owner."
 msgstr "当任何金额超过 $100,000 的交易的阶段或金额被更新时，向销售频道发送通知，包含交易名称、公司、新阶段、金额和负责人。"
+
+#. js-lingui-id: q/5LZp
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+msgid "When enabled, this pipeline will accept incoming data and process records"
+msgstr ""
 
 #. js-lingui-id: le/9Ju
 #: src/modules/settings/billing/components/SettingsBillingUserCreditsSection.tsx
@@ -32870,6 +33906,11 @@ msgstr "密钥何时会被禁用"
 #: src/modules/settings/billing/hooks/useBillingSubscriptionChangeWording.ts
 msgid "When your trial ends, you will be charged {priceLabel}."
 msgstr "试用结束后，您将被收取 {priceLabel}。"
+
+#. js-lingui-id: TquA/j
+#: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm.tsx
+msgid "When..."
+msgstr ""
 
 #. js-lingui-id: YvwwqC
 #: src/modules/object-record/advanced-filter/components/AdvancedFilterLogicalOperatorCell.tsx
@@ -33122,6 +34163,7 @@ msgstr "工作时间开始"
 
 #. js-lingui-id: pmUArF
 #: src/modules/command-menu-item/display/components/SidePanelCommandMenuItemDisplayPage.tsx
+#: src/modules/navigation-menu-item/display/dnd/components/OmniaMemberWorkspaceNavigationMenuItems.tsx
 #: src/modules/navigation-menu-item/display/sections/workspace/components/WorkspaceSection.tsx
 #: src/modules/object-core/workflows/constants/CoreWorkflowVisibilityOptions.ts
 #: src/modules/object-record/object-options-dropdown/components/ObjectOptionsDropdownCustomView.tsx
@@ -33196,6 +34238,9 @@ msgstr "工作时间开始"
 #: src/pages/settings/developers/SettingsDevelopers.tsx
 #: src/pages/settings/enterprise/SettingsEnterprise.tsx
 #: src/pages/settings/general/SettingsGeneral.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineNew.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelines.tsx
 #: src/pages/settings/layout/components/SettingsLayoutDetailScaffold.tsx
 #: src/pages/settings/layout/SettingsLayout.tsx
 #: src/pages/settings/legal/SettingsLegalDpa.tsx
@@ -33381,6 +34426,7 @@ msgstr "写入 {target}"
 #: src/modules/settings/data-model/fields/forms/components/SettingsDataModelFieldDescriptionForm.tsx
 #: src/modules/settings/data-model/objects/forms/components/SettingsDataModelObjectAboutForm.tsx
 #: src/modules/settings/developers/components/SettingsDevelopersWebhookForm.tsx
+#: src/modules/settings/ingestion-pipeline/components/IngestionPipelineForm.component.tsx
 #: src/modules/settings/roles/role-settings/components/SettingsRoleSettings.tsx
 #: src/modules/validation-rules/components/SettingsValidationRuleNameForm.tsx
 #: src/pages/settings/ai/components/SettingsSkillFormContent.tsx
@@ -33491,6 +34537,8 @@ msgstr "黄色"
 #: src/pages/settings/admin-panel/SettingsAdminApplicationRegistrationDangerZone.tsx
 #: src/pages/settings/applications/tabs/SettingsApplicationRegistrationOAuthTab.tsx
 #: src/pages/settings/developers/api-keys/SettingsDevelopersApiKeyDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
+#: src/pages/settings/ingestion-pipelines/SettingsIngestionPipelineDetail.tsx
 msgid "yes"
 msgstr "是"
 

@@ -111,6 +111,11 @@ msgstr "{hostnameCount} hostnames found for domain \"{domainName}\". Expect 1"
 msgid "{operationLabel} of {aggregateFieldLabel}"
 msgstr "{operationLabel} of {aggregateFieldLabel}"
 
+#. js-lingui-id: d0D3Vs
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "{skippedCount, plural, one {# record} other {# records}} could not be updated. You may not have permission to edit them."
+msgstr "{skippedCount, plural, one {# record} other {# records}} could not be updated. You may not have permission to edit them."
+
 #. js-lingui-id: dmxzg7
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-workspace-member-standard-flat-field-metadata.util.ts
 msgctxt "fieldMetadata.label"
@@ -1184,6 +1189,7 @@ msgstr "An error occurred."
 #: src/engine/core-modules/record-export/__tests__/record-export-exception-filter.spec.ts
 #: src/engine/core-modules/record-export/services/record-export-query.service.ts
 #: src/engine/core-modules/record-export/services/record-export-query.service.ts
+#: src/engine/core-modules/record-export/utils/build-relation-sub-field-export-context.util.ts
 #: src/engine/core-modules/record-export/utils/expand-morph-relation-export-fields.util.ts
 msgid "An export field is no longer available."
 msgstr "An export field is no longer available."
@@ -2711,6 +2717,11 @@ msgstr "Cannot modify predicate to change its role from {existingRoleIdentifier}
 #: src/engine/permissions/permissions.exception.ts
 msgid "Cannot remove the last admin from the workspace."
 msgstr "Cannot remove the last admin from the workspace."
+
+#. js-lingui-id: oVL3ov
+#: src/modules/reconciliation/query-hooks/carrier-config-update-one.pre-query.hook.ts
+msgid "Cannot rename this carrier config: {decisionRuleCount} learned rule(s) and {reviewItemCount} review item(s) reference the name \"{oldName}\" and would stop matching. Create a new carrier config instead, or remove the referencing records first."
+msgstr "Cannot rename this carrier config: {decisionRuleCount} learned rule(s) and {reviewItemCount} review item(s) reference the name \"{oldName}\" and would stop matching. Create a new carrier config instead, or remove the referencing records first."
 
 #. js-lingui-id: iI2Fqp
 #. placeholder {0}: connectedAccount.handle
@@ -4762,6 +4773,11 @@ msgctxt "commandMenuItem.shortLabel"
 msgid "Edit Layout"
 msgstr "Edit Layout"
 
+#. js-lingui-id: 8Zb4ck
+#: src/modules/policy/services/policy-write-authorization.service.ts
+msgid "Editing this record violates row-level security."
+msgstr "Editing this record violates row-level security."
+
 #. js-lingui-id: Csg2MU
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-command-menu-item-validator.service.ts
 msgid "either a path payload or navigationTargetObjectMetadataId is required when engineComponentKey is NAVIGATION"
@@ -5158,6 +5174,11 @@ msgctxt "fieldMetadata.label"
 msgid "Error Message"
 msgstr "Error Message"
 
+#. js-lingui-id: q1bjoq
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Error processing ingestion data."
+msgstr "Error processing ingestion data."
+
 #. js-lingui-id: ++Dmjj
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-timeline-activity-standard-flat-field-metadata.util.ts
 msgctxt "fieldMetadata.label"
@@ -5548,6 +5569,11 @@ msgstr "Field does not belong to the indexed object"
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-object-metadata-validator.service.ts
 msgid "Field label identifier is required"
 msgstr "Field label identifier is required"
+
+#. js-lingui-id: qRLqsZ
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Field mapping not found."
+msgstr "Field mapping not found."
 
 #. js-lingui-id: MPt365
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-field-permission-validator.service.ts
@@ -6627,6 +6653,17 @@ msgctxt "commandMenuItem.label"
 msgid "Import {objectLabelPlural}"
 msgstr "Import {objectLabelPlural}"
 
+#. js-lingui-id: DR516Y
+#: src/engine/core-modules/import-job/import-job.service.ts
+#: src/engine/core-modules/import-job/import-job.service.ts
+msgid "Import not found."
+msgstr "Import not found."
+
+#. js-lingui-id: opwXPu
+#: src/engine/core-modules/import-job/import-job.service.ts
+msgid "Import rows must be a list of records."
+msgstr "Import rows must be a list of records."
+
 #. js-lingui-id: vXTVX9
 #: src/engine/core-modules/getting-started/constants/getting-started-step-content.constant.ts
 msgid "Import your contacts"
@@ -6636,6 +6673,11 @@ msgstr "Import your contacts"
 #: src/engine/core-modules/getting-started/constants/getting-started-step-content.constant.ts
 msgid "Import your data"
 msgstr "Import your data"
+
+#. js-lingui-id: m5QpV/
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "Importing records..."
+msgstr "Importing records..."
 
 #. js-lingui-id: QPcp0k
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-task-standard-flat-field-metadata.util.ts
@@ -6696,6 +6738,16 @@ msgstr "Index with same name already exists"
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-index-metadata-validator.service.ts
 msgid "Index with same universal identifier already exists"
 msgstr "Index with same universal identifier already exists"
+
+#. js-lingui-id: OzV98F
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline is disabled."
+msgstr "Ingestion pipeline is disabled."
+
+#. js-lingui-id: iTWDAu
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Ingestion pipeline not found."
+msgstr "Ingestion pipeline not found."
 
 #. js-lingui-id: 5K0P9Y
 #: src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/services/flat-related-record-path-validator.service.ts
@@ -7165,6 +7217,11 @@ msgstr "Invalid hour value. Should be integer greater than 1"
 #: src/engine/core-modules/sso/sso.exception.ts
 msgid "Invalid identity provider type."
 msgstr "Invalid identity provider type."
+
+#. js-lingui-id: xQd5sM
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid ingestion pipeline input."
+msgstr "Invalid ingestion pipeline input."
 
 #. js-lingui-id: xfXYBX
 #: src/engine/core-modules/application/application-registration/application-registration.exception.ts
@@ -7679,6 +7736,11 @@ msgstr "Invalid viewUniversalIdentifier for fields widget \"{widgetTitle}\". Exp
 #: src/engine/metadata-modules/webhook/webhook.exception.ts
 msgid "Invalid webhook input."
 msgstr "Invalid webhook input."
+
+#. js-lingui-id: Q9Wge/
+#: src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception.ts
+msgid "Invalid webhook secret."
+msgstr "Invalid webhook secret."
 
 #. js-lingui-id: c4NCfN
 #: src/modules/dashboard/chart-data/exceptions/chart-data.exception.ts
@@ -11726,6 +11788,11 @@ msgstr "Resolved destination URL"
 msgid "Resolver logic function returned an invalid result."
 msgstr "Resolver logic function returned an invalid result."
 
+#. js-lingui-id: sWgM7e
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "Resolving relations..."
+msgstr "Resolving relations..."
+
 #. js-lingui-id: uAJ5BF
 #: src/engine/core-modules/file-storage/utils/validate-safe-relative-path.util.ts
 msgid "Resource path contains null bytes"
@@ -14006,6 +14073,26 @@ msgstr "The front component used by this timeline activity type is not available
 msgid "The happensAt field used by this timeline activity type is not available"
 msgstr "The happensAt field used by this timeline activity type is not available"
 
+#. js-lingui-id: hdbnsZ
+#: src/engine/core-modules/import-job/import-job.service.ts
+msgid "The import could not be queued. Try again."
+msgstr "The import could not be queued. Try again."
+
+#. js-lingui-id: 0ZwOCX
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "The import could not start. Re-run the import."
+msgstr "The import could not start. Re-run the import."
+
+#. js-lingui-id: aUoZdE
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "The import requester is no longer a workspace member."
+msgstr "The import requester is no longer a workspace member."
+
+#. js-lingui-id: WUDfCn
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "The import worker restarted while processing this import; re-run the import."
+msgstr "The import worker restarted while processing this import; re-run the import."
+
 #. js-lingui-id: EJUSll
 #: src/engine/core-modules/workflow/services/core-workflow-mutation.workspace-service.ts
 msgid "The initial version of a workflow can not be deleted"
@@ -14763,6 +14850,11 @@ msgstr "This endpoint has moved. Call it at {publicFunctionUrl} instead."
 msgid "This endpoint is no longer available on /s/. Use the dedicated public domain URL instead."
 msgstr "This endpoint is no longer available on /s/. Use the dedicated public domain URL instead."
 
+#. js-lingui-id: OLAi9i
+#: src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service.ts
+msgid "This environment variable cannot be used to authenticate to this source URL."
+msgstr "This environment variable cannot be used to authenticate to this source URL."
+
 #. js-lingui-id: jBNDRQ
 #: src/engine/core-modules/record-export/services/record-export.workspace-service.ts
 msgid "This export belongs to another session. Please create a new export."
@@ -14864,6 +14956,11 @@ msgstr "This HTTP method is not allowed on this server route."
 #: src/engine/metadata-modules/metadata-side-effect/utils/map-system-side-effect-collision-to-failure.util.ts
 msgid "This identifier is reserved by the system"
 msgstr "This identifier is reserved by the system"
+
+#. js-lingui-id: Ev9sZf
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "This import has no requester. Re-run the import."
+msgstr "This import has no requester. Re-run the import."
 
 #. js-lingui-id: 7f5dRA
 #: src/engine/metadata-modules/index-metadata/services/index-metadata.service.ts
@@ -15044,6 +15141,11 @@ msgstr "This permission is disabled on the object and cannot be granted"
 #: src/engine/core-modules/billing/billing.exception.ts
 msgid "This plan is not available."
 msgstr "This plan is not available."
+
+#. js-lingui-id: 3zbe8Z
+#: src/modules/policy/services/policy-write-authorization.service.ts
+msgid "This policy can no longer be edited. Only administrators can modify policies after {window}."
+msgstr "This policy can no longer be edited. Only administrators can modify policies after {window}."
 
 #. js-lingui-id: GA6RMi
 #: src/engine/metadata-modules/ai/ai-front-component/ai-front-component.service.ts
@@ -15920,6 +16022,11 @@ msgstr "Unable to retrieve the application package."
 msgid "Unassign yourself before unsubscribing from this chat."
 msgstr "Unassign yourself before unsubscribing from this chat."
 
+#. js-lingui-id: 9nDA0c
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "Unexpected error"
+msgstr "Unexpected error"
+
 #. js-lingui-id: ysWwLd
 #: src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/compute-message-campaign-standard-flat-field-metadata.util.ts
 msgctxt "fieldMetadata.label"
@@ -15968,6 +16075,11 @@ msgstr "Unknown disabled field permission action"
 #: src/engine/metadata-modules/flat-object-metadata/validators/utils/validate-flat-object-metadata-disabled-object-permission-actions.util.ts
 msgid "Unknown disabled object permission action"
 msgstr "Unknown disabled object permission action"
+
+#. js-lingui-id: 29VNqC
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "Unknown error"
+msgstr "Unknown error"
 
 #. js-lingui-id: of4ZuG
 #: src/engine/metadata-modules/flat-navigation-menu-item/validators/utils/validate-navigation-menu-item-type-required-properties.util.ts
@@ -18075,6 +18187,11 @@ msgstr "You do not have permission to delete this user from the workspace. Pleas
 msgid "You do not have permission to delete workspace-level navigation menu items. Please contact your workspace administrator for access."
 msgstr "You do not have permission to delete workspace-level navigation menu items. Please contact your workspace administrator for access."
 
+#. js-lingui-id: xXDrrh
+#: src/engine/core-modules/record-export/utils/build-relation-sub-field-export-context.util.ts
+msgid "You do not have permission to export one of the selected columns."
+msgstr "You do not have permission to export one of the selected columns."
+
 #. js-lingui-id: TUrV+a
 #: src/engine/core-modules/record-export/services/record-export.workspace-service.ts
 #: src/engine/core-modules/record-export/services/record-export.workspace-service.ts
@@ -18092,6 +18209,11 @@ msgstr "You do not have permission to impersonate users in this workspace."
 #: src/engine/guards/impersonate-permission.guard.ts
 msgid "You do not have permission to impersonate users. Please contact your workspace administrator for access."
 msgstr "You do not have permission to impersonate users. Please contact your workspace administrator for access."
+
+#. js-lingui-id: BcAxmO
+#: src/engine/core-modules/import-job/jobs/import-job.processor.ts
+msgid "You do not have permission to import records."
+msgstr "You do not have permission to import records."
 
 #. js-lingui-id: wFDl+C
 #: src/engine/core-modules/application/connection-provider/app-connection-access.service.ts
