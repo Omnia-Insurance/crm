@@ -1,9 +1,11 @@
+import { type RecordField } from '@/object-record/record-field/types/RecordField';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type ColumnDefinition } from '@/object-record/record-table/types/ColumnDefinition';
 import { type ViewField } from '@/views/types/ViewField';
 import { type ViewFilter } from '@/views/types/ViewFilter';
-import { mapColumnDefinitionsToViewFields } from '@/views/utils/mapColumnDefinitionToViewField';
+import { mapRecordFieldToViewField } from '@/views/utils/mapRecordFieldToViewField';
+import { mapViewFieldToRecordField } from '@/views/utils/mapViewFieldToRecordField';
 import { mapViewFieldsToColumnDefinitions } from '@/views/utils/mapViewFieldsToColumnDefinitions';
 import { mapViewFiltersToFilters } from '@/views/utils/mapViewFiltersToFilters';
 import { ViewFilterOperand } from 'twenty-shared/types';
@@ -63,7 +65,6 @@ describe('mapViewFieldsToColumnDefinitions', () => {
         size: 1,
         isVisible: false,
         isActive: true,
-        isOverridden: false,
         definition: {
           fieldMetadataId: '1',
           label: 'label 1',
@@ -83,7 +84,6 @@ describe('mapViewFieldsToColumnDefinitions', () => {
         size: 2,
         isVisible: false,
         isActive: true,
-        isOverridden: false,
         definition: {
           fieldMetadataId: '2',
           label: 'label 2',
@@ -103,7 +103,6 @@ describe('mapViewFieldsToColumnDefinitions', () => {
         size: 3,
         isVisible: true,
         isActive: true,
-        isOverridden: false,
         definition: {
           fieldMetadataId: '3',
           label: 'label 3',
@@ -173,50 +172,102 @@ describe('mapViewFieldsToColumnDefinitions', () => {
   });
 });
 
-describe('mapColumnDefinitionsToViewFields', () => {
-  it('should map ColumnDefinitions to ViewFields, setting defaults and using viewFieldId if present', () => {
-    const columnDefinitions = [
+// OMNIA-CUSTOM: relation sub-field columns (contract C6)
+const leadFieldMetadataId = '6a4b3d3e-8f0c-4c1e-9d7a-2b5e1f0c9a11';
+
+const leadViewField: ViewField = {
+  id: 'lead-view-field-id',
+  fieldMetadataId: leadFieldMetadataId,
+  position: 1,
+  size: 150,
+  isVisible: true,
+  isActive: true,
+  subFieldName: null,
+};
+
+const leadDateOfBirthViewField: ViewField = {
+  id: 'lead-date-of-birth-view-field-id',
+  fieldMetadataId: leadFieldMetadataId,
+  position: 2,
+  size: 180,
+  isVisible: true,
+  isActive: true,
+  subFieldName: 'dateOfBirth',
+};
+
+describe('mapViewFieldsToColumnDefinitions with relation sub-field columns', () => {
+  it('should skip sub-field view fields and keep the plain relation column', () => {
+    const columnDefinitions: ColumnDefinition<FieldMetadata>[] = [
       {
-        fieldMetadataId: 1,
+        fieldMetadataId: leadFieldMetadataId,
+        label: 'Lead',
         position: 1,
-        isVisible: true,
-        viewFieldId: 'custom-id-1',
-      },
-      {
-        fieldMetadataId: 2,
-        position: 2,
-        size: 200,
-        isVisible: false,
+        metadata: { fieldName: 'lead' },
+        iconName: 'IconUser',
+        type: FieldMetadataType.RELATION,
+        size: 150,
       },
     ];
 
-    const expectedViewFields = [
+    const expectedColumnDefinitions: ColumnDefinition<FieldMetadata>[] = [
       {
-        id: 'custom-id-1',
-        fieldMetadataId: 1,
+        fieldMetadataId: leadFieldMetadataId,
+        label: 'Lead',
+        metadata: { fieldName: 'lead' },
+        iconName: 'IconUser',
+        type: FieldMetadataType.RELATION,
+        size: 150,
         position: 1,
         isVisible: true,
-        isActive: true,
-        isOverridden: false,
-        definition: columnDefinitions[0],
-        size: undefined,
-      },
-      {
-        id: '',
-        fieldMetadataId: 2,
-        position: 2,
-        size: 200,
-        isVisible: false,
-        isActive: true,
-        isOverridden: false,
-        definition: columnDefinitions[1],
+        viewFieldId: 'lead-view-field-id',
       },
     ];
 
-    const actualViewFields = mapColumnDefinitionsToViewFields(
-      columnDefinitions as unknown as ColumnDefinition<FieldMetadata>[],
+    const actualColumnDefinitions = mapViewFieldsToColumnDefinitions({
+      columnDefinitions,
+      viewFields: [leadViewField, leadDateOfBirthViewField],
+    });
+
+    expect(actualColumnDefinitions).toEqual(expectedColumnDefinitions);
+  });
+});
+
+describe('mapViewFieldToRecordField', () => {
+  it('should keep the subFieldName of a sub-field column', () => {
+    const expectedRecordField: RecordField = {
+      id: 'lead-date-of-birth-view-field-id',
+      fieldMetadataItemId: leadFieldMetadataId,
+      position: 2,
+      size: 180,
+      isVisible: true,
+      subFieldName: 'dateOfBirth',
+    };
+
+    expect(mapViewFieldToRecordField(leadDateOfBirthViewField)).toEqual(
+      expectedRecordField,
     );
+  });
+});
 
-    expect(actualViewFields).toEqual(expectedViewFields);
+describe('mapRecordFieldToViewField', () => {
+  it('should keep the subFieldName of a sub-field column', () => {
+    const recordField: RecordField = {
+      id: 'lead-date-of-birth-view-field-id',
+      fieldMetadataItemId: leadFieldMetadataId,
+      position: 2,
+      size: 180,
+      isVisible: true,
+      subFieldName: 'dateOfBirth',
+    };
+
+    expect(mapRecordFieldToViewField(recordField)).toEqual({
+      id: 'lead-date-of-birth-view-field-id',
+      fieldMetadataId: leadFieldMetadataId,
+      position: 2,
+      size: 180,
+      isVisible: true,
+      isActive: true,
+      subFieldName: 'dateOfBirth',
+    });
   });
 });

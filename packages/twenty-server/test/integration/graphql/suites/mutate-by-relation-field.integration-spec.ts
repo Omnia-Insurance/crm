@@ -2,7 +2,7 @@ import { createManyOperationFactory } from 'test/integration/graphql/utils/creat
 import { deleteManyOperationFactory } from 'test/integration/graphql/utils/delete-many-operation-factory.util';
 import { destroyManyOperationFactory } from 'test/integration/graphql/utils/destroy-many-operation-factory.util';
 import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { restoreManyOperationFactory } from 'test/integration/graphql/utils/restore-many-operation-factory.util';
 import { updateManyOperationFactory } from 'test/integration/graphql/utils/update-many-operation-factory.util';
 
@@ -41,7 +41,7 @@ describe('Mutate by relation field (e2e)', () => {
       upsert: true,
     });
 
-    await makeGraphqlAPIRequest(createCompanies);
+    await makeGraphqlApiRequest(createCompanies);
 
     const createPeople = createManyOperationFactory({
       objectMetadataSingularName: 'person',
@@ -51,43 +51,38 @@ describe('Mutate by relation field (e2e)', () => {
         {
           id: TEST_PERSON_IDS.AIRBNB_ENGINEER,
           companyId: TEST_COMPANY_IDS.AIRBNB,
-          jobTitle: 'Engineer',
-          city: 'Original City',
+          jobTitle: 'Original City',
         },
         {
           id: TEST_PERSON_IDS.AIRBNB_DESIGNER,
           companyId: TEST_COMPANY_IDS.AIRBNB,
-          jobTitle: 'Designer',
-          city: 'Original City',
+          jobTitle: 'Original City',
         },
         {
           id: TEST_PERSON_IDS.STRIPE_ENGINEER,
           companyId: TEST_COMPANY_IDS.STRIPE,
-          jobTitle: 'Engineer',
-          city: 'Original City',
+          jobTitle: 'Original City',
         },
         {
           id: TEST_PERSON_IDS.NOTION_ENGINEER,
           companyId: TEST_COMPANY_IDS.NOTION,
-          jobTitle: 'Engineer',
-          city: 'Original City',
+          jobTitle: 'Original City',
         },
         {
           id: TEST_PERSON_IDS.UNAFFILIATED,
           companyId: null,
-          jobTitle: 'Engineer',
-          city: 'Original City',
+          jobTitle: 'Original City',
         },
       ],
       upsert: true,
     });
 
-    await makeGraphqlAPIRequest(createPeople);
+    await makeGraphqlApiRequest(createPeople);
   };
 
   beforeEach(async () => {
     // Each test mutates state, so wipe + reseed before every one.
-    await makeGraphqlAPIRequest(
+    await makeGraphqlApiRequest(
       destroyManyOperationFactory({
         objectMetadataSingularName: 'person',
         objectMetadataPluralName: 'people',
@@ -96,7 +91,7 @@ describe('Mutate by relation field (e2e)', () => {
       }),
     );
 
-    await makeGraphqlAPIRequest(
+    await makeGraphqlApiRequest(
       destroyManyOperationFactory({
         objectMetadataSingularName: 'company',
         objectMetadataPluralName: 'companies',
@@ -112,8 +107,8 @@ describe('Mutate by relation field (e2e)', () => {
     const updateOperation = updateManyOperationFactory({
       objectMetadataSingularName: 'person',
       objectMetadataPluralName: 'people',
-      gqlFields: 'id city',
-      data: { city: 'Updated City' },
+      gqlFields: 'id jobTitle',
+      data: { jobTitle: 'Updated City' },
       filter: {
         and: [
           { id: { in: ALL_TEST_PERSON_IDS } },
@@ -122,7 +117,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    const updateResponse = await makeGraphqlAPIRequest(updateOperation);
+    const updateResponse = await makeGraphqlApiRequest(updateOperation);
 
     expect(updateResponse.body.errors).toBeUndefined();
 
@@ -138,37 +133,37 @@ describe('Mutate by relation field (e2e)', () => {
     const findOperation = findManyOperationFactory({
       objectMetadataSingularName: 'person',
       objectMetadataPluralName: 'people',
-      gqlFields: 'id city',
+      gqlFields: 'id jobTitle',
       filter: { id: { in: ALL_TEST_PERSON_IDS } },
     });
 
-    const findResponse = await makeGraphqlAPIRequest(findOperation);
+    const findResponse = await makeGraphqlApiRequest(findOperation);
 
-    const cityByPersonId = Object.fromEntries(
+    const jobTitleByPersonId = Object.fromEntries(
       findResponse.body.data.people.edges.map(
-        (edge: { node: { id: string; city: string } }) => [
+        (edge: { node: { id: string; jobTitle: string } }) => [
           edge.node.id,
-          edge.node.city,
+          edge.node.jobTitle,
         ],
       ),
     );
 
-    expect(cityByPersonId[TEST_PERSON_IDS.AIRBNB_ENGINEER]).toEqual(
+    expect(jobTitleByPersonId[TEST_PERSON_IDS.AIRBNB_ENGINEER]).toEqual(
       'Updated City',
     );
-    expect(cityByPersonId[TEST_PERSON_IDS.AIRBNB_DESIGNER]).toEqual(
+    expect(jobTitleByPersonId[TEST_PERSON_IDS.AIRBNB_DESIGNER]).toEqual(
       'Updated City',
     );
 
     // Non-Airbnb rows must stay untouched — the JOIN must not widen the
     // mutation past the filter.
-    expect(cityByPersonId[TEST_PERSON_IDS.STRIPE_ENGINEER]).toEqual(
+    expect(jobTitleByPersonId[TEST_PERSON_IDS.STRIPE_ENGINEER]).toEqual(
       'Original City',
     );
-    expect(cityByPersonId[TEST_PERSON_IDS.NOTION_ENGINEER]).toEqual(
+    expect(jobTitleByPersonId[TEST_PERSON_IDS.NOTION_ENGINEER]).toEqual(
       'Original City',
     );
-    expect(cityByPersonId[TEST_PERSON_IDS.UNAFFILIATED]).toEqual(
+    expect(jobTitleByPersonId[TEST_PERSON_IDS.UNAFFILIATED]).toEqual(
       'Original City',
     );
   });
@@ -186,7 +181,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    const deleteResponse = await makeGraphqlAPIRequest(deleteOperation);
+    const deleteResponse = await makeGraphqlApiRequest(deleteOperation);
 
     expect(deleteResponse.body.errors).toBeUndefined();
 
@@ -203,7 +198,7 @@ describe('Mutate by relation field (e2e)', () => {
       filter: { id: { in: ALL_TEST_PERSON_IDS } },
     });
 
-    const findResponse = await makeGraphqlAPIRequest(findOperation);
+    const findResponse = await makeGraphqlApiRequest(findOperation);
     const remainingIds = findResponse.body.data.people.edges.map(
       (edge: { node: { id: string } }) => edge.node.id,
     );
@@ -236,7 +231,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    await makeGraphqlAPIRequest(deleteOperation);
+    await makeGraphqlApiRequest(deleteOperation);
 
     const restoreOperation = restoreManyOperationFactory({
       objectMetadataSingularName: 'person',
@@ -250,7 +245,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    const restoreResponse = await makeGraphqlAPIRequest(restoreOperation);
+    const restoreResponse = await makeGraphqlApiRequest(restoreOperation);
 
     expect(restoreResponse.body.errors).toBeUndefined();
 
@@ -275,7 +270,7 @@ describe('Mutate by relation field (e2e)', () => {
       filter: { id: { in: [TEST_PERSON_IDS.STRIPE_ENGINEER] } },
     });
 
-    const findStripeResponse = await makeGraphqlAPIRequest(findStripe);
+    const findStripeResponse = await makeGraphqlApiRequest(findStripe);
 
     expect(findStripeResponse.body.data.people.edges).toEqual([]);
   });
@@ -293,7 +288,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    const destroyResponse = await makeGraphqlAPIRequest(destroyOperation);
+    const destroyResponse = await makeGraphqlApiRequest(destroyOperation);
 
     expect(destroyResponse.body.errors).toBeUndefined();
 
@@ -314,7 +309,7 @@ describe('Mutate by relation field (e2e)', () => {
       },
     });
 
-    const findResponse = await makeGraphqlAPIRequest(findOperation);
+    const findResponse = await makeGraphqlApiRequest(findOperation);
 
     expect(findResponse.body.data.people.edges).toEqual([]);
   });
@@ -325,16 +320,16 @@ describe('Mutate by relation field (e2e)', () => {
     const updateOperation = updateManyOperationFactory({
       objectMetadataSingularName: 'person',
       objectMetadataPluralName: 'people',
-      gqlFields: 'id city',
-      data: { city: 'Scalar Updated City' },
+      gqlFields: 'id jobTitle',
+      data: { jobTitle: 'Scalar Updated City' },
       filter: { id: { eq: TEST_PERSON_IDS.UNAFFILIATED } },
     });
 
-    const updateResponse = await makeGraphqlAPIRequest(updateOperation);
+    const updateResponse = await makeGraphqlApiRequest(updateOperation);
 
     expect(updateResponse.body.errors).toBeUndefined();
     expect(updateResponse.body.data.updatePeople).toHaveLength(1);
-    expect(updateResponse.body.data.updatePeople[0].city).toEqual(
+    expect(updateResponse.body.data.updatePeople[0].jobTitle).toEqual(
       'Scalar Updated City',
     );
   });

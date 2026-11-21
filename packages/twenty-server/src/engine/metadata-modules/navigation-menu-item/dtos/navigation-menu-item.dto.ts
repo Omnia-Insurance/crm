@@ -1,5 +1,6 @@
 import { Field, HideField, ObjectType } from '@nestjs/graphql';
 
+import { type NativePageKey } from 'twenty-shared/types';
 import {
   IsDateString,
   IsNotEmpty,
@@ -55,6 +56,10 @@ export class NavigationMenuItemDTO {
 
   @IsOptional()
   @Field(() => String, { nullable: true })
+  nativePageKey?: NativePageKey | null;
+
+  @IsOptional()
+  @Field(() => String, { nullable: true })
   icon?: string | null;
 
   @IsOptional()
@@ -70,6 +75,21 @@ export class NavigationMenuItemDTO {
   @IsOptional()
   @Field(() => UUIDScalarType, { nullable: true })
   pageLayoutId?: string | null;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  agentChatChannelId?: string | null;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  workflowId?: string | null;
+
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  agentId?: string | null;
 
   @IsNumber()
   @IsNotEmpty()

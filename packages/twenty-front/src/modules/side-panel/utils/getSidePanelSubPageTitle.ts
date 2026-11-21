@@ -14,22 +14,8 @@ export const getSidePanelSubPageTitle = (
       return t`Filters`;
     case SidePanelSubPages.PageLayoutRecordTableSort:
       return t`Sorts`;
-    case SidePanelSubPages.NewSidebarItemMainMenu:
-      return t`Add menu item`;
-    case SidePanelSubPages.NewSidebarItemViewObjectPicker:
-      return t`Pick an object`;
-    case SidePanelSubPages.NewSidebarItemViewPicker:
-      return t`Pick a view`;
-    case SidePanelSubPages.NewSidebarItemViewSystemPicker:
-      return t`System objects`;
-    case SidePanelSubPages.NewSidebarItemObjectPicker:
-      return t`Pick an object`;
-    case SidePanelSubPages.NewSidebarItemObjectSystemPicker:
-      return t`System objects`;
-    case SidePanelSubPages.NewSidebarItemRecord:
-      return t`Add a record`;
-    case SidePanelSubPages.EditFolderPicker:
-      return t`Move to a folder`;
+    case SidePanelSubPages.PageLayoutFieldRelationTableFields:
+      return t`Fields`;
     default:
       assertUnreachable(subPage);
   }

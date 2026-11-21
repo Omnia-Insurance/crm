@@ -1,5 +1,6 @@
 import { useHotkeysOnFocusedElementCallback } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElementCallback';
 import { pendingHotkeyState } from '@/ui/utilities/hotkey/states/internal/pendingHotkeysState';
+import { isKeyboardEventComposing } from '@/ui/utilities/hotkey/utils/isKeyboardEventComposing';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useHotkeys } from 'react-hotkeys-hook';
 import {
@@ -48,6 +49,10 @@ export const useHotkeysOnFocusedElement = ({
   return useHotkeys(
     keys,
     (keyboardEvent, hotkeysEvent) => {
+      if (isKeyboardEventComposing(keyboardEvent)) {
+        return;
+      }
+
       callScopedHotkeyCallback({
         keyboardEvent,
         hotkeysEvent,
@@ -66,6 +71,7 @@ export const useHotkeysOnFocusedElement = ({
       enableOnContentEditable,
       enableOnFormTags,
       ignoreModifiers,
+      ignoreEventWhen: options?.ignoreEventWhen,
     },
     dependencies,
   );

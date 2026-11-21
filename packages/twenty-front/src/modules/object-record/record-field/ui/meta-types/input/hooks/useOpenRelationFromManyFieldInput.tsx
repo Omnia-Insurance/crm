@@ -86,9 +86,8 @@ export const useOpenRelationFromManyFieldInput = () => {
         [objectMetadataItem],
       );
 
-      // Initial search is triggered by RelationOneToManyFieldInput on mount
-      // so it can wait for the lead->policy allowlist filter before showing
-      // results. Do NOT call performSearch here.
+      // OMNIA-CUSTOM: RelationOneToManyFieldInput runs the initial search so
+      // Lead -> Policies can wait for its allowlist; never search here
 
       pushFocusItemToFocusStack({
         focusId: recordPickerInstanceId,

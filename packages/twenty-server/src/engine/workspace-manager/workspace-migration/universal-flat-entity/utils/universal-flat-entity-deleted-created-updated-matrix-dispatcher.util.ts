@@ -4,9 +4,10 @@ import { isDefined } from 'twenty-shared/utils';
 
 import { type MetadataUniversalFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/metadata-universal-flat-entity.type';
 import { type MetadataUniversalFlatEntityMaps } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/metadata-universal-flat-entity-maps.type';
-import { type UniversalFlatEntityUpdate } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-entity-update.type';
-import { compareTwoFlatEntity } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/compare-two-universal-flat-entity.util';
-import { sanitizeSystemFieldUpdateForNonSystemBuild } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/sanitize-system-field-update-for-non-system-build.util';
+import {
+  compareTwoFlatEntity,
+  type UniversalFlatEntityComparison,
+} from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/compare-two-universal-flat-entity.util';
 import { addUniversalFlatEntityToUniversalFlatEntityMapsThroughMutationOrThrow } from 'src/engine/workspace-manager/workspace-migration/utils/add-universal-flat-entity-to-universal-flat-entity-maps-through-mutation-or-throw.util';
 import { shouldInferDeletionFromMissingEntities } from 'src/engine/workspace-manager/workspace-migration/utils/should-infer-deletion-from-missing-entities.util';
 import { type WorkspaceMigrationBuilderOptions } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-builder-options.type';
@@ -15,12 +16,7 @@ export type DeletedCreatedUpdatedMatrix<T extends AllMetadataName> = {
   createdFlatEntityMaps: MetadataUniversalFlatEntityMaps<T>;
   deletedFlatEntityMaps: MetadataUniversalFlatEntityMaps<T>;
   updatedFlatEntityMaps: {
-    byUniversalIdentifier: Record<
-      string,
-      {
-        update: UniversalFlatEntityUpdate<T>;
-      }
-    >;
+    byUniversalIdentifier: Record<string, UniversalFlatEntityComparison<T>>;
   };
 };
 
@@ -82,34 +78,19 @@ export const flatEntityDeletedCreatedUpdatedMatrixDispatcher = <
     if (!isDefined(toUniversalFlatEntity)) {
       continue;
     }
-    const update = compareTwoFlatEntity({
+    const comparison = compareTwoFlatEntity({
       fromUniversalFlatEntity,
       toUniversalFlatEntity,
       metadataName,
     });
 
-    if (!isDefined(update)) {
-      continue;
-    }
-
-    // Drop immutable system-field changes on application builds so a spurious
-    // diff (e.g. defaultValue on createdBy/updatedBy) does not fail the sync.
-    const sanitizedUpdate = sanitizeSystemFieldUpdateForNonSystemBuild({
-      metadataName,
-      fromUniversalFlatEntity,
-      update,
-      buildOptions,
-    });
-
-    if (!isDefined(sanitizedUpdate)) {
+    if (!isDefined(comparison)) {
       continue;
     }
 
     initialDispatcher.updatedFlatEntityMaps.byUniversalIdentifier[
       fromUniversalFlatEntity.universalIdentifier
-    ] = {
-      update: sanitizedUpdate,
-    };
+    ] = comparison;
   }
 
   return initialDispatcher;

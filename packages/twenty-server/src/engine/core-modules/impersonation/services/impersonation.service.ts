@@ -1,36 +1,45 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
+import { type Request } from 'express';
 import { isDefined } from 'twenty-shared/utils';
 import { Repository } from 'typeorm';
 
-import { NodeEnvironment } from 'src/engine/core-modules/twenty-config/interfaces/node-environment.interface';
-
-import { AuditService } from 'src/engine/core-modules/audit/services/audit.service';
-import { MONITORING_EVENT } from 'src/engine/core-modules/audit/utils/events/workspace-event/monitoring/monitoring';
 import {
   AuthException,
   AuthExceptionCode,
 } from 'src/engine/core-modules/auth/auth.exception';
 import { LoginTokenService } from 'src/engine/core-modules/auth/token/services/login-token.service';
+import { type RawAuthContext } from 'src/engine/core-modules/auth/types/raw-auth-context.type';
+import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
+import { EventLogEmitterService } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.service';
+import { IMPERSONATION_EVENT } from 'src/engine/core-modules/event-logs/emit/events/workspace-event/impersonation/impersonation';
+import { IMPERSONATION_DENIAL_BY_REASON } from 'src/engine/core-modules/impersonation/constants/impersonation-denial-by-reason.constant';
+import { ImpersonationAuthorizationService } from 'src/engine/core-modules/impersonation/services/impersonation-authorization.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
-import { twoFactorAuthenticationMethodsValidator } from 'src/engine/core-modules/two-factor-authentication/two-factor-authentication.validation';
+import { UserSessionCookieService } from 'src/engine/core-modules/user-session/services/user-session-cookie.service';
+import { UserSessionService } from 'src/engine/core-modules/user-session/services/user-session.service';
+import { UserSessionRevokedReason } from 'src/engine/core-modules/user-session/types/user-session-revoked-reason.type';
 import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
-import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+// OMNIA-CUSTOM: omniaagent.com dashboard sibling cookie (C13)
+import { OmniaSiblingSessionService } from 'src/modules/omnia-sibling-session/omnia-sibling-session.service';
 
 @Injectable()
 export class ImpersonationService {
   constructor(
-    private readonly auditService: AuditService,
+    private readonly eventLogEmitterService: EventLogEmitterService,
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly loginTokenService: LoginTokenService,
-    private readonly twentyConfigService: TwentyConfigService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
-    private readonly permissionsService: PermissionsService,
+    private readonly impersonationAuthorizationService: ImpersonationAuthorizationService,
+    private readonly twentyConfigService: TwentyConfigService,
+    private readonly userSessionService: UserSessionService,
+    private readonly userSessionCookieService: UserSessionCookieService,
+    // OMNIA-CUSTOM: omniaagent.com dashboard sibling cookie (C13)
+    private readonly omniaSiblingSessionService: OmniaSiblingSessionService,
   ) {}
 
   async impersonate(
@@ -63,90 +72,149 @@ export class ImpersonationService {
       );
     }
 
-    const isServerLevelImpersonation =
-      toImpersonateUserWorkspace.workspace.id !==
-      impersonatorUserWorkspace.workspace.id;
+    if (
+      toImpersonateUserWorkspace.userId === impersonatorUserWorkspace.userId
+    ) {
+      throw new AuthException(
+        'User cannot impersonate themselves',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
 
-    const hasServerLevelImpersonatePermission =
-      impersonatorUserWorkspace.user.canImpersonate === true &&
-      toImpersonateUserWorkspace.workspace.allowImpersonation === true;
-
-    if (isServerLevelImpersonation) {
-      if (!hasServerLevelImpersonatePermission) {
-        throw new AuthException(
-          'Impersonation not enabled for the impersonator user or the target workspace',
-          AuthExceptionCode.FORBIDDEN_EXCEPTION,
-        );
-      }
-
-      const isDevelopment =
-        this.twentyConfigService.get('NODE_ENV') ===
-        NodeEnvironment.DEVELOPMENT;
-
-      if (isDevelopment) {
-        return this.generateImpersonationLoginToken(
-          impersonatorUserWorkspace,
-          toImpersonateUserWorkspace,
-          'server',
-        );
-      }
-
-      const has2FAEnabled =
-        twoFactorAuthenticationMethodsValidator.areDefined(
-          impersonatorUserWorkspace.twoFactorAuthenticationMethods,
-        ) &&
-        twoFactorAuthenticationMethodsValidator.areVerified(
-          impersonatorUserWorkspace.twoFactorAuthenticationMethods,
-        );
-
-      if (!has2FAEnabled) {
-        throw new AuthException(
-          'Two-factor authentication is required for server-level impersonation. Please enable 2FA in your workspace settings before attempting to impersonate users.',
-          AuthExceptionCode.TWO_FACTOR_AUTHENTICATION_PROVISION_REQUIRED,
-        );
-      }
-
-      return this.generateImpersonationLoginToken(
+    const authorizationResult =
+      await this.impersonationAuthorizationService.checkImpersonationAuthorization(
         impersonatorUserWorkspace,
         toImpersonateUserWorkspace,
-        'server',
       );
-    }
 
-    const hasWorkspaceLevelImpersonatePermission =
-      await this.permissionsService.userHasWorkspaceSettingPermission({
-        userWorkspaceId: impersonatorUserWorkspace.id,
-        setting: PermissionFlagType.IMPERSONATE,
-        workspaceId: workspaceId,
-      });
+    if (!authorizationResult.allowed) {
+      const { message, exceptionCode, userFriendlyMessage } =
+        IMPERSONATION_DENIAL_BY_REASON[authorizationResult.reason];
 
-    if (!hasWorkspaceLevelImpersonatePermission) {
-      throw new AuthException(
-        'Impersonation not enabled for this workspace',
-        AuthExceptionCode.FORBIDDEN_EXCEPTION,
-      );
-    }
-
-    const targetHasAdminPrivileges =
-      toImpersonateUserWorkspace.user.canImpersonate === true ||
-      toImpersonateUserWorkspace.user.canAccessFullAdminPanel === true;
-
-    const impersonatorHasAdminPrivileges =
-      impersonatorUserWorkspace.user.canImpersonate === true ||
-      impersonatorUserWorkspace.user.canAccessFullAdminPanel === true;
-
-    if (targetHasAdminPrivileges && !impersonatorHasAdminPrivileges) {
-      throw new AuthException(
-        'Cannot impersonate a user with admin privileges. Only administrators can impersonate other administrators.',
-        AuthExceptionCode.FORBIDDEN_EXCEPTION,
-      );
+      throw new AuthException(message, exceptionCode, { userFriendlyMessage });
     }
 
     return this.generateImpersonationLoginToken(
       impersonatorUserWorkspace,
       toImpersonateUserWorkspace,
-      'workspace',
+      authorizationResult.level,
     );
+  }
+
+  // Restores the parked session; never mints one from the impersonated user's cookie.
+  async stopImpersonation({
+    impersonationContext,
+    workspaceId,
+    request,
+  }: {
+    impersonationContext: RawAuthContext['impersonationContext'];
+    workspaceId: string;
+    request: Request;
+  }): Promise<{ canRestoreImpersonatorSession: boolean }> {
+    if (!isDefined(impersonationContext)) {
+      throw new AuthException(
+        'Not currently impersonating',
+        AuthExceptionCode.FORBIDDEN_EXCEPTION,
+      );
+    }
+
+    const impersonatorUserWorkspace =
+      await this.userWorkspaceRepository.findOne({
+        where: { id: impersonationContext.impersonatorUserWorkspaceId },
+        relations: ['user', 'workspace'],
+      });
+
+    if (!isDefined(impersonatorUserWorkspace)) {
+      throw new AuthException(
+        'Impersonator user workspace not found',
+        AuthExceptionCode.USER_WORKSPACE_NOT_FOUND,
+      );
+    }
+
+    const presentedSessionToken =
+      this.userSessionCookieService.extractSessionTokenFromRequest(request);
+
+    if (isDefined(presentedSessionToken)) {
+      await this.userSessionService.revokeSessionByToken(
+        presentedSessionToken,
+        UserSessionRevokedReason.ImpersonationEnded,
+      );
+    }
+
+    const eventLogContext = this.eventLogEmitterService.createContext({
+      workspaceId,
+      userId: impersonatorUserWorkspace.userId,
+    });
+
+    void eventLogContext.insertWorkspaceEvent(IMPERSONATION_EVENT, {
+      level: 'workspace',
+      action: 'ended',
+      message: `Impersonation ended by impersonatorUserWorkspaceId=${impersonationContext.impersonatorUserWorkspaceId}; workspaceId=${workspaceId}`,
+    });
+
+    if (!isDefined(request.res)) {
+      return { canRestoreImpersonatorSession: false };
+    }
+
+    const canRestoreImpersonatorSession = await this.restoreImpersonatorSession(
+      request,
+      impersonatorUserWorkspace.id,
+    );
+
+    if (!canRestoreImpersonatorSession) {
+      this.userSessionCookieService.clearSessionCookie(request.res);
+    }
+
+    this.userSessionCookieService.clearImpersonatorSessionCookie(request.res);
+
+    return { canRestoreImpersonatorSession };
+  }
+
+  // The parked token proves nothing alone, so it is re-checked against the impersonator.
+  private async restoreImpersonatorSession(
+    request: Request,
+    impersonatorUserWorkspaceId: string,
+  ): Promise<boolean> {
+    const response = request.res;
+
+    if (!isDefined(response)) {
+      return false;
+    }
+
+    const impersonatorSessionToken =
+      this.userSessionCookieService.extractImpersonatorSessionTokenFromRequest(
+        request,
+      );
+
+    if (!isDefined(impersonatorSessionToken)) {
+      return false;
+    }
+
+    try {
+      const { payload, expiresAt } =
+        await this.userSessionService.resolveSession(impersonatorSessionToken);
+
+      if (
+        payload.type !== JwtTokenTypeEnum.ACCESS ||
+        payload.isImpersonating === true ||
+        payload.userWorkspaceId !== impersonatorUserWorkspaceId
+      ) {
+        return false;
+      }
+
+      this.userSessionCookieService.attachSessionTokenToResponse(
+        response,
+        impersonatorSessionToken,
+        expiresAt,
+      );
+      // OMNIA-CUSTOM: the impersonated user's dashboard cookie must not outlive impersonation;
+      // the front re-issues the impersonator's on the reload that follows (C13)
+      this.omniaSiblingSessionService.clear(response);
+
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async generateImpersonationLoginToken(
@@ -154,19 +222,21 @@ export class ImpersonationService {
     toImpersonateUserWorkspace: UserWorkspaceEntity,
     impersonationLevel: 'server' | 'workspace',
   ) {
-    const auditService = this.auditService.createContext({
+    const eventLogContext = this.eventLogEmitterService.createContext({
       workspaceId: impersonatorUserWorkspace.workspace.id,
       userId: impersonatorUserWorkspace.userId,
     });
 
-    await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
-      eventName: `${impersonationLevel}.impersonation.attempt`,
+    void eventLogContext.insertWorkspaceEvent(IMPERSONATION_EVENT, {
+      level: impersonationLevel,
+      action: 'attempt',
       message: `Impersonation attempt: targetUserId=${toImpersonateUserWorkspace.user.id}, workspaceId=${toImpersonateUserWorkspace.workspace.id}, impersonatorUserId=${impersonatorUserWorkspace.user.id}`,
     });
 
     try {
-      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
-        eventName: `${impersonationLevel}.impersonation.login_token_attempt`,
+      void eventLogContext.insertWorkspaceEvent(IMPERSONATION_EVENT, {
+        level: impersonationLevel,
+        action: 'login_token_attempt',
         message: `Impersonation token generation attempt for user ${toImpersonateUserWorkspace.user.id}`,
       });
 
@@ -179,8 +249,9 @@ export class ImpersonationService {
         },
       );
 
-      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
-        eventName: `${impersonationLevel}.impersonation.login_token_generated`,
+      void eventLogContext.insertWorkspaceEvent(IMPERSONATION_EVENT, {
+        level: impersonationLevel,
+        action: 'login_token_generated',
         message: `Impersonation token generated successfully for user ${toImpersonateUserWorkspace.user.id}`,
       });
 
@@ -194,8 +265,9 @@ export class ImpersonationService {
         loginToken,
       };
     } catch {
-      await auditService.insertWorkspaceEvent(MONITORING_EVENT, {
-        eventName: `${impersonationLevel}.impersonation.login_token_failed`,
+      void eventLogContext.insertWorkspaceEvent(IMPERSONATION_EVENT, {
+        level: impersonationLevel,
+        action: 'login_token_failed',
         message: `Impersonation token generation failed for targetUserId=${toImpersonateUserWorkspace.user.id}`,
       });
       throw new AuthException(

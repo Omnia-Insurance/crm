@@ -1,311 +1,140 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+
+import { IsNull } from 'typeorm';
 
 import {
-  PermissionFlagType,
+  type PermissionFlagType,
   SystemPermissionFlag,
 } from 'twenty-shared/constants';
-import { STANDARD_OBJECTS } from 'twenty-shared/metadata';
-import {
-  type ObjectsPermissions,
-  type ObjectsPermissionsByRoleId,
-  type RestrictedFieldsPermissions,
-} from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-import { IsNull, Repository } from 'typeorm';
+import { FieldMetadataType } from 'twenty-shared/types';
 
 import { WorkspaceCacheProvider } from 'src/engine/workspace-cache/interfaces/workspace-cache-provider.service';
 
-import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
-import { FieldPermissionEntity } from 'src/engine/metadata-modules/object-permission/field-permission/field-permission.entity';
-import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
-import { RolePermissionFlagEntity } from 'src/engine/metadata-modules/role-permission-flag/role-permission-flag.entity';
-import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
-import { RowLevelPermissionPredicateGroupEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate-group.entity';
-import { RowLevelPermissionPredicateEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate.entity';
+import { buildResolveMorphRelationPermissionFieldIds } from 'src/engine/metadata-modules/role/utils/build-resolve-morph-relation-permission-field-ids.util';
+import { computeRoleRecordsPermissions } from 'src/engine/permissions/role/utils/compute-role-records-permissions.util';
+import { buildIsPermissionFlagGranted } from 'src/engine/permissions/role/utils/build-is-permission-flag-granted.util';
+import { type RoleRecordsPermissions } from 'src/engine/permissions/types/role-records-permissions.type';
+import { type PermissionFlagEntity } from 'src/engine/metadata-modules/permission-flag/permission-flag.entity';
 import { WorkspaceCache } from 'src/engine/workspace-cache/decorators/workspace-cache.decorator';
-import { regroupEntitiesByRelatedEntityId } from 'src/engine/workspace-cache/utils/regroup-entities-by-related-entity-id';
+import { type WorkspaceCacheProviderContext } from 'src/engine/workspace-cache/types/workspace-cache-provider-context.type';
+import { type WorkspaceCacheRowsRequirement } from 'src/engine/workspace-cache/types/workspace-cache-rows-requirement.type';
 
-const WORKFLOW_STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS = [
-  STANDARD_OBJECTS.workflow.universalIdentifier,
-  STANDARD_OBJECTS.workflowRun.universalIdentifier,
-  STANDARD_OBJECTS.workflowVersion.universalIdentifier,
-] as const;
-const WORKSPACE_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER =
-  STANDARD_OBJECTS.workspaceMember.universalIdentifier;
+const ROLES_PERMISSIONS_ROWS_REQUIREMENT = {
+  role: true,
+  objectPermission: { columns: true, groupBy: ['roleId'] },
+  rolePermissionFlag: { columns: true, groupBy: ['roleId'] },
+  permissionFlag: true,
+  fieldPermission: { columns: true, groupBy: ['roleId'] },
+  rowLevelPermissionPredicate: {
+    columns: true,
+    groupBy: ['roleId'],
+    where: { deletedAt: IsNull() },
+  },
+  rowLevelPermissionPredicateGroup: {
+    columns: true,
+    groupBy: ['roleId'],
+    where: { deletedAt: IsNull() },
+  },
+  rowLevelPermissionRule: { columns: true, groupBy: ['roleId'] },
+  objectMetadata: [
+    'id',
+    'isSystem',
+    'universalIdentifier',
+    'labelIdentifierFieldMetadataId',
+  ],
+  fieldMetadata: {
+    columns: ['id', 'type', 'universalIdentifier', 'morphId'],
+    where: { type: FieldMetadataType.MORPH_RELATION },
+  },
+} as const satisfies WorkspaceCacheRowsRequirement;
 
 @Injectable()
-@WorkspaceCache('rolesPermissions')
-export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvider<ObjectsPermissionsByRoleId> {
-  constructor(
-    @InjectRepository(ObjectMetadataEntity)
-    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
-    @InjectRepository(RoleEntity)
-    private readonly roleRepository: Repository<RoleEntity>,
-    @InjectRepository(ObjectPermissionEntity)
-    private readonly objectPermissionRepository: Repository<ObjectPermissionEntity>,
-    @InjectRepository(RolePermissionFlagEntity)
-    private readonly rolePermissionFlagRepository: Repository<RolePermissionFlagEntity>,
-    @InjectRepository(FieldPermissionEntity)
-    private readonly fieldPermissionRepository: Repository<FieldPermissionEntity>,
-    @InjectRepository(RowLevelPermissionPredicateEntity)
-    private readonly rowLevelPermissionPredicateRepository: Repository<RowLevelPermissionPredicateEntity>,
-    @InjectRepository(RowLevelPermissionPredicateGroupEntity)
-    private readonly rowLevelPermissionPredicateGroupRepository: Repository<RowLevelPermissionPredicateGroupEntity>,
-  ) {
-    super();
-  }
+@WorkspaceCache('rolesPermissions', { packingPonderation: 2 })
+export class WorkspaceRolesPermissionsCacheService extends WorkspaceCacheProvider<
+  Record<string, RoleRecordsPermissions>
+> {
+  override readonly rowsRequirement = ROLES_PERMISSIONS_ROWS_REQUIREMENT;
 
-  async computeForCache(
-    workspaceId: string,
-  ): Promise<ObjectsPermissionsByRoleId> {
-    const [
-      roles,
-      objectPermissions,
-      rolePermissionFlags,
-      fieldPermissions,
-      rowLevelPermissionPredicates,
-      rowLevelPermissionPredicateGroups,
-      workspaceObjectMetadataCollection,
-    ] = await Promise.all([
-      this.roleRepository.find({
-        where: { workspaceId },
-      }),
-      this.objectPermissionRepository.find({
-        where: { workspaceId },
-      }),
-      this.rolePermissionFlagRepository.find({
-        where: { workspaceId },
-        relations: ['permissionFlag'],
-      }),
-      this.fieldPermissionRepository.find({
-        where: { workspaceId },
-      }),
-      this.rowLevelPermissionPredicateRepository.find({
-        where: { workspaceId, deletedAt: IsNull() },
-      }),
-      this.rowLevelPermissionPredicateGroupRepository.find({
-        where: { workspaceId, deletedAt: IsNull() },
-      }),
-      this.getWorkspaceObjectMetadataCollection(workspaceId),
-    ]);
+  computeForCache({
+    rows,
+  }: WorkspaceCacheProviderContext<
+    typeof ROLES_PERMISSIONS_ROWS_REQUIREMENT
+  >): Record<string, RoleRecordsPermissions> {
+    const {
+      role: roles,
+      objectPermission: objectPermissions,
+      rolePermissionFlag: rolePermissionFlags,
+      permissionFlag: permissionFlags,
+      fieldPermission: fieldPermissions,
+      rowLevelPermissionPredicate: rowLevelPermissionPredicates,
+      rowLevelPermissionPredicateGroup: rowLevelPermissionPredicateGroups,
+      rowLevelPermissionRule: rowLevelPermissionRules,
+      objectMetadata: workspaceObjectMetadataCollection,
+      fieldMetadata: morphRelationFieldMetadatas,
+    } = rows;
 
-    const objectPermissionsByRoleId =
-      regroupEntitiesByRelatedEntityId<'objectPermission'>({
-        entities: objectPermissions,
-        foreignKey: 'roleId',
-      });
-    const rolePermissionFlagsByRoleId =
-      regroupEntitiesByRelatedEntityId<'rolePermissionFlag'>({
-        entities: rolePermissionFlags,
-        foreignKey: 'roleId',
-      });
-    const fieldPermissionsByRoleId =
-      regroupEntitiesByRelatedEntityId<'fieldPermission'>({
-        entities: fieldPermissions,
-        foreignKey: 'roleId',
-      });
-    const rowLevelPermissionPredicatesByRoleId =
-      regroupEntitiesByRelatedEntityId<'rowLevelPermissionPredicate'>({
-        entities: rowLevelPermissionPredicates,
-        foreignKey: 'roleId',
-      });
-    const rowLevelPermissionPredicateGroupsByRoleId =
-      regroupEntitiesByRelatedEntityId<'rowLevelPermissionPredicateGroup'>({
-        entities: rowLevelPermissionPredicateGroups,
-        foreignKey: 'roleId',
-      });
+    const resolveMorphRelationPermissionFieldIds =
+      buildResolveMorphRelationPermissionFieldIds(morphRelationFieldMetadatas);
 
-    const permissionsByRoleId: ObjectsPermissionsByRoleId = {};
+    const permissionFlagById = new Map(
+      permissionFlags.map((permissionFlag) => [
+        permissionFlag.id,
+        permissionFlag,
+      ]),
+    );
+
+    const permissionsByRoleId: Record<string, RoleRecordsPermissions> = {};
 
     for (const role of roles) {
-      const roleObjectPermissions =
-        objectPermissionsByRoleId.get(role.id) ?? [];
-      const roleRolePermissionFlags =
-        rolePermissionFlagsByRoleId.get(role.id) ?? [];
-      const roleFieldPermissions = fieldPermissionsByRoleId.get(role.id) ?? [];
-      const roleRowLevelPermissionPredicates =
-        rowLevelPermissionPredicatesByRoleId.get(role.id) ?? [];
-      const roleRowLevelPermissionPredicateGroups =
-        rowLevelPermissionPredicateGroupsByRoleId.get(role.id) ?? [];
-
-      const objectRecordsPermissions: ObjectsPermissions = {};
-
-      for (const objectMetadata of workspaceObjectMetadataCollection) {
-        const {
-          id: objectMetadataId,
-          isSystem,
-          universalIdentifier,
-        } = objectMetadata;
-
-        let canRead = role.canReadAllObjectRecords;
-        let canUpdate = role.canUpdateAllObjectRecords;
-        let canSoftDelete = role.canSoftDeleteAllObjectRecords;
-        let canDestroy = role.canDestroyAllObjectRecords;
-        let showInSidebar = role.showAllObjectsInSidebar;
-        let editWindowMinutes: number | null = role.editWindowMinutes ?? null;
-        const restrictedFields: RestrictedFieldsPermissions = {};
-
-        const isWorkspaceMemberObject =
-          universalIdentifier === WORKSPACE_MEMBER_OBJECT_UNIVERSAL_IDENTIFIER;
-        const isWorkflowRelatedObject =
-          WORKFLOW_STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS.includes(
-            universalIdentifier as (typeof WORKFLOW_STANDARD_OBJECT_UNIVERSAL_IDENTIFIERS)[number],
-          );
-
-        if (isWorkflowRelatedObject) {
-          const hasWorkflowsPermissions =
-            this.hasSettingsGatedObjectPermissions(
-              role,
-              roleRolePermissionFlags,
-              PermissionFlagType.WORKFLOWS,
-            );
-
-          canRead = hasWorkflowsPermissions;
-          canUpdate = hasWorkflowsPermissions;
-          canSoftDelete = hasWorkflowsPermissions;
-          canDestroy = hasWorkflowsPermissions;
-          showInSidebar = hasWorkflowsPermissions;
-        } else {
-          if (isWorkspaceMemberObject) {
-            const hasWorkspaceMembersPermissions =
-              this.hasSettingsGatedObjectPermissions(
-                role,
-                roleRolePermissionFlags,
-                PermissionFlagType.WORKSPACE_MEMBERS,
-              );
-
-            canRead = true;
-            canUpdate = hasWorkspaceMembersPermissions;
-            canSoftDelete = hasWorkspaceMembersPermissions;
-            canDestroy = hasWorkspaceMembersPermissions;
-          } else {
-            const objectRecordPermissionsOverride = roleObjectPermissions.find(
-              (objectPermission) =>
-                objectPermission.objectMetadataId === objectMetadataId,
-            );
-
-            const getPermissionValue = (
-              overrideValue: boolean | undefined,
-              defaultValue: boolean,
-            ) => (isSystem ? true : (overrideValue ?? defaultValue));
-
-            canRead = getPermissionValue(
-              objectRecordPermissionsOverride?.canReadObjectRecords,
-              canRead,
-            );
-            canUpdate = getPermissionValue(
-              objectRecordPermissionsOverride?.canUpdateObjectRecords,
-              canUpdate,
-            );
-            canSoftDelete = getPermissionValue(
-              objectRecordPermissionsOverride?.canSoftDeleteObjectRecords,
-              canSoftDelete,
-            );
-            canDestroy = getPermissionValue(
-              objectRecordPermissionsOverride?.canDestroyObjectRecords,
-              canDestroy,
-            );
-            showInSidebar = isSystem
-              ? true
-              : (objectRecordPermissionsOverride?.showInSidebar ??
-                showInSidebar);
-
-            if (
-              isDefined(objectRecordPermissionsOverride?.editWindowMinutes) &&
-              objectRecordPermissionsOverride.editWindowMinutes !== null
-            ) {
-              editWindowMinutes =
-                objectRecordPermissionsOverride.editWindowMinutes;
-            }
-          }
-
-          const fieldPermissionsForObject = roleFieldPermissions.filter(
-            (fieldPermission) =>
-              fieldPermission.objectMetadataId === objectMetadataId,
-          );
-
-          for (const fieldPermission of fieldPermissionsForObject) {
-            const isFieldLabelIdentifier =
-              fieldPermission.fieldMetadataId ===
-              objectMetadata.labelIdentifierFieldMetadataId;
-
-            if (
-              isDefined(fieldPermission.canReadFieldValue) ||
-              isDefined(fieldPermission.canUpdateFieldValue)
-            ) {
-              restrictedFields[fieldPermission.fieldMetadataId] = {
-                canRead: isFieldLabelIdentifier
-                  ? true
-                  : fieldPermission.canReadFieldValue,
-                canUpdate: fieldPermission.canUpdateFieldValue,
-              };
-            }
-          }
-        }
-
-        objectRecordsPermissions[objectMetadataId] = {
-          canReadObjectRecords: canRead,
-          canUpdateObjectRecords: canUpdate,
-          canSoftDeleteObjectRecords: canSoftDelete,
-          canDestroyObjectRecords: canDestroy,
-          showInSidebar,
-          editWindowMinutes,
-          restrictedFields,
-          rowLevelPermissionPredicates: roleRowLevelPermissionPredicates.filter(
-            (rowLevelPermissionPredicate) =>
-              rowLevelPermissionPredicate.objectMetadataId === objectMetadataId,
-          ),
-          rowLevelPermissionPredicateGroups:
-            roleRowLevelPermissionPredicateGroups.filter(
-              (rowLevelPermissionPredicateGroup) =>
-                rowLevelPermissionPredicateGroup.objectMetadataId ===
-                objectMetadataId,
+      const isPermissionFlagGranted = buildIsPermissionFlagGranted({
+        role,
+        permissionFlagUniversalIdentifiers: (
+          rolePermissionFlags.byRoleId.get(role.id) ?? []
+        ).map((rolePermissionFlagRow) =>
+          this.getRolePermissionFlagUniversalIdentifier({
+            flag: rolePermissionFlagRow.flag,
+            permissionFlag: permissionFlagById.get(
+              rolePermissionFlagRow.permissionFlagId,
             ),
-        };
-      }
+          }),
+        ),
+      });
 
-      permissionsByRoleId[role.id] = objectRecordsPermissions;
+      permissionsByRoleId[role.id] = computeRoleRecordsPermissions({
+        roleDefinition: {
+          canCreateAllObjectRecords: role.canCreateAllObjectRecords,
+          canReadAllObjectRecords: role.canReadAllObjectRecords,
+          canUpdateAllObjectRecords: role.canUpdateAllObjectRecords,
+          canSoftDeleteAllObjectRecords: role.canSoftDeleteAllObjectRecords,
+          canDestroyAllObjectRecords: role.canDestroyAllObjectRecords,
+          isPermissionFlagGranted,
+          objectPermissions: objectPermissions.byRoleId.get(role.id) ?? [],
+          fieldPermissions: fieldPermissions.byRoleId.get(role.id) ?? [],
+          rowLevelPermissionPredicates:
+            rowLevelPermissionPredicates.byRoleId.get(role.id) ?? [],
+          rowLevelPermissionPredicateGroups:
+            rowLevelPermissionPredicateGroups.byRoleId.get(role.id) ?? [],
+          rowLevelPermissionRules:
+            rowLevelPermissionRules.byRoleId.get(role.id) ?? [],
+        },
+        objectMetadataCollection: workspaceObjectMetadataCollection,
+        resolveMorphRelationPermissionFieldIds,
+      });
     }
 
     return permissionsByRoleId;
   }
 
-  private async getWorkspaceObjectMetadataCollection(
-    workspaceId: string,
-  ): Promise<ObjectMetadataEntity[]> {
-    const workspaceObjectMetadata = await this.objectMetadataRepository.find({
-      where: {
-        workspaceId,
-      },
-      select: [
-        'id',
-        'isSystem',
-        'universalIdentifier',
-        'labelIdentifierFieldMetadataId',
-      ],
-    });
-
-    return workspaceObjectMetadata;
-  }
-
-  private hasSettingsGatedObjectPermissions(
-    role: RoleEntity,
-    rolePermissionFlags: RolePermissionFlagEntity[],
-    permissionFlagType: PermissionFlagType,
-  ): boolean {
-    const hasPermissionFromRole = role.canUpdateAllSettings;
-    const permissionFlagUniversalIdentifier =
-      SystemPermissionFlag[permissionFlagType];
-    const hasPermissionFromSettingPermissions = isDefined(
-      rolePermissionFlags.find(
-        (rolePermissionFlag) =>
-          (rolePermissionFlag.permissionFlag?.universalIdentifier ??
-            SystemPermissionFlag[rolePermissionFlag.flag]) ===
-          permissionFlagUniversalIdentifier,
-      ),
-    );
-
-    return hasPermissionFromRole || hasPermissionFromSettingPermissions;
+  private getRolePermissionFlagUniversalIdentifier({
+    flag,
+    permissionFlag,
+  }: {
+    flag: PermissionFlagType;
+    permissionFlag:
+      | Pick<PermissionFlagEntity, 'universalIdentifier'>
+      | undefined;
+  }): string {
+    // The permissionFlag relation is stripped until the 2.6.0 upgrade cursor, so fall back to the legacy flag column
+    return permissionFlag?.universalIdentifier ?? SystemPermissionFlag[flag];
   }
 }

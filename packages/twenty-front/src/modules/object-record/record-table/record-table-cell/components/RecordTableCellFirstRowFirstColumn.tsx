@@ -1,10 +1,9 @@
 import { TABLE_Z_INDEX } from '@/object-record/record-table/constants/TableZIndex';
 import { getRecordTableColumnFieldWidthClassName } from '@/object-record/record-table/utils/getRecordTableColumnFieldWidthClassName';
-import { type DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { cx } from '@linaria/core';
 import { styled } from '@linaria/react';
-import { useContext, type ReactNode } from 'react';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+import { type ReactNode } from 'react';
+import { useTheme } from 'twenty-ui/theme';
 
 const StyledRecordTableTd = styled.div<{
   backgroundColor: string;
@@ -39,16 +38,14 @@ export const RecordTableCellFirstRowFirstColumn = ({
   isDragging,
   hasRightBorder = true,
   hasBottomBorder = true,
-  ...dragHandleProps
 }: {
-  className?: string;
   children?: ReactNode;
   isSelected?: boolean;
   isDragging?: boolean;
   hasRightBorder?: boolean;
   hasBottomBorder?: boolean;
-} & (Partial<DraggableProvidedDragHandleProps> | null)) => {
-  const { theme } = useContext(ThemeContext);
+}) => {
+  const theme = useTheme();
 
   const zIndex = TABLE_Z_INDEX.cell.sticky;
 
@@ -69,8 +66,6 @@ export const RecordTableCellFirstRowFirstColumn = ({
       hasRightBorder={hasRightBorder}
       hasBottomBorder={hasBottomBorder}
       zIndex={zIndex}
-      // oxlint-disable-next-line react/jsx-props-no-spreading
-      {...dragHandleProps}
       className={cx(
         'table-cell-0-0',
         getRecordTableColumnFieldWidthClassName(0),

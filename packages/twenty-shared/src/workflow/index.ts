@@ -8,16 +8,56 @@
  */
 
 export { CAPTURE_ALL_VARIABLE_TAG_INNER_REGEX } from './constants/CaptureAllVariableTagInnerRegex';
+export { CODE_STEP_SOURCE_MAX_LENGTH } from './constants/CodeStepSourceMaxLength';
 export { CONTENT_TYPE_VALUES_HTTP_REQUEST } from './constants/ContentTypeValuesHttpRequest';
-export { IF_ELSE_BRANCH_POSITION_OFFSETS } from './constants/IfElseBranchPositionOffsets';
+export { OBJECTS_BLOCKED_FROM_AUTOMATION } from './constants/ObjectsBlockedFromAutomation';
+export { OBJECTS_SYNCED_FROM_CONNECTED_ACCOUNTS } from './constants/ObjectsSyncedFromConnectedAccounts';
+export { STEP_RETRY_DELAYS_MS } from './constants/StepRetryDelaysMs';
 export { TRIGGER_STEP_ID } from './constants/TriggerStepId';
+export { WORKFLOW_ACTION_FEATURE_FLAGS } from './constants/WorkflowActionFeatureFlags';
+export { WORKFLOW_AI_AGENT_GENERATE_STEP_DEFAULT_NAME } from './constants/WorkflowAiAgentGenerateStepDefaultName';
+export type { WorkflowAiAgentStepConfigIssueCode } from './constants/WorkflowAiAgentStepConfigIssueMessages';
+export { WORKFLOW_AI_AGENT_STEP_CONFIG_ISSUE_MESSAGES } from './constants/WorkflowAiAgentStepConfigIssueMessages';
+export { WORKFLOW_TRIGGER_DEFAULT_NAMES } from './constants/WorkflowTriggerDefaultNames';
+export { WORKFLOW_TRIGGER_METADATA_KEY } from './constants/WorkflowTriggerMetadataKey';
+export { WORKFLOW_TRIGGER_METADATA_LABEL } from './constants/WorkflowTriggerMetadataLabel';
+export { WORKFLOW_TRIGGER_METADATA_WORKSPACE_MEMBER_ID_KEY } from './constants/WorkflowTriggerMetadataWorkspaceMemberIdKey';
+export { WORKFLOW_TRIGGER_METADATA_WORKSPACE_MEMBER_ID_LABEL } from './constants/WorkflowTriggerMetadataWorkspaceMemberIdLabel';
+export { WORKFLOW_TRIGGER_PAYLOAD_KEY } from './constants/WorkflowTriggerPayloadKey';
+export { WORKFLOW_TRIGGER_RECORD_LABEL } from './constants/WorkflowTriggerRecordLabel';
+export { WORKFLOW_TRIGGER_RECORDS_LABEL } from './constants/WorkflowTriggerRecordsLabel';
+export { WORKFLOW_DIAGRAM_DEFAULT_NODE_DIMENSIONS } from './layout/constants/WorkflowDiagramDefaultNodeDimensions';
+export { WORKFLOW_LAYOUT_DEFAULT_OPTIONS } from './layout/constants/WorkflowLayoutDefaultOptions';
+export type {
+  WorkflowLayoutNode,
+  WorkflowLayoutEdge,
+  WorkflowLayoutPosition,
+  WorkflowLayoutOptions,
+} from './layout/utils/compute-workflow-layout.util';
+export { computeWorkflowLayout } from './layout/utils/compute-workflow-layout.util';
+export { agentResponseFormatSchema } from './schemas/agent-response-format-schema';
 export { workflowAiAgentActionSchema } from './schemas/ai-agent-action-schema';
 export { workflowAiAgentActionSettingsSchema } from './schemas/ai-agent-action-settings-schema';
+export { workflowAiAgentConversationConfigSchema } from './schemas/ai-agent-conversation-config-schema';
+export { workflowAiAgentInlineConfigSchema } from './schemas/ai-agent-inline-config-schema';
 export { baseTriggerSchema } from './schemas/base-trigger-schema';
 export { baseWorkflowActionSchema } from './schemas/base-workflow-action-schema';
 export { baseWorkflowActionSettingsSchema } from './schemas/base-workflow-action-settings-schema';
+export { workflowClassifyActionSchema } from './schemas/classify-action-schema';
+export {
+  CLASSIFY_ANSWER_NAME_PATTERN,
+  CLASSIFY_OPTION_NAME_FORBIDDEN_CHARACTER,
+  workflowClassifyCriterionSchema,
+  workflowClassifyQuestionSchema,
+  workflowClassifyActionSettingsSchema,
+} from './schemas/classify-action-settings-schema';
 export { workflowCodeActionSchema } from './schemas/code-action-schema';
-export { workflowCodeActionSettingsSchema } from './schemas/code-action-settings-schema';
+export {
+  workflowCodeActionInputSchema,
+  workflowCodeActionSettingsSchema,
+} from './schemas/code-action-settings-schema';
+export { workflowCreateCalendarEventActionSchema } from './schemas/create-calendar-event-action-schema';
+export { workflowCreateCalendarEventActionSettingsSchema } from './schemas/create-calendar-event-action-settings-schema';
 export { workflowCreateRecordActionSchema } from './schemas/create-record-action-schema';
 export { workflowCreateRecordActionSettingsSchema } from './schemas/create-record-action-settings-schema';
 export { workflowCronTriggerSchema } from './schemas/cron-trigger-schema';
@@ -27,12 +67,16 @@ export { workflowDeleteRecordActionSettingsSchema } from './schemas/delete-recor
 export { workflowDraftEmailActionSchema } from './schemas/draft-email-action-schema';
 export { workflowEmptyActionSchema } from './schemas/empty-action-schema';
 export { workflowEmptyActionSettingsSchema } from './schemas/empty-action-settings-schema';
+export { expectedOutputSchemaShape } from './schemas/expected-output-schema-shape';
 export { workflowFilterActionSchema } from './schemas/filter-action-schema';
 export { workflowFilterActionSettingsSchema } from './schemas/filter-action-settings-schema';
 export { workflowFindRecordsActionSchema } from './schemas/find-records-action-schema';
 export { workflowFindRecordsActionSettingsSchema } from './schemas/find-records-action-settings-schema';
 export { workflowFormActionSchema } from './schemas/form-action-schema';
-export { workflowFormActionSettingsSchema } from './schemas/form-action-settings-schema';
+export {
+  workflowFormFieldSchema,
+  workflowFormActionSettingsSchema,
+} from './schemas/form-action-settings-schema';
 export { workflowHttpRequestActionSchema } from './schemas/http-request-action-schema';
 export { workflowHttpRequestActionSettingsSchema } from './schemas/http-request-action-settings-schema';
 export { workflowIfElseActionSchema } from './schemas/if-else-action-schema';
@@ -45,17 +89,39 @@ export { workflowIteratorActionSettingsSchema } from './schemas/iterator-action-
 export { workflowLogicFunctionActionSchema } from './schemas/logic-function-action-schema';
 export { workflowLogicFunctionActionSettingsSchema } from './schemas/logic-function-action-settings-schema';
 export { workflowManualTriggerSchema } from './schemas/manual-trigger-schema';
+export { workflowMcpToolActionSchema } from './schemas/mcp-tool-action-schema';
+export { workflowMcpToolActionSettingsSchema } from './schemas/mcp-tool-action-settings-schema';
 export { objectRecordSchema } from './schemas/object-record-schema';
+export { workflowPickRecordActionSchema } from './schemas/pick-record-action-schema';
+export {
+  workflowPickRecordStrategySchema,
+  workflowPickRecordActionSettingsSchema,
+} from './schemas/pick-record-action-settings-schema';
+export { recordFilterGroupSchema } from './schemas/record-filter-group-schema';
+export { recordFilterSchema } from './schemas/record-filter-schema';
+export { recordSortSchema } from './schemas/record-sort-schema';
+export { workflowSendChatMessageActionSchema } from './schemas/send-chat-message-action-schema';
+export { workflowSendChatMessageActionSettingsSchema } from './schemas/send-chat-message-action-settings-schema';
 export { workflowSendEmailActionSchema } from './schemas/send-email-action-schema';
-export { workflowSendEmailActionSettingsSchema } from './schemas/send-email-action-settings-schema';
+export type { WorkflowEmailFiles } from './schemas/send-email-action-settings-schema';
+export {
+  workflowEmailFilesSchema,
+  workflowSendEmailActionSettingsSchema,
+} from './schemas/send-email-action-settings-schema';
 export { stepFilterGroupSchema } from './schemas/step-filter-group-schema';
 export { stepFilterSchema } from './schemas/step-filter-schema';
 export { workflowUpdateRecordActionSchema } from './schemas/update-record-action-schema';
 export { workflowUpdateRecordActionSettingsSchema } from './schemas/update-record-action-settings-schema';
 export { workflowUpsertRecordActionSchema } from './schemas/upsert-record-action-schema';
 export { workflowUpsertRecordActionSettingsSchema } from './schemas/upsert-record-action-settings-schema';
+export { workflowWaitForEventActionSchema } from './schemas/wait-for-event-action-schema';
+export { workflowWaitForEventActionSettingsSchema } from './schemas/wait-for-event-action-settings-schema';
 export { workflowWebhookTriggerSchema } from './schemas/webhook-trigger-schema';
 export { workflowActionSchema } from './schemas/workflow-action-schema';
+export {
+  workflowConversationScopeSchema,
+  workflowConversationSchema,
+} from './schemas/workflow-conversation-schema';
 export { workflowDelayActionSchema } from './schemas/workflow-delay-action-schema';
 export { workflowDelayActionSettingsSchema } from './schemas/workflow-delay-action-settings-schema';
 export { workflowFileSchema } from './schemas/workflow-file-action-schema';
@@ -64,45 +130,138 @@ export { workflowRunStateSchema } from './schemas/workflow-run-state-schema';
 export { workflowRunStateStepInfoSchema } from './schemas/workflow-run-state-step-info-schema';
 export { workflowRunStateStepInfosSchema } from './schemas/workflow-run-state-step-infos-schema';
 export { workflowRunStatusSchema } from './schemas/workflow-run-status-schema';
+export {
+  workflowRunStepLogSchema,
+  workflowRunStepLogsSchema,
+} from './schemas/workflow-run-step-log-schema';
 export { workflowRunStepStatusSchema } from './schemas/workflow-run-step-status-schema';
+export { workflowStepWaitSchema } from './schemas/workflow-step-wait-schema';
 export { workflowTriggerSchema } from './schemas/workflow-trigger-schema';
+export { workflowVariableReferenceSchema } from './schemas/workflow-variable-reference-schema';
 export type { EmailRecipients } from './types/EmailRecipients';
 export type { FunctionInput } from './types/FunctionInput';
 export type {
+  RecordSchemaType,
   InputSchemaPropertyType,
   InputSchemaProperty,
   InputSchema,
 } from './types/InputSchema';
 export type { StepIfElseBranch } from './types/StepIfElseBranch';
+export { WorkflowActionType } from './types/WorkflowActionType';
 export type { WorkflowAttachment } from './types/WorkflowAttachment';
-export type { BodyType } from './types/workflowHttpRequestStep';
+export type {
+  WorkflowClassifyCriterion,
+  WorkflowClassifyQuestion,
+} from './types/WorkflowClassifyQuestion';
+export type {
+  WorkflowConversation,
+  WorkflowConversationScope,
+} from './types/WorkflowConversation';
+export type { BodyType } from './types/WorkflowHttpRequestStep';
 export type {
   WorkflowRunStepInfo,
   WorkflowRunStepInfos,
 } from './types/WorkflowRunStateStepInfos';
 export { StepStatus } from './types/WorkflowRunStateStepInfos';
-export { canObjectBeManagedByWorkflow } from './utils/canObjectBeManagedByWorkflow';
+export type {
+  WorkflowRunStepLog,
+  WorkflowRunStepLogs,
+  AiAgentStepLogDetails,
+} from './types/WorkflowRunStepLog';
+export type { WorkflowStepWait } from './types/WorkflowStepWait';
+export { canObjectBeManagedByAutomation } from './utils/canObjectBeManagedByAutomation';
 export { extractRawVariableNamePart } from './utils/extractRawVariableNameParts';
 export { getFunctionInputFromInputSchema } from './utils/getFunctionInputFromInputSchema';
+export { getWorkflowAiAgentStepConfigIssues } from './utils/getWorkflowAiAgentStepConfigIssues';
 export { getWorkflowRunContext } from './utils/getWorkflowRunContext';
+export { hasWorkflowAiAgentConfig } from './utils/hasWorkflowAiAgentConfig';
+export { isAgentRunnableAsWorkflowStep } from './utils/isAgentRunnableAsWorkflowStep';
+export { isObjectSyncedFromConnectedAccounts } from './utils/isObjectSyncedFromConnectedAccounts';
+export { isStandaloneVariableString } from './utils/isStandaloneVariableString';
+export { isWorkflowAiAgentGenerateStep } from './utils/isWorkflowAiAgentGenerateStep';
 export { parseBooleanFromStringValue } from './utils/parseBooleanFromStringValue';
-export { parseDataFromContentType } from './utils/parseDataFromContentType';
 export {
   needsEscaping,
   escapePathSegment,
   joinVariablePath,
   parseVariablePath,
 } from './utils/variable-path.util';
+export { MALFORMED_WORKFLOW_VALIDATION_ISSUE_CODES } from './validation/constants/malformed-workflow-validation-issue-codes.constant';
+export { NON_ACTIVABLE_WORKFLOW_VALIDATION_ISSUE_CODES } from './validation/constants/non-activable-workflow-validation-issue-codes.constant';
+export { isIfElseStepInput } from './validation/guards/isIfElseStepInput';
+export { isIteratorStepInput } from './validation/guards/isIteratorStepInput';
+export type {
+  IfElseStepInput,
+  IteratorStepInput,
+  WorkflowValidationSeverity,
+  WorkflowValidationIssueCode,
+  WorkflowValidationIssue,
+  WorkflowValidationResult,
+  ValidatableWorkflowStep,
+  ValidatableWorkflowTrigger,
+  ValidatableWorkflow,
+} from './validation/types/WorkflowValidation';
+export type { WorkflowGraph } from './validation/utils/build-workflow-graph.util';
+export { buildWorkflowGraph } from './validation/utils/build-workflow-graph.util';
+export { extractVariablesFromInput } from './validation/utils/extract-variables-from-input.util';
+export { getEditDistance } from './validation/utils/get-edit-distance.util';
+export {
+  getStepInput,
+  getStepOutgoingStepIds,
+} from './validation/utils/get-step-outgoing-step-ids.util';
+export { getVariablePathSuggestions } from './validation/utils/get-variable-path-suggestions.util';
+export { validateWorkflowExecutionPaths } from './validation/utils/validate-workflow-execution-paths.util';
+export { validateWorkflowGraph } from './validation/utils/validate-workflow-graph.util';
+export { validateWorkflowStepParams } from './validation/utils/validate-workflow-step-params.util';
+export { validateWorkflowVariableReferences } from './validation/utils/validate-workflow-variable-references.util';
+export { validateWorkflowStructure } from './validation/validate-workflow-structure.util';
+export { isBaseOutputSchemaV2 } from './workflow-schema/guards/isBaseOutputSchemaV2';
 export type {
   LeafType,
   NodeType,
   Leaf,
   Node,
   BaseOutputSchemaV2,
-} from './workflow-schema/types/base-output-schema.type';
-export { navigateOutputSchemaProperty } from './workflow-schema/utils/navigateOutputSchemaProperty';
+} from './workflow-schema/types/BaseOutputSchema';
+export type {
+  RecordFieldLeaf,
+  RecordFieldNode,
+  RecordFieldNodeValue,
+  FieldOutputSchemaV2,
+  RecordOutputSchemaV2,
+  RecordNode,
+  FindRecordsOutputSchema,
+  IteratorOutputSchema,
+  FormFieldLeaf,
+  FormSelectFieldLeaf,
+  FormFieldNode,
+  FormOutputSchema,
+  CodeOutputSchema,
+  ManualTriggerOutputSchema,
+  OutputSchemaV2,
+  VariableSearchResult,
+} from './workflow-schema/types/OutputSchema';
+export { buildManualTriggerMetadataNode } from './workflow-schema/utils/build-manual-trigger-metadata-node';
+export { collectOutputSchemaPaths } from './workflow-schema/utils/collect-output-schema-paths';
+export type { OutputSchemaPathFailure } from './workflow-schema/utils/find-output-schema-path-failure';
+export { findOutputSchemaPathFailure } from './workflow-schema/utils/find-output-schema-path-failure';
+export {
+  isFlattenedArrayOutputSchema,
+  getCurrentItemSchemaFromFlattenedArrayOutputSchema,
+} from './workflow-schema/utils/flattened-array-output-schema';
+export { navigateOutputSchemaProperty } from './workflow-schema/utils/navigate-output-schema-property';
+export type { ResolvedVariable } from './workflow-schema/utils/resolve-variable-path-in-output-schema';
+export {
+  resolveInSchema,
+  resolveVariablePathInOutputSchema,
+  collectOutputSchemaVariablePaths,
+} from './workflow-schema/utils/resolve-variable-path-in-output-schema';
+export {
+  searchRecordOutputSchema,
+  searchVariableInOutputSchema,
+} from './workflow-schema/utils/search-variable-in-output-schema';
 export type {
   GlobalAvailability,
   SingleRecordAvailability,
   BulkRecordsAvailability,
-} from './workflow-trigger/types/workflow-trigger.type';
+} from './workflow-trigger/types/WorkflowTrigger';

@@ -1,7 +1,7 @@
 import { CALENDAR_EVENT_GQL_FIELDS } from 'test/integration/constants/calendar-event-gql-fields.constants';
 import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
 import { findOneOperationFactory } from 'test/integration/graphql/utils/find-one-operation-factory.util';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
 
 import { CALENDAR_EVENT_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/calendar-event-data-seeds.constant';
@@ -14,7 +14,7 @@ describe('calendarEventsResolver (e2e)', () => {
       gqlFields: CALENDAR_EVENT_GQL_FIELDS,
     });
 
-    const response = await makeGraphqlAPIRequest(graphqlOperation);
+    const response = await makeGraphqlApiRequest(graphqlOperation);
 
     const data = response.body.data.calendarEvents;
 
@@ -25,9 +25,12 @@ describe('calendarEventsResolver (e2e)', () => {
 
     expect(edges.length).toEqual(QUERY_MAX_RECORDS);
 
-    const calendarEvent = edges[0].node;
+    const seededCalendarEvent = edges.find(
+      (edge: { node: { id: string } }) =>
+        edge.node.id === CALENDAR_EVENT_DATA_SEED_IDS.ID_1,
+    )?.node;
 
-    expect(calendarEvent).toMatchSnapshot({
+    expect(seededCalendarEvent).toMatchSnapshot({
       createdAt: expect.any(String),
       endsAt: expect.any(String),
       startsAt: expect.any(String),
@@ -44,7 +47,7 @@ describe('calendarEventsResolver (e2e)', () => {
       gqlFields: CALENDAR_EVENT_GQL_FIELDS,
     });
 
-    const response = await makeGraphqlAPIRequest(graphqlOperation);
+    const response = await makeGraphqlApiRequest(graphqlOperation);
 
     const data = response.body.data.calendarEvent;
 

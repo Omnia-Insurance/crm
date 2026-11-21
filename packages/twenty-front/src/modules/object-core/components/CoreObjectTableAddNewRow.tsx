@@ -1,0 +1,66 @@
+import { styled } from '@linaria/react';
+import { IconPlus } from 'twenty-ui/icon';
+import { themeCssVariables, useTheme } from 'twenty-ui/theme';
+
+import { CORE_OBJECT_TABLE_CHECKBOX_COLUMN_GRID_TRACK } from '@/object-core/constants/CoreObjectTableCheckboxColumnGridTrack';
+
+const StyledAddNewRow = styled.button<{ hasCheckboxColumn: boolean }>`
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-top: 1px solid ${themeCssVariables.border.color.light};
+  color: ${themeCssVariables.font.color.tertiary};
+  display: flex;
+  font-family: inherit;
+  font-size: ${themeCssVariables.font.size.md};
+  gap: ${themeCssVariables.spacing[1]};
+  height: ${themeCssVariables.spacing[8]};
+  padding: 0 ${themeCssVariables.spacing[2]};
+  padding-inline-start: ${({ hasCheckboxColumn }) =>
+    hasCheckboxColumn
+      ? `calc(${CORE_OBJECT_TABLE_CHECKBOX_COLUMN_GRID_TRACK} + ${themeCssVariables.spacing[2]})`
+      : themeCssVariables.spacing[2]};
+  width: 100%;
+
+  &:not(:disabled) {
+    cursor: pointer;
+  }
+
+  &:not(:disabled):hover {
+    background-color: ${themeCssVariables.background.transparent.light};
+    color: ${themeCssVariables.font.color.secondary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${themeCssVariables.color.blue};
+    outline-offset: -2px;
+  }
+`;
+
+type CoreObjectTableAddNewRowProps = {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  hasCheckboxColumn?: boolean;
+};
+
+export const CoreObjectTableAddNewRow = ({
+  label,
+  onClick,
+  disabled = false,
+  hasCheckboxColumn = false,
+}: CoreObjectTableAddNewRowProps) => {
+  const theme = useTheme();
+
+  return (
+    <StyledAddNewRow
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      hasCheckboxColumn={hasCheckboxColumn}
+    >
+      <IconPlus size={theme.icon.size.sm} />
+      {label}
+    </StyledAddNewRow>
+  );
+};

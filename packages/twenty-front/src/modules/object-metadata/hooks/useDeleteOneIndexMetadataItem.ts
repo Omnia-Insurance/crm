@@ -1,0 +1,65 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
+import { useMutation } from '@apollo/client/react';
+import { CrudOperationType } from 'twenty-shared/types';
+
+import { useMetadataErrorHandler } from '@/metadata-error-handler/hooks/useMetadataErrorHandler';
+import { useUpdateMetadataStoreDraft } from '@/metadata-store/hooks/useUpdateMetadataStoreDraft';
+import { type MetadataRequestResult } from '@/object-metadata/types/MetadataRequestResult';
+import { useToast } from 'twenty-ui/components/feedback';
+import { DeleteOneIndexMetadataItemDocument } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
+
+export const useDeleteOneIndexMetadataItem = () => {
+  const { t } = useLingui();
+  const [deleteOneIndexMetadataItemMutation] = useMutation(
+    DeleteOneIndexMetadataItemDocument,
+  );
+
+  const { handleMetadataError } = useMetadataErrorHandler();
+  const { enqueueToast } = useToast();
+  const { removeFromDraft, applyChanges } = useUpdateMetadataStoreDraft();
+
+  const deleteOneIndexMetadataItem = async ({
+    idToDelete,
+  }: {
+    idToDelete: string;
+  }): Promise<
+    MetadataRequestResult<
+      Awaited<ReturnType<typeof deleteOneIndexMetadataItemMutation>>
+    >
+  > => {
+    try {
+      const response = await deleteOneIndexMetadataItemMutation({
+        variables: {
+          idToDelete,
+        },
+      });
+
+      removeFromDraft({ key: 'indexMetadataItems', itemIds: [idToDelete] });
+      applyChanges();
+
+      return {
+        status: 'successful',
+        response,
+      };
+    } catch (error) {
+      if (CombinedGraphQLErrors.is(error)) {
+        handleMetadataError(error, {
+          primaryMetadataName: 'index',
+          operationType: CrudOperationType.DELETE,
+        });
+      } else {
+        enqueueToast({ status: 'error', children: t`An error occurred.` });
+      }
+
+      return {
+        status: 'failed',
+        error,
+      };
+    }
+  };
+
+  return {
+    deleteOneIndexMetadataItem,
+  };
+};

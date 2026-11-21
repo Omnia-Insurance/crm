@@ -1,11 +1,10 @@
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { generate } from '@genql/cli';
-import { DEFAULT_API_URL_NAME } from 'twenty-shared/application';
-
 import { buildClientWrapperSource } from './client-wrapper';
+import { buildDefaultApiUrlExpression } from './build-default-api-url-expression';
 import { emptyDir, ensureDir } from './fs-utils';
+import { generate } from './genql';
 import twentyClientTemplateSource from './twenty-client-template.ts?raw';
 
 const COMMON_SCALAR_TYPES = {
@@ -40,7 +39,7 @@ export const generateMetadataClient = async ({
 
   const clientContent = buildClientWrapperSource(templateSource, {
     apiClientName: 'MetadataApiClient',
-    defaultUrl: `\`\${process.env.${DEFAULT_API_URL_NAME}}/metadata\``,
+    defaultUrl: buildDefaultApiUrlExpression('/metadata'),
     includeUploadFile: true,
   });
 

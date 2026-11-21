@@ -9,6 +9,7 @@ export const mapViewFieldToRecordField = (viewField: ViewField) => {
     position: viewField.position,
     size: viewField.size,
     aggregateOperation: viewField.aggregateOperation,
+    // OMNIA-CUSTOM: sub-field columns render from RecordField (contract C6)
     subFieldName: viewField.subFieldName,
   };
 

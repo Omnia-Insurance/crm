@@ -1,88 +1,59 @@
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { isManyToOneRelationField } from '@/object-metadata/utils/isManyToOneRelationField';
-import { useAdvancedFilterFieldSelectDropdown } from '@/object-record/advanced-filter/hooks/useAdvancedFilterFieldSelectDropdown';
+import { isOneToManyRelationField } from '@/object-metadata/utils/isOneToManyRelationField';
+import { AdvancedFilterOneToManyEmptinessItems } from '@/object-record/advanced-filter/components/AdvancedFilterOneToManyEmptinessItems';
 import { useApplyAdvancedFilterRelationTargetField } from '@/object-record/advanced-filter/hooks/useApplyAdvancedFilterRelationTargetField';
+import { useApplyAdvancedFilterSourceField } from '@/object-record/advanced-filter/hooks/useApplyAdvancedFilterSourceField';
 import { usePushFocusForLeafFieldValuePicker } from '@/object-record/advanced-filter/hooks/usePushFocusForLeafFieldValuePicker';
-import { fieldMetadataItemUsedInDropdownComponentSelector } from '@/object-record/object-filter-dropdown/states/fieldMetadataItemUsedInDropdownComponentSelector';
-import { objectFilterDropdownIsSelectingRelationTargetFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingRelationTargetFieldComponentState';
 import { useFilterableFieldMetadataItems } from '@/object-record/record-filter/hooks/useFilterableFieldMetadataItems';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
-import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
-import { SelectableList } from '@/ui/layout/selectable-list/components/SelectableList';
-import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
-import { selectedItemIdComponentState } from '@/ui/layout/selectable-list/states/selectedItemIdComponentState';
-import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
-import { isDefined } from 'twenty-shared/utils';
-import { IconChevronLeft, useIcons } from 'twenty-ui/display';
-import { MenuItem } from 'twenty-ui/navigation';
+import { SelectOptionIcon } from '@/ui/input/components/SelectOptionIcon';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { IconUserCircle } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useLingui } from '@lingui/react/macro';
 
 type AdvancedFilterRelationTargetFieldSelectMenuProps = {
   recordFilterId: string;
+  sourceFieldMetadataItem: FieldMetadataItem;
 };
 
 export const AdvancedFilterRelationTargetFieldSelectMenu = ({
   recordFilterId,
+  sourceFieldMetadataItem,
 }: AdvancedFilterRelationTargetFieldSelectMenuProps) => {
+  const { t } = useLingui();
   const { getIcon } = useIcons();
-
-  const sourceFieldMetadataItem = useAtomComponentSelectorValue(
-    fieldMetadataItemUsedInDropdownComponentSelector,
-  );
-
-  const setObjectFilterDropdownIsSelectingRelationTargetField =
-    useSetAtomComponentState(
-      objectFilterDropdownIsSelectingRelationTargetFieldComponentState,
-    );
-
-  const { closeAdvancedFilterFieldSelectDropdown } =
-    useAdvancedFilterFieldSelectDropdown(recordFilterId);
-
   const { applyAdvancedFilterRelationTargetField } =
     useApplyAdvancedFilterRelationTargetField();
-
+  const { applyAdvancedFilterSourceField } =
+    useApplyAdvancedFilterSourceField();
   const { pushFocusForLeafFieldValuePicker } =
     usePushFocusForLeafFieldValuePicker();
-
-  const { advancedFilterFieldSelectDropdownId } =
-    useAdvancedFilterFieldSelectDropdown(recordFilterId);
-
-  const selectedItemId = useAtomComponentStateValue(
-    selectedItemIdComponentState,
-    advancedFilterFieldSelectDropdownId,
-  );
-
-  const targetObjectMetadataId =
-    isDefined(sourceFieldMetadataItem) &&
-    isManyToOneRelationField(sourceFieldMetadataItem)
-      ? sourceFieldMetadataItem.relation.targetObjectMetadata.id
-      : null;
-
-  const { filterableFieldMetadataItems: allTargetFields } =
+  const { objectMetadataItem: workspaceMemberObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: StandardObjectNameSingular.WorkspaceMember,
+    });
+  // OMNIA-CUSTOM: one-to-many sources traverse too, with has any / has no on
+  // top; the target list stays many-to-one only (the server caps depth at 1)
+  const isOneToManySource = isOneToManyRelationField(sourceFieldMetadataItem);
+  const isTraversableSource =
+    isManyToOneRelationField(sourceFieldMetadataItem) || isOneToManySource;
+  const targetObjectMetadataId = isTraversableSource
+    ? sourceFieldMetadataItem.relation.targetObjectMetadata.id
+    : null;
+  const { filterableFieldMetadataItems: relationTargetFields } =
     useFilterableFieldMetadataItems(targetObjectMetadataId ?? '');
 
-  // The backend supports a single hop only. Exclude many-to-one relations
-  // from the target list so the user can't compose multi-hop traversals
-  // (e.g. Person → Company → ParentCompany) that the dispatcher would
-  // collapse back to a filter-by-id on the intermediate relation.
-  const relationTargetFields = allTargetFields.filter(
-    (field) => !isManyToOneRelationField(field),
-  );
-
-  if (
-    !isDefined(sourceFieldMetadataItem) ||
-    !isManyToOneRelationField(sourceFieldMetadataItem)
-  ) {
+  if (!isTraversableSource) {
     return null;
   }
 
-  const handleSubMenuBack = () => {
-    setObjectFilterDropdownIsSelectingRelationTargetField(false);
-  };
+  const isWorkspaceMemberTarget =
+    isManyToOneRelationField(sourceFieldMetadataItem) &&
+    sourceFieldMetadataItem.relation.targetObjectMetadata.nameSingular ===
+      StandardObjectNameSingular.WorkspaceMember;
 
   const handleSelectTargetField = (
     relationTargetFieldMetadataItem: FieldMetadataItem,
@@ -92,55 +63,52 @@ export const AdvancedFilterRelationTargetFieldSelectMenu = ({
       relationTargetFieldMetadataItem,
       recordFilterId,
     });
-
     pushFocusForLeafFieldValuePicker(relationTargetFieldMetadataItem);
-
-    setObjectFilterDropdownIsSelectingRelationTargetField(false);
-    closeAdvancedFilterFieldSelectDropdown();
   };
 
-  const selectableItemIdArray = relationTargetFields.map((field) => field.id);
+  const handleSelectRelationRecord = () => {
+    applyAdvancedFilterSourceField({
+      sourceFieldMetadataItem,
+      recordFilterId,
+    });
+  };
 
   return (
-    <DropdownContent widthInPixels={GenericDropdownContentWidth.ExtraLarge}>
-      <DropdownMenuHeader
-        StartComponent={
-          <DropdownMenuHeaderLeftComponent
-            onClick={handleSubMenuBack}
-            Icon={IconChevronLeft}
-          />
-        }
+    <>
+      <Dropdown.Back
+        aria-label={t`${sourceFieldMetadataItem.label}, back to fields`}
       >
         {sourceFieldMetadataItem.label}
-      </DropdownMenuHeader>
-      <DropdownMenuItemsContainer>
-        <SelectableList
-          focusId={advancedFilterFieldSelectDropdownId}
-          selectableItemIdArray={selectableItemIdArray}
-          selectableListInstanceId={advancedFilterFieldSelectDropdownId}
-        >
-          {relationTargetFields.map((targetField, index) => (
-            <SelectableListItem
-              itemId={targetField.id}
-              key={`select-filter-relation-${index}`}
-              onEnter={() => {
-                handleSelectTargetField(targetField);
-              }}
+      </Dropdown.Back>
+      <Dropdown.Section>
+        {isWorkspaceMemberTarget && (
+          <>
+            <Dropdown.ActionItem
+              onClick={handleSelectRelationRecord}
+              startIcon={<IconUserCircle />}
             >
-              <MenuItem
-                focused={selectedItemId === targetField.id}
-                key={`select-filter-relation-${index}`}
-                testId={`select-filter-relation-${index}`}
-                onClick={() => {
-                  handleSelectTargetField(targetField);
-                }}
-                text={targetField.label}
-                LeftIcon={getIcon(targetField.icon)}
-              />
-            </SelectableListItem>
-          ))}
-        </SelectableList>
-      </DropdownMenuItemsContainer>
-    </DropdownContent>
+              {workspaceMemberObjectMetadataItem.labelSingular}
+            </Dropdown.ActionItem>
+            <Dropdown.Separator />
+          </>
+        )}
+        {/* OMNIA-CUSTOM: has any / has no, saved as IS_NOT_EMPTY / IS_EMPTY */}
+        {isOneToManySource && (
+          <AdvancedFilterOneToManyEmptinessItems
+            recordFilterId={recordFilterId}
+            sourceFieldMetadataItem={sourceFieldMetadataItem}
+          />
+        )}
+        {relationTargetFields.map((targetField) => (
+          <Dropdown.ActionItem
+            key={targetField.id}
+            onClick={() => handleSelectTargetField(targetField)}
+            startIcon={<SelectOptionIcon Icon={getIcon(targetField.icon)} />}
+          >
+            {targetField.label}
+          </Dropdown.ActionItem>
+        ))}
+      </Dropdown.Section>
+    </>
   );
 };

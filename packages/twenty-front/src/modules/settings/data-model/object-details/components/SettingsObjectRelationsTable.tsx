@@ -1,37 +1,40 @@
-import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
+import { StyledSettingsDataModelTableBodyContainer } from '@/settings/data-model/components/SettingsDataModelTableBodyContainer';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { SortableTableHeader } from '@/ui/layout/table/components/SortableTableHeader';
 import { Table } from '@/ui/layout/table/components/Table';
+import { TableBody } from '@/ui/layout/table/components/TableBody';
+import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
+import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { useSortedArray } from '@/ui/layout/table/hooks/useSortedArray';
 import { type TableMetadata } from '@/ui/layout/table/types/TableMetadata';
-import { isAdvancedModeEnabledState } from '@/ui/navigation/navigation-drawer/states/isAdvancedModeEnabledState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { msg } from '@lingui/core/macro';
+import { msg, plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import { FieldMetadataType } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
 import {
   IconArchive,
   IconFilter,
   IconSearch,
   IconSettings,
-} from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { MenuItemToggle } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { normalizeSearchText } from '~/utils/normalizeSearchText';
-import { TableRow } from '@/ui/layout/table/components/TableRow';
+} from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import {
   OBJECT_RELATION_TABLE_ROW_GRID_TEMPLATE_COLUMNS,
   SettingsObjectRelationItemTableRow,
 } from './SettingsObjectRelationItemTableRow';
+import { normalizeSearchText } from 'twenty-ui/utilities';
 
 const StyledSearchAndFilterContainer = styled.div`
   display: flex;
@@ -56,7 +59,7 @@ const SETTINGS_OBJECT_RELATION_TABLE_METADATA: TableMetadata<FieldMetadataItem> 
       },
       {
         fieldLabel: msg`App`,
-        fieldName: 'isCustom',
+        fieldName: 'applicationId',
         fieldType: 'string',
         align: 'left',
       },
@@ -69,12 +72,39 @@ const SETTINGS_OBJECT_RELATION_TABLE_METADATA: TableMetadata<FieldMetadataItem> 
     ],
     initialSort: {
       fieldName: 'label',
-      orderBy: 'AscNullsLast',
+      direction: 'asc',
     },
   };
 
 type SettingsObjectRelationsTableProps = {
   objectMetadataItem: EnrichedObjectMetadataItem;
+};
+
+const getRelationTargetObjectMetadataIds = (field: FieldMetadataItem) => {
+  if (field.type === FieldMetadataType.MORPH_RELATION) {
+    return (
+      field.morphRelations?.map(
+        (relation) => relation.targetObjectMetadata.id,
+      ) ?? []
+    );
+  }
+
+  return isDefined(field.relation?.targetObjectMetadata.id)
+    ? [field.relation.targetObjectMetadata.id]
+    : [];
+};
+
+const getMorphRelationTargetLabel = (field: FieldMetadataItem) => {
+  const morphRelationCount = field.morphRelations?.length ?? 0;
+
+  return plural(morphRelationCount, {
+    one: '# Object',
+    other: '# Objects',
+  });
+};
+
+const getMorphRelationFieldLabel = (field: FieldMetadataItem) => {
+  return field.label;
 };
 
 export const SettingsObjectRelationsTable = ({
@@ -85,18 +115,38 @@ export const SettingsObjectRelationsTable = ({
   const [showInactive, setShowInactive] = useState(true);
   const [showSystemRelations, setShowSystemRelations] = useState(false);
 
-  const isAdvancedModeEnabled = useAtomStateValue(isAdvancedModeEnabledState);
-
   const tableMetadata = SETTINGS_OBJECT_RELATION_TABLE_METADATA;
 
+  const { objectMetadataItems } = useFilteredObjectMetadataItems();
+
   const relationFields = useMemo(() => {
-    return objectMetadataItem.fields.filter(
-      (field) =>
-        (showSystemRelations || !isHiddenSystemField(field)) &&
-        (field.type === FieldMetadataType.RELATION ||
-          field.type === FieldMetadataType.MORPH_RELATION),
-    );
-  }, [objectMetadataItem.fields, showSystemRelations]);
+    return objectMetadataItem.fields.filter((field) => {
+      const isRelationField =
+        field.type === FieldMetadataType.RELATION ||
+        field.type === FieldMetadataType.MORPH_RELATION;
+
+      if (!isRelationField) {
+        return false;
+      }
+
+      const relationTargetObjectMetadataIds =
+        getRelationTargetObjectMetadataIds(field);
+
+      const isRelationToSystemObject = relationTargetObjectMetadataIds.some(
+        (objectMetadataId) =>
+          objectMetadataItems.some(
+            (objectMetadataItem) =>
+              objectMetadataItem.id === objectMetadataId &&
+              objectMetadataItem.isSystem,
+          ),
+      );
+
+      return (
+        showSystemRelations ||
+        (!isHiddenSystemField(field) && !isRelationToSystemObject)
+      );
+    });
+  }, [objectMetadataItem.fields, showSystemRelations, objectMetadataItems]);
 
   const sortedRelationFields = useSortedArray(relationFields, tableMetadata);
 
@@ -105,16 +155,42 @@ export const SettingsObjectRelationsTable = ({
 
     return sortedRelationFields.filter((field) => {
       const matchesActiveFilter = showInactive || field.isActive;
-      const matchesSearch = normalizeSearchText(field.label).includes(
-        searchNormalized,
-      );
+      const relationTargetObjectLabels = getRelationTargetObjectMetadataIds(
+        field,
+      ).flatMap((objectMetadataId) => {
+        const relationObjectMetadataItem = objectMetadataItems.find(
+          (objectMetadataItem) => objectMetadataItem.id === objectMetadataId,
+        );
+
+        return isDefined(relationObjectMetadataItem)
+          ? [
+              relationObjectMetadataItem.labelSingular,
+              relationObjectMetadataItem.labelPlural,
+            ]
+          : [];
+      });
+
+      const morphRelationLabels =
+        field.type === FieldMetadataType.MORPH_RELATION
+          ? [
+              getMorphRelationTargetLabel(field),
+              getMorphRelationFieldLabel(field),
+            ]
+          : [];
+
+      const searchableText = [
+        field.label,
+        ...relationTargetObjectLabels,
+        ...morphRelationLabels,
+      ]
+        .map(normalizeSearchText)
+        .join(' ');
+
+      const matchesSearch = searchableText.includes(searchNormalized);
+
       return matchesActiveFilter && matchesSearch;
     });
-  }, [sortedRelationFields, searchTerm, showInactive]);
-
-  if (relationFields.length === 0) {
-    return null;
-  }
+  }, [objectMetadataItems, sortedRelationFields, searchTerm, showInactive]);
 
   return (
     <>
@@ -128,44 +204,42 @@ export const SettingsObjectRelationsTable = ({
             onChange={setSearchTerm}
           />
         </StyledSearchInputContainer>
-        <Dropdown
+        <DropdownRoot
           dropdownId="settings-relations-filter-dropdown"
-          dropdownPlacement="bottom-end"
-          dropdownOffset={{ x: 0, y: 8 }}
-          clickableComponent={
-            <Button
-              Icon={IconFilter}
-              size="medium"
-              variant="secondary"
-              accent="default"
-              ariaLabel={t`Filter`}
-            />
-          }
-          dropdownComponents={
-            <DropdownContent>
-              <DropdownMenuItemsContainer>
-                <MenuItemToggle
-                  LeftIcon={IconArchive}
-                  onToggleChange={() => setShowInactive(!showInactive)}
-                  toggled={showInactive}
-                  text={t`Inactive`}
-                  toggleSize="small"
-                />
-                {isAdvancedModeEnabled && (
-                  <MenuItemToggle
-                    LeftIcon={IconSettings}
-                    onToggleChange={() =>
-                      setShowSystemRelations(!showSystemRelations)
-                    }
-                    toggled={showSystemRelations}
-                    text={t`System relations`}
-                    toggleSize="small"
-                  />
-                )}
-              </DropdownMenuItemsContainer>
-            </DropdownContent>
-          }
-        />
+          type="panel"
+        >
+          <Dropdown.Trigger
+            render={
+              <Button
+                startIcon={<IconFilter />}
+                size="md"
+                aria-label={t`Filter`}
+                variant="outline"
+              />
+            }
+          />
+          <DropdownContent
+            side="bottom"
+            align="end"
+            sideOffset={8}
+            alignOffset={0}
+          >
+            <Dropdown.Section>
+              <SettingsRow
+                startElement={<IconArchive />}
+                onCheckedChange={() => setShowInactive(!showInactive)}
+                checked={showInactive}
+              >{t`Inactive`}</SettingsRow>
+              <SettingsRow
+                startElement={<IconSettings />}
+                onCheckedChange={() =>
+                  setShowSystemRelations(!showSystemRelations)
+                }
+                checked={showSystemRelations}
+              >{t`System relations`}</SettingsRow>
+            </Dropdown.Section>
+          </DropdownContent>
+        </DropdownRoot>
       </StyledSearchAndFilterContainer>
       <Table>
         <TableRow
@@ -182,13 +256,23 @@ export const SettingsObjectRelationsTable = ({
           ))}
           <TableHeader></TableHeader>
         </TableRow>
-        {filteredRelationFields.map((fieldMetadataItem) => (
-          <SettingsObjectRelationItemTableRow
-            key={fieldMetadataItem.id}
-            fieldMetadataItem={fieldMetadataItem}
-            objectMetadataItem={objectMetadataItem}
-          />
-        ))}
+        <StyledSettingsDataModelTableBodyContainer>
+          <TableBody>
+            {filteredRelationFields.length > 0 ? (
+              filteredRelationFields.map((fieldMetadataItem) => (
+                <SettingsObjectRelationItemTableRow
+                  key={fieldMetadataItem.id}
+                  fieldMetadataItem={fieldMetadataItem}
+                  objectMetadataItem={objectMetadataItem}
+                />
+              ))
+            ) : (
+              <TableCell color={themeCssVariables.font.color.tertiary}>
+                {t`No relations found`}
+              </TableCell>
+            )}
+          </TableBody>
+        </StyledSettingsDataModelTableBodyContainer>
       </Table>
     </>
   );

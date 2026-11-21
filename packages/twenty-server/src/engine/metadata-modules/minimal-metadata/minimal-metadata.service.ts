@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import {
   ALL_METADATA_NAME,
@@ -10,14 +10,15 @@ import { isDefined, uncapitalize } from 'twenty-shared/utils';
 
 import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { ALL_FLAT_ENTITY_MAPS_PROPERTIES } from 'src/engine/metadata-modules/flat-entity/constant/all-flat-entity-maps-properties.constant';
-import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { type CollectionHashDTO } from 'src/engine/metadata-modules/minimal-metadata/dtos/collection-hash.dto';
 import { MinimalMetadataDTO } from 'src/engine/metadata-modules/minimal-metadata/dtos/minimal-metadata.dto';
 import { MinimalObjectMetadataDTO } from 'src/engine/metadata-modules/minimal-metadata/dtos/minimal-object-metadata.dto';
 import { MinimalViewDTO } from 'src/engine/metadata-modules/minimal-metadata/dtos/minimal-view.dto';
-import { resolveObjectMetadataStandardOverride } from 'src/engine/metadata-modules/object-metadata/utils/resolve-object-metadata-standard-override.util';
+import { getWorkspaceCustomApplicationUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/overrides/utils/get-workspace-custom-application-universal-identifier-or-throw.util';
+import { resolveEffectiveEntityProperty } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-entity-property.util';
+import { resolveEffectiveFlatEntityProperty } from 'src/engine/metadata-modules/overrides/utils/resolve-effective-flat-entity-property.util';
+import { belongsToTwentyStandardApp } from 'src/engine/metadata-modules/utils/belongs-to-twenty-standard-app.util';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { type FlatEntityMapsCacheKeyName } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { type WorkspaceCacheKeyName } from 'src/engine/workspace-cache/types/workspace-cache-key.type';
 
 const flatMapsKeyToMetadataName = (
@@ -34,30 +35,42 @@ const flatMapsKeyToMetadataName = (
 
 @Injectable()
 export class MinimalMetadataService {
-  private readonly logger = new Logger(MinimalMetadataService.name);
-
   constructor(
-    private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly workspaceCacheService: WorkspaceCacheService,
     private readonly i18nService: I18nService,
   ) {}
 
-  async getMinimalMetadata(
-    workspaceId: string,
-    userWorkspaceId?: string,
-    locale?: string,
-  ): Promise<MinimalMetadataDTO> {
-    const [{ flatObjectMetadataMaps, flatViewMaps }, cacheHashes] =
-      await Promise.all([
-        this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps({
-          workspaceId,
-          flatMapsKeys: ['flatObjectMetadataMaps', 'flatViewMaps'],
-        }),
-        this.workspaceCacheService.getCacheHashes(
-          workspaceId,
-          ALL_FLAT_ENTITY_MAPS_PROPERTIES as WorkspaceCacheKeyName[],
-        ),
-      ]);
+  async getMinimalMetadata({
+    workspaceId,
+    workspaceCustomApplicationId,
+    userWorkspaceId,
+    locale,
+  }: {
+    workspaceId: string;
+    workspaceCustomApplicationId: string;
+    userWorkspaceId?: string;
+    locale?: string;
+  }): Promise<MinimalMetadataDTO> {
+    const [
+      { flatObjectMetadataMaps, flatViewMaps, flatApplicationMaps },
+      cacheHashes,
+    ] = await Promise.all([
+      this.workspaceCacheService.getOrRecompute(workspaceId, [
+        'flatApplicationMaps',
+        'flatObjectMetadataMaps',
+        'flatViewMaps',
+      ]),
+      this.workspaceCacheService.getCacheHashes(
+        workspaceId,
+        ALL_FLAT_ENTITY_MAPS_PROPERTIES as WorkspaceCacheKeyName[],
+      ),
+    ]);
+
+    const workspaceCustomApplicationUniversalIdentifier =
+      getWorkspaceCustomApplicationUniversalIdentifierOrThrow({
+        workspaceCustomApplicationId,
+        flatApplicationMaps,
+      });
 
     const collectionHashes: CollectionHashDTO[] = Object.entries(cacheHashes)
       .map(([cacheKey, hash]) => {
@@ -78,37 +91,50 @@ export class MinimalMetadataService {
       flatObjectMetadataMaps.byUniversalIdentifier,
     )
       .filter(isDefined)
-      .filter((flatObjectMetadata) => flatObjectMetadata.isActive === true)
+      .filter(
+        (flatObjectMetadata) =>
+          resolveEffectiveFlatEntityProperty({
+            metadataName: 'objectMetadata',
+            flatEntity: flatObjectMetadata,
+            property: 'isActive',
+            authorContext: {
+              workspaceCustomApplicationUniversalIdentifier,
+            },
+          }) === true,
+      )
       .map((flatObjectMetadata) => {
-        const objectMetadataForOverride = {
-          labelPlural: flatObjectMetadata.labelPlural,
-          labelSingular: flatObjectMetadata.labelSingular,
-          description: flatObjectMetadata.description ?? undefined,
-          icon: flatObjectMetadata.icon ?? undefined,
-          color: flatObjectMetadata.color ?? undefined,
-          isCustom: flatObjectMetadata.isCustom,
-          standardOverrides: flatObjectMetadata.standardOverrides ?? undefined,
+        const isStandardApp = belongsToTwentyStandardApp(flatObjectMetadata);
+
+        const overrides = flatObjectMetadata.overrides ?? undefined;
+        const i18nContext = {
+          locale: safeLocale,
+          i18nInstance,
+          isStandardApp,
+          workspaceCustomApplicationUniversalIdentifier,
+          ownerApplicationUniversalIdentifier:
+            flatObjectMetadata.applicationUniversalIdentifier,
         };
 
         return {
           id: flatObjectMetadata.id,
           nameSingular: flatObjectMetadata.nameSingular,
           namePlural: flatObjectMetadata.namePlural,
-          labelSingular: resolveObjectMetadataStandardOverride(
-            objectMetadataForOverride,
-            'labelSingular',
-            safeLocale,
-            i18nInstance,
-          ),
-          labelPlural: resolveObjectMetadataStandardOverride(
-            objectMetadataForOverride,
-            'labelPlural',
-            safeLocale,
-            i18nInstance,
-          ),
+          labelSingular: resolveEffectiveEntityProperty({
+            metadataName: 'objectMetadata',
+            baseValue: flatObjectMetadata.labelSingular,
+            overrides,
+            property: 'labelSingular',
+            i18nContext,
+          }),
+          labelPlural: resolveEffectiveEntityProperty({
+            metadataName: 'objectMetadata',
+            baseValue: flatObjectMetadata.labelPlural,
+            overrides,
+            property: 'labelPlural',
+            i18nContext,
+          }),
           icon: flatObjectMetadata.icon ?? undefined,
-          isCustom: flatObjectMetadata.isCustom,
-          isActive: flatObjectMetadata.isActive,
+          isActive: true,
           isSystem: flatObjectMetadata.isSystem,
           isRemote: flatObjectMetadata.isRemote,
         };
@@ -133,27 +159,6 @@ export class MinimalMetadataService {
         key: flatView.key,
         objectMetadataId: flatView.objectMetadataId,
       }));
-
-    // OMNIA-CUSTOM: Fire-and-forget cache priming for missing entity hashes.
-    // After a Redis flush, most flat entity caches are empty. Prime them in the
-    // background so the *next* minimalMetadata request returns complete hashes.
-    const cachedKeys = new Set(Object.keys(cacheHashes));
-    const missingCacheKeys = (
-      ALL_FLAT_ENTITY_MAPS_PROPERTIES as FlatEntityMapsCacheKeyName[]
-    ).filter((key) => !cachedKeys.has(key));
-
-    if (missingCacheKeys.length > 0) {
-      this.flatEntityMapsCacheService
-        .getOrRecomputeManyOrAllFlatEntityMaps({
-          workspaceId,
-          flatMapsKeys: missingCacheKeys,
-        })
-        .catch((error) => {
-          this.logger.warn(
-            `Failed to prime missing entity caches: ${error.message}`,
-          );
-        });
-    }
 
     return {
       objectMetadataItems,

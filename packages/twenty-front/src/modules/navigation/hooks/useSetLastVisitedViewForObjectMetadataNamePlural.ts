@@ -1,6 +1,7 @@
 import { lastVisitedViewPerObjectMetadataItemState } from '@/navigation/states/lastVisitedViewPerObjectMetadataItemState';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
 import { viewsSelector } from '@/views/states/selectors/viewsSelector';
+import { ViewKey } from '@/views/types/ViewKey';
 import { type ViewWithRelations } from '@/views/types/ViewWithRelations';
 import { useCallback } from 'react';
 import { isDefined } from 'twenty-shared/utils';
@@ -31,6 +32,10 @@ export const useSetLastVisitedViewForObjectMetadataNamePlural = () => {
       }
 
       if (view.objectMetadataId !== objectMetadataItem.id) {
+        return;
+      }
+
+      if (view.key === ViewKey.INDEX) {
         return;
       }
 

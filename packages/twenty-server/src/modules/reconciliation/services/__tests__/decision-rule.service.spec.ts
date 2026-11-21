@@ -81,41 +81,46 @@ const createService = ({
     update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
       const rule = rules.find((candidate) => candidate.id === id);
 
-      if (rule) Object.assign(rule, updates);
+      if (rule) {
+        Object.assign(rule, updates);
+      }
     }),
+    // WorkspaceRepository.save returns the saved records as an array
     save: jest.fn(async (rule: Record<string, unknown>) => {
       const saved = { id: 'new-rule-id', ...rule } as RuleRecord;
 
       rules.push(saved);
 
-      return saved;
+      return [saved];
     }),
   };
   const reviewItemRepo = {
     update: jest.fn(async (id: string, updates: Record<string, unknown>) => {
       const item = reviewItems.find((candidate) => candidate.id === id);
 
-      if (item) Object.assign(item, updates);
+      if (item) {
+        Object.assign(item, updates);
+      }
     }),
   };
   const reposByObjectName: Record<string, unknown> = {
     reconciliationDecisionRule: ruleRepo,
     reviewItem: reviewItemRepo,
   };
-  const globalWorkspaceOrmManager = {
+  const workspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(
       async (callback: () => Promise<unknown>) => callback(),
     ),
-    getRepository: jest.fn(
-      async (_workspaceId: string, objectName: string) =>
-        reposByObjectName[objectName],
+    getRepository: jest.fn(),
+    getRepositoryWithoutPermissionChecks: jest.fn(
+      (objectName: string) => reposByObjectName[objectName],
     ),
   };
   const service = new ReconciliationDecisionRuleService(
-    globalWorkspaceOrmManager as never,
+    workspaceOrmManager as never,
   );
 
-  return { service, ruleRepo, reviewItemRepo };
+  return { service, ruleRepo, reviewItemRepo, workspaceOrmManager };
 };
 
 describe('ReconciliationDecisionRuleService', () => {
@@ -381,6 +386,54 @@ describe('ReconciliationDecisionRuleService', () => {
         decisionRuleId: RULE_ID,
         decisionRuleSignatureHash: expectedHash,
       });
+    });
+
+    it('creates a rule for a new signature and links the item to the saved id', async () => {
+      const item = createStatusOnlyItem();
+      const rules: RuleRecord[] = [];
+      const { service, ruleRepo, reviewItemRepo, workspaceOrmManager } =
+        createService({ rules, reviewItems: [item] });
+      const expectedHash = service.buildStatusRuleSignature(item, CARRIER_NAME)
+        ?.signatureHash as string;
+
+      const result = await service.upsertRulesFromReviewItems({
+        workspaceId: WORKSPACE_ID,
+        carrierName: CARRIER_NAME,
+        items: [item],
+        createdByUserWorkspaceId: 'user-workspace-id',
+      });
+
+      expect(ruleRepo.save).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'new-rule-id',
+        signatureHash: expectedHash,
+        approvedCount: 1,
+        createdByUserWorkspaceId: 'user-workspace-id',
+      });
+      expect(reviewItemRepo.update).toHaveBeenCalledWith(REVIEW_ITEM_ID, {
+        decisionRuleId: 'new-rule-id',
+        decisionRuleSignatureHash: expectedHash,
+      });
+      expect(workspaceOrmManager.getRepository).not.toHaveBeenCalled();
+    });
+
+    it('throws instead of linking an undefined rule when the save returns nothing', async () => {
+      const item = createStatusOnlyItem();
+      const { service, ruleRepo, reviewItemRepo } = createService({
+        reviewItems: [item],
+      });
+
+      ruleRepo.save.mockResolvedValueOnce([]);
+
+      await expect(
+        service.upsertRulesFromReviewItems({
+          workspaceId: WORKSPACE_ID,
+          carrierName: CARRIER_NAME,
+          items: [item],
+        }),
+      ).rejects.toThrow(/Failed to create reconciliation decision rule/);
+      expect(reviewItemRepo.update).not.toHaveBeenCalled();
     });
 
     it('is idempotent for items already linked to the same signature (no approvedCount inflation)', async () => {

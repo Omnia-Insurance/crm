@@ -14,14 +14,18 @@
       "**/coverage/**",
       "**/src/engine/metadata-modules/front-component/constants/seed-project/**",
       "**/src/engine/core-modules/logic-function/logic-function-resource/constants/seed-project/**",
-      "**/src/engine/core-modules/application/application-package/constants/seed-dependencies/**",
+      "**/src/engine/core-modules/application/application-package/constants/standard-application-dependencies/**",
+      "**/src/engine/core-modules/application/application-package/constants/workspace-custom-application-dependencies/**",
       "**/src/engine/core-modules/application/application-package/constants/yarn-engine/**",
       "**/src/engine/core-modules/logic-function/logic-function-drivers/constants/common-layer-dependencies/**",
+      "**/src/engine/metadata-modules/ai/ai-front-component/constants/builder/**",
+      "**/src/database/commands/upgrade-version-command/2-52/workspace-frontend-dependencies/**",
       "**/src/engine/workspace-manager/dev-seeder/data/sample-files/**"
     ]
   },
   "compilerOptions": {
     "builder": "swc",
+    "tsConfigPath": "tsconfig.build.json",
     "typeCheck": false,
     "watchAssets": true,
     "assets": [
@@ -34,7 +38,7 @@
         "outDir": "dist/assets"
       },
       {
-        "include": "engine/core-modules/application/application-package/constants/seed-dependencies/**",
+        "include": "engine/core-modules/application/application-package/constants/standard-application-dependencies/**",
         "outDir": "dist/assets"
       },
       {
@@ -58,7 +62,11 @@
         "outDir": "dist/assets"
       },
       {
-        "include": "database/clickHouse/migrations/*.sql",
+        "include": "database/commands/upgrade-version-command/2-52/workspace-frontend-dependencies/**",
+        "outDir": "dist/assets"
+      },
+      {
+        "include": "database/clickhouse/migrations/*.sql",
         "outDir": "dist"
       },
       {
@@ -68,6 +76,30 @@
       {
         "include": "engine/metadata-modules/ai/ai-models/ai-providers.json",
         "outDir": "dist"
+      },
+      {
+        "include": "engine/core-modules/code-interpreter/sandbox-scripts/**",
+        "outDir": "dist"
+      },
+      {
+        "include": "engine/core-modules/dpa/constants/subprocessors.json",
+        "outDir": "dist"
+      },
+      {
+        "include": "engine/metadata-modules/ai/ai-front-component/constants/builder/**",
+        "outDir": "dist/assets"
+      },
+      {
+        "include": "engine/core-modules/application/application-package/constants/workspace-custom-application-dependencies/**",
+        "outDir": "dist/assets"
+      },
+      {
+        "include": "engine/core-modules/application/application-package/constants/yarn-engine/*.cjs",
+        "outDir": "dist"
+      },
+      {
+        "include": "engine/metadata-modules/ai/ai-front-component/constants/generated/ui-documentation.json",
+        "outDir": "dist/assets"
       }
     ]
   },

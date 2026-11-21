@@ -12,21 +12,31 @@ import {
   CronTriggerSettings,
   DatabaseEventTriggerSettings,
   HttpRouteTriggerSettings,
+  ServerRouteTriggerSettings,
   ToolTriggerSettings,
   WorkflowActionTriggerSettings,
 } from 'twenty-shared/application';
 
+import { ADD_JOB_CONFIG_TO_WORKFLOW_AND_LOGIC_FUNCTION_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-58/add-job-config-to-workflow-and-logic-function-upgrade-command-name.constant';
+import { type MessageQueueJobConfig } from 'src/engine/core-modules/message-queue/types/message-queue-job-config.type';
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
 import { SyncableEntity } from 'src/engine/workspace-manager/types/syncable-entity.interface';
 import { type JsonbProperty } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/jsonb-property.type';
 
-const DEFAULT_LOGIC_FUNCTION_TIMEOUT_SECONDS = 300; // 5 minutes
+export const DEFAULT_LOGIC_FUNCTION_TIMEOUT_SECONDS = 300;
 
 export enum LogicFunctionRuntime {
   NODE18 = 'nodejs18.x',
   NODE22 = 'nodejs22.x',
 }
 
+export enum LogicFunctionExecutionMode {
+  LIVE = 'LIVE',
+  PREBUILT = 'PREBUILT',
+}
+
 @Entity('logicFunction')
+@Index('IDX_LOGIC_FUNCTION_APPLICATION_ID', ['applicationId'])
 @Index('IDX_LOGIC_FUNCTION_ID_DELETED_AT', ['id', 'deletedAt'])
 export class LogicFunctionEntity
   extends SyncableEntity
@@ -63,6 +73,14 @@ export class LogicFunctionEntity
   @Column({ nullable: false, type: 'boolean', default: true })
   isBuildUpToDate: boolean;
 
+  @Column({
+    type: 'enum',
+    enum: LogicFunctionExecutionMode,
+    default: LogicFunctionExecutionMode.LIVE,
+    nullable: false,
+  })
+  executionMode: LogicFunctionExecutionMode;
+
   @Column({ nullable: true, type: 'jsonb' })
   cronTriggerSettings: JsonbProperty<CronTriggerSettings> | null;
 
@@ -73,10 +91,20 @@ export class LogicFunctionEntity
   httpRouteTriggerSettings: JsonbProperty<HttpRouteTriggerSettings> | null;
 
   @Column({ nullable: true, type: 'jsonb' })
+  serverRouteTriggerSettings: JsonbProperty<ServerRouteTriggerSettings> | null;
+
+  @Column({ nullable: true, type: 'jsonb' })
   toolTriggerSettings: JsonbProperty<ToolTriggerSettings> | null;
 
   @Column({ nullable: true, type: 'jsonb' })
   workflowActionTriggerSettings: JsonbProperty<WorkflowActionTriggerSettings> | null;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_JOB_CONFIG_TO_WORKFLOW_AND_LOGIC_FUNCTION_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: true, type: 'jsonb' })
+  jobConfig: JsonbProperty<MessageQueueJobConfig> | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

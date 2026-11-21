@@ -1,27 +1,17 @@
+import { AppChip } from '@/applications/components/AppChip';
 import { currentWorkspaceMembersState } from '@/auth/states/currentWorkspaceMembersState';
+import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
 import { styled } from '@linaria/react';
-import React, { useContext } from 'react';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import {
-  AppTooltip,
-  Avatar,
-  IconChevronRight,
-  IconLock,
-  TooltipDelay,
-  useIcons,
-} from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
-
-import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
-
-const StyledAssignedText = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-size: ${themeCssVariables.font.size.sm};
-`;
+import { getSettingsPath } from 'twenty-shared/utils';
+import { IconChevronRight, IconLock } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { WorkspaceMemberAvatarStack } from '@/workspace-member/components/WorkspaceMemberAvatarStack';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledNameCell = styled.div`
   color: ${themeCssVariables.font.color.primary};
@@ -29,17 +19,9 @@ const StyledNameCell = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledAvatarGroup = styled.div`
+const StyledAssignedToCell = styled.div`
   display: flex;
   justify-content: flex-end;
-
-  > * {
-    margin-left: -5px;
-
-    &:first-of-type {
-      margin-left: 0;
-    }
-  }
 `;
 
 const StyledIconLockContainer = styled.div`
@@ -61,8 +43,11 @@ type SettingsRolesTableRowProps = {
   role: RoleWithPartialMembers;
 };
 
+const MAX_VISIBLE_ROLE_MEMBER_AVATARS = 5;
+
 export const SettingsRolesTableRow = ({ role }: SettingsRolesTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
   const { getIcon } = useIcons();
   const Icon = getIcon(role.icon ?? 'IconUser');
 
@@ -70,20 +55,19 @@ export const SettingsRolesTableRow = ({ role }: SettingsRolesTableRowProps) => {
     currentWorkspaceMembersState,
   );
 
-  const enrichedWorkspaceMembers = role.workspaceMembers
-    .map((workspaceMember) =>
+  const enrichedWorkspaceMembers = role.workspaceMembers.map(
+    (workspaceMember) =>
       currentWorkspaceMembers.find(
         (member) => member.id === workspaceMember.id,
-      ),
-    )
-    .filter(isDefined);
+      ) ?? workspaceMember,
+  );
 
   return (
     <StyledTableRowContainer>
       <TableRow
         key={role.id}
-        gridAutoColumns="332px 3fr 2fr 1fr"
-        mobileGridAutoColumns="5fr 1fr 1fr 35px"
+        gridAutoColumns="332px 3fr 3fr 1fr"
+        mobileGridAutoColumns="3fr 2fr 2fr 35px"
         to={getSettingsPath(SettingsPath.RoleDetail, { roleId: role.id })}
       >
         <TableCell>
@@ -101,35 +85,18 @@ export const SettingsRolesTableRow = ({ role }: SettingsRolesTableRowProps) => {
             )}
           </StyledNameCell>
         </TableCell>
-        <TableCell align="right">
-          <StyledAvatarGroup>
-            {enrichedWorkspaceMembers.slice(0, 5).map((workspaceMember) => (
-              <React.Fragment key={workspaceMember.id}>
-                <div id={`avatar-${workspaceMember.id}`}>
-                  <Avatar
-                    avatarUrl={workspaceMember.avatarUrl}
-                    placeholderColorSeed={workspaceMember.id}
-                    placeholder={workspaceMember.name.firstName ?? ''}
-                    type="rounded"
-                    size="md"
-                  />
-                </div>
-                <AppTooltip
-                  anchorSelect={`#avatar-${workspaceMember.id}`}
-                  content={`${workspaceMember.name.firstName} ${workspaceMember.name.lastName}`}
-                  noArrow
-                  place="top"
-                  positionStrategy="fixed"
-                  delay={TooltipDelay.shortDelay}
-                />
-              </React.Fragment>
-            ))}
-          </StyledAvatarGroup>
+        <TableCell>
+          <AppChip applicationId={role.applicationId} size="md" />
         </TableCell>
-        <TableCell align="left">
-          <StyledAssignedText>
-            {role.workspaceMembers.length}
-          </StyledAssignedText>
+        <TableCell align="right">
+          <StyledAssignedToCell>
+            <WorkspaceMemberAvatarStack
+              defaultAvatarName={t`Workspace member`}
+              maxVisible={MAX_VISIBLE_ROLE_MEMBER_AVATARS}
+              totalWorkspaceMembersCount={role.workspaceMembers.length}
+              workspaceMembers={enrichedWorkspaceMembers}
+            />
+          </StyledAssignedToCell>
         </TableCell>
         <TableCell align="right" color={theme.font.color.tertiary}>
           <IconChevronRight size={theme.icon.size.md} />

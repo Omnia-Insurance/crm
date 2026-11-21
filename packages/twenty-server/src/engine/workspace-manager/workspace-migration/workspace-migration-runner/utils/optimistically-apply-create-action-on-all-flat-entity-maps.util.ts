@@ -2,7 +2,7 @@ import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
 import { addFlatEntityToFlatEntityAndRelatedEntityMapsThroughMutationOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/add-flat-entity-to-flat-entity-and-related-entity-maps-through-mutation-or-throw.util';
-import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
+import { type AllFlatWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
 
 export type OptimisticallyApplyCreateActionOnAllFlatEntityMapsArgs = {
   flatAction: AllFlatWorkspaceMigrationAction<'create'>;
@@ -47,6 +47,17 @@ export const optimisticallyApplyCreateActionOnAllFlatEntityMaps = ({
 
       return allFlatEntityMaps;
     }
+    case 'searchFieldMetadata': {
+      addFlatEntityToFlatEntityAndRelatedEntityMapsThroughMutationOrThrow({
+        flatEntity: flatAction.flatEntity,
+        flatEntityAndRelatedMapsToMutate: allFlatEntityMaps,
+        metadataName: flatAction.metadataName,
+        // searchFieldMetadata is created before its parent object and fields
+        skipMissingRelatedEntities: true,
+      });
+
+      return allFlatEntityMaps;
+    }
     case 'view':
     case 'viewField':
     case 'viewGroup':
@@ -54,6 +65,7 @@ export const optimisticallyApplyCreateActionOnAllFlatEntityMaps = ({
     case 'viewSort':
     case 'rowLevelPermissionPredicate':
     case 'rowLevelPermissionPredicateGroup':
+    case 'rowLevelPermissionRule':
     case 'viewFilterGroup':
     case 'index':
     case 'logicFunction':
@@ -73,8 +85,19 @@ export const optimisticallyApplyCreateActionOnAllFlatEntityMaps = ({
     case 'objectPermission':
     case 'fieldPermission':
     case 'webhook':
+    case 'mcpServer':
     case 'applicationVariable':
-    case 'connectionProvider': {
+    case 'workflow':
+    case 'workflowVersion':
+    case 'connectionProvider':
+    case 'messagingProvider':
+    case 'timelineActivityType':
+    case 'agentChatChannel':
+    case 'agentChatChannelRole':
+    case 'settingsMenuItem':
+    case 'fieldMetadataOption':
+    case 'relatedRecordPath':
+    case 'validationRule': {
       addFlatEntityToFlatEntityAndRelatedEntityMapsThroughMutationOrThrow({
         flatEntity: flatAction.flatEntity,
         flatEntityAndRelatedMapsToMutate: allFlatEntityMaps,

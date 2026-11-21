@@ -4,20 +4,25 @@ import { Args, Mutation } from '@nestjs/graphql';
 import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { getWorkspaceAuthContext } from 'src/engine/core-modules/auth/storage/workspace-auth-context.storage';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
 import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { CustomPermissionGuard } from 'src/engine/guards/custom-permission.guard';
 import { PageLayoutGraphqlApiExceptionFilter } from 'src/engine/metadata-modules/page-layout/utils/page-layout-graphql-api-exception.filter';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
 import { DuplicatedDashboardDTO } from 'src/modules/dashboard/dtos/duplicated-dashboard.dto';
 import { DashboardDuplicationService } from 'src/modules/dashboard/services/dashboard-duplication.service';
 import { DashboardGraphqlApiExceptionFilter } from 'src/modules/dashboard/utils/dashboard-graphql-api-exception.filter';
+import { DASHBOARD_DUPLICATE_ACCESS_POLICY } from 'src/modules/dashboard/constants/dashboard-duplicate-access-policy.constant';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
 @MetadataResolver()
 @UseFilters(
   DashboardGraphqlApiExceptionFilter,
   PageLayoutGraphqlApiExceptionFilter,
+  PermissionsGraphqlApiExceptionFilter,
+  AuthGraphqlApiExceptionFilter,
 )
-@UseGuards(WorkspaceAuthGuard)
+@UseGuards(AccessPolicyGuard(DASHBOARD_DUPLICATE_ACCESS_POLICY))
 @UsePipes(ResolverValidationPipe)
 export class DashboardResolver {
   constructor(
@@ -25,7 +30,7 @@ export class DashboardResolver {
   ) {}
 
   @Mutation(() => DuplicatedDashboardDTO)
-  @UseGuards(NoPermissionGuard)
+  @UseGuards(CustomPermissionGuard)
   async duplicateDashboard(
     @Args('id', { type: () => UUIDScalarType }) id: string,
   ): Promise<DuplicatedDashboardDTO> {

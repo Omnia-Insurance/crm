@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { isDefined } from 'twenty-shared/utils';
+
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 const LIST_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -11,14 +13,14 @@ export class ConvosoLeadPreprocessor {
   private listMap: Record<string, string> | null = null;
   private listMapFetchedAt = 0;
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  // Repositories skip permission checks: ingestion is system work, and the
+  // jobs run preprocessors in a system auth context
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   async preProcess(
     payload: Record<string, unknown>,
     _pipeline: IngestionPipelineEntity,
-    workspaceId: string,
+    _workspaceId: string,
   ): Promise<Record<string, unknown> | null> {
     const listId = payload.list_id?.toString();
 
@@ -26,7 +28,7 @@ export class ConvosoLeadPreprocessor {
       return payload;
     }
 
-    const leadSourceId = await this.findOrCreateLeadSource(listId, workspaceId);
+    const leadSourceId = await this.findOrCreateLeadSource(listId);
 
     return {
       ...payload,
@@ -34,15 +36,11 @@ export class ConvosoLeadPreprocessor {
     };
   }
 
-  private async findOrCreateLeadSource(
-    listId: string,
-    workspaceId: string,
-  ): Promise<string | null> {
-    const leadSourceRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'leadSource',
-      { shouldBypassPermissionChecks: true },
-    );
+  private async findOrCreateLeadSource(listId: string): Promise<string | null> {
+    const leadSourceRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'leadSource',
+      );
 
     // Try matching by convosoListId first (if the field exists on Lead Source)
     try {
@@ -51,7 +49,7 @@ export class ConvosoLeadPreprocessor {
       });
 
       if (byListId) {
-        return (byListId as Record<string, unknown>).id as string;
+        return byListId.id;
       }
     } catch {
       // convosoListId field may not exist yet — fall through to name-based lookup
@@ -74,21 +72,25 @@ export class ConvosoLeadPreprocessor {
     });
 
     if (existing) {
-      return (existing as Record<string, unknown>).id as string;
+      return existing.id;
     }
 
     // Create new Lead Source with name and convosoListId
     try {
-      const created = await leadSourceRepo.save({
+      const [created] = await leadSourceRepo.save({
         name: listName,
         convosoListId: listId,
       });
 
+      if (!isDefined(created)) {
+        throw new Error('Lead Source save returned no record');
+      }
+
       this.logger.log(
-        `Created Lead Source "${listName}" for Convoso list_id ${listId}`,
+        `Created Lead Source ${created.id} for Convoso list_id ${listId}`,
       );
 
-      return (created as Record<string, unknown>).id as string;
+      return created.id;
     } catch (error) {
       this.logger.error(
         `Failed to create Lead Source "${listName}": ${error instanceof Error ? error.message : 'Unknown error'}`,

@@ -10,14 +10,13 @@ import {
   IconMail,
   IconMicrosoft,
   IconSend,
-} from 'twenty-ui/display';
-import { useContext } from 'react';
-import { ThemeContext } from 'twenty-ui/theme-constants';
+} from 'twenty-ui/icon';
+import { useTheme } from 'twenty-ui/theme';
 
 const ImapSmtpCaldavIcon = (
   props: IconComponentProps & { account: ConnectedAccount },
 ) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { account } = props;
 
   const hasImap = isDefined(account.connectionParameters?.IMAP);

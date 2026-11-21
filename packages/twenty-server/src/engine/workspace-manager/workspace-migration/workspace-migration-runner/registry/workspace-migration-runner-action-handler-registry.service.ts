@@ -7,7 +7,7 @@ import {
   buildActionHandlerKey,
   type AllUniversalWorkspaceMigrationAction,
   type WorkspaceMigrationActionHandlerKey,
-} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
+} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
 import { WorkspaceSchemaMigrationRunnerActionHandlersModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/action-handlers/workspace-schema-migration-runner-action-handlers.module';
 import { WORKSPACE_MIGRATION_ACTION_HANDLER_METADATA_KEY } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/constants/workspace-migration-action-handler-metadata-key.constant';
 import {
@@ -17,9 +17,7 @@ import {
 import { WorkspaceMigrationActionRunnerArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/workspace-migration-action-runner-args.type';
 
 @Injectable()
-export class WorkspaceMigrationRunnerActionHandlerRegistryService
-  implements OnModuleInit
-{
+export class WorkspaceMigrationRunnerActionHandlerRegistryService implements OnModuleInit {
   private readonly actionHandlers = new Map<
     WorkspaceMigrationActionHandlerKey,
     InstanceType<typeof BaseWorkspaceMigrationRunnerActionHandlerService>
@@ -39,7 +37,9 @@ export class WorkspaceMigrationRunnerActionHandlerRegistryService
     providers.forEach((wrapper) => {
       const { instance, metatype } = wrapper;
 
-      if (!instance || !metatype) return;
+      if (!instance || !metatype) {
+        return;
+      }
 
       const actionHandlerKey: WorkspaceMigrationActionHandlerKey | undefined =
         Reflect.getMetadata(

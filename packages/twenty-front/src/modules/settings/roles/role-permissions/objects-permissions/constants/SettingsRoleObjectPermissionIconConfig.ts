@@ -2,15 +2,13 @@ import {
   type IconComponent,
   IconEye,
   IconEyeOff,
-  IconLayoutSidebarRight,
-  IconLayoutSidebarRightCollapse,
   IconPencil,
   IconPencilOff,
   IconTrash,
   IconTrashOff,
   IconTrashX,
   IconTrashXOff,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 
 type SettingsRoleObjectPermissionIconConfig = {
   Icon: IconComponent;
@@ -21,8 +19,7 @@ export type SettingsRoleObjectPermissionKey =
   | 'canReadObjectRecords'
   | 'canUpdateObjectRecords'
   | 'canSoftDeleteObjectRecords'
-  | 'canDestroyObjectRecords'
-  | 'showInSidebar';
+  | 'canDestroyObjectRecords';
 
 export const SETTINGS_ROLE_OBJECT_PERMISSION_ICON_CONFIG: Record<
   SettingsRoleObjectPermissionKey,
@@ -43,9 +40,5 @@ export const SETTINGS_ROLE_OBJECT_PERMISSION_ICON_CONFIG: Record<
   canDestroyObjectRecords: {
     Icon: IconTrashX,
     IconForbidden: IconTrashXOff,
-  },
-  showInSidebar: {
-    Icon: IconLayoutSidebarRight,
-    IconForbidden: IconLayoutSidebarRightCollapse,
   },
 };

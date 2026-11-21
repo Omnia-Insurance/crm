@@ -16,18 +16,28 @@
         "{projectRoot}/ai/dist",
         "{projectRoot}/application/package.json",
         "{projectRoot}/application/dist",
+        "{projectRoot}/application-runtime/package.json",
+        "{projectRoot}/application-runtime/dist",
         "{projectRoot}/constants/package.json",
         "{projectRoot}/constants/dist",
         "{projectRoot}/database-events/package.json",
         "{projectRoot}/database-events/dist",
+        "{projectRoot}/front-component-build/package.json",
+        "{projectRoot}/front-component-build/dist",
         "{projectRoot}/i18n/package.json",
         "{projectRoot}/i18n/dist",
         "{projectRoot}/logic-function/package.json",
         "{projectRoot}/logic-function/dist",
+        "{projectRoot}/markdown/package.json",
+        "{projectRoot}/markdown/dist",
         "{projectRoot}/metadata/package.json",
         "{projectRoot}/metadata/dist",
+        "{projectRoot}/pending-wake-up/package.json",
+        "{projectRoot}/pending-wake-up/dist",
         "{projectRoot}/testing/package.json",
         "{projectRoot}/testing/dist",
+        "{projectRoot}/timeline/package.json",
+        "{projectRoot}/timeline/dist",
         "{projectRoot}/translations/package.json",
         "{projectRoot}/translations/dist",
         "{projectRoot}/types/package.json",
@@ -50,17 +60,6 @@
         "parallel": false
       }
     },
-    "build:individual": {
-      "executor": "nx:run-commands",
-      "cache": true,
-      "dependsOn": ["build"],
-      "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/dist/individual"],
-      "options": {
-        "cwd": "{projectRoot}",
-        "command": "npx vite build -c vite.config.individual.ts"
-      }
-    },
     "generateBarrels": {
       "executor": "nx:run-commands",
       "cache": true,
@@ -72,8 +71,8 @@
       ],
       "options": { "command": "tsx {projectRoot}/scripts/generateBarrels.ts" }
     },
-    "typecheck": {},
-    "test": {},
+    "typecheck": { "dependsOn": ["build"] },
+    "test": { "dependsOn": ["build"] },
     "lint": { "options": {}, "configurations": { "fix": {} } },
     "fmt": { "options": { "files": "src" }, "configurations": { "fix": {} } }
   }

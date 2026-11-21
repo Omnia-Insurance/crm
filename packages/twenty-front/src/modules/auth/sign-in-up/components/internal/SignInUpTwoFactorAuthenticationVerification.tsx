@@ -1,6 +1,8 @@
-import { styled } from '@linaria/react';
-
 import { useAuth } from '@/auth/hooks/useAuth';
+import {
+  StyledTwoFactorInstructions,
+  StyledTwoFactorMainContent,
+} from '@/auth/sign-in-up/components/internal/SignInUpTwoFactorAuthenticationStyles';
 import {
   type OTPFormValues,
   useTwoFactorAuthenticationForm,
@@ -10,32 +12,30 @@ import {
   SignInUpStep,
   signInUpStepState,
 } from '@/auth/states/signInUpStepState';
+import { getTwoFactorAuthenticationErrorToastOptions } from '@/auth/utils/getTwoFactorAuthenticationErrorToastOptions';
 import { useReadCaptchaToken } from '@/captcha/hooks/useReadCaptchaToken';
 import { useCaptcha } from '@/client-config/hooks/useCaptcha';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { ONBOARDING_CONTENT_BLOCK_WIDTH } from '@/onboarding/constants/OnboardingContentBlockWidth';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { styled } from '@linaria/react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { OTPInput, type SlotProps } from 'input-otp';
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { AppPath } from 'twenty-shared/types';
-import { MainButton } from 'twenty-ui/input';
-import { ClickToActionLink } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useToast } from 'twenty-ui/components/feedback';
+import { MainButton } from 'twenty-ui/components/input';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
-
-const StyledMainContentContainer = styled.div`
-  margin-bottom: ${themeCssVariables.spacing[8]};
-  margin-top: ${themeCssVariables.spacing[4]};
-  text-align: center;
-`;
 
 const StyledForm = styled.form`
   align-items: center;
   display: flex;
   flex-direction: column;
-  width: 100%;
+  max-width: 100%;
+  width: ${ONBOARDING_CONTENT_BLOCK_WIDTH}px;
 `;
 
 const StyledSlot = styled.div<{ isActive: boolean }>`
@@ -135,7 +135,8 @@ const StyledDashContainer = styled.div`
 
 const StyledDash = styled.div`
   background-color: ${themeCssVariables.font.color.primary};
-  border-radius: 9999px;
+  border-radius: ${themeCssVariables.border.radius.pill};
+  corner-shape: round;
   height: 0.25rem;
   width: 0.75rem;
 `;
@@ -160,15 +161,6 @@ const StyledOTPContainer = styled.div`
 const StyledSlotGroup = styled.div`
   display: flex;
 `;
-const StyledTextContainer = styled.div`
-  align-items: center;
-  color: ${themeCssVariables.font.color.tertiary};
-  font-size: ${themeCssVariables.font.size.sm};
-
-  margin-bottom: ${themeCssVariables.spacing[4]};
-  max-width: 280px;
-  text-align: center;
-`;
 
 const StyledActionBackLinkContainer = styled.div`
   margin: ${themeCssVariables.spacing[3]} 0 0;
@@ -178,7 +170,7 @@ export const SignInUpTOTPVerification = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const { getAuthTokensFromOTP } = useAuth();
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const navigate = useNavigateApp();
   const { readCaptchaToken } = useReadCaptchaToken();
@@ -193,8 +185,9 @@ export const SignInUpTOTPVerification = () => {
     setIsLoading(true);
     try {
       if (!isCaptchaReady) {
-        enqueueErrorSnackBar({
-          message: t`Captcha (anti-bot check) is still loading, try again`,
+        enqueueToast({
+          status: 'error',
+          children: t`Captcha (anti-bot check) is still loading, try again`,
         });
         setIsLoading(false);
         return;
@@ -207,15 +200,15 @@ export const SignInUpTOTPVerification = () => {
       }
 
       await getAuthTokensFromOTP(values.otp, loginToken, captchaToken);
-    } catch {
+    } catch (error) {
       form.setValue('otp', '');
 
-      enqueueErrorSnackBar({
-        message: t`Invalid verification code. Please try again.`,
-        options: {
+      enqueueToast(
+        getTwoFactorAuthenticationErrorToastOptions({
+          error,
           dedupeKey: 'invalid-otp-dedupe-key',
-        },
-      });
+        }),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -225,12 +218,16 @@ export const SignInUpTOTPVerification = () => {
     setSignInUpStep(SignInUpStep.TwoFactorAuthenticationProvision);
   };
 
+  const handleUseRecoveryCode = () => {
+    setSignInUpStep(SignInUpStep.TwoFactorAuthenticationRecovery);
+  };
+
   return (
     <StyledForm onSubmit={form.handleSubmit(submitOTP)}>
-      <StyledTextContainer>
+      <StyledTwoFactorInstructions>
         <Trans>Paste the code below</Trans>
-      </StyledTextContainer>
-      <StyledMainContentContainer>
+      </StyledTwoFactorInstructions>
+      <StyledTwoFactorMainContent>
         {/* // oxlint-disable-next-line react/jsx-props-no-spreading */}
         <Controller
           name="otp"
@@ -241,6 +238,7 @@ export const SignInUpTOTPVerification = () => {
               onBlur={onBlur}
               onChange={onChange}
               value={value}
+              autoFocus
               render={({ slots }) => (
                 <StyledOTPContainer>
                   <StyledSlotGroup>
@@ -269,18 +267,21 @@ export const SignInUpTOTPVerification = () => {
             />
           )}
         />
-      </StyledMainContentContainer>
+      </StyledTwoFactorMainContent>
       <MainButton
-        title={t`Submit`}
         type="submit"
-        variant="primary"
         fullWidth
         disabled={isLoading}
-      />
+      >{t`Submit`}</MainButton>
       <StyledActionBackLinkContainer>
-        <ClickToActionLink onClick={handleBack}>
+        <Button variant="link" onClick={handleUseRecoveryCode}>
+          <Trans>Lost your authenticator? Use a backup or recovery code</Trans>
+        </Button>
+      </StyledActionBackLinkContainer>
+      <StyledActionBackLinkContainer>
+        <Button variant="link" onClick={handleBack}>
           <Trans>Back</Trans>
-        </ClickToActionLink>
+        </Button>
       </StyledActionBackLinkContainer>
     </StyledForm>
   );

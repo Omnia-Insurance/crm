@@ -1,6 +1,17 @@
+import {
+  CalendarChannelVisibility,
+  MessageChannelVisibility,
+} from 'twenty-shared/types';
+
 import { deleteConnectedAccount } from 'test/integration/metadata/suites/connected-account/utils/delete-connected-account.util';
 import { getConnectedImapSmtpCaldavAccount } from 'test/integration/metadata/suites/connected-account/utils/get-connected-imap-smtp-caldav-account.util';
 import { saveImapSmtpCaldavAccount } from 'test/integration/metadata/suites/connected-account/utils/save-imap-smtp-caldav-account.util';
+import {
+  queryCalendarChannels,
+  queryMessageChannels,
+} from 'test/integration/utils/query-messaging.util';
+
+import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
 
 const createAccount = async (handle: string): Promise<string> => {
   const { data } = await saveImapSmtpCaldavAccount({
@@ -13,14 +24,14 @@ const createAccount = async (handle: string): Promise<string> => {
           port: 993,
           username: 'user@example.com',
           password: 'test-password',
-          secure: true,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
         },
         SMTP: {
           host: 'smtp.fastmail.com',
           port: 465,
           username: 'user@example.com',
           password: 'test-password',
-          secure: true,
+          connectionSecurity: EmailConnectionSecurity.SSL_TLS,
         },
       },
     },
@@ -49,14 +60,14 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
             port: 993,
             username: 'user@example.com',
             password: 'test-password',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
           SMTP: {
             host: 'smtp.fastmail.com',
             port: 465,
             username: 'user@example.com',
             password: 'test-password',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
         },
       },
@@ -78,13 +89,13 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
         host: 'imap.fastmail.com',
         port: 993,
         username: 'user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       SMTP: {
         host: 'smtp.fastmail.com',
         port: 465,
         username: 'user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       CALDAV: null,
     });
@@ -104,13 +115,13 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
             host: 'imap-updated.fastmail.com',
             port: 993,
             username: 'updated-user@example.com',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
           SMTP: {
             host: 'smtp-updated.fastmail.com',
             port: 587,
             username: 'updated-user@example.com',
-            secure: false,
+            connectionSecurity: EmailConnectionSecurity.STARTTLS,
           },
         },
         id: accountId,
@@ -129,13 +140,13 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
         host: 'imap-updated.fastmail.com',
         port: 993,
         username: 'updated-user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       SMTP: {
         host: 'smtp-updated.fastmail.com',
         port: 587,
         username: 'updated-user@example.com',
-        secure: false,
+        connectionSecurity: EmailConnectionSecurity.STARTTLS,
       },
       CALDAV: null,
     });
@@ -156,7 +167,7 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
             port: 993,
             username: 'user@example.com',
             password: 'test-password',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
         },
         id: accountId,
@@ -175,7 +186,7 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
         host: 'imap.fastmail.com',
         port: 993,
         username: 'user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       SMTP: null,
       CALDAV: null,
@@ -197,14 +208,14 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
             port: 993,
             username: 'user@example.com',
             password: 'new-password',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
           SMTP: {
             host: 'smtp.fastmail.com',
             port: 465,
             username: 'user@example.com',
             password: 'new-password',
-            secure: true,
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
           },
         },
         id: accountId,
@@ -223,15 +234,54 @@ describe('Successful save IMAP/SMTP/CALDAV account', () => {
         host: 'imap.fastmail.com',
         port: 993,
         username: 'user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       SMTP: {
         host: 'smtp.fastmail.com',
         port: 465,
         username: 'user@example.com',
-        secure: true,
+        connectionSecurity: EmailConnectionSecurity.SSL_TLS,
       },
       CALDAV: null,
     });
+  });
+
+  it('should create message and calendar channels with METADATA visibility', async () => {
+    const { data } = await saveImapSmtpCaldavAccount({
+      expectToFail: false,
+      input: {
+        handle: 'test-visibility@example.com',
+        connectionParameters: {
+          IMAP: {
+            host: 'imap.fastmail.com',
+            port: 993,
+            username: 'user@example.com',
+            password: 'test-password',
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+          },
+          CALDAV: {
+            host: 'caldav.fastmail.com',
+            port: 443,
+            username: 'user@example.com',
+            password: 'test-password',
+            connectionSecurity: EmailConnectionSecurity.SSL_TLS,
+          },
+        },
+      },
+    });
+
+    accountIdsToCleanup.push(data.connectedAccountId);
+
+    const messageChannel = (await queryMessageChannels()).find(
+      (channel) => channel.connectedAccountId === data.connectedAccountId,
+    );
+
+    expect(messageChannel?.visibility).toBe(MessageChannelVisibility.METADATA);
+
+    const [calendarChannel] = await queryCalendarChannels(
+      data.connectedAccountId,
+    );
+
+    expect(calendarChannel.visibility).toBe(CalendarChannelVisibility.METADATA);
   });
 });

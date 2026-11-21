@@ -1,21 +1,21 @@
-import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { read, type WorkBook } from 'xlsx-ugnis';
-
 import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { SPREADSHEET_MAX_RECORD_IMPORT_CAPACITY } from '@/spreadsheet-import/constants/SpreadsheetMaxRecordImportCapacity';
 import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
 import { useDownloadFakeRecords } from '@/spreadsheet-import/steps/components/UploadStep/hooks/useDownloadFakeRecords';
 import { readFileAsync } from '@/spreadsheet-import/utils/readFilesAsync';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { styled } from '@linaria/react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { MainButton } from 'twenty-ui/input';
+import { useState } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { useToast } from 'twenty-ui/components/feedback';
+import { MainButton } from 'twenty-ui/components/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { read, type WorkBook } from 'xlsx-ugnis';
 
 const StyledContainer = styled.div`
   align-items: center;
-  background: repeating-linear-gradient(
+  background:
+    repeating-linear-gradient(
       0deg,
       ${themeCssVariables.font.color.primary},
       ${themeCssVariables.font.color.primary} 10px,
@@ -116,7 +116,7 @@ export const DropZone = ({ onContinue, isLoading }: DropZoneProps) => {
 
   const [loading, setLoading] = useState(false);
 
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const { downloadSample } = useDownloadFakeRecords();
 
@@ -136,11 +136,10 @@ export const DropZone = ({ onContinue, isLoading }: DropZoneProps) => {
       setLoading(false);
       fileRejections.forEach((fileRejection) => {
         const fileName = fileRejection.file.name;
-        enqueueErrorSnackBar({
-          message: t`${fileName} upload rejected`,
-          options: {
-            detailedMessage: fileRejection.errors[0].message,
-          },
+        enqueueToast({
+          status: 'error',
+          children: t`${fileName} upload rejected`,
+          description: fileRejection.errors[0].message,
         });
       });
     },
@@ -164,6 +163,9 @@ export const DropZone = ({ onContinue, isLoading }: DropZoneProps) => {
   const formatSpreadsheetMaxRecordImportCapacity = formatNumber(
     SPREADSHEET_MAX_RECORD_IMPORT_CAPACITY,
   );
+
+  // OMNIA-CUSTOM: capacity 0 means no row cap, so there is no limit to show
+  const hasMaxRecordImportCapacity = SPREADSHEET_MAX_RECORD_IMPORT_CAPACITY > 0;
 
   return (
     <StyledContainer
@@ -189,17 +191,18 @@ export const DropZone = ({ onContinue, isLoading }: DropZoneProps) => {
             <Trans>Upload .xlsx, .xls or .csv file</Trans>
           </StyledText>
           <StyledButtonsContainer>
-            <MainButton onClick={open} title={t`Select file`} fullWidth />
+            <MainButton onClick={open} fullWidth>{t`Select file`}</MainButton>
             <MainButton
               onClick={downloadSample}
-              title={t`Download sample`}
-              variant="secondary"
               fullWidth
-            />
+              variant="outline"
+            >{t`Download sample`}</MainButton>
           </StyledButtonsContainer>
-          <StyledFooterText>
-            {t`Max import capacity: ${formatSpreadsheetMaxRecordImportCapacity} records. Otherwise, consider splitting your file or using the API.`}
-          </StyledFooterText>
+          {hasMaxRecordImportCapacity && (
+            <StyledFooterText>
+              {t`Max import capacity: ${formatSpreadsheetMaxRecordImportCapacity} records. Otherwise, consider splitting your file or using the API.`}
+            </StyledFooterText>
+          )}
         </>
       )}
     </StyledContainer>

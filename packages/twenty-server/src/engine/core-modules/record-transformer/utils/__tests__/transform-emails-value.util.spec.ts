@@ -159,6 +159,7 @@ describe('transformEmailsValue', () => {
     });
   });
 
+  // OMNIA-CUSTOM: upstream only lowercases; Omnia also trims (pasted and imported emails)
   it('should trim whitespace from primaryEmail', () => {
     const value = {
       primaryEmail: '  test@example.com  ',

@@ -1,22 +1,13 @@
+import { AgentHistoryMigrationModule } from 'src/database/commands/agent-history/agent-history-migration.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/workspace-iterator.module';
 import { CronRegisterAllCommand } from 'src/database/commands/cron-register-all.command';
-// OMNIA-CUSTOM: Brokerage app adoption migrates existing Omnia workspace metadata to the app-owned package
-import { AdoptBrokerageAppCommand } from 'src/database/commands/custom/adopt-brokerage-app.command';
-import { BackfillReconciliationDecisionRulesCommand } from 'src/database/commands/custom/backfill-reconciliation-decision-rules.command';
-// OMNIA-CUSTOM: Payment Reconciliation v2 — seeds the Reconciliation + CarrierConfig custom workspace objects
-import { SeedAmbetterCarrierConfigCommand } from 'src/database/commands/custom/seed-ambetter-carrier-config.command';
-// OMNIA-CUSTOM: Generic carrier-config seed with pre-flight validation (multi-carrier readiness audit 2026-06-11)
-import { SeedCarrierConfigCommand } from 'src/database/commands/custom/seed-carrier-config.command';
-// OMNIA-CUSTOM: Time Card — seeds the Convoso agent productivity ingestion pipeline
-import { BackfillTimeCardsCommand } from 'src/database/commands/custom/backfill-time-cards.command';
-import { SeedConvosoTimeCardPipelineCommand } from 'src/database/commands/custom/seed-convoso-time-card-pipeline.command';
-import { ComputeAgentRollupsCommand } from 'src/database/commands/custom/compute-agent-rollups.command';
-import { SyncDashboardAudienceCommand } from 'src/database/commands/custom/sync-dashboard-audience.command';
-import { SeedReconciliationObjectsCommand } from 'src/database/commands/custom/seed-reconciliation-objects.command';
+// OMNIA-CUSTOM: single registration point for every Omnia CLI command
+import { OmniaCommandModule } from 'src/database/commands/custom/omnia-command.module';
 import { DataSeedWorkspaceCommand } from 'src/database/commands/data-seed-dev-workspace.command';
+import { SecretEncryptionRotationModule } from 'src/database/commands/secret-encryption-rotation/secret-encryption-rotation.module';
 import { GenerateInstanceCommandCommand } from 'src/database/commands/generate-instance-command.command';
 import { InstallPreInstalledAppsCommand } from 'src/database/commands/install-pre-installed-apps.command';
 import { InstanceCommandGenerationService } from 'src/database/commands/instance-command-generation.service';
@@ -24,40 +15,42 @@ import { ListOrphanedWorkspaceEntitiesCommand } from 'src/database/commands/list
 import { ConfirmationQuestion } from 'src/database/commands/questions/confirmation.question';
 import { RebuildApplicationDefaultDepsCommand } from 'src/database/commands/rebuild-application-default-deps.command';
 import { RunInstanceCommandsCommand } from 'src/database/commands/run-instance-commands.command';
-import { SecretEncryptionRotationModule } from 'src/database/commands/secret-encryption-rotation/secret-encryption-rotation.module';
+import { UpdateFeatureFlagCommand } from 'src/database/commands/update-feature-flag.command';
 import { UpgradeVersionCommandModule } from 'src/database/commands/upgrade-version-command/upgrade-version-command.module';
 import { WorkspaceExportModule } from 'src/database/commands/workspace-export/workspace-export.module';
 import { TypeORMModule } from 'src/database/typeorm/typeorm.module';
+import { WorkspaceDataExportModule } from 'src/engine/core-modules/workspace-data-export/workspace-data-export.module';
 import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
-import { GenerateApiKeyCommand } from 'src/engine/core-modules/api-key/commands/generate-api-key.command';
+import { ApplicationInstallModule } from 'src/engine/core-modules/application/application-install/application-install.module';
 import { MarketplaceModule } from 'src/engine/core-modules/application/application-marketplace/marketplace.module';
 import { StaleRegistrationCleanupModule } from 'src/engine/core-modules/application/application-oauth/stale-registration-cleanup/stale-registration-cleanup.module';
 import { ApplicationUpgradeModule } from 'src/engine/core-modules/application/application-upgrade/application-upgrade.module';
 import { ApplicationModule } from 'src/engine/core-modules/application/application.module';
 import { PreInstalledAppsModule } from 'src/engine/core-modules/application/pre-installed-apps/pre-installed-apps.module';
-import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/enterprise-key-validation.cron.command';
+import { ApplicationRecurringChargeModule } from 'src/engine/core-modules/billing/app-billing/application-recurring-charge.module';
+import { BillingReminderModule } from 'src/engine/core-modules/billing/reminders/billing-reminder.module';
+import { EnterpriseKeyValidationCronCommand } from 'src/engine/core-modules/enterprise/cron/command/organization-key-validation.cron.command';
 import { EnterpriseModule } from 'src/engine/core-modules/enterprise/enterprise.module';
 import { EventLogCleanupModule } from 'src/engine/core-modules/event-logs/cleanup/event-log-cleanup.module';
 import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
 import { RotateSigningKeysCronCommand } from 'src/engine/core-modules/jwt/crons/commands/rotate-signing-keys.cron.command';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
+import { JobMemoryReconcileModule } from 'src/engine/core-modules/message-queue/commands/job-memory-reconcile.module';
+import { PendingWakeUpModule } from 'src/engine/core-modules/pending-wake-up/pending-wake-up.module';
 import { PublicDomainModule } from 'src/engine/core-modules/public-domain/public-domain.module';
 import { TwentyConfigModule } from 'src/engine/core-modules/twenty-config/twenty-config.module';
+import { UserSessionModule } from 'src/engine/core-modules/user-session/user-session.module';
 import { UpgradeStatusCommand } from 'src/engine/core-modules/upgrade/commands/upgrade-status.command';
 import { UpgradeModule } from 'src/engine/core-modules/upgrade/upgrade.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
 import { WorkspaceModule } from 'src/engine/core-modules/workspace/workspace.module';
-import { FieldMetadataEntity } from 'src/engine/metadata-modules/field-metadata/field-metadata.entity';
+import { AiAgentTriggerModule } from 'src/engine/metadata-modules/ai/ai-agent-trigger/ai-agent-trigger.module';
 import { FieldMetadataModule } from 'src/engine/metadata-modules/field-metadata/field-metadata.module';
-import { IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { NavigationMenuItemEntity } from 'src/engine/metadata-modules/navigation-menu-item/entities/navigation-menu-item.entity';
-import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataModule } from 'src/engine/metadata-modules/object-metadata/object-metadata.module';
-// OMNIA-CUSTOM: needed by SeedReconciliationObjectsCommand to lock recon objects to admins
-import { ObjectPermissionEntity } from 'src/engine/metadata-modules/object-permission/object-permission.entity';
-import { ObjectPermissionModule } from 'src/engine/metadata-modules/object-permission/object-permission.module';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
+import { CodeInterpreterSessionCleanupModule } from 'src/engine/core-modules/code-interpreter/crons/code-interpreter-session-cleanup.module';
 import { TrashCleanupModule } from 'src/engine/trash-cleanup/trash-cleanup.module';
 import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/workspace-cache-storage.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
@@ -65,82 +58,67 @@ import { DevSeederModule } from 'src/engine/workspace-manager/dev-seeder/dev-see
 import { WorkspaceCleanerModule } from 'src/engine/workspace-manager/workspace-cleaner/workspace-cleaner.module';
 import { WorkspaceManagerModule } from 'src/engine/workspace-manager/workspace-manager.module';
 import { WorkspaceMigrationModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration.module';
+import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
 import { WorkspaceVersionModule } from 'src/engine/workspace-manager/workspace-version/workspace-version.module';
+import { WebhookSubscriptionModule } from 'src/modules/connected-account/webhook-subscription-manager/webhook-subscription.module';
 import { CalendarEventImportManagerModule } from 'src/modules/calendar/calendar-event-import-manager/calendar-event-import-manager.module';
-// OMNIA-CUSTOM: provides AgentRollupService for ComputeAgentRollupsCommand
-import { AgentRollupModule } from 'src/modules/agent-rollup/agent-rollup.module';
-// OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
-import { DashboardAudienceModule } from 'src/modules/dashboard/dashboard-audience/dashboard-audience.module';
+import { EmailingModule } from 'src/modules/emailing/emailing.module';
 import { MessagingImportManagerModule } from 'src/modules/messaging/message-import-manager/messaging-import-manager.module';
 import { WorkflowRunQueueModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-run-queue.module';
 import { AutomatedTriggerModule } from 'src/modules/workflow/workflow-trigger/automated-trigger/automated-trigger.module';
-// OMNIA-CUSTOM: PolicyWriteAuthorizationService (agent-ownership RLS) is a
-// constructor dependency of ReviewItemService, which the reconciliation seed
-// commands instantiate here; PolicyQueryHookModule exports it.
-import { PolicyQueryHookModule } from 'src/modules/policy/query-hooks/policy-query-hook.module';
-import { ReconciliationDecisionRuleService } from 'src/modules/reconciliation/services/decision-rule.service';
-import { ReconciliationMutationService } from 'src/modules/reconciliation/services/mutation.service';
-import { ReconciliationObjectLockdownService } from 'src/modules/reconciliation/services/object-lockdown.service';
-import { ReviewItemService } from 'src/modules/reconciliation/services/review-item.service';
-import { ReconciliationStateMachineService } from 'src/modules/reconciliation/services/state-machine.service';
 
 @Module({
   imports: [
+    AgentHistoryMigrationModule,
+    AiAgentTriggerModule,
     UpgradeVersionCommandModule,
-    TypeOrmModule.forFeature([
-      ObjectMetadataEntity,
-      FieldMetadataEntity,
-      NavigationMenuItemEntity,
-      RoleEntity,
-      ObjectPermissionEntity,
-      WorkspaceEntity,
-      // OMNIA-CUSTOM: needed by SeedConvosoTimeCardPipelineCommand + BackfillTimeCardsCommand
-      IngestionPipelineEntity,
-      IngestionFieldMappingEntity,
-    ]),
-    // OMNIA-CUSTOM: Reconciliation seed restricts new objects to Admin role only
-    ObjectPermissionModule,
-    // OMNIA-CUSTOM: provides PolicyWriteAuthorizationService for ReviewItemService
-    // (used by the reconciliation seed commands)
-    PolicyQueryHookModule,
+    TypeOrmModule.forFeature([WorkspaceEntity, RoleEntity]),
     WorkspaceExportModule,
-    // Cron command dependencies
     MessagingImportManagerModule,
     CalendarEventImportManagerModule,
+    WebhookSubscriptionModule,
+    EmailingModule,
     AutomatedTriggerModule,
+    PendingWakeUpModule,
+    JobMemoryReconcileModule,
     FileModule,
     WorkspaceModule,
     WorkflowRunQueueModule,
-    // Data seeding dependencies
     TypeORMModule,
     FieldMetadataModule,
     ObjectMetadataModule,
     DevSeederModule,
     WorkspaceManagerModule,
     WorkspaceCacheStorageModule,
-    WorkspaceCacheModule,
-    WorkspaceIteratorModule,
-    // OMNIA-CUSTOM: provides DashboardAudienceRoleSyncService for SyncDashboardAudienceCommand
-    DashboardAudienceModule,
-    // OMNIA-CUSTOM: provides AgentRollupService for ComputeAgentRollupsCommand
-    AgentRollupModule,
     ApiKeyModule,
     FeatureFlagModule,
     WorkspaceCleanerModule,
     WorkspaceMigrationModule,
+    WorkspaceMigrationRunnerModule,
     TrashCleanupModule,
+    BillingReminderModule,
+    ApplicationRecurringChargeModule,
+    CodeInterpreterSessionCleanupModule,
     PublicDomainModule,
     EventLogCleanupModule,
     EnterpriseModule,
     TwentyConfigModule,
     MarketplaceModule,
+    ApplicationInstallModule,
     ApplicationUpgradeModule,
     StaleRegistrationCleanupModule,
+    WorkspaceDataExportModule,
     PreInstalledAppsModule,
+    WorkspaceIteratorModule,
     ApplicationModule,
+    WorkspaceCacheModule,
     WorkspaceVersionModule,
     UpgradeModule,
     SecretEncryptionRotationModule,
+    UserSessionModule,
+    EmailingDomainModule,
+    // OMNIA-CUSTOM: also exports the Omnia cron commands CronRegisterAllCommand injects
+    OmniaCommandModule,
   ],
   providers: [
     DataSeedWorkspaceCommand,
@@ -152,34 +130,11 @@ import { ReconciliationStateMachineService } from 'src/modules/reconciliation/se
     ListOrphanedWorkspaceEntitiesCommand,
     EnterpriseKeyValidationCronCommand,
     RotateSigningKeysCronCommand,
-    GenerateApiKeyCommand,
     UpgradeStatusCommand,
     RebuildApplicationDefaultDepsCommand,
     InstallPreInstalledAppsCommand,
-    // OMNIA-CUSTOM: Brokerage app adoption for existing Omnia workspaces
-    AdoptBrokerageAppCommand,
-    // OMNIA-CUSTOM: Dashboard role-gating — bootstrap/re-sync audience field + RLS predicates
-    SyncDashboardAudienceCommand,
-    // OMNIA-CUSTOM: Agent performance rollups
-    ComputeAgentRollupsCommand,
-    // OMNIA-CUSTOM: Payment Reconciliation v2 seed commands
-    SeedReconciliationObjectsCommand,
-    SeedAmbetterCarrierConfigCommand,
-    SeedCarrierConfigCommand,
-    BackfillReconciliationDecisionRulesCommand,
-    ReconciliationDecisionRuleService,
-    // OMNIA-CUSTOM: seed-reconciliation-objects delegates its admin-only
-    // lockdown to this shared service
-    ReconciliationObjectLockdownService,
-    // OMNIA-CUSTOM: ReviewItemService's remaining constructor deps — the
-    // state machine and its mutation service — so the seed commands can
-    // instantiate it in the CLI/migration context (matches ReconciliationModule).
-    ReconciliationMutationService,
-    ReconciliationStateMachineService,
-    ReviewItemService,
-    // OMNIA-CUSTOM: Time Card ingestion seed + backfill
-    SeedConvosoTimeCardPipelineCommand,
-    BackfillTimeCardsCommand,
+    UpdateFeatureFlagCommand,
+    provideWorkspaceScopedRepository(RoleEntity),
   ],
 })
 export class DatabaseCommandModule {}

@@ -1,0 +1,117 @@
+---
+title: Avvio rapido
+description: Crea la tua prima app Twenty con il CLI standalone.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Prima di iniziare
+
+Usa Node.js 24 (24.5+) o 26 (26.5.1+) e Yarn 4 (tramite Corepack: `corepack enable`; su Node 26, installalo prima con `npm install -g corepack`). Installa il CLI a livello globale; la tua app mantiene le proprie dipendenze SDK.
+
+<Note>
+La compilazione delle app Twenty è supportata ufficialmente solo sui sistemi Unix (macOS e Linux). Su Windows, lavora all'interno di WSL 2.
+</Note>
+
+## Crea il progetto
+
+```bash
+npm install -g twenty
+twenty app init my-twenty-app
+cd my-twenty-app
+yarn install
+```
+
+`app init` scrive solo il modello. Non installa dipendenze, non inizializza Git, non avvia Docker, non esegue l'autenticazione e non sincronizza. Personalizza il nome visualizzato e la descrizione con `--display-name` e `--description`; usa `--path` per una destinazione diversa.
+
+## Accedi a Twenty
+
+Utilizza uno spazio di lavoro esistente oppure avvia un [server locale](/it/developers/extend/apps/getting-started/local-server), quindi accedi:
+
+```bash
+twenty auth login --url https://your-workspace.twenty.com --name dev --use
+twenty auth status --remote dev
+```
+
+`--name dev` salva la connessione come `dev`; `--use` la imposta come predefinita per i comandi seguenti. Per selezionarla esplicitamente, aggiungi `--remote dev`. Le variabili d'ambiente possono sovrascrivere l'impostazione predefinita; consulta la [selezione dell'area di lavoro](/it/developers/extend/apps/operations/cli#connecting-to-a-workspace).
+
+## Sincronizza le modifiche
+
+Per la prima sincronizzazione, consenti esplicitamente la registrazione e l'installazione:
+
+```bash
+twenty app apply --create
+```
+
+Quindi avvia il watcher di sviluppo:
+
+```bash
+twenty app dev
+```
+
+Utilizza comandi con limiti definiti per script e agenti:
+
+```bash
+twenty app plan
+twenty app apply
+```
+
+`plan` mostra un'anteprima delle modifiche. `apply` carica e sincronizza una volta. Usa `--no-prune` per mantenere le entità remote mancanti dall'origine, oppure `--yes` per consentire l'eliminazione di oggetti e campi senza una richiesta di conferma. Tutti e tre i comandi richiedono un ambiente remoto autenticato e la proprietà della registrazione.
+
+## Cosa puoi creare
+
+Le app sono composte da **entità** — ciascuna definita come un file TypeScript con un singolo `export default`:
+
+| Entità                   | Cosa fa                                                                                                           |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| **Oggetti e campi**      | Modelli di dati personalizzati (Cartolina, Fattura, ecc.) con campi tipizzati                                     |
+| **Funzioni logiche**     | TypeScript lato server attivato da route HTTP, pianificazioni cron o eventi del database                          |
+| **Componenti front-end** | Componenti React che vengono renderizzati all'interno dell'UI di Twenty (pannello laterale, widget, menu comandi) |
+| **Skill e agenti**       | Funzionalità di IA — istruzioni riutilizzabili e assistenti autonomi                                              |
+| **Viste e navigazione**  | Viste elenco preconfigurate e voci di menu della barra laterale                                                   |
+| **Layout di pagina**     | Pagine di dettaglio dei record personalizzate con schede e widget                                                 |
+
+Riferimento completo: [Concetti](/it/developers/extend/apps/getting-started/concepts).
+
+## Sviluppa con le skill degli agenti IA
+
+Le [Agent Skills](https://skills.sh/) ufficiali di Twenty insegnano agli agenti di coding l'intero flusso di lavoro dell'app: scaffolding, sviluppo delle entità, operazioni di sincronizzazione e distribuzione e pubblicazione sul marketplace. Si installano in Claude Code, Codex, Cursor, Pi e qualsiasi altro harness supportato dalla CLI `skills` e funzionano con qualsiasi istanza di Twenty, inclusi domini personalizzati self-hosted e localhost.
+
+```bash filename="Terminal"
+# List the available skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --list
+
+# Install the scaffolding and development skills
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill create-app
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --skill develop-app
+```
+
+Ogni skill viene installata con la propria documentazione di riferimento. Il branch `agent-skills` diventa disponibile dopo la prima pubblicazione riuscita da `main`; prima di allora, segui le [istruzioni per la build locale](https://github.com/twentyhq/twenty/tree/main/packages/twenty-agent-skills#local-development).
+
+## Prossimi passaggi
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/it/developers/extend/apps/config/overview" img="/images/documentation/section-overview-icons-v1/apps-config.svg">
+    <CardTitle>Config</CardTitle>
+    Identità dell'applicazione, ruolo predefinito, installa e disinstalla hook, beni pubblici.
+  </Card>
+  <Card href="/it/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>Data</CardTitle>
+    Oggetti, campi e relazioni bidirezionali.
+  </Card>
+  <Card href="/it/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>Logica</CardTitle>
+    Funzioni logiche, competenze, agenti, connessioni e canali di messaggistica.
+  </Card>
+  <Card href="/it/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>Layout</CardTitle>
+    Visualizzazioni, navigazione, layout delle pagine, componenti anteriori.
+  </Card>
+  <Card href="/it/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>Operations</CardTitle>
+    CLI, testing, remotes, CI, and publishing your app.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="dev-apps" />

@@ -1,30 +1,36 @@
-import { InputErrorHelper } from '@/ui/input/components/InputErrorHelper';
-import { isNonEmptyString } from '@sniptt/guards';
-import { isDefined } from 'twenty-shared/utils';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { type TextInputComponentProps } from '@/ui/input/types/TextInputComponentProps';
+import { type TextInputSize } from '@/ui/input/types/TextInputSize';
+import { AutogrowWrapper } from '@/ui/input/components/internal/AutogrowWrapper/AutogrowWrapper';
 import { css } from '@linaria/core';
 import { styled } from '@linaria/react';
+import { isNonEmptyString } from '@sniptt/guards';
 import React, {
-  forwardRef,
   type ChangeEvent,
   type FocusEventHandler,
-  type InputHTMLAttributes,
-  useContext,
+  forwardRef,
   useId,
   useRef,
   useState,
 } from 'react';
-import { type IconComponent, IconEye, IconEyeOff } from 'twenty-ui/display';
-import { AutogrowWrapper } from 'twenty-ui/utilities';
-import { useCombinedRefs } from '~/hooks/useCombinedRefs';
+import { isDefined } from 'twenty-shared/utils';
+import { IconEye, IconEyeOff } from 'twenty-ui/icon';
+import { Field } from 'twenty-ui/primitives/input';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { combineRefs } from '~/utils/combineRefs';
 import { turnIntoEmptyStringIfWhitespacesOnly } from '~/utils/string/turnIntoEmptyStringIfWhitespacesOnly';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { PASSWORD_MANAGER_IGNORE_ATTRIBUTES } from '@/ui/input/constants/PasswordManagerIgnoreAttributes';
 const StyledContainer = styled.div<Pick<TextInputComponentProps, 'fullWidth'>>`
   box-sizing: border-box;
   display: inline-flex;
   flex-direction: column;
   position: relative;
   width: ${({ fullWidth }) => (fullWidth ? `100%` : 'auto')};
+`;
+
+const StyledErrorHelper = styled.div`
+  position: absolute;
+  top: 100%;
 `;
 
 const StyledInputContainer = styled.div`
@@ -48,8 +54,8 @@ const StyledAdornmentContainer = styled.div<StyledAdornmentContainerProps>`
     position === 'right' ? 'none' : 'solid'};
   border-radius: ${({ position }) =>
     position === 'left'
-      ? `${themeCssVariables.border.radius.sm} 0 0 ${themeCssVariables.border.radius.sm}`
-      : `0 ${themeCssVariables.border.radius.sm} ${themeCssVariables.border.radius.sm} 0`};
+      ? `${themeCssVariables.border.radius.md} 0 0 ${themeCssVariables.border.radius.md}`
+      : `0 ${themeCssVariables.border.radius.md} ${themeCssVariables.border.radius.md} 0`};
   border-right-style: ${({ position }) =>
     position === 'left' ? 'none' : 'solid'};
   box-sizing: border-box;
@@ -103,10 +109,10 @@ const StyledInput = styled.input<
 
   border-radius: ${({ leftAdornment, rightAdornment }) =>
     leftAdornment
-      ? `0 ${themeCssVariables.border.radius.sm} ${themeCssVariables.border.radius.sm} 0`
+      ? `0 ${themeCssVariables.border.radius.md} ${themeCssVariables.border.radius.md} 0`
       : rightAdornment
-        ? `${themeCssVariables.border.radius.sm} 0 0 ${themeCssVariables.border.radius.sm}`
-        : themeCssVariables.border.radius.sm};
+        ? `${themeCssVariables.border.radius.md} 0 0 ${themeCssVariables.border.radius.md}`
+        : themeCssVariables.border.radius.md};
   box-sizing: border-box;
   color: ${themeCssVariables.font.color.primary};
   display: flex;
@@ -171,6 +177,16 @@ const StyledInput = styled.input<
         ? themeCssVariables.border.color.danger
         : themeCssVariables.color.blue};
   }
+
+  &[type='number']::-webkit-outer-spin-button,
+  &[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &[type='number'] {
+    -moz-appearance: textfield;
+  }
 `;
 
 const StyledLeftIconContainer = styled.div<{ sizeVariant: TextInputSize }>`
@@ -219,32 +235,6 @@ const StyledTrailingIcon = styled.div<{
 
 const INPUT_TYPE_PASSWORD = 'password';
 
-export type TextInputSize = 'xs' | 'sm' | 'md' | 'lg';
-
-export type TextInputComponentProps = Omit<
-  InputHTMLAttributes<HTMLInputElement>,
-  'onChange' | 'onKeyDown'
-> & {
-  className?: string;
-  label?: string;
-  onChange?: (text: string) => void;
-  fullWidth?: boolean;
-  error?: string;
-  noErrorHelper?: boolean;
-  RightIcon?: IconComponent;
-  onRightIconClick?: () => void;
-  LeftIcon?: IconComponent;
-  autoGrow?: boolean;
-  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-  onBlur?: FocusEventHandler<HTMLInputElement>;
-  dataTestId?: string;
-  sizeVariant?: TextInputSize;
-  inheritFontStyles?: boolean;
-  rightAdornment?: string;
-  leftAdornment?: string;
-  textClickOutsideId?: string;
-};
-
 type TextInputWithAutoGrowWrapperProps = TextInputComponentProps;
 
 const TextInputComponent = forwardRef<
@@ -253,8 +243,10 @@ const TextInputComponent = forwardRef<
 >(
   (
     {
+      'aria-label': ariaLabel,
       className,
       label,
+      hint,
       value,
       onChange,
       onFocus,
@@ -283,12 +275,14 @@ const TextInputComponent = forwardRef<
       rightAdornment,
       leftAdornment,
       textClickOutsideId,
+      ignorePasswordManagers = false,
+      inputProps,
     },
     ref,
   ) => {
-    const { theme } = useContext(ThemeContext);
+    const theme = useTheme();
     const inputRef = useRef<HTMLInputElement>(null);
-    const combinedRef = useCombinedRefs(ref, inputRef);
+    const combinedRef = combineRefs(ref, inputRef, inputProps?.ref);
 
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [isFocused, setIsFocused] = useState(false);
@@ -307,18 +301,39 @@ const TextInputComponent = forwardRef<
       onBlur?.(event);
     };
 
-    const instanceId = useId();
+    const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+      onChange?.(turnIntoEmptyStringIfWhitespacesOnly(event.target.value));
+    };
+
+    const generatedId = useId();
+    const instanceId = inputProps?.id ?? generatedId;
+    const hintId = isNonEmptyString(hint) ? `${instanceId}-hint` : undefined;
+    const describedBy =
+      [inputProps?.['aria-describedby'], hintId]
+        .filter(isNonEmptyString)
+        .join(' ') || undefined;
+    const mergedInputProps = mergeProps<'input'>(inputProps, {
+      onFocus: handleFocus,
+      onBlur: handleBlur,
+      onKeyDown,
+      onChange: handleChange,
+      'aria-describedby': describedBy,
+    });
 
     return (
-      <StyledContainer
-        className={className}
-        fullWidth={fullWidth ?? false}
-        data-click-outside-id={textClickOutsideId}
+      <Field.Root
+        render={
+          <StyledContainer
+            className={className}
+            fullWidth={fullWidth ?? false}
+            data-click-outside-id={textClickOutsideId}
+          />
+        }
       >
         {label && (
-          <InputLabel htmlFor={instanceId}>
+          <Field.Label htmlFor={instanceId}>
             {label + (required ? '*' : '')}
-          </InputLabel>
+          </Field.Label>
         )}
         <StyledInputContainer>
           {leftAdornment && (
@@ -336,38 +351,33 @@ const TextInputComponent = forwardRef<
           )}
 
           <StyledInput
+            aria-label={ariaLabel}
             id={instanceId}
             width={width}
             data-testid={dataTestId}
             autoComplete={autoComplete ?? 'off'}
-            ref={combinedRef}
+            // oxlint-disable-next-line react/jsx-props-no-spreading
+            {...(ignorePasswordManagers && PASSWORD_MANAGER_IGNORE_ATTRIBUTES)}
             tabIndex={tabIndex ?? 0}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
             type={passwordVisible ? 'text' : type}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => {
-              onChange?.(
-                turnIntoEmptyStringIfWhitespacesOnly(event.target.value),
-              );
-            }}
-            onKeyDown={onKeyDown}
-            {...{
-              autoFocus,
-              disabled,
-              readOnly,
-              placeholder,
-              required,
-              value,
-              LeftIcon,
-              RightIcon,
-              maxLength,
-              error,
-              sizeVariant,
-              inheritFontStyles,
-              autoGrow,
-              leftAdornment,
-              rightAdornment,
-            }}
+            autoFocus={autoFocus}
+            disabled={disabled}
+            readOnly={readOnly}
+            placeholder={placeholder}
+            required={required}
+            value={value}
+            LeftIcon={LeftIcon}
+            RightIcon={RightIcon}
+            maxLength={maxLength}
+            error={error}
+            sizeVariant={sizeVariant}
+            inheritFontStyles={inheritFontStyles}
+            autoGrow={autoGrow}
+            leftAdornment={leftAdornment}
+            rightAdornment={rightAdornment}
+            // oxlint-disable-next-line react/jsx-props-no-spreading
+            {...mergedInputProps}
+            ref={combinedRef}
           />
           {rightAdornment && (
             <StyledAdornmentContainer
@@ -399,10 +409,15 @@ const TextInputComponent = forwardRef<
             )}
           </StyledTrailingIconContainer>
         </StyledInputContainer>
-        {!noErrorHelper && error && (
-          <InputErrorHelper>{error}</InputErrorHelper>
+        {isNonEmptyString(hint) && (
+          <Field.Description id={hintId}>{hint}</Field.Description>
         )}
-      </StyledContainer>
+        {!noErrorHelper && error && (
+          <StyledErrorHelper aria-live="polite">
+            <Field.Error match>{error}</Field.Error>
+          </StyledErrorHelper>
+        )}
+      </Field.Root>
     );
   },
 );

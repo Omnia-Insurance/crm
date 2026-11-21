@@ -17,7 +17,9 @@ const FIELD_NAME = 'phonenumber';
 type TestCaseInputAndExpected = Partial<
   Omit<PhonesMetadata, 'additionalPhones'>
 > & {
-  additionalPhones?: Array<Partial<AdditionalPhoneMetadata>> | null;
+  additionalPhones?: Array<
+    Partial<Record<keyof AdditionalPhoneMetadata, string | null>>
+  > | null;
 };
 
 type CreatePhoneFieldMetadataTestCase = {
@@ -66,13 +68,13 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
         'create primary phone field with full international format and other information',
       context: {
         input: {
-          primaryPhoneNumber: '+1123456789',
+          primaryPhoneNumber: '+11234567890',
           primaryPhoneCountryCode: 'US',
           primaryPhoneCallingCode: '+1',
           additionalPhones: null,
         },
         expected: {
-          primaryPhoneNumber: '123456789',
+          primaryPhoneNumber: '1234567890',
           primaryPhoneCountryCode: 'US',
           primaryPhoneCallingCode: '+1',
           additionalPhones: [],
@@ -83,9 +85,9 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
       title:
         'create primary phone field with full international and infer other information from it but not the countryCode as its shared',
       context: {
-        input: { primaryPhoneNumber: '+1123456789' },
+        input: { primaryPhoneNumber: '+11234567890' },
         expected: {
-          primaryPhoneNumber: '123456789',
+          primaryPhoneNumber: '1234567890',
           primaryPhoneCountryCode: '' as CountryCode,
           primaryPhoneCallingCode: '+1',
           additionalPhones: [],
@@ -158,7 +160,7 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
       context: {
         input: {
           additionalPhones: [
-            { callingCode: '+1', countryCode: 'US', number: '+1123456789' },
+            { callingCode: '+1', countryCode: 'US', number: '+11234567890' },
           ],
         },
         expected: {
@@ -166,7 +168,7 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
           primaryPhoneCountryCode: '' as CountryCode,
           primaryPhoneNumber: '',
           additionalPhones: [
-            { callingCode: '+1', countryCode: 'US', number: '123456789' },
+            { callingCode: '+1', countryCode: 'US', number: '1234567890' },
           ],
         },
       },
@@ -175,7 +177,7 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
       title:
         'create additional phone field with full international and infer other information from it but not the countryCode as its shared',
       context: {
-        input: { additionalPhones: [{ number: '+1123456789' }] },
+        input: { additionalPhones: [{ number: '+11234567890' }] },
         expected: {
           primaryPhoneCallingCode: '',
           primaryPhoneCountryCode: '' as CountryCode,
@@ -183,7 +185,8 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
           additionalPhones: [
             {
               callingCode: '+1',
-              number: '123456789',
+              countryCode: null,
+              number: '1234567890',
             },
           ],
         },
@@ -212,7 +215,7 @@ const SUCCESSFUL_TEST_CASES: EachTestingContext<CreatePhoneFieldMetadataTestCase
           primaryPhoneCallingCode: '',
           primaryPhoneCountryCode: '' as CountryCode,
           primaryPhoneNumber: '',
-          additionalPhones: [{}],
+          additionalPhones: [],
         },
       },
     },
@@ -289,7 +292,11 @@ describe('successful create phone field metadata test suite', () => {
             primaryPhoneNumber
             primaryPhoneCountryCode
             primaryPhoneCallingCode
-            additionalPhones
+            additionalPhones {
+              number
+              callingCode
+              countryCode
+            }
             __typename
           }
         `,

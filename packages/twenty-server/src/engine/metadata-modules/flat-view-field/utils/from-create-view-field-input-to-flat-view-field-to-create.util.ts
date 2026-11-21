@@ -67,7 +67,9 @@ export const fromCreateViewFieldInputToFlatViewFieldToCreate = ({
     position: createViewFieldInput.position ?? 0,
     aggregateOperation: createViewFieldInput.aggregateOperation ?? null,
     isActive: true,
+    isSystemSideEffect: false,
     universalOverrides: null,
+    // OMNIA-CUSTOM: relation sub-field column (e.g. "Lead / Date of Birth")
     subFieldName: createViewFieldInput.subFieldName ?? null,
     viewFieldGroupUniversalIdentifier,
     applicationUniversalIdentifier: flatApplication.universalIdentifier,

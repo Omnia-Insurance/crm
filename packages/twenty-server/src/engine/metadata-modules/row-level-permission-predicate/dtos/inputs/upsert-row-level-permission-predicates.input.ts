@@ -5,6 +5,7 @@ import { Field, InputType } from '@nestjs/graphql';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsNotEmpty,
   IsOptional,
   IsUUID,
@@ -14,7 +15,6 @@ import GraphQLJSON from 'graphql-type-json';
 import {
   RowLevelPermissionPredicateGroupLogicalOperator,
   RowLevelPermissionPredicateOperand,
-  RowLevelPermissionPredicateScope,
   RowLevelPermissionPredicateValue,
 } from 'twenty-shared/types';
 
@@ -32,11 +32,13 @@ export class RowLevelPermissionPredicateInput {
   @Field(() => UUIDScalarType)
   fieldMetadataId: string;
 
+  @IsUUID()
+  @IsOptional()
+  @Field(() => UUIDScalarType, { nullable: true })
+  relationFieldMetadataId?: string | null;
+
   @Field(() => RowLevelPermissionPredicateOperand)
   operand: RowLevelPermissionPredicateOperand;
-
-  @Field(() => RowLevelPermissionPredicateScope, { nullable: true })
-  scope?: RowLevelPermissionPredicateScope | null;
 
   @Field(() => GraphQLJSON, { nullable: true })
   value?: RowLevelPermissionPredicateValue | null;
@@ -79,11 +81,28 @@ export class RowLevelPermissionPredicateGroupInput {
   @Field(() => RowLevelPermissionPredicateGroupLogicalOperator)
   logicalOperator: RowLevelPermissionPredicateGroupLogicalOperator;
 
-  @Field(() => RowLevelPermissionPredicateScope, { nullable: true })
-  scope?: RowLevelPermissionPredicateScope | null;
-
   @Field(() => Number, { nullable: true })
   positionInRowLevelPermissionPredicateGroup?: number | null;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canReadRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canUpdateRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canSoftDeleteRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canDestroyRecords?: boolean;
 }
 
 @InputType()
@@ -109,4 +128,29 @@ export class UpsertRowLevelPermissionPredicatesInput {
   @Type(() => RowLevelPermissionPredicateGroupInput)
   @Field(() => [RowLevelPermissionPredicateGroupInput])
   predicateGroups: RowLevelPermissionPredicateGroupInput[];
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canCreateRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canReadRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canUpdateRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canSoftDeleteRecords?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  @Field(() => Boolean, { nullable: true })
+  canDestroyRecords?: boolean;
 }

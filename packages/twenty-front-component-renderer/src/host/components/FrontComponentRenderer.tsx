@@ -1,135 +1,242 @@
-import { FrontComponentErrorEffect } from '@/remote/components/FrontComponentErrorEffect';
-import { FrontComponentInitializeHostCommunicationApiEffect } from '@/remote/components/FrontComponentInitializeHostCommunicationApiEffect';
-import { FrontComponentUpdateContextEffect } from '@/remote/components/FrontComponentUpdateContextEffect';
-import { FrontComponentUpdateHostCommunicationApiEffect } from '@/remote/components/FrontComponentUpdateHostCommunicationApiEffect';
+import { ROOT_CONTAINER_STYLE } from '@/host/constants/RootContainerStyle';
+import { FrontComponentRemoteRootRenderer } from '@/host/components/FrontComponentRemoteRootRenderer';
+import { FrontComponentPointerCaptureControllerContext } from '@/host/events/contexts/FrontComponentPointerCaptureControllerContext';
+import { createHostOutsidePressController } from '@/host/events/utils/createHostOutsidePressController';
+import { createHostPointerCaptureController } from '@/host/events/utils/createHostPointerCaptureController';
+import { FrontComponentGeometryTrackerContext } from '@/host/geometry/contexts/FrontComponentGeometryTrackerContext';
+import { createGeometryTracker } from '@/host/geometry/utils/createGeometryTracker';
+import { FrontComponentHostFocusControllerContext } from '@/host/focus/contexts/FrontComponentHostFocusControllerContext';
+import { createHostFocusController } from '@/host/focus/utils/createHostFocusController';
+import { FrontComponentHostScrollControllerContext } from '@/host/scroll/contexts/FrontComponentHostScrollControllerContext';
+import { createHostScrollController } from '@/host/scroll/utils/createHostScrollController';
+import { FrontComponentConfirmationModalResultEffect } from '@/host/effect-components/FrontComponentConfirmationModalResultEffect';
+import { FrontComponentErrorEffect } from '@/host/effect-components/FrontComponentErrorEffect';
+import { FrontComponentFocusTrackerEffect } from '@/host/effect-components/FrontComponentFocusTrackerEffect';
+import { FrontComponentGeometryTrackerEffect } from '@/host/effect-components/FrontComponentGeometryTrackerEffect';
+import { FrontComponentInitializeHostCommunicationApiEffect } from '@/host/effect-components/FrontComponentInitializeHostCommunicationApiEffect';
+import { FrontComponentMediaSessionEffect } from '@/host/effect-components/FrontComponentMediaSessionEffect';
+import { FrontComponentPointerCaptureEffect } from '@/host/effect-components/FrontComponentPointerCaptureEffect';
+import { FrontComponentOutsidePressEffect } from '@/host/effect-components/FrontComponentOutsidePressEffect';
+import { FrontComponentPreventPageZoomEffect } from '@/host/effect-components/FrontComponentPreventPageZoomEffect';
+import { FrontComponentUpdateContextEffect } from '@/host/effect-components/FrontComponentUpdateContextEffect';
+import { FrontComponentUpdateHostCommunicationApiEffect } from '@/host/effect-components/FrontComponentUpdateHostCommunicationApiEffect';
+import { type FrontComponentMediaSessionHost } from '@/host/media/types/FrontComponentMediaSessionHost';
 import { type FrontComponentHostCommunicationApi } from '@/types/FrontComponentHostCommunicationApi';
-import { type SdkClientUrls } from '@/types/HostToWorkerRenderContext';
-import { type WorkerExports } from '@/types/WorkerExports';
+import { type FrontComponentThread } from '@/types/FrontComponentThread';
+import { type SdkClientSources } from '@/types/SdkClientSources';
+import { type SdkClientUrls } from '@/types/SdkClientUrls';
 import { type FrontComponentExecutionContext } from 'twenty-sdk/front-component';
-import { type ThreadWebWorker } from '@quilted/threads';
-import {
-  type RemoteReceiver,
-  RemoteRootRenderer,
-} from '@remote-dom/react/host';
-import { useMemo, useState } from 'react';
+import { type RemoteReceiver } from '@remote-dom/react/host';
+import { type ReactNode, useState } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { isDefined } from 'twenty-shared/utils';
 
-import { ThemeProvider } from 'twenty-ui/theme-constants';
-import { FrontComponentWorkerEffect } from '../../remote/components/FrontComponentWorkerEffect';
-import { componentRegistry } from '../generated/host-component-registry';
+import { ThemeProvider } from 'twenty-ui/theme';
+import { FrontComponentWorkerEffect } from '@/host/effect-components/FrontComponentWorkerEffect';
+import { componentRegistry } from '@/host/generated/host-component-registry';
+import { createFallbackComponentRegistry } from '@/host/utils/createFallbackComponentRegistry';
+import { FrontComponentErrorBox } from '@/host/components/FrontComponentErrorBox';
 
-type FrontComponentContentProps = {
+const fallbackComponentRegistry =
+  createFallbackComponentRegistry(componentRegistry);
+
+type FrontComponentRendererProps = {
   componentUrl: string;
+  componentSource?: string;
+  componentProps?: Record<string, unknown>;
+  sharedDependenciesSource?: string;
+  onReady?: () => void;
   applicationAccessToken?: string;
   apiUrl?: string;
+  functionsBaseUrl?: string;
   sdkClientUrls?: SdkClientUrls;
+  sdkClientSources?: SdkClientSources;
+  sharedDependenciesUrl?: string;
   applicationVariables?: Record<string, string>;
+  storageNamespace?: string;
   executionContext: FrontComponentExecutionContext;
   frontComponentHostCommunicationApi: FrontComponentHostCommunicationApi;
+  mediaSessionHost?: FrontComponentMediaSessionHost;
   onError: (error?: Error) => void;
   colorScheme: 'light' | 'dark';
+  loadingFallback?: ReactNode;
+  shouldPreventPageZoom?: boolean;
 };
 
 export const FrontComponentRenderer = ({
   componentUrl,
+  componentSource,
+  componentProps,
+  sharedDependenciesSource,
+  onReady,
   applicationAccessToken,
   apiUrl,
+  functionsBaseUrl,
   sdkClientUrls,
+  sdkClientSources,
+  sharedDependenciesUrl,
   applicationVariables,
+  storageNamespace,
   executionContext,
   frontComponentHostCommunicationApi,
+  mediaSessionHost,
   onError,
   colorScheme,
-}: FrontComponentContentProps) => {
+  loadingFallback,
+  shouldPreventPageZoom = false,
+}: FrontComponentRendererProps) => {
   const [receiver, setReceiver] = useState<RemoteReceiver | null>(null);
-  const [thread, setThread] = useState<ThreadWebWorker<
-    WorkerExports,
-    FrontComponentHostCommunicationApi
-  > | null>(null);
+  const [thread, setThread] = useState<FrontComponentThread | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [isExecutionContextInitialized, setIsExecutionContextInitialized] =
     useState(false);
+  const [geometryTracker] = useState(() => createGeometryTracker());
+  const [hostFocusController] = useState(() =>
+    createHostFocusController({ geometryTracker }),
+  );
+  const [hostScrollController] = useState(() =>
+    createHostScrollController({ geometryTracker }),
+  );
+  const [pointerCaptureController] = useState(() =>
+    createHostPointerCaptureController({ geometryTracker }),
+  );
+  const [outsidePressController] = useState(() =>
+    createHostOutsidePressController({
+      geometryTracker,
+      pointerCaptureController,
+    }),
+  );
+  const [initialExecutionContext] = useState(executionContext);
 
-  const MemoizedFrontComponentWorkerEffect = useMemo(() => {
-    return (
-      <FrontComponentWorkerEffect
-        componentUrl={componentUrl}
-        applicationAccessToken={applicationAccessToken}
-        apiUrl={apiUrl}
-        sdkClientUrls={sdkClientUrls}
-        applicationVariables={applicationVariables}
-        frontComponentId={executionContext.frontComponentId}
-        setReceiver={setReceiver}
-        setThread={setThread}
-        setError={setError}
-      />
-    );
-  }, [
-    componentUrl,
-    setError,
-    setReceiver,
-    setThread,
-    applicationAccessToken,
-    apiUrl,
-    sdkClientUrls,
-    applicationVariables,
-    executionContext.frontComponentId,
-  ]);
+  const isReady = isDefined(receiver) && isExecutionContextInitialized;
 
   return (
-    <>
-      {MemoizedFrontComponentWorkerEffect}
-
-      {isDefined(error) && (
-        <>
-          <FrontComponentErrorEffect error={error} onError={onError} />
-          <div
-            style={{
-              padding: '12px 16px',
-              backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '6px',
-              color: '#991b1b',
-              fontFamily: 'monospace',
-              fontSize: '13px',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: '200px',
-              overflow: 'auto',
-            }}
-          >
-            <strong>FrontComponent error:</strong> {error.message}
-          </div>
-        </>
-      )}
-
-      {isDefined(thread) && (
-        <>
-          <FrontComponentUpdateHostCommunicationApiEffect
-            thread={thread}
-            frontComponentHostCommunicationApi={
-              frontComponentHostCommunicationApi
-            }
+    <FrontComponentGeometryTrackerContext.Provider value={geometryTracker}>
+      <div
+        ref={geometryTracker.setRoot}
+        style={ROOT_CONTAINER_STYLE}
+        onPointerDown={outsidePressController.forwardUnhandledOwnedPress}
+        onPointerUp={outsidePressController.forwardUnhandledOwnedPress}
+        onPointerCancel={outsidePressController.forwardUnhandledOwnedPress}
+        onMouseDown={outsidePressController.forwardUnhandledOwnedPress}
+        onMouseUp={outsidePressController.forwardUnhandledOwnedPress}
+        onClick={outsidePressController.forwardUnhandledOwnedPress}
+      >
+        {shouldPreventPageZoom && (
+          <FrontComponentPreventPageZoomEffect
+            geometryTracker={geometryTracker}
           />
-          <FrontComponentInitializeHostCommunicationApiEffect thread={thread} />
-          <FrontComponentUpdateContextEffect
-            thread={thread}
-            executionContext={executionContext}
-            onExecutionContextInitialized={() =>
-              setIsExecutionContextInitialized(true)
-            }
-          />
-        </>
-      )}
+        )}
+        <FrontComponentWorkerEffect
+          componentUrl={componentUrl}
+          componentSource={componentSource}
+          componentProps={componentProps}
+          sharedDependenciesSource={sharedDependenciesSource}
+          onReady={onReady}
+          applicationAccessToken={applicationAccessToken}
+          apiUrl={apiUrl}
+          functionsBaseUrl={functionsBaseUrl}
+          sdkClientUrls={sdkClientUrls}
+          sdkClientSources={sdkClientSources}
+          sharedDependenciesUrl={sharedDependenciesUrl}
+          applicationVariables={applicationVariables}
+          storageNamespace={storageNamespace}
+          initialExecutionContext={initialExecutionContext}
+          geometryTracker={geometryTracker}
+          hostFocusController={hostFocusController}
+          hostScrollController={hostScrollController}
+          outsidePressController={outsidePressController}
+          mediaSessionHost={mediaSessionHost}
+          setReceiver={setReceiver}
+          setThread={setThread}
+          setError={setError}
+        />
 
-      {isDefined(receiver) && isExecutionContextInitialized && (
-        <ThemeProvider colorScheme={colorScheme}>
-          <RemoteRootRenderer
-            receiver={receiver}
-            components={componentRegistry}
-          />
-        </ThemeProvider>
-      )}
-    </>
+        {isDefined(error) && (
+          <ThemeProvider colorScheme={colorScheme}>
+            <FrontComponentErrorEffect error={error} onError={onError} />
+            <FrontComponentErrorBox error={error} />
+          </ThemeProvider>
+        )}
+
+        {isDefined(thread) && (
+          <>
+            <FrontComponentUpdateHostCommunicationApiEffect
+              thread={thread}
+              frontComponentHostCommunicationApi={
+                frontComponentHostCommunicationApi
+              }
+            />
+            <FrontComponentInitializeHostCommunicationApiEffect
+              thread={thread}
+            />
+            <FrontComponentGeometryTrackerEffect
+              thread={thread}
+              geometryTracker={geometryTracker}
+            />
+            <FrontComponentFocusTrackerEffect
+              thread={thread}
+              geometryTracker={geometryTracker}
+            />
+            <FrontComponentPointerCaptureEffect
+              thread={thread}
+              pointerCaptureController={pointerCaptureController}
+            />
+            <FrontComponentOutsidePressEffect
+              thread={thread}
+              outsidePressController={outsidePressController}
+            />
+            {isDefined(mediaSessionHost) && (
+              <FrontComponentMediaSessionEffect
+                thread={thread}
+                mediaSessionHost={mediaSessionHost}
+              />
+            )}
+            <FrontComponentUpdateContextEffect
+              thread={thread}
+              executionContext={executionContext}
+              onExecutionContextInitialized={() =>
+                setIsExecutionContextInitialized(true)
+              }
+            />
+            <FrontComponentConfirmationModalResultEffect
+              thread={thread}
+              frontComponentId={executionContext.frontComponentId}
+              onError={setError}
+            />
+          </>
+        )}
+
+        {!isDefined(error) && !isReady && loadingFallback}
+
+        {isReady && (
+          <ThemeProvider colorScheme={colorScheme}>
+            <ErrorBoundary
+              onError={setError}
+              onReset={() => setError(null)}
+              resetKeys={[componentUrl]}
+              fallbackRender={() => null}
+            >
+              <FrontComponentHostFocusControllerContext.Provider
+                value={hostFocusController}
+              >
+                <FrontComponentHostScrollControllerContext.Provider
+                  value={hostScrollController}
+                >
+                  <FrontComponentPointerCaptureControllerContext.Provider
+                    value={pointerCaptureController}
+                  >
+                    <FrontComponentRemoteRootRenderer
+                      receiver={receiver}
+                      components={fallbackComponentRegistry}
+                    />
+                  </FrontComponentPointerCaptureControllerContext.Provider>
+                </FrontComponentHostScrollControllerContext.Provider>
+              </FrontComponentHostFocusControllerContext.Provider>
+            </ErrorBoundary>
+          </ThemeProvider>
+        )}
+      </div>
+    </FrontComponentGeometryTrackerContext.Provider>
   );
 };

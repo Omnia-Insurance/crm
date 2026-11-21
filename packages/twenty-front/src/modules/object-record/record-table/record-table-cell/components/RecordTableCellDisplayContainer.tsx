@@ -1,7 +1,8 @@
-import { t } from '@lingui/core/macro';
+import { RECORD_TABLE_CELL_DISPLAY_CLASS_NAME } from '@/object-record/record-table/constants/RecordTableCellDisplayClassName';
 import { styled } from '@linaria/react';
 import { type Ref } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledOuterContainer = styled.div`
   align-items: center;
@@ -42,21 +43,25 @@ export const RecordTableCellDisplayContainer = ({
   scrollRef,
   onContextMenu,
   placeholderForEmptyCell,
-}: React.PropsWithChildren<EditableCellDisplayContainerProps>) => (
-  <StyledOuterContainer
-    data-testid={
-      focus ? 'editable-cell-focus-mode' : 'editable-cell-display-mode'
-    }
-    onClick={onClick}
-    ref={scrollRef}
-    onContextMenu={onContextMenu}
-  >
-    {placeholderForEmptyCell ? (
-      <StyledEmptyPlaceholderField>
-        {t`Set ${placeholderForEmptyCell}`}
-      </StyledEmptyPlaceholderField>
-    ) : (
-      <StyledInnerContainer>{children}</StyledInnerContainer>
-    )}
-  </StyledOuterContainer>
-);
+}: React.PropsWithChildren<EditableCellDisplayContainerProps>) => {
+  const { t } = useLingui();
+  return (
+    <StyledOuterContainer
+      className={RECORD_TABLE_CELL_DISPLAY_CLASS_NAME}
+      data-testid={
+        focus ? 'editable-cell-focus-mode' : 'editable-cell-display-mode'
+      }
+      onClick={onClick}
+      ref={scrollRef}
+      onContextMenu={onContextMenu}
+    >
+      {placeholderForEmptyCell ? (
+        <StyledEmptyPlaceholderField>
+          {t`Set ${placeholderForEmptyCell}`}
+        </StyledEmptyPlaceholderField>
+      ) : (
+        <StyledInnerContainer>{children}</StyledInnerContainer>
+      )}
+    </StyledOuterContainer>
+  );
+};

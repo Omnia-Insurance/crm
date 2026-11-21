@@ -27,14 +27,14 @@ describe('processGroupByConnectionWithRecords', () => {
     __ref: 'Person:123',
   };
 
-  const mockReadField = jest.fn(
-    (fieldName: any, from: any, ..._args: any[]) => {
+  const mockReadField: ReadFieldFunction = jest.fn(
+    (fieldName: any, from?: any): any => {
       if (fieldName === 'id' && from === mockReference) {
         return '123';
       }
       return undefined;
     },
-  ) as unknown as ReadFieldFunction;
+  );
 
   const mockToReference: ToReferenceFunction = jest.fn(() => mockReference);
 
@@ -55,6 +55,7 @@ describe('processGroupByConnectionWithRecords', () => {
       groupByDimensionValues: [],
       groupByConfig: undefined,
       objectMetadataItem: mockObjectMetadataItem,
+      objectMetadataItems: [mockObjectMetadataItem],
       readField: mockReadField,
       toReference: mockToReference,
     });
@@ -80,6 +81,7 @@ describe('processGroupByConnectionWithRecords', () => {
       groupByDimensionValues: [],
       groupByConfig: undefined,
       objectMetadataItem: mockObjectMetadataItem,
+      objectMetadataItems: [mockObjectMetadataItem],
       readField: mockReadField,
       toReference: mockToReference,
     });
@@ -111,6 +113,7 @@ describe('processGroupByConnectionWithRecords', () => {
       groupByDimensionValues: [],
       groupByConfig: undefined,
       objectMetadataItem: mockObjectMetadataItem,
+      objectMetadataItems: [mockObjectMetadataItem],
       readField: mockReadField,
       toReference: mockToReference,
     });

@@ -2,8 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
+import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
 type OldCrmPolicyPayload = Record<string, unknown> & {
@@ -144,14 +146,17 @@ export class OldCrmPolicyPreprocessor {
   private leadSourceCache = new Map<string, string | null>();
   private leadDetailCache = new Map<string, Record<string, unknown> | null>();
 
+  // Repositories skip permission checks: ingestion is system work, and the
+  // jobs run preprocessors in a system auth context
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly secureHttpClientService: SecureHttpClientService,
   ) {}
 
   async preProcess(
     payload: OldCrmPolicyPayload,
     pipeline: IngestionPipelineEntity,
-    workspaceId: string,
+    _workspaceId: string,
   ): Promise<Record<string, unknown> | null> {
     // Filter out records where reg_date is not today (Eastern time)
     if (!this.isToday(payload.reg_date)) {
@@ -167,13 +172,12 @@ export class OldCrmPolicyPreprocessor {
     if (payload.policy_number) {
       const existingByAppId = await this.findPolicyByApplicationId(
         payload.policy_number,
-        workspaceId,
       );
 
       if (existingByAppId) {
         this.logger.log(
-          `Skipping policy ${payload.policy_id}: policy_number "${payload.policy_number}" ` +
-            `matches existing policy ${existingByAppId} by applicationId`,
+          `Skipping policy ${payload.policy_id}: its policy number matches ` +
+            `the applicationId of existing policy ${existingByAppId}`,
         );
 
         return null;
@@ -182,12 +186,12 @@ export class OldCrmPolicyPreprocessor {
 
     // Resolve lead source from vendor_name (needed before person creation)
     const leadSourceId = payload.vendor_name
-      ? await this.findOrCreateLeadSource(payload.vendor_name, workspaceId)
+      ? await this.findOrCreateLeadSource(payload.vendor_name)
       : null;
 
     // Resolve agent by name (fuzzy) — needed for both person and policy
     const agentId = payload.member_name
-      ? await this.findAgentByName(payload.member_name, workspaceId)
+      ? await this.findAgentByName(payload.member_name)
       : null;
 
     if (payload.member_name && !agentId) {
@@ -209,38 +213,34 @@ export class OldCrmPolicyPreprocessor {
       leadDetails,
       leadSourceId,
       agentId,
-      workspaceId,
     );
 
     if (!personId) {
-      this.logger.warn(
-        `No person found for policy ${payload.policy_id} (phone: ${payload.phone})`,
-      );
+      this.logger.warn(`No person found for policy ${payload.policy_id}`);
 
       return null;
     }
 
     // Create family members from lead details
     if (leadDetails) {
-      await this.createFamilyMembers(leadDetails, personId, workspaceId);
+      await this.createFamilyMembers(leadDetails, personId);
     }
 
     // Resolve carrier
     const carrierId = payload.carrier_name
-      ? await this.findOrCreateCarrier(payload.carrier_name, workspaceId)
+      ? await this.findOrCreateCarrier(payload.carrier_name)
       : null;
 
     // Resolve product
     const productId = payload.product_name
-      ? await this.findOrCreateProduct(payload.product_name, workspaceId)
+      ? await this.findOrCreateProduct(payload.product_name)
       : null;
 
     // Look up LTV from CarrierProduct commission
     const ltvCommission = await lookupCarrierProductCommission(
       carrierId,
       productId,
-      workspaceId,
-      this.globalWorkspaceOrmManager,
+      this.workspaceOrmManager,
     );
 
     // Map status
@@ -280,7 +280,7 @@ export class OldCrmPolicyPreprocessor {
     const submittedDate = this.parseDateTimeAsEastern(payload.reg_date);
 
     this.logger.log(
-      `Policy ${payload.policy_number}: personId=${personId}, agentId=${agentId}, carrierId=${carrierId}, productId=${productId}`,
+      `Policy ${payload.policy_id}: personId=${personId}, agentId=${agentId}, carrierId=${carrierId}, productId=${productId}`,
     );
 
     // leadSource is set directly on the person/lead, not on the policy
@@ -310,7 +310,9 @@ export class OldCrmPolicyPreprocessor {
   ): Promise<Record<string, unknown> | null> {
     const cached = this.leadDetailCache.get(leadId);
 
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
     const headers = this.buildAuthHeaders(pipeline);
 
@@ -330,12 +332,16 @@ export class OldCrmPolicyPreprocessor {
     }
 
     try {
-      const response = await fetch(`${baseUrl}/lead/details/${leadId}`, {
-        method: 'GET',
+      // SSRF-safe: the base URL comes from the admin-configured source URL
+      const response = await this.secureHttpClientService.getHttpClient().get<{
+        status?: number;
+        response?: { data?: Record<string, unknown> };
+      }>(`${baseUrl}/lead/details/${encodeURIComponent(leadId)}`, {
         headers,
+        validateStatus: () => true,
       });
 
-      if (!response.ok) {
+      if (response.status < 200 || response.status >= 300) {
         this.logger.warn(
           `Lead details API returned ${response.status} for lead_id ${leadId}`,
         );
@@ -344,12 +350,9 @@ export class OldCrmPolicyPreprocessor {
         return null;
       }
 
-      const json = (await response.json()) as {
-        status?: number;
-        response?: { data?: Record<string, unknown> };
-      };
+      const json = response.data;
 
-      if (json.status !== 1 || !json.response?.data) {
+      if (json?.status !== 1 || !json.response?.data) {
         this.logger.warn(
           `Lead details API returned no data for lead_id ${leadId}`,
         );
@@ -410,7 +413,9 @@ export class OldCrmPolicyPreprocessor {
   }
 
   private getBaseUrl(sourceUrl: string | null): string | null {
-    if (!sourceUrl) return null;
+    if (!sourceUrl) {
+      return null;
+    }
 
     try {
       const url = new URL(sourceUrl);
@@ -432,17 +437,13 @@ export class OldCrmPolicyPreprocessor {
     leadDetails: Record<string, unknown> | null,
     leadSourceId: string | null,
     agentId: string | null,
-    workspaceId: string,
   ): Promise<string | null> {
     if (!normalizedPhone) {
       return null;
     }
 
-    const personRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
+    const personRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('person');
 
     const existing = await personRepo.findOne({
       where: {
@@ -453,8 +454,8 @@ export class OldCrmPolicyPreprocessor {
     });
 
     if (existing) {
-      const existingRecord = existing as Record<string, unknown>;
-      const existingId = existingRecord.id as string;
+      const existingRecord: Record<string, unknown> = existing;
+      const existingId = existing.id;
 
       // Enrich existing person if it has empty name
       const existingName = existingRecord.name as
@@ -477,7 +478,7 @@ export class OldCrmPolicyPreprocessor {
             this.logger.log(`Enriched Person ${existingId} with lead details`);
           } catch (error) {
             this.logger.warn(
-              `Failed to enrich Person ${existingId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              `Failed to enrich Person ${existingId}: ${getIngestionErrorLogLabel(error)}`,
             );
           }
         }
@@ -498,7 +499,7 @@ export class OldCrmPolicyPreprocessor {
             await personRepo.update(existingId, updates);
           } catch (error) {
             this.logger.warn(
-              `Failed to update Person ${existingId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              `Failed to update Person ${existingId}: ${getIngestionErrorLogLabel(error)}`,
             );
           }
         }
@@ -523,9 +524,8 @@ export class OldCrmPolicyPreprocessor {
       });
 
       if (existingByEmail) {
-        const existingRecord = existingByEmail as Record<string, unknown>;
-        const existingId = existingRecord.id as string;
-        const existingName = existingRecord.name as
+        const existingId = existingByEmail.id;
+        const existingName = existingByEmail.name as
           | Record<string, string>
           | undefined;
 
@@ -552,14 +552,14 @@ export class OldCrmPolicyPreprocessor {
 
         if (existingLast === incomingLast && existingFirst === incomingFirst) {
           this.logger.log(
-            `Found Person ${existingId} by email fallback (${email}), phone mismatch: expected ${normalizedPhone}`,
+            `Found Person ${existingId} by email fallback (phone mismatch)`,
           );
 
           return existingId;
         }
 
         this.logger.warn(
-          `Email fallback matched Person ${existingId} (${existingFirst} ${existingLast}) but name doesn't match incoming (${incomingFirst} ${incomingLast}) — skipping`,
+          `Email fallback matched Person ${existingId} but the incoming name differs, skipping`,
         );
       }
     }
@@ -574,19 +574,19 @@ export class OldCrmPolicyPreprocessor {
         agentId,
       );
 
-      const created = await personRepo.save(personData);
-      const createdId = (created as Record<string, unknown>).id as string;
-      const firstName = (personData.name as Record<string, string>)?.firstName;
-      const lastName = (personData.name as Record<string, string>)?.lastName;
+      const [created] = await personRepo.save(personData);
 
-      this.logger.log(
-        `Created Person ${createdId}: ${firstName} ${lastName} (${normalizedPhone})`,
-      );
+      // Without an id the policy would silently lose its lead link
+      if (!isDefined(created)) {
+        throw new Error('Person save returned no record');
+      }
 
-      return createdId;
+      this.logger.log(`Created Person ${created.id}`);
+
+      return created.id;
     } catch (error) {
       this.logger.error(
-        `Failed to create Person for phone ${normalizedPhone}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to create Person for policy ${payload.policy_id}: ${getIngestionErrorLogLabel(error)}`,
       );
 
       return null;
@@ -665,9 +665,15 @@ export class OldCrmPolicyPreprocessor {
         addr.addressStreet2 = addressOther;
       }
 
-      if (city) addr.addressCity = city;
-      if (stateName) addr.addressState = stateName;
-      if (zipcode) addr.addressPostcode = zipcode;
+      if (city) {
+        addr.addressCity = city;
+      }
+      if (stateName) {
+        addr.addressState = stateName;
+      }
+      if (zipcode) {
+        addr.addressPostcode = zipcode;
+      }
 
       personData.addressCustom = addr;
     }
@@ -780,9 +786,15 @@ export class OldCrmPolicyPreprocessor {
         addr.addressStreet2 = addressOther;
       }
 
-      if (city) addr.addressCity = city;
-      if (stateName) addr.addressState = stateName;
-      if (zipcode) addr.addressPostcode = zipcode;
+      if (city) {
+        addr.addressCity = city;
+      }
+      if (stateName) {
+        addr.addressState = stateName;
+      }
+      if (zipcode) {
+        addr.addressPostcode = zipcode;
+      }
 
       updates.addressCustom = addr;
     }
@@ -834,7 +846,6 @@ export class OldCrmPolicyPreprocessor {
   private async createFamilyMembers(
     leadDetails: Record<string, unknown>,
     personId: string,
-    workspaceId: string,
   ): Promise<void> {
     const family = leadDetails.lead_family as
       | Array<Record<string, unknown>>
@@ -847,11 +858,10 @@ export class OldCrmPolicyPreprocessor {
     let familyMemberRepo;
 
     try {
-      familyMemberRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        'familyMember',
-        { shouldBypassPermissionChecks: true },
-      );
+      familyMemberRepo =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          'familyMember',
+        );
     } catch {
       // familyMember object might not exist in this workspace
       return;
@@ -879,14 +889,16 @@ export class OldCrmPolicyPreprocessor {
         await familyMemberRepo.save(fmData);
       } catch (error) {
         this.logger.warn(
-          `Failed to create family member "${fullName}" for person ${personId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to create family member for Person ${personId}: ${getIngestionErrorLogLabel(error)}`,
         );
       }
     }
   }
 
   private isValidEmail(email: string): boolean {
-    if (!email) return false;
+    if (!email) {
+      return false;
+    }
 
     const e = email.trim().toLowerCase();
 
@@ -959,7 +971,9 @@ export class OldCrmPolicyPreprocessor {
   }
 
   private normalizePhone(phone: string | undefined): string | null {
-    if (!phone) return null;
+    if (!phone) {
+      return null;
+    }
 
     const digits = phone.toString().replace(/\D/g, '');
 
@@ -970,44 +984,43 @@ export class OldCrmPolicyPreprocessor {
     return digits.length === 10 ? digits : null;
   }
 
-  private async findOrCreateCarrier(
-    name: string,
-    workspaceId: string,
-  ): Promise<string | null> {
+  private async findOrCreateCarrier(name: string): Promise<string | null> {
     const trimmedName = name.trim();
 
-    if (!trimmedName) return null;
+    if (!trimmedName) {
+      return null;
+    }
 
     const cached = this.carrierCache.get(trimmedName);
 
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    const carrierRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'carrier',
-      { shouldBypassPermissionChecks: true },
-    );
+    const carrierRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('carrier');
 
     const existing = await carrierRepo.findOne({
       where: { name: trimmedName },
     });
 
     if (existing) {
-      const id = (existing as Record<string, unknown>).id as string;
+      this.carrierCache.set(trimmedName, existing.id);
 
-      this.carrierCache.set(trimmedName, id);
-
-      return id;
+      return existing.id;
     }
 
     try {
-      const created = await carrierRepo.save({ name: trimmedName });
-      const id = (created as Record<string, unknown>).id as string;
+      const [created] = await carrierRepo.save({ name: trimmedName });
+
+      if (!isDefined(created)) {
+        throw new Error('Carrier save returned no record');
+      }
 
       this.logger.log(`Created carrier: ${trimmedName}`);
-      this.carrierCache.set(trimmedName, id);
+      this.carrierCache.set(trimmedName, created.id);
 
-      return id;
+      return created.id;
     } catch (error) {
       this.logger.error(
         `Failed to create carrier "${trimmedName}": ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1018,44 +1031,43 @@ export class OldCrmPolicyPreprocessor {
     }
   }
 
-  private async findOrCreateProduct(
-    name: string,
-    workspaceId: string,
-  ): Promise<string | null> {
+  private async findOrCreateProduct(name: string): Promise<string | null> {
     const trimmedName = name.trim();
 
-    if (!trimmedName) return null;
+    if (!trimmedName) {
+      return null;
+    }
 
     const cached = this.productCache.get(trimmedName);
 
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    const productRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'product',
-      { shouldBypassPermissionChecks: true },
-    );
+    const productRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('product');
 
     const existing = await productRepo.findOne({
       where: { name: trimmedName },
     });
 
     if (existing) {
-      const id = (existing as Record<string, unknown>).id as string;
+      this.productCache.set(trimmedName, existing.id);
 
-      this.productCache.set(trimmedName, id);
-
-      return id;
+      return existing.id;
     }
 
     try {
-      const created = await productRepo.save({ name: trimmedName });
-      const id = (created as Record<string, unknown>).id as string;
+      const [created] = await productRepo.save({ name: trimmedName });
+
+      if (!isDefined(created)) {
+        throw new Error('Product save returned no record');
+      }
 
       this.logger.log(`Created product: ${trimmedName}`);
-      this.productCache.set(trimmedName, id);
+      this.productCache.set(trimmedName, created.id);
 
-      return id;
+      return created.id;
     } catch (error) {
       this.logger.error(
         `Failed to create product "${trimmedName}": ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1066,44 +1078,45 @@ export class OldCrmPolicyPreprocessor {
     }
   }
 
-  private async findOrCreateLeadSource(
-    name: string,
-    workspaceId: string,
-  ): Promise<string | null> {
+  private async findOrCreateLeadSource(name: string): Promise<string | null> {
     const trimmedName = name.trim();
 
-    if (!trimmedName) return null;
+    if (!trimmedName) {
+      return null;
+    }
 
     const cached = this.leadSourceCache.get(trimmedName);
 
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    const leadSourceRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'leadSource',
-      { shouldBypassPermissionChecks: true },
-    );
+    const leadSourceRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'leadSource',
+      );
 
     const existing = await leadSourceRepo.findOne({
       where: { name: trimmedName },
     });
 
     if (existing) {
-      const id = (existing as Record<string, unknown>).id as string;
+      this.leadSourceCache.set(trimmedName, existing.id);
 
-      this.leadSourceCache.set(trimmedName, id);
-
-      return id;
+      return existing.id;
     }
 
     try {
-      const created = await leadSourceRepo.save({ name: trimmedName });
-      const id = (created as Record<string, unknown>).id as string;
+      const [created] = await leadSourceRepo.save({ name: trimmedName });
+
+      if (!isDefined(created)) {
+        throw new Error('Lead Source save returned no record');
+      }
 
       this.logger.log(`Created Lead Source: ${trimmedName}`);
-      this.leadSourceCache.set(trimmedName, id);
+      this.leadSourceCache.set(trimmedName, created.id);
 
-      return id;
+      return created.id;
     } catch (error) {
       this.logger.error(
         `Failed to create Lead Source "${trimmedName}": ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -1114,26 +1127,26 @@ export class OldCrmPolicyPreprocessor {
     }
   }
 
-  private async findAgentByName(
-    name: string,
-    workspaceId: string,
-  ): Promise<string | null> {
+  private async findAgentByName(name: string): Promise<string | null> {
     const trimmedName = name.trim();
 
-    if (!trimmedName) return null;
+    if (!trimmedName) {
+      return null;
+    }
 
     const cached = this.agentCache.get(trimmedName);
 
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
-    const agentRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'agentProfile',
-      { shouldBypassPermissionChecks: true },
-    );
+    const agentRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+        'agentProfile',
+      );
 
     // Fuzzy match: find agents whose name contains the search string
-    const agents = (await agentRepo.find()) as Array<Record<string, unknown>>;
+    const agents: Record<string, unknown>[] = await agentRepo.find();
 
     this.logger.log(
       `Agent lookup for "${trimmedName}": found ${agents.length} agent profiles`,
@@ -1144,7 +1157,9 @@ export class OldCrmPolicyPreprocessor {
       // name is a plain string field, not a composite {firstName, lastName}
       const agentName = ((agent.name as string) || '').trim().toLowerCase();
 
-      if (!agentName) return false;
+      if (!agentName) {
+        return false;
+      }
 
       return agentName.includes(searchLower) || searchLower.includes(agentName);
     });
@@ -1169,22 +1184,14 @@ export class OldCrmPolicyPreprocessor {
 
   private async findPolicyByApplicationId(
     applicationId: string,
-    workspaceId: string,
   ): Promise<string | null> {
-    const policyRepo = await this.globalWorkspaceOrmManager.getRepository(
-      workspaceId,
-      'policy',
-      { shouldBypassPermissionChecks: true },
-    );
+    const policyRepo =
+      this.workspaceOrmManager.getRepositoryWithoutPermissionChecks('policy');
 
     const existing = await policyRepo.findOne({
       where: { applicationId },
     });
 
-    if (isDefined(existing)) {
-      return (existing as Record<string, unknown>).id as string;
-    }
-
-    return null;
+    return existing?.id ?? null;
   }
 }

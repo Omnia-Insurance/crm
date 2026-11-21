@@ -1,27 +1,29 @@
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import {
   IconCheckbox,
   type IconComponent,
   IconId,
   IconListDetails,
-} from 'twenty-ui/display';
+} from 'twenty-ui/icon';
 
 export const MANUAL_TRIGGER_AVAILABILITY_TYPE_OPTIONS: Array<{
-  label: string;
+  label: MessageDescriptor;
   value: 'GLOBAL' | 'SINGLE_RECORD' | 'BULK_RECORDS';
   Icon: IconComponent;
 }> = [
   {
-    label: 'Global',
+    label: msg`Global`,
     value: 'GLOBAL',
     Icon: IconCheckbox,
   },
   {
-    label: 'Single',
+    label: msg`Single`,
     value: 'SINGLE_RECORD',
     Icon: IconId,
   },
   {
-    label: 'Bulk',
+    label: msg`Bulk`,
     value: 'BULK_RECORDS',
     Icon: IconListDetails,
   },

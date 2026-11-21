@@ -1,4 +1,5 @@
 import { useDuplicateFieldsWidgetForPageLayout } from '@/page-layout/hooks/useDuplicateFieldsWidgetForPageLayout';
+import { useDuplicateRecordTableWidgetForPageLayout } from '@/page-layout/hooks/useDuplicateRecordTableWidgetForPageLayout';
 import { PageLayoutComponentInstanceContext } from '@/page-layout/states/contexts/PageLayoutComponentInstanceContext';
 import { pageLayoutCurrentLayoutsComponentState } from '@/page-layout/states/pageLayoutCurrentLayoutsComponentState';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
@@ -6,15 +7,14 @@ import { pageLayoutEditingWidgetIdComponentState } from '@/page-layout/states/pa
 import { type PageLayoutWidget } from '@/page-layout/types/PageLayoutWidget';
 import { addWidgetToTab } from '@/page-layout/utils/addWidgetToTab';
 import { generateDuplicatedTimestamps } from '@/page-layout/utils/generateDuplicatedTimestamps';
-import { getScrollWrapperInstanceIdFromPageLayoutId } from '@/page-layout/utils/getScrollWrapperInstanceIdFromPageLayoutId';
 import { getUpdatedTabLayouts } from '@/page-layout/utils/getUpdatedTabLayouts';
-import { useScrollWrapperHTMLElement } from '@/ui/utilities/scroll/hooks/useScrollWrapperHTMLElement';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { appendCopySuffix, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { v4 as uuidv4 } from 'uuid';
 
 export const useDuplicatePageLayoutWidget = (
@@ -40,15 +40,16 @@ export const useDuplicatePageLayoutWidget = (
     pageLayoutId,
   );
 
-  const { getScrollWrapperElement } = useScrollWrapperHTMLElement(
-    getScrollWrapperInstanceIdFromPageLayoutId(pageLayoutId),
-  );
-
   const store = useStore();
 
   const { duplicateFieldsWidget } = useDuplicateFieldsWidgetForPageLayout({
     pageLayoutId,
   });
+
+  const { duplicateRecordTableWidget } =
+    useDuplicateRecordTableWidgetForPageLayout({
+      pageLayoutId,
+    });
 
   const duplicateWidget = useCallback(
     (widgetId: string): string => {
@@ -61,7 +62,7 @@ export const useDuplicatePageLayoutWidget = (
         .find((widget) => widget.id === widgetId);
 
       if (!isDefined(sourceWidget)) {
-        throw new Error(`Widget with id ${widgetId} not found`);
+        throw new Error(doNotTranslate(`Widget with id ${widgetId} not found`));
       }
 
       const sourceTab = pageLayoutDraft.tabs.find(
@@ -70,21 +71,22 @@ export const useDuplicatePageLayoutWidget = (
 
       if (!isDefined(sourceTab)) {
         throw new Error(
-          `Tab with id ${sourceWidget.pageLayoutTabId} not found`,
+          doNotTranslate(
+            `Tab with id ${sourceWidget.pageLayoutTabId} not found`,
+          ),
         );
       }
 
       const newWidgetId = uuidv4();
 
-      const fieldsWidgetCopyResult = duplicateFieldsWidget({
-        sourceWidget,
-        newWidgetId,
-      });
+      const widgetViewCopyResult =
+        duplicateFieldsWidget({ sourceWidget, newWidgetId }) ??
+        duplicateRecordTableWidget({ sourceWidget, newWidgetId });
 
-      const clonedConfiguration = isDefined(fieldsWidgetCopyResult)
+      const clonedConfiguration = isDefined(widgetViewCopyResult)
         ? {
             ...sourceWidget.configuration,
-            viewId: fieldsWidgetCopyResult.newViewId,
+            viewId: widgetViewCopyResult.newViewId,
           }
         : sourceWidget.configuration;
 
@@ -96,20 +98,20 @@ export const useDuplicatePageLayoutWidget = (
         ...generateDuplicatedTimestamps(),
       };
 
-      const currentTabLayouts = allTabLayouts[sourceTab.id] ?? {
-        desktop: [],
-        mobile: [],
-      };
+      const currentTabDesktopLayouts =
+        allTabLayouts[sourceTab.id]?.desktop ?? [];
 
-      const sourceLayout = currentTabLayouts.desktop.find(
+      const sourceLayout = currentTabDesktopLayouts.find(
         (layout) => layout.i === widgetId,
       );
 
       if (!isDefined(sourceLayout)) {
-        throw new Error(`Layout for widget ${widgetId} not found`);
+        throw new Error(
+          doNotTranslate(`Layout for widget ${widgetId} not found`),
+        );
       }
 
-      const maxY = currentTabLayouts.desktop.reduce(
+      const maxY = currentTabDesktopLayouts.reduce(
         (max, layout) => Math.max(max, layout.y + layout.h),
         0,
       );
@@ -135,31 +137,27 @@ export const useDuplicatePageLayoutWidget = (
 
       setPageLayoutEditingWidgetId(newWidgetId);
 
-      const { scrollWrapperElement } = getScrollWrapperElement();
-
-      if (isDefined(scrollWrapperElement)) {
-        requestAnimationFrame(() => {
-          const widgetElement = scrollWrapperElement.querySelector(
-            `[data-widget-id="${newWidgetId}"]`,
-          );
-
-          if (isDefined(widgetElement)) {
+      requestAnimationFrame(() => {
+        // The same page layout can be mounted in the main view and a side panel
+        // at once, so every render of the new widget is brought into view.
+        document
+          .querySelectorAll(`[data-widget-id="${newWidgetId}"]`)
+          .forEach((widgetElement) => {
             widgetElement.scrollIntoView({
               behavior: 'smooth',
               block: 'nearest',
             });
-          }
-        });
-      }
+          });
+      });
 
       return newWidgetId;
     },
     [
       duplicateFieldsWidget,
+      duplicateRecordTableWidget,
       pageLayoutCurrentLayoutsState,
       pageLayoutDraftState,
       setPageLayoutEditingWidgetId,
-      getScrollWrapperElement,
       store,
     ],
   );

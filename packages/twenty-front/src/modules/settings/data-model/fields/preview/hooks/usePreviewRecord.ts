@@ -1,5 +1,8 @@
 import { useLabelIdentifierFieldMetadataItem } from '@/object-metadata/hooks/useLabelIdentifierFieldMetadataItem';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import {
+  StandardObjectNameSingular,
+  type RecordGqlFields,
+} from 'twenty-shared/types';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { isFieldValueEmpty } from '@/object-record/record-field/ui/utils/isFieldValueEmpty';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -22,11 +25,13 @@ export const usePreviewRecord = ({
 
   const skip = skipFromProps || !labelIdentifierFieldMetadataItem;
 
-  let recordGqlFields: Record<string, boolean> | undefined = undefined;
-  if (objectNameSingular === CoreObjectNameSingular.NoteTarget)
+  let recordGqlFields: RecordGqlFields | undefined = undefined;
+  if (objectNameSingular === StandardObjectNameSingular.NoteTarget) {
     recordGqlFields = { id: true, note: true };
-  if (objectNameSingular === CoreObjectNameSingular.TaskTarget)
+  }
+  if (objectNameSingular === StandardObjectNameSingular.TaskTarget) {
     recordGqlFields = { id: true, task: true };
+  }
 
   const { records } = useFindManyRecords({
     objectNameSingular,
@@ -35,7 +40,9 @@ export const usePreviewRecord = ({
     skip,
   });
 
-  if (skip) return null;
+  if (skip) {
+    return null;
+  }
 
   const [firstRecord] = records;
 
@@ -61,6 +68,5 @@ export const usePreviewRecord = ({
     [labelIdentifierFieldMetadataItem.name]: fieldPreviewValue,
   };
 
-  // If no record was found, or if the label identifier field value is empty, display a placeholder record
   return placeholderRecord;
 };

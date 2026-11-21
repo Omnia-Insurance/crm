@@ -7,25 +7,28 @@ export const GET_MY_CONNECTED_ACCOUNTS = gql`
       handle
       provider
       authFailedAt
+      authFailedReason
+      archivedAt
       scopes
       handleAliases
       lastSignedInAt
       userWorkspaceId
       connectionProviderId
+      applicationId
       name
-      visibility
+      scope
       lastCredentialsRefreshedAt
       connectionParameters {
         IMAP {
           host
           port
-          secure
+          connectionSecurity
           username
         }
         SMTP {
           host
           port
-          secure
+          connectionSecurity
           username
         }
         CALDAV {

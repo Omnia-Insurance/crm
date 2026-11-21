@@ -4,7 +4,11 @@ export type IsFilter = 'NULL' | 'NOT_NULL';
 
 export type UUIDFilter = {
   eq?: UUIDFilterValue;
+  gt?: UUIDFilterValue;
+  gte?: UUIDFilterValue;
   in?: UUIDFilterValue[];
+  lt?: UUIDFilterValue;
+  lte?: UUIDFilterValue;
   neq?: UUIDFilterValue;
   is?: IsFilter;
 };
@@ -21,7 +25,11 @@ export type BooleanFilter = {
 
 export type StringFilter = {
   eq?: string;
+  gt?: string;
+  gte?: string;
   in?: string[];
+  lt?: string;
+  lte?: string;
   neq?: string;
   startsWith?: string;
   like?: string;
@@ -35,6 +43,10 @@ export type RatingFilter = {
   eq?: string;
   in?: string[];
   is?: IsFilter;
+  gt?: string;
+  gte?: string;
+  lt?: string;
+  lte?: string;
 };
 
 export type FloatFilter = {
@@ -70,12 +82,24 @@ export type DateTimeFilter = {
   is?: IsFilter;
 };
 
+export type FieldReferenceFilterOperator =
+  | 'gtField'
+  | 'gteField'
+  | 'ltField'
+  | 'lteField';
+
+// "field" on the same record, or "relation.field" through the relation back to
+// the record a relation filter starts from
+export type FieldReferenceFilter = {
+  [Operator in FieldReferenceFilterOperator]?: string;
+};
+
 export type CurrencyFilter = {
   amountMicros?: FloatFilter;
   currencyCode?: SelectFilter;
 };
 
-export type URLFilter = {
+export type UrlFilter = {
   url?: StringFilter;
   label?: StringFilter;
 };
@@ -122,6 +146,10 @@ export type SelectFilter = {
   in?: string[];
   eq?: string;
   neq?: string;
+  gt?: string;
+  gte?: string;
+  lt?: string;
+  lte?: string;
 };
 
 export type MultiSelectFilter = {
@@ -138,11 +166,13 @@ export type ArrayFilter = {
 
 export type RawJsonFilter = {
   like?: string;
+  ilike?: string;
   is?: IsFilter;
 };
 
 export type FilesFilter = {
   like?: string;
+  ilike?: string;
   is?: IsFilter;
 };
 
@@ -165,13 +195,15 @@ export type LeafFilter =
   | FloatFilter
   | DateFilter
   | DateTimeFilter
+  | FieldReferenceFilter
   | CurrencyFilter
-  | URLFilter
+  | UrlFilter
   | FullNameFilter
   | BooleanFilter
   | AddressFilter
   | LinksFilter
   | ActorFilter
+  | EmailsFilter
   | PhonesFilter
   | ArrayFilter
   | RawJsonFilter

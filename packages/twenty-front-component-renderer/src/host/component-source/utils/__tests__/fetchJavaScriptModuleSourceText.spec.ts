@@ -1,0 +1,62 @@
+/**
+ * @jest-environment node
+ */
+import { fetchJavaScriptModuleSourceText } from '@/host/component-source/utils/fetchJavaScriptModuleSourceText';
+
+const originalFetch = globalThis.fetch;
+
+describe('fetchJavaScriptModuleSourceText', () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('should return the response text when the response is ok', async () => {
+    globalThis.fetch = jest.fn(async () => new Response('module source'));
+
+    await expect(
+      fetchJavaScriptModuleSourceText('https://api.twenty.test/core/abc.js'),
+    ).resolves.toBe('module source');
+  });
+
+  it('should forward headers and send same-origin credentials', async () => {
+    const fetchSpy = jest.fn(async () => new Response(''));
+    globalThis.fetch = fetchSpy;
+
+    await fetchJavaScriptModuleSourceText(
+      'https://api.twenty.test/core/abc.js',
+      { Authorization: 'Bearer token' },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.twenty.test/core/abc.js',
+      {
+        headers: { Authorization: 'Bearer token' },
+        credentials: 'same-origin',
+      },
+    );
+  });
+
+  it('should reject with a coded error when the response is not ok', async () => {
+    globalThis.fetch = jest.fn(
+      async () => new Response(null, { status: 404, statusText: 'Not Found' }),
+    );
+
+    await expect(
+      fetchJavaScriptModuleSourceText('https://api.twenty.test/core/abc.js'),
+    ).rejects.toMatchObject({ code: 'FRONT_COMPONENT_MODULE_FETCH_FAILED' });
+  });
+
+  it('should wrap fetch rejections in a coded error', async () => {
+    globalThis.fetch = jest.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    await expect(
+      fetchJavaScriptModuleSourceText('https://api.twenty.test/core/abc.js'),
+    ).rejects.toMatchObject({
+      code: 'FRONT_COMPONENT_MODULE_FETCH_FAILED',
+      message:
+        'Failed to fetch SDK client module https://api.twenty.test/core/abc.js: Failed to fetch',
+    });
+  });
+});

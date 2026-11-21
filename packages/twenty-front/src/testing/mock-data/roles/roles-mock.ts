@@ -1,40 +1,37 @@
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { jotaiStore } from '@/ui/utilities/state/jotai/jotaiStore';
-import { type FieldPermission } from '~/generated-metadata/graphql';
 import {
-  type OmniaObjectPermission,
-  type OmniaRole,
-} from '@/settings/roles/types/OmniaRoleExtensions';
+  type FieldPermission,
+  type ObjectPermission,
+  type Role,
+} from '~/generated-metadata/graphql';
 import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMetadataAndApolloMocksWrapper';
 
 export const MOCK_ROLE_ID_GRANTS_ALL = 'role-id-1';
 export const MOCK_ROLE_ID_REVOKES_ALL = 'role-id-2';
 
-export const MOCK_OBJECT_PERMISSION_1_REVOKES_ALL: OmniaObjectPermission = {
+export const MOCK_OBJECT_PERMISSION_1_REVOKES_ALL: ObjectPermission = {
   objectMetadataId: 'object-metadata-1',
   canReadObjectRecords: false,
   canUpdateObjectRecords: false,
   canSoftDeleteObjectRecords: false,
   canDestroyObjectRecords: false,
-  editWindowMinutes: null,
 };
 
-export const MOCK_OBJECT_PERMISSION_2_GRANTS_ALL: OmniaObjectPermission = {
+export const MOCK_OBJECT_PERMISSION_2_GRANTS_ALL: ObjectPermission = {
   objectMetadataId: 'object-metadata-2',
   canReadObjectRecords: true,
   canUpdateObjectRecords: true,
   canSoftDeleteObjectRecords: true,
   canDestroyObjectRecords: true,
-  editWindowMinutes: null,
 };
 
-export const MOCK_OBJECT_PERMISSION_3_NULL_ALL: OmniaObjectPermission = {
+export const MOCK_OBJECT_PERMISSION_3_NULL_ALL: ObjectPermission = {
   objectMetadataId: 'object-metadata-3',
   canReadObjectRecords: null,
   canUpdateObjectRecords: null,
   canSoftDeleteObjectRecords: null,
   canDestroyObjectRecords: null,
-  editWindowMinutes: null,
 };
 
 export const BASE_FIELD_PERMISSION: Omit<FieldPermission, 'roleId'> = {
@@ -56,8 +53,9 @@ export const BASE_FIELD_PERMISSION_OBJECT_METADATA_3: Omit<
   canUpdateFieldValue: false,
 };
 
-export const BASE_ROLE_MOCK_GRANTS_ALL: OmniaRole = {
+export const BASE_ROLE_MOCK_GRANTS_ALL: Role = {
   canAccessAllTools: false,
+  canAccessAllAgentChatChannels: false,
   canReadAllObjectRecords: true,
   canUpdateAllObjectRecords: true,
   canSoftDeleteAllObjectRecords: true,
@@ -66,9 +64,11 @@ export const BASE_ROLE_MOCK_GRANTS_ALL: OmniaRole = {
   canBeAssignedToUsers: true,
   canBeAssignedToAgents: true,
   canBeAssignedToApiKeys: true,
+  applicationId: 'application-id',
   id: MOCK_ROLE_ID_GRANTS_ALL,
   isEditable: true,
   label: 'Role grants all',
+  // OMNIA-CUSTOM: generated Role.showAllObjectsInSidebar is non-null (contract C4)
   showAllObjectsInSidebar: false,
   agents: [],
   apiKeys: [],
@@ -89,8 +89,9 @@ export const BASE_ROLE_MOCK_GRANTS_ALL: OmniaRole = {
   rowLevelPermissionPredicates: [],
 };
 
-export const BASE_ROLE_MOCK_REVOKES_ALL: OmniaRole = {
+export const BASE_ROLE_MOCK_REVOKES_ALL: Role = {
   canAccessAllTools: false,
+  canAccessAllAgentChatChannels: false,
   canReadAllObjectRecords: false,
   canUpdateAllObjectRecords: false,
   canSoftDeleteAllObjectRecords: false,
@@ -99,9 +100,11 @@ export const BASE_ROLE_MOCK_REVOKES_ALL: OmniaRole = {
   canBeAssignedToUsers: true,
   canBeAssignedToAgents: true,
   canBeAssignedToApiKeys: true,
+  applicationId: 'application-id',
   id: MOCK_ROLE_ID_REVOKES_ALL,
   isEditable: true,
   label: 'Role revokes all',
+  // OMNIA-CUSTOM: generated Role.showAllObjectsInSidebar is non-null (contract C4)
   showAllObjectsInSidebar: false,
   agents: [],
   apiKeys: [],

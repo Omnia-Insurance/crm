@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isDefined } from 'twenty-shared/utils';
@@ -24,25 +24,28 @@ export type IngestionPullJobData = {
   // to read the pipeline config (lookback minutes).
   startTimeOverride?: string;
   endTimeOverride?: string;
+  // The log a manual trigger returned to its caller; scheduled pulls create their own
+  logId?: string;
 };
 
 @Injectable()
-export class IngestionPullSchedulerService implements OnModuleInit {
+export class IngestionPullSchedulerService {
   private readonly logger = new Logger(IngestionPullSchedulerService.name);
 
   constructor(
+    // The re-sync scans enabled pull pipelines across every workspace
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(IngestionPipelineEntity)
     private readonly pipelineRepository: Repository<IngestionPipelineEntity>,
     @InjectMessageQueue(MessageQueue.ingestionQueue)
     private readonly messageQueueService: MessageQueueService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
-    // Re-register cron jobs for all enabled pull pipelines on startup.
-    // Wrapped so a schema drift (e.g. a pending migration that hasn't run
-    // yet) doesn't block app boot — the migration runner itself needs the
-    // app to boot to execute pending migrations. We log and move on; the
-    // next boot after the schema catches up will re-sync cleanly.
+  // Called from cron:register:all at server start, never on module init:
+  // that ran in every API, worker and CLI process and raced on the schedulers
+  async resyncEnabledPullSchedules(): Promise<number> {
+    // Schema drift (an upgrade still pending) must not fail
+    // cron:register:all; the next run re-syncs
     try {
       const pullPipelines = await this.pipelineRepository.find({
         where: {
@@ -52,21 +55,27 @@ export class IngestionPullSchedulerService implements OnModuleInit {
         },
       });
 
-      for (const pipeline of pullPipelines) {
-        if (isDefined(pipeline.schedule)) {
-          await this.syncSchedule(pipeline);
-        }
+      const scheduledPullPipelines = pullPipelines.filter((pipeline) =>
+        isDefined(pipeline.schedule),
+      );
+
+      for (const pipeline of scheduledPullPipelines) {
+        await this.syncSchedule(pipeline);
       }
 
-      if (pullPipelines.length > 0) {
+      if (scheduledPullPipelines.length > 0) {
         this.logger.log(
-          `Re-registered cron jobs for ${pullPipelines.length} pull pipelines`,
+          `Re-registered cron jobs for ${scheduledPullPipelines.length} pull pipelines`,
         );
       }
+
+      return scheduledPullPipelines.length;
     } catch (error) {
       this.logger.warn(
-        `Skipped pull-pipeline cron re-registration on boot (likely schema drift, will retry on next boot): ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Skipped pull-pipeline cron re-registration (likely schema drift, will retry on next run): ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
+
+      return 0;
     }
   }
 

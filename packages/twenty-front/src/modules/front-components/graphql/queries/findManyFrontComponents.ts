@@ -12,10 +12,15 @@ export const FIND_MANY_FRONT_COMPONENTS = gql`
       createdAt
       description
       isHeadless
+      widgetAvailability {
+        pageLayoutType
+        objectMetadataId
+      }
       sourceComponentPath
       universalIdentifier
       updatedAt
       usesSdkClient
+      frontComponentSharedDependenciesChecksum
     }
   }
 `;

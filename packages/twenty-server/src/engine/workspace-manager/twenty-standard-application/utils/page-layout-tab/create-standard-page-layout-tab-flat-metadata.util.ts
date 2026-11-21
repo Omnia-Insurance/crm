@@ -1,4 +1,8 @@
-import { type PageLayoutTabLayoutMode } from 'twenty-shared/types';
+import {
+  type PageLayoutTabLayoutMode,
+  PageLayoutType,
+  type WidgetType,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type FlatPageLayoutTab } from 'src/engine/metadata-modules/flat-page-layout-tab/types/flat-page-layout-tab.type';
@@ -21,6 +25,7 @@ export type CreateStandardPageLayoutTabArgs = {
   workspaceId: string;
   twentyStandardApplicationId: string;
   standardPageLayoutMetadataRelatedEntityIds: StandardPageLayoutMetadataRelatedEntityIds;
+  excludedWidgetTypes: WidgetType[];
   context: CreateStandardPageLayoutTabContext;
 };
 
@@ -29,6 +34,7 @@ export const createStandardPageLayoutTabFlatMetadata = ({
   workspaceId,
   twentyStandardApplicationId,
   standardPageLayoutMetadataRelatedEntityIds,
+  excludedWidgetTypes,
   now,
 }: CreateStandardPageLayoutTabArgs): FlatPageLayoutTab => {
   const layoutIds = standardPageLayoutMetadataRelatedEntityIds[layoutName];
@@ -36,10 +42,14 @@ export const createStandardPageLayoutTabFlatMetadata = ({
     layoutName as keyof typeof STANDARD_PAGE_LAYOUTS
   ] as {
     universalIdentifier: string;
+    type: PageLayoutType;
     tabs: Record<
       string,
       StandardPageLayoutTabConfig & {
-        widgets: Record<string, { universalIdentifier: string }>;
+        widgets: Record<
+          string,
+          { universalIdentifier: string; type?: WidgetType }
+        >;
       }
     >;
   };
@@ -50,9 +60,20 @@ export const createStandardPageLayoutTabFlatMetadata = ({
   }
 
   const tabIds = layoutIds.tabs[tabTitle];
-  const widgetIds = Object.values(tabIds.widgets).map((widget) => widget.id);
-  const widgetUniversalIdentifiers = Object.values(tabDefinition.widgets).map(
-    (widget) => widget.universalIdentifier,
+  const widgetNames = Object.keys(tabDefinition.widgets).filter(
+    (widgetName) => {
+      const widgetType = tabDefinition.widgets[widgetName].type;
+
+      return (
+        !isDefined(widgetType) || !excludedWidgetTypes.includes(widgetType)
+      );
+    },
+  );
+  const widgetIds = widgetNames.map(
+    (widgetName) => tabIds.widgets[widgetName].id,
+  );
+  const widgetUniversalIdentifiers = widgetNames.map(
+    (widgetName) => tabDefinition.widgets[widgetName].universalIdentifier,
   );
 
   return {
@@ -69,6 +90,7 @@ export const createStandardPageLayoutTabFlatMetadata = ({
     widgetIds,
     widgetUniversalIdentifiers,
     isActive: true,
+    isSystemSideEffect: layout.type === PageLayoutType.RECORD_PAGE,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,

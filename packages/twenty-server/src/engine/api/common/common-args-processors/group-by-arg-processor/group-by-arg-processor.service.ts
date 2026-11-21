@@ -1,16 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import {
-  AggregateOperations,
-  type RestrictedFieldsPermissions,
-} from 'twenty-shared/types';
+import { AggregateOperations } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
-import { type GroupByField } from 'src/engine/api/common/common-query-runners/types/group-by-field.types';
+import { type GroupByField } from 'src/engine/api/common/common-query-runners/types/group-by-field.type';
 import {
   CommonQueryRunnerException,
   CommonQueryRunnerExceptionCode,
 } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
-import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
+import { STANDARD_ERROR_MESSAGE } from 'src/engine/constants/standard-error-message.constant';
 import { validateAndTransformGroupByFieldsOrThrow } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/validate-and-transform-group-by-fields-or-throw.util';
 import {
   type AggregationField,
@@ -23,7 +20,7 @@ import {
 } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 import { findManyFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-many-flat-entity-by-id-in-flat-entity-maps.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import { resolveAggregateFieldKey } from 'src/engine/core-modules/record-crud/utils/resolve-aggregate-field-key.util';
 
@@ -66,7 +63,7 @@ export class GroupByArgProcessorService {
     >;
     flatObjectMetadata: FlatObjectMetadata;
     flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
-    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+    flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
   }): GroupByField[] {
     return validateAndTransformGroupByFieldsOrThrow({
       groupBy,
@@ -79,16 +76,16 @@ export class GroupByArgProcessorService {
   getAvailableAggregations({
     flatObjectMetadata,
     flatFieldMetadataMaps,
-    restrictedFields,
+    unreadableFieldMetadataIds,
   }: {
     flatObjectMetadata: FlatObjectMetadata;
-    flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
-    restrictedFields?: RestrictedFieldsPermissions;
+    flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
+    unreadableFieldMetadataIds?: ReadonlySet<string>;
   }): Record<string, AggregationField> {
     const objectFields = findManyFlatEntityByIdInFlatEntityMaps({
       flatEntityIds: flatObjectMetadata.fieldIds,
       flatEntityMaps: flatFieldMetadataMaps,
-    }).filter((field) => restrictedFields?.[field.id]?.canRead !== false);
+    }).filter((field) => !unreadableFieldMetadataIds?.has(field.id));
 
     return getAvailableAggregationsFromObjectFields(objectFields);
   }

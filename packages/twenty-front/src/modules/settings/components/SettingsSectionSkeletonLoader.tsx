@@ -1,38 +1,57 @@
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { SKELETON_HEIGHT_SIZES } from 'twenty-ui/primitives/feedback';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
+const TITLE_WIDTH = 140;
+const LAST_DESCRIPTION_LINE_WIDTH = '60%';
 
-type SettingsSectionSkeletonLoaderProps = {
-  rowCount?: number;
-};
-
-const StyledRows = styled.div`
+const StyledContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${themeCssVariables.spacing[2]};
   width: 100%;
 `;
 
+const StyledDescription = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[1]};
+  margin-bottom: ${themeCssVariables.spacing[6]};
+  margin-top: ${themeCssVariables.spacing[2]};
+`;
+
+type SettingsSectionSkeletonLoaderProps = {
+  rowCount?: number;
+  hasHeader?: boolean;
+};
+
 export const SettingsSectionSkeletonLoader = ({
   rowCount = 4,
+  hasHeader = false,
 }: SettingsSectionSkeletonLoaderProps) => {
-  const { theme } = useContext(ThemeContext);
+  const rows = (
+    <SkeletonLine
+      count={rowCount}
+      height={SKELETON_HEIGHT_SIZES.l}
+      gap={themeCssVariables.spacing[2]}
+    />
+  );
+
+  if (!hasHeader) {
+    return rows;
+  }
 
   return (
-    <StyledRows>
-      <SkeletonTheme
-        baseColor={theme.background.tertiary}
-        highlightColor={theme.background.transparent.lighter}
-        borderRadius={4}
-      >
-        <Skeleton
-          count={rowCount}
-          height={SKELETON_LOADER_HEIGHT_SIZES.standard.l}
+    <StyledContainer>
+      <SkeletonLine width={TITLE_WIDTH} height={SKELETON_HEIGHT_SIZES.s} />
+      <StyledDescription>
+        <SkeletonLine height={SKELETON_HEIGHT_SIZES.xs} />
+        <SkeletonLine
+          width={LAST_DESCRIPTION_LINE_WIDTH}
+          height={SKELETON_HEIGHT_SIZES.xs}
         />
-      </SkeletonTheme>
-    </StyledRows>
+      </StyledDescription>
+      {rows}
+    </StyledContainer>
   );
 };

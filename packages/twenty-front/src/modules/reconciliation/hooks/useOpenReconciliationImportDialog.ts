@@ -1,11 +1,14 @@
 import { useApolloClient } from '@apollo/client/react';
-import { useRef } from 'react';
+import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { AppPath, StandardObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 
 import { useUploadAttachmentFile } from '@/activities/files/hooks/useUploadAttachmentFile';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useCreateOneRecord } from '@/object-record/hooks/useCreateOneRecord';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
-import { useShowAuthModal } from '@/ui/layout/hooks/useShowAuthModal';
 import { useBuildSpreadsheetImportFields } from '@/object-record/spreadsheet-import/hooks/useBuildSpreadSheetImportFields';
 import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -13,14 +16,8 @@ import { START_RECONCILIATION_PARSING } from '@/reconciliation/graphql/mutations
 import { useOpenSpreadsheetImportDialog } from '@/spreadsheet-import/hooks/useOpenSpreadsheetImportDialog';
 import { type SpreadsheetColumn } from '@/spreadsheet-import/types/SpreadsheetColumn';
 import { SpreadsheetColumnType } from '@/spreadsheet-import/types/SpreadsheetColumnType';
-import { type SpreadsheetImportField } from '@/spreadsheet-import/types/SpreadsheetImportField';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { type SpreadsheetImportFields } from '@/spreadsheet-import/types/SpreadsheetImportFields';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
-import { AppPath } from 'twenty-shared/types';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type ColumnMappingEntry = {
   crmField: string;
@@ -39,268 +36,274 @@ export type CarrierConfig = {
   statusConfig?: Record<string, unknown> | null;
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type SpreadsheetImportFieldItem = SpreadsheetImportFields[number];
 
-/**
- * Derive a CRM field path from a SpreadsheetImportField's metadata.
- *
- * Examples:
- *   Simple field (policyNumber) → "policyNumber"
- *   Composite sub-field (name / firstName) → "name.firstName"
- *   Relation update sub-field (lead / name / firstName) → "lead.name.firstName"
- *   Relation connect sub-field (lead / name / firstName) → "lead.name.firstName"
- */
+type FieldMetadataItemReference = { id: string; name: string; type: string };
+
+// CRM path the pipeline writes to: "policyNumber", "name.firstName" or
+// "lead.name.firstName" for relation sub-fields.
 const buildCrmFieldPath = (
-  field: SpreadsheetImportField,
-  allFieldMetadataItems: { id: string; name: string }[],
+  spreadsheetImportField: SpreadsheetImportFieldItem,
+  fieldMetadataItems: FieldMetadataItemReference[],
 ): string => {
-  const parentField = allFieldMetadataItems.find(
-    (f) => f.id === field.fieldMetadataItemId,
+  const parentFieldMetadataItem = fieldMetadataItems.find(
+    (fieldMetadataItem) =>
+      fieldMetadataItem.id === spreadsheetImportField.fieldMetadataItemId,
   );
 
-  // Simple (non-nested) field: just the field name
-  if (!field.isNestedField) {
-    return parentField?.name ?? field.key;
+  if (!spreadsheetImportField.isNestedField) {
+    return parentFieldMetadataItem?.name ?? spreadsheetImportField.key;
   }
 
-  // Relation sub-field: prefix with relation name
-  if (field.isRelationUpdateField || field.isRelationConnectField) {
-    const relationName = parentField?.name;
-    const targetName = field.isRelationUpdateField
-      ? field.targetFieldMetadataItem?.name
-      : field.uniqueFieldMetadataItem?.name;
+  if (
+    spreadsheetImportField.isRelationUpdateField ||
+    spreadsheetImportField.isRelationConnectField
+  ) {
+    const relationName = parentFieldMetadataItem?.name;
+    const targetFieldName = spreadsheetImportField.isRelationUpdateField
+      ? spreadsheetImportField.targetFieldMetadataItem?.name
+      : spreadsheetImportField.uniqueFieldMetadataItem?.name;
 
-    if (field.isCompositeSubField && field.compositeSubFieldKey) {
-      return `${relationName}.${targetName}.${field.compositeSubFieldKey}`;
+    if (
+      spreadsheetImportField.isCompositeSubField &&
+      isNonEmptyString(spreadsheetImportField.compositeSubFieldKey)
+    ) {
+      return `${relationName}.${targetFieldName}.${spreadsheetImportField.compositeSubFieldKey}`;
     }
 
-    return `${relationName}.${targetName}`;
+    return `${relationName}.${targetFieldName}`;
   }
 
-  // Composite sub-field directly on the object
-  if (field.isCompositeSubField && field.compositeSubFieldKey) {
-    return `${parentField?.name}.${field.compositeSubFieldKey}`;
+  if (
+    spreadsheetImportField.isCompositeSubField &&
+    isNonEmptyString(spreadsheetImportField.compositeSubFieldKey)
+  ) {
+    return `${parentFieldMetadataItem?.name}.${spreadsheetImportField.compositeSubFieldKey}`;
   }
 
-  return field.key;
+  return spreadsheetImportField.key;
 };
 
-/**
- * Resolve the actual leaf field type for a SpreadsheetImportField.
- *
- * For simple fields this is just field.fieldMetadataType. For relation
- * sub-fields the metadata type is "RELATION" — which is the type of the
- * relation itself, not the target leaf field. This helper walks through the
- * various sub-field kinds to return the correct leaf type so that downstream
- * consumers (type transforms, compare-method inference) behave correctly.
- */
+// A relation sub-field reports the RELATION type; type transforms and compare
+// methods need the leaf field's type instead.
 const resolveLeafFieldType = (
-  field: SpreadsheetImportField,
-  allObjectFields: { id: string; name: string; type: string }[],
+  spreadsheetImportField: SpreadsheetImportFieldItem,
+  fieldMetadataItems: FieldMetadataItemReference[],
 ): string => {
-  // Non-nested field: use its own type directly
-  if (!field.isNestedField) {
-    return String(field.fieldMetadataType);
+  if (!spreadsheetImportField.isNestedField) {
+    return String(spreadsheetImportField.fieldMetadataType);
   }
 
-  // Relation update field: use target field's type
-  if (field.isRelationUpdateField && field.targetFieldMetadataItem) {
-    return String(field.targetFieldMetadataItem.type);
+  if (
+    spreadsheetImportField.isRelationUpdateField &&
+    isDefined(spreadsheetImportField.targetFieldMetadataItem)
+  ) {
+    return String(spreadsheetImportField.targetFieldMetadataItem.type);
   }
 
-  // Relation connect field: use unique constraint field's type
-  if (field.isRelationConnectField && field.uniqueFieldMetadataItem) {
-    return String(field.uniqueFieldMetadataItem.type);
+  if (
+    spreadsheetImportField.isRelationConnectField &&
+    isDefined(spreadsheetImportField.uniqueFieldMetadataItem)
+  ) {
+    return String(spreadsheetImportField.uniqueFieldMetadataItem.type);
   }
 
-  // Composite sub-field (non-relation): look up parent field type
-  if (field.isCompositeSubField) {
-    const parentField = allObjectFields.find(
-      (f) => f.id === field.fieldMetadataItemId,
+  if (spreadsheetImportField.isCompositeSubField) {
+    const parentFieldMetadataItem = fieldMetadataItems.find(
+      (fieldMetadataItem) =>
+        fieldMetadataItem.id === spreadsheetImportField.fieldMetadataItemId,
     );
-    if (parentField) {
-      return String(parentField.type);
+
+    if (isDefined(parentFieldMetadataItem)) {
+      return String(parentFieldMetadataItem.type);
     }
   }
 
-  return String(field.fieldMetadataType);
+  return String(spreadsheetImportField.fieldMetadataType);
 };
 
-/**
- * Resolve statusConfig.fieldMapping values to actual file headers.
- * The fieldMapping maps role names → header strings. When the file format
- * changes (XLSX title-case vs CSV underscore), the header strings become
- * stale. This resolves them against the actual headers from the column mapping.
- */
+// statusConfig.fieldMapping stores header strings, which go stale when the
+// file format changes (XLSX title case vs CSV underscores).
 const resolveStatusFieldMapping = (
   carrierConfig: CarrierConfig,
   columnMapping: ColumnMapping,
 ): Record<string, unknown> | null => {
-  const statusConfig = (carrierConfig as Record<string, unknown>)
-    .statusConfig as Record<string, unknown> | null;
+  const statusConfig = carrierConfig.statusConfig;
 
-  if (!statusConfig?.fieldMapping) return null;
+  if (!isDefined(statusConfig?.fieldMapping)) {
+    return null;
+  }
 
   const fieldMapping = statusConfig.fieldMapping as Record<string, string>;
   const actualHeaders = Object.keys(columnMapping);
 
-  const normalize = (s: string) =>
-    s.toLowerCase().replace(/[\s_-]+/g, '');
+  const normalizeHeader = (header: string) =>
+    header.toLowerCase().replace(/[\s_-]+/g, '');
 
-  const headerByNormalized = new Map(
-    actualHeaders.map((h) => [normalize(h), h]),
+  const actualHeaderByNormalizedHeader = new Map(
+    actualHeaders.map((header) => [normalizeHeader(header), header]),
   );
 
-  const resolved: Record<string, string> = {};
-  let changed = false;
+  const resolvedFieldMapping: Record<string, string> = {};
+  let hasResolvedHeader = false;
 
   for (const [role, configuredHeader] of Object.entries(fieldMapping)) {
     if (actualHeaders.includes(configuredHeader)) {
-      resolved[role] = configuredHeader;
+      resolvedFieldMapping[role] = configuredHeader;
       continue;
     }
 
-    const match = headerByNormalized.get(normalize(configuredHeader));
+    const matchingHeader = actualHeaderByNormalizedHeader.get(
+      normalizeHeader(configuredHeader),
+    );
 
-    if (match) {
-      resolved[role] = match;
-      changed = true;
+    if (isNonEmptyString(matchingHeader)) {
+      resolvedFieldMapping[role] = matchingHeader;
+      hasResolvedHeader = true;
       continue;
     }
 
-    // Keep as-is (computed field output keys like "True Effective Date")
-    resolved[role] = configuredHeader;
+    // Computed field outputs such as "True Effective Date" are not file headers.
+    resolvedFieldMapping[role] = configuredHeader;
   }
 
-  if (!changed) return null;
+  if (!hasResolvedHeader) {
+    return null;
+  }
 
-  return { ...statusConfig, fieldMapping: resolved };
+  return { ...statusConfig, fieldMapping: resolvedFieldMapping };
 };
 
-/** Check if a SpreadsheetColumn is matched (has a value/field key). */
 const isMatchedColumn = (
-  col: SpreadsheetColumn,
-): col is SpreadsheetColumn & { value: string } =>
-  col.type === SpreadsheetColumnType.matched ||
-  col.type === SpreadsheetColumnType.matchedCheckbox ||
-  col.type === SpreadsheetColumnType.matchedSelect ||
-  col.type === SpreadsheetColumnType.matchedSelectOptions;
-
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
+  column: SpreadsheetColumn,
+): column is SpreadsheetColumn & { value: string } =>
+  column.type === SpreadsheetColumnType.matched ||
+  column.type === SpreadsheetColumnType.matchedCheckbox ||
+  column.type === SpreadsheetColumnType.matchedSelect ||
+  column.type === SpreadsheetColumnType.matchedSelectOptions;
 
 export const useOpenReconciliationImportDialog = () => {
-  const showAuthModal = useShowAuthModal();
-
+  const { t } = useLingui();
+  const { enqueueToast } = useToast();
   const { openSpreadsheetImportDialog } = useOpenSpreadsheetImportDialog();
   const { uploadAttachmentFile } = useUploadAttachmentFile();
-  const { enqueueErrorSnackBar } = useSnackBar();
   const navigateApp = useNavigateApp();
+  // startReconciliationParsing is served by the metadata API, the default client.
   const apolloClient = useApolloClient();
 
-  // Use safe fallback object names when unauthenticated (sign-in page mock
-  // metadata doesn't include Omnia custom objects like policy/reconciliation).
   const { createOneRecord: createReconciliation } =
     useCreateOneRecord<ObjectRecord>({
-      objectNameSingular: showAuthModal ? 'person' : 'reconciliation',
+      objectNameSingular: 'reconciliation',
     });
 
   const { updateOneRecord } = useUpdateOneRecord();
 
-  const { objectMetadataItem: policyMetadata } = useObjectMetadataItem({
-    objectNameSingular: showAuthModal ? 'person' : 'policy',
-  });
-  const { objectMetadataItem: personMetadata } = useObjectMetadataItem({
-    objectNameSingular: 'person',
-  });
+  const { objectMetadataItem: policyObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: 'policy',
+    });
+  const { objectMetadataItem: personObjectMetadataItem } =
+    useObjectMetadataItem({
+      objectNameSingular: StandardObjectNameSingular.Person,
+    });
 
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
 
-  const selectedSheetNameRef = useRef<string | null>(null);
-  const columnMappingRef = useRef<ColumnMapping | null>(null);
-
   const openReconciliationImportDialog = (carrierConfig: CarrierConfig) => {
-    // Build import fields from actual CRM objects — policy + lead
-    const policyFieldItems =
+    let selectedSheetName: string | null = null;
+    let columnMapping: ColumnMapping | null = null;
+
+    const policyFieldMetadataItems =
       spreadsheetImportFilterAvailableFieldMetadataItems(
-        policyMetadata.updatableFields,
+        policyObjectMetadataItem.updatableFields,
       );
-    const personFieldItems =
+    const personFieldMetadataItems =
       spreadsheetImportFilterAvailableFieldMetadataItems(
-        personMetadata.updatableFields,
+        personObjectMetadataItem.updatableFields,
       );
 
-    const policyImportFields = buildSpreadsheetImportFields(policyFieldItems);
-    const personImportFields = buildSpreadsheetImportFields(personFieldItems);
-
-    const allFields = [
-      ...policyImportFields,
-      ...personImportFields,
-    ] as SpreadsheetImportField[];
-
-    const allFieldMetadataItems = [...policyFieldItems, ...personFieldItems];
-
-    // All field metadata for CRM path resolution (includes relation fields
-    // that may not be in the filtered import list)
-    const allObjectFields = [
-      ...policyMetadata.fields,
-      ...personMetadata.fields,
+    const spreadsheetImportFields = [
+      ...buildSpreadsheetImportFields(policyFieldMetadataItems),
+      ...buildSpreadsheetImportFields(personFieldMetadataItems),
     ];
 
-    // Build precomputedMatches from saved carrier config column mapping
-    const precomputedMatches = carrierConfig.columnMapping
+    // Relation fields are not import columns but are needed to resolve CRM paths.
+    const allFieldMetadataItems = [
+      ...policyObjectMetadataItem.fields,
+      ...personObjectMetadataItem.fields,
+    ];
+
+    const precomputedMatches = isDefined(carrierConfig.columnMapping)
       ? Object.fromEntries(
           Object.entries(carrierConfig.columnMapping).map(
-            ([header, entry]) => [header, entry.fieldKey],
+            ([header, columnMappingEntry]) => [
+              header,
+              columnMappingEntry.fieldKey,
+            ],
           ),
         )
       : undefined;
 
     openSpreadsheetImportDialog({
-      spreadsheetImportFields: allFields,
-      availableFieldMetadataItems: allFieldMetadataItems,
+      spreadsheetImportFields,
+      availableFieldMetadataItems: [
+        ...policyFieldMetadataItems,
+        ...personFieldMetadataItems,
+      ],
       selectHeader: true,
       allowDuplicateFieldMatching: true,
       precomputedMatches,
       onSheetSelected: (sheetName) => {
-        selectedSheetNameRef.current = sheetName;
+        selectedSheetName = sheetName;
       },
-      matchColumnsStepHook: async (structuredRows, _rawRows, columns) => {
-        // Capture column mapping from user's column matches
-        const mapping: ColumnMapping = {};
+      matchColumnsStepHook: async (
+        importedStructuredRows,
+        _importedRows,
+        columns,
+      ) => {
+        const matchedColumnMapping: ColumnMapping = {};
 
-        for (const col of columns) {
-          if (!isMatchedColumn(col)) continue;
+        for (const column of columns) {
+          if (!isMatchedColumn(column)) {
+            continue;
+          }
 
-          const field = allFields.find((f) => f.key === col.value);
+          const spreadsheetImportField = spreadsheetImportFields.find(
+            (field) => field.key === column.value,
+          );
 
-          if (!field) continue;
+          // Read-only columns only match exported headers; the pipeline never writes them.
+          if (
+            !isDefined(spreadsheetImportField) ||
+            spreadsheetImportField.isReadOnly === true
+          ) {
+            continue;
+          }
 
-          // Skip read-only fields — they're export-only, not pipeline targets
-          if (field.isReadOnly) continue;
-
-          mapping[col.header] = {
-            crmField: buildCrmFieldPath(field, allObjectFields),
-            fieldType: resolveLeafFieldType(field, allObjectFields),
-            fieldKey: field.key,
+          matchedColumnMapping[column.header] = {
+            crmField: buildCrmFieldPath(
+              spreadsheetImportField,
+              allFieldMetadataItems,
+            ),
+            fieldType: resolveLeafFieldType(
+              spreadsheetImportField,
+              allFieldMetadataItems,
+            ),
+            fieldKey: spreadsheetImportField.key,
           };
         }
 
-        columnMappingRef.current = mapping;
+        columnMapping = matchedColumnMapping;
 
-        return structuredRows;
+        return importedStructuredRows;
       },
       onSubmit: async (_validationResult, file) => {
         try {
-          // 1. Create the Reconciliation record with column mapping snapshot
-          const record = await createReconciliation({
+          const reconciliation = await createReconciliation({
             name: `${carrierConfig.name} — ${new Date().toLocaleDateString()}`,
             carrierConfigId: carrierConfig.id,
-            sheetName: selectedSheetNameRef.current,
-            columnMapping: columnMappingRef.current,
+            sheetName: selectedSheetName,
+            columnMapping,
             status: 'UPLOADED',
             stats: {
               totalBobRows: 0,
@@ -315,54 +318,48 @@ export const useOpenReconciliationImportDialog = () => {
             },
           });
 
-          if (!record?.id) {
-            throw new Error('Failed to create reconciliation record');
+          if (!isDefined(reconciliation?.id)) {
+            throw new Error(t`The reconciliation record was not created.`);
           }
 
-          // 2. Save column mapping to carrier config for pre-fill next time,
-          //    and resolve statusConfig.fieldMapping to actual file headers
-          if (columnMappingRef.current) {
+          // The next run prefills from this mapping.
+          if (isDefined(columnMapping)) {
             const updatedStatusConfig = resolveStatusFieldMapping(
               carrierConfig,
-              columnMappingRef.current,
+              columnMapping,
             );
 
             await updateOneRecord({
               objectNameSingular: 'carrierConfig',
               idToUpdate: carrierConfig.id,
               updateOneRecordInput: {
-                columnMapping: columnMappingRef.current,
-                ...(updatedStatusConfig
+                columnMapping,
+                ...(isDefined(updatedStatusConfig)
                   ? { statusConfig: updatedStatusConfig }
                   : {}),
               },
             });
           }
 
-          // 3. Upload the original xlsx as an attachment
           await uploadAttachmentFile(file, {
-            id: record.id,
+            id: reconciliation.id,
             targetObjectNameSingular: 'reconciliation',
           });
 
-          // 4. Trigger the parse + match pipeline
           await apolloClient.mutate({
             mutation: START_RECONCILIATION_PARSING,
-            variables: { reconciliationId: record.id },
+            variables: { reconciliationId: reconciliation.id },
           });
 
-          // 5. Navigate to the reconciliation record
           navigateApp(AppPath.RecordShowPage, {
             objectNameSingular: 'reconciliation',
-            objectRecordId: record.id,
+            objectRecordId: reconciliation.id,
           });
         } catch (error) {
-          enqueueErrorSnackBar({
-            message: 'Failed to create reconciliation',
-            options: {
-              detailedMessage:
-                error instanceof Error ? error.message : 'Unknown error',
-            },
+          enqueueToast({
+            status: 'error',
+            children: t`Failed to create reconciliation`,
+            description: error instanceof Error ? error.message : undefined,
           });
         }
       },

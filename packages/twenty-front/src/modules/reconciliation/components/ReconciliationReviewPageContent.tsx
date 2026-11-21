@@ -1,37 +1,22 @@
-import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { contextStoreCurrentObjectMetadataItemIdComponentState } from '@/context-store/states/contextStoreCurrentObjectMetadataItemIdComponentState';
-import { contextStoreCurrentPageTypeComponentState } from '@/context-store/states/contextStoreCurrentPageTypeComponentState';
-import { contextStoreCurrentViewTypeComponentState } from '@/context-store/states/contextStoreCurrentViewTypeComponentState';
-import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { styled } from '@linaria/react';
-import { useEffect, useMemo } from 'react';
-import { ContextStorePageType } from 'twenty-shared/types';
 
-// Exact same imports as RecordShowPage
 import { RecordShowCommandMenu } from '@/command-menu-item/components/RecordShowCommandMenu';
 import { CommandMenuComponentInstanceContext } from '@/command-menu/states/contexts/CommandMenuComponentInstanceContext';
-import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
-import { MAIN_CONTEXT_STORE_INSTANCE_ID } from '@/context-store/constants/MainContextStoreInstanceId';
-import { ContextStoreComponentInstanceContext } from '@/context-store/states/contexts/ContextStoreComponentInstanceContext';
-import { MainContainerLayoutWithSidePanel } from '@/object-record/components/MainContainerLayoutWithSidePanel';
+import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
-import { DraftRelatedViolationsContext } from '@/object-record/record-field/ui/contexts/DraftRelatedViolationsContext';
 import { RecordShowContainerContextStoreTargetedRecordsEffect } from '@/object-record/record-show/components/RecordShowContainerContextStoreTargetedRecordsEffect';
-import { RecordShowEffect } from '@/object-record/record-show/components/RecordShowEffect';
-import { useRecordShowPage } from '@/object-record/record-show/hooks/useRecordShowPage';
+import { RecordShowPageResourceEffect } from '@/object-record/record-show/components/RecordShowPageResourceEffect';
+import { useRecordShowPageResource } from '@/object-record/record-show/hooks/useRecordShowPageResource';
 import { computeRecordShowComponentInstanceId } from '@/object-record/record-show/utils/computeRecordShowComponentInstanceId';
-import { LayoutRenderingProvider } from '@/ui/layout/contexts/LayoutRenderingContext';
-import { PageContainer } from '@/ui/layout/page/components/PageContainer';
-import { RecordShowPageHeader } from '~/pages/object-record/RecordShowPageHeader';
-import { RecordShowPageTitle } from '~/pages/object-record/RecordShowPageTitle';
-import { PageLayoutType } from '~/generated-metadata/graphql';
-
+import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { ReconciliationFilterProviders } from '@/reconciliation/components/ReconciliationFilterProviders';
 import { ReconciliationReviewBody } from '@/reconciliation/components/ReconciliationReviewBody';
-import type { ObjectRecord } from '@/object-record/types/ObjectRecord';
+import { SidePanelToggleButton } from '@/side-panel/components/SidePanelToggleButton';
+import { PageCardLayout } from '@/ui/layout/page/components/PageCardLayout';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { RecordShowPageHeader } from '~/pages/object-record/RecordShowPageHeader';
+import { RecordShowPageTitle } from '~/pages/object-record/RecordShowPageTitle';
 
 export type ReviewItemRecord = ObjectRecord & {
   name: string;
@@ -54,139 +39,80 @@ export type ReviewItemRecord = ObjectRecord & {
 
 const StyledPageBody = styled.div`
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
 `;
 
-type Props = {
+type ReconciliationReviewPageContentProps = {
   objectRecordId: string;
+  reviewItemMetadataItem: EnrichedObjectMetadataItem;
 };
 
-export const ReconciliationReviewPageContent = ({ objectRecordId }: Props) => {
-  // Use the same hook RecordShowPage uses — handles metadata, icon, etc.
-  const { objectNameSingular } = useRecordShowPage(
-    'reconciliation',
-    objectRecordId,
-  );
-
+// The record show page chrome around the review body: the route context store
+// already reports a reconciliation record page, so pinned commands show.
+export const ReconciliationReviewPageContent = ({
+  objectRecordId,
+  reviewItemMetadataItem,
+}: ReconciliationReviewPageContentProps) => {
   const isLayoutCustomizationModeEnabled = useAtomStateValue(
     isLayoutCustomizationModeEnabledState,
   );
 
-  // OMNIA-CUSTOM: Set the context store's current object metadata item ID
-  // (normally set by MainContextStoreProviderEffect via route params,
-  // but our custom route doesn't expose :objectNameSingular as a param)
-  const { objectMetadataItem } = useObjectMetadataItem({
+  const { loading, record } = useRecordShowPageResource({
     objectNameSingular: 'reconciliation',
+    recordId: objectRecordId,
   });
-  const { objectMetadataItem: reviewItemMetadata } = useObjectMetadataItem({
-    objectNameSingular: 'reviewItem',
-  });
-  const setContextStoreCurrentObjectMetadataItemId = useSetAtomComponentState(
-    contextStoreCurrentObjectMetadataItemIdComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
-  );
-  const setContextStoreCurrentViewType = useSetAtomComponentState(
-    contextStoreCurrentViewTypeComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
-  );
-  // OMNIA-CUSTOM: page type must be Record so standard pinned command-menu
-  // items (whose conditional expressions require pageType == "RECORD_PAGE")
-  // appear in the header — MainContextStoreProvider skips this route because
-  // it can't resolve objectMetadataItem from URL params.
-  const setContextStoreCurrentPageType = useSetAtomComponentState(
-    contextStoreCurrentPageTypeComponentState,
-    MAIN_CONTEXT_STORE_INSTANCE_ID,
-  );
-  useEffect(() => {
-    setContextStoreCurrentObjectMetadataItemId(objectMetadataItem.id);
-    setContextStoreCurrentViewType(null);
-    setContextStoreCurrentPageType(ContextStorePageType.Record);
-    return () => {
-      setContextStoreCurrentObjectMetadataItemId(undefined);
-      setContextStoreCurrentViewType(null);
-      setContextStoreCurrentPageType(null);
-    };
-  }, [
-    objectMetadataItem.id,
-    setContextStoreCurrentObjectMetadataItemId,
-    setContextStoreCurrentViewType,
-    setContextStoreCurrentPageType,
-  ]);
 
   const recordShowComponentInstanceId =
     computeRecordShowComponentInstanceId(objectRecordId);
 
-  const viewBarId = useMemo(
-    () => `reconciliation-review-${objectRecordId}`,
-    [objectRecordId],
-  );
+  const viewBarId = `reconciliation-review-${objectRecordId}`;
 
-  // Replicate RecordShowPage structure exactly
   return (
-    <DraftRelatedViolationsContext.Provider value={[]}>
-      <LayoutRenderingProvider
-        value={{
-          targetRecordIdentifier: {
-            id: objectRecordId,
-            targetObjectNameSingular: 'reconciliation',
-          },
-          layoutType: PageLayoutType.RECORD_PAGE,
-          isInSidePanel: false,
-        }}
+    <RecordComponentInstanceContextsWrapper
+      componentInstanceId={recordShowComponentInstanceId}
+    >
+      <CommandMenuComponentInstanceContext.Provider
+        value={{ instanceId: recordShowComponentInstanceId }}
       >
-        <RecordComponentInstanceContextsWrapper
-          componentInstanceId={recordShowComponentInstanceId}
-        >
-          <ContextStoreComponentInstanceContext.Provider
-            value={{ instanceId: MAIN_CONTEXT_STORE_INSTANCE_ID }}
-          >
-            <CommandMenuComponentInstanceContext.Provider
-              value={{ instanceId: recordShowComponentInstanceId }}
+        <RecordShowPageResourceEffect
+          loading={loading}
+          record={record}
+          recordId={objectRecordId}
+        />
+        <RecordShowContainerContextStoreTargetedRecordsEffect
+          recordId={objectRecordId}
+        />
+        <RecordShowPageTitle
+          objectNameSingular="reconciliation"
+          objectRecordId={objectRecordId}
+        />
+        <PageCardLayout
+          header={
+            <RecordShowPageHeader
+              objectNameSingular="reconciliation"
+              objectRecordId={objectRecordId}
             >
-              <PageContainer>
-                <RecordShowPageTitle
-                  objectNameSingular={objectNameSingular}
-                  objectRecordId={objectRecordId}
-                />
-                <RecordShowPageHeader
-                  objectNameSingular={objectNameSingular}
-                  objectRecordId={objectRecordId}
-                >
-                  <RecordShowCommandMenu />
-                  {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
-                </RecordShowPageHeader>
-                <MainContainerLayoutWithSidePanel>
-                  <TimelineActivityContext.Provider
-                    value={{ recordId: objectRecordId }}
-                  >
-                    <RecordShowEffect
-                      objectNameSingular={objectNameSingular}
-                      recordId={objectRecordId}
-                    />
-                    <RecordShowContainerContextStoreTargetedRecordsEffect
-                      recordId={objectRecordId}
-                    />
-                    <ReconciliationFilterProviders
-                      viewBarId={viewBarId}
-                      reviewItemMetadata={reviewItemMetadata}
-                    >
-                      <StyledPageBody>
-                        <ReconciliationReviewBody
-                          objectRecordId={objectRecordId}
-                          viewBarId={viewBarId}
-                          reviewItemMetadata={reviewItemMetadata}
-                        />
-                      </StyledPageBody>
-                    </ReconciliationFilterProviders>
-                  </TimelineActivityContext.Provider>
-                </MainContainerLayoutWithSidePanel>
-              </PageContainer>
-            </CommandMenuComponentInstanceContext.Provider>
-          </ContextStoreComponentInstanceContext.Provider>
-        </RecordComponentInstanceContextsWrapper>
-      </LayoutRenderingProvider>
-    </DraftRelatedViolationsContext.Provider>
+              <RecordShowCommandMenu />
+              {!isLayoutCustomizationModeEnabled && <SidePanelToggleButton />}
+            </RecordShowPageHeader>
+          }
+        >
+          <ReconciliationFilterProviders
+            viewBarId={viewBarId}
+            reviewItemMetadata={reviewItemMetadataItem}
+          >
+            <StyledPageBody>
+              <ReconciliationReviewBody
+                objectRecordId={objectRecordId}
+                viewBarId={viewBarId}
+                reviewItemMetadata={reviewItemMetadataItem}
+              />
+            </StyledPageBody>
+          </ReconciliationFilterProviders>
+        </PageCardLayout>
+      </CommandMenuComponentInstanceContext.Provider>
+    </RecordComponentInstanceContextsWrapper>
   );
 };

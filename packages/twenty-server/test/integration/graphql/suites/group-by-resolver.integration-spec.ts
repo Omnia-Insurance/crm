@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { gql } from 'apollo-server-core';
+import { gql } from 'graphql-tag';
 import { default as request } from 'supertest';
 import { COMPANY_GQL_FIELDS } from 'test/integration/constants/company-gql-fields.constants';
 import { PERSON_GQL_FIELDS } from 'test/integration/constants/person-gql-fields.constants';
@@ -9,10 +9,10 @@ import { createViewFilterGroupOperationFactory } from 'test/integration/graphql/
 import { deleteRole } from 'test/integration/graphql/utils/delete-one-role.util';
 import { destroyOneOperationFactory } from 'test/integration/graphql/utils/destroy-one-operation-factory.util';
 import { groupByOperationFactory } from 'test/integration/graphql/utils/group-by-operation-factory.util';
-import { makeGraphqlAPIRequestWithMemberRole } from 'test/integration/graphql/utils/make-graphql-api-request-with-member-role.util';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequestWithMemberRole } from 'test/integration/graphql/utils/make-graphql-api-request-with-member-role.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { updateWorkspaceMemberRole } from 'test/integration/graphql/utils/update-workspace-member-role.util';
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 import { deleteOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/delete-one-field-metadata.util';
 import { updateOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/update-one-field-metadata.util';
 import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
@@ -35,7 +35,7 @@ import { isDefined } from 'twenty-shared/utils';
 import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { type FieldMetadataDTO } from 'src/engine/metadata-modules/field-metadata/dtos/field-metadata.dto';
 import { type ObjectMetadataDTO } from 'src/engine/metadata-modules/object-metadata/dtos/object-metadata.dto';
-import { PermissionsExceptionMessage } from 'src/engine/metadata-modules/permissions/permissions.exception';
+import { PermissionsExceptionMessage } from 'src/engine/permissions/permissions.exception';
 import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
 
 const client = request(`http://localhost:${APP_PORT}`);
@@ -47,22 +47,21 @@ describe('group-by resolver (integration)', () => {
     const testPerson3Id = randomUUID();
 
     afterEach(async () => {
-      // cleanup created people
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         destroyOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: 'id',
           recordId: testPersonId,
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         destroyOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: 'id',
           recordId: testPerson2Id,
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         destroyOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: 'id',
@@ -74,34 +73,34 @@ describe('group-by resolver (integration)', () => {
       const cityA = 'City A';
       const cityB = 'City B';
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPersonId, city: cityA },
+          data: { id: testPersonId, jobTitle: cityA },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson2Id, city: cityB },
+          data: { id: testPerson2Id, jobTitle: cityB },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson3Id, city: cityB },
+          data: { id: testPerson3Id, jobTitle: cityB },
         }),
       );
 
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
-          groupBy: [{ city: true }],
-          orderBy: [{ city: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
+          groupBy: [{ jobTitle: true }],
+          orderBy: [{ jobTitle: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
           limit: 300,
         }),
       );
@@ -136,33 +135,33 @@ describe('group-by resolver (integration)', () => {
       const cityB = 'City B';
       const cityC = 'City C';
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPersonId, city: cityA },
+          data: { id: testPersonId, jobTitle: cityA },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson2Id, city: cityB },
+          data: { id: testPerson2Id, jobTitle: cityB },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson3Id, city: cityC },
+          data: { id: testPerson3Id, jobTitle: cityC },
         }),
       );
 
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
-          groupBy: [{ city: true }],
+          groupBy: [{ jobTitle: true }],
           limit: 2,
         }),
       );
@@ -179,39 +178,39 @@ describe('group-by resolver (integration)', () => {
       const cityB = 'City B';
 
       const person1 = (
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
-            data: { id: testPersonId, city: cityA },
+            data: { id: testPersonId, jobTitle: cityA },
           }),
         )
       ).body.data.createPerson;
 
       const person2 = (
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
-            data: { id: testPerson2Id, city: cityB },
+            data: { id: testPerson2Id, jobTitle: cityB },
           }),
         )
       ).body.data.createPerson;
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson3Id, city: cityB },
+          data: { id: testPerson3Id, jobTitle: cityB },
         }),
       );
 
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
-          groupBy: [{ city: true }],
-          orderBy: [{ city: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
+          groupBy: [{ jobTitle: true }],
+          orderBy: [{ jobTitle: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
           gqlFields: 'minCreatedAt',
           limit: 300,
         }),
@@ -253,7 +252,7 @@ describe('group-by resolver (integration)', () => {
     const idMar3 = testPerson3Id;
 
     beforeAll(async () => {
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
@@ -263,14 +262,14 @@ describe('group-by resolver (integration)', () => {
           },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
           data: { id: idJan8, createdAt: '2025-01-08T08:00:00.000Z' }, // wednesday, january, Q1, 2025
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
@@ -280,9 +279,8 @@ describe('group-by resolver (integration)', () => {
     });
 
     afterAll(async () => {
-      // cleanup created people
       for (const id of [testPersonId, testPerson2Id, testPerson3Id]) {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
@@ -308,7 +306,7 @@ describe('group-by resolver (integration)', () => {
     };
 
     it('datetime field - groups by createdAt MONTH', async () => {
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
@@ -341,21 +339,21 @@ describe('group-by resolver (integration)', () => {
       const idMarch3rd = randomUUID();
 
       beforeAll(async () => {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
             data: { id: idMarch3rd, createdAt: '2025-03-03T09:30:00.000Z' }, // monday, march, Q1, 2025
           }),
         );
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
             data: { id: idMarch2nd, createdAt: '2025-03-02T09:30:00.000Z' }, // sunday, march, Q1, 2025
           }),
         );
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -365,21 +363,21 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
             recordId: idMarch1st,
           }),
         );
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
             recordId: idMarch2nd,
           }),
         );
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
@@ -389,7 +387,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('datetime field - groups by createdAt WEEK with default (MONDAY)', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -413,7 +411,6 @@ describe('group-by resolver (integration)', () => {
         expect(groups).toBeDefined();
         expect(groups.length).toBe(4);
 
-        // Group starting week of monday dec 30th, 2024
         const mondayDec30thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2024-12-30'),
         );
@@ -422,7 +419,6 @@ describe('group-by resolver (integration)', () => {
         expect(mondayDec30thGroup.edges[0].node.id).toBe(idJan2);
         expect(mondayDec30thGroup.totalCount).toBe(1);
 
-        // Group starting week of monday jan 6th, 2025
         const mondayJan6thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-01-06'),
         );
@@ -431,7 +427,6 @@ describe('group-by resolver (integration)', () => {
         expect(mondayJan6thGroup.edges[0].node.id).toBe(idJan8);
         expect(mondayJan6thGroup.totalCount).toBe(1);
 
-        // Group starting week of monday feb 24th, 2025
         const mondayFeb24thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-02-24'),
         );
@@ -449,7 +444,6 @@ describe('group-by resolver (integration)', () => {
           ),
         ).toBeDefined;
 
-        // Group starting week of monday march 3rd, 2025
         const mondayMarch3rdGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-03-03'),
         );
@@ -469,7 +463,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('datetime field - groups by createdAt WEEK with weekStartDay SUNDAY', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -499,7 +493,6 @@ describe('group-by resolver (integration)', () => {
         expect(groups).toBeDefined();
         expect(groups.length).toBe(4);
 
-        // Group starting week of sunday dec 29th, 2024
         const sundayDec29thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2024-12-29'),
         );
@@ -510,7 +503,6 @@ describe('group-by resolver (integration)', () => {
           sundayDec29thGroup.edges.find((edge: any) => edge.node.id === idJan2),
         ).toBeDefined();
 
-        // Group starting week of sunday jan 5th, 2025
         const sundayJan5thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-01-05'),
         );
@@ -521,7 +513,6 @@ describe('group-by resolver (integration)', () => {
           sundayJan5thGroup.edges.find((edge: any) => edge.node.id === idJan8),
         ).toBeDefined();
 
-        // Group starting week of sunday feb 23rd, 2025
         const sundayFeb23rdGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-02-23'),
         );
@@ -534,7 +525,6 @@ describe('group-by resolver (integration)', () => {
           ),
         ).toBeDefined();
 
-        // Group starting week of sunday march 2nd, 2025
         const sundayMarch2ndGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-03-02'),
         );
@@ -559,7 +549,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('datetime field - groups by createdAt WEEK with weekStartDay SATURDAY', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -589,7 +579,6 @@ describe('group-by resolver (integration)', () => {
         expect(groups).toBeDefined();
         expect(groups.length).toBe(3);
 
-        // Group starting week of saturday dec 28th, 2024
         const saturdayDec28thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2024-12-28'),
         );
@@ -602,7 +591,6 @@ describe('group-by resolver (integration)', () => {
           ),
         ).toBeDefined();
 
-        // Group starting week of saturday jan 4th, 2025
         const saturdayJan4thGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-01-04'),
         );
@@ -615,7 +603,6 @@ describe('group-by resolver (integration)', () => {
           ),
         ).toBeDefined();
 
-        // Group starting week of saturday march 1st, 2025
         const saturdayMarch1stGroup = groups.find((group: any) =>
           group.groupByDimensionValues[0].startsWith('2025-03-01'),
         );
@@ -664,7 +651,7 @@ describe('group-by resolver (integration)', () => {
       const testPersonId2024 = randomUUID();
 
       beforeAll(async () => {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -677,7 +664,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
@@ -686,7 +673,7 @@ describe('group-by resolver (integration)', () => {
         );
       });
       it('datetime field - groups by createdAt DAY_OF_THE_WEEK', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -721,7 +708,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('datetime field - groups by createdAt MONTH_OF_THE_YEAR', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -755,7 +742,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('datetime field - groups by createdAt QUARTER_OF_THE_YEAR', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -819,9 +806,8 @@ describe('group-by resolver (integration)', () => {
     });
 
     afterEach(async () => {
-      // cleanup created people
       for (const id of [testPersonId, testPerson2Id, testPerson3Id]) {
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: 'id',
@@ -830,7 +816,7 @@ describe('group-by resolver (integration)', () => {
         );
       }
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         destroyOneOperationFactory({
           objectMetadataSingularName: 'view',
           gqlFields: 'id',
@@ -840,29 +826,28 @@ describe('group-by resolver (integration)', () => {
     });
     it('groups by city', async () => {
       const cityFieldMetadata = personObject?.fieldsList?.find(
-        (f: FieldMetadataDTO) => f.name === 'city',
+        (f: FieldMetadataDTO) => f.name === 'jobTitle',
       );
       const cityFieldMetadataId = cityFieldMetadata?.id;
 
       const cityToKeep = 'City To Keep';
       const cityToExclude = 'City To Exclude';
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPersonId, city: cityToKeep },
+          data: { id: testPersonId, jobTitle: cityToKeep },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson2Id, city: cityToExclude },
+          data: { id: testPerson2Id, jobTitle: cityToExclude },
         }),
       );
 
-      // create a view with a filter: city eq cityToKeep
       const { data: createViewData } = await createOneView({
         input: {
           name: 'People View City Keep',
@@ -874,8 +859,7 @@ describe('group-by resolver (integration)', () => {
 
       viewId = createViewData.createView.id;
 
-      // create a filter group and a filter for the view
-      const viewFilterGroupResponse = await makeMetadataAPIRequest(
+      const viewFilterGroupResponse = await makeMetadataApiRequest(
         createViewFilterGroupOperationFactory({
           data: {
             viewId,
@@ -901,11 +885,11 @@ describe('group-by resolver (integration)', () => {
         expectToFail: false,
       });
 
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
-          groupBy: [{ city: true }],
+          groupBy: [{ jobTitle: true }],
           viewId,
         }),
       );
@@ -918,7 +902,6 @@ describe('group-by resolver (integration)', () => {
           expect.objectContaining({ groupByDimensionValues: [cityToKeep] }),
         ]),
       );
-      // Ensure excluded city is not present
       expect(groups).toEqual(
         expect.not.arrayContaining([
           expect.objectContaining({ groupByDimensionValues: [cityToExclude] }),
@@ -930,29 +913,28 @@ describe('group-by resolver (integration)', () => {
       const cityA = 'City A';
       const cityB = 'City B';
 
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPersonId, city: cityA },
+          data: { id: testPersonId, jobTitle: cityA },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson2Id, city: cityB },
+          data: { id: testPerson2Id, jobTitle: cityB },
         }),
       );
-      await makeGraphqlAPIRequest(
+      await makeGraphqlApiRequest(
         createOneOperationFactory({
           objectMetadataSingularName: 'person',
           gqlFields: PERSON_GQL_FIELDS,
-          data: { id: testPerson3Id, city: cityB },
+          data: { id: testPerson3Id, jobTitle: cityB },
         }),
       );
 
-      // create a view with any field filter
       const { data: createViewData } = await createOneView({
         input: {
           name: 'People View City Keep',
@@ -965,13 +947,13 @@ describe('group-by resolver (integration)', () => {
 
       viewId = createViewData.createView.id;
 
-      const response = await makeGraphqlAPIRequest(
+      const response = await makeGraphqlApiRequest(
         groupByOperationFactory({
           objectMetadataSingularName: 'person',
           objectMetadataPluralName: 'people',
-          groupBy: [{ city: true }],
+          groupBy: [{ jobTitle: true }],
           viewId,
-          orderBy: [{ city: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
+          orderBy: [{ jobTitle: OrderByDirection.AscNullsFirst }], // needed for City groups to be in 300 first groups
           limit: 300,
         }),
       );
@@ -984,11 +966,55 @@ describe('group-by resolver (integration)', () => {
           expect.objectContaining({ groupByDimensionValues: [cityA] }),
         ]),
       );
-      // Ensure excluded city is not present
       expect(groups).toEqual(
         expect.not.arrayContaining([
           expect.objectContaining({ groupByDimensionValues: [cityB] }),
         ]),
+      );
+    });
+
+    it('rejects a view filter using an operator not allowed for the field type', async () => {
+      const searchVectorFieldMetadataId = personObject?.fieldsList?.find(
+        (f: FieldMetadataDTO) => f.name === 'searchVector',
+      )?.id;
+
+      jestExpectToBeDefined(searchVectorFieldMetadataId);
+
+      const { data: createViewData } = await createOneView({
+        input: {
+          name: 'People View Vector Filter',
+          objectMetadataId: personObjectMetadataId,
+          icon: 'Icon123',
+        },
+        expectToFail: false,
+      });
+
+      viewId = createViewData.createView.id;
+
+      await createOneViewFilter({
+        input: {
+          viewId,
+          fieldMetadataId: searchVectorFieldMetadataId,
+          operand: ViewFilterOperand.VECTOR_SEARCH,
+          value: 'anything',
+          positionInViewFilterGroup: 0,
+        },
+        expectToFail: false,
+      });
+
+      const response = await makeGraphqlApiRequest(
+        groupByOperationFactory({
+          objectMetadataSingularName: 'person',
+          objectMetadataPluralName: 'people',
+          groupBy: [{ jobTitle: true }],
+          viewId,
+        }),
+      );
+
+      expect(response.body.errors).toBeDefined();
+      expect(response.body.errors[0].message).toContain('searchVector');
+      expect(response.body.errors[0].extensions.code).toBe(
+        ErrorCode.BAD_USER_INPUT,
       );
     });
   });
@@ -1017,8 +1043,7 @@ describe('group-by resolver (integration)', () => {
       };
 
       beforeAll(async () => {
-        // Create companies with different createdAt dates for grouping
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'company',
             gqlFields: COMPANY_GQL_FIELDS,
@@ -1033,7 +1058,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'company',
             gqlFields: COMPANY_GQL_FIELDS,
@@ -1048,8 +1073,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Create people linked to companies
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1061,7 +1085,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1073,7 +1097,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1087,9 +1111,8 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        // Cleanup people
         for (const id of [testPersonId, testPerson2Id, testPerson3Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'person',
               gqlFields: 'id',
@@ -1098,9 +1121,8 @@ describe('group-by resolver (integration)', () => {
           );
         }
 
-        // Cleanup companies
         for (const id of [testCompanyId, testCompany2Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'company',
               gqlFields: 'id',
@@ -1111,7 +1133,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('groups by one relation field - company createdAt with DAY_OF_THE_WEEK granularity', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -1147,8 +1169,48 @@ describe('group-by resolver (integration)', () => {
         expect(wednesdayGroup.totalCount).toBe(1);
       });
 
+      it('orders by a base-object date field while grouping by a relation field without ambiguous column error', async () => {
+        // Grouping by the company relation joins the company table (which also
+        // has a createdAt column). Ordering by the base object's own createdAt
+        // must qualify the column with the object table name, otherwise the
+        // "createdAt" reference is ambiguous across the joined tables.
+        const response = await makeGraphqlApiRequest(
+          groupByOperationFactory({
+            objectMetadataSingularName: 'person',
+            objectMetadataPluralName: 'people',
+            groupBy: [
+              {
+                createdAt: {
+                  granularity: 'DAY_OF_THE_WEEK',
+                },
+              },
+              {
+                company: {
+                  createdAt: {
+                    granularity: 'DAY_OF_THE_WEEK',
+                  },
+                },
+              },
+            ],
+            orderBy: [
+              {
+                createdAt: {
+                  granularity: 'DAY_OF_THE_WEEK',
+                  orderBy: 'AscNullsFirst',
+                },
+              },
+            ],
+            filter: filter2025,
+          }),
+        );
+
+        expect(response.body.errors).toBeUndefined();
+        expect(response.body.data.peopleGroupBy).toBeDefined();
+        expect(Array.isArray(response.body.data.peopleGroupBy)).toBe(true);
+      });
+
       it('groups by one relation field - company createdAt with WEEK granularity and weekStartDay SUNDAY', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -1172,7 +1234,6 @@ describe('group-by resolver (integration)', () => {
         expect(groups).toBeDefined();
         expect(Array.isArray(groups)).toBe(true);
 
-        // Verify that all records are grouped
         const totalCount = groups.reduce(
           (sum: number, group: any) => sum + group.totalCount,
           0,
@@ -1182,7 +1243,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('groups by two relation fields from the same joined table', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -1256,7 +1317,6 @@ describe('group-by resolver (integration)', () => {
       };
 
       beforeAll(async () => {
-        // Find person and company object metadata
         const { objects } = await findManyObjectMetadata({
           input: {
             filter: {},
@@ -1275,7 +1335,6 @@ describe('group-by resolver (integration)', () => {
           throw new Error('Person or Company object not found');
         }
 
-        // Create listing object
         const { data: createListingObjectData } = await createOneObjectMetadata(
           {
             input: {
@@ -1291,7 +1350,6 @@ describe('group-by resolver (integration)', () => {
 
         listingObjectMetadataId = createListingObjectData.createOneObject.id;
 
-        // Create relation from person to listing
         const personlistingRelation = await createRelationBetweenObjects({
           objectMetadataId: personObject.id,
           targetObjectMetadataId: listingObjectMetadataId,
@@ -1302,8 +1360,7 @@ describe('group-by resolver (integration)', () => {
 
         personlistingRelationFieldId = personlistingRelation.id;
 
-        // Create companies
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'company',
             gqlFields: COMPANY_GQL_FIELDS,
@@ -1314,7 +1371,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'company',
             gqlFields: COMPANY_GQL_FIELDS,
@@ -1325,8 +1382,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Create listings
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'listing',
             gqlFields: 'id name',
@@ -1337,7 +1393,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'listing',
             gqlFields: 'id name',
@@ -1348,8 +1404,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Create people linked to companies and listings
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1362,7 +1417,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1375,7 +1430,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'person',
             gqlFields: PERSON_GQL_FIELDS,
@@ -1390,9 +1445,8 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        // Cleanup people
         for (const id of [testPersonId, testPerson2Id, testPerson3Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'person',
               gqlFields: 'id',
@@ -1401,9 +1455,8 @@ describe('group-by resolver (integration)', () => {
           );
         }
 
-        // Cleanup listings
         for (const id of [testlistingId, testlisting2Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'listing',
               gqlFields: 'id',
@@ -1412,9 +1465,8 @@ describe('group-by resolver (integration)', () => {
           );
         }
 
-        // Cleanup company
         for (const id of [testCompanyId, testCompany2Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'company',
               gqlFields: 'id',
@@ -1423,7 +1475,6 @@ describe('group-by resolver (integration)', () => {
           );
         }
 
-        // Cleanup relation field
         if (isDefined(personlistingRelationFieldId)) {
           await updateOneFieldMetadata({
             input: {
@@ -1441,7 +1492,6 @@ describe('group-by resolver (integration)', () => {
           });
         }
 
-        // Cleanup listing object
         if (isDefined(listingObjectMetadataId)) {
           await updateOneObjectMetadata({
             input: {
@@ -1461,7 +1511,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('groups by two relation fields from different tables', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'person',
             objectMetadataPluralName: 'people',
@@ -1528,8 +1578,7 @@ describe('group-by resolver (integration)', () => {
       };
 
       beforeAll(async () => {
-        // Create rockets with different names
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'rocket',
             gqlFields: 'id name',
@@ -1540,7 +1589,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'rocket',
             gqlFields: 'id name',
@@ -1551,8 +1600,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Create pets linked to rockets via morph relation
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'pet',
             gqlFields: 'id name polymorphicOwnerRocket { id name }',
@@ -1565,7 +1613,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'pet',
             gqlFields: 'id name polymorphicOwnerRocket { id name }',
@@ -1578,7 +1626,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'pet',
             gqlFields: 'id name polymorphicOwnerRocket { id name }',
@@ -1593,9 +1641,8 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        // Cleanup pets
         for (const id of [testPetId, testPet2Id, testPet3Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'pet',
               gqlFields: 'id',
@@ -1604,9 +1651,8 @@ describe('group-by resolver (integration)', () => {
           );
         }
 
-        // Cleanup rockets
         for (const id of [testRocketId, testRocket2Id]) {
-          await makeGraphqlAPIRequest(
+          await makeGraphqlApiRequest(
             destroyOneOperationFactory({
               objectMetadataSingularName: 'rocket',
               gqlFields: 'id',
@@ -1617,7 +1663,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       it('groups by morph relation field - polymorphicOwnerRocket name', async () => {
-        const response = await makeGraphqlAPIRequest(
+        const response = await makeGraphqlApiRequest(
           groupByOperationFactory({
             objectMetadataSingularName: 'pet',
             objectMetadataPluralName: 'pets',
@@ -1661,7 +1707,6 @@ describe('group-by resolver (integration)', () => {
       let originalMemberRoleId: string;
 
       beforeAll(async () => {
-        // Get the original Member role ID for restoration later
         const getRolesQuery = {
           query: `
             query GetRoles {
@@ -1682,7 +1727,6 @@ describe('group-by resolver (integration)', () => {
           (role: any) => role.label === 'Member',
         ).id;
 
-        // Get object metadata IDs for pet and rocket
         const { objects } = await findManyObjectMetadata({
           input: {
             filter: {},
@@ -1704,7 +1748,6 @@ describe('group-by resolver (integration)', () => {
         petObjectId = petObject.id;
         rocketObjectId = rocketObject.id;
 
-        // Create a custom role with pet read permission but no rocket read permission
         const createRoleOperation = {
           query: gql`
             mutation CreateOneRole {
@@ -1727,11 +1770,10 @@ describe('group-by resolver (integration)', () => {
         };
 
         const createRoleResponse =
-          await makeMetadataAPIRequest(createRoleOperation);
+          await makeMetadataApiRequest(createRoleOperation);
 
         customRoleId = createRoleResponse.body.data.createOneRole.id;
 
-        // Set object permissions: allow reading pets but not rockets
         const upsertObjectPermissionsOperation = {
           query: gql`
             mutation UpsertObjectPermissions(
@@ -1770,17 +1812,15 @@ describe('group-by resolver (integration)', () => {
           },
         };
 
-        await makeMetadataAPIRequest(upsertObjectPermissionsOperation);
+        await makeMetadataApiRequest(upsertObjectPermissionsOperation);
 
-        // Assign the custom role to a workspace member
         await updateWorkspaceMemberRole({
           client,
           roleId: customRoleId,
           workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
         });
 
-        // Create a rocket
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'rocket',
             gqlFields: 'id name',
@@ -1791,8 +1831,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Create a pet linked to the rocket
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           createOneOperationFactory({
             objectMetadataSingularName: 'pet',
             gqlFields: 'id name polymorphicOwnerRocket { id name }',
@@ -1807,8 +1846,7 @@ describe('group-by resolver (integration)', () => {
       });
 
       afterAll(async () => {
-        // Cleanup pet
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'pet',
             gqlFields: 'id',
@@ -1816,8 +1854,7 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // Cleanup rocket
-        await makeGraphqlAPIRequest(
+        await makeGraphqlApiRequest(
           destroyOneOperationFactory({
             objectMetadataSingularName: 'rocket',
             gqlFields: 'id',
@@ -1825,7 +1862,6 @@ describe('group-by resolver (integration)', () => {
           }),
         );
 
-        // // Restore original role
         const restoreMemberRoleQuery = {
           query: `
             mutation UpdateWorkspaceMemberRole {
@@ -1844,7 +1880,6 @@ describe('group-by resolver (integration)', () => {
           .set('Authorization', `Bearer ${APPLE_JANE_ADMIN_ACCESS_TOKEN}`)
           .send(restoreMemberRoleQuery);
 
-        // // Delete custom role
         if (isDefined(customRoleId)) {
           await deleteRole(client, customRoleId);
         }
@@ -1866,7 +1901,7 @@ describe('group-by resolver (integration)', () => {
           ],
         };
 
-        const response = await makeGraphqlAPIRequestWithMemberRole(
+        const response = await makeGraphqlApiRequestWithMemberRole(
           groupByOperationFactory({
             objectMetadataSingularName: 'pet',
             objectMetadataPluralName: 'pets',

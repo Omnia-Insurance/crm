@@ -1,4 +1,4 @@
-import { type OutputSchemaField } from '@/ai/constants/OutputFieldTypeOptions';
+import { type OutputSchemaField } from '@/ai/types/OutputSchemaField';
 import { type AgentResponseSchema } from 'twenty-shared/ai';
 import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
@@ -6,7 +6,9 @@ import { v4 } from 'uuid';
 export const schemaToFields = (
   schema: AgentResponseSchema,
 ): OutputSchemaField[] => {
-  if (!isDefined(schema.properties)) return [];
+  if (!isDefined(schema.properties)) {
+    return [];
+  }
 
   return Object.entries(schema.properties).map(([key, field]) => ({
     id: v4(),

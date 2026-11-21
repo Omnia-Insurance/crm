@@ -310,6 +310,7 @@ describe('isMatchingCurrencyFilter', () => {
     });
   });
 
+  // OMNIA-CUSTOM: null-safety for unloaded currency values.
   describe('undefined value', () => {
     it('returns false when value is undefined and filter checks amountMicros', () => {
       const currencyFilter: CurrencyFilter = {

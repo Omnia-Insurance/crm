@@ -8,19 +8,17 @@ import { findManyApplications } from 'test/integration/graphql/utils/find-many-a
 import { forgeLegacyHs256Token } from 'test/integration/graphql/utils/forge-legacy-hs256-token.util';
 import { getAuthTokensFromLoginToken } from 'test/integration/graphql/utils/get-auth-tokens-from-login-token.util';
 import { getCurrentUser } from 'test/integration/graphql/utils/get-current-user.util';
-import { renewApplicationToken } from 'test/integration/graphql/utils/renew-application-token.util';
+import { renewApplicationToken } from 'test/integration/metadata/suites/application/utils/renew-application-token.util';
 import { renewToken } from 'test/integration/graphql/utils/renew-token.util';
 import { signUp } from 'test/integration/graphql/utils/sign-up.util';
 import { signUpInNewWorkspace } from 'test/integration/graphql/utils/sign-up-in-new-workspace.util';
 
-import {
-  type AccessTokenJwtPayload,
-  type ApplicationRefreshTokenJwtPayload,
-  JwtTokenTypeEnum,
-  type LoginTokenJwtPayload,
-  type RefreshTokenJwtPayload,
-  type WorkspaceAgnosticTokenJwtPayload,
-} from 'src/engine/core-modules/auth/types/auth-context.type';
+import { type AccessTokenJwtPayload } from 'src/engine/core-modules/auth/types/access-token-jwt-payload.type';
+import { type ApplicationRefreshTokenJwtPayload } from 'src/engine/core-modules/auth/types/application-refresh-token-jwt-payload.type';
+import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
+import { type LoginTokenJwtPayload } from 'src/engine/core-modules/auth/types/login-token-jwt-payload.type';
+import { type RefreshTokenJwtPayload } from 'src/engine/core-modules/auth/types/refresh-token-jwt-payload.type';
+import { type WorkspaceAgnosticTokenJwtPayload } from 'src/engine/core-modules/auth/types/workspace-agnostic-token-jwt-payload.type';
 import { AuthProviderEnum } from 'src/engine/core-modules/workspace/types/workspace.type';
 import { API_KEY_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/api-key-data-seeds.constant';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
@@ -133,6 +131,7 @@ describe('JWT Legacy HS256 no-kid fallback (integration)', () => {
       workspaceId: sharedLoginPayload.workspaceId,
       authProvider:
         sharedLoginPayload.authProvider ?? AuthProviderEnum.Password,
+      jti: randomUUID(),
     };
 
     const forgedToken = forgeLegacyHs256Token(
@@ -291,35 +290,34 @@ describe('JWT Legacy HS256 no-kid fallback - seeded-workspace tokens (integratio
   });
 
   it('verifies a hand-crafted no-kid HS256 APPLICATION_REFRESH token via the legacy fallback (round-trip through renewApplicationToken)', async () => {
+    const sessionAccessTokenPayload = jwt.decode(
+      APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    ) as AccessTokenJwtPayload;
+
     const forgedPayload: ApplicationRefreshTokenJwtPayload = {
       sub: seededApplicationId,
       type: JwtTokenTypeEnum.APPLICATION_REFRESH,
       workspaceId: seededWorkspaceId,
       applicationId: seededApplicationId,
+      userId: sessionAccessTokenPayload.userId,
+      userWorkspaceId: sessionAccessTokenPayload.userWorkspaceId,
     };
 
-    const forgedToken = forgeLegacyHs256Token(
-      forgedPayload as unknown as Record<string, unknown> & {
-        type: JwtTokenTypeEnum;
-      },
-      seededWorkspaceId,
-    );
+    const forgedToken = forgeLegacyHs256Token(forgedPayload, seededWorkspaceId);
 
     const decoded = decodeJwtCompleteOrThrow(forgedToken);
 
     expect(decoded.header.alg).toBe('HS256');
     expect(decoded.header.kid).toBeUndefined();
 
-    const response = await renewApplicationToken({
-      applicationRefreshToken: forgedToken,
-      accessToken: APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    const { data } = await renewApplicationToken({
+      input: { applicationRefreshToken: forgedToken },
+      expectToFail: false,
     });
 
-    expect(response.body.errors).toBeUndefined();
+    const renewed = data.renewApplicationToken;
 
-    const renewed = response.body.data?.renewApplicationToken;
-
-    expect(isNonEmptyString(renewed?.applicationAccessToken.token)).toBe(true);
-    expect(isNonEmptyString(renewed?.applicationRefreshToken.token)).toBe(true);
+    expect(isNonEmptyString(renewed.applicationAccessToken.token)).toBe(true);
+    expect(isNonEmptyString(renewed.applicationRefreshToken.token)).toBe(true);
   });
 });

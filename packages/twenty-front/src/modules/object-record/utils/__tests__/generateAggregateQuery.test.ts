@@ -1,3 +1,4 @@
+import { ObjectOpenRecordIn, type RecordGqlFields } from 'twenty-shared/types';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { generateAggregateQuery } from '@/object-record/utils/generateAggregateQuery';
 
@@ -11,7 +12,6 @@ describe('generateAggregateQuery', () => {
       labelSingular: 'Company',
       labelPlural: 'Companies',
       labelIdentifierFieldMetadataId: '20202020-72ba-4e11-a36d-e17b544541e1',
-      isCustom: false,
       isActive: true,
       isSearchable: false,
       createdAt: new Date().toISOString(),
@@ -20,16 +20,19 @@ describe('generateAggregateQuery', () => {
       readableFields: [],
       updatableFields: [],
       indexMetadatas: [],
+      searchFieldMetadatas: [],
       isLabelSyncedWithName: true,
       isRemote: false,
       isSystem: false,
-      isUIReadOnly: false,
+      isAuditLogged: true,
+      isUIEditable: true,
+      isUICreatable: true,
+      openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
     };
 
-    const mockRecordGqlFields = {
+    const mockRecordGqlFields: RecordGqlFields = {
       id: true,
       name: true,
-      address: false,
       createdAt: true,
     };
 
@@ -54,7 +57,6 @@ describe('generateAggregateQuery', () => {
       labelSingular: 'Person',
       labelPlural: 'People',
       labelIdentifierFieldMetadataId: '20202020-72ba-4e11-a36d-e17b544541e1',
-      isCustom: false,
       isActive: true,
       isSearchable: false,
       createdAt: new Date().toISOString(),
@@ -63,13 +65,17 @@ describe('generateAggregateQuery', () => {
       readableFields: [],
       updatableFields: [],
       indexMetadatas: [],
+      searchFieldMetadatas: [],
       isLabelSyncedWithName: true,
       isRemote: false,
       isSystem: false,
-      isUIReadOnly: false,
+      isAuditLogged: true,
+      isUIEditable: true,
+      isUICreatable: true,
+      openRecordIn: ObjectOpenRecordIn.USER_CHOICE,
     };
 
-    const mockRecordGqlFields = {
+    const mockRecordGqlFields: RecordGqlFields = {
       id: true,
     };
 

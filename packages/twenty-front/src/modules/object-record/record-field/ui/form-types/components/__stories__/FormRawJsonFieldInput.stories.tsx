@@ -17,6 +17,36 @@ export default meta;
 
 type Story = StoryObj<typeof FormRawJsonFieldInput>;
 
+export const WithError: Story = {
+  args: {
+    label: 'Body',
+    placeholder: 'Enter valid json',
+    error:
+      'Use only letters, numbers, underscores, dots or hyphens (max 64 characters).',
+    onChange: fn(),
+  },
+  render: (args) => (
+    <div style={{ width: 240 }}>
+      <FormRawJsonFieldInput {...args} />
+      <FormRawJsonFieldInput
+        label="Headers"
+        placeholder="Enter valid json"
+        defaultValue={null}
+        onChange={fn()}
+      />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const error = await canvas.findByText(
+      'Use only letters, numbers, underscores, dots or hyphens (max 64 characters).',
+    );
+
+    expect(error).toBeVisible();
+  },
+};
+
 export const Default: Story = {
   args: {
     label: 'JSON field',
@@ -313,10 +343,7 @@ export const ClearField: Story = {
   },
 };
 
-/**
- * Line breaks are not authorized in JSON strings. Users should instead put newlines characters themselves.
- * See https://stackoverflow.com/a/42073.
- */
+// Line breaks are not allowed in JSON strings, users type escaped newlines (https://stackoverflow.com/a/42073)
 export const DoesNotBreakWhenUserInsertsNewlineInJsonString: Story = {
   args: {
     placeholder: 'Enter valid json',

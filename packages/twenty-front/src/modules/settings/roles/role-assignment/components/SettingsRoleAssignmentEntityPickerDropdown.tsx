@@ -1,42 +1,17 @@
-import { SettingsEmptyPlaceholder } from '@/settings/components/SettingsEmptyPlaceholder';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { DropdownMenuSearchInput } from '@/ui/layout/dropdown/components/DropdownMenuSearchInput';
-import { DropdownMenuSeparator } from '@/ui/layout/dropdown/components/DropdownMenuSeparator';
-import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
-import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@apollo/client/react';
+import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { type FlatAgent } from '@/metadata-store/types/FlatAgent';
 import {
-  type Agent,
   type ApiKeyForRole,
   FindManyAgentsDocument,
   GetApiKeysDocument,
 } from '~/generated-metadata/graphql';
-import { normalizeSearchText } from '~/utils/normalizeSearchText';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { normalizeSearchText } from 'twenty-ui/utilities';
 
-const StyledLoadingContainer = styled.div`
-  padding: ${themeCssVariables.spacing[2]};
-  text-align: center;
-`;
-
-const StyledDropdownItem = styled.div`
-  cursor: pointer;
-  padding: ${themeCssVariables.spacing[2]};
-
-  &:hover {
-    background-color: ${themeCssVariables.background.transparent.lighter};
-  }
-`;
-
-const StyledItemName = styled.div`
-  color: ${themeCssVariables.font.color.secondary};
-  font-weight: ${themeCssVariables.font.weight.medium};
-`;
-
-type EntityData = Agent | ApiKeyForRole;
+type EntityData = FlatAgent | ApiKeyForRole;
 
 type SettingsRoleAssignmentEntityPickerDropdownProps = {
   entityType: 'agent' | 'apiKey';
@@ -51,8 +26,10 @@ export const SettingsRoleAssignmentEntityPickerDropdown = ({
 }: SettingsRoleAssignmentEntityPickerDropdownProps) => {
   const [searchFilter, setSearchFilter] = useState('');
   const { t } = useLingui();
+  const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
 
   const isAgent = entityType === 'agent';
+  const shouldShowSystemAgents = searchFilter !== '';
 
   const { data: agentsData, loading: agentsLoading } = useQuery(
     FindManyAgentsDocument,
@@ -71,9 +48,19 @@ export const SettingsRoleAssignmentEntityPickerDropdown = ({
 
   const entities = useMemo(() => {
     return ((isAgent
-      ? agentsData?.findManyAgents.filter((agent) => agent.isCustom)
+      ? agentsData?.findManyAgents.filter(
+          (agent) =>
+            getIsMetadataItemCustom(agent) &&
+            (!agent.isSystem || shouldShowSystemAgents),
+        )
       : apiKeysData?.apiKeys) || []) as EntityData[];
-  }, [isAgent, agentsData?.findManyAgents, apiKeysData?.apiKeys]);
+  }, [
+    isAgent,
+    agentsData?.findManyAgents,
+    apiKeysData?.apiKeys,
+    shouldShowSystemAgents,
+    getIsMetadataItemCustom,
+  ]);
 
   const placeholder = isAgent ? t`Search agents` : t`Search API keys`;
 
@@ -82,9 +69,8 @@ export const SettingsRoleAssignmentEntityPickerDropdown = ({
       return isAgent
         ? t`No agents match your search`
         : t`No API keys match your search`;
-    } else {
-      return isAgent ? t`No agents available` : t`No API keys available`;
     }
+    return isAgent ? t`No agents available` : t`No API keys available`;
   };
 
   const filteredEntities = useMemo(() => {
@@ -97,47 +83,42 @@ export const SettingsRoleAssignmentEntityPickerDropdown = ({
       }
 
       if (isAgent) {
-        const agent = entity as Agent;
+        const agent = entity as FlatAgent;
         return (
           normalizeSearchText(agent.name).includes(searchTerm) ||
           normalizeSearchText(agent.label).includes(searchTerm)
         );
-      } else {
-        return normalizeSearchText((entity as ApiKeyForRole).name).includes(
-          searchTerm,
-        );
       }
+      return normalizeSearchText((entity as ApiKeyForRole).name).includes(
+        searchTerm,
+      );
     });
   }, [entities, searchFilter, excludedIds, isAgent]);
 
   return (
-    <DropdownContent widthInPixels={GenericDropdownContentWidth.Medium}>
-      <DropdownMenuSearchInput
+    <>
+      <Dropdown.Search
         value={searchFilter}
-        onChange={(event) => setSearchFilter(event.target.value)}
+        onValueChange={setSearchFilter}
         placeholder={placeholder}
+        aria-label={placeholder}
       />
-      <DropdownMenuSeparator />
-      <DropdownMenuItemsContainer hasMaxHeight>
-        {loading ? (
-          <StyledLoadingContainer>{t`Loading...`}</StyledLoadingContainer>
-        ) : filteredEntities.length > 0 ? (
-          filteredEntities.map((entity) => (
-            <StyledDropdownItem
-              key={entity.id}
-              onClick={() => onSelect(entity as EntityData)}
-            >
-              <StyledItemName>
-                {isAgent ? (entity as Agent).label : entity.name}
-              </StyledItemName>
-            </StyledDropdownItem>
-          ))
-        ) : (
-          <SettingsEmptyPlaceholder padding="2">
-            {getEmptyStateMessage()}
-          </SettingsEmptyPlaceholder>
+      <Dropdown.Separator />
+      <Dropdown.Section scrollable>
+        {loading && <Dropdown.Loading>{t`Loading...`}</Dropdown.Loading>}
+        {!loading && filteredEntities.length === 0 && (
+          <Dropdown.Empty>{getEmptyStateMessage()}</Dropdown.Empty>
         )}
-      </DropdownMenuItemsContainer>
-    </DropdownContent>
+        {!loading &&
+          filteredEntities.map((entity) => (
+            <Dropdown.ActionItem
+              key={entity.id}
+              onClick={() => onSelect(entity)}
+            >
+              {isAgent ? (entity as FlatAgent).label : entity.name}
+            </Dropdown.ActionItem>
+          ))}
+      </Dropdown.Section>
+    </>
   );
 };

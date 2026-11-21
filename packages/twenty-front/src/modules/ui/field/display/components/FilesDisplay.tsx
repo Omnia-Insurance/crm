@@ -1,12 +1,9 @@
-import { downloadFile } from '@/activities/files/utils/downloadFile';
-import { isAttachmentPreviewEnabledState } from '@/client-config/states/isAttachmentPreviewEnabledState';
+import { useLingui } from '@lingui/react/macro';
 import { type FieldFilesValue } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { FileChip } from '@/ui/field/display/components/FileChip';
 import { UploadFileChip } from '@/ui/field/display/components/UploadFileChip';
-import { filePreviewState } from '@/ui/field/display/states/filePreviewState';
-import { ExpandableList } from '@/ui/layout/expandable-list/components/ExpandableList';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
+import { useOpenFilePreview } from '@/ui/field/display/hooks/useOpenFilePreview';
+import { OverflowingList } from 'twenty-ui/components/layout';
 import { isDefined } from 'twenty-shared/utils';
 
 type FilesDisplayProps = {
@@ -22,20 +19,9 @@ export const FilesDisplay = ({
   isUploadWindowOpen = false,
   isFileUploading = false,
 }: FilesDisplayProps) => {
-  const setFilePreview = useSetAtomState(filePreviewState);
-  const isAttachmentPreviewEnabled = useAtomStateValue(
-    isAttachmentPreviewEnabledState,
-  );
+  const { t } = useLingui();
 
-  const handlePreview = (file: FieldFilesValue) => {
-    if (!isAttachmentPreviewEnabled) {
-      if (isDefined(file.url)) {
-        downloadFile(file.url, file.label ?? 'file');
-      }
-      return;
-    }
-    setFilePreview(file);
-  };
+  const { openFilePreview } = useOpenFilePreview();
 
   if (!isDefined(value) || value.length === 0) {
     if (isFileUploading) {
@@ -48,15 +34,15 @@ export const FilesDisplay = ({
   }
 
   return (
-    <ExpandableList>
+    <OverflowingList overflowLabel={t`Show all items`}>
       {value.map((file) => (
         <FileChip
           key={file.fileId}
           file={file}
-          onClick={handlePreview}
+          onClick={openFilePreview}
           forceDisableClick={forceDisableClick}
         />
       ))}
-    </ExpandableList>
+    </OverflowingList>
   );
 };

@@ -14,7 +14,8 @@ on:
 
 concurrency:
   group: deploy-eks
-  cancel-in-progress: true
+  # A cancelled run can stop Helm mid-upgrade while the migration job is running.
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
@@ -63,12 +64,22 @@ jobs:
             type=ref,event=branch
             type=raw,value=latest
 
+      # APP_VERSION must equal the server's upgrade version: it stamps executed
+      # upgrade commands and drives the client version-mismatch refresh.
+      - name: Derive APP_VERSION
+        id: app-version
+        run: |
+          version=$(sed -n "s/^export const TWENTY_CURRENT_VERSION = '\([0-9.]*\)'.*/\1/p" packages/twenty-server/src/engine/core-modules/upgrade/constants/twenty-current-version.constant.ts)
+          test -n "$version"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/twenty-docker/twenty/Dockerfile
+          # Without a target Docker builds the last stage, the all-in-one twenty-app-dev image.
           target: twenty
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -76,10 +87,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            REACT_APP_SERVER_BASE_URL=/api
-            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
-            SENTRY_RELEASE=${{ github.sha }}
-            APP_VERSION=2.6.1
+            APP_VERSION=${{ steps.app-version.outputs.value }}
 
   deploy:
     name: Deploy to EKS
@@ -109,37 +117,48 @@ jobs:
         with:
           version: 'v3.16.4'
 
+      # deploy_only deploys this commit's build too, never latest: with pullPolicy IfNotPresent
+      # that mutable tag lets the migration job and each node run a different build.
       - name: Determine image tag
         id: image-tag
         run: |
+          # Use short SHA (7 chars) to match docker/metadata-action output
+          tag="${GITHUB_SHA::7}"
           if [ "${{ github.event.inputs.deploy_only }}" == "true" ]; then
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          else
-            # Use short SHA (7 chars) to match docker/metadata-action output
-            echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+            found=$(aws ecr batch-get-image --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$tag" --query 'length(images)' --output text)
+            if [ "$found" = "0" ]; then
+              echo "::error::$ECR_REPOSITORY:$tag is not in ECR. Run the workflow without deploy_only to build it."
+              exit 1
+            fi
           fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - name: Clear stale Helm state
+      # Never roll back on its own: the previous image may predate a schema the migration
+      # job already upgraded, and a new upgrade could race a migration job still running.
+      - name: Stop on a stuck Helm release
         run: |
           STATUS=$(helm status ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status' || echo "not-found")
           if [ "$STATUS" = "pending-upgrade" ] || [ "$STATUS" = "pending-install" ] || [ "$STATUS" = "pending-rollback" ]; then
-            echo "Found stale Helm state ($STATUS), rolling back..."
-            helm rollback ${{ env.HELM_RELEASE }} 0 --namespace ${{ env.NAMESPACE }} --wait --timeout 3m || true
+            echo "::error::Helm release ${{ env.HELM_RELEASE }} is $STATUS. Check the migration job (kubectl get jobs -n ${{ env.NAMESPACE }}), clear the release lock by hand, then re-run this workflow."
+            exit 1
           fi
 
+      # --set-string keeps an all-digit short SHA a string. The timeout covers the
+      # pre-upgrade migration job (activeDeadlineSeconds 3600) plus the rollout.
+      # No --install: an install skips that pre-upgrade job. No --atomic: the job has
+      # already upgraded the database, so rolling back would run the old image on it.
       - name: Deploy with Helm
         run: |
-          helm upgrade --install ${{ env.HELM_RELEASE }} \
+          helm upgrade ${{ env.HELM_RELEASE }} \
             ./packages/twenty-docker/helm/twenty \
             --namespace ${{ env.NAMESPACE }} \
             --values packages/twenty-docker/helm/twenty/omnia-values.yaml \
             --set server.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
-            --set server.image.tag=${{ steps.image-tag.outputs.tag }} \
+            --set-string server.image.tag=${{ steps.image-tag.outputs.tag }} \
             --set worker.image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
-            --set worker.image.tag=${{ steps.image-tag.outputs.tag }} \
+            --set-string worker.image.tag=${{ steps.image-tag.outputs.tag }} \
             --wait \
-            --atomic \
-            --timeout 10m
+            --timeout 65m
 
       - name: Verify deployment
         run: |

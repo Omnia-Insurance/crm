@@ -1,4 +1,6 @@
 storage: /tmp/verdaccio-storage
+# Published tarballs are base64-encoded in the registry request body.
+max_body_size: 50mb
 auth:
   htpasswd:
     file: /tmp/verdaccio-htpasswd
@@ -13,7 +15,7 @@ packages:
   'twenty-client-sdk':
     access: $all
     publish: $all
-  'create-twenty-app':
+  'twenty-ui':
     access: $all
     publish: $all
   '**':

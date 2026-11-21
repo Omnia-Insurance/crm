@@ -1,9 +1,9 @@
 import { type AppErrorDisplayProps } from '@/error-handler/types/AppErrorDisplayProps';
 import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
-import { useContext } from 'react';
-import { IconReload } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconReload } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 type AppRootErrorFallbackProps = AppErrorDisplayProps;
 
@@ -11,15 +11,15 @@ const StyledContainer = styled.div`
   background: ${themeCssVariables.background.noisy};
   box-sizing: border-box;
   display: flex;
-  height: 100vh;
+  height: calc(100vh / var(--t-zoom, 1));
   padding: 12px;
-  width: 100vw;
+  width: calc(100vw / var(--t-zoom, 1));
 `;
 
 const StyledPanel = styled.div`
   background: ${themeCssVariables.grayScale.gray1};
   border: 1px solid ${themeCssVariables.grayScale.gray5};
-  border-radius: 8px;
+  border-radius: ${themeCssVariables.border.radius.md};
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
@@ -81,30 +81,10 @@ const StyledEmptySubTitle = styled.div`
   width: 50%;
 `;
 
-const StyledButton = styled.button`
-  align-items: center;
-  background: ${themeCssVariables.grayScale.gray1};
-  border: 1px solid ${themeCssVariables.grayScale.gray5};
-  border-radius: 8px;
-  color: ${themeCssVariables.grayScale.gray12};
-  cursor: pointer;
-  display: flex;
-  padding: 8px;
-  padding: 8px 16px;
-`;
-
-const StyledIconContainer = styled.span`
-  color: ${themeCssVariables.grayScale.gray12};
-  display: inline-flex;
-  margin-right: 8px;
-`;
-
 export const AppRootErrorFallback = ({
   resetErrorBoundary,
   title = t`Sorry, something went wrong`,
 }: AppRootErrorFallbackProps) => {
-  const { theme } = useContext(ThemeContext);
-
   return (
     <StyledContainer>
       <StyledPanel>
@@ -125,12 +105,13 @@ export const AppRootErrorFallback = ({
               {t`Please refresh the page.`}
             </StyledEmptySubTitle>
           </StyledEmptyTextContainer>
-          <StyledButton onClick={resetErrorBoundary}>
-            <StyledIconContainer>
-              <IconReload size={theme.icon.size.md} />
-            </StyledIconContainer>
+          <Button
+            variant="outline"
+            startIcon={<IconReload />}
+            onClick={resetErrorBoundary}
+          >
             {t`Reload`}
-          </StyledButton>
+          </Button>
         </StyledEmptyContainer>
       </StyledPanel>
     </StyledContainer>

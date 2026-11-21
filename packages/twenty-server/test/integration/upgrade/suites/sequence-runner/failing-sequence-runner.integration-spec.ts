@@ -8,67 +8,71 @@ import {
   DEFAULT_OPTIONS,
   makeFastInstance,
   makeSlowInstance,
-  makeStep,
   makeWorkspace,
   migrationRecordToKey,
   resetSeedSequenceCounter,
+  restoreUpgradeMigrations,
   seedInstanceMigration,
   seedWorkspaceMigration,
   setMockActiveWorkspaceIds,
+  snapshotUpgradeMigrations,
   testGetExecutedMigrationsInOrder,
   WS_1,
   WS_2,
 } from 'test/integration/upgrade/utils/upgrade-sequence-runner-integration-test.util';
 
-const makeFailingFastInstance = (name: string, error: Error): UpgradeStep =>
-  ({
-    ...makeStep('fast-instance', name),
-    command: {
-      up: async () => {
-        throw error;
-      },
-      down: async () => {},
+const makeFailingFastInstance = (name: string, error: Error): UpgradeStep => ({
+  ...makeFastInstance(name),
+  command: {
+    up: async () => {
+      throw error;
     },
-  }) as unknown as UpgradeStep;
+    down: async () => {},
+  },
+});
 
 const makeFailingWorkspace = (
   name: string,
   error: Error,
-): WorkspaceUpgradeStep =>
-  ({
-    ...makeStep('workspace', name),
-    command: {
-      runOnWorkspace: async () => {
-        throw error;
-      },
+): WorkspaceUpgradeStep => ({
+  ...makeWorkspace(name),
+  command: {
+    runOnWorkspace: async () => {
+      throw error;
     },
-  }) as unknown as WorkspaceUpgradeStep;
+  },
+});
 
 const makeWorkspaceFailingForIds = (
   name: string,
   failingWorkspaceIds: Set<string>,
   error: Error,
-): WorkspaceUpgradeStep =>
-  ({
-    ...makeStep('workspace', name),
-    command: {
-      runOnWorkspace: async ({ workspaceId }: { workspaceId: string }) => {
-        if (failingWorkspaceIds.has(workspaceId)) {
-          throw error;
-        }
-      },
+): WorkspaceUpgradeStep => ({
+  ...makeWorkspace(name),
+  command: {
+    runOnWorkspace: async ({ workspaceId }) => {
+      if (failingWorkspaceIds.has(workspaceId)) {
+        throw error;
+      }
     },
-  }) as unknown as WorkspaceUpgradeStep;
+  },
+});
 
 describe('UpgradeSequenceRunnerService — failing sequence (integration)', () => {
   let context: IntegrationTestContext;
+  let savedUpgradeMigrations: Awaited<
+    ReturnType<typeof snapshotUpgradeMigrations>
+  >;
 
   beforeAll(async () => {
     context = await createUpgradeSequenceRunnerIntegrationTestModule();
+    savedUpgradeMigrations = await snapshotUpgradeMigrations(
+      context.dataSource,
+    );
   }, 30000);
 
   afterAll(async () => {
-    await context.dataSource.query('DELETE FROM core."upgradeMigration"');
+    await restoreUpgradeMigrations(context.dataSource, savedUpgradeMigrations);
     await context.module?.close();
     await context.dataSource?.destroy();
   }, 15000);
@@ -202,7 +206,6 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      // Seeds
       'Ic1:instance:completed:1',
 
       // Ic2 attempted and failed
@@ -223,7 +226,7 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
             throw error;
           },
         },
-      } as unknown as UpgradeStep,
+      },
     ];
 
     setMockActiveWorkspaceIds([WS_1]);
@@ -244,7 +247,6 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      // Seeds
       'Ic1:instance:completed:1',
       `Ic1:${WS_1}:completed:1`,
 
@@ -280,7 +282,6 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      // Seeds
       `Wc1:${WS_1}:failed:1`,
 
       // Runner retries Wc1, still fails — Ic1 never reached
@@ -342,7 +343,6 @@ describe('UpgradeSequenceRunnerService — failing sequence (integration)', () =
     const executed = await testGetExecutedMigrationsInOrder(context.dataSource);
 
     expect(executed.map(migrationRecordToKey)).toStrictEqual([
-      // Seeds
       `Wc0:${WS_1}:completed:1`,
       `Wc0:${WS_2}:completed:1`,
       'Ic1:instance:completed:1',

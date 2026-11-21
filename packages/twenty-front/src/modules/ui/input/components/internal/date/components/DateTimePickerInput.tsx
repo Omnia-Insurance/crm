@@ -1,4 +1,5 @@
 import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
 import { useIMask } from 'react-imask';
 
 import { useDateTimeFormat } from '@/localization/hooks/useDateTimeFormat';
@@ -7,6 +8,7 @@ import { MAX_DATE } from '@/ui/input/components/internal/date/constants/MaxDate'
 import { MIN_DATE } from '@/ui/input/components/internal/date/constants/MinDate';
 import { getDateTimeMask } from '@/ui/input/components/internal/date/utils/getDateTimeMask';
 import { getTimeBlocks } from '@/ui/input/components/internal/date/utils/getTimeBlocks';
+import { type FormFieldInputVariant } from '@/ui/input/types/FormFieldInputVariant';
 
 import { TimeZoneAbbreviation } from '@/ui/input/components/internal/date/components/TimeZoneAbbreviation';
 import { useGetShiftedDateToCustomTimeZone } from '@/ui/input/components/internal/date/hooks/useGetShiftedDateToCustomTimeZone';
@@ -17,27 +19,37 @@ import { useUserTimezone } from '@/ui/input/components/internal/date/hooks/useUs
 import { useEffect, useState } from 'react';
 import { Temporal } from 'temporal-polyfill';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { isDifferentZonedDateTime } from '~/utils/dates/isDifferentZonedDateTime';
 
-const StyledInputContainer = styled.div`
+const StyledInputContainer = styled.div<{
+  $variant: FormFieldInputVariant;
+}>`
   align-items: center;
-
-  border-top-left-radius: ${themeCssVariables.border.radius.md};
-  border-top-right-radius: ${themeCssVariables.border.radius.md};
   display: flex;
-  height: ${themeCssVariables.spacing[8]};
+  height: ${({ $variant }) =>
+    $variant === 'transparent'
+      ? themeCssVariables.spacing[6]
+      : themeCssVariables.spacing[8]};
   width: 100%;
+
+  &:focus-within {
+    box-shadow: inset 0 -1px 0 ${themeCssVariables.color.blue};
+  }
 `;
 
-const StyledInput = styled.input<{ hasError?: boolean }>`
+const StyledInput = styled.input<{
+  $variant: FormFieldInputVariant;
+}>`
   background: transparent;
   border: none;
   color: ${themeCssVariables.font.color.primary};
   font-size: ${themeCssVariables.font.size.md};
-  font-weight: 500;
+  font-weight: ${({ $variant }) =>
+    $variant === 'transparent' ? themeCssVariables.font.weight.regular : 500};
   outline: none;
-  padding-left: ${themeCssVariables.spacing[2]};
+  padding-left: ${({ $variant }) =>
+    $variant === 'transparent' ? '0' : themeCssVariables.spacing[2]};
   width: 140px;
 `;
 
@@ -47,6 +59,7 @@ type DateTimePickerInputProps = {
   onFocus?: () => void;
   readonly?: boolean;
   timeZone?: string;
+  variant?: FormFieldInputVariant;
 };
 
 export const DateTimePickerInput = ({
@@ -55,7 +68,9 @@ export const DateTimePickerInput = ({
   onFocus,
   readonly,
   timeZone,
+  variant = 'default',
 }: DateTimePickerInputProps) => {
+  const { t } = useLingui();
   const [internalDate, setInternalDate] = useState(date);
 
   const { userTimezone } = useUserTimezone();
@@ -94,7 +109,7 @@ export const DateTimePickerInput = ({
       )
     : null;
 
-  const { ref, setValue } = useIMask(
+  const { ref, setValue } = useIMask<HTMLInputElement>(
     {
       mask: Date,
       pattern,
@@ -168,11 +183,13 @@ export const DateTimePickerInput = ({
     internalDate?.toInstant() ?? Temporal.Now.instant();
 
   return (
-    <StyledInputContainer>
+    <StyledInputContainer $variant={variant}>
       <StyledInput
+        $variant={variant}
         disabled={shouldDisplayReadOnly}
         type="text"
-        ref={ref as any}
+        aria-label={t`Date and time`}
+        ref={ref}
         onFocus={!shouldDisplayReadOnly ? onFocus : undefined}
       />
       <TimeZoneAbbreviation

@@ -1,12 +1,14 @@
+import { msg } from '@lingui/core/macro';
 import { v4 } from 'uuid';
 import { isDefined } from 'twenty-shared/utils';
 
 import { type ApplicationService } from 'src/engine/core-modules/application/application.service';
-import { CommandMenuItemAvailabilityType } from 'src/engine/metadata-modules/command-menu-item/enums/command-menu-item-availability-type.enum';
+import { CommandMenuItemAvailabilityType } from 'twenty-shared/types';
 import { EngineComponentKey } from 'src/engine/metadata-modules/command-menu-item/enums/engine-component-key.enum';
 import { type FlatCommandMenuItem } from 'src/engine/metadata-modules/flat-command-menu-item/types/flat-command-menu-item.type';
 import { type WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
-import { QUICK_LEAD_WORKFLOW_VERSION_ID } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-workflows.util';
+import { getWorkflowPrefillIds } from 'src/engine/workspace-manager/standard-objects-prefill-data/utils/prefill-workflows.util';
+import { i18nLabel } from 'src/engine/workspace-manager/twenty-standard-application/utils/i18n-label.util';
 import { type WorkspaceMigrationValidateBuildAndRunService } from 'src/engine/workspace-manager/workspace-migration/services/workspace-migration-validate-build-and-run-service';
 
 const QUICK_LEAD_COMMAND_MENU_ITEM_UNIVERSAL_IDENTIFIER =
@@ -46,6 +48,8 @@ export const prefillWorkflowCommandMenuItems = async ({
 
   const now = new Date().toISOString();
 
+  const { coreQuickLeadWorkflowVersionId } = getWorkflowPrefillIds(workspaceId);
+
   const quickLeadFlatCommandMenuItem: FlatCommandMenuItem = {
     id: v4(),
     universalIdentifier: QUICK_LEAD_COMMAND_MENU_ITEM_UNIVERSAL_IDENTIFIER,
@@ -53,23 +57,36 @@ export const prefillWorkflowCommandMenuItems = async ({
     applicationUniversalIdentifier:
       workspaceCustomFlatApplication.universalIdentifier,
     workspaceId,
-    workflowVersionId: QUICK_LEAD_WORKFLOW_VERSION_ID,
+    workflowVersionId: null,
+    coreWorkflowVersionId: coreQuickLeadWorkflowVersionId,
     frontComponentId: null,
     frontComponentUniversalIdentifier: null,
     engineComponentKey: EngineComponentKey.TRIGGER_WORKFLOW_VERSION,
-    label: 'Quick Lead',
+    label: i18nLabel(
+      msg({ message: `Quick Lead`, context: 'commandMenuItem.label' }),
+    ),
     icon: 'IconUserPlus',
-    shortLabel: 'Quick Lead',
+    shortLabel: i18nLabel(
+      msg({ message: `Quick Lead`, context: 'commandMenuItem.shortLabel' }),
+    ),
     position: 100,
     isPinned: false,
     availabilityType: CommandMenuItemAvailabilityType.GLOBAL,
     conditionalAvailabilityExpression: null,
+    conditionalPinnedExpression: null,
+    availabilityCoreObjectName: null,
     availabilityObjectMetadataId: null,
     availabilityObjectMetadataUniversalIdentifier: null,
+    navigationTargetObjectMetadataId: null,
+    navigationTargetObjectMetadataUniversalIdentifier: null,
     payload: null,
     hotKeys: null,
     pageLayoutId: null,
     pageLayoutUniversalIdentifier: null,
+    isActive: true,
+    isSystemSideEffect: false,
+    overrides: null,
+    universalOverrides: null,
     createdAt: now,
     updatedAt: now,
   };

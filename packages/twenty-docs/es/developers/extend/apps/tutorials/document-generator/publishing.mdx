@@ -1,0 +1,138 @@
+---
+title: 6. Publicación
+description: Añade metadatos de mercado y publica tu aplicación.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Añadir metadatos de mercado
+
+La [configuración de la aplicación](/es/developers/extend/apps/config/application) lleva los enlaces
+que se muestran en el mercado: autor, categoría, logotipo y soporte
+. Coloca un logotipo en `public/` y haz referencia a él con `logo`.
+
+```ts filename="src/application-config.ts"
+import { defineApplication } from 'twenty-sdk/define';
+
+export default defineApplication({
+  universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
+  displayName: 'Document Generator',
+  description:
+    'Create reusable document templates and generate personalized documents from your CRM records.',
+  logo: 'public/document-generator.svg',
+  author: 'Twenty',
+  category: 'Productivity',
+  websiteUrl: 'https://docs.twenty.com/es/developers/extend/apps',
+  termsUrl: 'https://www.twenty.com/terms',
+  emailSupport: 'contact@twenty.com',
+  issueReportUrl: 'https://github.com/twentyhq/twenty/issues',
+});
+```
+
+<Tip>
+  El rol por defecto se declara con `defineApplicationRole()` en su propio archivo —
+  ya no pasas `defaultRoleUniversalIdentifier` aquí.
+</Tip>
+
+También añade la palabra clave `twenty-app` a `package.json` para que la aplicación sea detectable:
+
+```json filename="package.json"
+{ "keywords": ["twenty-app"] }
+```
+
+## Añadir capturas de pantalla de galería
+
+Un listado de mercado se vende a sí mismo con capturas de pantalla. Coloca algunos PNG en `public/gallery/` y haz referencia a ellos con `galleryImages` — se muestran como una galería en la página de listado, en el orden del array.
+
+```ts filename="src/application-config.ts"
+export default defineApplication({
+  // ...identity from above
+  galleryImages: [
+    'public/gallery/01-generated-document.png',
+    'public/gallery/02-command-menu.png',
+    'public/gallery/03-template-editor.png',
+    'public/gallery/04-documents.png',
+  ],
+});
+```
+
+<Tip>
+  Lidera con la ganancia: haz la primera captura de pantalla el resultado terminado (un documento
+  generado), luego muestra cómo se activa y se autoriza. Usa capturas nítidas,
+  de alta resolución, son lo primero que un usuario ve.
+</Tip>
+
+Dale a `README.md` el mismo tratamiento: es la página principal de npm y GitHub.
+Abre con la proposición de valor y una captura de pantalla, muestra las características de la línea de cabecera,
+y mantén los detalles de construcción debajo del plano.
+
+## Comprobar antes de enviar
+
+Ejecuta las mismas puertas que CI hace:
+
+```bash filename="Terminal"
+yarn lint          # oxlint
+yarn typecheck     # tsgo
+yarn test:unit     # unit tests
+twenty app plan   # preview the metadata diff
+```
+
+El plan muestra exactamente qué cambiaría en el servidor sin aplicarlos —
+una buena comprobación final. Ver
+[Testing](/es/developers/extend/apps/operations/testing) y
+[Sincronizando y recuperando](/es/developers/extend/apps/operations/sync-and-recovery).
+
+## Publicar
+
+```bash filename="Terminal"
+# Public app → npm (default)
+twenty app publish
+
+# Or deploy privately to a specific server's registry
+twenty app publish --private -r <remote>
+```
+
+`veinte aplicaciones publish` construye y publica a npm por defecto; `--private` sube un tarball
+a un registro privado del servidor Veinte en su lugar. Para superficializar una aplicación publicada
+en el mercado de una instancia, espera la sincronización del catálogo de marketplace del servidor.
+
+Detalles completos y la lista de verificación de lanzamiento:
+[Publishing](/es/developers/extend/apps/operations/publishing).
+
+## Construiste una aplicación 🎉
+
+En seis capítulos utilizaste la mayor parte de la superficie SDK:
+
+* **Objetos, campos y una relación** para modelar los datos
+* Una **función lógica** expuesta como una **herramienta de IA**, una **acción de flujo de trabajo**, y **rutas HTTP**
+* **Vistas, navegación, un comando y un componente frontal** para la interfaz de usuario
+* Un **agente + habilidad** para generación natural
+* **Metadatos del mercado** y el flujo de publicación
+
+La aplicación terminada está en
+[`packages/twenty-apps/examples/document-generator`](https://github.com/twentyhq/twenty/tree/main/packages/twenty-apps/examples/document-generator).
+
+## A dónde ir siguiente
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/es/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>referencia de datos</CardTitle>
+    Opción de cada tipo de campo, relación e índice.
+  </Card>
+  <Card href="/es/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>referencia lógica</CardTitle>
+    Activadores de eventos Cron y base de datos, el almacén clave-valor, conexiones OAuth.
+  </Card>
+  <Card href="/es/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>Referencia de diseño</CardTitle>
+    Diseños de páginas, widgets de panel y más superficies de interfaz de usuario.
+  </Card>
+  <Card href="/es/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>Operaciones</CardTitle>
+    CLI, pruebas, mandos y CI.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="card-page-tutorial-publishing" />

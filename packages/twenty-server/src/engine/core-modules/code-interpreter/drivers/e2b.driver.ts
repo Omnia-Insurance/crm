@@ -2,9 +2,21 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 
 import { Sandbox } from '@e2b/code-interpreter';
+import { Logger } from '@nestjs/common';
+import { isNonEmptyString } from '@sniptt/guards';
 
-import { DEFAULT_CODE_INTERPRETER_TIMEOUT_MS } from 'src/engine/core-modules/code-interpreter/code-interpreter.constants';
+import { isDefined } from 'twenty-shared/utils';
+
+import {
+  CODE_INTERPRETER_MAX_OUTPUT_FILE_COUNT,
+  CODE_INTERPRETER_MAX_OUTPUT_FILE_SIZE_BYTES,
+  DEFAULT_CODE_INTERPRETER_TIMEOUT_MS,
+} from 'src/engine/core-modules/code-interpreter/code-interpreter.constants';
+import { getOrCreateSessionSandbox } from 'src/engine/core-modules/code-interpreter/drivers/utils/get-or-create-session-sandbox.util';
+import { releaseSessionSandboxes } from 'src/engine/core-modules/code-interpreter/drivers/utils/release-session-sandboxes.util';
+import { sweepExpiredSessionSandboxes } from 'src/engine/core-modules/code-interpreter/drivers/utils/sweep-expired-session-sandboxes.util';
 import { getMimeType } from 'src/engine/core-modules/code-interpreter/utils/get-mime-type.util';
+import { truncateCodeInterpreterOutput } from 'src/engine/core-modules/code-interpreter/utils/truncate-code-interpreter-output.util';
 
 import {
   type CodeExecutionResult,
@@ -17,13 +29,15 @@ import {
 
 export type E2BDriverOptions = {
   apiKey: string;
+  template: string;
   timeoutMs?: number;
+  idleTimeoutMs?: number;
 };
 
 const SANDBOX_SCRIPTS_PATH = join(__dirname, '..', 'sandbox-scripts');
 
 async function uploadDirectoryToSandbox(
-  sbx: Sandbox,
+  sandbox: Sandbox,
   localPath: string,
   remotePath: string,
 ) {
@@ -34,17 +48,19 @@ async function uploadDirectoryToSandbox(
     const remoteEntryPath = `${remotePath}/${entry.name}`;
 
     if (entry.isDirectory()) {
-      await uploadDirectoryToSandbox(sbx, localEntryPath, remoteEntryPath);
+      await uploadDirectoryToSandbox(sandbox, localEntryPath, remoteEntryPath);
     } else {
       const content = await fs.readFile(localEntryPath);
       const arrayBuffer = new Uint8Array(content).buffer;
 
-      await sbx.files.write(remoteEntryPath, arrayBuffer);
+      await sandbox.files.write(remoteEntryPath, arrayBuffer);
     }
   }
 }
 
 export class E2BDriver implements CodeInterpreterDriver {
+  private readonly logger = new Logger(E2BDriver.name);
+
   constructor(private options: E2BDriverOptions) {}
 
   async execute(
@@ -53,27 +69,55 @@ export class E2BDriver implements CodeInterpreterDriver {
     context?: ExecutionContext,
     callbacks?: StreamCallbacks,
   ): Promise<CodeExecutionResult> {
-    const sbx = await Sandbox.create({
-      apiKey: this.options.apiKey,
-      timeoutMs: this.options.timeoutMs ?? DEFAULT_CODE_INTERPRETER_TIMEOUT_MS,
-    });
+    const { apiKey, template } = this.options;
+    const sessionId = context?.sessionId;
+    const idleTimeoutMs =
+      this.options.idleTimeoutMs ?? DEFAULT_CODE_INTERPRETER_TIMEOUT_MS;
+    const timeoutMs =
+      this.options.timeoutMs ?? DEFAULT_CODE_INTERPRETER_TIMEOUT_MS;
+
+    let sandbox: Sandbox;
+    let isReused = false;
+    let keepWarm = false;
+
+    if (isDefined(sessionId)) {
+      keepWarm = true;
+      ({ sandbox, isReused } = await getOrCreateSessionSandbox({
+        sandboxApi: Sandbox,
+        apiKey,
+        template,
+        sessionId,
+        actorKey: context?.actorKey,
+        timeoutMs,
+        idleTimeoutMs,
+      }));
+    } else {
+      sandbox = await Sandbox.create(template, { apiKey, timeoutMs });
+    }
 
     try {
-      // Upload pre-installed scripts to sandbox
-      try {
-        await uploadDirectoryToSandbox(
-          sbx,
-          SANDBOX_SCRIPTS_PATH,
-          '/home/user/scripts',
-        );
-      } catch {
-        // Scripts directory might not exist
+      if (!isReused) {
+        try {
+          await uploadDirectoryToSandbox(
+            sandbox,
+            SANDBOX_SCRIPTS_PATH,
+            '/home/user/scripts',
+          );
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+
+          this.logger.warn(`Failed to upload sandbox scripts: ${reason}`);
+        }
+      }
+
+      if (isReused) {
+        await this.resetOutputDirectory(sandbox);
       }
 
       for (const file of files ?? []) {
         const arrayBuffer = new Uint8Array(file.content).buffer;
 
-        await sbx.files.write(`/home/user/${file.filename}`, arrayBuffer);
+        await sandbox.files.write(`/home/user/${file.filename}`, arrayBuffer);
       }
 
       const envSetup = context?.env
@@ -93,55 +137,102 @@ export class E2BDriver implements CodeInterpreterDriver {
       const outputFiles: OutputFile[] = [];
       let chartCounter = 0;
 
-      const execution = await sbx.runCode(envSetup + code, {
+      const execution = await sandbox.runCode(envSetup + code, {
         onStdout: (data) => callbacks?.onStdout?.(data.line),
         onStderr: (data) => callbacks?.onStderr?.(data.line),
         onResult: async (result) => {
-          if (result.png) {
-            const outputFile: OutputFile = {
-              filename: `chart-${chartCounter++}.png`,
-              content: Buffer.from(result.png, 'base64'),
-              mimeType: 'image/png',
-            };
-
-            outputFiles.push(outputFile);
-            await callbacks?.onResult?.(outputFile);
+          if (
+            !isNonEmptyString(result.png) ||
+            outputFiles.length >= CODE_INTERPRETER_MAX_OUTPUT_FILE_COUNT
+          ) {
+            return;
           }
+
+          const outputFile: OutputFile = {
+            filename: `chart-${chartCounter++}.png`,
+            content: Buffer.from(result.png, 'base64'),
+            mimeType: 'image/png',
+          };
+
+          outputFiles.push(outputFile);
+          await callbacks?.onResult?.(outputFile);
         },
       });
 
       try {
-        const outputDir = await sbx.files.list('/home/user/output');
+        const outputDir = await sandbox.files.list('/home/user/output');
 
         for (const file of outputDir) {
-          if (file.type === 'file') {
-            const content = await sbx.files.read(
-              `/home/user/output/${file.name}`,
-            );
-
-            const outputFile: OutputFile = {
-              filename: file.name,
-              content: Buffer.from(content),
-              mimeType: getMimeType(file.name),
-            };
-
-            outputFiles.push(outputFile);
-            await callbacks?.onResult?.(outputFile);
+          if (outputFiles.length >= CODE_INTERPRETER_MAX_OUTPUT_FILE_COUNT) {
+            break;
           }
+
+          if (file.type !== 'file' || isDefined(file.symlinkTarget)) {
+            continue;
+          }
+
+          if (file.size > CODE_INTERPRETER_MAX_OUTPUT_FILE_SIZE_BYTES) {
+            this.logger.warn(
+              `Skipping output file ${file.name}: ${file.size} bytes exceeds the size limit`,
+            );
+            continue;
+          }
+
+          const content = await sandbox.files.read(
+            `/home/user/output/${file.name}`,
+            { format: 'bytes' },
+          );
+
+          const outputFile: OutputFile = {
+            filename: file.name,
+            content: Buffer.from(content),
+            mimeType: getMimeType(file.name),
+          };
+
+          outputFiles.push(outputFile);
+          await callbacks?.onResult?.(outputFile);
         }
       } catch {
         // Output directory doesn't exist - that's fine
       }
 
       return {
-        stdout: execution.logs.stdout.join('\n'),
-        stderr: execution.logs.stderr.join('\n'),
+        stdout: truncateCodeInterpreterOutput(execution.logs.stdout.join('\n')),
+        stderr: truncateCodeInterpreterOutput(execution.logs.stderr.join('\n')),
         exitCode: execution.error ? 1 : 0,
         files: outputFiles,
         error: execution.error?.value,
       };
     } finally {
-      await sbx.kill();
+      if (!keepWarm) {
+        await sandbox.kill();
+      }
     }
+  }
+
+  private async resetOutputDirectory(sandbox: Sandbox): Promise<void> {
+    const outputDirectory = '/home/user/output';
+
+    try {
+      if (await sandbox.files.exists(outputDirectory)) {
+        await sandbox.files.remove(outputDirectory);
+      }
+
+      await sandbox.files.makeDir(outputDirectory);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+
+      this.logger.warn(
+        `Failed to reset reused sandbox output directory; results may include stale files: ${reason}`,
+      );
+    }
+  }
+
+  async releaseSession(sessionId: string): Promise<void> {
+    await releaseSessionSandboxes(Sandbox, this.options.apiKey, sessionId);
+  }
+
+  async sweepExpiredSessions(maxAgeMs: number): Promise<number> {
+    return sweepExpiredSessionSandboxes(Sandbox, this.options.apiKey, maxAgeMs);
   }
 }

@@ -7,6 +7,15 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+# ServiceAccount used by the server and worker pods
+serviceAccount:
+  create: false  # set true to create a dedicated ServiceAccount instead of using the namespace's "default"
+  name: ""  # when create is false, this ServiceAccount must already exist in the namespace; defaults to the chart fullname when create is true
+  automount: true  # set false to skip mounting the Kubernetes API token (server and worker do not call the API; IRSA/Workload Identity are unaffected)
+  annotations: {}
+  # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/twenty-role
+  # iam.gke.io/gcp-service-account: twenty@my-project.iam.gserviceaccount.com
+
 # Global security context (uid/gid for all pods)
 securityContext:
   runAsUser: 1000
@@ -98,6 +107,43 @@ server:
 
   extraVolumeMounts: []
 
+  # Pod scheduling and DNS
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  dnsPolicy: ~
+  dnsConfig: {}
+  # OMNIA-CUSTOM: rollout knobs. Empty strategy keeps upstream's (Recreate with
+  # persistence, else RollingUpdate maxSurge 1 / maxUnavailable 1).
+  topologySpreadConstraints: []
+  strategy: {}
+  minReadySeconds: 0
+
+  # Health probes for the server container. Set any probe to null to disable it.
+  # startupProbe gates the slow initial boot (up to periodSeconds x failureThreshold),
+  # so liveness/readiness intentionally carry no initialDelaySeconds.
+  startupProbe:
+    httpGet:
+      path: /healthz
+      port: http-tcp
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http-tcp
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: http-tcp
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
 # Worker deployment
 worker:
   enabled: true
@@ -114,6 +160,15 @@ worker:
       memory: 2048Mi
 
   extraEnv: []
+
+  # Pod scheduling and DNS
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  dnsPolicy: ~
+  dnsConfig: {}
+  # OMNIA-CUSTOM: empty keeps upstream's RollingUpdate (maxSurge 1 / maxUnavailable 1)
+  strategy: {}
 
 # PostgreSQL
 db:
@@ -178,6 +233,8 @@ redisInternal:
     existingClaim: ""
     accessModes:
       - ReadWriteOnce
+  # OMNIA-CUSTOM: scheduling tolerations for the in-cluster Redis pod
+  tolerations: []
 
 # External Redis (when redisInternal.enabled=false)
 redis:
@@ -188,6 +245,6 @@ redis:
     secretName: ""
     passwordKey: ""
 
-# Scheduling constraints (applied to all deployments unless overridden per-component)
-nodeSelector: {}
+# OMNIA-CUSTOM: tolerations for the in-cluster Postgres pod only; every other
+# component reads its own <component>.tolerations.
 tolerations: []

@@ -9,7 +9,7 @@
       "executor": "nx:run-commands",
       "cache": true,
       "inputs": ["production", "^production"],
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "sandbox:prebuild"],
       "outputs": ["{projectRoot}/dist"],
       "options": {
         "cwd": "{projectRoot}",
@@ -22,6 +22,7 @@
     },
     "typecheck": {},
     "lint": {},
+    "test": {},
     "generate-remote-dom-elements": {
       "executor": "nx:run-commands",
       "cache": true,
@@ -29,6 +30,7 @@
       "inputs": [
         "{projectRoot}/scripts/remote-dom/**/*",
         "{projectRoot}/src/constants/**/*",
+        "{projectRoot}/src/types/**/*",
         "{workspaceRoot}/packages/twenty-ui/src/**/index.ts",
         "{workspaceRoot}/packages/twenty-ui/src/**/*.tsx"
       ],
@@ -46,13 +48,13 @@
         }
       }
     },
-    "storybook:prebuild": {
+    "sandbox:prebuild": {
       "executor": "nx:run-commands",
       "cache": true,
       "dependsOn": [
         "generate-remote-dom-elements",
         {
-          "target": "build:sdk",
+          "target": "build",
           "projects": "twenty-sdk"
         },
         {
@@ -60,16 +62,59 @@
           "projects": "twenty-ui"
         },
         {
+          "target": "build",
+          "projects": "twenty-shared"
+        }
+      ],
+      "inputs": [
+        "{projectRoot}/scripts/front-component-sandbox/**/*",
+        "{projectRoot}/src/remote/**/*",
+        "!{projectRoot}/src/remote/sandbox/generated/**/*",
+        "{projectRoot}/src/constants/**/*",
+        "{projectRoot}/src/polyfills/**/*",
+        "{projectRoot}/src/types/**/*",
+        "{projectRoot}/src/utils/**/*"
+      ],
+      "outputs": [
+        "{projectRoot}/src/remote/sandbox/generated/frontComponentSandboxDocument.ts"
+      ],
+      "options": {
+        "cwd": "packages/twenty-front-component-renderer",
+        "command": "tsx -r tsconfig-paths/register scripts/front-component-sandbox/build-sandbox-document.ts"
+      }
+    },
+    "storybook:prebuild": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": [
+        "generate-remote-dom-elements",
+        "sandbox:prebuild",
+        {
           "target": "build:individual",
+          "projects": "twenty-ui"
+        },
+        {
+          "target": "build",
           "projects": "twenty-shared"
         }
       ],
       "inputs": [
         "{projectRoot}/scripts/front-component-stories/**/*",
-        "{projectRoot}/src/__stories__/example-sources/*",
-        "{workspaceRoot}/packages/twenty-sdk/src/cli/utilities/build/**/*"
+        "!{projectRoot}/scripts/front-component-stories/__tests__/**/*",
+        "!{projectRoot}/scripts/front-component-stories/native-tests/**/*",
+        "{projectRoot}/src/__stories__/html-tag/**/*",
+        "{projectRoot}/src/__stories__/host-api/**/*",
+        "{projectRoot}/src/__stories__/showcase/**/*",
+        "{projectRoot}/src/__stories__/twenty-ui-gallery/**/*",
+        "{projectRoot}/src/__stories__/shared/front-components/**/*",
+        "{workspaceRoot}/packages/twenty-sdk/src/front-component-renderer/build/**/*",
+        "{workspaceRoot}/packages/twenty-shared/src/front-component-build/**/*",
+        "{workspaceRoot}/packages/twenty-shared/vite.bundled-source-plugin.ts"
       ],
-      "outputs": ["{projectRoot}/src/__stories__/example-sources-built/*"],
+      "outputs": [
+        "{projectRoot}/src/__stories__/example-sources-built/*",
+        "{projectRoot}/src/__stories__/example-sources-built-preact/*"
+      ],
       "options": {
         "command": "tsx {projectRoot}/scripts/front-component-stories/build-source-examples.ts"
       }
@@ -105,6 +150,22 @@
       "dependsOn": ["storybook:prebuild"],
       "options": {
         "command": "vitest run --config vitest.storybook.config.ts --shard={args.shard}"
+      }
+    },
+    "storybook:test:file-selection": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "node --import tsx --test scripts/front-component-stories/__tests__/image-input.browser.test.ts"
+      }
+    },
+    "storybook:test:layout": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "playwright test --config playwright.layout.config.ts"
       }
     },
     "storybook:coverage": {}

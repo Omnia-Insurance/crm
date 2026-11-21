@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { v4 } from 'uuid';
-
 import { triggerCreateRecordsOptimisticEffect } from '@/apollo/optimistic-effect/utils/triggerCreateRecordsOptimisticEffect';
-import { triggerDestroyRecordsOptimisticEffect } from '@/apollo/optimistic-effect/utils/triggerDestroyRecordsOptimisticEffect';
 import { currentWorkspaceMemberState } from '@/auth/states/currentWorkspaceMemberState';
 import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
@@ -20,7 +18,7 @@ import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useU
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import {
   type ObjectRecord as ObjectRecordShared,
-  type RecordGqlOperationGqlRecordFields,
+  type RecordGqlFields,
 } from 'twenty-shared/types';
 
 import { type BaseObjectRecord } from '@/object-record/types/BaseObjectRecord';
@@ -31,10 +29,11 @@ import { getCreateOneRecordMutationResponseField } from '@/object-record/utils/g
 import { sanitizeRecordInput } from '@/object-record/utils/sanitizeRecordInput';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { CustomError, isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 type useCreateOneRecordProps = {
   objectNameSingular: string;
-  recordGqlFields?: RecordGqlOperationGqlRecordFields;
+  recordGqlFields?: RecordGqlFields;
   skipPostOptimisticEffect?: boolean;
   shouldMatchRootQueryFilter?: boolean;
 };
@@ -47,6 +46,7 @@ export const useCreateOneRecord = <
   skipPostOptimisticEffect = false,
   shouldMatchRootQueryFilter,
 }: useCreateOneRecordProps) => {
+  const { t } = useLingui();
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
   const apolloCoreClient = useApolloCoreClient();
   const [loading, setLoading] = useState(false);
@@ -101,8 +101,7 @@ export const useCreateOneRecord = <
       objectMetadataItems,
       recordInput: {
         ...computeOptimisticCreateRecordBaseRecordInput(objectMetadataItem),
-        ...recordInput,
-        id: idForCreation,
+        ...sanitizedInput,
       },
       objectPermissionsByObjectMetadataId,
     });
@@ -161,7 +160,7 @@ export const useCreateOneRecord = <
           setLoading(false);
         },
       })
-      .catch((error: Error) => {
+      .catch(async (error: Error) => {
         if (!isDefined(recordCreatedInCache)) {
           throw error;
         }
@@ -175,13 +174,8 @@ export const useCreateOneRecord = <
           objectPermissionsByObjectMetadataId,
         });
 
-        triggerDestroyRecordsOptimisticEffect({
-          cache: apolloCoreClient.cache,
-          objectMetadataItem,
-          recordsToDestroy: [recordCreatedInCache],
-          objectMetadataItems,
-          upsertRecordsInStore,
-          objectPermissionsByObjectMetadataId,
+        await refetchAggregateQueries({
+          objectMetadataNamePlural: objectMetadataItem.namePlural,
         });
 
         throw error;
@@ -211,7 +205,7 @@ export const useCreateOneRecord = <
     });
 
     if (!isDefined(createdRecord)) {
-      throw new CustomError('Failed to create record');
+      throw new CustomError(t`Failed to create record`);
     }
 
     return getRecordFromRecordNode({

@@ -1,0 +1,155 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { CoreCommonApiModule } from 'src/engine/api/common/core-common-api.module';
+import { ActorModule } from 'src/engine/core-modules/actor/actor.module';
+import { CacheLockModule } from 'src/engine/core-modules/cache-lock/cache-lock.module';
+import { UserWorkspaceModule } from 'src/engine/core-modules/user-workspace/user-workspace.module';
+import { AddPeopleToMessageListJobService } from 'src/modules/emailing/services/add-people-to-message-list-job.service';
+import { AddPeopleToMessageListService } from 'src/modules/emailing/services/add-people-to-message-list.service';
+import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
+import { EmailingDomainModule } from 'src/engine/core-modules/emailing-domain/emailing-domain.module';
+import { EmailingDomainEntity } from 'src/engine/core-modules/emailing-domain/emailing-domain.entity';
+import { ShortLinkModule } from 'src/engine/core-modules/short-link/short-link.module';
+import { ClickHouseModule } from 'src/database/clickhouse/clickhouse.module';
+import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
+import { UnsubscribeTopicEntity } from 'src/engine/core-modules/emailing-domain/unsubscribe-topic.entity';
+import { FileUrlModule } from 'src/engine/core-modules/file/file-url/file-url.module';
+import { MessageChannelEntity } from 'src/engine/metadata-modules/message-channel/entities/message-channel.entity';
+import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { MessageChannelMetadataModule } from 'src/engine/metadata-modules/message-channel/message-channel-metadata.module';
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
+import { WorkspaceManyOrAllFlatEntityMapsCacheModule } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.module';
+import { provideWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/provide-workspace-scoped-repository';
+import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
+import { UsageLimitModule } from 'src/engine/core-modules/usage-limit/usage-limit.module';
+import { CampaignTrackingController } from 'src/modules/emailing/controllers/campaign-tracking.controller';
+import { UnsubscribeController } from 'src/modules/emailing/controllers/unsubscribe.controller';
+import { RecordCampaignEngagementJob } from 'src/modules/emailing/jobs/record-campaign-engagement.job';
+import { RecoverWorkspaceStaleCampaignsJob } from 'src/modules/emailing/jobs/recover-workspace-stale-campaigns.job';
+import { CampaignEngagementCaptureService } from 'src/modules/emailing/services/campaign-engagement-capture.service';
+import { CampaignEngagementEventService } from 'src/modules/emailing/services/campaign-engagement-event.service';
+import { CampaignEngagementRecordingService } from 'src/modules/emailing/services/campaign-engagement-recording.service';
+import { CampaignTrackingContentService } from 'src/modules/emailing/services/campaign-tracking-content.service';
+import { EmailingOngoingStaleCronCommand } from 'src/modules/emailing/crons/commands/emailing-ongoing-stale.cron.command';
+import { EmailingOngoingStaleCronJob } from 'src/modules/emailing/crons/jobs/emailing-ongoing-stale.cron.job';
+import { ReconcileCampaignStatsCronCommand } from 'src/modules/emailing/crons/commands/reconcile-campaign-stats.cron.command';
+import { ReconcileCampaignStatsCronJob } from 'src/modules/emailing/crons/jobs/reconcile-campaign-stats.cron.job';
+import { EmailingSendResolver } from 'src/modules/emailing/resolvers/emailing-send.resolver';
+import { MessageListResolver } from 'src/modules/emailing/resolvers/message-list.resolver';
+import { MessageSuppressionResolver } from 'src/modules/emailing/resolvers/message-suppression.resolver';
+import { UnsubscribeTopicResolver } from 'src/modules/emailing/resolvers/unsubscribe-topic.resolver';
+import { CampaignSendingWorkspaceService } from 'src/modules/emailing/services/campaign-sending-workspace.service';
+import { CampaignVariableService } from 'src/modules/emailing/services/campaign-variable.service';
+import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
+import { EmailBillingService } from 'src/modules/emailing/services/email-billing.service';
+import { EmailingDomainSenderService } from 'src/modules/emailing/services/emailing-domain-sender.service';
+import { MessageCampaignDraftService } from 'src/modules/emailing/services/message-campaign-draft.service';
+import { MessageCampaignRecoveryService } from 'src/modules/emailing/services/message-campaign-recovery.service';
+import { MessageCampaignStatisticsService } from 'src/modules/emailing/services/message-campaign-statistics.service';
+import { MessageCampaignAudienceService } from 'src/modules/emailing/services/message-campaign-audience.service';
+import { MessageCampaignDeliveryFeedbackService } from 'src/modules/emailing/services/message-campaign-delivery-feedback.service';
+import { MessageCampaignBatchDeliveryService } from 'src/modules/emailing/services/message-campaign-batch-delivery.service';
+import { CampaignSendSlotService } from 'src/modules/emailing/services/campaign-send-slot.service';
+import { MessageCampaignDeliveryService } from 'src/modules/emailing/services/message-campaign-delivery.service';
+import { MessageCampaignLifecycleService } from 'src/modules/emailing/services/message-campaign-lifecycle.service';
+import { MessageCampaignMaterializationService } from 'src/modules/emailing/services/message-campaign-materialization.service';
+import { MessageCampaignScheduleService } from 'src/modules/emailing/services/message-campaign-schedule.service';
+import { MessageCampaignService } from 'src/modules/emailing/services/message-campaign.service';
+import { MessageListDuplicationService } from 'src/modules/emailing/services/message-list-duplication.service';
+import { MessageSuppressionService } from 'src/modules/emailing/services/message-suppression.service';
+import { UnsubscribeTopicService } from 'src/modules/emailing/services/unsubscribe-topic.service';
+import { UnsubscribePreferencesService } from 'src/modules/emailing/services/unsubscribe-preferences.service';
+import { FindCampaignSuppressionsTool } from 'src/modules/emailing/tools/find-campaign-suppressions.tool';
+import { PreviewCampaignSendTool } from 'src/modules/emailing/tools/preview-campaign-send.tool';
+import { SaveCampaignTool } from 'src/modules/emailing/tools/save-campaign-tool';
+import { SendCampaignTestTool } from 'src/modules/emailing/tools/send-campaign-test.tool';
+import { SendCampaignTool } from 'src/modules/emailing/tools/send-campaign.tool';
+
+@Module({
+  imports: [
+    ActorModule,
+    CacheLockModule,
+    CoreCommonApiModule,
+    UserWorkspaceModule,
+    EmailingDomainModule,
+    ThrottlerModule,
+    MessageChannelMetadataModule,
+    FileUrlModule,
+    PermissionsModule,
+    BillingModule,
+    WorkspaceCacheModule,
+    WorkspaceManyOrAllFlatEntityMapsCacheModule,
+    UsageLimitModule,
+    ClickHouseModule,
+    MetricsModule,
+    ShortLinkModule,
+    TypeOrmModule.forFeature([
+      MessageChannelEntity,
+      EmailingDomainEntity,
+      UnsubscribeTopicEntity,
+      WorkspaceEntity,
+    ]),
+  ],
+  controllers: [UnsubscribeController, CampaignTrackingController],
+  providers: [
+    CampaignVariableService,
+    EmailBillingService,
+    MessageCampaignService,
+    MessageCampaignScheduleService,
+    MessageCampaignAudienceService,
+    CampaignSendSlotService,
+    MessageCampaignDeliveryService,
+    MessageCampaignBatchDeliveryService,
+    MessageCampaignDeliveryFeedbackService,
+    MessageCampaignLifecycleService,
+    MessageCampaignMaterializationService,
+    MessageCampaignDraftService,
+    MessageCampaignRecoveryService,
+    MessageCampaignStatisticsService,
+    MessageSuppressionService,
+    UnsubscribePreferencesService,
+    UnsubscribeTopicService,
+    EmailingDomainSenderService,
+    SaveCampaignTool,
+    PreviewCampaignSendTool,
+    SendCampaignTestTool,
+    SendCampaignTool,
+    FindCampaignSuppressionsTool,
+    EmailingSendResolver,
+    MessageListDuplicationService,
+    AddPeopleToMessageListService,
+    AddPeopleToMessageListJobService,
+    MessageListResolver,
+    MessageSuppressionResolver,
+    UnsubscribeTopicResolver,
+    provideWorkspaceScopedRepository(EmailingDomainEntity),
+    CampaignTrackingContentService,
+    CampaignEngagementCaptureService,
+    CampaignEngagementRecordingService,
+    CampaignEngagementEventService,
+    RecordCampaignEngagementJob,
+    provideWorkspaceScopedRepository(UnsubscribeTopicEntity),
+    CampaignSendingWorkspaceService,
+    EmailingOngoingStaleCronCommand,
+    EmailingOngoingStaleCronJob,
+    RecoverWorkspaceStaleCampaignsJob,
+    ReconcileCampaignStatsCronCommand,
+    ReconcileCampaignStatsCronJob,
+  ],
+  exports: [
+    AddPeopleToMessageListService,
+    EmailingDomainSenderService,
+    MessageCampaignScheduleService,
+    MessageCampaignDeliveryService,
+    MessageCampaignBatchDeliveryService,
+    MessageCampaignDeliveryFeedbackService,
+    MessageCampaignMaterializationService,
+    MessageCampaignStatisticsService,
+    MessageSuppressionService,
+    SaveCampaignTool,
+    EmailingOngoingStaleCronCommand,
+    ReconcileCampaignStatsCronCommand,
+  ],
+})
+export class EmailingModule {}

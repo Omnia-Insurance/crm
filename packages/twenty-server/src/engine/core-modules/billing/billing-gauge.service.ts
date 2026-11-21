@@ -22,6 +22,8 @@ export class BillingGaugeService implements OnModuleInit {
     private readonly twentyConfigService: TwentyConfigService,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
+    // Observability gauges count subscriptions across every workspace.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(BillingSubscriptionEntity)
     private readonly billingSubscriptionRepository: Repository<BillingSubscriptionEntity>,
   ) {}
@@ -79,7 +81,6 @@ export class BillingGaugeService implements OnModuleInit {
     try {
       const ageThreshold = new Date(Date.now() - WORKSPACE_AGE_THRESHOLD_MS);
 
-      // Find the most recently created workspace that is older than 1 minute
       const lastWorkspace = await this.workspaceRepository.findOne({
         where: {
           deletedAt: IsNull(),

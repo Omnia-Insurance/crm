@@ -3,21 +3,24 @@ import { useState } from 'react';
 
 import { EmailThreadMessage } from '@/activities/emails/components/EmailThreadMessage';
 import { type EmailThreadMessageWithSender } from '@/activities/emails/types/EmailThreadMessageWithSender';
-import { t } from '@lingui/core/macro';
-import { IconArrowsVertical } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconArrowsVertical } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledButtonContainer = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[6]};
+  padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[10]};
 `;
 
 export const EmailThreadIntermediaryMessages = ({
   messages,
+  onDraftClick,
 }: {
   messages: EmailThreadMessageWithSender[];
+  onDraftClick: (message: EmailThreadMessageWithSender) => void;
 }) => {
+  const { t } = useLingui();
   const [areMessagesOpen, setAreMessagesOpen] = useState(false);
   const messagesLength = messages.length;
 
@@ -29,20 +32,17 @@ export const EmailThreadIntermediaryMessages = ({
     messages.map((message) => (
       <EmailThreadMessage
         key={message.id}
-        sender={message.sender}
-        participants={message.messageParticipants}
-        body={message.text}
-        sentAt={message.receivedAt}
+        message={message}
+        onDraftClick={onDraftClick}
       />
     ))
   ) : (
     <StyledButtonContainer>
       <Button
-        Icon={IconArrowsVertical}
-        title={t`${messagesLength} emails`}
-        size="small"
+        startIcon={<IconArrowsVertical />}
+        size="sm"
         onClick={() => setAreMessagesOpen(true)}
-      />
+      >{t`${messagesLength} emails`}</Button>
     </StyledButtonContainer>
   );
 };

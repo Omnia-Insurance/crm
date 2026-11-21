@@ -3,16 +3,12 @@ import {
   StyledControlContainer,
 } from '@/ui/input/components/SelectControl';
 import { styled } from '@linaria/react';
-import React, { useContext } from 'react';
+import React from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import {
-  IconChevronDown,
-  type IconComponent,
-  OverflowingTextWithTooltip,
-  TintedIconTile,
-} from 'twenty-ui/display';
-import { type ThemeColor } from 'twenty-ui/theme';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { TintedIconTile } from 'twenty-ui/components/data-display';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { IconChevronDown, type IconComponent } from 'twenty-ui/icon';
+import { type ThemeColor, useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledIconChevronDownWrapper = styled.div<{
   disabled?: boolean;
@@ -45,7 +41,7 @@ export const MultiSelectControl = ({
   textAccent = 'default',
   hasRightElement,
 }: MultiSelectControlProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const firstSelectedOption = selectedOptions?.[0];
   return (
     <StyledControlContainer
@@ -64,10 +60,13 @@ export const MultiSelectControl = ({
       ) : isDefined(firstSelectedOption?.Icon) ? (
         isDefined(firstSelectedOption.iconThemeColor) ? (
           <TintedIconTile
-            Icon={firstSelectedOption.Icon}
+            icon={
+              <firstSelectedOption.Icon
+                size={theme.icon.size.md}
+                stroke={theme.icon.stroke.sm}
+              />
+            }
             color={firstSelectedOption.iconThemeColor}
-            size={theme.icon.size.md}
-            stroke={theme.icon.stroke.sm}
           />
         ) : (
           <firstSelectedOption.Icon

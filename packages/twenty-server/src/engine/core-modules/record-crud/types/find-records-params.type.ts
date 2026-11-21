@@ -6,7 +6,7 @@ import {
 import { type RecordCrudExecutionContext } from './record-crud-execution-context.type';
 import { type FindRecordsInput } from './record-crud-input.type';
 
-export type FindRecordsParams = FindRecordsInput &
+export type FindRecordsParams = Omit<FindRecordsInput, 'filter' | 'orderBy'> &
   RecordCrudExecutionContext & {
     filter?:
       | Record<string, unknown>
@@ -15,4 +15,6 @@ export type FindRecordsParams = FindRecordsInput &
       | Partial<ObjectRecordFilter>[];
     orderBy?: Partial<ObjectRecordOrderBy>;
     offset?: number;
+    select?: string[];
+    shouldBuildEffectiveSelectFields: boolean;
   };

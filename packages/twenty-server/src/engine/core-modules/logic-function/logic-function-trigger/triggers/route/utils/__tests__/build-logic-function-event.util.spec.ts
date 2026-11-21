@@ -1,5 +1,3 @@
-import { type Request } from 'express';
-
 import {
   buildLogicFunctionEvent,
   extractBody,
@@ -13,11 +11,11 @@ describe('filterRequestHeaders', () => {
   it('should filter headers based on allowed names', () => {
     const requestHeaders = {
       'content-type': 'application/json',
-      authorization: 'Bearer token123',
       'x-custom-header': 'custom-value',
+      'x-other-header': 'other-value',
       'user-agent': 'test-agent',
     };
-    const forwardedRequestHeaders = ['content-type', 'authorization'];
+    const forwardedRequestHeaders = ['content-type', 'x-custom-header'];
 
     const result = filterRequestHeaders({
       requestHeaders,
@@ -26,16 +24,16 @@ describe('filterRequestHeaders', () => {
 
     expect(result).toEqual({
       'content-type': 'application/json',
-      authorization: 'Bearer token123',
+      'x-custom-header': 'custom-value',
     });
   });
 
   it('should handle case-insensitive header names', () => {
     const requestHeaders = {
       'content-type': 'application/json',
-      authorization: 'Bearer token123',
+      'x-custom-header': 'custom-value',
     };
-    const forwardedRequestHeaders = ['Content-Type', 'AUTHORIZATION'];
+    const forwardedRequestHeaders = ['Content-Type', 'X-CUSTOM-HEADER'];
 
     const result = filterRequestHeaders({
       requestHeaders,
@@ -44,7 +42,31 @@ describe('filterRequestHeaders', () => {
 
     expect(result).toEqual({
       'content-type': 'application/json',
+      'x-custom-header': 'custom-value',
+    });
+  });
+
+  it('should never forward credential headers listed in forwardedRequestHeaders', () => {
+    const requestHeaders = {
       authorization: 'Bearer token123',
+      cookie: 'session=abc',
+      'proxy-authorization': 'Basic abc',
+      'x-custom-header': 'custom-value',
+    };
+    const forwardedRequestHeaders = [
+      'Authorization',
+      'COOKIE',
+      'proxy-authorization',
+      'x-custom-header',
+    ];
+
+    const result = filterRequestHeaders({
+      requestHeaders,
+      forwardedRequestHeaders,
+    });
+
+    expect(result).toEqual({
+      'x-custom-header': 'custom-value',
     });
   });
 
@@ -107,11 +129,35 @@ describe('filterRequestHeaders', () => {
       'content-type': 'application/json',
     });
   });
+
+  it('should forward every non-credential header when forwardAllHeaders is true', () => {
+    const requestHeaders = {
+      'content-type': 'application/json',
+      authorization: 'Bearer token123',
+      cookie: 'session=abc',
+      'proxy-authorization': 'Basic abc',
+      'x-custom-header': 'custom-value',
+      'x-array-header': ['a', 'b'],
+      'x-missing': undefined,
+    };
+
+    const result = filterRequestHeaders({
+      requestHeaders,
+      forwardedRequestHeaders: [],
+      forwardAllHeaders: true,
+    });
+
+    expect(result).toEqual({
+      'content-type': 'application/json',
+      'x-custom-header': 'custom-value',
+      'x-array-header': 'a, b',
+    });
+  });
 });
 
 describe('extractBody', () => {
   it('should return null for undefined body', () => {
-    const request = { body: undefined } as Request;
+    const request = { body: undefined };
 
     const result = extractBody(request);
 
@@ -119,7 +165,7 @@ describe('extractBody', () => {
   });
 
   it('should return null for null body', () => {
-    const request = { body: null } as unknown as Request;
+    const request = { body: null };
 
     const result = extractBody(request);
 
@@ -127,7 +173,7 @@ describe('extractBody', () => {
   });
 
   it('should parse string body as JSON', () => {
-    const request = { body: '{"key":"value"}' } as unknown as Request;
+    const request = { body: '{"key":"value"}' };
 
     const result = extractBody(request);
 
@@ -135,7 +181,7 @@ describe('extractBody', () => {
   });
 
   it('should wrap non-JSON string body in raw property', () => {
-    const request = { body: 'plain text body' } as unknown as Request;
+    const request = { body: 'plain text body' };
 
     const result = extractBody(request);
 
@@ -145,7 +191,7 @@ describe('extractBody', () => {
   it('should return object body as-is (parsed JSON)', () => {
     const request = {
       body: { key: 'value', nested: { foo: 'bar' } },
-    } as Request;
+    };
 
     const result = extractBody(request);
 
@@ -155,7 +201,7 @@ describe('extractBody', () => {
   it('should parse Buffer body as JSON', () => {
     const request = {
       body: Buffer.from('{"buffered":"json"}'),
-    } as unknown as Request;
+    };
 
     const result = extractBody(request);
 
@@ -165,7 +211,7 @@ describe('extractBody', () => {
   it('should wrap non-JSON Buffer body in raw property', () => {
     const request = {
       body: Buffer.from('buffer content'),
-    } as unknown as Request;
+    };
 
     const result = extractBody(request);
 
@@ -173,7 +219,7 @@ describe('extractBody', () => {
   });
 
   it('should handle empty object body', () => {
-    const request = { body: {} } as Request;
+    const request = { body: {} };
 
     const result = extractBody(request);
 
@@ -181,7 +227,7 @@ describe('extractBody', () => {
   });
 
   it('should handle array body', () => {
-    const request = { body: [1, 2, 3] } as unknown as Request;
+    const request = { body: [1, 2, 3] };
 
     const result = extractBody(request);
 
@@ -223,7 +269,7 @@ describe('normalizeQueryStringParameters', () => {
   });
 
   it('should stringify nested objects', () => {
-    const query = { filter: { name: 'test' } as unknown as string };
+    const query = { filter: { name: 'test' } };
 
     const result = normalizeQueryStringParameters(query);
 
@@ -231,7 +277,7 @@ describe('normalizeQueryStringParameters', () => {
   });
 
   it('should filter non-string values from arrays and join with commas', () => {
-    const query = { ids: ['1', undefined as unknown as string, '2'] };
+    const query = { ids: ['1', { nested: 'value' }, '2'] };
 
     const result = normalizeQueryStringParameters(query);
 
@@ -277,7 +323,7 @@ describe('extractRawBody', () => {
   it('returns the raw body as utf-8 string when present', () => {
     const request = {
       rawBody: Buffer.from('{"a":1}', 'utf-8'),
-    } as unknown as Request;
+    };
 
     expect(extractRawBody(request)).toBe('{"a":1}');
   });
@@ -286,34 +332,39 @@ describe('extractRawBody', () => {
     const original = '{ "a" : 1,\n  "b": "héllo"\n}';
     const request = {
       rawBody: Buffer.from(original, 'utf-8'),
-    } as unknown as Request;
+    };
 
     expect(extractRawBody(request)).toBe(original);
   });
 
   it('returns undefined when rawBody is missing', () => {
-    expect(extractRawBody({} as Request)).toBeUndefined();
+    expect(extractRawBody({})).toBeUndefined();
   });
 
   it('returns empty string when rawBody is an empty buffer', () => {
     const request = {
       rawBody: Buffer.alloc(0),
-    } as unknown as Request;
+    };
 
     expect(extractRawBody(request)).toBe('');
   });
 });
 
 describe('buildLogicFunctionEvent', () => {
-  const createMockRequest = (overrides: Partial<Request> = {}): Request =>
-    ({
-      headers: {},
-      query: {},
-      body: undefined,
-      method: 'GET',
-      path: '/test',
-      ...overrides,
-    }) as Request;
+  type LogicFunctionEventRequest = Parameters<
+    typeof buildLogicFunctionEvent
+  >[0]['request'];
+
+  const createMockRequest = (
+    overrides: Partial<LogicFunctionEventRequest> = {},
+  ): LogicFunctionEventRequest => ({
+    headers: {},
+    query: {},
+    body: undefined,
+    method: 'GET',
+    path: '/test',
+    ...overrides,
+  });
 
   it('should build a complete event from Express request', () => {
     const request = createMockRequest({
@@ -338,7 +389,6 @@ describe('buildLogicFunctionEvent', () => {
     expect(result).toEqual({
       headers: {
         'content-type': 'application/json',
-        authorization: 'Bearer token',
       },
       queryStringParameters: { page: '1' },
       pathParameters: { id: '123' },
@@ -461,12 +511,8 @@ describe('buildLogicFunctionEvent', () => {
     const request = createMockRequest({
       method: 'POST',
       body: { action: 'opened', number: 42 },
+      rawBody: Buffer.from(original, 'utf-8'),
     });
-
-    (request as unknown as { rawBody: Buffer }).rawBody = Buffer.from(
-      original,
-      'utf-8',
-    );
 
     const result = buildLogicFunctionEvent({
       request,

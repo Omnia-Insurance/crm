@@ -1,26 +1,33 @@
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { SettingsDnsRecordsTable } from '@/settings/components/SettingsDnsRecordsTable';
-import { t } from '@lingui/core/macro';
-import { H2Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/components/layout';
 import { type ThemeColor } from 'twenty-ui/theme';
 import {
   type DomainRecord,
   type DomainValidRecords,
 } from '~/generated-metadata/graphql';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useLingui } from '@lingui/react/macro';
 
 export const SettingsDomainRecords = ({
   records,
 }: {
   records: DomainValidRecords['records'];
 }) => {
+  const { t } = useLingui();
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
 
   const rowsDefinitions = [
-    { name: 'Domain Setup', validationType: 'redirection' as const },
-    { name: 'Secure Connection', validationType: 'ssl' as const },
+    {
+      name: doNotTranslate('Domain Setup'),
+      validationType: 'redirection' as const,
+    },
+    {
+      name: doNotTranslate('Secure Connection'),
+      validationType: 'ssl' as const,
+    },
   ];
 
   const defaultValues: { status: string; statusColor: ThemeColor } =
@@ -42,7 +49,7 @@ export const SettingsDomainRecords = ({
     );
 
     if (!record) {
-      throw new Error(`Record ${row.name} not found`);
+      throw new Error(doNotTranslate(`Record ${row.name} not found`));
     }
 
     return {
@@ -57,12 +64,12 @@ export const SettingsDomainRecords = ({
   });
 
   return (
-    <Section>
-      <H2Title
+    <Section.Root>
+      <Section.Header
         title={t`Domain Setup`}
         description={t`Configure these DNS records with your domain provider`}
       />
       <SettingsDnsRecordsTable records={transformedRecords} />
-    </Section>
+    </Section.Root>
   );
 };

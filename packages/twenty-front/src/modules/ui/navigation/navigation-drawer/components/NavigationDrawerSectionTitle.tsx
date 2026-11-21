@@ -1,32 +1,33 @@
-import { useIsSettingsPage } from '@/navigation/hooks/useIsSettingsPage';
-import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
-import { useIsMobile } from '@/ui/utilities/responsive/hooks/useIsMobile';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useIsNavigationDrawerContentExpanded } from '@/ui/navigation/navigation-drawer/hooks/useIsNavigationDrawerContentExpanded';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { styled } from '@linaria/react';
 import { motion } from 'framer-motion';
-import React, { useContext } from 'react';
+import React from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconChevronRight, Label } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconChevronRight } from 'twenty-ui/icon';
+import { Text } from 'twenty-ui/primitives/typography';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+
+const StyledDisplayLabel = styled(Text)`
+  .section-title-container:hover & {
+    color: ${themeCssVariables.font.color.tertiary};
+  }
+`;
 
 const StyledTitle = styled.div`
   align-items: center;
-  border-radius: ${themeCssVariables.border.radius.sm};
+  border-radius: ${themeCssVariables.border.radius.md};
   display: flex;
-  height: ${themeCssVariables.spacing[5]};
+  height: ${themeCssVariables.spacing[7]};
   justify-content: space-between;
   padding-bottom: ${themeCssVariables.spacing[1]};
   padding-left: ${themeCssVariables.spacing[1]};
-  padding-right: ${themeCssVariables.spacing[1]};
-  padding-top: ${themeCssVariables.spacing[2]};
+  padding-right: ${themeCssVariables.spacing['0.5']};
+  padding-top: ${themeCssVariables.spacing[1]};
 
   &:hover {
     background-color: ${themeCssVariables.background.transparent.light};
     cursor: pointer;
-
-    .section-title-label {
-      color: ${themeCssVariables.font.color.tertiary};
-    }
   }
 `;
 
@@ -80,15 +81,12 @@ export const NavigationDrawerSectionTitle = ({
   alwaysShowRightIcon = false,
   isOpen,
 }: NavigationDrawerSectionTitleProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const isMobile = useIsMobile();
-  const isNavigationDrawerExpanded = useAtomStateValue(
-    isNavigationDrawerExpandedState,
-  );
-  const isSettingsPage = useIsSettingsPage();
+  const isNavigationDrawerExpanded = useIsNavigationDrawerContentExpanded();
   const handleTitleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (isDefined(onClick) && (isNavigationDrawerExpanded || isSettingsPage)) {
+    if (isDefined(onClick) && isNavigationDrawerExpanded) {
       onClick();
     }
   };
@@ -96,7 +94,9 @@ export const NavigationDrawerSectionTitle = ({
   return (
     <StyledTitle className="section-title-container">
       <StyledLabelContainer onClick={handleTitleClick}>
-        <Label className="section-title-label">{label}</Label>
+        <StyledDisplayLabel size="xs" weight="semibold" color="light">
+          {label}
+        </StyledDisplayLabel>
         {isOpen !== undefined && (
           <StyledChevron>
             <MotionIconChevronRight

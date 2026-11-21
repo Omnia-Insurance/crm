@@ -2,13 +2,11 @@ import { isNull, isUndefined } from '@sniptt/guards';
 
 import { type CurrentWorkspaceMember } from '@/auth/states/currentWorkspaceMemberState';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { getFieldMetadataFromGqlField } from '@/object-record/cache/utils/getFieldMetadataFromGqlField';
 import { getMorphRelationFromFieldMetadataAndGqlField } from '@/object-record/cache/utils/getMorphRelationFromFieldMetadataAndGqlField';
 import {
   getRecordFromCache,
   type GetRecordFromCacheArgs,
 } from '@/object-record/cache/utils/getRecordFromCache';
-import { GRAPHQL_TYPENAME_KEY } from '@/object-record/constants/GraphqlTypenameKey';
 import { type FieldActorValue } from '@/object-record/record-field/ui/types/FieldMetadata';
 import { isFieldActor } from '@/object-record/record-field/ui/types/guards/isFieldActor';
 import { isFieldMorphRelation } from '@/object-record/record-field/ui/types/guards/isFieldMorphRelation';
@@ -17,11 +15,13 @@ import { isFieldUuid } from '@/object-record/record-field/ui/types/guards/isFiel
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { buildOptimisticActorFieldValueFromCurrentWorkspaceMember } from '@/object-record/utils/buildOptimisticActorFieldValueFromCurrentWorkspaceMember';
 import { getForeignKeyNameFromRelationFieldName } from '@/object-record/utils/getForeignKeyNameFromRelationFieldName';
+import { getUnknownRecordInputFields } from '@/object-record/utils/getUnknownRecordInputFields';
 import {
   computeMorphRelationGqlFieldName,
   computeRelationGqlFieldJoinColumnName,
   isDefined,
 } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import { FieldMetadataType, RelationType } from '~/generated-metadata/graphql';
 
 type ComputeOptimisticCacheRecordInputArgs = {
@@ -40,44 +40,16 @@ export const computeOptimisticRecordFromInput = ({
   currentWorkspaceMember,
   objectPermissionsByObjectMetadataId,
 }: ComputeOptimisticCacheRecordInputArgs) => {
-  const unknownRecordInputFields = Object.keys(recordInput).filter(
-    (recordKey) => {
-      const correspondingFieldMetadataItem = objectMetadataItem.fields.find(
-        (field) => field.name === recordKey,
-      );
+  const unknownRecordInputFields = getUnknownRecordInputFields({
+    objectMetadataItem,
+    recordInput,
+  });
 
-      const potentialRelationJoinColumnNameFieldMetadataItem =
-        objectMetadataItem.fields.find(
-          (field) =>
-            field.type === FieldMetadataType.RELATION &&
-            computeRelationGqlFieldJoinColumnName({ name: field.name }) ===
-              recordKey,
-        );
-
-      const potentialMorphRelationJoinColumnNameFieldMetadataItem =
-        objectMetadataItem.fields.find((field) => {
-          if (!isFieldMorphRelation(field)) return false;
-
-          return isDefined(
-            getFieldMetadataFromGqlField({
-              objectMetadataItem,
-              gqlField: recordKey,
-            }),
-          );
-        });
-
-      const isUnknownField =
-        !isDefined(correspondingFieldMetadataItem) &&
-        !isDefined(potentialRelationJoinColumnNameFieldMetadataItem) &&
-        !isDefined(potentialMorphRelationJoinColumnNameFieldMetadataItem);
-
-      const isTypenameField = recordKey === GRAPHQL_TYPENAME_KEY;
-      return isUnknownField && !isTypenameField;
-    },
-  );
   if (unknownRecordInputFields.length > 0) {
     throw new Error(
-      `Should never occur, encountered unknown fields ${unknownRecordInputFields.join(', ')} in objectMetadataItem ${objectMetadataItem.nameSingular}`,
+      doNotTranslate(
+        `Should never occur, encountered unknown fields ${unknownRecordInputFields.join(', ')} in objectMetadataItem ${objectMetadataItem.nameSingular}`,
+      ),
     );
   }
 
@@ -171,7 +143,9 @@ export const computeOptimisticRecordFromInput = ({
       );
       if (!isDefined(targetObjectMetataDataItem)) {
         throw new Error(
-          'Should never occur, encountered invalid relation definition',
+          doNotTranslate(
+            'Should never occur, encountered invalid relation definition',
+          ),
         );
       }
 
@@ -246,7 +220,9 @@ export const computeOptimisticRecordFromInput = ({
 
       if (!isDefined(fieldMetadataItem.morphRelations)) {
         throw new Error(
-          'Should never occur, encountered invalid relation definition',
+          doNotTranslate(
+            'Should never occur, encountered invalid relation definition',
+          ),
         );
       }
 
@@ -259,7 +235,9 @@ export const computeOptimisticRecordFromInput = ({
 
       if (!isDefined(fieldMetadataMorphRelation?.targetObjectMetadata)) {
         throw new Error(
-          'Should never occur, encountered invalid relation definition',
+          doNotTranslate(
+            'Should never occur, encountered invalid relation definition',
+          ),
         );
       }
 

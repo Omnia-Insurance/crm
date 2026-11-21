@@ -51,7 +51,7 @@ describe('WorkspaceAuthContextMiddleware', () => {
     ({
       workspace: mockWorkspace,
       ...overrides,
-    }) as unknown as Request;
+    }) as Request;
 
   it('should call next without auth context when workspace is not defined', () => {
     const req = buildRequest({ workspace: undefined });
@@ -77,7 +77,7 @@ describe('WorkspaceAuthContextMiddleware', () => {
     );
   });
 
-  it('should create a user auth context when both application and user are present', () => {
+  it('should keep the application on the user auth context when both are present', () => {
     const req = buildRequest({
       application: mockApplication,
       user: mockUser,
@@ -100,8 +100,27 @@ describe('WorkspaceAuthContextMiddleware', () => {
         userWorkspaceId: 'user-workspace-id',
         workspaceMemberId: 'workspace-member-id',
         workspaceMember: mockWorkspaceMember,
+        application: mockApplication,
       }),
     );
+  });
+
+  it('should not put an application on the user auth context when there is none', () => {
+    const req = buildRequest({
+      user: mockUser,
+      userWorkspaceId: 'user-workspace-id',
+      workspaceMemberId: 'workspace-member-id',
+      workspaceMember: mockWorkspaceMember,
+    });
+    let capturedContext: unknown;
+
+    (mockNext as jest.Mock).mockImplementation(() => {
+      capturedContext = workspaceAuthContextStorage.getStore();
+    });
+
+    middleware.use(req, mockResponse, mockNext);
+
+    expect(capturedContext).not.toHaveProperty('application');
   });
 
   it('should create an application auth context when application is present without user', () => {

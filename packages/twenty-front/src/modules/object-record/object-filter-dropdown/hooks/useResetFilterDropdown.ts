@@ -4,13 +4,8 @@ import { fieldMetadataItemIdUsedInDropdownComponentState } from '@/object-record
 import { objectFilterDropdownAnyFieldSearchIsSelectedComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownAnyFieldSearchIsSelectedComponentState';
 import { objectFilterDropdownCurrentRecordFilterComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownCurrentRecordFilterComponentState';
 import { objectFilterDropdownFilterIsSelectedComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownFilterIsSelectedComponentState';
-import { objectFilterDropdownIsSelectingCompositeFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingCompositeFieldComponentState';
-import { objectFilterDropdownIsSelectingRelationSubFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingRelationSubFieldComponentState';
-import { objectFilterDropdownIsSelectingRelationTargetFieldComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownIsSelectingRelationTargetFieldComponentState';
 import { objectFilterDropdownSearchInputComponentState } from '@/object-record/object-filter-dropdown/states/objectFilterDropdownSearchInputComponentState';
-import { relationTargetFieldMetadataIdUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/relationTargetFieldMetadataIdUsedInDropdownComponentState';
 import { selectedOperandInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/selectedOperandInDropdownComponentState';
-import { subFieldNameUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/subFieldNameUsedInDropdownComponentState';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { useStore } from 'jotai';
 
@@ -43,35 +38,6 @@ export const useResetFilterDropdown = (componentInstanceId?: string) => {
       componentInstanceId,
     );
 
-  const objectFilterDropdownIsSelectingCompositeField =
-    useAtomComponentStateCallbackState(
-      objectFilterDropdownIsSelectingCompositeFieldComponentState,
-      componentInstanceId,
-    );
-
-  const objectFilterDropdownIsSelectingRelationTargetField =
-    useAtomComponentStateCallbackState(
-      objectFilterDropdownIsSelectingRelationTargetFieldComponentState,
-      componentInstanceId,
-    );
-
-  const objectFilterDropdownIsSelectingRelationSubField =
-    useAtomComponentStateCallbackState(
-      objectFilterDropdownIsSelectingRelationSubFieldComponentState,
-      componentInstanceId,
-    );
-
-  const subFieldNameUsedInDropdown = useAtomComponentStateCallbackState(
-    subFieldNameUsedInDropdownComponentState,
-    componentInstanceId,
-  );
-
-  const relationTargetFieldMetadataIdUsedInDropdown =
-    useAtomComponentStateCallbackState(
-      relationTargetFieldMetadataIdUsedInDropdownComponentState,
-      componentInstanceId,
-    );
-
   const objectFilterDropdownCurrentRecordFilter =
     useAtomComponentStateCallbackState(
       objectFilterDropdownCurrentRecordFilterComponentState,
@@ -82,24 +48,14 @@ export const useResetFilterDropdown = (componentInstanceId?: string) => {
     store.set(objectFilterDropdownSearchInput, '');
     store.set(selectedOperandInDropdown, null);
     store.set(objectFilterDropdownFilterIsSelected, false);
-    store.set(objectFilterDropdownIsSelectingCompositeField, false);
-    store.set(objectFilterDropdownIsSelectingRelationTargetField, false);
-    store.set(objectFilterDropdownIsSelectingRelationSubField, false);
     store.set(fieldMetadataItemIdUsedInDropdown, null);
-    store.set(subFieldNameUsedInDropdown, null);
-    store.set(relationTargetFieldMetadataIdUsedInDropdown, null);
     store.set(objectFilterDropdownCurrentRecordFilter, null);
     store.set(objectFilterDropdownAnyFieldSearchIsSelected, false);
   }, [
     objectFilterDropdownSearchInput,
     selectedOperandInDropdown,
     objectFilterDropdownFilterIsSelected,
-    objectFilterDropdownIsSelectingCompositeField,
-    objectFilterDropdownIsSelectingRelationTargetField,
-    objectFilterDropdownIsSelectingRelationSubField,
     fieldMetadataItemIdUsedInDropdown,
-    subFieldNameUsedInDropdown,
-    relationTargetFieldMetadataIdUsedInDropdown,
     objectFilterDropdownCurrentRecordFilter,
     objectFilterDropdownAnyFieldSearchIsSelected,
     store,

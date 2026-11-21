@@ -1,23 +1,31 @@
 import { type OTPFormValues } from '@/auth/sign-in-up/hooks/useTwoFactorAuthenticationForm';
-import { VERIFY_TWO_FACTOR_AUTHENTICATION_METHOD_FOR_AUTHENTICATED_USER } from '@/settings/two-factor-authentication/graphql/mutations/verifyTwoFactorAuthenticationMethod';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
+import { getTwoFactorAuthenticationErrorToastOptions } from '@/auth/utils/getTwoFactorAuthenticationErrorToastOptions';
 import { useLoadCurrentUser } from '@/users/hooks/useLoadCurrentUser';
 import { useMutation } from '@apollo/client/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { SettingsPath } from 'twenty-shared/types';
+import { isNonEmptyArray } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { VerifyTwoFactorAuthenticationMethodForAuthenticatedUserDocument } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
-export const useTwoFactorVerificationForSettings = () => {
-  const { enqueueErrorSnackBar, enqueueSuccessSnackBar } = useSnackBar();
+type UseTwoFactorVerificationForSettingsProps = {
+  onBackupCodesIssued: (backupCodes: string[]) => void;
+};
+
+export const useTwoFactorVerificationForSettings = ({
+  onBackupCodesIssued,
+}: UseTwoFactorVerificationForSettingsProps) => {
+  const { enqueueToast } = useToast();
   const navigate = useNavigateSettings();
   const { t } = useLingui();
   const [isLoading, setIsLoading] = useState(false);
   const { loadCurrentUser } = useLoadCurrentUser();
 
   const [verifyTwoFactorAuthenticationMethod] = useMutation(
-    VERIFY_TWO_FACTOR_AUTHENTICATION_METHOD_FOR_AUTHENTICATED_USER,
+    VerifyTwoFactorAuthenticationMethodForAuthenticatedUserDocument,
   );
 
   const formConfig = useForm<OTPFormValues>({
@@ -31,40 +39,43 @@ export const useTwoFactorVerificationForSettings = () => {
   const otpValue = formConfig.watch('otp');
   const canSave = !isSubmitting && otpValue?.length === 6;
 
-  const handleVerificationSuccess = async () => {
-    enqueueSuccessSnackBar({
-      message: t`Two-factor authentication setup completed successfully!`,
+  const handleVerificationSuccess = async (
+    backupCodes: string[] | null | undefined,
+  ) => {
+    enqueueToast({
+      status: 'success',
+      children: t`Two-factor authentication setup completed successfully!`,
     });
 
-    // Reload current user to refresh 2FA status
-    await loadCurrentUser();
+    if (isNonEmptyArray(backupCodes)) {
+      onBackupCodesIssued(backupCodes);
+    }
 
-    // Navigate back to profile page
-    navigate(SettingsPath.ProfilePage);
+    await loadCurrentUser();
   };
 
   const handleSave = async (values: OTPFormValues) => {
     try {
       setIsLoading(true);
 
-      await verifyTwoFactorAuthenticationMethod({
+      const result = await verifyTwoFactorAuthenticationMethod({
         variables: {
           otp: values.otp,
         },
       });
 
-      await handleVerificationSuccess();
-    } catch {
-      enqueueErrorSnackBar({
-        message: t`Invalid verification code. Please try again.`,
-      });
+      await handleVerificationSuccess(
+        result.data?.verifyTwoFactorAuthenticationMethodForAuthenticatedUser
+          .backupCodes,
+      );
+    } catch (error) {
+      enqueueToast(getTwoFactorAuthenticationErrorToastOptions({ error }));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCancel = () => {
-    // Reset form and navigate back to profile page
     formConfig.reset();
     navigate(SettingsPath.ProfilePage);
   };

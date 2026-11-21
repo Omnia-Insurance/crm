@@ -1,27 +1,23 @@
-import { Separator } from '@/settings/components/Separator';
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import { Controller, useFormContext } from 'react-hook-form';
 
-import {
-  addressSchema as addressFieldDefaultValueSchema,
-  addressSettingsSchema,
-} from '@/object-record/record-field/ui/types/guards/isFieldAddressValue';
+import { addressFieldSettingsSchema } from '@/object-record/record-field/ui/validation-schemas/addressFieldSettingsSchema';
+import { addressFieldValueSchema } from '@/object-record/record-field/ui/validation-schemas/addressFieldValueSchema';
 import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSelect';
 import { MultiSelectAddressFields } from '@/settings/data-model/fields/forms/address/components/MultiSelectAddressFields';
 import { DEFAULT_SELECTION_ADDRESS_WITH_MESSAGES } from '@/settings/data-model/fields/forms/address/constants/DefaultSelectionAddressWithMessages';
 import { useAddressSettingsFormInitialValues } from '@/settings/data-model/fields/forms/address/hooks/useAddressSettingsFormInitialValues';
 import { useCountries } from '@/ui/input/components/internal/hooks/useCountries';
 import { Select } from '@/ui/input/components/Select';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
 import { useLingui } from '@lingui/react/macro';
-import { type MouseEvent } from 'react';
 import {
   IconCircleOff,
   IconList,
   IconMap,
   IconRefresh,
   type IconComponentProps,
-} from 'twenty-ui/display';
-import { type SelectOption } from 'twenty-ui/input';
+} from 'twenty-ui/icon';
+import { type SelectOption } from 'twenty-ui/primitives/input';
 import { z } from 'zod';
 import { applySimpleQuotesToString } from '~/utils/string/applySimpleQuotesToString';
 import { stripSimpleQuotesFromString } from '~/utils/string/stripSimpleQuotesFromString';
@@ -33,8 +29,8 @@ type SettingsDataModelFieldAddressFormProps = {
 };
 
 export const settingsDataModelFieldAddressFormSchema = z.object({
-  defaultValue: addressFieldDefaultValueSchema,
-  settings: addressSettingsSchema,
+  defaultValue: addressFieldValueSchema,
+  settings: addressFieldSettingsSchema,
 });
 
 export type SettingsDataModelFieldTextFormValues = z.infer<
@@ -67,12 +63,6 @@ export const SettingsDataModelFieldAddressForm = ({
     initialDefaultValue,
     resetDefaultValueField,
   } = useAddressSettingsFormInitialValues({ existingFieldMetadataId });
-
-  const { closeDropdown } = useCloseDropdown();
-  const reset = () => {
-    resetDefaultValueField();
-    closeDropdown('addressSubFieldsId');
-  };
 
   return (
     <>
@@ -107,7 +97,7 @@ export const SettingsDataModelFieldAddressForm = ({
           );
         }}
       />
-      <Separator />
+      <SettingsCardSeparator />
       <Controller
         name="settings.subFields"
         defaultValue={initialDisplaySubFields}
@@ -121,6 +111,7 @@ export const SettingsDataModelFieldAddressForm = ({
               description={t`Decide which Sub-address fields you want to display`}
             >
               <MultiSelectAddressFields<string>
+                dropdownId="addressSubFieldsId"
                 options={DEFAULT_SELECTION_ADDRESS_WITH_MESSAGES.map(
                   (option) => ({
                     ...option,
@@ -128,14 +119,10 @@ export const SettingsDataModelFieldAddressForm = ({
                   }),
                 )}
                 values={values}
-                dropdownId="addressSubFieldsId"
                 onChange={onChange}
                 callToActionButton={{
                   text: t`Reset to default`,
-                  onClick: (event: MouseEvent<HTMLDivElement>) => {
-                    event.preventDefault();
-                    reset();
-                  },
+                  onClick: resetDefaultValueField,
                   Icon: IconRefresh,
                 }}
                 selectSizeVariant="small"

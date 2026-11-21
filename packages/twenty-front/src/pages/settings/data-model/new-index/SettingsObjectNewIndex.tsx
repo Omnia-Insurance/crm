@@ -1,0 +1,210 @@
+import { WorkspaceRouteUnavailable } from '@/ui/layout/page/components/WorkspaceRouteUnavailable';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
+import { useCreateOneIndexMetadataItem } from '@/object-metadata/hooks/useCreateOneIndexMetadataItem';
+import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { SEARCH_VECTOR_FIELD_NAME } from '@/object-record/constants/SearchVectorFieldName';
+import { SaveAndCancelButtons } from '@/settings/components/SaveAndCancelButtons/SaveAndCancelButtons';
+import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
+import { SettingsObjectIndexFieldsForm } from '@/settings/data-model/indexes/forms/components/SettingsObjectIndexFieldsForm';
+import { SettingsObjectIndexOptionsForm } from '@/settings/data-model/indexes/forms/components/SettingsObjectIndexOptionsForm';
+import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useLingui } from '@lingui/react/macro';
+import { useEffect, useMemo } from 'react';
+import { FormProvider, useForm } from 'react-hook-form';
+import { useParams } from 'react-router-dom';
+import { MAX_CUSTOM_INDEXES_PER_OBJECT } from 'twenty-shared/constants';
+import { isWorkspaceCustomIndex } from 'twenty-shared/metadata';
+import { AppPath, RelationType, SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { Callout, useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
+import { IconAlertTriangle } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { IndexType } from '~/generated-metadata/graphql';
+import { useNavigateApp } from '~/hooks/useNavigateApp';
+import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import {
+  settingsObjectNewIndexFormSchema,
+  type SettingsObjectNewIndexFormValues,
+} from '@/settings/data-model/indexes/forms/validation-schemas/settingsObjectNewIndexFormSchema';
+
+const isFieldIndexable = (field: FieldMetadataItem): boolean => {
+  if (field.name === SEARCH_VECTOR_FIELD_NAME) {
+    return false;
+  }
+  if (field.isSystem === true) {
+    return false;
+  }
+  if (field.isActive !== true) {
+    return false;
+  }
+
+  // Only MANY_TO_ONE relations have a join column on this side to index
+  const relationType =
+    field.relation?.type ?? field.morphRelations?.[0]?.type ?? null;
+
+  if (isDefined(relationType) && relationType !== RelationType.MANY_TO_ONE) {
+    return false;
+  }
+
+  return true;
+};
+
+export const SettingsObjectNewIndex = () => {
+  const { t } = useLingui();
+  const navigateApp = useNavigateApp();
+  const navigate = useNavigateSettings();
+  const workspaceSurface = useWorkspaceSurface();
+  const { objectNamePlural = '' } = useParams();
+  const { enqueueToast } = useToast();
+
+  const { findObjectMetadataItemByNamePlural } =
+    useFilteredObjectMetadataItems();
+  const activeObjectMetadataItem =
+    findObjectMetadataItemByNamePlural(objectNamePlural);
+
+  const { createOneIndexMetadataItem } = useCreateOneIndexMetadataItem();
+
+  const formConfig = useForm<SettingsObjectNewIndexFormValues>({
+    mode: 'onTouched',
+    resolver: zodResolver(settingsObjectNewIndexFormSchema),
+    defaultValues: {
+      fields: [],
+      indexType: IndexType.BTREE,
+    },
+  });
+
+  useEffect(() => {
+    if (
+      workspaceSurface.type === 'main' &&
+      !isDefined(activeObjectMetadataItem)
+    ) {
+      navigateApp(AppPath.NotFound);
+    }
+  }, [activeObjectMetadataItem, navigateApp, workspaceSurface.type]);
+
+  const isDDLLocked = useAtomStateValue(isDDLLockedState);
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+
+  const indexableFields = useMemo(
+    () =>
+      (activeObjectMetadataItem?.fields ?? [])
+        .filter(isFieldIndexable)
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [activeObjectMetadataItem?.fields],
+  );
+
+  if (!isDefined(activeObjectMetadataItem)) {
+    return workspaceSurface.type === 'side-panel' ? (
+      <WorkspaceRouteUnavailable />
+    ) : null;
+  }
+
+  const customIndexCount = activeObjectMetadataItem.indexMetadatas.filter(
+    (indexMetadata) =>
+      isWorkspaceCustomIndex({
+        indexMetadata,
+        workspaceCustomApplicationId:
+          currentWorkspace?.workspaceCustomApplication?.id,
+      }),
+  ).length;
+  const reachedCap = customIndexCount >= MAX_CUSTOM_INDEXES_PER_OBJECT;
+
+  const { isValid, isSubmitting } = formConfig.formState;
+  const canSave = isValid && !isSubmitting && !isDDLLocked && !reachedCap;
+
+  const handleSave = async (formValues: SettingsObjectNewIndexFormValues) => {
+    const result = await createOneIndexMetadataItem({
+      objectMetadataId: activeObjectMetadataItem.id,
+      fields: formValues.fields.map((entry) => ({
+        fieldMetadataId: entry.fieldMetadataId,
+        subFieldName: entry.subFieldName,
+      })),
+      indexType: formValues.indexType,
+    });
+
+    if (result.status === 'successful') {
+      enqueueToast({ status: 'success', children: t`Index created` });
+      navigate(SettingsPath.ObjectIndexes, { objectNamePlural });
+    }
+  };
+
+  return (
+    <FormProvider // oxlint-disable-next-line react/jsx-props-no-spreading
+      {...formConfig}
+    >
+      <SettingsPageLayout
+        title={t`New Index`}
+        links={[
+          {
+            children: t`Workspace`,
+            href: getSettingsPath(SettingsPath.General),
+          },
+          {
+            children: t`Objects`,
+            href: getSettingsPath(SettingsPath.Objects),
+          },
+          {
+            children: activeObjectMetadataItem.labelPlural,
+            href: getSettingsPath(SettingsPath.ObjectDetail, {
+              objectNamePlural,
+            }),
+          },
+          {
+            children: t`Indexes`,
+            href: getSettingsPath(SettingsPath.ObjectIndexes, {
+              objectNamePlural,
+            }),
+          },
+          { children: t`New Index` },
+        ]}
+        actionButton={
+          <SaveAndCancelButtons
+            isLoading={isSubmitting}
+            isSaveDisabled={!canSave}
+            isCancelDisabled={isSubmitting}
+            onCancel={() =>
+              navigate(SettingsPath.ObjectIndexes, { objectNamePlural })
+            }
+            onSave={formConfig.handleSubmit(handleSave)}
+          />
+        }
+      >
+        <SettingsPageContainer>
+          <Section.Root>
+            <Callout
+              status="warning"
+              icon={
+                <IconAlertTriangle
+                  size={themeCssVariables.icon.size.md}
+                  aria-hidden="true"
+                />
+              }
+              title={t`Use indexes sparingly`}
+              description={t`Each index speeds up reads on the fields it covers, but slows down every insert and update, and uses disk space. Only add an index when you know which queries it serves.`}
+            />
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
+              title={t`Fields`}
+              description={t`Pick one or more fields. The order you select them in becomes the column order in the index — important for composite queries. For composite fields like Address, pick the specific sub-column to index.`}
+            />
+            <SettingsObjectIndexFieldsForm indexableFields={indexableFields} />
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
+              title={t`Options`}
+              description={t`Pick the index type. BTREE covers most queries; GIN is for full-text and JSONB.`}
+            />
+            <SettingsObjectIndexOptionsForm />
+          </Section.Root>
+        </SettingsPageContainer>
+      </SettingsPageLayout>
+    </FormProvider>
+  );
+};

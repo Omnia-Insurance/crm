@@ -1,9 +1,9 @@
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
 import { FormNestedFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormNestedFieldInputContainer';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
-import { type VariablePickerComponent } from '@/object-record/record-field/ui/form-types/types/VariablePickerComponent';
+import { type VariablePickerComponent } from '@/ui/input/types/VariablePickerComponent';
 import { type FieldEmailsValue } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { Field } from 'twenty-ui/primitives/input';
 import { useLingui } from '@lingui/react/macro';
 
 type FormEmailsFieldInputProps = {
@@ -12,6 +12,8 @@ type FormEmailsFieldInputProps = {
   onChange: (value: FieldEmailsValue) => void;
   VariablePicker?: VariablePickerComponent;
   readonly?: boolean;
+  subFieldPlaceholders?: Partial<Record<keyof FieldEmailsValue, string>>;
+  isPrimaryEmailOnly?: boolean;
 };
 
 export const FormEmailsFieldInput = ({
@@ -20,6 +22,8 @@ export const FormEmailsFieldInput = ({
   onChange,
   readonly,
   VariablePicker,
+  subFieldPlaceholders,
+  isPrimaryEmailOnly = false,
 }: FormEmailsFieldInputProps) => {
   const { t } = useLingui();
 
@@ -30,15 +34,28 @@ export const FormEmailsFieldInput = ({
     });
   };
 
+  if (isPrimaryEmailOnly) {
+    return (
+      <FormTextFieldInput
+        label={label}
+        defaultValue={defaultValue?.primaryEmail}
+        onChange={handleChange}
+        placeholder={subFieldPlaceholders?.primaryEmail ?? t`Email`}
+        readonly={readonly}
+        VariablePicker={VariablePicker}
+      />
+    );
+  }
+
   return (
     <FormFieldInputContainer>
-      {label ? <InputLabel>{label}</InputLabel> : null}
+      {label ? <Field.Label>{label}</Field.Label> : null}
       <FormNestedFieldInputContainer>
         <FormTextFieldInput
           label={t`Primary Email`}
           defaultValue={defaultValue?.primaryEmail}
           onChange={handleChange}
-          placeholder={t`Primary Email`}
+          placeholder={subFieldPlaceholders?.primaryEmail ?? t`Primary Email`}
           readonly={readonly}
           VariablePicker={VariablePicker}
         />

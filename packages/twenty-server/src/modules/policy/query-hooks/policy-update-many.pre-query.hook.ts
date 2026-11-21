@@ -1,306 +1,189 @@
 import { Injectable } from '@nestjs/common';
 
-import { msg } from '@lingui/core/macro';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { isString } from '@sniptt/guards';
+import { QUERY_MAX_RECORDS } from 'twenty-shared/constants';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { isDefined, isPlainObject } from 'twenty-shared/utils';
 
+import { type ObjectRecordFilter } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
 import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/interfaces/workspace-query-hook.interface';
 import { type UpdateManyResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 
+import { isRecordFilterEmpty } from 'src/engine/api/common/common-query-runners/utils/is-record-filter-empty.util';
+import { GraphqlQueryParser } from 'src/engine/api/graphql/graphql-query-runner/graphql-query-parsers/graphql-query.parser';
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
-import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { ForbiddenError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
-import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { findFlatEntityByIdInFlatEntityMapsOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps-or-throw.util';
+import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { type PolicyUpdateTargetRecord } from 'src/modules/policy/query-hooks/types/policy-update-target-record.type';
+import { findPolicyUpdateTargets } from 'src/modules/policy/query-hooks/utils/find-policy-update-targets.util';
+import { PolicyWriteAuthorizationService } from 'src/modules/policy/services/policy-write-authorization.service';
 import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
-import { formatDuration } from 'src/modules/policy/utils/format-duration.util';
+
+type PolicyUpdateManyArgs = UpdateManyResolverArgs<
+  Partial<ObjectRecord>,
+  Partial<ObjectRecordFilter>
+>;
+
+// A bare id list is looked up by id; any other filter is applied the way the runner applies it
+const findFilteredPolicyIds = (
+  filter: Partial<ObjectRecordFilter>,
+): string[] | undefined => {
+  const { id: idFilter, ...otherFilters } = filter;
+
+  if (Object.keys(otherFilters).length > 0 || !isPlainObject(idFilter)) {
+    return undefined;
+  }
+
+  const { in: policyIds, ...otherIdFilters } = idFilter;
+
+  return Object.keys(otherIdFilters).length === 0 &&
+    Array.isArray(policyIds) &&
+    policyIds.every(isString)
+    ? policyIds
+    : undefined;
+};
 
 @Injectable()
 @WorkspaceQueryHook(`policy.updateMany`)
-export class PolicyUpdateManyPreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
+export class PolicyUpdateManyPreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    private readonly workspaceCacheService: WorkspaceCacheService,
-    private readonly agentProfileResolverService: AgentProfileResolverService,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly policyWriteAuthorizationService: PolicyWriteAuthorizationService,
   ) {}
 
   async execute(
-    authContext: AuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
-    payload: UpdateManyResolverArgs,
-  ): Promise<UpdateManyResolverArgs> {
-    const workspace = authContext.workspace;
+    payload: PolicyUpdateManyArgs,
+  ): Promise<PolicyUpdateManyArgs> {
+    const isRenaming =
+      isDefined(payload.data.carrierId) || isDefined(payload.data.productId);
 
-    if (!isDefined(workspace)) {
+    // The runner refuses a missing or empty filter before it writes anything
+    if (
+      (!isUserAuthContext(authContext) && !isRenaming) ||
+      !isDefined(payload.filter) ||
+      isRecordFilterEmpty(payload.filter)
+    ) {
       return payload;
     }
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      if (isDefined(payload.filter?.id?.in)) {
-        const policyRepo = await this.globalWorkspaceOrmManager.getRepository(
-          workspace.id,
-          'policy',
-          { shouldBypassPermissionChecks: true },
-        );
-        const policyIds = payload.filter.id.in as string[];
-        const existingPolicies: Record<string, unknown>[] = [];
+    const workspaceId = authContext.workspace.id;
 
-        for (const policyId of policyIds) {
-          const existing = (await policyRepo.findOne({
-            where: { id: policyId },
-          })) as Record<string, unknown> | null;
-
-          if (isDefined(existing)) {
-            existingPolicies.push(existing);
-          }
-        }
-
-        const isAdmin = await this.isUserAdmin(authContext, workspace.id);
-
-        await this.assertPolicyAgentOwnership({
+    const policies = await findPolicyUpdateTargets({
+      workspaceId,
+      policyIds:
+        findFilteredPolicyIds(payload.filter) ??
+        (await this.findPolicyIdsMatchingFilter({
           authContext,
-          workspaceId: workspace.id,
-          existingPolicies,
-          isAdmin,
-        });
+          filter: payload.filter,
+        })),
+      workspaceOrmManager: this.workspaceOrmManager,
+    });
 
-        // Block edits to policies older than the configured edit window for non-admin users
-        const editWindowMinutes = await this.getEditWindowMinutes(
-          authContext,
-          workspace.id,
-        );
+    if (policies.length === 0) {
+      return payload;
+    }
 
-        if (isDefined(editWindowMinutes)) {
-          const now = Date.now();
-          const editWindowMs = editWindowMinutes * 60 * 1000;
+    await this.policyWriteAuthorizationService.assertUserMayUpdatePolicies({
+      authContext,
+      policies,
+    });
 
-          for (const existing of existingPolicies) {
-            if (isDefined(existing?.createdAt)) {
-              const createdAt = new Date(existing.createdAt as string);
-              const ageMs = now - createdAt.getTime();
+    if (!isRenaming) {
+      return payload;
+    }
 
-              if (ageMs > editWindowMs) {
-                if (!isAdmin) {
-                  const window = formatDuration(editWindowMs);
+    const displayName = await this.buildSharedDisplayName({
+      workspaceId,
+      data: payload.data,
+      policies,
+    });
 
-                  throw new ForbiddenError(
-                    `Policies older than ${window} can only be edited by administrators`,
-                    {
-                      userFriendlyMessage: msg`This policy can no longer be edited. Only administrators can modify policies after ${window}.`,
-                    },
-                  );
-                }
-
-                // If we reach here, user is admin — no need to check more
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      // Auto-derive name when carrier or product changes in bulk update
-      if (
-        isDefined(payload.data.carrierId) ||
-        isDefined(payload.data.productId)
-      ) {
-        const displayName = await buildPolicyDisplayName(
-          (payload.data.carrierId as string) ?? null,
-          (payload.data.productId as string) ?? null,
-          workspace.id,
-          this.globalWorkspaceOrmManager,
-        );
-
-        if (displayName) {
-          payload.data.name = displayName;
-        }
-      }
-    }, authContext as WorkspaceAuthContext);
+    if (isDefined(displayName)) {
+      payload.data.name = displayName;
+    }
 
     return payload;
   }
 
-  private async assertPolicyAgentOwnership({
+  private async findPolicyIdsMatchingFilter({
     authContext,
-    workspaceId,
-    existingPolicies,
-    isAdmin,
+    filter,
   }: {
-    authContext: AuthContext;
-    workspaceId: string;
-    existingPolicies: Record<string, unknown>[];
-    isAdmin: boolean;
-  }) {
-    if (
-      isAdmin ||
-      existingPolicies.length === 0 ||
-      !isDefined(authContext.workspaceMemberId)
-    ) {
-      return;
-    }
-
-    const shouldEnforceAgentOwnership = await this.shouldEnforceAgentOwnership(
-      authContext,
-      workspaceId,
-    );
-
-    if (!shouldEnforceAgentOwnership) {
-      return;
-    }
-
-    const agentProfileId =
-      await this.agentProfileResolverService.resolveAgentProfileId(
-        workspaceId,
-        authContext.workspaceMemberId,
-        authContext,
-      );
-
-    const hasPolicyAssignedToAnotherAgent = existingPolicies.some(
-      (existing) =>
-        isDefined(existing.agentId) && existing.agentId !== agentProfileId,
-    );
-
-    if (!hasPolicyAssignedToAnotherAgent) {
-      return;
-    }
-
-    throw new ForbiddenError(
-      `Editing this record violates row-level security`,
-      {
-        userFriendlyMessage: msg`Editing this record violates row-level security.`,
-      },
-    );
-  }
-
-  private async shouldEnforceAgentOwnership(
-    authContext: AuthContext,
-    workspaceId: string,
-  ): Promise<boolean> {
-    const userWorkspaceId = authContext.userWorkspaceId;
-
-    if (!isDefined(userWorkspaceId)) {
-      return false;
-    }
-
-    const {
-      userWorkspaceRoleMap,
-      rolesPermissions,
-      flatObjectMetadataMaps,
-      flatFieldMetadataMaps,
-    } = await this.workspaceCacheService.getOrRecompute(workspaceId, [
-      'userWorkspaceRoleMap',
-      'rolesPermissions',
-      'flatObjectMetadataMaps',
-      'flatFieldMetadataMaps',
-    ]);
-
-    const roleId = userWorkspaceRoleMap[userWorkspaceId];
-
-    if (!isDefined(roleId)) {
-      return false;
-    }
-
-    const policyFlatObjectMetadata = Object.values(
-      flatObjectMetadataMaps.byUniversalIdentifier,
-    ).find((meta) => meta?.nameSingular === 'policy');
-
-    if (!isDefined(policyFlatObjectMetadata)) {
-      return false;
-    }
-
-    const objectPermissions =
-      rolesPermissions[roleId]?.[policyFlatObjectMetadata.id];
-
-    return (
-      objectPermissions?.rowLevelPermissionPredicates?.some((predicate) => {
-        if (predicate.scope !== RowLevelPermissionPredicateScope.WRITE) {
-          return false;
-        }
-
-        const fieldUniversalIdentifier =
-          flatFieldMetadataMaps.universalIdentifierById[
-            predicate.fieldMetadataId
-          ];
-        const fieldMetadata = isDefined(fieldUniversalIdentifier)
-          ? flatFieldMetadataMaps.byUniversalIdentifier[
-              fieldUniversalIdentifier
-            ]
-          : undefined;
-
-        return (
-          fieldMetadata?.name === 'agent' &&
-          isDefined(predicate.workspaceMemberFieldMetadataId)
+    authContext: WorkspaceAuthContext;
+    filter: Partial<ObjectRecordFilter>;
+  }): Promise<string[]> {
+    const policies = await this.workspaceOrmManager.executeInWorkspaceContext(
+      () => {
+        const {
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
+          objectIdByNameSingular,
+        } = getWorkspaceContext();
+        const queryParser = new GraphqlQueryParser(
+          findFlatEntityByIdInFlatEntityMapsOrThrow({
+            flatEntityMaps: flatObjectMetadataMaps,
+            flatEntityId: objectIdByNameSingular.policy,
+          }),
+          flatObjectMetadataMaps,
+          flatFieldMetadataMaps,
         );
-      }) ?? false
+        // Permission-checked, so a filter never reaches policies the caller cannot read
+        const queryBuilder = this.workspaceOrmManager
+          .getRepository('policy')
+          .createQueryBuilder('policy');
+
+        queryParser.applyFilterToBuilder(queryBuilder, 'policy', filter);
+
+        // A larger match fails either here or at the runner's update limit, so one extra row is enough
+        return queryBuilder
+          .withDeleted()
+          .select(['id'])
+          .limit(QUERY_MAX_RECORDS + 1)
+          .getMany<Pick<ObjectRecord, 'id'>>();
+      },
+      authContext,
     );
+
+    return policies.map(({ id }) => id);
   }
 
-  private async getEditWindowMinutes(
-    authContext: AuthContext,
-    workspaceId: string,
-  ): Promise<number | null> {
-    const userWorkspaceId = authContext.userWorkspaceId;
+  // One name is written to every row, so it is derived only when it fits all of them
+  private async buildSharedDisplayName({
+    workspaceId,
+    data,
+    policies,
+  }: {
+    workspaceId: string;
+    data: Partial<ObjectRecord>;
+    policies: PolicyUpdateTargetRecord[];
+  }): Promise<string | null> {
+    const carrierIds: unknown[] =
+      data.carrierId === undefined
+        ? [...new Set(policies.map(({ carrierId }) => carrierId))]
+        : [data.carrierId];
+    const productIds: unknown[] =
+      data.productId === undefined
+        ? [...new Set(policies.map(({ productId }) => productId))]
+        : [data.productId];
 
-    if (!isDefined(userWorkspaceId)) {
+    if (carrierIds.length !== 1 || productIds.length !== 1) {
       return null;
     }
 
-    const { userWorkspaceRoleMap, rolesPermissions, flatObjectMetadataMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspaceId, [
-        'userWorkspaceRoleMap',
-        'rolesPermissions',
-        'flatObjectMetadataMaps',
-      ]);
-
-    const roleId = userWorkspaceRoleMap[userWorkspaceId];
-
-    if (!isDefined(roleId)) {
-      return null;
-    }
-
-    const policyFlatObjectMetadata = Object.values(
-      flatObjectMetadataMaps.byUniversalIdentifier,
-    ).find((meta) => meta?.nameSingular === 'policy');
-
-    if (!isDefined(policyFlatObjectMetadata)) {
-      return null;
-    }
-
-    const objectPermissions =
-      rolesPermissions[roleId]?.[policyFlatObjectMetadata.id];
-
-    return objectPermissions?.editWindowMinutes ?? null;
-  }
-
-  private async isUserAdmin(
-    authContext: AuthContext,
-    workspaceId: string,
-  ): Promise<boolean> {
-    const userWorkspaceId = authContext.userWorkspaceId;
-
-    if (!isDefined(userWorkspaceId)) {
-      return false;
-    }
-
-    const { userWorkspaceRoleMap, flatRoleMaps } =
-      await this.workspaceCacheService.getOrRecompute(workspaceId, [
-        'userWorkspaceRoleMap',
-        'flatRoleMaps',
-      ]);
-
-    const roleId = userWorkspaceRoleMap[userWorkspaceId];
-
-    if (!isDefined(roleId)) {
-      return false;
-    }
-
-    const universalIdentifier = flatRoleMaps.universalIdentifierById[roleId];
-
-    return universalIdentifier === STANDARD_ROLE.admin.universalIdentifier;
+    return this.workspaceOrmManager.executeInWorkspaceContext(
+      () =>
+        buildPolicyDisplayName(
+          { carrierId: carrierIds[0], productId: productIds[0] },
+          this.workspaceOrmManager,
+        ),
+      buildSystemAuthContext(workspaceId),
+      { lite: true },
+    );
   }
 }

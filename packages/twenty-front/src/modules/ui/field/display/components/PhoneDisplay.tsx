@@ -1,7 +1,7 @@
+import { ContactLink } from '@/ui/field/display/components/internal/ContactLink/ContactLink';
 import { parsePhoneNumber, type PhoneNumber } from 'libphonenumber-js';
 import { type MouseEvent } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { ContactLink } from 'twenty-ui/navigation';
 
 interface PhoneDisplayProps {
   value: PhoneDisplayValueProps;
@@ -14,7 +14,9 @@ type PhoneDisplayValueProps = {
 export const PhoneDisplay = ({
   value: { number, callingCode },
 }: PhoneDisplayProps) => {
-  if (!isDefined(number)) return <ContactLink href="#">{number}</ContactLink>;
+  if (!isDefined(number)) {
+    return <ContactLink href="#">{number}</ContactLink>;
+  }
 
   const callingCodeSanitized = callingCode?.replace('+', '');
 
@@ -25,10 +27,12 @@ export const PhoneDisplay = ({
       defaultCallingCode: callingCodeSanitized || '1',
     });
   } catch (error) {
-    if (!(error instanceof Error))
+    if (!(error instanceof Error)) {
       return <ContactLink href="#">{number}</ContactLink>;
-    if (error.message === 'NOT_A_NUMBER')
+    }
+    if (error.message === 'NOT_A_NUMBER') {
       return <ContactLink href="#">{`+${callingCodeSanitized}`}</ContactLink>;
+    }
     return <ContactLink href="#">{number}</ContactLink>;
   }
 

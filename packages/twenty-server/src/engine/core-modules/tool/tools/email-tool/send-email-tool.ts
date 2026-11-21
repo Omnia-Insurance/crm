@@ -1,7 +1,9 @@
+import { EmailOperation } from 'twenty-shared/types';
 import { Injectable, Logger } from '@nestjs/common';
 
-import { FileFolder } from 'twenty-shared/types';
+import { SOURCE_LOCALE } from 'twenty-shared/translations';
 
+import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { EmailComposerService } from 'src/engine/core-modules/tool/tools/email-tool/email-composer.service';
 import { EmailToolInputZodSchema } from 'src/engine/core-modules/tool/tools/email-tool/email-tool.schema';
 import { EmailToolException } from 'src/engine/core-modules/tool/tools/email-tool/exceptions/email-tool.exception';
@@ -23,6 +25,7 @@ export class SendEmailTool implements Tool {
   constructor(
     private readonly emailComposerService: EmailComposerService,
     private readonly sendEmailService: SendEmailService,
+    private readonly i18nService: I18nService,
   ) {}
 
   async execute(
@@ -30,27 +33,31 @@ export class SendEmailTool implements Tool {
     context: ToolExecutionContext,
   ): Promise<ToolOutput> {
     try {
-      const result = await this.emailComposerService.composeEmail(
+      const result = await this.emailComposerService.composeEmail({
         parameters,
         context,
-        { attachmentsFileFolder: FileFolder.Workflow },
-      );
+        operation: EmailOperation.SEND,
+      });
 
       if (!result.success) {
-        return result.output;
+        const errorMessage = this.i18nService
+          .getI18nInstance(SOURCE_LOCALE)
+          ._(result.error);
+
+        return { success: false, message: errorMessage, error: errorMessage };
       }
 
       const { data } = result;
 
       const sendResult = await this.sendEmailService.sendComposedEmail(data);
 
-      if (data.shouldPersistMessage) {
-        await this.sendEmailService.persistSentMessage(
-          sendResult,
-          data,
-          context.workspaceId,
-        );
-      }
+      const persistedMessage = data.shouldPersistMessage
+        ? await this.sendEmailService.persistSentMessage(
+            sendResult,
+            data,
+            context.workspaceId,
+          )
+        : undefined;
 
       this.logger.log(
         `Email sent successfully to ${data.toRecipientsDisplay}${data.attachments.length > 0 ? ` with ${data.attachments.length} attachments` : ''}`,
@@ -64,8 +71,14 @@ export class SendEmailTool implements Tool {
           ccRecipients: data.recipients.cc,
           bccRecipients: data.recipients.bcc,
           subject: data.sanitizedSubject,
+          sanitizedHtmlBody: data.sanitizedHtmlBody,
+          plainTextBody: data.plainTextBody,
           connectedAccountId: data.connectedAccount.id,
           attachmentCount: data.attachments.length,
+          headerMessageId: sendResult.headerMessageId,
+          threadExternalId: sendResult.threadExternalId,
+          messageId: persistedMessage?.messageId,
+          messageThreadId: persistedMessage?.messageThreadId,
         },
       };
     } catch (error) {
@@ -84,8 +97,7 @@ export class SendEmailTool implements Tool {
           success: false,
           message: 'Failed to send email due to insufficient permissions',
           error:
-            'The connected email account does not have permission to send emails. ' +
-            'The user should disconnect and reconnect their account in Settings > Accounts to grant the required permissions.',
+            'The connected email account does not have permission to send emails.',
         };
       }
 

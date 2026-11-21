@@ -10,22 +10,21 @@ import {
 import { LastUsedPill } from '@/auth/sign-in-up/components/internal/LastUsedPill';
 import { SignInUpEmailField } from '@/auth/sign-in-up/components/internal/SignInUpEmailField';
 import { SignInUpPasswordField } from '@/auth/sign-in-up/components/internal/SignInUpPasswordField';
-import { StyledSSOButtonContainer } from '@/auth/sign-in-up/components/internal/SignInUpSSOButtonStyles';
-import { AuthenticatedMethod } from '@/auth/types/AuthenticatedMethod.enum';
-import { SignInUpMode } from '@/auth/types/signInUpMode';
+import { StyledSsoButtonContainer } from '@/auth/sign-in-up/components/internal/SignInUpSsoButtonStyles';
+import { AuthenticatedMethod } from '@/auth/types/AuthenticatedMethod';
+import { SignInUpMode } from '@/auth/types/SignInUpMode';
 import { isRequestingCaptchaTokenState } from '@/captcha/states/isRequestingCaptchaTokenState';
 import { captchaState } from '@/client-config/states/captchaState';
 import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
+import { InputHint } from '@/ui/input/components/internal/InputHint/InputHint';
+import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { isDefined } from 'twenty-shared/utils';
-import { Loader } from 'twenty-ui/feedback';
-import { MainButton } from 'twenty-ui/input';
-import { InputHint } from '@/ui/input/components/InputHint';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { MainButton } from 'twenty-ui/components/input';
 
 const StyledForm = styled.form`
   align-items: center;
@@ -70,7 +69,9 @@ export const SignInUpWithCredentials = ({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (isSubmitButtonDisabled) return;
+    if (isSubmitButtonDisabled) {
+      return;
+    }
 
     if (signInUpStep === SignInUpStep.Init) {
       continueWithEmail();
@@ -161,22 +162,22 @@ export const SignInUpWithCredentials = ({
               signInUpMode={signInUpMode}
             />
           )}
-          <StyledSSOButtonContainer>
+          <StyledSsoButtonContainer>
             <MainButton
-              title={buttonTitle}
               type="submit"
-              variant={
-                signInUpStep === SignInUpStep.Init ? 'secondary' : 'primary'
-              }
-              Icon={() => (form.formState.isSubmitting ? <Loader /> : null)}
+              loading={form.formState.isSubmitting}
+              loadingPosition="start"
               disabled={isSubmitButtonDisabled}
               fullWidth
-            />
+              variant={signInUpStep === SignInUpStep.Init ? 'outline' : 'solid'}
+            >
+              {buttonTitle}
+            </MainButton>
             {isLastUsed && <LastUsedPill />}
             {isSignUpBlockedByDDLLock && (
               <InputHint>{t`Sign-up is temporarily unavailable during maintenance.`}</InputHint>
             )}
-          </StyledSSOButtonContainer>
+          </StyledSsoButtonContainer>
         </StyledForm>
       )}
     </>

@@ -1,26 +1,25 @@
 import { isNonEmptyString } from '@sniptt/guards';
 
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import { type ThemeColor, MAIN_COLOR_NAMES } from 'twenty-ui/theme';
 
 const SYSTEM_OBJECT_COLOR: ThemeColor = 'gray';
 
 const STANDARD_OBJECT_FALLBACK_COLOR: Partial<
-  Record<CoreObjectNameSingular, ThemeColor>
+  Record<StandardObjectNameSingular, ThemeColor>
 > = {
-  [CoreObjectNameSingular.Company]: 'blue',
-  [CoreObjectNameSingular.Person]: 'blue',
-  [CoreObjectNameSingular.Task]: 'turquoise',
-  [CoreObjectNameSingular.TaskTarget]: 'turquoise',
-  [CoreObjectNameSingular.Note]: 'turquoise',
-  [CoreObjectNameSingular.NoteTarget]: 'turquoise',
-  [CoreObjectNameSingular.Opportunity]: 'red',
-  [CoreObjectNameSingular.Dashboard]: SYSTEM_OBJECT_COLOR,
-  [CoreObjectNameSingular.Workflow]: SYSTEM_OBJECT_COLOR,
-  [CoreObjectNameSingular.WorkflowRun]: SYSTEM_OBJECT_COLOR,
-  [CoreObjectNameSingular.WorkflowVersion]: SYSTEM_OBJECT_COLOR,
+  [StandardObjectNameSingular.Company]: 'blue',
+  [StandardObjectNameSingular.Person]: 'blue',
+  [StandardObjectNameSingular.Task]: 'turquoise',
+  [StandardObjectNameSingular.TaskTarget]: 'turquoise',
+  [StandardObjectNameSingular.Note]: 'turquoise',
+  [StandardObjectNameSingular.NoteTarget]: 'turquoise',
+  [StandardObjectNameSingular.Opportunity]: 'red',
+  [StandardObjectNameSingular.Dashboard]: SYSTEM_OBJECT_COLOR,
+  [StandardObjectNameSingular.WorkflowRun]: SYSTEM_OBJECT_COLOR,
+  [StandardObjectNameSingular.WorkflowVersion]: SYSTEM_OBJECT_COLOR,
 };
 
 const CUSTOM_OBJECT_ICON_COLORS: ThemeColor[] = MAIN_COLOR_NAMES.filter(
@@ -39,7 +38,9 @@ const getColorForCustomObject = (seed: string): ThemeColor => {
 
 export const getObjectColorWithFallback = (
   objectMetadataItem:
-    | Pick<EnrichedObjectMetadataItem, 'nameSingular' | 'color' | 'isSystem'>
+    | (Pick<EnrichedObjectMetadataItem, 'color' | 'isSystem'> & {
+        nameSingular?: string | null;
+      })
     | null
     | undefined,
 ): ThemeColor => {
@@ -55,9 +56,15 @@ export const getObjectColorWithFallback = (
     return objectMetadataItem.color as ThemeColor;
   }
 
+  const nameSingular = objectMetadataItem.nameSingular;
+
+  if (!isNonEmptyString(nameSingular)) {
+    return SYSTEM_OBJECT_COLOR;
+  }
+
   return (
     STANDARD_OBJECT_FALLBACK_COLOR[
-      objectMetadataItem.nameSingular as CoreObjectNameSingular
-    ] ?? getColorForCustomObject(objectMetadataItem.nameSingular)
+      nameSingular as StandardObjectNameSingular
+    ] ?? getColorForCustomObject(nameSingular)
   );
 };

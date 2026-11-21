@@ -1,60 +1,60 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import omit from 'lodash.omit';
-import { useEffect, useState } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
-import { type z } from 'zod';
-
+import { WorkspaceRouteUnavailable } from '@/ui/layout/page/components/WorkspaceRouteUnavailable';
+import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
+import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { useFieldMetadataItem } from '@/object-metadata/hooks/useFieldMetadataItem';
 import { useFilteredObjectMetadataItems } from '@/object-metadata/hooks/useFilteredObjectMetadataItems';
+import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
 import { useGetRelationMetadata } from '@/object-metadata/hooks/useGetRelationMetadata';
 import { useUpdateOneFieldMetadataItem } from '@/object-metadata/hooks/useUpdateOneFieldMetadataItem';
-import { CoreObjectNamePlural } from '@/object-metadata/types/CoreObjectNamePlural';
 import { formatFieldMetadataItemInput } from '@/object-metadata/utils/formatFieldMetadataItemInput';
 import { isLabelIdentifierField } from '@/object-metadata/utils/isLabelIdentifierField';
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
+import { resolveJunctionConfig } from '@/object-record/record-field/ui/utils/junction/resolveJunctionConfig';
 import { SaveAndCancelButtons } from '@/settings/components/SaveAndCancelButtons/SaveAndCancelButtons';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { FIELD_NAME_MAXIMUM_LENGTH } from '@/settings/data-model/constants/FieldNameMaximumLength';
 import { SettingsDataModelFieldDescriptionForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldDescriptionForm';
 import { SettingsDataModelFieldIconLabelForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldIconLabelForm';
 import { SettingsDataModelFieldSettingsFormCard } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldSettingsFormCard';
 import { settingsFieldFormSchema } from '@/settings/data-model/fields/forms/validation-schemas/settingsFieldFormSchema';
+import { type SettingsDataModelFieldEditFormValues } from '@/settings/data-model/types/SettingsDataModelFieldEditFormValues';
 import { type SettingsFieldType } from '@/settings/data-model/types/SettingsFieldType';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsTranslationsCard } from '@/settings/translations/components/SettingsTranslationsCard';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { useWorkspaceSurface } from '@/ui/layout/hooks/useWorkspaceSurface';
 import { navigationMemorizedUrlState } from '@/ui/navigation/states/navigationMemorizedUrlState';
-import { shouldNavigateBackToMemorizedUrlOnSaveState } from '@/ui/navigation/states/shouldNavigateBackToMemorizedUrlOnSaveState';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useValidationRulesReadingField } from '@/validation-rules/hooks/useValidationRulesReadingField';
+import { getFieldDeletionConfirmationSubtitle } from '@/validation-rules/utils/getFieldDeletionConfirmationSubtitle';
+import { getFieldRemovalValidationRulesWarning } from '@/validation-rules/utils/getFieldRemovalValidationRulesWarning';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
+import omit from 'lodash.omit';
+import { useEffect, useState } from 'react';
+import { FormProvider, useForm } from 'react-hook-form';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AppPath, SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath, isDefined } from 'twenty-shared/utils';
 import {
-  H2Title,
-  IconArchive,
-  IconArchiveOff,
-  IconTrash,
-} from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+  getSettingsPath,
+  isDefined,
+  isEmptyObject,
+  isMorphRelationHead,
+} from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Section } from 'twenty-ui/components/layout';
+import { IconArchive, IconArchiveOff, IconTrash } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 import { useNavigateApp } from '~/hooks/useNavigateApp';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
-import { getFieldMetadataItemInitialValues } from '~/pages/settings/data-model/utils/getFieldMetadataItemInitialValues';
-
-//TODO: fix this type
-export type SettingsDataModelFieldEditFormValues = z.infer<
-  ReturnType<typeof settingsFieldFormSchema>
-> &
-  any;
+import { getFieldMetadataItemInitialValues } from '@/settings/data-model/fields/forms/utils/getFieldMetadataItemInitialValues';
 
 const DELETE_FIELD_MODAL_ID = 'delete-field-confirmation-modal';
+const DEACTIVATE_FIELD_MODAL_ID = 'deactivate-field-confirmation-modal';
 const StyledDangerButtons = styled.div`
   display: flex;
   gap: ${themeCssVariables.spacing[2]};
@@ -63,25 +63,33 @@ const StyledDangerButtons = styled.div`
 export const SettingsObjectFieldEdit = () => {
   const navigateSettings = useNavigateSettings();
   const navigateApp = useNavigateApp();
+  const workspaceSurface = useWorkspaceSurface();
   const { t } = useLingui();
 
-  const { openModal, closeModal } = useModal();
-  const { enqueueSuccessSnackBar } = useSnackBar();
+  const { openDialog, closeDialog } = useDialog();
+  const { enqueueToast } = useToast();
 
   const navigate = useNavigate();
-
-  const [navigationMemorizedUrl, setNavigationMemorizedUrl] = useAtomState(
-    navigationMemorizedUrlState,
-  );
-
-  const [
-    shouldNavigateBackToMemorizedUrlOnSave,
-    setShouldNavigateBackToMemorizedUrlOnSave,
-  ] = useAtomState(shouldNavigateBackToMemorizedUrlOnSaveState);
+  const location = useLocation();
+  const stateReturnTo =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'returnTo' in location.state &&
+    typeof location.state.returnTo === 'string' &&
+    isValidReturnToPath(location.state.returnTo)
+      ? location.state.returnTo
+      : undefined;
+  const navigationMemorizedUrl = useAtomStateValue(navigationMemorizedUrlState);
+  const returnTo =
+    stateReturnTo ??
+    (workspaceSurface.type === 'main' &&
+    isValidReturnToPath(navigationMemorizedUrl)
+      ? navigationMemorizedUrl
+      : undefined);
 
   const { objectNamePlural = '', fieldName = '' } = useParams();
 
-  const { findObjectMetadataItemByNamePlural } =
+  const { findObjectMetadataItemByNamePlural, objectMetadataItems } =
     useFilteredObjectMetadataItems();
 
   const objectMetadataItem =
@@ -111,8 +119,34 @@ export const SettingsObjectFieldEdit = () => {
       fieldMetadataItem.name === newNameDuringSave,
   );
 
+  const deactivateFieldModalId = `${DEACTIVATE_FIELD_MODAL_ID}-${workspaceSurface.type}`;
+
+  const {
+    validationRulesReadingField,
+    loading: isLoadingValidationRules,
+    hasFailedToLoad: hasValidationRulesFailedToLoad,
+  } = useValidationRulesReadingField({
+    fieldMetadataId: fieldMetadataItem?.id ?? '',
+  });
+  const validationRulesWarning = getFieldRemovalValidationRulesWarning({
+    validationRulesReadingField,
+    hasFailedToLoad: hasValidationRulesFailedToLoad,
+  });
+
+  const isReverseJunctionRelation =
+    resolveJunctionConfig({
+      settings: fieldMetadataItem?.settings,
+      relationObjectMetadataId:
+        fieldMetadataItem?.relation?.targetObjectMetadata.id ?? '',
+      relationTargetFieldMetadataId:
+        fieldMetadataItem?.relation?.targetFieldMetadata.id,
+      sourceObjectMetadataId: objectMetadataItem?.id,
+      objectMetadataItems,
+    })?.direction === 'reverse';
+
   const getRelationMetadata = useGetRelationMetadata();
   const { updateOneFieldMetadataItem } = useUpdateOneFieldMetadataItem();
+  const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
 
   const { settings, defaultValue } =
     getFieldMetadataItemInitialValues(fieldMetadataItem);
@@ -126,6 +160,7 @@ export const SettingsObjectFieldEdit = () => {
       label: fieldMetadataItem?.label ?? '',
       description: fieldMetadataItem?.description,
       isLabelSyncedWithName: fieldMetadataItem?.isLabelSyncedWithName ?? true,
+      // OMNIA-CUSTOM: soft Required rule (UI-only), saved through formatFieldMetadataItemInput
       requiredCondition: fieldMetadataItem?.requiredCondition ?? null,
       settings,
       defaultValue,
@@ -133,18 +168,40 @@ export const SettingsObjectFieldEdit = () => {
   });
 
   useEffect(() => {
-    if (!isDeleting && (!objectMetadataItem || !fieldMetadataItem)) {
+    if (
+      workspaceSurface.type === 'main' &&
+      !isDeleting &&
+      (!objectMetadataItem || !fieldMetadataItem)
+    ) {
       navigateApp(AppPath.NotFound);
     }
-  }, [navigateApp, objectMetadataItem, fieldMetadataItem, isDeleting]);
+  }, [
+    navigateApp,
+    objectMetadataItem,
+    fieldMetadataItem,
+    isDeleting,
+    workspaceSurface.type,
+  ]);
 
-  const { isDirty, isValid, isSubmitting } = formConfig.formState;
+  const { isValid, isSubmitting, dirtyFields } = formConfig.formState;
+
+  const isDirty = !isEmptyObject(dirtyFields);
 
   const canSave = isDirty && isValid && !isSubmitting;
 
   if (!isDefined(objectMetadataItem) || !isDefined(fieldMetadataItem)) {
-    return null;
+    return workspaceSurface.type === 'side-panel' ? (
+      <WorkspaceRouteUnavailable />
+    ) : null;
   }
+
+  const isCustomField = getIsMetadataItemCustom(fieldMetadataItem);
+
+  // Mirrors the server guard: system-managed fields only accept activation changes
+  const isFieldPropertiesReadonly =
+    readonly ||
+    (fieldMetadataItem.isSystemSideEffect === true &&
+      !isMorphRelationHead(fieldMetadataItem));
 
   const fieldLabel = fieldMetadataItem.label;
   const objectLabel = objectMetadataItem.labelPlural;
@@ -168,7 +225,7 @@ export const SettingsObjectFieldEdit = () => {
   const handleSave = async (
     formValues: SettingsDataModelFieldEditFormValues,
   ) => {
-    if (readonly) {
+    if (isFieldPropertiesReadonly) {
       return;
     }
 
@@ -220,15 +277,8 @@ export const SettingsObjectFieldEdit = () => {
   };
 
   const navigateBackOrToSettings = () => {
-    if (
-      shouldNavigateBackToMemorizedUrlOnSave &&
-      isDefined(navigationMemorizedUrl)
-    ) {
-      navigate(navigationMemorizedUrl, { replace: true });
-
-      setShouldNavigateBackToMemorizedUrlOnSave(false);
-      setNavigationMemorizedUrl('/');
-
+    if (isDefined(returnTo)) {
+      navigate(returnTo, { replace: true });
       return;
     }
 
@@ -241,11 +291,21 @@ export const SettingsObjectFieldEdit = () => {
     navigateBackOrToSettings();
   };
 
-  const handleDeactivate = async () => {
+  const handleDeactivate = () => {
     if (readonly) {
       return;
     }
 
+    if (isDefined(validationRulesWarning)) {
+      openDialog(deactivateFieldModalId);
+
+      return;
+    }
+
+    void confirmDeactivate();
+  };
+
+  const confirmDeactivate = async () => {
     const deactivationResult = await deactivateMetadataField(
       fieldMetadataItem.id,
       objectMetadataItem.id,
@@ -275,11 +335,11 @@ export const SettingsObjectFieldEdit = () => {
   };
 
   const handleDelete = () => {
-    if (readonly || !fieldMetadataItem?.isCustom) {
+    if (readonly || !isCustomField) {
       return;
     }
 
-    openModal(DELETE_FIELD_MODAL_ID);
+    openDialog(DELETE_FIELD_MODAL_ID);
   };
 
   const confirmDelete = async () => {
@@ -294,10 +354,8 @@ export const SettingsObjectFieldEdit = () => {
     });
 
     if (deleteResult.status === 'successful') {
-      enqueueSuccessSnackBar({
-        message: t`Field deleted`,
-      });
-      closeModal(DELETE_FIELD_MODAL_ID);
+      enqueueToast({ status: 'success', children: t`Field deleted` });
+      closeDialog(DELETE_FIELD_MODAL_ID);
       navigateSettings(SettingsPath.ObjectDetail, {
         objectNamePlural,
       });
@@ -305,19 +363,19 @@ export const SettingsObjectFieldEdit = () => {
     }
 
     setIsDeleting(false);
-    closeModal(DELETE_FIELD_MODAL_ID);
+    closeDialog(DELETE_FIELD_MODAL_ID);
   };
 
   return (
     <>
       {/* oxlint-disable-next-line react/jsx-props-no-spreading */}
       <FormProvider {...formConfig}>
-        <SubMenuTopBarContainer
+        <SettingsPageLayout
           title={fieldMetadataItem?.label}
           links={[
             {
               children: t`Workspace`,
-              href: getSettingsPath(SettingsPath.Workspace),
+              href: getSettingsPath(SettingsPath.General),
             },
             {
               children: t`Objects`,
@@ -336,7 +394,7 @@ export const SettingsObjectFieldEdit = () => {
           actionButton={
             <SaveAndCancelButtons
               isLoading={isSubmitting}
-              isSaveDisabled={!canSave || readonly}
+              isSaveDisabled={!canSave || isFieldPropertiesReadonly}
               isCancelDisabled={isSubmitting || readonly}
               onCancel={handleCancel}
               onSave={formConfig.handleSubmit(handleSave)}
@@ -344,8 +402,8 @@ export const SettingsObjectFieldEdit = () => {
           }
         >
           <SettingsPageContainer>
-            <Section>
-              <H2Title
+            <Section.Root>
+              <Section.Header
                 title={t`Icon and Name`}
                 description={t`The name and icon of this field`}
               />
@@ -353,95 +411,117 @@ export const SettingsObjectFieldEdit = () => {
                 fieldMetadataItem={fieldMetadataItem}
                 maxLength={FIELD_NAME_MAXIMUM_LENGTH}
                 isCreationMode={false}
-                readonly={readonly}
+                readonly={isFieldPropertiesReadonly}
               />
-            </Section>
-            {
-              //patch - awaiting refacto on many to many relations - https://github.com/twentyhq/core-team-issues/issues/186
-              fieldMetadataItem.name !== CoreObjectNamePlural.NoteTarget &&
-                fieldMetadataItem.name !== CoreObjectNamePlural.TaskTarget && (
-                  <>
-                    <Section>
-                      {fieldMetadataItem.isUnique ? (
-                        <H2Title
-                          title={t`Values`}
-                          description={t`The values of this field must be unique`}
-                        />
-                      ) : (
-                        <H2Title
-                          title={t`Values`}
-                          description={t`The values of this field`}
-                        />
-                      )}
-                      <SettingsDataModelFieldSettingsFormCard
-                        fieldType={fieldMetadataItem.type}
-                        existingFieldMetadataId={fieldMetadataItem.id}
-                        objectNameSingular={objectMetadataItem.nameSingular}
-                        disabled={readonly}
-                      />
-                    </Section>
-                  </>
-                )
-            }
-            <Section>
-              <H2Title
+            </Section.Root>
+            {!isReverseJunctionRelation && (
+              <Section.Root>
+                {fieldMetadataItem.isUnique ? (
+                  <Section.Header
+                    title={t`Values`}
+                    description={t`The values of this field must be unique`}
+                  />
+                ) : (
+                  <Section.Header
+                    title={t`Values`}
+                    description={t`The values of this field`}
+                  />
+                )}
+                <SettingsDataModelFieldSettingsFormCard
+                  fieldType={fieldMetadataItem.type}
+                  existingFieldMetadataId={fieldMetadataItem.id}
+                  objectNameSingular={objectMetadataItem.nameSingular}
+                  disabled={isFieldPropertiesReadonly}
+                />
+              </Section.Root>
+            )}
+            <Section.Root>
+              <Section.Header
                 title={t`Description`}
                 description={t`The description of this field`}
               />
               <SettingsDataModelFieldDescriptionForm
                 fieldMetadataItem={fieldMetadataItem}
-                disabled={readonly}
+                disabled={isFieldPropertiesReadonly}
               />
-            </Section>
+            </Section.Root>
+
+            <Section.Root>
+              <Section.Header
+                title={t`Translations`}
+                description={t`What each language displays for this field's labels`}
+              />
+              <SettingsTranslationsCard
+                objectNamePlural={objectNamePlural}
+                fieldName={fieldMetadataItem.name}
+                disabled={isDirty}
+              />
+            </Section.Root>
 
             {!isLabelIdentifier && !readonly && fieldCanBeDeactivated && (
-              <Section>
-                <H2Title
+              <Section.Root>
+                <Section.Header
                   title={t`Danger zone`}
                   description={t`Deactivate this field`}
                 />
                 <StyledDangerButtons>
                   <Button
-                    Icon={
-                      fieldMetadataItem.isActive ? IconArchive : IconArchiveOff
+                    startIcon={
+                      fieldMetadataItem.isActive ? (
+                        <IconArchive />
+                      ) : (
+                        <IconArchiveOff />
+                      )
                     }
-                    variant="secondary"
-                    title={
-                      fieldMetadataItem.isActive ? t`Deactivate` : t`Activate`
-                    }
-                    size="small"
+                    size="sm"
+                    disabled={isLoadingValidationRules}
                     onClick={
                       fieldMetadataItem.isActive
                         ? handleDeactivate
                         : handleActivate
                     }
-                  />
-                  {fieldMetadataItem.isCustom && (
+                    variant="outline"
+                  >
+                    {fieldMetadataItem.isActive ? t`Deactivate` : t`Activate`}
+                  </Button>
+                  {isCustomField && (
                     <Button
-                      Icon={IconTrash}
-                      variant="secondary"
-                      accent="danger"
-                      title={t`Delete`}
-                      size="small"
+                      startIcon={<IconTrash />}
+                      size="sm"
+                      disabled={isLoadingValidationRules}
                       onClick={handleDelete}
-                    />
+                      variant="outline"
+                      color="danger"
+                    >{t`Delete`}</Button>
                   )}
                 </StyledDangerButtons>
-              </Section>
+              </Section.Root>
             )}
           </SettingsPageContainer>
-        </SubMenuTopBarContainer>
+        </SettingsPageLayout>
       </FormProvider>
-      {fieldMetadataItem?.isCustom && (
-        <ConfirmationModal
-          modalInstanceId={DELETE_FIELD_MODAL_ID}
+      <ConfirmationDialog
+        dialogId={deactivateFieldModalId}
+        title={t`Deactivate ${fieldLabel} field?`}
+        subtitle={validationRulesWarning ?? ''}
+        confirmButtonText={t`Deactivate`}
+        onConfirmClick={confirmDeactivate}
+        onClose={() => closeDialog(deactivateFieldModalId)}
+      />
+      {isCustomField && (
+        <ConfirmationDialog
+          dialogId={DELETE_FIELD_MODAL_ID}
           title={t`Delete ${fieldLabel} field?`}
-          subtitle={t`This will permanently delete the field and all its data from ${objectLabel}. Type "yes" to confirm.`}
+          subtitle={getFieldDeletionConfirmationSubtitle({
+            objectLabel,
+            validationRulesWarning,
+            validationRulesReadingField,
+          })}
           confirmButtonText={t`Delete`}
           confirmationValue="yes"
           confirmationPlaceholder="yes"
           onConfirmClick={confirmDelete}
-          onClose={() => closeModal(DELETE_FIELD_MODAL_ID)}
+          onClose={() => closeDialog(DELETE_FIELD_MODAL_ID)}
           loading={isDeleting}
         />
       )}

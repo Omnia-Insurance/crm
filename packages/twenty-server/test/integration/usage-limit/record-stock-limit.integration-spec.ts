@@ -1,0 +1,192 @@
+import { createManyOperationFactory } from 'test/integration/graphql/utils/create-many-operation-factory.util';
+import { deleteManyOperationFactory } from 'test/integration/graphql/utils/delete-many-operation-factory.util';
+import { destroyManyOperationFactory } from 'test/integration/graphql/utils/destroy-many-operation-factory.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+import { getCoreRepository } from 'test/integration/utils/get-core-repository.util';
+
+import { createClient } from 'redis';
+import { type Repository } from 'typeorm';
+import { v4 } from 'uuid';
+
+import { UsageLimitEntity } from 'src/engine/core-modules/usage-limit/usage-limit.entity';
+import { UsageOperationType } from 'src/engine/core-modules/usage/enums/usage-operation-type.enum';
+import { UsageResourceType } from 'src/engine/core-modules/usage/enums/usage-resource-type.enum';
+import { UsageUnit } from 'src/engine/core-modules/usage/enums/usage-unit.enum';
+import { type WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+
+const SCHEMA_NAME = getWorkspaceSchemaName(SEED_APPLE_WORKSPACE_ID);
+const HEADROOM = 2;
+const PROBE_LIMIT_VALUE = 1_000_000_000;
+const STOCK_COUNTER_KEY_PATTERN = `*{${SEED_APPLE_WORKSPACE_ID}}:stock-held:RECORD:*`;
+
+describe('Record stock limit', () => {
+  let usageLimitRepository: Repository<UsageLimitEntity>;
+  let redis: Awaited<ReturnType<typeof createClient>>;
+  let usageLimitId: string;
+  const createdRocketIds: string[] = [];
+
+  const createRockets = async (count: number) => {
+    const ids = Array.from({ length: count }, () => v4());
+
+    createdRocketIds.push(...ids);
+
+    return makeGraphqlApiRequest(
+      createManyOperationFactory({
+        objectMetadataSingularName: 'rocket',
+        objectMetadataPluralName: 'rockets',
+        gqlFields: 'id',
+        data: ids.map((id) => ({ id, name: 'Record stock test' })),
+      }),
+    );
+  };
+
+  const softDeleteRockets = (ids: string[]) =>
+    makeGraphqlApiRequest(
+      deleteManyOperationFactory({
+        objectMetadataSingularName: 'rocket',
+        objectMetadataPluralName: 'rockets',
+        gqlFields: 'id',
+        filter: { id: { in: ids } },
+      }),
+    );
+
+  const destroyRockets = (ids: string[]) =>
+    makeGraphqlApiRequest(
+      destroyManyOperationFactory({
+        objectMetadataSingularName: 'rocket',
+        objectMetadataPluralName: 'rockets',
+        gqlFields: 'id',
+        filter: { id: { in: ids } },
+      }),
+    );
+
+  const findStockCounterKeys = () => redis.keys(STOCK_COUNTER_KEY_PATTERN);
+
+  const dropStockCounter = async () => {
+    const keys = await findStockCounterKeys();
+
+    if (keys.length > 0) {
+      await redis.del(keys);
+    }
+  };
+
+  const readWarmedStock = async (): Promise<number> => {
+    const [key] = await findStockCounterKeys();
+
+    expect(key).toBeDefined();
+
+    return Number(await redis.get(key));
+  };
+
+  const refreshUsageLimitsCache = () =>
+    getAppProviderByClassName<WorkspaceCacheService>(
+      'WorkspaceCacheService',
+    ).invalidateAndRecompute(SEED_APPLE_WORKSPACE_ID, ['usageLimits']);
+
+  const setLimitValue = async (limitValue: number) => {
+    await usageLimitRepository.update({ id: usageLimitId }, { limitValue });
+    await refreshUsageLimitsCache();
+  };
+
+  const expectRefused = (response: { body: { errors?: unknown[] } }) => {
+    expect(
+      (response.body.errors?.[0] as { extensions?: { subCode?: string } })
+        ?.extensions?.subCode,
+    ).toBe('STOCK_EXHAUSTED');
+  };
+
+  const expectAdmitted = (response: { body: { errors?: unknown[] } }) => {
+    expect(response.body.errors).toBeUndefined();
+  };
+
+  const calibrateLimitToWarmedStock = async () => {
+    await dropStockCounter();
+    await setLimitValue(PROBE_LIMIT_VALUE);
+    expectAdmitted(await createRockets(1));
+    await setLimitValue((await readWarmedStock()) + HEADROOM);
+  };
+
+  beforeAll(async () => {
+    usageLimitRepository =
+      getCoreRepository<UsageLimitEntity>(UsageLimitEntity);
+    redis = await createClient({ url: process.env.REDIS_URL }).connect();
+
+    await usageLimitRepository.delete({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      resourceType: UsageResourceType.RECORD,
+    });
+
+    const [usageLimit] = await usageLimitRepository.save([
+      {
+        workspaceId: SEED_APPLE_WORKSPACE_ID,
+        resourceType: UsageResourceType.RECORD,
+        operationType: UsageOperationType.RECORD_WRITE,
+        spenderType: 'workspace',
+        spenderId: '',
+        limitKind: 'stock',
+        periodCount: 1,
+        periodUnit: 'lifetime',
+        unit: UsageUnit.RECORD,
+        limitValue: PROBE_LIMIT_VALUE,
+        burstValue: null,
+      },
+    ]);
+
+    usageLimitId = usageLimit.id;
+  });
+
+  beforeEach(async () => {
+    await calibrateLimitToWarmedStock();
+  });
+
+  afterEach(async () => {
+    if (createdRocketIds.length > 0) {
+      await global.testDataSource.query(
+        `DELETE FROM "${SCHEMA_NAME}"."_rocket" WHERE id = ANY($1)`,
+        [createdRocketIds],
+      );
+      createdRocketIds.length = 0;
+    }
+  });
+
+  afterAll(async () => {
+    await usageLimitRepository.delete({ id: usageLimitId });
+    await refreshUsageLimitsCache();
+    await dropStockCounter();
+    await redis.quit();
+  });
+
+  it('refuses the write that would cross the limit', async () => {
+    expectAdmitted(await createRockets(HEADROOM));
+    expectRefused(await createRockets(1));
+  });
+
+  it('refuses a batch as a whole when only part of it fits', async () => {
+    expectRefused(await createRockets(HEADROOM + 1));
+    expectAdmitted(await createRockets(HEADROOM));
+  });
+
+  it('gives the capacity back when records are destroyed', async () => {
+    const admitted = await createRockets(HEADROOM);
+
+    expectAdmitted(admitted);
+    expectRefused(await createRockets(1));
+
+    await destroyRockets([admitted.body.data.createRockets[0].id]);
+
+    expectAdmitted(await createRockets(1));
+  });
+
+  it('keeps soft-deleted records counted until they are destroyed', async () => {
+    const admitted = await createRockets(HEADROOM);
+
+    expectAdmitted(admitted);
+
+    await softDeleteRockets([admitted.body.data.createRockets[0].id]);
+
+    expectRefused(await createRockets(1));
+  });
+});

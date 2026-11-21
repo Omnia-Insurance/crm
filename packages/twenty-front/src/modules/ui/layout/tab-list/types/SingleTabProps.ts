@@ -1,4 +1,4 @@
-import { type IconComponent } from 'twenty-ui/display';
+import { type IconComponent } from 'twenty-ui/icon';
 
 export type SingleTabProps<T extends string = string> = {
   title: string;
@@ -8,5 +8,6 @@ export type SingleTabProps<T extends string = string> = {
   disabled?: boolean;
   pill?: string | React.ReactElement;
   logo?: string;
+  colorSeed?: string;
   tooltipContent?: string;
 };

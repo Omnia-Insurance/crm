@@ -20,36 +20,45 @@
     "storybook-static"
   ],
   "rules": {
+    "curly": "error",
+    "prefer-const": ["error", { "ignoreReadBeforeAssign": true }],
     "func-style": ["error", "declaration", { "allowArrowFunctions": true }],
-    "no-console": ["warn", { "allow": ["group", "groupCollapsed", "groupEnd"] }],
+    "no-console": [
+      "warn",
+      { "allow": ["group", "groupCollapsed", "groupEnd"] }
+    ],
     "no-script-url": "error",
     "no-control-regex": "off",
     "no-debugger": "error",
+    "no-else-return": "error",
     "no-duplicate-imports": "error",
     "no-undef": "off",
     "no-unused-vars": "off",
     "no-redeclare": "off",
-    "no-restricted-imports": ["error", {
-      "patterns": [
-        {
-          "group": ["../*"],
-          "message": "Relative parent imports are not allowed. Use @/ alias instead."
-        },
-        {
-          "group": ["@tabler/icons-react"],
-          "message": "Please import icons from `twenty-ui`"
-        },
-        {
-          "group": ["react-hotkeys-web-hook"],
-          "importNames": ["useHotkeys"],
-          "message": "Please use the custom wrapper: `useScopedHotkeys` from `twenty-ui`"
-        },
-        {
-          "group": ["lodash"],
-          "message": "Please use the standalone lodash package (for instance: `import groupBy from 'lodash.groupby'` instead of `import { groupBy } from 'lodash'`)"
-        }
-      ]
-    }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["../*"],
+            "message": "Relative parent imports are not allowed. Use @/ alias instead."
+          },
+          {
+            "group": ["@tabler/icons-react"],
+            "message": "Please import icons from `twenty-ui`"
+          },
+          {
+            "group": ["react-hotkeys-web-hook"],
+            "importNames": ["useHotkeys"],
+            "message": "Please use the custom wrapper: `useScopedHotkeys` from `twenty-ui`"
+          },
+          {
+            "group": ["lodash"],
+            "message": "Please use the standalone lodash package (for instance: `import groupBy from 'lodash.groupby'` instead of `import { groupBy } from 'lodash'`)"
+          }
+        ]
+      }
+    ],
 
     "import/no-duplicates": "error",
 
@@ -68,34 +77,46 @@
 
     "typescript/no-redeclare": "error",
     "typescript/ban-ts-comment": "error",
-    "typescript/consistent-type-imports": ["error", {
-      "prefer": "type-imports",
-      "fixStyle": "inline-type-imports"
-    }],
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "prefer": "type-imports",
+        "fixStyle": "inline-type-imports"
+      }
+    ],
     "typescript/explicit-function-return-type": "off",
     "typescript/explicit-module-boundary-types": "off",
-    "typescript/no-empty-object-type": ["error", {
-      "allowInterfaces": "with-single-extends"
-    }],
+    "typescript/no-empty-object-type": [
+      "error",
+      {
+        "allowInterfaces": "with-single-extends"
+      }
+    ],
     "typescript/no-empty-function": "off",
     "typescript/no-explicit-any": "off",
-    "typescript/no-unused-vars": ["warn", {
-      "vars": "all",
-      "varsIgnorePattern": "^_",
-      "args": "after-used",
-      "argsIgnorePattern": "^_"
-    }],
+    "typescript/no-unused-vars": [
+      "warn",
+      {
+        "vars": "all",
+        "varsIgnorePattern": "^_",
+        "args": "after-used",
+        "argsIgnorePattern": "^_"
+      }
+    ],
 
-    "typescript/strict-boolean-expressions": ["error", {
-      "allowNullableBoolean": true,
-      "allowNullableObject": true,
-      "allowString": true,
-      "allowNumber": true,
-      "allowNullableString": true,
-      "allowNullableNumber": true,
-      "allowNullableEnum": true,
-      "allowAny": true
-    }],
+    "typescript/strict-boolean-expressions": [
+      "error",
+      {
+        "allowNullableBoolean": true,
+        "allowNullableObject": true,
+        "allowString": true,
+        "allowNumber": true,
+        "allowNullableString": true,
+        "allowNullableNumber": true,
+        "allowNullableEnum": true,
+        "allowAny": true
+      }
+    ],
 
     "twenty/effect-components": "error",
     "twenty/no-hardcoded-colors": "error",
@@ -105,19 +126,46 @@
     "twenty/no-state-useref": "error",
     "twenty/component-props-naming": "error",
     "twenty/no-navigate-prefer-link": "error",
+    "twenty/no-window-open": "error",
+    "twenty/no-twenty-ui-override": "warn",
     "twenty/no-jotai-store-in-selector": "error",
     "twenty/no-direct-atom-family-in-selector": "error",
     "twenty/folder-structure": "error",
-    "twenty/enforce-module-boundaries": ["error", {
-      "depConstraints": [
-        {
-          "sourceTag": "scope:frontend",
-          "onlyDependOnLibsWithTags": ["scope:shared", "scope:frontend"]
-        }
-      ]
-    }]
+    "twenty/no-icu-escaping-apostrophe": "error",
+    "twenty/no-miscased-acronym-in-identifier": "error",
+    "twenty/no-miscased-acronym-in-message": "error",
+    "twenty/types-folder-filename": ["error", { "convention": "PascalCase" }],
+    "twenty/enforce-module-boundaries": [
+      "error",
+      {
+        "depConstraints": [
+          {
+            "sourceTag": "scope:frontend",
+            "onlyDependOnLibsWithTags": ["scope:shared", "scope:frontend"]
+          }
+        ]
+      }
+    ]
   },
   "overrides": [
+    {
+      "files": [
+        "src/modules/ui/input/components/NavigationButton.tsx",
+        "src/modules/ui/navigation/link/components/LinkChip/LinkChip.tsx"
+      ],
+      "rules": {
+        "react/jsx-props-no-spreading": "off"
+      }
+    },
+    {
+      "files": [
+        "src/utils/openUrlInNewTab.ts",
+        "src/modules/domain-manager/hooks/useRedirect.ts"
+      ],
+      "rules": {
+        "twenty/no-window-open": "off"
+      }
+    },
     {
       "files": ["**/constants/*.ts", "**/*.constants.ts"],
       "rules": {

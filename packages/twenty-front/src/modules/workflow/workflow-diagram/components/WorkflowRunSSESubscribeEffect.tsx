@@ -1,17 +1,18 @@
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { useListenToEventsForQuery } from '@/sse-db-event/hooks/useListenToEventsForQuery';
+import { getWorkflowRunSseQueryId } from '@/workflow/utils/getWorkflowRunSseQueryId';
 
 export const WorkflowRunSSESubscribeEffect = ({
   workflowRunId,
 }: {
   workflowRunId: string;
 }) => {
-  const queryId = `workflow-run-${workflowRunId}`;
+  const queryId = getWorkflowRunSseQueryId(workflowRunId);
 
   useListenToEventsForQuery({
     queryId,
     operationSignature: {
-      objectNameSingular: CoreObjectNameSingular.WorkflowRun,
+      objectNameSingular: StandardObjectNameSingular.WorkflowRun,
       variables: {
         filter: {
           id: { eq: workflowRunId },

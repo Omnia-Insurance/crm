@@ -1,12 +1,9 @@
 import { type FieldMetadataType } from '~/generated-metadata/graphql';
 
-import { type IconComponent } from 'twenty-ui/display';
+// OMNIA-CUSTOM: soft required-field rule (contract C5)
+import { type RequiredCondition } from 'twenty-shared/types';
+import { type IconComponent } from 'twenty-ui/icon';
 import { type FieldMetadata } from './FieldMetadata';
-
-export type RequiredCondition = {
-  type: 'always' | 'fieldEmpty' | 'fieldNotEmpty';
-  fieldId?: string;
-} | null;
 
 export type FieldDefinition<T extends FieldMetadata> = {
   fieldMetadataId: string;
@@ -18,6 +15,7 @@ export type FieldDefinition<T extends FieldMetadata> = {
   metadata: T;
   defaultValue?: any;
   editButtonIcon?: IconComponent;
-  isUIReadOnly?: boolean;
-  requiredCondition?: RequiredCondition;
+  isUIEditable?: boolean;
+  // OMNIA-CUSTOM: soft required-field rule (contract C5)
+  requiredCondition?: RequiredCondition | null;
 };

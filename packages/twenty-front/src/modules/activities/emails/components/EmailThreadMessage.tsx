@@ -1,92 +1,99 @@
-import { styled } from '@linaria/react';
 import { useState } from 'react';
 
+import { EmailThreadMessageAttachments } from '@/activities/emails/components/EmailThreadMessageAttachments';
 import { EmailThreadMessageBody } from '@/activities/emails/components/EmailThreadMessageBody';
 import { EmailThreadMessageBodyPreview } from '@/activities/emails/components/EmailThreadMessageBodyPreview';
+import { EmailThreadMessageLayout } from '@/activities/emails/components/EmailThreadMessageLayout';
 import { EmailThreadMessageReceivers } from '@/activities/emails/components/EmailThreadMessageReceivers';
 import { EmailThreadMessageSender } from '@/activities/emails/components/EmailThreadMessageSender';
 import { EmailThreadNotShared } from '@/activities/emails/components/EmailThreadNotShared';
-import { type EmailThreadMessageParticipant } from '@/activities/emails/types/EmailThreadMessageParticipant';
-import { FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED } from 'twenty-shared/constants';
+import { type EmailThreadMessageWithSender } from '@/activities/emails/types/EmailThreadMessageWithSender';
 import { MessageParticipantRole } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { isFieldValueRestricted, isNonEmptyArray } from 'twenty-shared/utils';
 import { MessageChannelVisibility } from '~/generated/graphql';
 
-const StyledThreadMessage = styled.div<{ hideBottomBorder?: boolean }>`
-  border-bottom: ${({ hideBottomBorder }) =>
-    hideBottomBorder
-      ? 'none'
-      : `1px solid ${themeCssVariables.border.color.light}`};
-  display: flex;
-  flex-direction: column;
-  padding: ${themeCssVariables.spacing[4]} ${themeCssVariables.spacing[0]};
-`;
-
-const StyledThreadMessageHeader = styled.div`
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  margin-bottom: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[0]} ${themeCssVariables.spacing[2]};
-`;
-
-const StyledThreadMessageBody = styled.div`
-  padding: ${themeCssVariables.spacing[0]} ${themeCssVariables.spacing[2]};
-`;
-
 type EmailThreadMessageProps = {
-  body: string;
-  sentAt: string;
-  sender: EmailThreadMessageParticipant;
-  participants: EmailThreadMessageParticipant[];
+  message: EmailThreadMessageWithSender;
   isExpanded?: boolean;
   hideBottomBorder?: boolean;
+  onDraftClick: (message: EmailThreadMessageWithSender) => void;
 };
 
 export const EmailThreadMessage = ({
-  body,
-  sentAt,
-  sender,
-  participants,
+  message,
   isExpanded = false,
   hideBottomBorder = false,
+  onDraftClick,
 }: EmailThreadMessageProps) => {
   const [isOpen, setIsOpen] = useState(isExpanded);
 
-  const receivers = participants.filter(
+  const receivers = message.messageParticipants.filter(
     (participant) => participant.role !== MessageParticipantRole.FROM,
   );
 
-  if (!isDefined(sender) || receivers.length === 0) {
-    return null;
-  }
+  const { isDraft } = message;
 
-  const isRestricted =
-    body === FIELD_RESTRICTED_ADDITIONAL_PERMISSIONS_REQUIRED;
+  const isRestricted = isFieldValueRestricted(message.text);
+
+  const attachmentFiles = (message.attachments ?? []).flatMap(
+    (attachment) => attachment.file ?? [],
+  );
+  const hasAttachments = !isRestricted && isNonEmptyArray(attachmentFiles);
+
+  const handleRowClick = () => {
+    if (isRestricted) {
+      return;
+    }
+
+    if (isDraft) {
+      onDraftClick(message);
+
+      return;
+    }
+
+    if (!isOpen) {
+      setIsOpen(true);
+    }
+  };
+
+  const handleHeaderClick = () => {
+    if (!isDraft && isOpen) {
+      setIsOpen(false);
+    }
+  };
 
   return (
-    <StyledThreadMessage
+    <EmailThreadMessageLayout
       hideBottomBorder={hideBottomBorder}
-      onClick={() => !isOpen && setIsOpen(true)}
-      style={{ cursor: isOpen || isRestricted ? 'auto' : 'pointer' }}
-    >
-      <StyledThreadMessageHeader onClick={() => isOpen && setIsOpen(false)}>
-        <EmailThreadMessageSender sender={sender} sentAt={sentAt} />
-        {isOpen && <EmailThreadMessageReceivers receivers={receivers} />}
-      </StyledThreadMessageHeader>
-      <StyledThreadMessageBody>
-        {isRestricted ? (
-          <EmailThreadNotShared
-            visibility={MessageChannelVisibility.METADATA}
+      isRowClickable={!isRestricted && (isDraft || !isOpen)}
+      isHeaderClickable={!isDraft && isOpen}
+      onRowClick={handleRowClick}
+      onHeaderClick={handleHeaderClick}
+      header={
+        <>
+          <EmailThreadMessageSender
+            sender={message.sender}
+            sentAt={message.receivedAt}
+            hasAttachments={hasAttachments}
           />
-        ) : isOpen ? (
-          <EmailThreadMessageBody body={body} isDisplayed />
-        ) : (
-          <EmailThreadMessageBodyPreview body={body} />
-        )}
-      </StyledThreadMessageBody>
-    </StyledThreadMessage>
+          {!isDraft && isOpen && receivers.length > 0 && (
+            <EmailThreadMessageReceivers receivers={receivers} />
+          )}
+        </>
+      }
+    >
+      {isRestricted ? (
+        <EmailThreadNotShared visibility={MessageChannelVisibility.METADATA} />
+      ) : isDraft || !isOpen ? (
+        <EmailThreadMessageBodyPreview body={message.text} />
+      ) : (
+        <>
+          <EmailThreadMessageBody body={message.text} isDisplayed />
+          {hasAttachments && (
+            <EmailThreadMessageAttachments files={attachmentFiles} />
+          )}
+        </>
+      )}
+    </EmailThreadMessageLayout>
   );
 };

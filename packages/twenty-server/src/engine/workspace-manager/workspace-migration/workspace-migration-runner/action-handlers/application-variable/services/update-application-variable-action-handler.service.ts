@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { WorkspaceMigrationRunnerActionHandler } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/interfaces/workspace-migration-runner-action-handler-service.interface';
 
 import { ApplicationVariableEntity } from 'src/engine/core-modules/application/application-variable/application-variable.entity';
-import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
 import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier-or-throw.util';
 import { resolveUniversalUpdateRelationIdentifiersToIds } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/resolve-universal-update-relation-identifiers-to-ids.util';
 import {
@@ -20,9 +19,7 @@ export class UpdateApplicationVariableActionHandlerService extends WorkspaceMigr
   'update',
   'applicationVariable',
 ) {
-  constructor(
-    private readonly secretEncryptionService: SecretEncryptionService,
-  ) {
+  constructor() {
     super();
   }
 
@@ -59,34 +56,6 @@ export class UpdateApplicationVariableActionHandlerService extends WorkspaceMigr
       queryRunner.manager.getRepository<ApplicationVariableEntity>(
         ApplicationVariableEntity,
       );
-
-    const existing = await applicationVariableRepository.findOne({
-      where: { id: entityId, workspaceId },
-    });
-
-    if (
-      update.isSecret !== undefined &&
-      update.isSecret &&
-      existing &&
-      !existing.isSecret
-    ) {
-      (update as Record<string, unknown>).value =
-        this.secretEncryptionService.encryptVersioned(existing.value, {
-          workspaceId,
-        });
-    }
-
-    if (
-      update.isSecret !== undefined &&
-      !update.isSecret &&
-      existing &&
-      existing.isSecret
-    ) {
-      (update as Record<string, unknown>).value =
-        this.secretEncryptionService.decryptVersioned(existing.value, {
-          workspaceId,
-        });
-    }
 
     await applicationVariableRepository.update(
       { id: entityId, workspaceId },

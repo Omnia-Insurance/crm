@@ -1,4 +1,5 @@
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 import {
   type BillingPriceLicensed,
   type BillingPriceMetered,
@@ -26,18 +27,20 @@ export const usePriceAndBillingUsageByPriceId = () => {
         p.stripePriceId === priceId,
     ) as BillingPriceLicensed | undefined;
 
-    if (isDefined(licensed))
+    if (isDefined(licensed)) {
       return { price: licensed, billingUsage: BillingUsageType.LICENSED };
+    }
 
     const metered = allBillingPrices.find(
       (p) =>
         p.priceUsageType === BillingUsageType.METERED &&
         p.stripePriceId === priceId,
     ) as BillingPriceMetered | undefined;
-    if (isDefined(metered))
+    if (isDefined(metered)) {
       return { price: metered, billingUsage: BillingUsageType.METERED };
+    }
 
-    throw new Error('Price not found');
+    throw new Error(doNotTranslate('Price not found'));
   };
 
   return { getPriceAndBillingUsageByPriceId };

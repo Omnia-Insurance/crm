@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 
 import { useResolveDefaultEmailRecipient } from '@/activities/emails/hooks/useResolveDefaultEmailRecipient';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 
 const mockUseFindOneRecord = jest.fn();
 const mockUseFindManyRecords = jest.fn();
@@ -31,9 +31,12 @@ describe('useResolveDefaultEmailRecipient', () => {
   it('should return the person primary email for a Person record', () => {
     mockUseFindOneRecord.mockImplementation(
       (args: { objectNameSingular: string }) => {
-        if (args.objectNameSingular === CoreObjectNameSingular.Person) {
+        if (args.objectNameSingular === StandardObjectNameSingular.Person) {
           return {
-            record: { emails: { primaryEmail: 'person@example.com' } },
+            record: {
+              id: 'person-id',
+              emails: { primaryEmail: 'person@example.com' },
+            },
             loading: false,
           };
         }
@@ -44,38 +47,48 @@ describe('useResolveDefaultEmailRecipient', () => {
 
     const { result } = renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Person,
+        objectNameSingular: StandardObjectNameSingular.Person,
         recordId: 'person-id',
       }),
     );
 
     expect(result.current.defaultTo).toBe('person@example.com');
+    expect(result.current.defaultRecipientPersonId).toBe('person-id');
     expect(result.current.loading).toBe(false);
   });
 
   it('should return the first company employee email for a Company record', () => {
     mockUseFindManyRecords.mockReturnValue({
-      records: [{ emails: { primaryEmail: 'employee@company.com' } }],
+      records: [
+        {
+          id: 'employee-id',
+          emails: { primaryEmail: 'employee@company.com' },
+        },
+      ],
       loading: false,
     });
 
     const { result } = renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Company,
+        objectNameSingular: StandardObjectNameSingular.Company,
         recordId: 'company-id',
       }),
     );
 
     expect(result.current.defaultTo).toBe('employee@company.com');
+    expect(result.current.defaultRecipientPersonId).toBe('employee-id');
   });
 
   it('should return the opportunity point of contact email', () => {
     mockUseFindOneRecord.mockImplementation(
       (args: { objectNameSingular: string }) => {
-        if (args.objectNameSingular === CoreObjectNameSingular.Opportunity) {
+        if (
+          args.objectNameSingular === StandardObjectNameSingular.Opportunity
+        ) {
           return {
             record: {
               pointOfContact: {
+                id: 'contact-id',
                 emails: { primaryEmail: 'contact@opp.com' },
               },
             },
@@ -89,12 +102,13 @@ describe('useResolveDefaultEmailRecipient', () => {
 
     const { result } = renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Opportunity,
+        objectNameSingular: StandardObjectNameSingular.Opportunity,
         recordId: 'opp-id',
       }),
     );
 
     expect(result.current.defaultTo).toBe('contact@opp.com');
+    expect(result.current.defaultRecipientPersonId).toBe('contact-id');
   });
 
   it('should return empty string for unknown object types', () => {
@@ -112,7 +126,7 @@ describe('useResolveDefaultEmailRecipient', () => {
   it('should return empty string when recordId is null', () => {
     const { result } = renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Person,
+        objectNameSingular: StandardObjectNameSingular.Person,
         recordId: null,
       }),
     );
@@ -123,7 +137,7 @@ describe('useResolveDefaultEmailRecipient', () => {
   it('should report loading when the relevant query is in flight', () => {
     mockUseFindOneRecord.mockImplementation(
       (args: { objectNameSingular: string }) => {
-        if (args.objectNameSingular === CoreObjectNameSingular.Person) {
+        if (args.objectNameSingular === StandardObjectNameSingular.Person) {
           return { record: null, loading: true };
         }
 
@@ -133,7 +147,7 @@ describe('useResolveDefaultEmailRecipient', () => {
 
     const { result } = renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Person,
+        objectNameSingular: StandardObjectNameSingular.Person,
         recordId: 'person-id',
       }),
     );
@@ -144,28 +158,25 @@ describe('useResolveDefaultEmailRecipient', () => {
   it('should pass skip=true to queries for non-matching object types', () => {
     renderHook(() =>
       useResolveDefaultEmailRecipient({
-        objectNameSingular: CoreObjectNameSingular.Person,
+        objectNameSingular: StandardObjectNameSingular.Person,
         recordId: 'person-id',
       }),
     );
 
-    // Person query should NOT be skipped
     const personCall = mockUseFindOneRecord.mock.calls.find(
       (call: { objectNameSingular: string }[]) =>
-        call[0].objectNameSingular === CoreObjectNameSingular.Person,
+        call[0].objectNameSingular === StandardObjectNameSingular.Person,
     );
 
     expect(personCall?.[0].skip).toBe(false);
 
-    // Opportunity query SHOULD be skipped
     const oppCall = mockUseFindOneRecord.mock.calls.find(
       (call: { objectNameSingular: string }[]) =>
-        call[0].objectNameSingular === CoreObjectNameSingular.Opportunity,
+        call[0].objectNameSingular === StandardObjectNameSingular.Opportunity,
     );
 
     expect(oppCall?.[0].skip).toBe(true);
 
-    // Company people query SHOULD be skipped
     expect(mockUseFindManyRecords.mock.calls[0][0].skip).toBe(true);
   });
 });

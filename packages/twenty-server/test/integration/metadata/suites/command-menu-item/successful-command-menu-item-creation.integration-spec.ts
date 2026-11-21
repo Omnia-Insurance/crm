@@ -7,11 +7,11 @@ import { seedBuiltFrontComponentFile } from 'test/integration/metadata/suites/fr
 import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
 import { jestExpectToBeDefined } from 'test/utils/jest-expect-to-be-defined.util.test';
 
-import { CommandMenuItemAvailabilityType } from 'src/engine/metadata-modules/command-menu-item/enums/command-menu-item-availability-type.enum';
+import { CommandMenuItemAvailabilityType } from 'twenty-shared/types';
 import { EngineComponentKey } from 'src/engine/metadata-modules/command-menu-item/enums/engine-component-key.enum';
 
 describe('CommandMenuItem creation should succeed', () => {
-  let createdCommandMenuItemId: string;
+  let createdCommandMenuItemId: string | undefined;
   let createdFrontComponentId: string | undefined;
   let cleanupBuiltFile: (() => void) | undefined;
   let companyObjectMetadataId: string;
@@ -62,7 +62,7 @@ describe('CommandMenuItem creation should succeed', () => {
         expectToFail: false,
         input: { id: createdCommandMenuItemId },
       });
-      createdCommandMenuItemId = undefined as unknown as string;
+      createdCommandMenuItemId = undefined;
     }
     if (createdFrontComponentId) {
       await deleteFrontComponent({
@@ -196,13 +196,13 @@ describe('CommandMenuItem creation should succeed', () => {
     });
   });
 
-  it('should create NAVIGATION command menu item with objectMetadataItemId payload', async () => {
+  it('should create NAVIGATION command menu item with navigationTargetObjectMetadataId', async () => {
     const { data } = await createCommandMenuItem({
       expectToFail: false,
       input: {
         engineComponentKey: EngineComponentKey.NAVIGATION,
         label: 'Go to Companies',
-        payload: { objectMetadataItemId: companyObjectMetadataId },
+        navigationTargetObjectMetadataId: companyObjectMetadataId,
       },
     });
 
@@ -212,9 +212,8 @@ describe('CommandMenuItem creation should succeed', () => {
       id: expect.any(String),
       engineComponentKey: EngineComponentKey.NAVIGATION,
       label: 'Go to Companies',
-      payload: {
-        objectMetadataItemId: companyObjectMetadataId,
-      },
+      navigationTargetObjectMetadataId: companyObjectMetadataId,
+      payload: null,
     });
   });
 

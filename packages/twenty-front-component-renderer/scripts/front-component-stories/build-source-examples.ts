@@ -5,11 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 import { getFrontComponentBuildPlugins } from 'twenty-sdk/front-component-renderer/build';
 
+import twentyUiPackageJson from '../../../twenty-ui/package.json';
+
 const dirname = path.dirname(fileURLToPath(import.meta.url));
-const exampleSourcesDir = path.resolve(
-  dirname,
-  '../../src/__stories__/example-sources',
-);
+const storiesDir = path.resolve(dirname, '../../src/__stories__');
 const exampleSourcesBuiltDir = path.resolve(
   dirname,
   '../../src/__stories__/example-sources-built',
@@ -19,11 +18,24 @@ const exampleSourcesBuiltPreactDir = path.resolve(
   '../../src/__stories__/example-sources-built-preact',
 );
 
+const SOURCE_SCAN_ROOTS = [
+  'html-tag',
+  'host-api',
+  'media',
+  'showcase',
+  'twenty-ui-gallery',
+];
+
 const rootNodeModules = path.resolve(dirname, '../../../../node_modules');
 
-const twentyUiIndividualIndex = path.resolve(
+const twentyUiIndividualDir = path.resolve(
   dirname,
-  '../../../twenty-ui/dist/individual/individual-entry.js',
+  '../../../twenty-ui/dist/individual',
+);
+
+const twentyUiIndividualIndex = path.join(
+  twentyUiIndividualDir,
+  'individual-entry.js',
 );
 
 const sdkDefineIndex = path.resolve(
@@ -36,78 +48,91 @@ const sdkFrontComponentIndex = path.resolve(
   '../../../twenty-sdk/dist/front-component/index.mjs',
 );
 
-const twentySharedIndividualDir = path.resolve(
-  dirname,
-  '../../../twenty-shared/dist/individual',
-);
+const twentyUiSubmodules = Object.keys(twentyUiPackageJson.exports)
+  .filter((subpath) => subpath !== '.' && !subpath.endsWith('.css'))
+  .map((subpath) => subpath.slice(2));
 
-const TWENTY_SHARED_SUBMODULES = [
-  'ai',
-  'application',
-  'constants',
-  'database-events',
-  'metadata',
-  'testing',
-  'translations',
-  'types',
-  'utils',
-  'workflow',
-  'workspace',
-];
-
-const twentySharedAliases = Object.fromEntries(
-  TWENTY_SHARED_SUBMODULES.map((submodule) => [
-    `twenty-shared/${submodule}`,
-    path.join(twentySharedIndividualDir, submodule, 'index.js'),
-  ]),
-);
+const twentyUiAliases = {
+  'twenty-ui/style.css': path.join(twentyUiIndividualDir, 'twenty-ui.css'),
+  'twenty-ui': twentyUiIndividualIndex,
+  ...Object.fromEntries(
+    twentyUiSubmodules.map((submodule) => [
+      `twenty-ui/${submodule}`,
+      path.join(twentyUiIndividualDir, submodule, 'index.js'),
+    ]),
+  ),
+};
 
 const storyAlias = {
   react: path.join(rootNodeModules, 'react'),
   'react-dom': path.join(rootNodeModules, 'react-dom'),
   'twenty-sdk/define': sdkDefineIndex,
   'twenty-sdk/front-component': sdkFrontComponentIndex,
-  'twenty-sdk/ui': twentyUiIndividualIndex,
-  ...twentySharedAliases,
+  ...twentyUiAliases,
 };
 
-const STORY_COMPONENTS = [
-  'static.front-component',
-  'interactive.front-component',
-  'lifecycle.front-component',
-  'chakra-example.front-component',
-  'tailwind-example.front-component',
-  'emotion-example.front-component',
-  'styled-components-example.front-component',
-  'shadcn-example.front-component',
-  'mui-example.front-component',
-  'twenty-ui-example.front-component',
-  'sdk-context-example.front-component',
-  'form-events.front-component',
-  'keyboard-events.front-component',
-  'host-api-calls.front-component',
-  'caret-preservation.front-component',
-  'file-input.front-component',
-];
+const ENTRY_POINT_PATTERN = /\.front-component\.tsx$/;
+
+const findEntryPointFiles = (directory: string): string[] => {
+  const result: string[] = [];
+
+  if (!fs.existsSync(directory)) {
+    return result;
+  }
+
+  for (const dirent of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolutePath = path.join(directory, dirent.name);
+
+    if (dirent.isDirectory()) {
+      if (dirent.name === 'shared') {
+        continue;
+      }
+
+      result.push(...findEntryPointFiles(absolutePath));
+      continue;
+    }
+
+    if (!dirent.isFile()) {
+      continue;
+    }
+
+    if (ENTRY_POINT_PATTERN.test(dirent.name)) {
+      result.push(absolutePath);
+    }
+  }
+
+  return result;
+};
 
 const resolveEntryPoints = (): Record<string, string> => {
+  const files = SOURCE_SCAN_ROOTS.flatMap((root) =>
+    findEntryPointFiles(path.join(storiesDir, root)),
+  );
+
   const entryPoints: Record<string, string> = {};
 
-  for (const name of STORY_COMPONENTS) {
-    const filePath = path.join(exampleSourcesDir, `${name}.tsx`);
+  for (const filePath of files) {
+    const basename = path.basename(filePath).replace(/\.tsx$/, '');
 
-    if (!fs.existsSync(filePath)) {
+    if (entryPoints[basename] !== undefined) {
       throw new Error(
-        `Story component source file not found: ${filePath}\n` +
-          `Ensure the file exists in ${exampleSourcesDir} and the name in STORY_COMPONENTS is correct.`,
+        `Duplicate front-component basename "${basename}" found at ${filePath} and ${entryPoints[basename]}`,
       );
     }
 
-    entryPoints[name] = filePath;
+    entryPoints[basename] = filePath;
+  }
+
+  if (Object.keys(entryPoints).length === 0) {
+    throw new Error(
+      `No front-component source files found under ${storiesDir} (scanned: ${SOURCE_SCAN_ROOTS.join(', ')})`,
+    );
   }
 
   return entryPoints;
 };
+
+const STORY_COMPONENTS = Object.keys(resolveEntryPoints());
 
 type BundleSizeEntry = {
   name: string;
@@ -127,12 +152,37 @@ const collectBundleSizes = (): BundleSizeEntry[] =>
     };
   });
 
+// esbuild memory grows with entries x import graph and is only released when its service stops
+const ENTRY_POINT_BATCH_SIZE = 16;
+
+const buildInBatches = async (
+  entryPoints: Record<string, string>,
+  options: esbuild.BuildOptions,
+): Promise<void> => {
+  const entryPointList = Object.entries(entryPoints);
+
+  for (
+    let batchStart = 0;
+    batchStart < entryPointList.length;
+    batchStart += ENTRY_POINT_BATCH_SIZE
+  ) {
+    const batchEntryPoints = Object.fromEntries(
+      entryPointList.slice(batchStart, batchStart + ENTRY_POINT_BATCH_SIZE),
+    );
+
+    try {
+      await esbuild.build({ ...options, entryPoints: batchEntryPoints });
+    } finally {
+      await esbuild.stop();
+    }
+  }
+};
+
 const buildSourceExamples = async (): Promise<void> => {
   const entryPoints = resolveEntryPoints();
   const tsconfigPath = path.join(dirname, '../../tsconfig.json');
 
   const commonOptions: esbuild.BuildOptions = {
-    entryPoints,
     bundle: true,
     splitting: false,
     format: 'esm',
@@ -148,7 +198,7 @@ const buildSourceExamples = async (): Promise<void> => {
 
   fs.mkdirSync(exampleSourcesBuiltDir, { recursive: true });
 
-  await esbuild.build({
+  await buildInBatches(entryPoints, {
     ...commonOptions,
     outdir: exampleSourcesBuiltDir,
     plugins: getFrontComponentBuildPlugins(),
@@ -160,7 +210,7 @@ const buildSourceExamples = async (): Promise<void> => {
 
   fs.mkdirSync(exampleSourcesBuiltPreactDir, { recursive: true });
 
-  await esbuild.build({
+  await buildInBatches(entryPoints, {
     ...commonOptions,
     outdir: exampleSourcesBuiltPreactDir,
     plugins: getFrontComponentBuildPlugins({ usePreact: true }),

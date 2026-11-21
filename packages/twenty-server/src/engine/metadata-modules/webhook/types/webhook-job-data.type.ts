@@ -1,4 +1,4 @@
-import { type MetadataEvent } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event';
+import { type MetadataEvent } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event.type';
 
 type WebhookJobBase = {
   targetUrl: string;
@@ -15,7 +15,7 @@ export type CallWebhookJobData = WebhookJobBase & {
   objectMetadata: { id: string; nameSingular: string };
   workspaceMemberId?: string;
   applicationId?: string;
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   record: any;
   updatedFields?: string[];
 };

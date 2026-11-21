@@ -37,7 +37,7 @@ export const computeContextStoreFilters = ({
   const { recordGqlOperationFilter: recordGqlFilterForAnyFieldFilter } =
     turnAnyFieldFilterIntoRecordGqlFilter({
       filterValue: contextStoreAnyFieldFilterValue,
-      fields: objectMetadataItem.fields,
+      fields: objectMetadataItem.readableFields,
     });
 
   if (contextStoreTargetedRecordsRule.mode === 'exclusion') {
@@ -61,24 +61,11 @@ export const computeContextStoreFilters = ({
     ]);
   }
   if (contextStoreTargetedRecordsRule.mode === 'selection') {
-    if (contextStoreTargetedRecordsRule.selectedRecordIds.length === 0) {
-      return { id: { in: [] } };
-    }
-
-    queryFilter = makeAndFilterVariables([
-      recordGqlFilterForAnyFieldFilter,
-      {
-        id: {
-          in: contextStoreTargetedRecordsRule.selectedRecordIds,
-        },
+    return {
+      id: {
+        in: contextStoreTargetedRecordsRule.selectedRecordIds,
       },
-      computeRecordGqlOperationFilter({
-        filterValueDependencies,
-        fieldMetadataItems,
-        recordFilters: contextStoreFilters,
-        recordFilterGroups: contextStoreFilterGroups,
-      }),
-    ]);
+    };
   }
 
   return queryFilter;

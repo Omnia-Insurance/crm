@@ -3,38 +3,41 @@ import { useCallback } from 'react';
 import {
   backgroundJobsState,
   type BackgroundJobData,
-  type BackgroundJobStatus,
 } from '@/ui/feedback/background-job-indicator/states/backgroundJobState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 
 export const useBackgroundJob = () => {
-  const setJobs = useSetAtomState(backgroundJobsState);
+  const setBackgroundJobs = useSetAtomState(backgroundJobsState);
 
   const upsertJob = useCallback(
     (job: BackgroundJobData) => {
-      setJobs((prev) => {
-        const idx = prev.findIndex((j) => j.id === job.id);
+      setBackgroundJobs((previousJobs) => {
+        const existingJobIndex = previousJobs.findIndex(
+          (existingJob) => existingJob.id === job.id,
+        );
 
-        if (idx >= 0) {
-          const updated = [...prev];
+        if (existingJobIndex >= 0) {
+          const updatedJobs = [...previousJobs];
 
-          updated[idx] = job;
+          updatedJobs[existingJobIndex] = job;
 
-          return updated;
+          return updatedJobs;
         }
 
-        return [...prev, job];
+        return [...previousJobs, job];
       });
     },
-    [setJobs],
+    [setBackgroundJobs],
   );
 
   const removeJob = useCallback(
     (jobId: string) => {
-      setJobs((prev) => prev.filter((j) => j.id !== jobId));
+      setBackgroundJobs((previousJobs) =>
+        previousJobs.filter((existingJob) => existingJob.id !== jobId),
+      );
     },
-    [setJobs],
+    [setBackgroundJobs],
   );
 
   const updateJobStatus = useCallback(
@@ -51,11 +54,15 @@ export const useBackgroundJob = () => {
         >
       >,
     ) => {
-      setJobs((prev) =>
-        prev.map((j) => (j.id === jobId ? { ...j, ...updates } : j)),
+      setBackgroundJobs((previousJobs) =>
+        previousJobs.map((existingJob) =>
+          existingJob.id === jobId
+            ? { ...existingJob, ...updates }
+            : existingJob,
+        ),
       );
     },
-    [setJobs],
+    [setBackgroundJobs],
   );
 
   return { upsertJob, removeJob, updateJobStatus };

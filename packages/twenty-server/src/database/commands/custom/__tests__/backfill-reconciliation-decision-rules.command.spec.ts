@@ -37,11 +37,11 @@ const createCommand = ({ items }: { items: ReviewItemForDecisionRule[] }) => {
   const reviewItemRepo = {
     find: jest.fn(async () => items),
   };
-  const globalWorkspaceOrmManager = {
+  const workspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(
       async (callback: () => Promise<unknown>) => callback(),
     ),
-    getRepository: jest.fn(async () => reviewItemRepo),
+    getRepositoryWithoutPermissionChecks: jest.fn(() => reviewItemRepo),
   };
   const decisionRuleService = {
     getCarrierNameForReconciliation: jest.fn(async () => CARRIER_NAME),
@@ -60,7 +60,7 @@ const createCommand = ({ items }: { items: ReviewItemForDecisionRule[] }) => {
   };
   const command = new BackfillReconciliationDecisionRulesCommand(
     {} as never,
-    globalWorkspaceOrmManager as never,
+    workspaceOrmManager as never,
     decisionRuleService as never,
     reviewItemService as never,
   );

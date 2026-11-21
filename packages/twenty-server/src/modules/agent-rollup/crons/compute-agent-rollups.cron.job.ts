@@ -4,16 +4,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 import { Repository } from 'typeorm';
 
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { AgentRollupService } from 'src/modules/agent-rollup/services/agent-rollup.service';
+import {
+  ComputeAgentRollupsJob,
+  type ComputeAgentRollupsJobData,
+} from 'src/modules/agent-rollup/jobs/compute-agent-rollups.job';
 
-// OMNIA-CUSTOM: recomputes per-agent performance rollups on a schedule so the
-// leaderboard dashboard stays fresh. Computes each active workspace inline
-// (computeWorkspace is cheap and idempotent, and no-ops on workspaces without
-// the agentProfile object); a failure in one workspace doesn't block the rest.
 @Injectable()
 @Processor(MessageQueue.cronQueue)
 export class ComputeAgentRollupsCronJob {
@@ -22,7 +23,8 @@ export class ComputeAgentRollupsCronJob {
   constructor(
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
-    private readonly agentRollupService: AgentRollupService,
+    @InjectMessageQueue(MessageQueue.workspaceQueue)
+    private readonly messageQueueService: MessageQueueService,
   ) {}
 
   @Process(ComputeAgentRollupsCronJob.name)
@@ -33,26 +35,26 @@ export class ComputeAgentRollupsCronJob {
       order: { id: 'ASC' },
     });
 
-    if (workspaces.length === 0) {
-      return;
-    }
-
-    let updated = 0;
+    let enqueuedCount = 0;
 
     for (const workspace of workspaces) {
       try {
-        updated += await this.agentRollupService.computeWorkspace(workspace.id);
+        await this.messageQueueService.add<ComputeAgentRollupsJobData>(
+          ComputeAgentRollupsJob.name,
+          { workspaceId: workspace.id },
+          { isWorkspaceJob: true, workspaceId: workspace.id },
+        );
+        enqueuedCount++;
       } catch (error) {
         this.logger.error(
-          `Agent rollup compute failed for workspace ${workspace.id}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Failed to enqueue agent rollups for workspace ${workspace.id}`,
+          error instanceof Error ? error.stack : undefined,
         );
       }
     }
 
     this.logger.log(
-      `Agent rollups recomputed across ${workspaces.length} workspace(s); ${updated} agent record(s) changed`,
+      `Enqueued agent rollups for ${enqueuedCount} of ${workspaces.length} active workspace(s)`,
     );
   }
 }

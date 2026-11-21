@@ -1,8 +1,6 @@
 /* @license Enterprise */
 
-import { ObjectType, registerEnumType } from '@nestjs/graphql';
-
-import { IDField } from '@ptc-org/nestjs-query-graphql';
+import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
 import {
   Column,
   CreateDateColumn,
@@ -12,14 +10,14 @@ import {
 } from 'typeorm';
 
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 export enum IdentityProviderType {
   OIDC = 'OIDC',
   SAML = 'SAML',
 }
 
-export enum OIDCResponseType {
+export enum OidcResponseType {
   // Only Authorization Code is used for now
   CODE = 'code',
   ID_TOKEN = 'id_token',
@@ -31,21 +29,20 @@ registerEnumType(IdentityProviderType, {
   name: 'IdentityProviderType',
 });
 
-export enum SSOIdentityProviderStatus {
+export enum SsoIdentityProviderStatus {
   Active = 'Active',
   Inactive = 'Inactive',
   Error = 'Error',
 }
 
-registerEnumType(SSOIdentityProviderStatus, {
+registerEnumType(SsoIdentityProviderStatus, {
   name: 'SSOIdentityProviderStatus',
 });
 
 @Entity({ name: 'workspaceSSOIdentityProvider', schema: 'core' })
 @ObjectType('WorkspaceSSOIdentityProvider')
-export class WorkspaceSSOIdentityProviderEntity extends WorkspaceRelatedEntity {
-  // COMMON
-  @IDField(() => UUIDScalarType)
+export class WorkspaceSsoIdentityProviderEntity extends WorkspaceRelatedEntity {
+  @Field(() => UUIDScalarType)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -54,10 +51,10 @@ export class WorkspaceSSOIdentityProviderEntity extends WorkspaceRelatedEntity {
 
   @Column({
     type: 'enum',
-    enum: SSOIdentityProviderStatus,
-    default: SSOIdentityProviderStatus.Active,
+    enum: SsoIdentityProviderStatus,
+    default: SsoIdentityProviderStatus.Active,
   })
-  status: SSOIdentityProviderStatus;
+  status: SsoIdentityProviderStatus;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
@@ -75,14 +72,12 @@ export class WorkspaceSSOIdentityProviderEntity extends WorkspaceRelatedEntity {
   @Column()
   issuer: string;
 
-  // OIDC
   @Column({ nullable: true })
   clientID?: string;
 
   @Column({ nullable: true })
   clientSecret?: string;
 
-  // SAML
   @Column({ nullable: true })
   ssoURL?: string;
 

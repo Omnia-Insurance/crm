@@ -5,6 +5,8 @@ import { ALL_METADATA_NAME } from 'twenty-shared/metadata';
 import { isDefined } from 'twenty-shared/utils';
 
 import { AiExceptionCode } from 'src/engine/metadata-modules/ai/ai.exception';
+import { resolveEffectiveAgent } from 'src/engine/metadata-modules/flat-agent/utils/resolve-effective-agent.util';
+import { WORKSPACE_LOCAL_STATE_PROPERTIES } from 'src/engine/metadata-modules/overrides/constants/workspace-local-state-properties.constant';
 import { findFlatEntityByUniversalIdentifier } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier.util';
 import { type UniversalFlatAgent } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-agent.type';
 import { belongsToTwentyStandardApp } from 'src/engine/metadata-modules/utils/belongs-to-twenty-standard-app.util';
@@ -13,9 +15,12 @@ import { type FailedFlatEntityValidation } from 'src/engine/workspace-manager/wo
 import { getEmptyFlatEntityValidationError } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/builders/utils/get-flat-entity-validation-error.util';
 import { type FlatEntityUpdateValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-update-validation-args.type';
 import { type UniversalFlatEntityValidationArgs } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/universal-flat-entity-validation-args.type';
+import { validateAgentAvatar } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-avatar.util';
 import { validateAgentNameUniqueness } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-name-uniqueness.util';
 import { validateAgentRequiredProperties } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-required-properties.util';
 import { validateAgentResponseFormat } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-response-format.util';
+import { validateAgentTriggersCallerApplication } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-triggers-caller-application.util';
+import { validateAgentTriggers } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/validators/utils/validate-agent-triggers.util';
 
 @Injectable()
 export class FlatAgentValidatorService {
@@ -60,6 +65,11 @@ export class FlatAgentValidatorService {
         }),
       );
     }
+
+    validationResult.errors.push(
+      ...validateAgentTriggers({ triggers: flatAgent.triggers }),
+      ...validateAgentAvatar(flatAgent),
+    );
 
     return validationResult;
   }
@@ -148,8 +158,13 @@ export class FlatAgentValidatorService {
       return validationResult;
     }
 
+    const isWorkspaceLocalStateUpdate = Object.keys(flatEntityUpdate).every(
+      (key) => WORKSPACE_LOCAL_STATE_PROPERTIES.has(key),
+    );
+
     if (
       !isCallerTwentyStandardApp(buildOptions) &&
+      !isWorkspaceLocalStateUpdate &&
       belongsToTwentyStandardApp({
         universalIdentifier: fromFlatAgent.universalIdentifier,
         applicationUniversalIdentifier:
@@ -167,6 +182,9 @@ export class FlatAgentValidatorService {
       ...fromFlatAgent,
       ...flatEntityUpdate,
     };
+    const effectiveOptimisticFlatAgent = isDefined(flatEntityUpdate.overrides)
+      ? resolveEffectiveAgent(optimisticFlatAgent)
+      : undefined;
 
     const existingAgents = Object.values(
       optimisticFlatAgentMaps.byUniversalIdentifier,
@@ -179,6 +197,11 @@ export class FlatAgentValidatorService {
         flatAgent: optimisticFlatAgent,
         updatedProperties: flatEntityUpdate,
       }),
+      ...(isDefined(effectiveOptimisticFlatAgent)
+        ? validateAgentRequiredProperties({
+            flatAgent: effectiveOptimisticFlatAgent,
+          })
+        : []),
     );
 
     if (isDefined(flatEntityUpdate.name)) {
@@ -190,10 +213,32 @@ export class FlatAgentValidatorService {
       );
     }
 
-    if (isDefined(flatEntityUpdate.responseFormat)) {
+    const responseFormatsToValidate = [
+      flatEntityUpdate.responseFormat,
+      effectiveOptimisticFlatAgent?.responseFormat,
+    ].filter(isDefined);
+
+    for (const responseFormat of responseFormatsToValidate) {
       validationResult.errors.push(
-        ...validateAgentResponseFormat({
-          responseFormat: flatEntityUpdate.responseFormat,
+        ...validateAgentResponseFormat({ responseFormat }),
+      );
+    }
+
+    validationResult.errors.push(
+      ...validateAgentAvatar(flatEntityUpdate),
+      ...(isDefined(effectiveOptimisticFlatAgent)
+        ? validateAgentAvatar(effectiveOptimisticFlatAgent)
+        : []),
+    );
+
+    if (flatEntityUpdate.triggers !== undefined) {
+      validationResult.errors.push(
+        ...validateAgentTriggers({ triggers: flatEntityUpdate.triggers }),
+        ...validateAgentTriggersCallerApplication({
+          callerApplicationUniversalIdentifier:
+            buildOptions.applicationUniversalIdentifier,
+          agentApplicationUniversalIdentifier:
+            fromFlatAgent.applicationUniversalIdentifier,
         }),
       );
     }

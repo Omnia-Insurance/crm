@@ -1,91 +1,109 @@
 import { agentChatSelectedFilesState } from '@/ai/states/agentChatSelectedFilesState';
 import { agentChatUploadedFilesState } from '@/ai/states/agentChatUploadedFilesState';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
-import { useApolloClient, useMutation } from '@apollo/client/react';
+import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
+import { agentChatThreadRecordFamilySelector } from '@/ai/states/selectors/agentChatThreadRecordFamilySelector';
+import { useDirectFileUpload } from '@/file/hooks/useDirectFileUpload';
+import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useLingui } from '@lingui/react/macro';
-import { isDefined } from 'twenty-shared/utils';
+import { useStore } from 'jotai';
+import { AgentChatThreadConversationType } from 'twenty-shared/ai';
+import { isDefined, isNonEmptyArray } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 
-import { type AgentChatFileUIPart } from '@/ai/types/agent-chat-file-ui-part.type';
-import { UploadAiChatFileDocument } from '~/generated-metadata/graphql';
+import { type AgentChatFileUIPart } from '@/ai/types/AgentChatFileUIPart';
+import { FileFolder } from '~/generated-metadata/graphql';
 
 export const useAiChatFileUpload = () => {
-  const apolloClient = useApolloClient();
-  const [uploadAiChatFile] = useMutation(UploadAiChatFileDocument, {
-    client: apolloClient,
-  });
+  const { uploadFile: directUploadFile } = useDirectFileUpload();
   const { t } = useLingui();
-  const { enqueueErrorSnackBar } = useSnackBar();
-  const [agentChatSelectedFiles, setAgentChatSelectedFiles] = useAtomState(
+  const { enqueueToast } = useToast();
+  const setAgentChatSelectedFiles = useSetAtomState(
     agentChatSelectedFilesState,
   );
-  const [agentChatUploadedFiles, setAgentChatUploadedFiles] = useAtomState(
+  const setAgentChatUploadedFiles = useSetAtomState(
     agentChatUploadedFilesState,
   );
+  const store = useStore();
 
   const sendFile = async (file: File): Promise<AgentChatFileUIPart | null> => {
+    const abortController = new AbortController();
+    const unsubscribeFromSelectedFiles = store.sub(
+      agentChatSelectedFilesState.atom,
+      () => {
+        if (!store.get(agentChatSelectedFilesState.atom).includes(file)) {
+          abortController.abort();
+        }
+      },
+    );
+
     try {
-      const result = await uploadAiChatFile({
-        variables: {
-          file,
-        },
+      const uploadedFile = await directUploadFile(file, {
+        fileFolder: FileFolder.AgentChat,
+        signal: abortController.signal,
       });
 
-      const response = result?.data?.uploadAiChatFile;
-
-      if (!isDefined(response)) {
-        throw new Error(t`Couldn't upload the file.`);
+      if (!store.get(agentChatSelectedFilesState.atom).includes(file)) {
+        return null;
       }
 
-      setAgentChatSelectedFiles(
-        agentChatSelectedFiles.filter((f) => f.name !== file.name),
-      );
       return {
         filename: file.name,
         mediaType: file.type,
-        url: response.url,
-        fileId: response.id,
+        url: uploadedFile.url,
+        fileId: uploadedFile.id,
         type: 'file',
       };
     } catch {
       const fileName = file.name;
-      enqueueErrorSnackBar({
-        message: t`Failed to upload file: ${fileName}`,
-      });
+
+      if (!abortController.signal.aborted) {
+        enqueueToast({
+          status: 'error',
+          children: t`Failed to upload file: ${fileName}`,
+        });
+      }
+
       return null;
+    } finally {
+      unsubscribeFromSelectedFiles();
+      setAgentChatSelectedFiles((previousSelectedFiles) =>
+        previousSelectedFiles.filter((selectedFile) => selectedFile !== file),
+      );
     }
   };
 
   const uploadFiles = async (files: File[]) => {
-    const uploadResults = await Promise.allSettled(
-      files.map((file) => sendFile(file)),
+    const currentAiChatThread = store.get(currentAiChatThreadState.atom);
+    const currentThread = store.get(
+      agentChatThreadRecordFamilySelector.selectorFamily(
+        currentAiChatThread ?? '',
+      ),
     );
 
-    const successfulUploads = uploadResults.reduce<AgentChatFileUIPart[]>(
-      (acc, result) => {
-        if (result.status === 'fulfilled' && isDefined(result.value)) {
-          acc.push(result.value);
-        }
-        return acc;
-      },
-      [],
+    if (
+      currentThread?.conversationType ===
+      AgentChatThreadConversationType.DIRECT_MESSAGE
+    ) {
+      return [];
+    }
+
+    setAgentChatSelectedFiles((previousSelectedFiles) => [
+      ...previousSelectedFiles,
+      ...files,
+    ]);
+
+    const successfulUploads = (await Promise.all(files.map(sendFile))).filter(
+      isDefined,
     );
 
-    if (successfulUploads.length > 0) {
-      setAgentChatUploadedFiles([
-        ...agentChatUploadedFiles,
+    if (isNonEmptyArray(successfulUploads)) {
+      setAgentChatUploadedFiles((previousUploadedFiles) => [
+        ...previousUploadedFiles,
         ...successfulUploads,
       ]);
     }
 
-    const failedCount = uploadResults.filter(
-      (result) => result.status === 'rejected',
-    ).length;
-    if (failedCount > 0) {
-      enqueueErrorSnackBar({
-        message: t`${failedCount} file(s) failed to upload`,
-      });
-    }
+    return successfulUploads;
   };
 
   return { uploadFiles };

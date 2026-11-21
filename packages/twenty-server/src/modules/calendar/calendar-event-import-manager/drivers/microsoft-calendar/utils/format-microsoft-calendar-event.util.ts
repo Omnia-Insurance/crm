@@ -6,7 +6,7 @@ import {
 
 import { sanitizeCalendarEvent } from 'src/modules/calendar/calendar-event-import-manager/drivers/utils/sanitizeCalendarEvent';
 import { CalendarEventParticipantResponseStatus } from 'src/modules/calendar/common/standard-objects/calendar-event-participant.workspace-entity';
-import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event';
+import { type FetchedCalendarEvent } from 'src/modules/calendar/common/types/fetched-calendar-event.type';
 
 export const formatMicrosoftCalendarEvents = (
   events: Event[],
@@ -34,6 +34,8 @@ const formatMicrosoftCalendarEvent = (event: Event): FetchedCalendarEvent => {
   const calendarEvent: FetchedCalendarEvent = {
     title: event.subject ?? '',
     isCanceled: !!event.isCancelled,
+    isPrivate:
+      event.sensitivity === 'private' || event.sensitivity === 'confidential',
     isFullDay: !!event.isAllDay,
     startsAt: event.start?.dateTime ?? '',
     endsAt: event.end?.dateTime ?? '',
@@ -47,9 +49,11 @@ const formatMicrosoftCalendarEvent = (event: Event): FetchedCalendarEvent => {
     conferenceLinkLabel: event.onlineMeeting?.joinUrl ?? '',
     conferenceLinkUrl: event.onlineMeeting?.joinUrl ?? '',
     recurringEventExternalId: event.id ?? '',
+    organizerHandle:
+      event.organizer?.emailAddress?.address?.toLowerCase() ?? '',
     participants:
       event.attendees?.map((attendee) => ({
-        handle: attendee.emailAddress?.address ?? '',
+        handle: attendee.emailAddress?.address?.toLowerCase() ?? '',
         displayName: attendee.emailAddress?.name ?? '',
         isOrganizer: attendee.status?.response === 'organizer',
         responseStatus: formatResponseStatus(attendee.status?.response),
@@ -71,6 +75,7 @@ const formatMicrosoftCalendarEvent = (event: Event): FetchedCalendarEvent => {
     'conferenceLinkLabel',
     'conferenceLinkUrl',
     'recurringEventExternalId',
+    'organizerHandle',
     'status',
   ];
 

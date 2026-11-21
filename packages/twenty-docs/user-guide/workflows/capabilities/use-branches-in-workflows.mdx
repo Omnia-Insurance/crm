@@ -3,6 +3,8 @@ title: Use Branches in Workflows
 description: Understand how branches work and how to control which path is executed.
 ---
 
+import { PageBanner } from "/snippets/page-banner.mdx"
+
 ## How Branches Work
 
 In the workflow editor, you can create multiple paths (branches) going out from a single node. This allows you to build complex automations with different outcomes.
@@ -19,8 +21,6 @@ To execute only one branch based on specific conditions, **add a Filter node at 
 2. Add a **Filter** node as the first step in each branch
 3. Set conditions on each Filter to determine when that branch should continue
 4. Only the branch(es) whose Filter conditions are met will proceed
-
-<img src="/images/user-guide/workflows/branches-with-filters.png" style={{width:'100%'}}/>
 
 ### How Filters Work
 
@@ -74,7 +74,7 @@ Trigger
    Merged Step: Send Confirmation Email
 ```
 
-The confirmation email sends only after both the customer update and ticket creation are done.
+The confirmation email is sent only after both the customer update and ticket creation are done.
 
 ## Best Practices
 
@@ -89,3 +89,4 @@ The confirmation email sends only after both the customer update and ticket crea
 - [Workflows FAQ](/user-guide/workflows/how-tos/need-more-help/workflows-faq) — answers about parallel execution
 - [Workflow Actions](/user-guide/workflows/capabilities/workflow-actions) — available actions for branches
 
+<PageBanner illustration="page-cover-branches" />

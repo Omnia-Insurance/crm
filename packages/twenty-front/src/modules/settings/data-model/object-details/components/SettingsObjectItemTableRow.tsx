@@ -1,11 +1,13 @@
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { type ReactNode, useContext } from 'react';
+import { type ReactNode } from 'react';
 
+import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { ObjectMetadataIcon } from '@/object-metadata/components/ObjectMetadataIcon';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { isHiddenSystemField } from '@/object-metadata/utils/isHiddenSystemField';
 import { SettingsItemTypeTag } from '@/settings/components/SettingsItemTypeTag';
+import { SettingsNameCellSecondaryLabel } from '@/settings/components/SettingsNameCellSecondaryLabel';
 import {
   SETTINGS_OBJECT_TABLE_ROW_GRID_TEMPLATE_COLUMNS,
   StyledActionTableCell,
@@ -14,7 +16,7 @@ import {
 } from '@/settings/data-model/object-details/components/SettingsObjectItemTableRowStyledComponents';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 export type SettingsObjectMetadataItemTableRowProps = {
   action: ReactNode;
@@ -37,21 +39,6 @@ const StyledNameLabel = styled.div`
   white-space: nowrap;
 `;
 
-const StyledInactiveLabel = styled.span`
-  color: ${themeCssVariables.font.color.extraLight};
-  flex: 0 999 auto;
-  font-size: ${themeCssVariables.font.size.sm};
-  min-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &::before {
-    content: '·';
-    margin-right: ${themeCssVariables.spacing[1]};
-  }
-`;
-
 export const SettingsObjectMetadataItemTableRow = ({
   action,
   objectMetadataItem,
@@ -59,7 +46,8 @@ export const SettingsObjectMetadataItemTableRow = ({
   totalObjectCount,
 }: SettingsObjectMetadataItemTableRowProps) => {
   const { t } = useLingui();
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
+  const { formatNumber } = useNumberFormat();
 
   return (
     <TableRow
@@ -79,7 +67,9 @@ export const SettingsObjectMetadataItemTableRow = ({
               {objectMetadataItem.labelPlural}
             </StyledNameLabel>
             {!objectMetadataItem.isActive && (
-              <StyledInactiveLabel>{t`Deactivated`}</StyledInactiveLabel>
+              <SettingsNameCellSecondaryLabel>
+                {t`Deactivated`}
+              </SettingsNameCellSecondaryLabel>
             )}
           </StyledNameContainer>
         </StyledNameTableCell>
@@ -88,13 +78,13 @@ export const SettingsObjectMetadataItemTableRow = ({
         <SettingsItemTypeTag item={objectMetadataItem} />
       </TableCell>
       <TableCell align="right">
-        {
+        {formatNumber(
           objectMetadataItem.fields.filter(
             (field) => !isHiddenSystemField(field),
-          ).length
-        }
+          ).length,
+        )}
       </TableCell>
-      <TableCell align="right">{totalObjectCount}</TableCell>
+      <TableCell align="right">{formatNumber(totalObjectCount)}</TableCell>
       <StyledActionTableCell>{action}</StyledActionTableCell>
     </TableRow>
   );

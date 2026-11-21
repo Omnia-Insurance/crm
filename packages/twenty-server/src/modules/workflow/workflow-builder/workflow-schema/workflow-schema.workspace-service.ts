@@ -1,19 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { computeAiAgentOutputSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/compute-ai-agent-output-schema.util';
+import { WAIT_FOR_EVENT_NAME_PATTERN } from 'src/modules/workflow/workflow-executor/workflow-actions/wait-for-event/constants/wait-for-event-name-pattern.constant';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { isString } from '@sniptt/guards';
+import {
+  getOutputSchemaFromValue,
+  inputSchemaToOutputSchema,
+} from 'twenty-shared/logic-function';
 import { isDefined, isValidVariable } from 'twenty-shared/utils';
 import {
   BaseOutputSchemaV2,
+  buildManualTriggerMetadataNode,
   BulkRecordsAvailability,
   extractRawVariableNamePart,
+  getCurrentItemSchemaFromFlattenedArrayOutputSchema,
   GlobalAvailability,
+  isBaseOutputSchemaV2,
+  isFlattenedArrayOutputSchema,
   navigateOutputSchemaProperty,
   SingleRecordAvailability,
   TRIGGER_STEP_ID,
+  WORKFLOW_TRIGGER_METADATA_KEY,
+  WORKFLOW_TRIGGER_PAYLOAD_KEY,
+  WORKFLOW_TRIGGER_RECORD_LABEL,
+  WORKFLOW_TRIGGER_RECORDS_LABEL,
+  WorkflowActionType,
 } from 'twenty-shared/workflow';
 
 import { type DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import { checkStringIsDatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/utils/check-string-is-database-event-action';
+import { resolveEffectiveAgent } from 'src/engine/metadata-modules/flat-agent/utils/resolve-effective-agent.util';
+import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
+import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
 import { generateFakeValue } from 'src/engine/utils/generate-fake-value';
 import { WorkflowCommonWorkspaceService } from 'src/modules/workflow/common/workspace-services/workflow-common.workspace-service';
 import { DEFAULT_ITERATOR_CURRENT_ITEM } from 'src/modules/workflow/workflow-builder/workflow-schema/constants/default-iterator-current-item.const';
@@ -29,29 +47,34 @@ import { generateFakeObjectRecord } from 'src/modules/workflow/workflow-builder/
 import { generateFakeObjectRecordEvent } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/generate-fake-object-record-event';
 import { inferArrayItemSchema } from 'src/modules/workflow/workflow-builder/workflow-schema/utils/infer-array-item-schema';
 import { type FormFieldMetadata } from 'src/modules/workflow/workflow-executor/workflow-actions/form/types/workflow-form-action-settings.type';
-import {
-  type WorkflowAction,
-  WorkflowActionType,
-} from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
+import { type WorkflowAction } from 'src/modules/workflow/workflow-executor/workflow-actions/types/workflow-action.type';
 import {
   WorkflowTrigger,
   WorkflowTriggerType,
 } from 'src/modules/workflow/workflow-trigger/types/workflow-trigger.type';
 
+type WorkflowVersionContent = {
+  trigger: WorkflowTrigger | null;
+  steps: WorkflowAction[] | null;
+};
+
 @Injectable()
 export class WorkflowSchemaWorkspaceService {
+  private readonly logger = new Logger(WorkflowSchemaWorkspaceService.name);
+
   constructor(
     private readonly workflowCommonWorkspaceService: WorkflowCommonWorkspaceService,
+    private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
   ) {}
 
   async computeStepOutputSchema({
     step,
     workspaceId,
-    workflowVersionId,
+    workflowVersionContent,
   }: {
     step: WorkflowTrigger | WorkflowAction;
     workspaceId: string;
-    workflowVersionId?: string;
+    workflowVersionContent?: WorkflowVersionContent;
   }): Promise<OutputSchema> {
     const stepType = step.type;
 
@@ -74,7 +97,6 @@ export class WorkflowSchemaWorkspaceService {
 
         return {};
       }
-      case WorkflowTriggerType.WEBHOOK:
       case WorkflowTriggerType.CRON: {
         return {};
       }
@@ -85,6 +107,7 @@ export class WorkflowSchemaWorkspaceService {
       case WorkflowActionType.UPDATE_RECORD:
       case WorkflowActionType.DELETE_RECORD:
       case WorkflowActionType.UPSERT_RECORD:
+      case WorkflowActionType.PICK_RECORD:
         return this.computeRecordOutputSchema({
           objectType: step.settings.input.objectName,
           workspaceId,
@@ -99,6 +122,11 @@ export class WorkflowSchemaWorkspaceService {
           formFieldMetadataItems: step.settings.input,
           workspaceId,
         });
+      case WorkflowActionType.WAIT_FOR_EVENT:
+        return this.computeWaitForEventOutputSchema({
+          eventName: step.settings.input?.eventName,
+          workspaceId,
+        });
       case WorkflowActionType.ITERATOR: {
         const items = step.settings.input.items;
 
@@ -106,7 +134,7 @@ export class WorkflowSchemaWorkspaceService {
           currentItem: await this.computeLoopCurrentItemOutputSchema({
             items,
             workspaceId,
-            workflowVersionId,
+            workflowVersionContent,
           }),
           currentItemIndex: {
             label: 'Current Item Index',
@@ -123,16 +151,33 @@ export class WorkflowSchemaWorkspaceService {
         };
       }
       case WorkflowActionType.AI_AGENT: {
-        return {
-          response: {
-            label: 'Response',
-            isLeaf: true,
-            type: 'string',
-            value: 'Response of the agent',
-          },
-        };
+        if (isDefined(step.settings.input.responseFormat)) {
+          return computeAiAgentOutputSchema(step.settings.input.responseFormat);
+        }
+
+        return this.computeAiAgentActionOutputSchema({
+          agentId: step.settings.input.agentId,
+          workspaceId,
+        });
       }
-      case WorkflowActionType.CODE: // StepOutput schema is computed on logicFunction draft execution
+      case WorkflowTriggerType.WEBHOOK:
+      case WorkflowActionType.CODE:
+      case WorkflowActionType.HTTP_REQUEST:
+      case WorkflowActionType.MCP_TOOL: {
+        const expectedOutputSchema =
+          'expectedOutputSchema' in step.settings
+            ? step.settings.expectedOutputSchema
+            : undefined;
+
+        return this.computeOutputSchemaFromExpectedSample(expectedOutputSchema);
+      }
+      case WorkflowActionType.LOGIC_FUNCTION: {
+        return this.computeLogicFunctionOutputSchema({
+          logicFunctionId: step.settings.input.logicFunctionId,
+          expectedOutputSchema: step.settings.expectedOutputSchema,
+          workspaceId,
+        });
+      }
       default:
         return {};
     }
@@ -141,13 +186,16 @@ export class WorkflowSchemaWorkspaceService {
   async enrichOutputSchema({
     step,
     workspaceId,
-    workflowVersionId,
+    workflowVersionContent,
   }: {
     step: WorkflowAction;
     workspaceId: string;
-    workflowVersionId: string;
+    workflowVersionContent?: WorkflowVersionContent;
   }): Promise<WorkflowAction> {
-    const BACKEND_ENRICHED_TYPES = [WorkflowActionType.ITERATOR];
+    const BACKEND_ENRICHED_TYPES = [
+      WorkflowActionType.ITERATOR,
+      WorkflowActionType.AI_AGENT,
+    ];
 
     if (!BACKEND_ENRICHED_TYPES.includes(step.type)) {
       return step;
@@ -157,7 +205,7 @@ export class WorkflowSchemaWorkspaceService {
     const outputSchema = await this.computeStepOutputSchema({
       step,
       workspaceId,
-      workflowVersionId,
+      workflowVersionContent,
     });
 
     result.settings = {
@@ -166,6 +214,124 @@ export class WorkflowSchemaWorkspaceService {
     };
 
     return result;
+  }
+
+  async enrichStepsOutputSchema({
+    trigger,
+    steps,
+    workspaceId,
+  }: {
+    trigger: WorkflowTrigger | null;
+    steps: WorkflowAction[] | null;
+    workspaceId: string;
+  }): Promise<WorkflowAction[] | null> {
+    if (!isDefined(steps)) {
+      return null;
+    }
+
+    return Promise.all(
+      steps.map((step) =>
+        this.enrichOutputSchema({
+          step,
+          workspaceId,
+          workflowVersionContent: { trigger, steps },
+        }),
+      ),
+    );
+  }
+
+  private computeOutputSchemaFromExpectedSample(
+    expectedOutputSchema: object | undefined,
+  ): OutputSchema {
+    if (
+      isDefined(expectedOutputSchema) &&
+      Object.keys(expectedOutputSchema).length > 0
+    ) {
+      return getOutputSchemaFromValue(expectedOutputSchema);
+    }
+
+    return {};
+  }
+
+  private getOutputSchemaWithExpectedFallback(settings: {
+    outputSchema?: OutputSchema;
+    expectedOutputSchema?: object;
+  }): BaseOutputSchemaV2 {
+    const outputSchema = settings.outputSchema;
+
+    if (isBaseOutputSchemaV2(outputSchema)) {
+      return outputSchema;
+    }
+
+    const expectedOutputSchema = this.computeOutputSchemaFromExpectedSample(
+      settings.expectedOutputSchema,
+    );
+
+    return isBaseOutputSchemaV2(expectedOutputSchema)
+      ? expectedOutputSchema
+      : {};
+  }
+
+  private async computeLogicFunctionOutputSchema({
+    logicFunctionId,
+    expectedOutputSchema,
+    workspaceId,
+  }: {
+    logicFunctionId: string;
+    expectedOutputSchema: object | undefined;
+    workspaceId: string;
+  }): Promise<OutputSchema> {
+    const declaredOutputSchema =
+      await this.getLogicFunctionDeclaredOutputSchema({
+        logicFunctionId,
+        workspaceId,
+      });
+
+    if (isDefined(declaredOutputSchema)) {
+      return declaredOutputSchema;
+    }
+
+    return this.computeOutputSchemaFromExpectedSample(expectedOutputSchema);
+  }
+
+  private async getLogicFunctionDeclaredOutputSchema({
+    logicFunctionId,
+    workspaceId,
+  }: {
+    logicFunctionId: string;
+    workspaceId: string;
+  }): Promise<BaseOutputSchemaV2 | undefined> {
+    if (!isDefined(logicFunctionId)) {
+      return undefined;
+    }
+
+    const { flatLogicFunctionMaps } =
+      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId,
+          flatMapsKeys: ['flatLogicFunctionMaps'],
+        },
+      );
+
+    const flatLogicFunction = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: logicFunctionId,
+      flatEntityMaps: flatLogicFunctionMaps,
+    });
+
+    const declaredInputSchema =
+      flatLogicFunction?.workflowActionTriggerSettings?.outputSchema;
+
+    if (!isDefined(declaredInputSchema)) {
+      return undefined;
+    }
+
+    const declaredOutputSchema = inputSchemaToOutputSchema(declaredInputSchema);
+
+    if (Object.keys(declaredOutputSchema).length === 0) {
+      return undefined;
+    }
+
+    return declaredOutputSchema;
   }
 
   private async computeDatabaseEventTriggerOutputSchema({
@@ -254,8 +420,137 @@ export class WorkflowSchemaWorkspaceService {
     return generateFakeObjectRecord({ objectMetadataInfo });
   }
 
+  private async computeWaitForEventOutputSchema({
+    eventName,
+    workspaceId,
+  }: {
+    eventName: string | undefined;
+    workspaceId: string;
+  }): Promise<OutputSchema> {
+    // a step being configured has no output to describe yet, like on the front
+    if (!isDefined(eventName) || !WAIT_FOR_EVENT_NAME_PATTERN.test(eventName)) {
+      return {};
+    }
+
+    const [objectType, action] = eventName.split('.');
+
+    const objectMetadataInfo =
+      await this.workflowCommonWorkspaceService.getObjectMetadataInfo(
+        objectType,
+        workspaceId,
+      );
+
+    const recordLabel =
+      objectMetadataInfo.flatObjectMetadata.labelSingular ?? 'Record';
+
+    const record: Node = {
+      isLeaf: false,
+      label: recordLabel,
+      icon: 'IconAlpha',
+      type: 'object',
+      value: generateFakeObjectRecord({ objectMetadataInfo }),
+    };
+
+    const recordId: Leaf = {
+      isLeaf: true,
+      label: 'Record ID',
+      icon: 'IconId',
+      type: 'string',
+      value: generateFakeValue('string'),
+    };
+
+    const hasTimedOut: Leaf = {
+      isLeaf: true,
+      label: 'Has Timed Out',
+      icon: 'IconClockX',
+      type: 'boolean',
+      value: false,
+    };
+
+    if (action !== 'updated' && action !== 'upserted') {
+      return { record, recordId, hasTimedOut } satisfies OutputSchema;
+    }
+
+    const before: Node = {
+      isLeaf: false,
+      label: `${recordLabel} Before Update`,
+      icon: 'IconHistory',
+      type: 'object',
+      value: generateFakeObjectRecord({ objectMetadataInfo }),
+    };
+
+    const updatedFields: Leaf = {
+      isLeaf: true,
+      label: 'Updated Fields',
+      icon: 'IconListDetails',
+      type: 'array',
+      value: ['name'],
+    };
+
+    return {
+      record,
+      recordId,
+      before,
+      updatedFields,
+      hasTimedOut,
+    } satisfies OutputSchema;
+  }
+
   private computeSendEmailActionOutputSchema(): OutputSchema {
-    return { success: { isLeaf: true, type: 'boolean', value: true } };
+    return {
+      success: { isLeaf: true, type: 'boolean', value: true },
+      headerMessageId: {
+        isLeaf: true,
+        type: 'string',
+        label: 'Message-ID header',
+        value: '<message-id@mail.example.com>',
+      },
+      messageId: {
+        isLeaf: true,
+        type: 'string',
+        label: 'Message record ID',
+        value: '',
+      },
+      messageThreadId: {
+        isLeaf: true,
+        type: 'string',
+        label: 'Message thread ID',
+        value: '',
+      },
+    };
+  }
+
+  private async computeAiAgentActionOutputSchema({
+    agentId,
+    workspaceId,
+  }: {
+    agentId?: string;
+    workspaceId: string;
+  }): Promise<OutputSchema> {
+    if (!isDefined(agentId)) {
+      return computeAiAgentOutputSchema();
+    }
+
+    const { flatAgentMaps } =
+      await this.flatEntityMapsCacheService.getOrRecomputeManyOrAllFlatEntityMaps(
+        {
+          workspaceId,
+          flatMapsKeys: ['flatAgentMaps'],
+        },
+      );
+
+    const flatAgent = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: agentId,
+      flatEntityMaps: flatAgentMaps,
+    });
+
+    if (!isDefined(flatAgent)) {
+      return computeAiAgentOutputSchema();
+    }
+
+    return computeAiAgentOutputSchema(
+      resolveEffectiveAgent(flatAgent).responseFormat,
+    );
   }
 
   private async computeFormActionOutputSchema({
@@ -291,14 +586,28 @@ export class WorkflowSchemaWorkspaceService {
     workspaceId: string;
   }): Promise<OutputSchema> {
     if (availability.type === 'GLOBAL') {
-      return {};
+      return {
+        [WORKFLOW_TRIGGER_METADATA_KEY]: buildManualTriggerMetadataNode(),
+      };
     }
 
     if (availability.type === 'SINGLE_RECORD') {
-      return this.computeRecordOutputSchema({
+      const recordOutputSchema = await this.computeRecordOutputSchema({
         objectType: availability.objectNameSingular,
         workspaceId,
       });
+
+      const payload: Node = {
+        isLeaf: false,
+        type: 'object',
+        label: WORKFLOW_TRIGGER_RECORD_LABEL,
+        value: recordOutputSchema,
+      };
+
+      return {
+        [WORKFLOW_TRIGGER_PAYLOAD_KEY]: payload,
+        [WORKFLOW_TRIGGER_METADATA_KEY]: buildManualTriggerMetadataNode(),
+      };
     }
 
     if (availability.type === 'BULK_RECORDS') {
@@ -308,14 +617,24 @@ export class WorkflowSchemaWorkspaceService {
           workspaceId,
         );
 
-      return {
-        [objectMetadataInfo.flatObjectMetadata.namePlural]: {
-          label: objectMetadataInfo.flatObjectMetadata.labelPlural,
-          isLeaf: true,
-          type: 'array',
-          value:
-            'Array of ' + objectMetadataInfo.flatObjectMetadata.labelPlural,
+      const payload: Node = {
+        isLeaf: false,
+        type: 'object',
+        label: WORKFLOW_TRIGGER_RECORDS_LABEL,
+        value: {
+          [objectMetadataInfo.flatObjectMetadata.namePlural]: {
+            label: objectMetadataInfo.flatObjectMetadata.labelPlural,
+            isLeaf: true,
+            type: 'array',
+            value:
+              'Array of ' + objectMetadataInfo.flatObjectMetadata.labelPlural,
+          },
         },
+      };
+
+      return {
+        [WORKFLOW_TRIGGER_PAYLOAD_KEY]: payload,
+        [WORKFLOW_TRIGGER_METADATA_KEY]: buildManualTriggerMetadataNode(),
       };
     }
 
@@ -325,22 +644,27 @@ export class WorkflowSchemaWorkspaceService {
   private async computeLoopCurrentItemOutputSchema({
     items,
     workspaceId,
-    workflowVersionId,
+    workflowVersionContent,
   }: {
     items: string | undefined | unknown[];
     workspaceId: string;
-    workflowVersionId?: string;
+    workflowVersionContent?: WorkflowVersionContent;
   }): Promise<Leaf | Node> {
     if (!isDefined(items)) {
       return DEFAULT_ITERATOR_CURRENT_ITEM;
     }
 
     if (isString(items) && isValidVariable(items)) {
-      return this.computeIteratorCurrentItemFromVariable({
-        items,
-        workspaceId,
-        workflowVersionId,
-      });
+      // runs on every content write, so a source that no longer resolves (e.g. a deleted object) must not block saving
+      try {
+        return await this.computeIteratorCurrentItemFromVariable({
+          items,
+          workspaceId,
+          workflowVersionContent,
+        });
+      } catch {
+        return DEFAULT_ITERATOR_CURRENT_ITEM;
+      }
     }
 
     return generateFakeArrayItem({ items });
@@ -349,21 +673,17 @@ export class WorkflowSchemaWorkspaceService {
   private async computeIteratorCurrentItemFromVariable({
     items,
     workspaceId,
-    workflowVersionId,
+    workflowVersionContent,
   }: {
     items: string;
     workspaceId: string;
-    workflowVersionId?: string;
+    workflowVersionContent?: WorkflowVersionContent;
   }): Promise<Leaf | Node> {
-    if (!isDefined(workflowVersionId)) {
+    if (!isDefined(workflowVersionContent)) {
       return DEFAULT_ITERATOR_CURRENT_ITEM;
     }
 
-    const workflowVersion =
-      await this.workflowCommonWorkspaceService.getWorkflowVersionOrFail({
-        workflowVersionId,
-        workspaceId,
-      });
+    const workflowVersion = workflowVersionContent;
 
     const stepId = extractRawVariableNamePart({
       rawVariableName: items,
@@ -450,10 +770,29 @@ export class WorkflowSchemaWorkspaceService {
       }
       case WorkflowActionType.CODE:
       case WorkflowActionType.HTTP_REQUEST:
-      case WorkflowActionType.LOGIC_FUNCTION: {
+      case WorkflowActionType.LOGIC_FUNCTION:
+      case WorkflowActionType.MCP_TOOL: {
         const propertyPath = extractPropertyPathFromVariable(items);
+        const outputSchema = this.getOutputSchemaWithExpectedFallback(
+          step.settings,
+        );
+
+        const variableTargetsWholeStepOutput = propertyPath.length === 0;
+
+        if (variableTargetsWholeStepOutput) {
+          if (!isFlattenedArrayOutputSchema(outputSchema)) {
+            return DEFAULT_ITERATOR_CURRENT_ITEM;
+          }
+
+          return (
+            getCurrentItemSchemaFromFlattenedArrayOutputSchema({
+              schema: outputSchema,
+            }) ?? DEFAULT_ITERATOR_CURRENT_ITEM
+          );
+        }
+
         const schemaNode = navigateOutputSchemaProperty({
-          schema: step.settings.outputSchema as BaseOutputSchemaV2,
+          schema: outputSchema,
           propertyPath,
         });
 

@@ -302,8 +302,8 @@ def select_backfill_log(logs, known_log_ids, watch_started_at):
         if is_new_id or is_recent:
             new_logs.append(log)
 
-    # The placeholder log created by the GraphQL mutation stays pending.
-    # Prefer the worker-owned log that actually transitions to running/completed.
+    # The worker completes the log the mutation returned; prefer new logs that
+    # have left pending.
     actionable_logs = [
         log for log in new_logs
         if log.get("status") in ("running", "completed", "failed", "partial")
@@ -322,7 +322,7 @@ def poll_completion(
     watch_started_at,
     timeout_seconds=DAY_TIMEOUT_SECONDS,
 ):
-    """Poll for the worker-owned pull log created after the trigger."""
+    """Poll for the trigger's pull log (the first new one to leave pending)."""
     start = time.time()
     tracked_log_id = None
 

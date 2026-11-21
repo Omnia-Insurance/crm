@@ -1,16 +1,15 @@
 import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { type SettingsRolePermissionsSettingPermission } from '@/settings/roles/role-permissions/permission-flags/types/SettingsRolePermissionsSettingPermission';
-import { type PermissionFlagType } from '~/generated-metadata/graphql';
 import { WorkflowAiAgentPermissionsFlagRow } from './WorkflowAiAgentPermissionsFlagRow';
 
 type WorkflowAiAgentPermissionsFlagListProps = {
   title: string;
   permissions: SettingsRolePermissionsSettingPermission[];
-  enabledPermissionFlagKeys: PermissionFlagType[];
+  enabledPermissionFlagKeys: string[];
   readonly: boolean;
-  showDeleteButton?: boolean;
-  onAddPermissionFlag?: (permissionKey: PermissionFlagType) => void;
-  onDeletePermissionFlag?: (permissionKey: PermissionFlagType) => void;
+  shouldShowDeleteButton?: boolean;
+  onAddPermissionFlag?: (permissionKey: string) => void;
+  onDeletePermissionFlag?: (permissionKey: string) => void;
 };
 
 export const WorkflowAiAgentPermissionsFlagList = ({
@@ -18,7 +17,7 @@ export const WorkflowAiAgentPermissionsFlagList = ({
   permissions,
   enabledPermissionFlagKeys,
   readonly,
-  showDeleteButton = false,
+  shouldShowDeleteButton = false,
   onAddPermissionFlag,
   onDeletePermissionFlag,
 }: WorkflowAiAgentPermissionsFlagListProps) => {
@@ -37,7 +36,7 @@ export const WorkflowAiAgentPermissionsFlagList = ({
             permission={permission}
             isEnabled={isEnabled}
             readonly={readonly}
-            showDeleteButton={showDeleteButton}
+            shouldShowDeleteButton={shouldShowDeleteButton}
             onAdd={() => onAddPermissionFlag?.(permission.key)}
             onDelete={() => onDeletePermissionFlag?.(permission.key)}
           />

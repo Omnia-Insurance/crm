@@ -1,206 +1,325 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
+import { t } from '@lingui/core/macro';
+import { isDefined, isPlainObject, isValidUuid } from 'twenty-shared/utils';
+import { In } from 'typeorm';
+import { type QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+
+import { IMPORT_JOB_PROCESSOR_NAME } from 'src/engine/core-modules/import-job/constants/import-job-processor-name.constant';
+import { IMPORT_JOB_SUMMARY_SELECT } from 'src/engine/core-modules/import-job/constants/import-job-summary-select.constant';
 import { ImportJobEntity } from 'src/engine/core-modules/import-job/entities/import-job.entity';
 import { ImportJobStatus } from 'src/engine/core-modules/import-job/enums/import-job-status.enum';
+import { type ImportJobData } from 'src/engine/core-modules/import-job/types/import-job-data.type';
+import { type ImportJobRequester } from 'src/engine/core-modules/import-job/types/import-job-requester.type';
+import { assignMissingImportRowIds } from 'src/engine/core-modules/import-job/utils/assign-missing-import-row-ids.util';
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { SubscriptionService } from 'src/engine/subscriptions/subscription.service';
-import { SubscriptionChannel } from 'src/engine/subscriptions/enums/subscription-channel.enum';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
-export const IMPORT_JOB_PROCESSOR_NAME = 'import-job';
+type ImportJobProgressUpdate = Partial<
+  Pick<
+    ImportJobEntity,
+    | 'status'
+    | 'processedRecords'
+    | 'successCount'
+    | 'warningCount'
+    | 'failureCount'
+    | 'result'
+  >
+>;
 
-export type ImportJobData = {
-  importJobId: string;
-  workspaceId: string;
+type CreateImportJobArgs = {
+  requester: ImportJobRequester;
+  workspaceMemberId: string | null;
+  objectNameSingular: string;
+  fileName: string | null;
+  columnMappings: Record<string, unknown>;
 };
 
 @Injectable()
 export class ImportJobService {
   constructor(
-    @InjectRepository(ImportJobEntity)
-    private readonly importJobRepository: Repository<ImportJobEntity>,
+    @InjectWorkspaceScopedRepository(ImportJobEntity)
+    private readonly importJobRepository: WorkspaceScopedRepository<ImportJobEntity>,
     @InjectMessageQueue(MessageQueue.importQueue)
-    private readonly importQueueService: MessageQueueService,
-    private readonly subscriptionService: SubscriptionService,
+    private readonly messageQueueService: MessageQueueService,
   ) {}
 
   async startImportJob({
+    validatedRows,
+    ...args
+  }: CreateImportJobArgs & {
+    validatedRows: unknown;
+  }): Promise<ImportJobEntity> {
+    const rows = this.prepareRows(validatedRows);
+
+    const importJob = await this.insertImportJob({
+      ...args,
+      validatedRows: rows,
+      status: ImportJobStatus.PENDING,
+    });
+
+    await this.enqueue({
+      importJobId: importJob.id,
+      workspaceId: args.requester.workspaceId,
+    });
+
+    return importJob;
+  }
+
+  async createImportJob(args: CreateImportJobArgs): Promise<ImportJobEntity> {
+    return this.insertImportJob({
+      ...args,
+      validatedRows: [],
+      status: ImportJobStatus.UPLOADING,
+    });
+  }
+
+  async appendImportJobRows({
+    requester,
+    importJobId,
+    rows,
+  }: {
+    requester: ImportJobRequester;
+    importJobId: string;
+    rows: unknown;
+  }): Promise<{ importJobId: string; totalRecords: number }> {
+    this.assertValidImportJobIdOrThrow(importJobId);
+
+    const preparedRows = this.prepareRows(rows);
+
+    // Appended in SQL so the jsonb column is never loaded into server memory
+    await this.importJobRepository
+      .createQueryBuilder()
+      .update()
+      .set({
+        validatedRows: () =>
+          `COALESCE("validatedRows", '[]'::jsonb) || :rows::jsonb`,
+        totalRecords: () => `"totalRecords" + :rowCount`,
+      })
+      .where('"id" = :importJobId', { importJobId })
+      .andWhere('"workspaceId" = :workspaceId', {
+        workspaceId: requester.workspaceId,
+      })
+      .andWhere('"userWorkspaceId" = :userWorkspaceId', {
+        userWorkspaceId: requester.userWorkspaceId,
+      })
+      .andWhere('"status" = :status', { status: ImportJobStatus.UPLOADING })
+      .setParameters({
+        rows: JSON.stringify(preparedRows),
+        rowCount: preparedRows.length,
+      })
+      .execute();
+
+    const importJob = await this.findForRequesterOrThrow({
+      requester,
+      importJobId,
+    });
+
+    return { importJobId: importJob.id, totalRecords: importJob.totalRecords };
+  }
+
+  async finalizeImportJob({
+    requester,
+    importJobId,
+  }: {
+    requester: ImportJobRequester;
+    importJobId: string;
+  }): Promise<ImportJobEntity> {
+    this.assertValidImportJobIdOrThrow(importJobId);
+
+    const { affected } = await this.importJobRepository.update(
+      requester.workspaceId,
+      {
+        id: importJobId,
+        userWorkspaceId: requester.userWorkspaceId,
+        status: ImportJobStatus.UPLOADING,
+      },
+      { status: ImportJobStatus.PENDING },
+    );
+
+    const importJob = await this.findForRequesterOrThrow({
+      requester,
+      importJobId,
+    });
+
+    // Only the call that moved the job out of uploading enqueues it, so a retried finalize never queues it twice
+    if ((affected ?? 0) > 0) {
+      await this.enqueue({ importJobId, workspaceId: requester.workspaceId });
+    }
+
+    return importJob;
+  }
+
+  async cancelImportJob({
+    requester,
+    importJobId,
+  }: {
+    requester: ImportJobRequester;
+    importJobId: string;
+  }): Promise<ImportJobEntity> {
+    this.assertValidImportJobIdOrThrow(importJobId);
+
+    await this.importJobRepository.update(
+      requester.workspaceId,
+      {
+        id: importJobId,
+        userWorkspaceId: requester.userWorkspaceId,
+        status: In([
+          ImportJobStatus.UPLOADING,
+          ImportJobStatus.PENDING,
+          ImportJobStatus.PROCESSING,
+        ]),
+      },
+      { status: ImportJobStatus.CANCELLED },
+    );
+
+    return this.findForRequesterOrThrow({ requester, importJobId });
+  }
+
+  async findForRequester({
+    requester,
+    importJobId,
+  }: {
+    requester: ImportJobRequester;
+    importJobId: string;
+  }): Promise<ImportJobEntity | null> {
+    if (!isValidUuid(importJobId)) {
+      return null;
+    }
+
+    return this.importJobRepository.findOne(requester.workspaceId, {
+      where: { id: importJobId, userWorkspaceId: requester.userWorkspaceId },
+      select: IMPORT_JOB_SUMMARY_SELECT,
+    });
+  }
+
+  async findById({
     workspaceId,
+    importJobId,
+  }: ImportJobData): Promise<ImportJobEntity | null> {
+    return this.importJobRepository.findOneBy(workspaceId, {
+      id: importJobId,
+    });
+  }
+
+  async findStatusById({
+    workspaceId,
+    importJobId,
+  }: ImportJobData): Promise<ImportJobStatus | undefined> {
+    const importJob = await this.importJobRepository.findOne(workspaceId, {
+      where: { id: importJobId },
+      select: { id: true, status: true },
+    });
+
+    return importJob?.status;
+  }
+
+  // A conditional update, so a cancel that lands first wins and a second delivery cannot start the job again
+  async claimPendingImportJob({
+    workspaceId,
+    importJobId,
+  }: ImportJobData): Promise<boolean> {
+    const { affected } = await this.importJobRepository.update(
+      workspaceId,
+      { id: importJobId, status: ImportJobStatus.PENDING },
+      { status: ImportJobStatus.PROCESSING },
+    );
+
+    return (affected ?? 0) > 0;
+  }
+
+  async updateProgress({
+    workspaceId,
+    importJobId,
+    updates,
+  }: ImportJobData & { updates: ImportJobProgressUpdate }): Promise<void> {
+    await this.importJobRepository.update(
+      workspaceId,
+      { id: importJobId },
+      updates as QueryDeepPartialEntity<ImportJobEntity>,
+    );
+  }
+
+  private async insertImportJob({
+    requester,
     workspaceMemberId,
     objectNameSingular,
     fileName,
     columnMappings,
     validatedRows,
-  }: {
-    workspaceId: string;
-    workspaceMemberId?: string;
-    objectNameSingular: string;
-    fileName?: string;
-    columnMappings: Record<string, unknown>;
+    status,
+  }: CreateImportJobArgs & {
     validatedRows: Record<string, unknown>[];
+    status: ImportJobStatus;
   }): Promise<ImportJobEntity> {
-    const importJob = this.importJobRepository.create({
-      workspaceId,
-      workspaceMemberId: workspaceMemberId ?? null,
+    return this.importJobRepository.insertAndReturnOne(requester.workspaceId, {
+      userWorkspaceId: requester.userWorkspaceId,
+      workspaceMemberId,
       objectNameSingular,
-      fileName: fileName ?? null,
+      fileName,
       columnMappings,
       validatedRows,
-      status: ImportJobStatus.PENDING,
+      status,
       totalRecords: validatedRows.length,
-    });
+    } as QueryDeepPartialEntity<ImportJobEntity>);
+  }
 
-    const savedJob = await this.importJobRepository.save(importJob);
-
-    await this.importQueueService.add<ImportJobData>(
-      IMPORT_JOB_PROCESSOR_NAME,
-      {
-        importJobId: savedJob.id,
+  private async enqueue({ importJobId, workspaceId }: ImportJobData) {
+    try {
+      await this.messageQueueService.add<ImportJobData>(
+        IMPORT_JOB_PROCESSOR_NAME,
+        { importJobId, workspaceId },
+        { id: importJobId, isWorkspaceJob: true, workspaceId, retryLimit: 0 },
+      );
+    } catch (error) {
+      // A job stuck in pending never becomes terminal, so the retention cron would never purge its rows
+      await this.updateProgress({
         workspaceId,
-      },
-      { retryLimit: 2 },
-    );
+        importJobId,
+        updates: {
+          status: ImportJobStatus.FAILED,
+          result: {
+            errors: [{ error: t`The import could not be queued. Try again.` }],
+          },
+        },
+      });
 
-    return savedJob;
+      throw error;
+    }
   }
 
-  async createImportJob({
-    workspaceId,
-    workspaceMemberId,
-    objectNameSingular,
-    fileName,
-    columnMappings,
-  }: {
-    workspaceId: string;
-    workspaceMemberId?: string;
-    objectNameSingular: string;
-    fileName?: string;
-    columnMappings: Record<string, unknown>;
+  // Unknown ids and other users' jobs get the same error, so job ids cannot be probed
+  private async findForRequesterOrThrow(args: {
+    requester: ImportJobRequester;
+    importJobId: string;
   }): Promise<ImportJobEntity> {
-    const importJob = this.importJobRepository.create({
-      workspaceId,
-      workspaceMemberId: workspaceMemberId ?? null,
-      objectNameSingular,
-      fileName: fileName ?? null,
-      columnMappings,
-      validatedRows: [],
-      status: ImportJobStatus.UPLOADING,
-      totalRecords: 0,
-    });
+    const importJob = await this.findForRequester(args);
 
-    return this.importJobRepository.save(importJob);
+    if (!isDefined(importJob)) {
+      throw new NotFoundException(t`Import not found.`);
+    }
+
+    return importJob;
   }
 
-  async appendImportJobRows(
-    id: string,
-    workspaceId: string,
-    rows: Record<string, unknown>[],
-  ): Promise<{ importJobId: string; totalRecords: number }> {
-    // Append rows directly in PostgreSQL using jsonb_concat to avoid
-    // loading the full JSONB column into server memory.
-    await this.importJobRepository.query(
-      `UPDATE core."importJob"
-       SET "validatedRows" = COALESCE("validatedRows", '[]'::jsonb) || $1::jsonb,
-           "totalRecords" = "totalRecords" + $2
-       WHERE "id" = $3 AND "workspaceId" = $4 AND "status" = 'uploading'`,
-      [JSON.stringify(rows), rows.length, id, workspaceId],
-    );
-
-    const job = await this.importJobRepository.findOneByOrFail({
-      id,
-      workspaceId,
-    });
-
-    return { importJobId: job.id, totalRecords: job.totalRecords };
+  private assertValidImportJobIdOrThrow(importJobId: string) {
+    if (!isValidUuid(importJobId)) {
+      throw new NotFoundException(t`Import not found.`);
+    }
   }
 
-  async finalizeImportJob(
-    id: string,
-    workspaceId: string,
-  ): Promise<ImportJobEntity> {
-    await this.importJobRepository.update(
-      { id, workspaceId, status: ImportJobStatus.UPLOADING },
-      { status: ImportJobStatus.PENDING },
-    );
+  private prepareRows(rows: unknown): Record<string, unknown>[] {
+    if (!Array.isArray(rows) || !rows.every(isPlainObject)) {
+      throw new BadRequestException(t`Import rows must be a list of records.`);
+    }
 
-    const job = await this.importJobRepository.findOneByOrFail({
-      id,
-      workspaceId,
-    });
-
-    await this.importQueueService.add<ImportJobData>(
-      IMPORT_JOB_PROCESSOR_NAME,
-      { importJobId: job.id, workspaceId },
-      { retryLimit: 2 },
-    );
-
-    return job;
-  }
-
-  async cancelImportJob(
-    id: string,
-    workspaceId: string,
-  ): Promise<ImportJobEntity> {
-    await this.importJobRepository.update(
-      { id, workspaceId },
-      { status: ImportJobStatus.CANCELLED },
-    );
-
-    const job = await this.importJobRepository.findOneByOrFail({
-      id,
-      workspaceId,
-    });
-
-    await this.publishProgress(job);
-
-    return job;
-  }
-
-  async getImportJob(
-    id: string,
-    workspaceId: string,
-  ): Promise<ImportJobEntity | null> {
-    return this.importJobRepository.findOneBy({ id, workspaceId });
-  }
-
-  async updateProgress(
-    id: string,
-    updates: Partial<
-      Pick<
-        ImportJobEntity,
-        | 'status'
-        | 'processedRecords'
-        | 'successCount'
-        | 'warningCount'
-        | 'failureCount'
-        | 'result'
-      >
-    >,
-  ): Promise<void> {
-    await this.importJobRepository.update(id, updates as any);
-
-    const job = await this.importJobRepository.findOneByOrFail({ id });
-
-    await this.publishProgress(job);
-  }
-
-  private async publishProgress(job: ImportJobEntity): Promise<void> {
-    await this.subscriptionService.publish({
-      channel: SubscriptionChannel.IMPORT_JOB_PROGRESS,
-      workspaceId: job.workspaceId,
-      payload: {
-        importJobId: job.id,
-        status: job.status,
-        processedRecords: job.processedRecords,
-        totalRecords: job.totalRecords,
-        successCount: job.successCount,
-        warningCount: job.warningCount,
-        failureCount: job.failureCount,
-        result: job.result,
-      },
-    });
+    return assignMissingImportRowIds(rows);
   }
 }

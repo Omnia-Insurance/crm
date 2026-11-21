@@ -13,6 +13,7 @@ import {
   type CommonSelectedFields,
   type CommonSelectedFieldsResult,
 } from 'src/engine/api/common/types/common-selected-fields-result.type';
+import { type ShareWithInput } from 'src/engine/permissions/record-share/types/share-with-input.type';
 
 export enum CommonQueryNames {
   FIND_ONE = 'findOne',
@@ -51,16 +52,19 @@ export interface FindManyQueryArgs {
   before?: string;
   after?: string;
   offset?: number;
+  shouldBypassQueryMaxRecords?: boolean;
 }
 
 export interface CreateManyQueryArgs {
   data: Partial<ObjectRecord>[];
   upsert?: boolean;
+  shareWith?: ShareWithInput[];
 }
 
 export interface CreateOneQueryArgs {
   data: Partial<ObjectRecord>;
   upsert?: boolean;
+  shareWith?: ShareWithInput[];
 }
 export interface GroupByQueryArgs {
   filter?: ObjectRecordFilter;

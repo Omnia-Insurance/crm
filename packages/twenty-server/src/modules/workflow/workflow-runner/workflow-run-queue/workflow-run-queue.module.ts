@@ -1,12 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { CacheStorageModule } from 'src/engine/core-modules/cache-storage/cache-storage.module';
-import { MessageQueueModule } from 'src/engine/core-modules/message-queue/message-queue.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
-import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
-import { WorkspaceDataSourceModule } from 'src/engine/workspace-datasource/workspace-datasource.module';
+import { WorkflowRunModule } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run.module';
 import { WorkflowHandleStaledRunsCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/command/workflow-handle-staled-runs.command';
 import { WorkflowCleanWorkflowRunsCronCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/cron/command/workflow-clean-workflow-runs.cron.command';
 import { WorkflowHandleStaledRunsCronCommand } from 'src/modules/workflow/workflow-runner/workflow-run-queue/cron/command/workflow-handle-staled-runs.cron.command';
@@ -19,19 +16,16 @@ import { WorkflowHandleStaledRunsJob } from 'src/modules/workflow/workflow-runne
 import { WorkflowRunEnqueueJob } from 'src/modules/workflow/workflow-runner/workflow-run-queue/jobs/workflow-run-enqueue.job';
 import { WorkflowHandleStaledRunsWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workspace-services/workflow-handle-staled-runs.workspace-service';
 import { WorkflowRunEnqueueWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workspace-services/workflow-run-enqueue.workspace-service';
-import { WorkflowThrottlingWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workspace-services/workflow-throttling.workspace-service';
+import { WorkflowThrottlingModule } from 'src/modules/workflow/workflow-runner/workflow-run-queue/workflow-throttling.module';
 
 @Module({
   imports: [
-    CacheStorageModule,
     TypeOrmModule.forFeature([WorkspaceEntity]),
-    MessageQueueModule,
-    WorkspaceDataSourceModule,
     MetricsModule,
-    ThrottlerModule,
+    WorkflowRunModule,
+    WorkflowThrottlingModule,
   ],
   providers: [
-    WorkflowThrottlingWorkspaceService,
     WorkflowRunEnqueueCronJob,
     WorkflowRunEnqueueCronCommand,
     WorkflowRunEnqueueWorkspaceService,
@@ -46,14 +40,10 @@ import { WorkflowThrottlingWorkspaceService } from 'src/modules/workflow/workflo
     WorkflowCleanWorkflowRunsCronCommand,
   ],
   exports: [
-    WorkflowThrottlingWorkspaceService,
-    WorkflowRunEnqueueJob,
-    WorkflowRunEnqueueCronJob,
+    WorkflowThrottlingModule,
+    WorkflowRunEnqueueWorkspaceService,
     WorkflowRunEnqueueCronCommand,
-    WorkflowHandleStaledRunsCronJob,
     WorkflowHandleStaledRunsCronCommand,
-    WorkflowHandleStaledRunsCommand,
-    WorkflowCleanWorkflowRunsCronJob,
     WorkflowCleanWorkflowRunsCronCommand,
   ],
 })

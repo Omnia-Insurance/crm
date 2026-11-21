@@ -1,11 +1,11 @@
-import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
 import { viewableRichTextComponentState } from '@/side-panel/pages/rich-text-page/states/viewableRichTextComponentState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { lazy, Suspense, useContext } from 'react';
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { lazy, Suspense } from 'react';
+import { SKELETON_HEIGHT_SIZES } from 'twenty-ui/primitives/feedback';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const ActivityRichTextEditor = lazy(() =>
   import('@/activities/components/ActivityRichTextEditor').then((module) => ({
@@ -14,11 +14,11 @@ const ActivityRichTextEditor = lazy(() =>
 );
 
 const RichTextFieldEditor = lazy(() =>
-  import(
-    '@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor'
-  ).then((module) => ({
-    default: module.RichTextFieldEditor,
-  })),
+  import('@/object-record/record-field/ui/meta-types/input/components/RichTextFieldEditor').then(
+    (module) => ({
+      default: module.RichTextFieldEditor,
+    }),
+  ),
 );
 
 const StyledContainer = styled.div`
@@ -29,25 +29,21 @@ const StyledContainer = styled.div`
 `;
 
 const LoadingSkeleton = () => {
-  const { theme } = useContext(ThemeContext);
   return (
-    <SkeletonTheme
-      baseColor={theme.background.tertiary}
-      highlightColor={theme.background.transparent.lighter}
-      borderRadius={theme.border.radius.sm}
-    >
-      <Skeleton height={SKELETON_LOADER_HEIGHT_SIZES.standard.s} />
-    </SkeletonTheme>
+    <SkeletonLine
+      borderRadius={themeCssVariables.border.radius.smRound}
+      height={SKELETON_HEIGHT_SIZES.s}
+    />
   );
 };
 
 const isActivityObject = (
   objectNameSingular: string,
 ): objectNameSingular is
-  | CoreObjectNameSingular.Note
-  | CoreObjectNameSingular.Task =>
-  objectNameSingular === CoreObjectNameSingular.Note ||
-  objectNameSingular === CoreObjectNameSingular.Task;
+  | StandardObjectNameSingular.Note
+  | StandardObjectNameSingular.Task =>
+  objectNameSingular === StandardObjectNameSingular.Note ||
+  objectNameSingular === StandardObjectNameSingular.Task;
 
 export const SidePanelEditRichTextPage = () => {
   const { recordId, objectNameSingular, fieldName } = useAtomStateValue(

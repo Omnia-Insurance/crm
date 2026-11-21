@@ -1,27 +1,26 @@
+import { GettingStartedOpenedSection } from '@/getting-started/components/GettingStartedOpenedSection';
 import { NavigationDrawerOpenedSection } from '@/navigation-menu-item/display/sections/components/NavigationDrawerOpenedSection';
 import { NavigationDrawerWorkspaceSectionSkeletonLoader } from '@/object-metadata/components/NavigationDrawerWorkspaceSectionSkeletonLoader';
 
-import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
 import { lazy, Suspense } from 'react';
 
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const FavoritesSectionDispatcher = lazy(() =>
-  import(
-    '@/navigation-menu-item/display/sections/favorites/components/FavoritesSectionDispatcher'
-  ).then((module) => ({
-    default: module.FavoritesSectionDispatcher,
-  })),
+  import('@/navigation-menu-item/display/sections/favorites/components/FavoritesSectionDispatcher').then(
+    (module) => ({
+      default: module.FavoritesSectionDispatcher,
+    }),
+  ),
 );
 
 const WorkspaceSectionDispatcher = lazy(() =>
-  import(
-    '@/navigation-menu-item/display/sections/workspace/components/WorkspaceSectionDispatcher'
-  ).then((module) => ({
-    default: module.WorkspaceSectionDispatcher,
-  })),
+  import('@/navigation-menu-item/display/sections/workspace/components/WorkspaceSectionDispatcher').then(
+    (module) => ({
+      default: module.WorkspaceSectionDispatcher,
+    }),
+  ),
 );
 
 const StyledScrollableItemsContainer = styled.div`
@@ -31,19 +30,14 @@ const StyledScrollableItemsContainer = styled.div`
 `;
 
 export const MainNavigationDrawerScrollableItems = () => {
-  const isLayoutCustomizationModeEnabled = useAtomStateValue(
-    isLayoutCustomizationModeEnabledState,
-  );
-
   return (
     <StyledScrollableItemsContainer>
       <NavigationDrawerOpenedSection />
+      <GettingStartedOpenedSection />
       <Suspense fallback={<NavigationDrawerWorkspaceSectionSkeletonLoader />}>
         <FavoritesSectionDispatcher />
         <WorkspaceSectionDispatcher />
       </Suspense>
-      {/* OMNIA-CUSTOM: No "Other" section — Settings is in the fixed header,
-          and Documentation is removed for our deployment */}
     </StyledScrollableItemsContainer>
   );
 };

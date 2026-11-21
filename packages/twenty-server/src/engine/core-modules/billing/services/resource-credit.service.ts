@@ -1,88 +1,75 @@
 /* @license Enterprise */
 
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 
 import { isDefined } from 'twenty-shared/utils';
-import { type Repository } from 'typeorm';
 
 import { BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
-import { BillingProductKey } from 'src/engine/core-modules/billing/enums/billing-product-key.enum';
-
-export type ResourceCreditPricingInfo = {
-  tierCap: number;
-  unitPriceCents: number;
-};
+import { type SubscriptionInterval } from 'src/engine/core-modules/billing/enums/billing-subscription-interval.enum';
+import {
+  computePlanWorkspaceCreditsMicro,
+  type PlanWorkspaceCreditsMicro,
+} from 'src/engine/core-modules/billing/utils/compute-plan-workspace-credits-micro.util';
+import { getCurrentPeriodMaxSeats } from 'src/engine/core-modules/billing/utils/get-current-period-max-seats.util';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 @Injectable()
 export class ResourceCreditService {
   protected readonly logger = new Logger(ResourceCreditService.name);
 
   constructor(
-    @InjectRepository(BillingSubscriptionEntity)
-    private readonly billingSubscriptionRepository: Repository<BillingSubscriptionEntity>,
+    @InjectWorkspaceScopedRepository(BillingSubscriptionEntity)
+    private readonly billingSubscriptionRepository: WorkspaceScopedRepository<BillingSubscriptionEntity>,
   ) {}
 
-  extractResourceCreditPricingInfo(
-    subscription: BillingSubscriptionEntity,
-  ): ResourceCreditPricingInfo | null {
-    const resourceCreditItem = subscription.billingSubscriptionItems?.find(
-      (item) =>
-        item.billingProduct?.metadata?.productKey ===
-        BillingProductKey.RESOURCE_CREDIT,
+  async getResourceCreditRolloverParameters({
+    workspaceId,
+    subscriptionId,
+    boundary,
+    interval,
+  }: {
+    workspaceId: string;
+    subscriptionId: string;
+    boundary: Date;
+    interval: SubscriptionInterval;
+  }): Promise<PlanWorkspaceCreditsMicro | null> {
+    const subscription = await this.billingSubscriptionRepository.findOne(
+      workspaceId,
+      {
+        where: { id: subscriptionId },
+        relations: [
+          'billingSubscriptionItems',
+          'billingSubscriptionItems.billingProduct',
+          'billingSubscriptionItems.billingProduct.billingPrices',
+        ],
+      },
     );
-
-    if (!isDefined(resourceCreditItem)) {
-      return null;
-    }
-
-    const matchingPrice =
-      resourceCreditItem.billingProduct?.billingPrices?.find(
-        (price) => price.stripePriceId === resourceCreditItem.stripePriceId,
-      );
-
-    if (!isDefined(matchingPrice)) {
-      return null;
-    }
-
-    const tierCap = Number(matchingPrice.metadata?.credit_amount ?? 0);
-
-    if (!Number.isFinite(tierCap) || tierCap <= 0) {
-      return null;
-    }
-
-    return {
-      tierCap,
-      unitPriceCents: matchingPrice.unitAmount ?? 0,
-    };
-  }
-
-  async getResourceCreditRolloverParameters(subscriptionId: string): Promise<{
-    tierQuantity: number;
-    unitPriceCents: number;
-  } | null> {
-    const subscription = await this.billingSubscriptionRepository.findOne({
-      where: { id: subscriptionId },
-      relations: [
-        'billingSubscriptionItems',
-        'billingSubscriptionItems.billingProduct',
-        'billingSubscriptionItems.billingProduct.billingPrices',
-      ],
-    });
 
     if (!isDefined(subscription)) {
       return null;
     }
 
-    const pricingInfo = this.extractResourceCreditPricingInfo(subscription);
+    const closingPeriodMaxSeats =
+      subscription.currentPeriodStart.getTime() === boundary.getTime()
+        ? (subscription.previousPeriodMaxSeats ?? 0)
+        : getCurrentPeriodMaxSeats(subscription);
 
-    if (!isDefined(pricingInfo)) {
+    const planWorkspaceCredits = computePlanWorkspaceCreditsMicro({
+      billingSubscriptionItems: subscription.billingSubscriptionItems,
+      interval,
+      seats: closingPeriodMaxSeats,
+    });
+
+    if (
+      !isDefined(planWorkspaceCredits) ||
+      planWorkspaceCredits.workspaceCreditsForPackMicro +
+        planWorkspaceCredits.workspaceCreditsForSeatsMicro <=
+        0
+    ) {
       return null;
     }
 
-    return {
-      tierQuantity: pricingInfo.tierCap,
-      unitPriceCents: pricingInfo.unitPriceCents,
-    };
+    return planWorkspaceCredits;
   }
 }

@@ -1,9 +1,10 @@
 import { isDefined } from 'twenty-shared/utils';
 import { DataSource, QueryRunner } from 'typeorm';
 
+import { type PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings/plaintext-string.type';
 import { SECRET_ENCRYPTION_ENVELOPE_V2_PREFIX } from 'src/engine/core-modules/secret-encryption/constants/secret-encryption.constant';
 import { SecretEncryptionService } from 'src/engine/core-modules/secret-encryption/secret-encryption.service';
-import { SimpleSecretEncryptionUtil } from 'src/engine/core-modules/two-factor-authentication/utils/simple-secret-encryption.util';
+import { SimpleSecretEncryptionUtil } from 'src/database/commands/upgrade-version-command/2-5/utils/simple-secret-encryption.util';
 import { RegisteredInstanceCommand } from 'src/engine/core-modules/upgrade/decorators/registered-instance-command.decorator';
 import { SlowInstanceCommand } from 'src/engine/core-modules/upgrade/interfaces/slow-instance-command.interface';
 
@@ -22,9 +23,7 @@ type TwoFactorMethodRow = {
 };
 
 @RegisteredInstanceCommand('2.5.0', 1798000009000, { type: 'slow' })
-export class EncryptTotpSecretsSlowInstanceCommand
-  implements SlowInstanceCommand
-{
+export class EncryptTotpSecretsSlowInstanceCommand implements SlowInstanceCommand {
   constructor(
     private readonly secretEncryptionService: SecretEncryptionService,
     private readonly simpleSecretEncryptionUtil: SimpleSecretEncryptionUtil,
@@ -61,7 +60,7 @@ export class EncryptTotpSecretsSlowInstanceCommand
         }
 
         const encryptedValue = this.secretEncryptionService.encryptVersioned(
-          plaintext,
+          plaintext as PlaintextString,
           { workspaceId: row.workspaceId },
         );
 

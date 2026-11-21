@@ -1,0 +1,141 @@
+---
+title: Preguntas frecuentes legales
+description: Preguntas legales más frecuentes.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Residencia de datos y transferencias internacionales
+
+<AccordionGroup>
+<Accordion title="¿En qué país y región se almacenarán nuestros datos de espacio de trabajo, archivos adjuntos, registros y copias de seguridad?">
+Veinte nube se ejecuta en servidores AWS ubicados en la República Federal de Alemania, Alemania.
+</Accordion>
+<Accordion title="¿Puede la región de alojamiento ser fijada contractualmente para nuestro espacio de trabajo?">
+La selección de la región de alojamiento estará disponible a partir de 2027, inicialmente para nuevos espacios de trabajo. Los usuarios podrán solicitar un cambio de región para un área de trabajo existente en una fecha posterior. Alternativamente, puedes contactar a [nuestros Partners](https://twenty.com/partners/list?categories=HOSTING) para ayudarte a configurar tu instancia.
+</Accordion>
+<Accordion title="¿Qué subprocesadores pueden procesar o acceder a nuestros datos CRM y en qué países se encuentran?">
+Una lista de todos los subprocesadores está disponible en [nuestro Centro de Confianza](https://trust.twenty.com/?tab=subprocessors).
+</Accordion>
+<Accordion title="¿Qué salvaguardias se aplican a las transferencias internacionales de datos?">
+Las cláusulas contractuales estándar de la UE, junto con las enmiendas del Reino Unido y Suiza, se aplican a las transferencias internacionales de datos fuera de la UE, incluidas las transferencias a todos los subprocesadores.
+</Accordion>
+</AccordionGroup>
+
+## Acuerdo de procesamiento de datos y funciones legales
+
+<AccordionGroup>
+<Accordion title="¿Dónde podemos encontrar el actual Acuerdo de Procesamiento de Datos?">
+Puede generar su DPA firmado en https://{your-domain}/settings/legal/dpa (por ejemplo, https://getting-started.twenty.com/settings/legal/dpa).
+</Accordion>
+<Accordion title="¿Está disponible el DPA en todos los planes?">
+Sí. El DPA estándar está disponible en todos los planes y se puede firmar con un clic desde Configuración → Legal → DPA. Los cambios en las condiciones estándar, como una entidad contratante diferente o plazos de notificación personalizados, están disponibles en el plan Enterprise.
+</Accordion>
+<Accordion title="¿Funciona Veinte como procesador de datos para comerciantes e información de contacto almacenada en el CRM, mientras que nuestra empresa sigue siendo el controlador de datos?">
+Según nuestra [Política de privacidad](https://twenty.com/privacy-policy), Veinte actúa como procesador de datos para comerciantes e información de contacto almacenada en el CRM, mientras su empresa sigue siendo el controlador de datos.
+</Accordion>
+<Accordion title="¿El contenido CRM se utiliza alguna vez para entrenar Veinte o AI de terceros?">
+No. Twenty no tiene su propio modelo de IA ni entrena ningún modelo con sus datos. Los proveedores de IA utilizados de forma predeterminada en Twenty Cloud (Azure OpenAI, OpenAI, Anthropic y Mistral) no entrenan con ellos según sus condiciones. Algunos modelos opcionales, como Google Gemini y TypeSafe (utilizado por la acción Classify del flujo de trabajo), solo se usan si un administrador los habilita; sus condiciones se enumeran en [nuestro Centro de confianza](https://trust.twenty.com/?tab=subprocessors).
+</Accordion>
+<Accordion title="¿Se puede mantener el procesamiento de IA en la UE o limitarlo a proveedores que no conserven datos?">
+Sí. En Configuración → General → Privacidad, establece la región de procesamiento solo en la UE y activa la retención cero de datos. Entonces, Twenty solo utiliza modelos cuyo proveedor cumple ambos requisitos y rechaza cualquier solicitud que no pueda enrutar de esa manera. Hay menos modelos disponibles con esta configuración, y algunos cuestan más.
+</Accordion>
+<Accordion title="Si existe un procesamiento de IA opcional, ¿puede estar totalmente desactivado para nuestro espacio de trabajo?">
+No se envía ningún dato a un proveedor de IA a menos que alguien en su espacio de trabajo ejecute la IA: el chat de IA, un agente de IA o un paso de IA en un flujo de trabajo. Para bloquear la IA por completo, establezca un límite de uso de IA de 0 para el espacio de trabajo en Configuración → Facturación, que se aplica a todos los miembros, incluidos los administradores. También puede eliminar el permiso Preguntar a la IA de sus roles editables en Configuración → Roles; el rol Admin integrado siempre lo conserva.
+</Accordion>
+</AccordionGroup>
+
+## Controles de seguridad y acceso
+
+<AccordionGroup>
+<Accordion title="¿Se utiliza el cifrado en tránsito y en reposo, cuáles son sus prácticas de gestión de claves, y cómo se aíslan los datos de los inquilinos?">
+Todos los datos se cifran en tránsito y en reposo. Los datos del arrendatario se aislan mediante una configuración de esquema por arrendatario, y las claves de cifrado se rotan periódicamente.
+</Accordion>
+<Accordion title="¿Qué Veinte personal o subprocesadores pueden acceder a los espacios de trabajo de los clientes, para qué propósitos y cómo se aprueba el acceso y se registra?">
+Los equipos de ingeniería y soporte de Twenty pueden acceder a los espacios de trabajo de los clientes para investigar y resolver incidencias. Los propietarios de los espacios de trabajo controlan esto: el acceso de soporte se puede desactivar en cualquier momento en Configuración → General → Privacidad, y permanece desactivado hasta que lo vuelvas a activar. El acceso de soporte requiere autenticación de dos factores por parte de Twenty y, en el plan Organization y superiores, cada sesión se registra en sus registros de auditoría. Mientras alguien de Twenty se hace pasar por usted, la sesión también aparece con una etiqueta de Suplantación en Configuración → Perfil → Dispositivos.
+</Accordion>
+<Accordion title="¿Pueden los miembros de nuestro espacio de trabajo suplantarse entre sí?">
+Los miembros cuyo rol tiene el permiso Suplantar pueden ver el espacio de trabajo como cualquier otro miembro, incluidos los administradores del espacio de trabajo, así que concédalo solo a roles en los que confíe. Puede controlar quién tiene este permiso en Configuración → Roles.
+</Accordion>
+<Accordion title="¿Cuánto tiempo se conservan los registros de auditoría?">
+Los registros de auditoría están disponibles en el plan Organization y superiores. Puede establecer cuánto tiempo se conservan en Configuración → General → Seguridad.
+</Accordion>
+<Accordion title="¿Cuál es su proceso de notificación de incidentes y plazo de notificación de destino después de un incidente de seguridad confirmado que afecta a nuestros datos?">
+En caso de una violación de datos personales confirmada que afecte a sus datos, le notificaremos sin demoras indebidas, con el objetivo de hacerlo a más tardar 72 horas después de la verificación del incidente, tal como se establece en la sección 4.6 de nuestro DPA. Nuestra notificación incluirá, en la medida en que se conozca en el momento: la naturaleza del incumplimiento, las categorías y el volumen aproximado de datos y individuos afectados, las consecuencias probables, y las medidas de remediación y mitigación tomadas o planificadas. Proporcionaremos actualizaciones a medida que avance la investigación.
+</Accordion>
+</AccordionGroup>
+
+## retención y eliminación de datos
+
+<AccordionGroup>
+<Accordion title="Cuando se elimina un registro CRM individual, ¿cuándo se elimina de los sistemas activos?">
+Cuando se elimina un registro, se borra primero y se puede restaurar. Se elimina permanentemente de los sistemas activos una vez transcurrido el período de retención o un usuario lo destruye manualmente.
+</Accordion>
+<Accordion title="¿Cuánto tiempo se mantienen los registros borrados de forma suave en el sistema?">
+Por defecto, los registros borrados de forma blanda se mantienen durante 14 días, después de lo cual se eliminan permanentemente del sistema. El período de retención para registros borrados suavemente se puede cambiar en Ajustes → General → Seguridad.
+</Accordion>
+<Accordion title="¿Cuánto tiempo puede que ese registro permanezca en copias de seguridad o registros técnicos?">
+Un registro eliminado permanece en copias de seguridad durante 30 días, después de lo cual se elimina permanentemente.
+</Accordion>
+<Accordion title="Cuando se cierra un área de trabajo o se solicita la eliminación completa, ¿qué línea de tiempo exacta se aplica a los datos de producción, adjuntos, registros y copias de seguridad?">
+Cuando se elimina un espacio de trabajo, sus datos se eliminan de los sistemas en producción en un plazo de aproximadamente 90 días tras la finalización del servicio, y por lo general mucho antes. Las copias de seguridad y de archivo se sobrescriben o se eliminan posteriormente dentro de otros 90 días, después de lo cual todos los datos se eliminan de forma permanente. Durante ambos períodos, los datos están aislados de cualquier uso operativo. A petición, podemos proporcionar una certificación por escrito una vez que se complete la purga. Consulta la cláusula 4.9 de tu Acuerdo de Tratamiento de Datos para conocer todas las condiciones.
+</Accordion>
+<Accordion title="Durante cualquier período de retención de copia de seguridad, ¿se eliminan los datos aislados del acceso operativo y el uso?">
+Sí, durante cualquier período de retención de copia de seguridad, los datos eliminados están aislados del uso operativo.
+</Accordion>
+<Accordion title="¿Se retienen más categorías de datos para fines legales, de facturación, de prevención de fraudes, de seguridad o de auditoría? En caso afirmativo, ¿a qué categorías y durante cuánto tiempo?">
+Para más información sobre retención de datos, puedes solicitar nuestra Política de Gestión y Retención de Datos disponible en [nuestro Centro de Confianza](https://trust.twenty.com/?tab=documents).
+</Accordion>
+<Accordion title="¿Puede 20 proporcionar una confirmación por escrito cuando se ha completado una solicitud de eliminación completa?">
+Reconocemos las solicitudes de borrado y proporcionamos confirmación por escrito una vez que se haya completado la eliminación.
+</Accordion>
+</AccordionGroup>
+
+## Respaldos y resistencia
+
+<AccordionGroup>
+<Accordion title="¿Cuál es el período de frecuencia y retención de la copia de seguridad?">
+Las copias de seguridad se crean continuamente con instantáneas que se toman diariamente, y el período de retención es de 30 días.
+</Accordion>
+<Accordion title="¿Cuál es el objetivo del punto de recuperación y el objetivo de recuperación de la nube veinte?">
+RTO y RPO son 6 horas (según nuestro DPA).
+</Accordion>
+<Accordion title="¿Las copias de seguridad están cifradas y almacenadas en la misma región que los datos del espacio de trabajo principal?">
+Todas las copias de seguridad son cifradas y almacenadas en lugares geográficamente separados dentro de la misma jurisdicción (por ejemplo, dentro de la UE para los datos de la UE).
+</Accordion>
+</AccordionGroup>
+
+## Cumplimiento
+
+<AccordionGroup>
+<Accordion title="¿Es 20 el RGPD?">
+Sí, Veinte es [compatible con el RGP](https://trust.twenty.com/?tab=securityControls\&frameworks=gdpr_v1).
+</Accordion>
+<Accordion title="¿Es 20 SOC 2 compatible?">
+Sí, Veinte es [compatible con SOC 2](https://trust.twenty.com/?tab=securityControls\&frameworks=soc2_v1).
+</Accordion>
+<Accordion title="¿Es veinte HIPAA compatible?">
+No, Veinte está en proceso de ser compatible con HIPAA.
+</Accordion>
+</AccordionGroup>
+
+## Licencias
+
+<AccordionGroup>
+<Accordion title="Si cambio el código para añadir funciones solo para uso interno de mi equipo, ¿tengo que publicar esos cambios?">
+No. Ejecutar una versión modificada solo para tu propio equipo no constituye distribución, por lo que no se genera ninguna obligación de publicación. La cláusula de red de la AGPL se aplica cuando personas externas a tu organización interactúan con tu instancia modificada a través de la red.
+</Accordion>
+<Accordion title="Si creo un front-end por separado y uso Twenty como backend tal cual, ¿tengo que publicar esos cambios?">
+No. Tu front-end es una obra propia e independiente, y el hecho de comunicarse con Twenty a través de sus APIs no cambia eso. Como Twenty en sí no está modificado, no hay nada que publicar.
+</Accordion>
+<Accordion title="Si cambio el código para añadir funciones para revenderlo, ¿tengo que publicar esos cambios?">
+Sí, dado que estás modificando código para distribuirlo a otros, estás obligado a publicar esos cambios. Si no quieres publicar tus cambios, puedes obtener una licencia Organization.
+</Accordion>
+<Accordion title="¿Las aplicaciones desarrolladas con Twenty deben tener licencia AGPL?">
+Las aplicaciones que solo interactúan con Twenty mediante sus API/SDK publicados pueden tener la licencia que elijas (consulta la «Excepción de aplicación de Twenty» en la LICENSE del repositorio). Twenty en sí está mayormente bajo licencia AGPLv3, y algunos paquetes (incluido el SDK de Twenty) tienen licencia MIT.
+</Accordion>
+</AccordionGroup>
+
+Si tienes más preguntas, por favor revisa nuestros [Términos y Condiciones](https://twenty.com/terms), [Política de Privacidad](https://twenty.com/privacy-policy) y [Centro de Confianza](https://trust.twenty.com/). Si tus preguntas siguen sin responder, envíalas a [contact@twenty.com](mailto:contact@twenty.com) o a través del chat de soporte.
+
+<PageBanner illustration="section-legal" />

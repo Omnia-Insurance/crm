@@ -1,59 +1,61 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+
+import { CommonSelectFieldsBuilder } from 'src/engine/api/common/common-select-fields/common-select-fields-builder';
 
 import { CommonArgsProcessors } from 'src/engine/api/common/common-args-processors/common-args-processors';
+import { FilterArgProcessorService } from 'src/engine/api/common/common-args-processors/filter-arg-processor/filter-arg-processor.service';
 import { GroupByArgProcessorService } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/group-by-arg-processor.service';
-import { ProcessNestedRelationsV2Helper } from 'src/engine/api/common/common-nested-relations-processor/process-nested-relations-v2.helper';
+import { CommonRecordVisibilityModule } from 'src/engine/api/common/common-record-visibility/common-record-visibility.module';
 import { ProcessNestedRelationsHelper } from 'src/engine/api/common/common-nested-relations-processor/process-nested-relations.helper';
 import { CommonQueryRunners } from 'src/engine/api/common/common-query-runners/common-query-runners';
 import { CommonResultGettersService } from 'src/engine/api/common/common-result-getters/common-result-getters.service';
 import { GroupByWithRecordsService } from 'src/engine/api/graphql/graphql-query-runner/group-by/services/group-by-with-records.service';
-import { ProcessAggregateHelper } from 'src/engine/api/graphql/graphql-query-runner/helpers/process-aggregate.helper';
 import { WorkspaceQueryHookModule } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/workspace-query-hook.module';
-import { WorkspaceQueryRunnerModule } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-runner.module';
-import { ApiKeyModule } from 'src/engine/core-modules/api-key/api-key.module';
-import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-flag.module';
+import { EventLogEmitterModule } from 'src/engine/core-modules/event-logs/emit/event-log-emitter.module';
 import { FileModule } from 'src/engine/core-modules/file/file.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
 import { RecordPositionModule } from 'src/engine/core-modules/record-position/record-position.module';
 import { RecordTransformerModule } from 'src/engine/core-modules/record-transformer/record-transformer.module';
-import { ThrottlerModule } from 'src/engine/core-modules/throttler/throttler.module';
-import { PermissionsModule } from 'src/engine/metadata-modules/permissions/permissions.module';
-import { RoleTargetEntity } from 'src/engine/metadata-modules/role-target/role-target.entity';
-import { UserRoleModule } from 'src/engine/metadata-modules/user-role/user-role.module';
+import { UsageLimitModule } from 'src/engine/core-modules/usage-limit/usage-limit.module';
+import { UsageModule } from 'src/engine/core-modules/usage/usage.module';
 import { ViewFilterGroupModule } from 'src/engine/metadata-modules/view-filter-group/view-filter-group.module';
 import { ViewFilterModule } from 'src/engine/metadata-modules/view-filter/view-filter.module';
 import { ViewModule } from 'src/engine/metadata-modules/view/view.module';
+import { PermissionsModule } from 'src/engine/permissions/permissions.module';
+import { RecordShareModule } from 'src/engine/permissions/record-share/record-share.module';
 import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache.module';
 
 @Module({
   imports: [
     WorkspaceQueryHookModule,
-    WorkspaceQueryRunnerModule,
-    PermissionsModule,
-    TypeOrmModule.forFeature([RoleTargetEntity]),
-    UserRoleModule,
-    ApiKeyModule,
+    CommonRecordVisibilityModule,
+    EventLogEmitterModule,
     FileModule,
     ViewModule,
     ViewFilterModule,
     ViewFilterGroupModule,
-    ThrottlerModule,
+    UsageLimitModule,
+    UsageModule,
     MetricsModule,
     RecordPositionModule,
+    PermissionsModule,
+    RecordShareModule,
     RecordTransformerModule,
-    FeatureFlagModule,
     WorkspaceCacheModule,
   ],
   providers: [
+    CommonSelectFieldsBuilder,
     ProcessNestedRelationsHelper,
-    ProcessNestedRelationsV2Helper,
     ...CommonArgsProcessors,
-    ProcessAggregateHelper,
     ...CommonQueryRunners,
     CommonResultGettersService,
     GroupByWithRecordsService,
   ],
-  exports: [...CommonQueryRunners, GroupByArgProcessorService],
+  exports: [
+    ...CommonQueryRunners,
+    CommonSelectFieldsBuilder,
+    FilterArgProcessorService,
+    GroupByArgProcessorService,
+  ],
 })
 export class CoreCommonApiModule {}

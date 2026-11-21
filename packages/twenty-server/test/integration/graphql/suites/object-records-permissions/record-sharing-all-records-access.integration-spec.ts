@@ -1,0 +1,429 @@
+import { randomUUID } from 'node:crypto';
+
+import { parse } from 'graphql';
+import {
+  FeatureFlagKey,
+  FieldMetadataType,
+  RecordShareAccessLevel,
+  RecordSharePrincipalType,
+  RecordShareRowCause,
+} from 'twenty-shared/types';
+
+import { createOneOperationFactory } from 'test/integration/graphql/utils/create-one-operation-factory.util';
+import { destroyManyOperationFactory } from 'test/integration/graphql/utils/destroy-many-operation-factory.util';
+import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { findManyObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/find-many-object-metadata.util';
+import { createOneRole } from 'test/integration/metadata/suites/role/utils/create-one-role.util';
+import { deleteOneRole } from 'test/integration/metadata/suites/role/utils/delete-one-role.util';
+import { findOneRoleByLabel } from 'test/integration/metadata/suites/role/utils/find-one-role-by-label.util';
+import { updateOneRole } from 'test/integration/metadata/suites/role/utils/update-one-role.util';
+import { updateWorkspaceMemberRole } from 'test/integration/metadata/suites/role/utils/update-workspace-member-role.util';
+import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
+import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
+import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
+import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { updateFeatureFlag } from 'test/integration/metadata/suites/utils/update-feature-flag.util';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+import { getCoreRepository } from 'test/integration/utils/get-core-repository.util';
+
+import { type RecordSharePrincipalInput } from 'src/engine/permissions/record-share/dtos/record-sharing.dto';
+import { type RecordShareSystemWriteService } from 'src/engine/permissions/record-share/services/record-share-system-write.service';
+import { type RecordPermissionReadRepository } from 'src/engine/permissions/internal/record-permission-repository/repositories/record-permission-read.repository';
+import { type RecordShareStorageService } from 'src/engine/permissions/internal/record-share/services/record-share-storage.service';
+import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user-workspace.entity';
+import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
+import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+
+const OBJECT_NAME = 'allRecordsAccessRecord';
+const OBJECT_PLURAL = 'allRecordsAccessRecords';
+const RESTRICTED_RECORD_ID = randomUUID();
+const SHARED_RECORD_ID = randomUUID();
+const workspaceId = SEED_APPLE_WORKSPACE_ID;
+const fields =
+  'canManageSharing isPrivate shares { principalId rowCause accessLevel }';
+const READ_SHARING = parse(
+  `query RecordSharing($target: RecordTargetInput!) { recordSharing(target: $target) { ${fields} } }`,
+);
+const SET_SHARE = parse(
+  `mutation SetShare($target: RecordTargetInput!, $principal: RecordSharePrincipalInput!, $accessLevel: RecordShareAccessLevel!) { setRecordShare(target: $target, principal: $principal, accessLevel: $accessLevel) { ${fields} } }`,
+);
+const SET_PRIVATE = parse(
+  `mutation SetPrivate($target: RecordTargetInput!, $isPrivate: Boolean!) { setRecordPrivate(target: $target, isPrivate: $isPrivate) { ${fields} } }`,
+);
+
+describe('Access to all records and ownership transfer', () => {
+  let objectMetadataId: string;
+  let shares: RecordShareStorageService;
+  let recordPermissionReadRepository: RecordPermissionReadRepository;
+
+  const target = (recordId: string) => ({ objectMetadataId, recordId });
+
+  const setRecordSharingAndPrivateRecordsEnabled = async (value: boolean) => {
+    for (const featureFlag of [
+      FeatureFlagKey.IS_RECORD_LEVEL_SHARING_ENABLED,
+      FeatureFlagKey.IS_PRIVATE_RECORDS_ENABLED,
+    ]) {
+      await updateFeatureFlag({ featureFlag, value, expectToFail: false });
+    }
+  };
+
+  const setShare = ({
+    recordId,
+    principal,
+    accessLevel = RecordShareAccessLevel.READ,
+    token,
+  }: {
+    recordId: string;
+    principal: RecordSharePrincipalInput;
+    accessLevel?: RecordShareAccessLevel;
+    token: string;
+  }) =>
+    makeMetadataApiRequest(
+      {
+        query: SET_SHARE,
+        variables: {
+          target: target(recordId),
+          principal,
+          accessLevel,
+        },
+      },
+      token,
+    );
+
+  const findRecordIds = async (token: string) => {
+    const response = await makeGraphqlApiRequest(
+      findManyOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        objectMetadataPluralName: OBJECT_PLURAL,
+        gqlFields: 'id',
+        filter: { id: { in: [RESTRICTED_RECORD_ID, SHARED_RECORD_ID] } },
+      }),
+      token,
+    );
+
+    expect(response.body.errors).toBeUndefined();
+
+    return response.body.data[OBJECT_PLURAL].edges
+      .map(({ node }: { node: { id: string } }) => node.id)
+      .sort();
+  };
+
+  const findMemberGrants = async (workspaceMemberId: string) =>
+    (
+      await recordPermissionReadRepository.findRecordShares({
+        workspaceId,
+        objectMetadataId,
+        recordIds: [RESTRICTED_RECORD_ID, SHARED_RECORD_ID],
+      })
+    )
+      .filter(
+        (share) =>
+          share.principalType === RecordSharePrincipalType.WORKSPACE_MEMBER &&
+          share.principalId === workspaceMemberId,
+      )
+      .map(({ recordId, accessLevel, rowCause }) => ({
+        recordId,
+        accessLevel,
+        rowCause,
+      }));
+
+  beforeAll(async () => {
+    shares = getAppProviderByClassName<RecordShareStorageService>(
+      'RecordShareStorageService',
+    );
+    recordPermissionReadRepository =
+      getAppProviderByClassName<RecordPermissionReadRepository>(
+        'RecordPermissionReadRepository',
+      );
+    const { data } = await createOneObjectMetadata({
+      input: {
+        nameSingular: OBJECT_NAME,
+        namePlural: OBJECT_PLURAL,
+        labelSingular: 'All records access record',
+        labelPlural: 'All records access records',
+        icon: 'IconShare',
+        isLabelSyncedWithName: false,
+      },
+    });
+
+    objectMetadataId = data.createOneObject.id;
+    await createOneFieldMetadata({
+      input: {
+        name: 'name',
+        label: 'Name',
+        type: FieldMetadataType.TEXT,
+        objectMetadataId,
+        isLabelSyncedWithName: false,
+      },
+    });
+    await setRecordSharingAndPrivateRecordsEnabled(true);
+  });
+
+  const makeRecordsPublic = () =>
+    global.testDataSource.query(
+      `UPDATE "${getWorkspaceSchemaName(workspaceId)}"."_${OBJECT_NAME}" SET "_isPrivate" = false`,
+    );
+
+  beforeEach(async () => {
+    await makeRecordsPublic();
+    await shares.deleteByRecordIds({
+      workspaceId,
+      objectMetadataId,
+      recordIds: [RESTRICTED_RECORD_ID, SHARED_RECORD_ID],
+    });
+    await makeGraphqlApiRequest(
+      destroyManyOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        objectMetadataPluralName: OBJECT_PLURAL,
+        gqlFields: 'id',
+        filter: { id: { in: [RESTRICTED_RECORD_ID, SHARED_RECORD_ID] } },
+      }),
+    );
+
+    for (const recordId of [RESTRICTED_RECORD_ID, SHARED_RECORD_ID]) {
+      const created = await makeGraphqlApiRequest(
+        createOneOperationFactory({
+          objectMetadataSingularName: OBJECT_NAME,
+          gqlFields: 'id',
+          data: { id: recordId, name: 'Created by Jony' },
+        }),
+        APPLE_JONY_MEMBER_ACCESS_TOKEN,
+      );
+
+      expect(created.body.errors).toBeUndefined();
+
+      const restricted = await makeMetadataApiRequest(
+        {
+          query: SET_PRIVATE,
+          variables: {
+            target: target(recordId),
+            isPrivate: true,
+          },
+        },
+        APPLE_JONY_MEMBER_ACCESS_TOKEN,
+      );
+
+      expect(restricted.body.errors).toBeUndefined();
+    }
+  });
+
+  afterAll(async () => {
+    await makeRecordsPublic();
+    await setRecordSharingAndPrivateRecordsEnabled(false);
+    await shares.deleteByRecordIds({
+      workspaceId,
+      objectMetadataId,
+      recordIds: [RESTRICTED_RECORD_ID, SHARED_RECORD_ID],
+    });
+    await updateOneObjectMetadata({
+      input: {
+        idToUpdate: objectMetadataId,
+        updatePayload: { isActive: false },
+      },
+      expectToFail: false,
+    });
+    await deleteOneObjectMetadata({ input: { idToDelete: objectMetadataId } });
+  });
+
+  it('should show private records to their creator only, admins included', async () => {
+    expect(await findRecordIds(APPLE_JONY_MEMBER_ACCESS_TOKEN)).toEqual(
+      [RESTRICTED_RECORD_ID, SHARED_RECORD_ID].sort(),
+    );
+    expect(await findRecordIds(APPLE_JANE_ADMIN_ACCESS_TOKEN)).toEqual([]);
+    expect(await findRecordIds(APPLE_PHIL_GUEST_ACCESS_TOKEN)).toEqual([]);
+  });
+
+  it('should keep the sharing of private records out of reach of admins', async () => {
+    const sharing = await makeMetadataApiRequest(
+      {
+        query: READ_SHARING,
+        variables: { target: target(RESTRICTED_RECORD_ID) },
+      },
+      APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    );
+
+    expect(sharing.body.errors).toBeDefined();
+
+    const shared = await setShare({
+      recordId: RESTRICTED_RECORD_ID,
+      principal: { workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL },
+      token: APPLE_JANE_ADMIN_ACCESS_TOKEN,
+    });
+
+    expect(shared.body.errors).toBeDefined();
+    expect(await findRecordIds(APPLE_PHIL_GUEST_ACCESS_TOKEN)).toEqual([]);
+  });
+
+  it('should keep private records hidden from roles that can update all settings', async () => {
+    const guestRoleId = (await findOneRoleByLabel({ label: 'Guest' })).id;
+    const { data } = await createOneRole({
+      expectToFail: false,
+      input: {
+        label: `Restricted records auditor ${randomUUID()}`,
+        canUpdateAllSettings: false,
+        canAccessAllTools: false,
+        canReadAllObjectRecords: true,
+        canUpdateAllObjectRecords: false,
+        canSoftDeleteAllObjectRecords: false,
+        canDestroyAllObjectRecords: false,
+      },
+    });
+    const auditorRoleId = data.createOneRole.id;
+    const assignRoleToPhil = (roleId: string) =>
+      updateWorkspaceMemberRole({
+        expectToFail: false,
+        input: {
+          workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
+          roleId,
+        },
+      });
+
+    try {
+      await assignRoleToPhil(auditorRoleId);
+      await updateOneRole({
+        expectToFail: false,
+        input: {
+          idToUpdate: auditorRoleId,
+          updatePayload: { canUpdateAllSettings: true },
+        },
+      });
+      expect(await findRecordIds(APPLE_PHIL_GUEST_ACCESS_TOKEN)).toEqual([]);
+    } finally {
+      try {
+        await assignRoleToPhil(guestRoleId);
+      } finally {
+        await deleteOneRole({
+          expectToFail: false,
+          input: { idToDelete: auditorRoleId },
+        });
+      }
+    }
+  });
+
+  it('should keep private records private while record sharing is off', async () => {
+    await updateFeatureFlag({
+      featureFlag: FeatureFlagKey.IS_RECORD_LEVEL_SHARING_ENABLED,
+      value: false,
+      expectToFail: false,
+    });
+
+    try {
+      expect(await findRecordIds(APPLE_PHIL_GUEST_ACCESS_TOKEN)).not.toContain(
+        RESTRICTED_RECORD_ID,
+      );
+    } finally {
+      await updateFeatureFlag({
+        featureFlag: FeatureFlagKey.IS_RECORD_LEVEL_SHARING_ENABLED,
+        value: true,
+        expectToFail: false,
+      });
+    }
+  });
+
+  it('should hand the records a removed member managed to the successor', async () => {
+    await setShare({
+      recordId: SHARED_RECORD_ID,
+      principal: { workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL },
+      accessLevel: RecordShareAccessLevel.FULL,
+      token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    });
+    await setShare({
+      recordId: RESTRICTED_RECORD_ID,
+      principal: { workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL },
+      token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    });
+    await setShare({
+      recordId: SHARED_RECORD_ID,
+      principal: { workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JANE },
+      token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    });
+
+    const { objects } = await findManyObjectMetadata({
+      expectToFail: false,
+      input: { filter: {}, paging: { first: 1000 } },
+      gqlFields: 'id nameSingular',
+    });
+    const chatThreadObjectMetadataId = objects.find(
+      (object) => object.nameSingular === 'agentChatThread',
+    )!.id;
+    const privateChatThreadId = randomUUID();
+
+    await shares.insertMany({
+      workspaceId,
+      recordShares: [
+        {
+          objectMetadataId: chatThreadObjectMetadataId,
+          recordId: privateChatThreadId,
+          principalType: RecordSharePrincipalType.WORKSPACE_MEMBER,
+          principalId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
+          accessLevel: RecordShareAccessLevel.FULL,
+          rowCause: RecordShareRowCause.OWNER,
+          sourceId: privateChatThreadId,
+        },
+      ],
+    });
+
+    try {
+      await getAppProviderByClassName<RecordShareSystemWriteService>(
+        'RecordShareSystemWriteService',
+      ).transferRecordSharesToSuccessor({
+        removedUserWorkspace: await getCoreRepository<UserWorkspaceEntity>(
+          UserWorkspaceEntity,
+        ).findOneByOrFail({ id: USER_WORKSPACE_DATA_SEED_IDS.PHIL }),
+        removedWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
+        actingUserWorkspaceId: USER_WORKSPACE_DATA_SEED_IDS.JANE,
+      });
+
+      expect(
+        await findMemberGrants(WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL),
+      ).toEqual([]);
+      expect(
+        await findMemberGrants(WORKSPACE_MEMBER_DATA_SEED_IDS.JANE),
+      ).toEqual([
+        {
+          recordId: SHARED_RECORD_ID,
+          accessLevel: RecordShareAccessLevel.FULL,
+          rowCause: RecordShareRowCause.MANUAL,
+        },
+      ]);
+      expect(
+        await findMemberGrants(WORKSPACE_MEMBER_DATA_SEED_IDS.JONY),
+      ).toEqual([]);
+
+      const chatThreadShares =
+        await recordPermissionReadRepository.findRecordShares({
+          workspaceId,
+          objectMetadataId: chatThreadObjectMetadataId,
+          recordIds: [privateChatThreadId],
+        });
+
+      expect(chatThreadShares.map(({ principalId }) => principalId)).toEqual([
+        WORKSPACE_MEMBER_DATA_SEED_IDS.PHIL,
+      ]);
+
+      await getAppProviderByClassName<RecordShareSystemWriteService>(
+        'RecordShareSystemWriteService',
+      ).transferRecordSharesToSuccessor({
+        removedUserWorkspace: await getCoreRepository<UserWorkspaceEntity>(
+          UserWorkspaceEntity,
+        ).findOneByOrFail({ id: USER_WORKSPACE_DATA_SEED_IDS.JONY }),
+        removedWorkspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+        actingUserWorkspaceId: USER_WORKSPACE_DATA_SEED_IDS.JANE,
+      });
+
+      expect(await findRecordIds(APPLE_JANE_ADMIN_ACCESS_TOKEN)).toEqual(
+        [RESTRICTED_RECORD_ID, SHARED_RECORD_ID].sort(),
+      );
+    } finally {
+      await shares.deleteByRecordIds({
+        workspaceId,
+        objectMetadataId: chatThreadObjectMetadataId,
+        recordIds: [privateChatThreadId],
+      });
+    }
+  });
+});

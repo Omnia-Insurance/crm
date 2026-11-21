@@ -1,62 +1,15 @@
-import { isDefined } from 'twenty-shared/utils';
-
 import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
-import {
-  type TwentyORMException,
-  TwentyORMExceptionCode,
-} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { type TwentyOrmException } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { isTwentyOrmUserInputError } from 'src/engine/twenty-orm/utils/is-twenty-orm-user-input-error.util';
 
-interface DuplicateKeyErrorWithMetadata extends TwentyORMException {
-  conflictingRecordId?: string;
-  conflictingObjectNameSingular?: string;
-}
-
-export const twentyORMGraphqlApiExceptionHandler = (
-  error: TwentyORMException,
+export const twentyOrmGraphqlApiExceptionHandler = (
+  error: TwentyOrmException,
 ) => {
-  switch (error.code) {
-    case TwentyORMExceptionCode.DUPLICATE_ENTRY_DETECTED: {
-      const duplicateKeyError: DuplicateKeyErrorWithMetadata = error;
-
-      const extensions: Record<string, unknown> = {
-        userFriendlyMessage: error.userFriendlyMessage,
-        ...(isDefined(duplicateKeyError.conflictingRecordId) &&
-        isDefined(duplicateKeyError.conflictingObjectNameSingular)
-          ? {
-              conflictingRecordId: duplicateKeyError.conflictingRecordId,
-              conflictingObjectNameSingular:
-                duplicateKeyError.conflictingObjectNameSingular,
-            }
-          : {}),
-      };
-
-      throw new UserInputError(error.message, extensions);
-    }
-
-    case TwentyORMExceptionCode.IMPORT_PARTIAL_SUCCESS: {
-      const partialError = error as any;
-
-      const extensions: Record<string, unknown> = {
-        userFriendlyMessage: error.userFriendlyMessage,
-        subCode: 'IMPORT_PARTIAL_SUCCESS',
-        importWarnings: partialError.importWarnings ?? [],
-        savedRecordCount: partialError.savedRecordCount ?? 0,
-      };
-
-      throw new UserInputError(error.message, extensions);
-    }
-
-    case TwentyORMExceptionCode.INVALID_INPUT:
-    case TwentyORMExceptionCode.CONNECT_RECORD_NOT_FOUND:
-    case TwentyORMExceptionCode.CONNECT_NOT_ALLOWED:
-    case TwentyORMExceptionCode.CONNECT_UNIQUE_CONSTRAINT_ERROR:
-    case TwentyORMExceptionCode.RLS_VALIDATION_FAILED:
-    case TwentyORMExceptionCode.TOO_MANY_RECORDS_TO_UPDATE:
-      throw new UserInputError(error.message, {
-        userFriendlyMessage: error.userFriendlyMessage,
-      });
-    default: {
-      throw error;
-    }
+  if (isTwentyOrmUserInputError(error)) {
+    throw new UserInputError(error.message, {
+      userFriendlyMessage: error.userFriendlyMessage,
+    });
   }
+
+  throw error;
 };

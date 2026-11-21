@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
+import { MEMBER_ROLE_UNIVERSAL_IDENTIFIER } from 'twenty-shared/constants';
 import { Repository } from 'typeorm';
 
 import { ApplicationService } from 'src/engine/core-modules/application/application.service';
@@ -9,8 +10,10 @@ import { UserWorkspaceEntity } from 'src/engine/core-modules/user-workspace/user
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { RoleEntity } from 'src/engine/metadata-modules/role/role.entity';
 import { RoleService } from 'src/engine/metadata-modules/role/role.service';
-import { UserRoleService } from 'src/engine/metadata-modules/user-role/user-role.service';
-import { WorkspaceDataSourceService } from 'src/engine/workspace-datasource/workspace-datasource.service';
+import { RoleAssignmentWriteService } from 'src/engine/permissions/role-assignment/role-assignment-write.service';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { WorkspaceSchemaService } from 'src/engine/workspace-datasource/workspace-schema.service';
 import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 import { TwentyStandardApplicationService } from 'src/engine/workspace-manager/twenty-standard-application/services/twenty-standard-application.service';
 
@@ -19,16 +22,16 @@ export class WorkspaceManagerService {
   private readonly logger = new Logger(WorkspaceManagerService.name);
 
   constructor(
-    private readonly workspaceDataSourceService: WorkspaceDataSourceService,
+    private readonly workspaceSchemaService: WorkspaceSchemaService,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
     private readonly roleService: RoleService,
-    private readonly userRoleService: UserRoleService,
+    private readonly roleAssignmentWriteService: RoleAssignmentWriteService,
     private readonly twentyStandardApplicationService: TwentyStandardApplicationService,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
-    @InjectRepository(RoleEntity)
-    private readonly roleRepository: Repository<RoleEntity>,
+    @InjectWorkspaceScopedRepository(RoleEntity)
+    private readonly roleRepository: WorkspaceScopedRepository<RoleEntity>,
     private readonly applicationService: ApplicationService,
   ) {}
 
@@ -42,9 +45,7 @@ export class WorkspaceManagerService {
     const workspaceId = workspace.id;
     const schemaCreationStart = performance.now();
     const schemaName =
-      await this.workspaceDataSourceService.createWorkspaceDBSchema(
-        workspaceId,
-      );
+      await this.workspaceSchemaService.createWorkspaceDBSchema(workspaceId);
 
     const schemaCreationEnd = performance.now();
 
@@ -81,6 +82,11 @@ export class WorkspaceManagerService {
         },
       );
 
+    await this.roleService.createWorkspaceCustomApplicationRole({
+      workspaceId,
+      workspaceCustomFlatApplication,
+    });
+
     await this.setupDefaultRoles({
       workspaceId,
       userId,
@@ -97,10 +103,9 @@ export class WorkspaceManagerService {
     userId: string;
     workspaceCustomFlatApplication: FlatApplication;
   }): Promise<void> {
-    const adminRole = await this.roleRepository.findOne({
+    const adminRole = await this.roleRepository.findOne(workspaceId, {
       where: {
         universalIdentifier: STANDARD_ROLE.admin.universalIdentifier,
-        workspaceId,
       },
     });
 
@@ -109,17 +114,23 @@ export class WorkspaceManagerService {
         where: { workspaceId, userId },
       });
 
-      await this.userRoleService.assignRoleToManyUserWorkspace({
+      await this.roleAssignmentWriteService.assignRoleToUserWorkspaces({
         workspaceId,
         userWorkspaceIds: [userWorkspace.id],
         roleId: adminRole.id,
       });
     }
 
-    const memberRole = await this.roleService.createMemberRole({
-      workspaceId,
-      ownerFlatApplication: workspaceCustomFlatApplication,
+    const existingMemberRole = await this.roleRepository.findOne(workspaceId, {
+      where: { universalIdentifier: MEMBER_ROLE_UNIVERSAL_IDENTIFIER },
     });
+
+    const memberRole =
+      existingMemberRole ??
+      (await this.roleService.createMemberRole({
+        workspaceId,
+        ownerFlatApplication: workspaceCustomFlatApplication,
+      }));
 
     await this.workspaceRepository.update(workspaceId, {
       defaultRoleId: memberRole.id,

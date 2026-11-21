@@ -1,16 +1,30 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
+import { Test, type TestingModule } from '@nestjs/testing';
 
+import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { HealthSherpaPolicyPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/healthsherpa-policy.preprocessor';
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import {
+  TwentyOrmException,
+  TwentyOrmExceptionCode,
+} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
+
+jest.mock(
+  'src/modules/policy/utils/lookup-carrier-product-commission.util',
+  () => ({ lookupCarrierProductCommission: jest.fn() }),
+);
 
 describe('HealthSherpaPolicyPreprocessor', () => {
   let preprocessor: HealthSherpaPolicyPreprocessor;
-  let mockWorkspaceOrmManager: jest.Mocked<GlobalWorkspaceOrmManager>;
-  let mockPersonRepo: any;
-  let mockAgentRepo: any;
-  let mockProductRepo: any;
-  let mockProductTypeRepo: any;
+  let mockWorkspaceOrmManager: {
+    getRepositoryWithoutPermissionChecks: jest.Mock;
+  };
+  let mockPersonRepo: { findOne: jest.Mock; find: jest.Mock; save: jest.Mock };
+  let mockAgentRepo: { findOne: jest.Mock };
+  let mockCarrierRepo: { findOne: jest.Mock };
+  let mockProductRepo: { findOne: jest.Mock };
+  let mockProductTypeRepo: { findOne: jest.Mock };
 
   const mockPipeline = {
     id: 'pipeline-123',
@@ -32,6 +46,10 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       findOne: jest.fn(),
     };
 
+    mockCarrierRepo = {
+      findOne: jest.fn(),
+    };
+
     mockProductRepo = {
       findOne: jest.fn(),
     };
@@ -40,22 +58,32 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       findOne: jest.fn(),
     };
 
-    // Mock GlobalWorkspaceOrmManager
     mockWorkspaceOrmManager = {
-      getRepository: jest.fn((_, objectName) => {
-        if (objectName === 'person') return mockPersonRepo;
-        if (objectName === 'agentProfile') return mockAgentRepo;
-        if (objectName === 'product') return mockProductRepo;
-        if (objectName === 'productType') return mockProductTypeRepo;
+      getRepositoryWithoutPermissionChecks: jest.fn((objectName: string) => {
+        if (objectName === 'person') {
+          return mockPersonRepo;
+        }
+        if (objectName === 'agentProfile') {
+          return mockAgentRepo;
+        }
+        if (objectName === 'carrier') {
+          return mockCarrierRepo;
+        }
+        if (objectName === 'product') {
+          return mockProductRepo;
+        }
+        if (objectName === 'productType') {
+          return mockProductTypeRepo;
+        }
         return {};
       }),
-    } as any;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HealthSherpaPolicyPreprocessor,
         {
-          provide: GlobalWorkspaceOrmManager,
+          provide: WorkspaceOrmManager,
           useValue: mockWorkspaceOrmManager,
         },
       ],
@@ -287,7 +315,7 @@ describe('HealthSherpaPolicyPreprocessor', () => {
     it('should skip junk emails', async () => {
       mockPersonRepo.findOne.mockResolvedValue(null);
       mockAgentRepo.findOne.mockResolvedValue(null);
-      mockPersonRepo.save.mockResolvedValue({ id: 'person-new' });
+      mockPersonRepo.save.mockResolvedValue([{ id: 'person-new' }]);
 
       const payload = {
         application_id: 'app-123',
@@ -314,7 +342,7 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       mockPersonRepo.findOne.mockResolvedValue(null);
       mockAgentRepo.findOne.mockResolvedValue(null);
       mockPersonRepo.find.mockResolvedValue([]);
-      mockPersonRepo.save.mockResolvedValue({ id: 'person-new-123' });
+      mockPersonRepo.save.mockResolvedValue([{ id: 'person-new-123' }]);
 
       const payload = {
         application_id: 'app-123',
@@ -353,7 +381,7 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       mockPersonRepo.findOne.mockResolvedValue(null);
       mockAgentRepo.findOne.mockResolvedValue({ id: 'agent-789' });
       mockPersonRepo.find.mockResolvedValue([]);
-      mockPersonRepo.save.mockResolvedValue({ id: 'person-new' });
+      mockPersonRepo.save.mockResolvedValue([{ id: 'person-new' }]);
 
       const payload = {
         application_id: 'app-123',
@@ -374,6 +402,26 @@ describe('HealthSherpaPolicyPreprocessor', () => {
           assignedAgentId: 'agent-789',
         }),
       );
+      expect(result._personId).toBe('person-new');
+    });
+
+    it('should fail the policy instead of linking undefined when the Person save returns no row', async () => {
+      mockPersonRepo.findOne.mockResolvedValue(null);
+      mockAgentRepo.findOne.mockResolvedValue(null);
+      mockPersonRepo.save.mockResolvedValue([]);
+
+      await expect(
+        preprocessor.preProcess(
+          {
+            application_id: 'app-123',
+            member_phone: '5551234567',
+            member_first_name: 'Jane',
+            member_last_name: 'Smith',
+          },
+          mockPipeline,
+          workspaceId,
+        ),
+      ).rejects.toThrow('Failed to find or create Person for policy');
     });
 
     it('should retry without email on duplicate email error', async () => {
@@ -381,13 +429,13 @@ describe('HealthSherpaPolicyPreprocessor', () => {
       mockAgentRepo.findOne.mockResolvedValue(null);
       mockPersonRepo.find.mockResolvedValue([]);
 
-      // First save fails with duplicate
       mockPersonRepo.save.mockRejectedValueOnce(
-        new Error('duplicate key value violates unique constraint'),
+        new TwentyOrmException(
+          'A duplicate entry was detected',
+          TwentyOrmExceptionCode.DUPLICATE_ENTRY_DETECTED,
+        ),
       );
-
-      // Second save succeeds
-      mockPersonRepo.save.mockResolvedValueOnce({ id: 'person-retry' });
+      mockPersonRepo.save.mockResolvedValueOnce([{ id: 'person-retry' }]);
 
       const payload = {
         application_id: 'app-123',
@@ -408,6 +456,89 @@ describe('HealthSherpaPolicyPreprocessor', () => {
 
       // Second call should not have email
       expect(mockPersonRepo.save.mock.calls[1][0]).not.toHaveProperty('emails');
+    });
+
+    it('should keep the application id and member details out of logs', async () => {
+      const loggedMessages: string[] = [];
+      const loggerSpies = (['log', 'warn', 'error'] as const).map((level) =>
+        jest
+          .spyOn(Logger.prototype, level)
+          .mockImplementation((message: unknown) => {
+            loggedMessages.push(String(message));
+          }),
+      );
+
+      mockPersonRepo.findOne.mockResolvedValue(null);
+      mockAgentRepo.findOne.mockResolvedValue(null);
+      mockPersonRepo.save
+        .mockRejectedValueOnce(
+          new TwentyOrmException(
+            'A duplicate entry was detected',
+            TwentyOrmExceptionCode.DUPLICATE_ENTRY_DETECTED,
+          ),
+        )
+        .mockResolvedValueOnce([{ id: 'person-retry' }]);
+
+      await preprocessor.preProcess(
+        {
+          application_id: 'app-123',
+          member_phone: '5551234567',
+          member_first_name: 'Jane',
+          member_last_name: 'Smith',
+          member_email: 'jane.smith@example.com',
+        },
+        mockPipeline,
+        workspaceId,
+      );
+
+      loggerSpies.forEach((loggerSpy) => loggerSpy.mockRestore());
+
+      expect(loggedMessages).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('retrying without email'),
+          expect.stringContaining('Auto-created Person person-retry'),
+        ]),
+      );
+
+      for (const message of loggedMessages) {
+        expect(message).not.toMatch(
+          /app-123|5551234567|Jane|Smith|jane\.smith/,
+        );
+      }
+    });
+  });
+
+  describe('LTV Lookup', () => {
+    it('should look up the commission with the matched carrier and product ids', async () => {
+      mockPersonRepo.findOne.mockResolvedValue({ id: 'person-123' });
+      mockCarrierRepo.findOne.mockResolvedValue({ id: 'carrier-1' });
+      mockProductRepo.findOne.mockResolvedValue({
+        id: 'product-1',
+        productTypeId: null,
+      });
+      jest.mocked(lookupCarrierProductCommission).mockResolvedValue({
+        amountMicros: 250_000_000,
+        currencyCode: 'USD',
+      });
+
+      const result = await preprocessor.preProcess(
+        {
+          application_id: 'app-123',
+          member_phone: '5551234567',
+          carrier_name: 'Oscar',
+          plan_name: 'Oscar Gold 2026',
+        },
+        mockPipeline,
+        workspaceId,
+      );
+
+      expect(lookupCarrierProductCommission).toHaveBeenCalledWith(
+        'carrier-1',
+        'product-1',
+        mockWorkspaceOrmManager,
+      );
+      expect(result._ltvAmountMicros).toBe(250_000_000);
+      expect(result._ltvCurrencyCode).toBe('USD');
     });
   });
 

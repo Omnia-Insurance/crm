@@ -1,24 +1,28 @@
 import * as dns from 'dns/promises';
 
-import { isPrivateIp } from 'src/engine/core-modules/secure-http-client/utils/is-private-ip.util';
+import { getIsBlockedIp } from 'src/engine/core-modules/secure-http-client/utils/get-is-blocked-ip.util';
 
 export const resolveAndValidateHostname = async (
   hostnameOrUrl: string,
+  allowedInternalHosts: string[] = [],
   dnsLookup: typeof dns.lookup = dns.lookup,
 ): Promise<string> => {
+  const trimmedHostnameOrUrl = hostnameOrUrl.trim();
   let hostname: string;
 
   try {
-    const url = new URL(hostnameOrUrl);
+    const url = new URL(trimmedHostnameOrUrl);
 
     hostname = url.hostname;
   } catch {
-    hostname = hostnameOrUrl;
+    hostname = trimmedHostnameOrUrl;
   }
+
+  const isBlockedIp = getIsBlockedIp(hostname, allowedInternalHosts);
 
   const { address: resolvedIp } = await dnsLookup(hostname);
 
-  if (isPrivateIp(resolvedIp)) {
+  if (isBlockedIp(resolvedIp)) {
     throw new Error(
       `Connection to internal IP address ${resolvedIp} is not allowed.`,
     );

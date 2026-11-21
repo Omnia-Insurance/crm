@@ -2,7 +2,7 @@ import { type RefObject, useEffect } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
 type NodeDimensionEffectProps = {
-  elementRef: RefObject<HTMLElement>;
+  elementRef: RefObject<HTMLElement | null>;
   onDimensionChange: (dimensions: { width: number; height: number }) => void;
 };
 
@@ -11,7 +11,9 @@ export const NodeDimensionEffect = ({
   onDimensionChange,
 }: NodeDimensionEffectProps) => {
   useEffect(() => {
-    if (!elementRef.current) return;
+    if (!elementRef.current) {
+      return;
+    }
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];

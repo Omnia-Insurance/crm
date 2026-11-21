@@ -1,44 +1,46 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { Tag } from 'twenty-ui/components';
+import { type MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
+import { isDefined } from 'twenty-shared/utils';
+import { Tag } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
 
-import type { ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
+import { type ReviewItemRecord } from '@/reconciliation/components/ReconciliationReviewPageContent';
 
-type Props = {
+type ReviewItemSidebarProps = {
   items: ReviewItemRecord[];
   selectedItemId: string | null;
   onSelectItem: (id: string) => void;
   loading: boolean;
 };
 
-const FLAG_LABELS: Record<string, string> = {
-  STATUS_CHANGE: 'Status change',
-  PAYMENT_ERROR: 'Payment issue',
-  BROKER_EFF_AUDIT: 'Broker date',
-  NAME_MISMATCH: 'Name mismatch',
-  REINSTATEMENT: 'Reinstated',
-  MULTI_MATCH: 'Multi-match',
+const FLAG_LABELS: Record<string, MessageDescriptor> = {
+  STATUS_CHANGE: msg`Status change`,
+  PAYMENT_ERROR: msg`Payment issue`,
+  BROKER_EFF_AUDIT: msg`Broker date`,
+  NAME_MISMATCH: msg`Name mismatch`,
+  REINSTATEMENT: msg`Reinstated`,
+  MULTI_MATCH: msg`Multi-match`,
 };
 
-// ── Styled components ──
-
 const StyledSidebar = styled.nav`
-  width: 280px;
-  min-width: 280px;
-  border-right: 1px solid ${themeCssVariables.border.color.medium};
   background: ${themeCssVariables.background.primary};
+  border-right: 1px solid ${themeCssVariables.border.color.medium};
   display: flex;
   flex-direction: column;
+  min-width: 280px;
   overflow-y: auto;
+  width: 280px;
 `;
 
 const StyledItem = styled.div<{ active: boolean; reviewed: boolean }>`
-  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
+  background: ${({ active }) =>
+    active ? themeCssVariables.background.tertiary : 'transparent'};
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
   cursor: pointer;
   opacity: ${({ reviewed }) => (reviewed ? 0.45 : 1)};
-  background: ${({ active }) =>
-    active ? themeCssVariables.background.tertiary : 'transparent'};
+  padding: ${themeCssVariables.spacing[2]} ${themeCssVariables.spacing[3]};
 
   &:hover {
     background: ${themeCssVariables.background.tertiary};
@@ -46,48 +48,51 @@ const StyledItem = styled.div<{ active: boolean; reviewed: boolean }>`
 `;
 
 const StyledItemRow = styled.div`
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
+  justify-content: space-between;
 `;
 
 const StyledItemName = styled.span`
+  color: ${themeCssVariables.font.color.primary};
   font-size: ${themeCssVariables.font.size.sm};
   font-weight: ${themeCssVariables.font.weight.medium};
-  color: ${themeCssVariables.font.color.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 `;
 
 const StyledItemId = styled.span`
-  font-size: ${themeCssVariables.font.size.xs};
   color: ${themeCssVariables.font.color.tertiary};
   flex-shrink: 0;
+  font-size: ${themeCssVariables.font.size.xs};
   font-variant-numeric: tabular-nums;
 `;
 
 const StyledTags = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[1]};
   margin-top: ${themeCssVariables.spacing[1]};
-  flex-wrap: wrap;
 `;
 
 const StyledEmpty = styled.div`
-  padding: ${themeCssVariables.spacing[6]};
-  text-align: center;
   color: ${themeCssVariables.font.color.tertiary};
   font-size: ${themeCssVariables.font.size.sm};
+  padding: ${themeCssVariables.spacing[6]};
+  text-align: center;
 `;
 
-// ── Helpers ──
-
+// Review item names read "<policy number> → <CRM policy name>"
 const extractDisplayName = (item: ReviewItemRecord): string => {
-  if (item.policy?.name) return item.policy.name;
+  if (item.policy?.name) {
+    return item.policy.name;
+  }
   const parts = item.name.split(' → ');
-  if (parts.length > 1 && parts[1] !== 'none') return parts[1];
+  if (parts.length > 1 && parts[1] !== 'none') {
+    return parts[1];
+  }
   return item.name;
 };
 
@@ -95,32 +100,32 @@ const extractPolicyId = (item: ReviewItemRecord): string => {
   return item.name.split(' ')[0] ?? '';
 };
 
-// ── Component ──
-
 export const ReviewItemSidebar = ({
   items,
   selectedItemId,
   onSelectItem,
   loading,
-}: Props) => {
+}: ReviewItemSidebarProps) => {
+  const { t } = useLingui();
+
   if (loading) {
     return (
-      <StyledSidebar aria-label="Review items">
-        <StyledEmpty>Loading...</StyledEmpty>
+      <StyledSidebar aria-label={t`Review items`}>
+        <StyledEmpty>{t`Loading...`}</StyledEmpty>
       </StyledSidebar>
     );
   }
 
   if (items.length === 0) {
     return (
-      <StyledSidebar aria-label="Review items">
-        <StyledEmpty>No items match your filters</StyledEmpty>
+      <StyledSidebar aria-label={t`Review items`}>
+        <StyledEmpty>{t`No items match your filters`}</StyledEmpty>
       </StyledSidebar>
     );
   }
 
   return (
-    <StyledSidebar aria-label="Review items">
+    <StyledSidebar aria-label={t`Review items`}>
       {items.map((item) => {
         const isReviewed = item.decision !== 'PENDING';
         const isActive = item.id === selectedItemId;
@@ -140,17 +145,23 @@ export const ReviewItemSidebar = ({
             </StyledItemRow>
             {(isUnmatched || (item.flags && item.flags.length > 0)) && (
               <StyledTags>
-                {isUnmatched && <Tag color="orange" text="Unmatched" />}
+                {isUnmatched && <Tag color="orange">{t`Unmatched`}</Tag>}
                 {(item.flags ?? []).map((flag) => {
-                  const label = FLAG_LABELS[flag];
-                  if (!label) return null;
+                  const flagLabelDescriptor = FLAG_LABELS[flag];
+
+                  if (!isDefined(flagLabelDescriptor)) {
+                    return null;
+                  }
+
+                  const label = t(flagLabelDescriptor);
                   const reason = item.flagReasons?.[flag];
+
                   return (
                     <span
                       key={flag}
                       title={reason ? `${label}: ${reason}` : label}
                     >
-                      <Tag color="gray" text={label} />
+                      <Tag color="gray">{label}</Tag>
                     </span>
                   );
                 })}

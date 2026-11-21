@@ -6,8 +6,11 @@ export const FLAT_FIELD_METADATA_EDITABLE_PROPERTIES = {
     'description',
     'icon',
     'isActive',
+    'isAuditLogged',
     'isLabelSyncedWithName',
+    'isSearchable',
     'isUnique',
+    // OMNIA-CUSTOM: soft required rule (contract C5)
     'requiredCondition',
     'label',
     'name',
@@ -19,13 +22,20 @@ export const FLAT_FIELD_METADATA_EDITABLE_PROPERTIES = {
     'description',
     'icon',
     'isActive',
+    'isAuditLogged',
     'label',
     'options',
     'settings',
+    'isSearchable',
     'isUnique',
+    // OMNIA-CUSTOM: soft required rule (contract C5); Lead is the standard person object
     'requiredCondition',
   ],
 } as const satisfies Record<
   'standard' | 'custom',
   MetadataEntityPropertyName<'fieldMetadata'>[]
 >;
+
+export const FLAT_FIELD_METADATA_SYSTEM_SIDE_EFFECT_EDITABLE_PROPERTIES = [
+  'isActive',
+] as const satisfies MetadataEntityPropertyName<'fieldMetadata'>[];

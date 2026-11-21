@@ -1,22 +1,24 @@
-import { Suspense, lazy, useContext } from 'react';
-import { isDefined } from 'twenty-shared/utils';
-import { IconChevronDown, IconChevronRight, useIcons } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { NavigationMenuItemEditable } from '@/navigation-menu-item/edit/components/NavigationMenuItemEditable';
+import { ColoredIcon } from '@/ui/icon/components/ColoredIcon';
+import { NavigationMenuItemFolderChevron } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderChevron';
+import { getFolderNavigationMenuItemLabel } from '@/navigation-menu-item/display/folder/utils/getFolderNavigationMenuItemLabel';
+import { Suspense, lazy } from 'react';
+import { useIcons } from 'twenty-ui/icon/provider';
 import { useIsMobile } from 'twenty-ui/utilities';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
 import { FOLDER_ICON_DEFAULT } from '@/navigation-menu-item/common/constants/FolderIconDefault';
 import { DEFAULT_NAVIGATION_MENU_ITEM_COLOR_FOLDER } from '@/navigation-menu-item/common/constants/NavigationMenuItemDefaultColorFolder';
 import { NavigationMenuItemFolderLayout } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderLayout';
-import { NavigationMenuItemFolderSubItem } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderSubItem';
+import { NavigationMenuItemFolderSubItemDispatcher } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderSubItemDispatcher';
 import { useNavigationMenuItemFolderOpenState } from '@/navigation-menu-item/display/folder/hooks/useNavigationMenuItemFolderOpenState';
 import type { NavigationMenuItemSectionContentProps } from '@/navigation-menu-item/display/sections/types/NavigationMenuItemSectionContentProps';
 import { NavigationDrawerItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItem';
 
 const LazyNavigationMenuItemFolderDnd = lazy(() =>
-  import(
-    '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderDnd'
-  ).then((module) => ({ default: module.NavigationMenuItemFolderDnd })),
+  import('@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderDnd').then(
+    (module) => ({ default: module.NavigationMenuItemFolderDnd }),
+  ),
 );
 
 type NavigationMenuItemFolderProps = Pick<
@@ -44,7 +46,7 @@ export const NavigationMenuItemFolder = ({
   orphanIndex,
 }: NavigationMenuItemFolderProps) => {
   const folderId = item.id;
-  const folderName = item.name ?? 'Folder';
+  const folderName = getFolderNavigationMenuItemLabel(item);
   const folderIconKey = item.icon;
   const folderColor = 'color' in item ? (item.color as string | null) : null;
   const folderChildrenNavigationMenuItems =
@@ -54,6 +56,7 @@ export const NavigationMenuItemFolder = ({
   if (readOnly) {
     return (
       <NavigationMenuItemFolderReadOnlyContent
+        item={item}
         folderId={folderId}
         folderName={folderName}
         folderIconKey={folderIconKey}
@@ -68,6 +71,7 @@ export const NavigationMenuItemFolder = ({
     <Suspense
       fallback={
         <NavigationMenuItemFolderReadOnlyContent
+          item={item}
           folderId={folderId}
           folderName={folderName}
           folderIconKey={folderIconKey}
@@ -78,6 +82,7 @@ export const NavigationMenuItemFolder = ({
       }
     >
       <LazyNavigationMenuItemFolderDnd
+        item={item}
         folderId={folderId}
         folderName={folderName}
         folderIconKey={folderIconKey}
@@ -95,6 +100,7 @@ export const NavigationMenuItemFolder = ({
 };
 
 type NavigationMenuItemFolderReadOnlyContentProps = {
+  item: NavigationMenuItem;
   folderId: string;
   folderName: string;
   folderIconKey?: string | null;
@@ -104,6 +110,7 @@ type NavigationMenuItemFolderReadOnlyContentProps = {
 };
 
 const NavigationMenuItemFolderReadOnlyContent = ({
+  item,
   folderId,
   folderName,
   folderIconKey,
@@ -113,10 +120,9 @@ const NavigationMenuItemFolderReadOnlyContent = ({
 }: NavigationMenuItemFolderReadOnlyContentProps) => {
   const { getIcon } = useIcons();
   const isMobile = useIsMobile();
-  const { theme } = useContext(ThemeContext);
   const FolderIcon = getIcon(folderIconKey ?? FOLDER_ICON_DEFAULT);
 
-  const { isOpen, handleToggle, hasActiveChild } =
+  const { isOpen, handleToggle, hasActiveChild, activeChildIndex } =
     useNavigationMenuItemFolderOpenState({
       folderId,
       folderChildrenNavigationMenuItems: navigationMenuItems,
@@ -125,46 +131,35 @@ const NavigationMenuItemFolderReadOnlyContent = ({
   return (
     <NavigationMenuItemFolderLayout
       header={
-        <NavigationDrawerItem
-          label={folderName}
-          Icon={FolderIcon}
-          iconColor={
-            isDefined(folderColor)
-              ? folderColor
-              : DEFAULT_NAVIGATION_MENU_ITEM_COLOR_FOLDER
-          }
-          active={!isOpen && hasActiveChild}
-          onClick={handleToggle}
-          className="navigation-drawer-item"
-          triggerEvent="CLICK"
-          preventCollapseOnMobile={isMobile}
-          alwaysShowRightOptions
-          rightOptions={
-            isOpen ? (
-              <IconChevronDown
-                size={theme.icon.size.sm}
-                stroke={theme.icon.stroke.sm}
-                color={themeCssVariables.font.color.tertiary}
+        <NavigationMenuItemEditable item={item}>
+          <NavigationDrawerItem
+            label={folderName}
+            Icon={() => (
+              <ColoredIcon
+                Icon={FolderIcon}
+                color={folderColor ?? DEFAULT_NAVIGATION_MENU_ITEM_COLOR_FOLDER}
               />
-            ) : (
-              <IconChevronRight
-                size={theme.icon.size.sm}
-                stroke={theme.icon.stroke.sm}
-                color={themeCssVariables.font.color.tertiary}
-              />
-            )
-          }
-        />
+            )}
+            active={!isOpen && hasActiveChild}
+            onClick={handleToggle}
+            className="navigation-drawer-item"
+            triggerEvent="CLICK"
+            preventCollapseOnMobile={isMobile}
+            alwaysShowRightOptions
+            rightOptions={<NavigationMenuItemFolderChevron isOpen={isOpen} />}
+          />
+        </NavigationMenuItemEditable>
       }
       isOpen={isOpen}
       isGroup={isGroup}
     >
       {navigationMenuItems.map((navigationMenuItem, index) => (
-        <NavigationMenuItemFolderSubItem
+        <NavigationMenuItemFolderSubItemDispatcher
           key={navigationMenuItem.id}
           navigationMenuItem={navigationMenuItem}
           index={index}
           arrayLength={navigationMenuItems.length}
+          selectedIndex={activeChildIndex}
           isDragging={false}
         />
       ))}

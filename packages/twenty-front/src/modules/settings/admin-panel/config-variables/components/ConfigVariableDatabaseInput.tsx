@@ -1,19 +1,19 @@
+import { type ConfigVariableOptions } from '@/settings/admin-panel/config-variables/types/ConfigVariableOptions';
 import { Select } from '@/ui/input/components/Select';
 import { SelectControl } from '@/ui/input/components/SelectControl';
 import { TextArea } from '@/ui/input/components/TextArea';
 import { TextInput } from '@/ui/input/components/TextInput';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { type ConfigVariableValue } from 'twenty-shared/types';
-import { CustomError } from 'twenty-shared/utils';
-import { CodeEditor } from 'twenty-ui/input';
-import { MenuItemMultiSelect } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { CustomError, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { CodeEditor } from 'twenty-ui/components/code-editor';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { ConfigVariableType } from '~/generated-admin/graphql';
-import { type ConfigVariableOptions } from '@/settings/admin-panel/config-variables/types/ConfigVariableOptions';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledJsonEditorContainer = styled.div`
   display: flex;
@@ -48,6 +48,7 @@ export const ConfigVariableDatabaseInput = ({
   disabled,
   placeholder,
 }: ConfigVariableDatabaseInputProps) => {
+  const { t } = useLingui();
   const selectOptions =
     options && Array.isArray(options)
       ? options.map((option) => ({
@@ -57,17 +58,21 @@ export const ConfigVariableDatabaseInput = ({
       : [];
 
   const booleanOptions = [
-    { value: 'true', label: 'true' },
-    { value: 'false', label: 'false' },
+    { value: 'true', label: doNotTranslate('true') },
+    { value: 'false', label: doNotTranslate('false') },
   ];
 
   const isValueSelected = (optionValue: string) => {
-    if (!Array.isArray(value)) return false;
+    if (!Array.isArray(value)) {
+      return false;
+    }
     return value.includes(optionValue);
   };
 
   const handleMultiSelectChange = (optionValue: string) => {
-    if (!Array.isArray(value)) return;
+    if (!Array.isArray(value)) {
+      return;
+    }
 
     let newValues = [...value];
     if (isValueSelected(optionValue)) {
@@ -98,7 +103,7 @@ export const ConfigVariableDatabaseInput = ({
       return (
         <TextInput
           label={label}
-          value={value !== null && value !== undefined ? String(value) : ''}
+          value={isDefined(value) ? String(value) : ''}
           onChange={(text) => {
             const num = Number(text);
             onChange(isNaN(num) ? text : num);
@@ -114,13 +119,16 @@ export const ConfigVariableDatabaseInput = ({
       return (
         <>
           {options && Array.isArray(options) ? (
-            <Dropdown
+            <DropdownRoot
               dropdownId="config-variable-array-dropdown"
-              dropdownPlacement="bottom-start"
-              dropdownOffset={{
-                y: 8,
-              }}
-              clickableComponent={
+              type="picker"
+              multiple
+            >
+              <Dropdown.Trigger
+                render={<div />}
+                nativeButton={false}
+                disabled={disabled}
+              >
                 <SelectControl
                   selectedOption={{
                     value: '',
@@ -133,29 +141,26 @@ export const ConfigVariableDatabaseInput = ({
                   hasRightElement={false}
                   selectSizeVariant="default"
                 />
-              }
-              dropdownComponents={
-                <DropdownContent>
-                  <DropdownMenuItemsContainer>
-                    {selectOptions.map((option) => (
-                      <MenuItemMultiSelect
-                        key={option.value}
-                        text={option.label}
-                        selected={isValueSelected(option.value)}
-                        className="config-variable-array-menu-item-multi-select"
-                        onSelectChange={() =>
-                          handleMultiSelectChange(option.value)
-                        }
-                      />
-                    ))}
-                  </DropdownMenuItemsContainer>
-                </DropdownContent>
-              }
-            />
+              </Dropdown.Trigger>
+              <DropdownContent side="bottom" align="start" sideOffset={8}>
+                <Dropdown.Section>
+                  {selectOptions.map((option) => (
+                    <Dropdown.OptionItem
+                      key={option.value}
+                      selected={isValueSelected(option.value)}
+                      onSelect={() => handleMultiSelectChange(option.value)}
+                    >
+                      {option.label}
+                    </Dropdown.OptionItem>
+                  ))}
+                </Dropdown.Section>
+              </DropdownContent>
+            </DropdownRoot>
           ) : (
             <TextArea
               textAreaId={jsonArrayTextAreaId}
               label={label}
+              maxRows={5}
               value={
                 Array.isArray(value)
                   ? JSON.stringify(value)
@@ -196,7 +201,7 @@ export const ConfigVariableDatabaseInput = ({
           value={
             typeof value === 'string'
               ? value
-              : value !== null && value !== undefined
+              : isDefined(value)
                 ? JSON.stringify(value)
                 : ''
           }
@@ -215,7 +220,7 @@ export const ConfigVariableDatabaseInput = ({
             value={
               typeof value === 'string'
                 ? value
-                : value !== null && value !== undefined
+                : isDefined(value)
                   ? JSON.stringify(value, null, 2)
                   : ''
             }
@@ -225,6 +230,10 @@ export const ConfigVariableDatabaseInput = ({
               readOnly: disabled === true,
             }}
             onChange={(text) => {
+              if (!isDefined(text)) {
+                return;
+              }
+
               try {
                 onChange(JSON.parse(text) as Record<string, unknown>);
               } catch {
@@ -236,6 +245,9 @@ export const ConfigVariableDatabaseInput = ({
       );
 
     default:
-      throw new CustomError(`Unsupported type: ${type}`, 'UNSUPPORTED_TYPE');
+      throw new CustomError(
+        doNotTranslate(`Unsupported type: ${type}`),
+        'UNSUPPORTED_TYPE',
+      );
   }
 };

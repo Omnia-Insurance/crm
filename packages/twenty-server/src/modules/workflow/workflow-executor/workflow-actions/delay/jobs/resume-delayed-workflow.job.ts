@@ -1,5 +1,6 @@
 import { Scope } from '@nestjs/common';
 
+import { isDefined } from 'twenty-shared/utils';
 import { StepStatus } from 'twenty-shared/workflow';
 
 import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
@@ -7,7 +8,7 @@ import { Process } from 'src/engine/core-modules/message-queue/decorators/proces
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { WorkflowRunStatus } from 'src/modules/workflow/common/standard-objects/workflow-run.workspace-entity';
 import { RESUME_DELAYED_WORKFLOW_JOB_NAME } from 'src/modules/workflow/workflow-executor/workflow-actions/delay/contants/resume-delayed-workflow-job-name';
@@ -19,8 +20,13 @@ import {
 } from 'src/modules/workflow/workflow-runner/exceptions/workflow-run.exception';
 import { RunWorkflowJob } from 'src/modules/workflow/workflow-runner/jobs/run-workflow.job';
 import { type RunWorkflowJobData } from 'src/modules/workflow/workflow-runner/types/run-workflow-job-data.type';
+import { buildRunWorkflowJobOptions } from 'src/modules/workflow/workflow-runner/utils/build-run-workflow-job-options.util';
+import { isWorkflowRunNotFoundError } from 'src/modules/workflow/workflow-runner/utils/is-workflow-run-not-found-error.util';
+import { WorkflowRunJobScopeWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run-job-scope.workspace-service';
 import { WorkflowRunWorkspaceService } from 'src/modules/workflow/workflow-runner/workflow-run/workflow-run.workspace-service';
 
+// Drains delays 2.45 and earlier queued as delayed jobs; new ones are TIME waits resumed through
+// ResumePendingWakeUpJob. Remove once upgrades no longer start from 2.45
 @Processor({
   queueName: MessageQueue.delayedJobsQueue,
   scope: Scope.REQUEST,
@@ -30,7 +36,8 @@ export class ResumeDelayedWorkflowJob {
     @InjectMessageQueue(MessageQueue.workflowQueue)
     private readonly messageQueueService: MessageQueueService,
     private readonly workflowRunWorkspaceService: WorkflowRunWorkspaceService,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly workflowRunJobScopeWorkspaceService: WorkflowRunJobScopeWorkspaceService,
   ) {}
 
   @Process(RESUME_DELAYED_WORKFLOW_JOB_NAME)
@@ -41,18 +48,23 @@ export class ResumeDelayedWorkflowJob {
   }: ResumeDelayedWorkflowJobData): Promise<void> {
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const workflowRun = await this.workflowRunWorkspaceService.getWorkflowRun(
+        {
+          workflowRunId,
+          workspaceId,
+        },
+      );
+
+      if (!isDefined(workflowRun)) {
+        return;
+      }
+
+      if (workflowRun.status !== WorkflowRunStatus.RUNNING) {
+        return;
+      }
+
       try {
-        const workflowRun =
-          await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
-            workflowRunId,
-            workspaceId,
-          });
-
-        if (workflowRun.status !== WorkflowRunStatus.RUNNING) {
-          return;
-        }
-
         const step = workflowRun.state?.flow?.steps?.find(
           (step) => step.id === stepId,
         );
@@ -92,8 +104,19 @@ export class ResumeDelayedWorkflowJob {
             workflowRunId,
             lastExecutedStepId: stepId,
           },
+          buildRunWorkflowJobOptions({
+            workflowRunId,
+            scope:
+              await this.workflowRunJobScopeWorkspaceService.resolveForCoreWorkflow(
+                { workspaceId, coreWorkflowId: workflowRun.coreWorkflowId },
+              ),
+          }),
         );
       } catch (error) {
+        if (isWorkflowRunNotFoundError(error)) {
+          return;
+        }
+
         await this.workflowRunWorkspaceService.endWorkflowRun({
           workflowRunId,
           workspaceId,

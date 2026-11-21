@@ -35,16 +35,83 @@ describe('computeContextStoreFilters', () => {
     });
 
     expect(filters).toEqual({
-      and: [
-        {},
-        {
-          id: {
-            in: ['1', '2', '3'],
-          },
-        },
-        {},
-      ],
+      id: {
+        in: ['1', '2', '3'],
+      },
     });
+  });
+
+  it('should target only the selected records and ignore view filters in selection mode', () => {
+    const contextStoreTargetedRecordsRule: ContextStoreTargetedRecordsRule = {
+      mode: 'selection',
+      selectedRecordIds: ['1', '2', '3'],
+    };
+
+    const contextStoreFilters: RecordFilter[] = [
+      {
+        id: 'name-filter',
+        fieldMetadataId: personObjectMetadataItem.fields.find(
+          (field) => field.name === 'name',
+        )!.id,
+        value: 'John',
+        displayValue: 'John',
+        displayAvatarUrl: undefined,
+        operand: ViewFilterOperand.CONTAINS,
+        type: 'TEXT',
+        label: 'Name',
+      },
+    ];
+
+    const filters = computeContextStoreFilters({
+      contextStoreTargetedRecordsRule,
+      contextStoreFilters,
+      contextStoreFilterGroups: [],
+      objectMetadataItem: personObjectMetadataItem,
+      fieldMetadataItems: personObjectMetadataItem.fields,
+      filterValueDependencies: mockFilterValueDependencies,
+      contextStoreAnyFieldFilterValue: 'any field search',
+    });
+
+    // Explicitly selected records must be targeted as-is, even if they would
+    // not match the active view filters or any-field search.
+    expect(filters).toEqual({
+      id: {
+        in: ['1', '2', '3'],
+      },
+    });
+  });
+
+  it('should exclude non-readable fields from the any-field search filter', () => {
+    const contextStoreTargetedRecordsRule: ContextStoreTargetedRecordsRule = {
+      mode: 'exclusion',
+      excludedRecordIds: [],
+    };
+
+    const linkedinLinkField = personObjectMetadataItem.fields.find(
+      (field) => field.name === 'linkedinLink',
+    )!;
+
+    const personObjectMetadataItemWithRestrictedLinkedinLink = {
+      ...personObjectMetadataItem,
+      readableFields: personObjectMetadataItem.readableFields.filter(
+        (field) => field.id !== linkedinLinkField.id,
+      ),
+    };
+
+    const filters = computeContextStoreFilters({
+      contextStoreTargetedRecordsRule,
+      contextStoreFilters: [],
+      contextStoreFilterGroups: [],
+      objectMetadataItem: personObjectMetadataItemWithRestrictedLinkedinLink,
+      fieldMetadataItems: personObjectMetadataItem.fields,
+      filterValueDependencies: mockFilterValueDependencies,
+      contextStoreAnyFieldFilterValue: 'Airtable',
+    });
+
+    const serializedFilters = JSON.stringify(filters);
+
+    expect(serializedFilters).not.toContain('linkedinLink');
+    expect(serializedFilters).toContain('name');
   });
 
   it('should work for exclusion mode', () => {

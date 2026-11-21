@@ -1,12 +1,12 @@
 import { gql } from 'graphql-tag';
-import { makeMetadataAPIRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
 
 export const getConnectedImapSmtpCaldavAccount = async ({
   id,
 }: {
   id: string;
 }) => {
-  const response = await makeMetadataAPIRequest({
+  const response = await makeMetadataApiRequest({
     query: gql`
       query GetConnectedImapSmtpCaldavAccount($id: UUID!) {
         getConnectedImapSmtpCaldavAccount(id: $id) {
@@ -19,19 +19,19 @@ export const getConnectedImapSmtpCaldavAccount = async ({
               host
               port
               username
-              secure
+              connectionSecurity
             }
             SMTP {
               host
               port
               username
-              secure
+              connectionSecurity
             }
             CALDAV {
               host
               port
               username
-              secure
+              connectionSecurity
             }
           }
         }

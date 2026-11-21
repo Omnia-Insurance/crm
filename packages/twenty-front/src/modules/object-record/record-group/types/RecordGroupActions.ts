@@ -1,4 +1,4 @@
-import { type IconComponent } from 'twenty-ui/display';
+import { type IconComponent } from 'twenty-ui/icon';
 
 export type RecordGroupAction = {
   id: string;
@@ -7,4 +7,5 @@ export type RecordGroupAction = {
   position: number;
   callback: () => void;
   condition?: boolean;
+  closeOnClick?: boolean;
 };

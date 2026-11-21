@@ -1,18 +1,19 @@
 import { ReactFlowProvider } from '@xyflow/react';
 
 import { SettingsDataModelOverview } from '@/settings/data-model/graph-overview/components/SettingsDataModelOverview';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
-import { t } from '@lingui/core/macro';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 export const SettingsObjectOverview = () => {
+  const { t } = useLingui();
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       links={[
         {
           children: t`Workspace`,
-          href: getSettingsPath(SettingsPath.Workspace),
+          href: getSettingsPath(SettingsPath.General),
         },
         { children: t`Objects`, href: getSettingsPath(SettingsPath.Objects) },
         {
@@ -23,6 +24,6 @@ export const SettingsObjectOverview = () => {
       <ReactFlowProvider>
         <SettingsDataModelOverview />
       </ReactFlowProvider>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

@@ -1,12 +1,10 @@
-import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { RecordTableCellContext } from '@/object-record/record-table/contexts/RecordTableCellContext';
-import { useRecordTableRowContextOrThrow } from '@/object-record/record-table/contexts/RecordTableRowContext';
-import { RecordTableCellFieldContextWrapper } from '@/object-record/record-table/record-table-cell/components/RecordTableCellFieldContextWrapper';
-import { type TableCellPosition } from '@/object-record/record-table/types/TableCellPosition';
 import { useMemo } from 'react';
 
-// OMNIA-CUSTOM: Memoized RecordTableCellContext.Provider value to prevent
-// cascading re-renders of all cell context consumers on every parent re-render.
+import { type RecordField } from '@/object-record/record-field/types/RecordField';
+import { getRecordFieldColumnKey } from '@/object-record/record-field/utils/getRecordFieldColumnKey';
+import { RecordTableCellContext } from '@/object-record/record-table/contexts/RecordTableCellContext';
+import { RecordTableCellFieldContextWrapper } from '@/object-record/record-table/record-table-cell/components/RecordTableCellFieldContextWrapper';
+
 export const RecordTableCellWrapper = ({
   children,
   recordField,
@@ -16,28 +14,16 @@ export const RecordTableCellWrapper = ({
   recordFieldIndex: number;
   children: React.ReactNode;
 }) => {
-  const { rowIndex } = useRecordTableRowContextOrThrow();
-
-  const currentTableCellPosition: TableCellPosition = useMemo(
-    () => ({
-      column: recordFieldIndex,
-      row: rowIndex,
-    }),
-    [recordFieldIndex, rowIndex],
-  );
-
-  const cellContextValue = useMemo(
-    () => ({
-      recordField,
-      cellPosition: currentTableCellPosition,
-    }),
-    [recordField, currentTableCellPosition],
+  const recordTableCellContextValue = useMemo(
+    () => ({ recordField, columnIndex: recordFieldIndex }),
+    [recordField, recordFieldIndex],
   );
 
   return (
     <RecordTableCellContext.Provider
-      value={cellContextValue}
-      key={`${recordField.fieldMetadataItemId}${recordField.subFieldName ? `.${recordField.subFieldName}` : ''}`}
+      value={recordTableCellContextValue}
+      // OMNIA-CUSTOM: sub-field columns share fieldMetadataItemId with their relation
+      key={getRecordFieldColumnKey(recordField)}
     >
       <RecordTableCellFieldContextWrapper recordField={recordField}>
         {children}

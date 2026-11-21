@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 import { ToolCategory } from 'twenty-shared/ai';
+
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
+import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { type ToolRegistryService } from 'src/engine/core-modules/tool-provider/services/tool-registry.service';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 
@@ -29,30 +32,27 @@ export type GetToolCatalogResult = {
 export const createGetToolCatalogTool = (
   toolRegistry: ToolRegistryService,
   workspaceId: string,
-  roleId: string,
-  options?: {
+  options: {
     userId?: string;
     userWorkspaceId?: string;
     excludeTools?: Set<string>;
+    authContext?: WorkspaceAuthContext;
+    application?: FlatApplication;
   },
 ) => ({
   description:
-    'STEP 1: Start here. Browse available tools by category. Returns tool names and descriptions. You MUST call this before using learn_tools or execute_tool — do not guess tool names.',
+    'Fallback discovery — use only when you do not know which tool exists. You do not need this for record operations: build the name from the grammar ({operation}_{object}, e.g. find_many_people) and pass it straight to learn_tools, which returns the closest matching names when a name is wrong. Pass ONE category to keep the response small.',
   inputSchema: getToolCatalogInputSchema,
   execute: async (
     parameters: GetToolCatalogInput,
   ): Promise<GetToolCatalogResult> => {
-    const entries = await toolRegistry.buildToolIndex(
-      workspaceId,
-      roleId,
-      options,
-    );
+    const entries = await toolRegistry.buildToolIndex(workspaceId, options);
 
     const categoryFilter = parameters.categories
       ? new Set(parameters.categories)
       : undefined;
 
-    const excludeSet = options?.excludeTools;
+    const excludeSet = options.excludeTools;
 
     const catalog: Record<
       string,

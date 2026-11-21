@@ -1,45 +1,28 @@
-import { CommandMenuButton } from '@/command-menu/components/CommandMenuButton';
 import { getAdvancedFilterAddFilterRuleSelectDropdownId } from '@/object-record/advanced-filter/utils/getAdvancedFilterAddFilterRuleSelectDropdownId';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { useCloseDropdown } from '@/ui/layout/dropdown/hooks/useCloseDropdown';
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+import { CommandMenuButton } from '@/command-menu/components/CommandMenuButton';
+import { useAddStepFilterToGroup } from '@/workflow/workflow-steps/filters/hooks/useAddStepFilterToGroup';
 import { useChildStepFiltersAndChildStepFilterGroups } from '@/workflow/workflow-steps/filters/hooks/useChildStepFiltersAndChildStepFilterGroups';
 import { useUpsertStepFilterSettings } from '@/workflow/workflow-steps/filters/hooks/useUpsertStepFilterSettings';
-import {
-  StepLogicalOperator,
-  ViewFilterOperand,
-  type StepFilter,
-  type StepFilterGroup,
-} from 'twenty-shared/types';
+import { buildEmptyStepFilter } from '@/workflow/workflow-steps/filters/utils/buildEmptyStepFilter';
+import { StepLogicalOperator, type StepFilterGroup } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { t } from '@lingui/core/macro';
-import { IconLibraryPlus, IconPlus } from 'twenty-ui/display';
-import { MenuItem } from 'twenty-ui/navigation';
+import { IconLibraryPlus, IconPlus } from 'twenty-ui/icon';
 import { v4 } from 'uuid';
+import { useLingui } from '@lingui/react/macro';
 
 type WorkflowStepFilterAddFilterRuleSelectProps = {
   stepFilterGroup: StepFilterGroup;
 };
 
-const BASE_NEW_STEP_FILTER = {
-  type: 'unknown',
-  label: '',
-  value: '',
-  operand: ViewFilterOperand.IS,
-  displayValue: '',
-  stepFilterGroupId: '',
-  stepOutputKey: '',
-};
-
 export const WorkflowStepFilterAddFilterRuleSelect = ({
   stepFilterGroup,
 }: WorkflowStepFilterAddFilterRuleSelectProps) => {
+  const { t } = useLingui();
   const { upsertStepFilterSettings } = useUpsertStepFilterSettings();
-
-  const dropdownId = getAdvancedFilterAddFilterRuleSelectDropdownId(
-    stepFilterGroup.id,
-  );
 
   const { lastChildPosition } = useChildStepFiltersAndChildStepFilterGroups({
     stepFilterGroupId: stepFilterGroup.id,
@@ -47,26 +30,11 @@ export const WorkflowStepFilterAddFilterRuleSelect = ({
 
   const newPositionInStepFilterGroup = lastChildPosition + 1;
 
-  const { closeDropdown } = useCloseDropdown();
-
-  const handleAddFilter = () => {
-    closeDropdown(dropdownId);
-
-    const newStepFilter = {
-      id: v4(),
-      ...BASE_NEW_STEP_FILTER,
-      stepFilterGroupId: stepFilterGroup.id,
-      positionInStepFilterGroup: newPositionInStepFilterGroup,
-    } satisfies StepFilter;
-
-    upsertStepFilterSettings({
-      stepFilterToUpsert: newStepFilter,
-    });
-  };
+  const { addStepFilterToGroup } = useAddStepFilterToGroup({
+    stepFilterGroup,
+  });
 
   const handleAddFilterGroup = () => {
-    closeDropdown(dropdownId);
-
     const newStepFilterGroupId = v4();
 
     const newStepFilterGroup: StepFilterGroup = {
@@ -76,15 +44,11 @@ export const WorkflowStepFilterAddFilterRuleSelect = ({
       positionInStepFilterGroup: newPositionInStepFilterGroup,
     };
 
-    const newStepFilter: StepFilter = {
-      id: v4(),
-      ...BASE_NEW_STEP_FILTER,
-      stepFilterGroupId: newStepFilterGroupId,
-      positionInStepFilterGroup: 1,
-    };
-
     upsertStepFilterSettings({
-      stepFilterToUpsert: newStepFilter,
+      stepFilterToUpsert: buildEmptyStepFilter({
+        stepFilterGroupId: newStepFilterGroupId,
+        positionInStepFilterGroup: 1,
+      }),
       stepFilterGroupToUpsert: newStepFilterGroup,
     });
   };
@@ -102,43 +66,47 @@ export const WorkflowStepFilterAddFilterRuleSelect = ({
           shortLabel: t`Add rule`,
           key: 'add-rule',
         }}
-        onClick={handleAddFilter}
+        onClick={addStepFilterToGroup}
       />
     );
   }
 
   return (
-    <Dropdown
-      dropdownId={dropdownId}
-      clickableComponent={
-        <CommandMenuButton
-          command={{
-            Icon: IconPlus,
-            label: t`Add filter rule`,
-            shortLabel: t`Add filter rule`,
-            key: 'add-filter-rule',
-          }}
-        />
-      }
-      dropdownComponents={
-        <DropdownContent>
-          <DropdownMenuItemsContainer>
-            <MenuItem
-              LeftIcon={IconPlus}
-              text={t`Add rule`}
-              onClick={handleAddFilter}
-            />
-            {isFilterRuleGroupOptionVisible && (
-              <MenuItem
-                LeftIcon={IconLibraryPlus}
-                text={t`Add rule group`}
-                onClick={handleAddFilterGroup}
-              />
-            )}
-          </DropdownMenuItemsContainer>
-        </DropdownContent>
-      }
-      dropdownPlacement="bottom-start"
-    />
+    <DropdownRoot
+      dropdownId={getAdvancedFilterAddFilterRuleSelectDropdownId(
+        stepFilterGroup.id,
+      )}
+      type="menu"
+    >
+      <Dropdown.Trigger
+        render={
+          <NavigationButton
+            size="sm"
+            variant="outline"
+            color="neutral"
+            startIcon={<IconPlus />}
+            aria-label={t`Add filter rule`}
+          >
+            {t`Add filter rule`}
+          </NavigationButton>
+        }
+      />
+      <DropdownContent>
+        <Dropdown.Section>
+          <Dropdown.ActionItem
+            startIcon={<IconPlus />}
+            onClick={addStepFilterToGroup}
+          >
+            {t`Add rule`}
+          </Dropdown.ActionItem>
+          <Dropdown.ActionItem
+            startIcon={<IconLibraryPlus />}
+            onClick={handleAddFilterGroup}
+          >
+            {t`Add rule group`}
+          </Dropdown.ActionItem>
+        </Dropdown.Section>
+      </DropdownContent>
+    </DropdownRoot>
   );
 };

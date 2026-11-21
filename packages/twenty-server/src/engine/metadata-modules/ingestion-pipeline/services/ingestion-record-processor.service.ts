@@ -8,11 +8,11 @@ import { IngestionRelationResolverService } from 'src/engine/metadata-modules/in
 import { type IngestionError } from 'src/engine/metadata-modules/ingestion-pipeline/types/ingestion-error.type';
 import { buildRecordFromMappings } from 'src/engine/metadata-modules/ingestion-pipeline/utils/build-record-from-mappings.util';
 import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeline/utils/extract-value-by-path.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { type WorkspaceRepository } from 'src/engine/twenty-orm/repository/workspace-repository';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-
-// PostgreSQL unique_violation error code
-const PG_UNIQUE_VIOLATION = '23505';
+import { isDuplicateEntryError } from 'src/engine/twenty-orm/utils/is-duplicate-entry-error.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 type ProcessingResult = {
   recordsCreated: number;
@@ -27,7 +27,7 @@ export class IngestionRecordProcessorService {
   private readonly logger = new Logger(IngestionRecordProcessorService.name);
 
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly relationResolverService: IngestionRelationResolverService,
   ) {}
 
@@ -37,90 +37,79 @@ export class IngestionRecordProcessorService {
     mappings: IngestionFieldMappingEntity[],
     workspaceId: string,
   ): Promise<ProcessingResult> {
-    const authContext = buildSystemAuthContext(workspaceId);
+    return this.workspaceOrmManager.executeInWorkspaceContext(async () => {
+      const result: ProcessingResult = {
+        recordsCreated: 0,
+        recordsUpdated: 0,
+        recordsSkipped: 0,
+        recordsFailed: 0,
+        errors: [],
+      };
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const result: ProcessingResult = {
-          recordsCreated: 0,
-          recordsUpdated: 0,
-          recordsSkipped: 0,
-          recordsFailed: 0,
-          errors: [],
-        };
+      const relationCache = this.relationResolverService.createCache();
 
-        const relationCache = this.relationResolverService.createCache();
+      // Ingestion writes as the system; the settings user only configures the pipeline
+      const repository =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          pipeline.targetObjectNameSingular,
+        );
 
-        const repository =
-          await this.globalWorkspaceOrmManager.getRepository(
-            workspaceId,
-            pipeline.targetObjectNameSingular,
-            { shouldBypassPermissionChecks: true },
-          );
+      for (let i = 0; i < records.length; i++) {
+        const sourceRecord = records[i];
 
-        for (let i = 0; i < records.length; i++) {
-          const sourceRecord = records[i];
+        try {
+          // Build the CRM record from field mappings
+          const mappedRecord = buildRecordFromMappings(sourceRecord, mappings);
 
-          try {
-            // Build the CRM record from field mappings
-            const mappedRecord = buildRecordFromMappings(
-              sourceRecord,
-              mappings,
+          // Resolve all relation references
+          const resolvedRecord =
+            await this.relationResolverService.resolveRelations(
+              mappedRecord,
+              relationCache,
             );
 
-            // Resolve all relation references
-            const resolvedRecord =
-              await this.relationResolverService.resolveRelations(
-                mappedRecord,
-                workspaceId,
-                relationCache,
-              );
+          if (
+            isDefined(pipeline.dedupFieldNames) &&
+            pipeline.dedupFieldNames.length > 0
+          ) {
+            const whereClause = buildDedupWhereClause(
+              resolvedRecord,
+              pipeline.dedupFieldNames,
+            );
 
-            if (
-              isDefined(pipeline.dedupFieldNames) &&
-              pipeline.dedupFieldNames.length > 0
-            ) {
-              const whereClause = buildDedupWhereClause(
+            if (isDefined(whereClause)) {
+              const saved = await this.saveWithDedup(
+                repository,
                 resolvedRecord,
-                pipeline.dedupFieldNames,
+                whereClause,
+                result,
               );
 
-              if (isDefined(whereClause)) {
-                const saved = await this.saveWithDedup(
-                  repository,
-                  resolvedRecord,
-                  whereClause,
-                  result,
-                );
-
-                if (saved) {
-                  continue;
-                }
+              if (saved) {
+                continue;
               }
             }
-
-            // No dedup field or no dedup value — create new record
-            await repository.save(resolvedRecord);
-            result.recordsCreated++;
-          } catch (error) {
-            result.recordsFailed++;
-            result.errors.push({
-              recordIndex: i,
-              sourceData: sourceRecord,
-              message:
-                error instanceof Error ? error.message : 'Unknown error',
-            });
-
-            this.logger.warn(
-              `Failed to process record ${i} for pipeline ${pipeline.id}: ${error}`,
-            );
           }
-        }
 
-        return result;
-      },
-      authContext,
-    );
+          // No dedup field or no dedup value — create new record
+          await repository.save(resolvedRecord);
+          result.recordsCreated++;
+        } catch (error) {
+          result.recordsFailed++;
+          result.errors.push({
+            recordIndex: i,
+            sourceData: sourceRecord,
+            message: error instanceof Error ? error.message : 'Unknown error',
+          });
+
+          this.logger.warn(
+            `Failed to process record ${i} for pipeline ${pipeline.id}: ${getIngestionErrorLogLabel(error)}`,
+          );
+        }
+      }
+
+      return result;
+    }, buildSystemAuthContext(workspaceId));
   }
 
   /**
@@ -133,9 +122,7 @@ export class IngestionRecordProcessorService {
    * AND of several fields (e.g. (agents.id, date) for Time Cards).
    */
   private async saveWithDedup(
-    repository: Awaited<
-      ReturnType<GlobalWorkspaceOrmManager['getRepository']>
-    >,
+    repository: WorkspaceRepository,
     resolvedRecord: Record<string, unknown>,
     whereClause: Record<string, unknown>,
     result: ProcessingResult,
@@ -144,9 +131,7 @@ export class IngestionRecordProcessorService {
     const existing = await repository.findOne({ where: whereClause });
 
     if (isDefined(existing)) {
-      const existingId = (existing as Record<string, unknown>).id as string;
-
-      await repository.update(existingId, resolvedRecord);
+      await repository.update(existing.id, resolvedRecord);
       result.recordsUpdated++;
 
       return true;
@@ -154,29 +139,26 @@ export class IngestionRecordProcessorService {
 
     // No existing record — try to insert. The unique index on the dedup field
     // guarantees that only one concurrent insert wins; losers get a
-    // unique_violation which we catch and convert to an update.
+    // duplicate-entry error which we catch and convert to an update.
     try {
       await repository.save(resolvedRecord);
       result.recordsCreated++;
 
       return true;
     } catch (error) {
-      if (isUniqueViolation(error)) {
+      if (isDuplicateEntryError(error)) {
         // Another concurrent job inserted first — update instead
         const nowExisting = await repository.findOne({ where: whereClause });
 
         if (isDefined(nowExisting)) {
-          const existingId = (nowExisting as Record<string, unknown>)
-            .id as string;
-
-          await repository.update(existingId, resolvedRecord);
+          await repository.update(nowExisting.id, resolvedRecord);
           result.recordsUpdated++;
 
           return true;
         }
       }
 
-      // Not a unique violation — let the outer catch handle it
+      // Not a duplicate entry — let the outer catch handle it
       throw error;
     }
   }
@@ -223,20 +205,4 @@ const buildDedupWhereClause = (
   }
 
   return where;
-};
-
-const isUniqueViolation = (error: unknown): boolean => {
-  if (typeof error === 'object' && error !== null && 'code' in error) {
-    return (error as { code: string }).code === PG_UNIQUE_VIOLATION;
-  }
-
-  // TypeORM sometimes wraps the underlying PG error
-  if (error instanceof Error && 'driverError' in error) {
-    const driverError = (error as unknown as { driverError: { code: string } })
-      .driverError;
-
-    return driverError?.code === PG_UNIQUE_VIOLATION;
-  }
-
-  return false;
 };

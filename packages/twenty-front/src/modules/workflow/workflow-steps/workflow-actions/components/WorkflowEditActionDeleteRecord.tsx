@@ -3,7 +3,6 @@ import { useObjectMetadataSelectHelpers } from '@/object-metadata/hooks/useObjec
 import { FormSingleRecordPicker } from '@/object-record/record-field/ui/form-types/components/FormSingleRecordPicker';
 import { Select } from '@/ui/input/components/Select';
 import { type WorkflowDeleteRecordAction } from '@/workflow/types/Workflow';
-import { t } from '@lingui/core/macro';
 import { useEffect, useState } from 'react';
 
 import { GenericDropdownContentWidth } from '@/ui/layout/dropdown/constants/GenericDropdownContentWidth';
@@ -11,11 +10,12 @@ import { WorkflowStepBody } from '@/workflow/workflow-steps/components/WorkflowS
 import { WorkflowStepFooter } from '@/workflow/workflow-steps/components/WorkflowStepFooter';
 import { WorkflowVariablePicker } from '@/workflow/workflow-variables/components/WorkflowVariablePicker';
 import { isDefined } from 'twenty-shared/utils';
-import { canObjectBeManagedByWorkflow } from 'twenty-shared/workflow';
-import { HorizontalSeparator } from 'twenty-ui/display';
-import { type SelectOption } from 'twenty-ui/input';
+import { canObjectBeManagedByAutomation } from 'twenty-shared/workflow';
+import { Separator } from 'twenty-ui/primitives/layout';
+import { type SelectOption } from 'twenty-ui/primitives/input';
 import { type JsonValue } from 'type-fest';
 import { useDebouncedCallback } from 'use-debounce';
+import { useLingui } from '@lingui/react/macro';
 
 type WorkflowEditActionDeleteRecordProps = {
   action: WorkflowDeleteRecordAction;
@@ -38,6 +38,7 @@ export const WorkflowEditActionDeleteRecord = ({
   action,
   actionOptions,
 }: WorkflowEditActionDeleteRecordProps) => {
+  const { t } = useLingui();
   const { getSelectIconPropsFromObjectMetadataItem } =
     useObjectMetadataSelectHelpers();
   const { activeNonSystemObjectMetadataItems } =
@@ -46,9 +47,8 @@ export const WorkflowEditActionDeleteRecord = ({
   const availableMetadata: Array<SelectOption<string>> =
     activeNonSystemObjectMetadataItems
       .filter((objectMetadataItem) =>
-        canObjectBeManagedByWorkflow({
+        canObjectBeManagedByAutomation({
           nameSingular: objectMetadataItem.nameSingular,
-          isSystem: objectMetadataItem.isSystem,
         }),
       )
       .map((item) => ({
@@ -134,11 +134,11 @@ export const WorkflowEditActionDeleteRecord = ({
             saveAction(newFormData);
           }}
           withSearchInput
-          dropdownOffset={{ y: 4 }}
+          dropdownSideOffset={4}
           dropdownWidth={GenericDropdownContentWidth.ExtraLarge}
         />
 
-        <HorizontalSeparator noMargin />
+        <Separator />
 
         {isDefined(objectNameSingular) && (
           <FormSingleRecordPicker

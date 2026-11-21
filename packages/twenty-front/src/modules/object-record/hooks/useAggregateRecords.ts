@@ -9,7 +9,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { type ExtendedAggregateOperations } from '@/object-record/record-table/types/ExtendedAggregateOperations';
 import isEmpty from 'lodash.isempty';
 import { type RecordGqlOperationFilter } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
 
 export type AggregateRecordsData = {
   [fieldName: string]: {
@@ -43,18 +43,19 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
     objectMetadataItem.id,
   );
 
-  const hasReadPermission = objectPermissions.canReadObjectRecords;
+  const hasReadPermission = canReachSomeRecords({
+    objectRecordsPermissions: objectPermissions,
+    operationType: 'read',
+  });
 
-  const { data, loading, error } = useQuery<RecordGqlOperationFindManyResult>(
-    aggregateQuery,
-    {
+  const { data, loading, error, refetch } =
+    useQuery<RecordGqlOperationFindManyResult>(aggregateQuery, {
       skip: skip || !isDefined(objectMetadataItem) || !hasReadPermission,
       variables: {
         filter,
       },
       client: apolloCoreClient,
-    },
-  );
+    });
 
   const formattedData: AggregateRecordsData = {};
 
@@ -77,5 +78,6 @@ export const useAggregateRecords = <T extends AggregateRecordsData>({
     data: formattedData as T,
     loading,
     error,
+    refetch,
   };
 };

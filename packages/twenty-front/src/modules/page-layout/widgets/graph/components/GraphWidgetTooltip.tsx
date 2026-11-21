@@ -3,12 +3,11 @@ import { GRAPH_TOOLTIP_MIN_WIDTH_PX } from '@/page-layout/widgets/graph/componen
 import { GRAPH_TOOLTIP_SCROLL_MAX_HEIGHT_PX } from '@/page-layout/widgets/graph/components/constants/GraphTooltipScrollMaxHeightPx';
 import { GraphWidgetLegendDot } from '@/page-layout/widgets/graph/components/GraphWidgetLegendDot';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { isNonEmptyString } from '@sniptt/guards';
-import { useContext } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { IconArrowUpRight } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconArrowUpRight } from 'twenty-ui/icon';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledTooltip = styled.div`
   background: ${themeCssVariables.background.primary};
@@ -18,7 +17,10 @@ const StyledTooltip = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-width: min(${GRAPH_TOOLTIP_MAX_WIDTH_PX}px, calc(100vw - 40px));
+  max-width: min(
+    ${GRAPH_TOOLTIP_MAX_WIDTH_PX}px,
+    calc(100vw / var(--t-zoom, 1) - 40px)
+  );
   min-width: ${GRAPH_TOOLTIP_MIN_WIDTH_PX}px;
   pointer-events: auto;
 `;
@@ -150,7 +152,8 @@ export const GraphWidgetTooltip = ({
   highlightedKey,
   onGraphWidgetTooltipClick,
 }: GraphWidgetTooltipProps) => {
-  const { theme } = useContext(ThemeContext);
+  const { t } = useLingui();
+  const theme = useTheme();
 
   const filteredItems = items.filter(
     (item) => item.value !== 0 && isNonEmptyString(item.formattedValue),

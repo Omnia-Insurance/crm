@@ -1,55 +1,79 @@
-import { isExternalRedirectTrusted } from '@/utils/auth/derive-trusted-redirect-domain';
+import {
+  deriveTrustedParentDomain,
+  isExternalRedirectTrusted,
+} from '@/utils/auth/derive-trusted-redirect-domain';
 
-const FRONTEND_URL = 'https://crm.example.com';
+const FRONTEND_URL = 'https://crm.omniaagent.com';
+
+describe('deriveTrustedParentDomain', () => {
+  it('should strip the leftmost label', () => {
+    expect(deriveTrustedParentDomain(FRONTEND_URL)).toBe('omniaagent.com');
+  });
+
+  it('should return null when there is no subdomain to strip', () => {
+    expect(deriveTrustedParentDomain('https://omniaagent.com')).toBeNull();
+    expect(deriveTrustedParentDomain('http://localhost:3001')).toBeNull();
+    expect(deriveTrustedParentDomain('http://10.0.0.12:3001')).toBeNull();
+    expect(deriveTrustedParentDomain('not a url')).toBeNull();
+  });
+});
 
 describe('isExternalRedirectTrusted', () => {
-  it('trusts https URLs on the same host or a sibling subdomain', () => {
+  it('should trust https URLs on the frontend host or a sibling subdomain', () => {
+    expect(
+      isExternalRedirectTrusted('https://crm.omniaagent.com/x', FRONTEND_URL),
+    ).toBe(true);
     expect(
       isExternalRedirectTrusted(
-        'https://crm.example.com/objects/people',
+        'https://omniaagent.com/retention',
         FRONTEND_URL,
       ),
     ).toBe(true);
     expect(
-      isExternalRedirectTrusted('https://example.com/dashboard', FRONTEND_URL),
-    ).toBe(true);
-    expect(
-      isExternalRedirectTrusted('https://app.example.com', FRONTEND_URL),
+      isExternalRedirectTrusted('https://dash.omniaagent.com/', FRONTEND_URL),
     ).toBe(true);
   });
 
-  it('rejects non-https protocols even when the host is trusted', () => {
+  it('should reject non-https URLs even on a trusted host', () => {
     expect(
-      isExternalRedirectTrusted('javascript://crm.example.com/', FRONTEND_URL),
+      isExternalRedirectTrusted('http://dash.omniaagent.com/', FRONTEND_URL),
     ).toBe(false);
     expect(
-      isExternalRedirectTrusted('javascript://example.com/', FRONTEND_URL),
+      isExternalRedirectTrusted(
+        'javascript://crm.omniaagent.com/%0aalert(1)',
+        FRONTEND_URL,
+      ),
     ).toBe(false);
-    expect(isExternalRedirectTrusted('http://example.com', FRONTEND_URL)).toBe(
+  });
+
+  it('should reject other domains and lookalike suffixes', () => {
+    expect(isExternalRedirectTrusted('https://evil.com/', FRONTEND_URL)).toBe(
       false,
     );
     expect(
-      isExternalRedirectTrusted('data:text/html,hello', FRONTEND_URL),
+      isExternalRedirectTrusted('https://evilomniaagent.com/', FRONTEND_URL),
     ).toBe(false);
-  });
-
-  it('rejects untrusted hosts and invalid URLs', () => {
-    expect(
-      isExternalRedirectTrusted('https://evil-example.com', FRONTEND_URL),
-    ).toBe(false);
-    expect(isExternalRedirectTrusted('not a url', FRONTEND_URL)).toBe(false);
-  });
-
-  it('allows http and https between localhost ports only', () => {
     expect(
       isExternalRedirectTrusted(
-        'http://localhost:3002/',
+        'https://crm.omniaagent.com.evil.com/',
+        FRONTEND_URL,
+      ),
+    ).toBe(false);
+    expect(isExternalRedirectTrusted('/relative/path', FRONTEND_URL)).toBe(
+      false,
+    );
+  });
+
+  it('should allow http and https between localhost ports only', () => {
+    expect(
+      isExternalRedirectTrusted(
+        'http://localhost:3000/',
         'http://localhost:3001',
       ),
     ).toBe(true);
     expect(
       isExternalRedirectTrusted(
-        'javascript://localhost/',
+        'javascript://localhost/%0aalert(1)',
         'http://localhost:3001',
       ),
     ).toBe(false);

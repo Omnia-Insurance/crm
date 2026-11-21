@@ -3,6 +3,7 @@ import {
   beforeEach,
   describe,
   expect,
+  expectTypeOf,
   it,
   vi,
   type MockInstance,
@@ -11,19 +12,26 @@ import {
 import { AppConnectionAuthFailedError } from '@/sdk/logic-function/connections/errors/app-connection-auth-failed.error';
 import { getConnection } from '@/sdk/logic-function/connections/get-connection';
 import { type AppConnection } from '@/sdk/logic-function/connections/types/app-connection.type';
+import { type AppConnectionWithoutVisibility } from '@/sdk/logic-function/connections/utils/with-legacy-connection-visibility.util';
 
 const buildConnection = (
-  overrides: Partial<AppConnection> = {},
-): AppConnection => ({
+  overrides: Partial<
+    Omit<AppConnection, 'visibility' | 'providerType' | 'accessToken'>
+  > = {},
+): AppConnectionWithoutVisibility => ({
   id: 'c-1',
   providerName: 'linear',
   name: 'Linear #1',
   handle: 'octocat@example.com',
-  visibility: 'user',
+  externalAccountId: null,
+  scope: 'USER',
   userWorkspaceId: 'uws-me',
+  workspaceMemberId: 'wm-me',
+  providerType: 'oauth',
   accessToken: 'fresh',
   scopes: ['read'],
   authFailedAt: null,
+  authFailedReason: null,
   ...overrides,
 });
 
@@ -42,37 +50,80 @@ describe('getConnection', () => {
     fetchSpy.mockRestore();
   });
 
-  it('POSTs the id to /apps/connections/get and returns the response', async () => {
+  it('narrows the token by provider type', async () => {
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            appConnection: {
+              ...buildConnection(),
+              providerType: 'custom',
+              accessToken: null,
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const connection = await getConnection('c-1');
+
+    if (connection.providerType === 'oauth') {
+      expectTypeOf(connection.accessToken).toEqualTypeOf<string>();
+    } else {
+      expectTypeOf(connection.accessToken).toEqualTypeOf<string | null>();
+    }
+
+    expect(connection).toMatchObject({
+      providerType: 'custom',
+      accessToken: null,
+    });
+  });
+
+  it('queries appConnection by id over GraphQL and derives the deprecated visibility', async () => {
     const connection = buildConnection({ id: 'persisted' });
 
     fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify(connection), { status: 200 }),
+      new Response(JSON.stringify({ data: { appConnection: connection } }), {
+        status: 200,
+      }),
     );
 
     const result = await getConnection('persisted');
 
-    expect(result).toEqual(connection);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      'https://api.test/apps/connections/get',
+    expect(result).toEqual({ ...connection, visibility: 'user' });
+
+    const [url, requestInit] = fetchSpy.mock.calls[0];
+
+    expect(url).toBe('https://api.test/metadata');
+    expect(requestInit).toEqual(
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ id: 'persisted' }),
         headers: expect.objectContaining({
           Authorization: 'Bearer app-token',
         }),
       }),
     );
+
+    const sentBody = JSON.parse(requestInit?.body as string);
+
+    expect(sentBody.query).toContain('appConnection(id: $id)');
+    expect(sentBody.query).toMatch(/\bscope\b/);
+    expect(sentBody.query).not.toContain('visibility');
+    expect(sentBody.variables).toEqual({ id: 'persisted' });
   });
 
   it('throws AppConnectionAuthFailedError when the connection needs reconnect', async () => {
     fetchSpy.mockResolvedValue(
       new Response(
-        JSON.stringify(
-          buildConnection({
-            id: 'broken',
-            authFailedAt: '2024-01-02T00:00:00.000Z',
-          }),
-        ),
+        JSON.stringify({
+          data: {
+            appConnection: buildConnection({
+              id: 'broken',
+              authFailedAt: '2024-01-02T00:00:00.000Z',
+            }),
+          },
+        }),
         { status: 200 },
       ),
     );

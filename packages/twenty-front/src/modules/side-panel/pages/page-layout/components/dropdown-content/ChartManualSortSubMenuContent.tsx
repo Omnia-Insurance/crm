@@ -1,38 +1,35 @@
-import { type DropResult } from '@hello-pangea/dnd';
+import { ChartSettingsDropdownSection } from '@/side-panel/pages/page-layout/components/chart-settings/ChartSettingsDropdownSection';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { DraggableListRow } from '@/ui/layout/draggable-list/components/DraggableListRow';
+import { type DraggableListDropResult } from '@/ui/layout/draggable-list/types/DraggableListDropResult';
 
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { useUpdateCurrentWidgetConfig } from '@/side-panel/pages/page-layout/hooks/useUpdateCurrentWidgetConfig';
 import { useWidgetInEditMode } from '@/side-panel/pages/page-layout/hooks/useWidgetInEditMode';
 
-import { getManualSortOrderFromConfig } from '@/side-panel/pages/page-layout/utils/getManualSortOrderFromConfig';
-import { isWidgetConfigurationOfType } from '@/side-panel/pages/page-layout/utils/isWidgetConfigurationOfType';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { sortOptionsForManualOrder } from '@/page-layout/widgets/graph/utils/sortOptionsForManualOrder';
+import { getManualSortOrderFromConfig } from '@/side-panel/pages/page-layout/utils/getManualSortOrderFromConfig';
+import { isWidgetConfigurationOfType } from '@/side-panel/pages/page-layout/utils/isWidgetConfigurationOfType';
 import { DraggableItem } from '@/ui/layout/draggable-list/components/DraggableItem';
 import { DraggableList } from '@/ui/layout/draggable-list/components/DraggableList';
-import { DropdownMenuHeader } from '@/ui/layout/dropdown/components/DropdownMenuHeader/DropdownMenuHeader';
-import { DropdownMenuHeaderLeftComponent } from '@/ui/layout/dropdown/components/DropdownMenuHeader/internal/DropdownMenuHeaderLeftComponent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { t } from '@lingui/core/macro';
 import { isDefined } from 'twenty-shared/utils';
-import { Tag } from 'twenty-ui/components';
-import { IconChevronLeft } from 'twenty-ui/display';
-import { MenuItemDraggable } from 'twenty-ui/navigation';
+import { Tag } from 'twenty-ui/primitives/data-display';
 import { type WidgetConfiguration } from '~/generated-metadata/graphql';
 import { moveArrayItem } from '~/utils/array/moveArrayItem';
+import { useLingui } from '@lingui/react/macro';
 
 type ChartManualSortSubMenuContentProps = {
   fieldMetadataItem: FieldMetadataItem;
   axis: 'primary' | 'secondary';
-  onBack: () => void;
 };
 
 export const ChartManualSortSubMenuContent = ({
   fieldMetadataItem,
   axis,
-  onBack,
 }: ChartManualSortSubMenuContentProps) => {
-  const { pageLayoutId } = usePageLayoutIdFromContextStore();
+  const { t } = useLingui();
+  const { pageLayoutId } = usePageLayoutSidePanelTarget();
   const { widgetInEditMode } = useWidgetInEditMode(pageLayoutId);
   const { updateCurrentWidgetConfig } =
     useUpdateCurrentWidgetConfig(pageLayoutId);
@@ -51,7 +48,7 @@ export const ChartManualSortSubMenuContent = ({
     currentManualSortOrder,
   );
 
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = (result: DraggableListDropResult) => {
     if (!isDefined(result.destination)) {
       return;
     }
@@ -78,17 +75,8 @@ export const ChartManualSortSubMenuContent = ({
 
   return (
     <>
-      <DropdownMenuHeader
-        StartComponent={
-          <DropdownMenuHeaderLeftComponent
-            onClick={onBack}
-            Icon={IconChevronLeft}
-          />
-        }
-      >
-        {t`Reorder options`}
-      </DropdownMenuHeader>
-      <DropdownMenuItemsContainer>
+      <Dropdown.Back>{t`Reorder options`}</Dropdown.Back>
+      <ChartSettingsDropdownSection>
         <DraggableList
           onDragEnd={handleDragEnd}
           draggableItems={
@@ -100,24 +88,21 @@ export const ChartManualSortSubMenuContent = ({
                   index={index}
                   isDragDisabled={sortedOptions.length === 1}
                   itemComponent={
-                    <MenuItemDraggable
-                      gripMode="always"
+                    <DraggableListRow
+                      dragHandleVisibility="always"
                       isDragDisabled={sortedOptions.length === 1}
-                      text={
-                        <Tag
-                          preventShrink
-                          color={option.color}
-                          text={option.label}
-                        />
-                      }
-                    />
+                    >
+                      <Tag truncate={false} color={option.color}>
+                        {option.label}
+                      </Tag>
+                    </DraggableListRow>
                   }
                 />
               ))}
             </>
           }
         />
-      </DropdownMenuItemsContainer>
+      </ChartSettingsDropdownSection>
     </>
   );
 };

@@ -1,0 +1,383 @@
+import { type AllStandardObjectFieldName } from 'src/engine/workspace-manager/twenty-standard-application/types/all-standard-object-field-name.type';
+import { msg } from '@lingui/core/macro';
+import {
+  FieldMetadataType,
+  RelationType,
+  RelationOnDeleteAction,
+} from 'twenty-shared/types';
+import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import {
+  type CreateStandardFieldArgs,
+  createStandardFieldFlatMetadata,
+} from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-field-flat-metadata.util';
+import { createStandardRelationFieldFlatMetadata } from 'src/engine/workspace-manager/twenty-standard-application/utils/field-metadata/create-standard-relation-field-flat-metadata.util';
+import { PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-disabled-field-permission-actions.constant';
+import { i18nLabel } from 'src/engine/workspace-manager/twenty-standard-application/utils/i18n-label.util';
+
+export const buildAgentMessageStandardFlatFieldMetadatas = (
+  args: Omit<
+    CreateStandardFieldArgs<'agentMessage', FieldMetadataType>,
+    'context'
+  >,
+): Record<AllStandardObjectFieldName<'agentMessage'>, FlatFieldMetadata> => ({
+  id: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'id',
+        type: FieldMetadataType.UUID,
+        label: i18nLabel(
+          msg({ message: 'ID', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'ID', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconId',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: false,
+        defaultValue: 'uuid',
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  agentId: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'agentId',
+        type: FieldMetadataType.UUID,
+        label: i18nLabel(
+          msg({ message: 'Agent ID', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Agent ID', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconLego',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: true,
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  senderWorkspaceMember: {
+    ...createStandardRelationFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'senderWorkspaceMember',
+        type: FieldMetadataType.RELATION,
+        label: i18nLabel(
+          msg({ message: 'Sender', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({
+            message: 'Workspace member who sent this message',
+            context: 'fieldMetadata.description',
+          }),
+        ),
+        icon: 'IconUser',
+        isUIEditable: false,
+        isNullable: true,
+        targetObjectName: 'workspaceMember',
+        targetFieldName: 'agentMessages',
+        morphId: null,
+        settings: {
+          relationType: RelationType.MANY_TO_ONE,
+          onDelete: RelationOnDeleteAction.SET_NULL,
+          joinColumnName: 'senderWorkspaceMemberId',
+        },
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  senderApplicationId: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'senderApplicationId',
+        type: FieldMetadataType.UUID,
+        label: i18nLabel(
+          msg({
+            message: 'Sender application ID',
+            context: 'fieldMetadata.label',
+          }),
+        ),
+        description: i18nLabel(
+          msg({
+            message: 'Sender application ID',
+            context: 'fieldMetadata.description',
+          }),
+        ),
+        icon: 'IconUser',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: true,
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  role: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'role',
+        type: FieldMetadataType.TEXT,
+        label: i18nLabel(
+          msg({ message: 'Role', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Role', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconText',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: false,
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  status: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'status',
+        type: FieldMetadataType.TEXT,
+        label: i18nLabel(
+          msg({ message: 'Status', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Status', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconText',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: false,
+        defaultValue: "'sent'",
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  processedAt: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'processedAt',
+        type: FieldMetadataType.DATE_TIME,
+        label: i18nLabel(
+          msg({ message: 'Processed At', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({
+            message: 'Processed At',
+            context: 'fieldMetadata.description',
+          }),
+        ),
+        icon: 'IconCalendar',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: true,
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  createdAt: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'createdAt',
+        type: FieldMetadataType.DATE_TIME,
+        label: i18nLabel(
+          msg({ message: 'Created At', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Created At', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconCalendar',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: false,
+        defaultValue: 'now',
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  updatedAt: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'updatedAt',
+        type: FieldMetadataType.DATE_TIME,
+        label: i18nLabel(
+          msg({ message: 'Updated At', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Updated At', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconCalendar',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: false,
+        defaultValue: 'now',
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  deletedAt: {
+    ...createStandardFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'deletedAt',
+        type: FieldMetadataType.DATE_TIME,
+        label: i18nLabel(
+          msg({ message: 'Deleted At', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Deleted At', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconCalendar',
+        isSystem: true,
+        isUIEditable: false,
+        isNullable: true,
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  thread: {
+    ...createStandardRelationFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'thread',
+        type: FieldMetadataType.RELATION,
+        label: i18nLabel(
+          msg({ message: 'Thread', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Thread', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconRelationOneToMany',
+        isUIEditable: false,
+        isNullable: false,
+        targetObjectName: 'agentChatThread',
+        targetFieldName: 'messages',
+        morphId: null,
+        settings: {
+          relationType: RelationType.MANY_TO_ONE,
+          onDelete: RelationOnDeleteAction.CASCADE,
+          joinColumnName: 'threadId',
+        },
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  turn: {
+    ...createStandardRelationFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'turn',
+        type: FieldMetadataType.RELATION,
+        label: i18nLabel(
+          msg({ message: 'Turn', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Turn', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconRelationOneToMany',
+        isUIEditable: false,
+        isNullable: true,
+        targetObjectName: 'agentTurn',
+        targetFieldName: 'messages',
+        morphId: null,
+        settings: {
+          relationType: RelationType.MANY_TO_ONE,
+          onDelete: RelationOnDeleteAction.CASCADE,
+          joinColumnName: 'turnId',
+        },
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  parts: {
+    ...createStandardRelationFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'parts',
+        type: FieldMetadataType.RELATION,
+        label: i18nLabel(
+          msg({ message: 'Parts', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({ message: 'Parts', context: 'fieldMetadata.description' }),
+        ),
+        icon: 'IconRelationOneToMany',
+        isUIEditable: false,
+        isNullable: true,
+        targetObjectName: 'agentMessagePart',
+        targetFieldName: 'message',
+        morphId: null,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          joinColumnName: null,
+        },
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+  reactions: {
+    ...createStandardRelationFieldFlatMetadata({
+      ...args,
+      context: {
+        fieldName: 'reactions',
+        type: FieldMetadataType.RELATION,
+        label: i18nLabel(
+          msg({ message: 'Reactions', context: 'fieldMetadata.label' }),
+        ),
+        description: i18nLabel(
+          msg({
+            message: 'Emoji reactions of workspace members to this message',
+            context: 'fieldMetadata.description',
+          }),
+        ),
+        icon: 'IconMoodSmile',
+        isUIEditable: false,
+        isNullable: true,
+        targetObjectName: 'agentMessageReaction',
+        targetFieldName: 'message',
+        morphId: null,
+        settings: {
+          relationType: RelationType.ONE_TO_MANY,
+          joinColumnName: null,
+        },
+      },
+    }),
+    disabledFieldPermissionActions:
+      PLATFORM_WRITTEN_DISABLED_FIELD_PERMISSION_ACTIONS,
+    isAuditLogged: false,
+  },
+});

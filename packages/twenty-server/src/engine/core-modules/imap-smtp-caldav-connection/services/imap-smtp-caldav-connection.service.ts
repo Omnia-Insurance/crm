@@ -3,8 +3,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { msg } from '@lingui/core/macro';
 import { ImapFlow } from 'imapflow';
 import { createTransport } from 'nodemailer';
+import { isNonEmptyString } from '@sniptt/guards';
 import { ACCOUNT_TYPES } from 'twenty-shared/constants';
-import { assertUnreachable } from 'twenty-shared/utils';
+import { assertUnreachable, isDefined } from 'twenty-shared/utils';
 
 import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { type EmailAccountConnectionParametersInput } from 'src/engine/core-modules/imap-smtp-caldav-connection/dtos/imap-smtp-caldav-connection.input';
@@ -12,8 +13,12 @@ import { ImapSmtpCaldavValidatorService } from 'src/engine/core-modules/imap-smt
 import {
   type AccountType,
   type ConnectionParameters,
-  type ImapSmtpCaldavParams,
+  type PlaintextImapSmtpCaldavParams,
 } from 'src/engine/core-modules/imap-smtp-caldav-connection/types/imap-smtp-caldav-connection.type';
+import { buildImapTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-imap-tls-options.util';
+import { buildMailServerCertificateOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-mail-server-certificate-options.util';
+import { buildSmtpTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-smtp-tls-options.util';
+import { isMailServerCertificateError } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/is-mail-server-certificate-error.util';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { CalDavClientService } from 'src/modules/calendar/calendar-event-import-manager/drivers/caldav/services/caldav-client.service';
@@ -41,15 +46,19 @@ export class ImapSmtpCaldavService {
     const client = new ImapFlow({
       host: validatedHost,
       port: params.port,
-      secure: params.secure ?? true,
+      ...buildImapTlsOptions(params.connectionSecurity),
       auth: {
         user: params.username ?? handle,
         pass: params.password,
       },
       logger: false,
-      tls: {
-        rejectUnauthorized: false,
-      },
+      disableIMAP4rev2: true,
+      tls: buildMailServerCertificateOptions({
+        host: params.host,
+        isSelfSignedCertificateAllowed: this.twentyConfigService.get(
+          'IMAP_SMTP_ALLOW_SELF_SIGNED',
+        ),
+      }),
     });
 
     // ImapFlow is EventEmitter — missing 'error' listener crashes process on socket timeout.
@@ -85,6 +94,24 @@ export class ImapSmtpCaldavService {
         );
       }
 
+      if (isMailServerCertificateError(error)) {
+        throw new UserInputError(
+          `IMAP server certificate could not be verified: ${error.message}`,
+          {
+            userFriendlyMessage: msg`Your email server's security certificate is invalid (expired, self-signed or issued for another hostname). Ask your email provider to fix it, then try again.`,
+          },
+        );
+      }
+
+      if (error.tlsFailed === true) {
+        throw new UserInputError(
+          `IMAP STARTTLS upgrade failed: ${error.message}`,
+          {
+            userFriendlyMessage: msg`We couldn't establish a secure STARTTLS connection with your email server. Try SSL/TLS as the connection security instead.`,
+          },
+        );
+      }
+
       if (error.code === 'ECONNREFUSED') {
         throw new UserInputError(
           `IMAP connection refused. Please verify server and port.`,
@@ -114,13 +141,17 @@ export class ImapSmtpCaldavService {
     const transport = createTransport({
       host: validatedHost,
       port: params.port,
+      ...buildSmtpTlsOptions(params.connectionSecurity),
       auth: {
         user: params.username ?? handle,
         pass: params.password,
       },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      tls: buildMailServerCertificateOptions({
+        host: params.host,
+        isSelfSignedCertificateAllowed: this.twentyConfigService.get(
+          'IMAP_SMTP_ALLOW_SELF_SIGNED',
+        ),
+      }),
     });
 
     try {
@@ -217,9 +248,17 @@ export class ImapSmtpCaldavService {
   }: {
     connectionParameters: EmailAccountConnectionParametersInput;
     handle: string;
-    existingConnectionParameters: ImapSmtpCaldavParams | null;
-  }): Promise<ImapSmtpCaldavParams> {
-    const validatedParams: ImapSmtpCaldavParams = {};
+    existingConnectionParameters: PlaintextImapSmtpCaldavParams | null;
+  }): Promise<PlaintextImapSmtpCaldavParams> {
+    const validatedParams: PlaintextImapSmtpCaldavParams = {};
+
+    if (isDefined(connectionParameters.name)) {
+      const trimmedName = connectionParameters.name.trim();
+
+      validatedParams.name = isNonEmptyString(trimmedName) ? trimmedName : null;
+    } else if (isDefined(existingConnectionParameters?.name)) {
+      validatedParams.name = existingConnectionParameters.name;
+    }
 
     for (const protocol of ACCOUNT_TYPES) {
       const params = connectionParameters[protocol];

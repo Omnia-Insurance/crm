@@ -1,4 +1,6 @@
+import { t } from '@lingui/core/macro';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
+import { getIsMetadataItemCustom } from '@/object-metadata/utils/getIsMetadataItemCustom';
 import { type FieldsWidgetGroup } from '@/page-layout/widgets/fields/types/FieldsWidgetGroup';
 import { FieldMetadataType } from 'twenty-shared/types';
 import { isFieldMetadataEligibleForFieldsWidget } from 'twenty-shared/utils';
@@ -7,9 +9,11 @@ import { v4 as uuidv4 } from 'uuid';
 export const buildDefaultFieldsWidgetGroups = ({
   fields,
   labelIdentifierFieldMetadataItemId,
+  workspaceCustomApplicationId,
 }: {
   fields: FieldMetadataItem[];
   labelIdentifierFieldMetadataItemId: string | undefined;
+  workspaceCustomApplicationId?: string | null;
 }): FieldsWidgetGroup[] => {
   const eligibleFields = fields.filter(
     (field) =>
@@ -21,8 +25,12 @@ export const buildDefaultFieldsWidgetGroups = ({
       }),
   );
 
-  const standardFields = eligibleFields.filter((field) => !field.isCustom);
-  const customFields = eligibleFields.filter((field) => field.isCustom);
+  const nonCustomFields = eligibleFields.filter(
+    (field) => !getIsMetadataItemCustom(field, workspaceCustomApplicationId),
+  );
+  const customFields = eligibleFields.filter((field) =>
+    getIsMetadataItemCustom(field, workspaceCustomApplicationId),
+  );
 
   const isFieldVisible = (fieldType: FieldMetadataType) =>
     fieldType !== FieldMetadataType.RELATION &&
@@ -31,13 +39,13 @@ export const buildDefaultFieldsWidgetGroups = ({
   const groups: FieldsWidgetGroup[] = [];
   let globalIndex = 0;
 
-  if (standardFields.length > 0) {
+  if (nonCustomFields.length > 0) {
     groups.push({
       id: uuidv4(),
-      name: 'General',
+      name: t`General`,
       position: 0,
       isVisible: true,
-      fields: standardFields.map((field, index) => ({
+      fields: nonCustomFields.map((field, index) => ({
         fieldMetadataItem: field,
         position: index,
         isVisible: isFieldVisible(field.type),
@@ -49,7 +57,7 @@ export const buildDefaultFieldsWidgetGroups = ({
   if (customFields.length > 0) {
     groups.push({
       id: uuidv4(),
-      name: 'Other',
+      name: t`Other`,
       position: 1,
       isVisible: true,
       fields: customFields.map((field, index) => ({

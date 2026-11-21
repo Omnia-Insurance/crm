@@ -1,29 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 
+import { isNonEmptyString } from '@sniptt/guards';
+
 import {
-    DEFAULT_LANGUAGE,
-    SUPPORTED_LANGUAGES,
+  type BaseGroup,
+  type BaseStructure,
+} from '../navigation/base-structure-types';
+import {
+  DEFAULT_LANGUAGE,
+  SUPPORTED_LANGUAGES,
 } from '../navigation/supported-languages';
-
-type BasePage = string | BaseGroup;
-
-type BaseGroup = {
-  key: string;
-  label: string;
-  icon?: string;
-  pages: BasePage[];
-};
-
-type BaseTab = {
-  key: string;
-  label: string;
-  groups: BaseGroup[];
-};
-
-type BaseStructure = {
-  tabs: BaseTab[];
-};
 
 type TranslationGroupEntry = {
   label: string;
@@ -55,6 +42,7 @@ type GeneratedLanguage = {
 type GeneratedGroup = {
   group: string;
   icon?: string;
+  root?: string;
   pages: Array<string | GeneratedGroup>;
 };
 
@@ -63,7 +51,7 @@ const baseStructurePath = path.resolve(
   '../navigation/base-structure.json',
 );
 const docsPath = path.resolve(__dirname, '../docs.json');
-const localesRoot = path.resolve(__dirname, '../l');
+const docsRoot = path.resolve(__dirname, '..');
 
 const baseStructure: BaseStructure = JSON.parse(
   fs.readFileSync(baseStructurePath, 'utf8'),
@@ -71,15 +59,11 @@ const baseStructure: BaseStructure = JSON.parse(
 
 const docsConfig = JSON.parse(fs.readFileSync(docsPath, 'utf8'));
 
-const collectTranslations = (
-  file: TranslationFile | null,
-): TranslationMaps => {
+const collectTranslations = (file: TranslationFile | null): TranslationMaps => {
   const tabLabels = new Map<string, string>();
   const groupLabels = new Map<string, string>();
 
-  const collectGroups = (
-    groups?: Record<string, TranslationGroupEntry>,
-  ) => {
+  const collectGroups = (groups?: Record<string, TranslationGroupEntry>) => {
     if (!groups) {
       return;
     }
@@ -99,17 +83,15 @@ const collectTranslations = (
 };
 
 const loadTranslationFile = (language: string): TranslationFile | null => {
-  const translationPath = path.join(
-    localesRoot,
-    language,
-    'navigation.json',
-  );
+  const translationPath = path.join(docsRoot, language, 'navigation.json');
 
   if (!fs.existsSync(translationPath)) {
     return null;
   }
 
-  return JSON.parse(fs.readFileSync(translationPath, 'utf8')) as TranslationFile;
+  return JSON.parse(
+    fs.readFileSync(translationPath, 'utf8'),
+  ) as TranslationFile;
 };
 
 const buildLanguageEntry = (language: string): GeneratedLanguage => {
@@ -119,37 +101,62 @@ const buildLanguageEntry = (language: string): GeneratedLanguage => {
 
   return {
     language,
-    tabs: baseStructure.tabs.map((tab) => ({
-      tab: translationMaps.tabLabels.get(tab.key) ?? tab.label,
-      groups: tab.groups.map((group) =>
-        buildGroup(group, translationMaps, language),
-      ),
-    })),
+    tabs: baseStructure.tabs
+      .map((tab) => ({
+        tab: translationMaps.tabLabels.get(tab.key) ?? tab.label,
+        groups: tab.groups
+          .map((group) => buildGroup(group, translationMaps, language))
+          .filter((group): group is GeneratedGroup => group !== null),
+      }))
+      .filter((tab) => tab.groups.length > 0),
   };
 };
 
+// Mintlify requires each page path to appear in only one language's navigation.
+// Duplicating a path across languages breaks the language switcher (it can no
+// longer resolve the equivalent page and falls back to the first page). So a
+// page is only included in a non-default language when its translation exists,
+// and empty groups/tabs are dropped entirely.
 const buildGroup = (
   group: BaseGroup,
   translations: TranslationMaps,
   language: string,
-): GeneratedGroup => ({
-  group: translations.groupLabels.get(group.key) ?? group.label,
-  ...(group.icon ? { icon: group.icon } : {}),
-  pages: group.pages.map((page) =>
-    typeof page === 'string'
-      ? formatPageSlug(page, language)
-      : buildGroup(page, translations, language),
-  ),
-});
+): GeneratedGroup | null => {
+  const pages = group.pages
+    .map((page) =>
+      typeof page === 'string'
+        ? formatPageSlug(page, language)
+        : buildGroup(page, translations, language),
+    )
+    .filter((page): page is string | GeneratedGroup => page !== null);
 
-const formatPageSlug = (slug: string, language: string): string => {
+  if (pages.length === 0) {
+    return null;
+  }
+
+  const root = isNonEmptyString(group.root)
+    ? formatPageSlug(group.root, language)
+    : null;
+
+  return {
+    group: translations.groupLabels.get(group.key) ?? group.label,
+    ...(group.icon ? { icon: group.icon } : {}),
+    ...(isNonEmptyString(root) ? { root } : {}),
+    pages,
+  };
+};
+
+// Mintlify resolves a page's counterpart in another language from the
+// language-code path prefix, so the switcher only works when translations
+// live at `<language>/<slug>`.
+const formatPageSlug = (slug: string, language: string): string | null => {
   if (language === DEFAULT_LANGUAGE) {
     return slug;
   }
 
-  const localizedPagePath = path.join(localesRoot, language, `${slug}.mdx`);
+  const localizedPagePath = path.join(docsRoot, language, `${slug}.mdx`);
 
-  return fs.existsSync(localizedPagePath) ? `l/${language}/${slug}` : slug;
+  return fs.existsSync(localizedPagePath) ? `${language}/${slug}` : null;
 };
 
 const hasLocaleContent = (language: string): boolean => {
@@ -157,13 +164,12 @@ const hasLocaleContent = (language: string): boolean => {
     return true;
   }
 
-  const localeDir = path.join(localesRoot, language);
+  const localeDir = path.join(docsRoot, language);
   return fs.existsSync(localeDir);
 };
 
-const languages = SUPPORTED_LANGUAGES.filter(hasLocaleContent).map(
-  buildLanguageEntry,
-);
+const languages =
+  SUPPORTED_LANGUAGES.filter(hasLocaleContent).map(buildLanguageEntry);
 
 if (!docsConfig.navigation) {
   docsConfig.navigation = {};

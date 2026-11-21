@@ -1,49 +1,70 @@
 import react from '@vitejs/plugin-react-swc';
-import wyw from '@wyw-in-js/vite';
+import { Features } from 'lightningcss';
 import * as path from 'path';
 import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
-import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { wrapInTwentyUiCascadeLayer } from './build-tools/wrapInTwentyUiCascadeLayer';
 import packageJson from './package.json';
 
-const depNames = Object.keys(packageJson.dependencies || {});
+// bundled so consumers only parse the icons twenty-ui uses, not the 6,000-module barrel
+const BUNDLED_DEPS = ['@tabler/icons-react'];
+
+const depNames = Object.keys({
+  ...(packageJson.dependencies || {}),
+  ...(packageJson.peerDependencies || {}),
+}).filter((dep) => !BUNDLED_DEPS.includes(dep));
 
 const isExternal = (id: string): boolean =>
   depNames.some((dep) => id === dep || id.startsWith(dep + '/'));
 
+const entries = Object.keys(packageJson.exports)
+  .filter((subpath) => !subpath.endsWith('.css'))
+  .map((subpath) =>
+    subpath === '.' ? 'src/individual-entry.ts' : `src/${subpath}/index.ts`,
+  );
+
 export default defineConfig(() => {
   return {
     resolve: {
+      tsconfigPaths: true,
       alias: {
         '@ui/': path.resolve(__dirname, 'src') + '/',
         '@assets/': path.resolve(__dirname, 'src/assets') + '/',
+        '@styles/': path.resolve(__dirname, 'src/styles') + '/',
       },
     },
     css: {
       modules: {
         localsConvention: 'camelCaseOnly',
       },
+      postcss: {
+        plugins: [
+          wrapInTwentyUiCascadeLayer({
+            sourceDirectory: path.resolve(__dirname, 'src'),
+          }),
+        ],
+      },
+      lightningcss: {
+        exclude: Features.DirSelector,
+      },
+      preprocessorOptions: {
+        scss: {
+          api: 'modern-compiler',
+          loadPaths: [path.resolve(__dirname, 'src/styles')],
+          additionalData: [
+            `@use 'abstracts/functions' as *;`,
+            `@use 'abstracts/mixins' as *;`,
+            `@use 'abstracts/breakpoints' as *;`,
+            '',
+          ].join('\n'),
+        },
+      },
     },
     root: __dirname,
     cacheDir: '../../node_modules/.vite/packages/twenty-ui-individual',
     assetsInclude: ['src/**/*.svg'],
-    plugins: [
-      react(),
-      tsconfigPaths({
-        root: __dirname,
-        projects: ['tsconfig.json'],
-      }),
-      svgr(),
-      {
-        ...wyw({
-          babelOptions: {
-            presets: ['@babel/preset-typescript', '@babel/preset-react'],
-          },
-        }),
-        enforce: 'pre',
-      },
-    ],
+    plugins: [react(), svgr()],
     build: {
       cssCodeSplit: false,
       minify: 'esbuild',
@@ -57,7 +78,7 @@ export default defineConfig(() => {
         requireReturnsDefault: 'auto',
       },
       lib: {
-        entry: 'src/individual-entry.ts',
+        entry: entries,
         formats: ['es'],
       },
       rollupOptions: {

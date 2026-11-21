@@ -1,25 +1,44 @@
 import { Injectable } from '@nestjs/common';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
+import { isDefined } from 'twenty-shared/utils';
 import { z } from 'zod';
 
+import {
+  ACTION_TOOL_LABELS,
+  type ActionToolId,
+} from 'src/engine/core-modules/tool-provider/constants/action-tool-label.constant';
+import { EMAIL_TOOL_APPROVALS } from 'src/engine/core-modules/tool-provider/constants/email-tool-approvals.constant';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
+import { I18nService } from 'src/engine/core-modules/i18n/i18n.service';
 import { type GenerateDescriptorOptions } from 'src/engine/core-modules/tool-provider/interfaces/generate-descriptor-options.type';
 import { type ToolProvider } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider.interface';
 import { type ToolProviderContext } from 'src/engine/core-modules/tool-provider/interfaces/tool-provider-context.type';
+import { type ActionToolLabel } from 'src/engine/core-modules/tool-provider/types/action-tool-label.type';
+import { translateToolLabel } from 'src/engine/core-modules/tool-provider/utils/translate-tool-label.util';
+import { humanizeToolName } from 'src/engine/core-modules/tool-provider/utils/tool-set-to-descriptors.util';
 
-import { ToolCategory } from 'twenty-shared/ai';
+import { type ToolApproval, ToolCategory } from 'twenty-shared/ai';
+import { toToolJsonSchema } from 'src/engine/core-modules/record-crud/utils/to-tool-json-schema.util';
 import { type ToolDescriptor } from 'src/engine/core-modules/tool-provider/types/tool-descriptor.type';
 import { type ToolIndexEntry } from 'src/engine/core-modules/tool-provider/types/tool-index-entry.type';
 import { CodeInterpreterService } from 'src/engine/core-modules/code-interpreter/code-interpreter.service';
+import { CreateCalendarEventTool } from 'src/engine/core-modules/tool/tools/calendar-tool/create-calendar-event-tool';
 import { CodeInterpreterTool } from 'src/engine/core-modules/tool/tools/code-interpreter-tool/code-interpreter-tool';
 import { DraftEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/draft-email-tool';
+import { FindConnectedAccountsTool } from 'src/engine/core-modules/tool/tools/email-tool/find-connected-accounts-tool';
 import { SendEmailTool } from 'src/engine/core-modules/tool/tools/email-tool/send-email-tool';
+import { CompleteFileUploadTool } from 'src/engine/core-modules/tool/tools/file-upload-tool/complete-file-upload-tool';
+import { CreateFileUploadTool } from 'src/engine/core-modules/tool/tools/file-upload-tool/create-file-upload-tool';
 import { HttpTool } from 'src/engine/core-modules/tool/tools/http-tool/http-tool';
-import { NavigateAppTool } from 'src/engine/core-modules/tool/tools/navigate-tool/navigate-app-tool';
+import { ExtractJsonPathsTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/extract-json-paths-tool';
+import { SearchOutputTool } from 'src/engine/core-modules/tool/tools/output-navigation-tool/search-output-tool';
 import { SearchHelpCenterTool } from 'src/engine/core-modules/tool/tools/search-help-center-tool/search-help-center-tool';
+import { ShareRecordTool } from 'src/engine/core-modules/tool/tools/share-record-tool/share-record-tool';
 import { type ToolOutput } from 'src/engine/core-modules/tool/types/tool-output.type';
 import { type Tool } from 'src/engine/core-modules/tool/types/tool.type';
-import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+import { SettingPermissionsService } from 'src/engine/permissions/setting-permissions.service';
+import { SaveCampaignTool } from 'src/modules/emailing/tools/save-campaign-tool';
 
 @Injectable()
 export class ActionToolProvider implements ToolProvider {
@@ -31,19 +50,34 @@ export class ActionToolProvider implements ToolProvider {
     private readonly httpTool: HttpTool,
     private readonly sendEmailTool: SendEmailTool,
     private readonly draftEmailTool: DraftEmailTool,
+    private readonly findConnectedAccountsTool: FindConnectedAccountsTool,
+    private readonly createCalendarEventTool: CreateCalendarEventTool,
     private readonly searchHelpCenterTool: SearchHelpCenterTool,
+    private readonly createFileUploadTool: CreateFileUploadTool,
+    private readonly completeFileUploadTool: CompleteFileUploadTool,
     private readonly codeInterpreterTool: CodeInterpreterTool,
-    private readonly navigateAppTool: NavigateAppTool,
+    private readonly extractJsonPathsTool: ExtractJsonPathsTool,
+    private readonly searchOutputTool: SearchOutputTool,
+    private readonly saveCampaignTool: SaveCampaignTool,
+    private readonly shareRecordTool: ShareRecordTool,
     private readonly codeInterpreterService: CodeInterpreterService,
-    private readonly permissionsService: PermissionsService,
+    private readonly settingPermissionsService: SettingPermissionsService,
+    private readonly i18nService: I18nService,
   ) {
     this.toolMap = new Map<string, Tool>([
       ['http_request', this.httpTool],
       ['send_email', this.sendEmailTool],
       ['draft_email', this.draftEmailTool],
+      ['find_connected_accounts', this.findConnectedAccountsTool],
+      ['create_calendar_event', this.createCalendarEventTool],
       ['search_help_center', this.searchHelpCenterTool],
+      ['create_file_upload', this.createFileUploadTool],
+      ['complete_file_upload', this.completeFileUploadTool],
       ['code_interpreter', this.codeInterpreterTool],
-      ['navigate_app', this.navigateAppTool],
+      ['extract_json_paths', this.extractJsonPathsTool],
+      ['search_output', this.searchOutputTool],
+      ['save_campaign', this.saveCampaignTool],
+      ['share_record', this.shareRecordTool],
     ]);
   }
 
@@ -58,60 +92,145 @@ export class ActionToolProvider implements ToolProvider {
     const includeSchemas = options?.includeSchemas ?? true;
     const descriptors: (ToolIndexEntry | ToolDescriptor)[] = [];
 
-    const hasHttpPermission = await this.permissionsService.hasToolPermission(
-      context.rolePermissionConfig,
-      context.workspaceId,
-      PermissionFlagType.HTTP_REQUEST_TOOL,
-    );
+    const hasHttpPermission =
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: context.authContext,
+        permissionFlag: PermissionFlagType.HTTP_REQUEST_TOOL,
+      });
 
     if (hasHttpPermission) {
       descriptors.push(
-        this.buildDescriptor('http_request', this.httpTool, includeSchemas),
+        this.buildDescriptor(
+          'http_request',
+          this.httpTool,
+          includeSchemas,
+          context.locale,
+        ),
       );
     }
 
-    const hasEmailPermission = await this.permissionsService.hasToolPermission(
-      context.rolePermissionConfig,
-      context.workspaceId,
-      PermissionFlagType.SEND_EMAIL_TOOL,
-    );
+    const hasEmailPermission =
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: context.authContext,
+        permissionFlag: PermissionFlagType.SEND_EMAIL_TOOL,
+      });
 
     if (hasEmailPermission) {
       descriptors.push(
-        this.buildDescriptor('send_email', this.sendEmailTool, includeSchemas),
+        this.buildDescriptor(
+          'send_email',
+          this.sendEmailTool,
+          includeSchemas,
+          context.locale,
+          EMAIL_TOOL_APPROVALS.send_email,
+        ),
       );
       descriptors.push(
         this.buildDescriptor(
           'draft_email',
           this.draftEmailTool,
           includeSchemas,
+          context.locale,
+          EMAIL_TOOL_APPROVALS.draft_email,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'find_connected_accounts',
+          this.findConnectedAccountsTool,
+          includeSchemas,
+          context.locale,
         ),
       );
     }
 
+    const hasCreateCalendarEventPermission =
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: context.authContext,
+        permissionFlag: PermissionFlagType.CREATE_CALENDAR_EVENT_TOOL,
+      });
+
+    if (hasCreateCalendarEventPermission) {
+      descriptors.push(
+        this.buildDescriptor(
+          'create_calendar_event',
+          this.createCalendarEventTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+    }
+
+    const hasUploadFilePermission =
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: context.authContext,
+        permissionFlag: PermissionFlagType.UPLOAD_FILE,
+      });
+
+    if (hasUploadFilePermission) {
+      descriptors.push(
+        this.buildDescriptor(
+          'create_file_upload',
+          this.createFileUploadTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+      descriptors.push(
+        this.buildDescriptor(
+          'complete_file_upload',
+          this.completeFileUploadTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+    }
+
+    // OMNIA-CUSTOM: no search_help_center. It posts a model-written query (which can quote PHI) to
+    // docs.twenty.com, which has no BAA; without a descriptor the tool can neither load nor run.
+
     descriptors.push(
       this.buildDescriptor(
-        'search_help_center',
-        this.searchHelpCenterTool,
+        'extract_json_paths',
+        this.extractJsonPathsTool,
         includeSchemas,
       ),
     );
 
     descriptors.push(
       this.buildDescriptor(
-        'navigate_app',
-        this.navigateAppTool,
+        'search_output',
+        this.searchOutputTool,
         includeSchemas,
       ),
     );
+
+    descriptors.push(
+      this.buildDescriptor(
+        'save_campaign',
+        this.saveCampaignTool,
+        includeSchemas,
+        context.locale,
+      ),
+    );
+
+    if (await this.shareRecordTool.isEnabled(context.workspaceId)) {
+      descriptors.push(
+        this.buildDescriptor(
+          'share_record',
+          this.shareRecordTool,
+          includeSchemas,
+          context.locale,
+        ),
+      );
+    }
 
     const hasCodeInterpreterPermission =
       this.codeInterpreterService.isEnabled() &&
-      (await this.permissionsService.hasToolPermission(
-        context.rolePermissionConfig,
-        context.workspaceId,
-        PermissionFlagType.CODE_INTERPRETER_TOOL,
-      ));
+      (await this.settingPermissionsService.hasPermissionFlag({
+        authContext: context.authContext,
+        permissionFlag: PermissionFlagType.CODE_INTERPRETER_TOOL,
+      }));
 
     if (hasCodeInterpreterPermission) {
       descriptors.push(
@@ -119,6 +238,7 @@ export class ActionToolProvider implements ToolProvider {
           'code_interpreter',
           this.codeInterpreterTool,
           includeSchemas,
+          context.locale,
         ),
       );
     }
@@ -143,6 +263,14 @@ export class ActionToolProvider implements ToolProvider {
       workspaceId: context.workspaceId,
       userId: context.userId,
       userWorkspaceId: context.userWorkspaceId,
+      workspaceMemberId:
+        isDefined(context.authContext) && isUserAuthContext(context.authContext)
+          ? context.authContext.workspaceMemberId
+          : undefined,
+      agentId: context.agentId,
+      threadId: context.threadId,
+      outboundRequestSource: 'ai-http-tool',
+      authContext: context.authContext,
       onCodeExecutionUpdate: context.onCodeExecutionUpdate,
     });
   }
@@ -151,16 +279,25 @@ export class ActionToolProvider implements ToolProvider {
     toolId: string,
     tool: Tool,
     includeSchemas: boolean,
+    locale?: ToolProviderContext['locale'],
+    approval?: ToolApproval,
   ): ToolIndexEntry | ToolDescriptor {
+    const labels: ActionToolLabel | undefined =
+      ACTION_TOOL_LABELS[toolId as ActionToolId];
+
     return {
       name: toolId,
+      label: isDefined(labels)
+        ? translateToolLabel(labels.label, this.i18nService, locale)
+        : humanizeToolName(toolId),
       description: tool.description,
       category: ToolCategory.ACTION,
       icon: 'IconPlayerPlay',
       ...(includeSchemas && {
-        inputSchema: z.toJSONSchema(tool.inputSchema as z.ZodType),
+        inputSchema: toToolJsonSchema(tool.inputSchema as z.ZodType),
       }),
       executionRef: { kind: 'static', toolId },
+      ...(isDefined(approval) && { approval }),
     };
   }
 }

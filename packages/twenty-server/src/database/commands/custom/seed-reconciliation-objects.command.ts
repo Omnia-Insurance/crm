@@ -9,20 +9,20 @@
 //
 // See memory/project-reconciliation-v2.md for the full architecture context.
 
-import { InjectRepository } from '@nestjs/typeorm';
-
 import { Command } from 'nest-commander';
 import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { Repository } from 'typeorm';
 
-import { ActiveOrSuspendedWorkspaceCommandRunner } from 'src/database/commands/command-runners/active-or-suspended-workspace.command-runner';
+import { ProvisionedWorkspaceCommandRunner } from 'src/database/commands/command-runners/provisioned-workspace.command-runner';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
 import { type RunOnWorkspaceArgs } from 'src/database/commands/command-runners/workspace.command-runner';
 import { type UpdateFieldInput } from 'src/engine/metadata-modules/field-metadata/dtos/update-field.input';
 import { FieldMetadataService } from 'src/engine/metadata-modules/field-metadata/services/field-metadata.service';
+import { withDerivedFieldMetadataMaps } from 'src/engine/metadata-modules/flat-entity/utils/with-derived-field-metadata-maps.util';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { ObjectMetadataService } from 'src/engine/metadata-modules/object-metadata/object-metadata.service';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
 import { type FieldMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/field-metadata-seed.type';
 import { type ObjectMetadataSeed } from 'src/engine/workspace-manager/dev-seeder/metadata/types/object-metadata-seed.type';
@@ -749,11 +749,11 @@ const DECISION_RULE_CUSTOM_FIELDS: FieldMetadataSeed[] = [
   description:
     'Create the Reconciliation and CarrierConfig custom workspace objects used by the payment reconciliation pipeline. Idempotent; safe to re-run.',
 })
-export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspaceCommandRunner {
+export class SeedReconciliationObjectsCommand extends ProvisionedWorkspaceCommandRunner {
   constructor(
     protected readonly workspaceIteratorService: WorkspaceIteratorService,
-    @InjectRepository(ObjectMetadataEntity)
-    private readonly objectMetadataRepository: Repository<ObjectMetadataEntity>,
+    @InjectWorkspaceScopedRepository(ObjectMetadataEntity)
+    private readonly objectMetadataRepository: WorkspaceScopedRepository<ObjectMetadataEntity>,
     private readonly objectMetadataService: ObjectMetadataService,
     private readonly fieldMetadataService: FieldMetadataService,
     private readonly workspaceCacheService: WorkspaceCacheService,
@@ -902,10 +902,13 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
     // 4. Invalidate workspace caches so new metadata is picked up
     if (!isDryRun) {
-      await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
-        'flatObjectMetadataMaps',
-        'flatFieldMetadataMaps',
-      ]);
+      await this.workspaceCacheService.invalidateAndRecompute(
+        workspaceId,
+        withDerivedFieldMetadataMaps([
+          'flatObjectMetadataMaps',
+          'flatFieldMetadataMaps',
+        ]),
+      );
     }
 
     // 5. Restrict to Admin role: deny read/write on these objects for every
@@ -918,8 +921,8 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     );
   }
 
-  // Delegates to the shared lockdown service so the same logic also runs for
-  // roles created after seeding (see RoleService.createRole).
+  // Shared with the reconciliation lockdown listener, which re-locks roles
+  // created or edited after seeding.
   private async restrictToAdminRole({
     workspaceId,
     dryRun,
@@ -975,8 +978,8 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     seed: ObjectMetadataSeed;
     dryRun: boolean;
   }): Promise<void> {
-    const existing = await this.objectMetadataRepository.findOne({
-      where: { workspaceId, nameSingular: seed.nameSingular },
+    const existing = await this.objectMetadataRepository.findOne(workspaceId, {
+      where: { nameSingular: seed.nameSingular },
     });
 
     if (isDefined(existing)) {
@@ -1030,10 +1033,13 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     fieldSeeds: FieldMetadataSeed[];
     dryRun: boolean;
   }): Promise<void> {
-    const objectMetadata = await this.objectMetadataRepository.findOne({
-      where: { workspaceId, nameSingular: objectNameSingular },
-      relations: ['fields'],
-    });
+    const objectMetadata = await this.objectMetadataRepository.findOne(
+      workspaceId,
+      {
+        where: { nameSingular: objectNameSingular },
+        relations: ['fields'],
+      },
+    );
 
     if (!isDefined(objectMetadata)) {
       if (dryRun) {
@@ -1076,7 +1082,9 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
 
       const existing = existingFieldsByName.get(seed.name);
 
-      if (!existing || !seed.options) continue;
+      if (!existing || !seed.options) {
+        continue;
+      }
 
       const existingValues = new Set(
         ((existing.options ?? []) as { value: string }[]).map((o) => o.value),
@@ -1190,14 +1198,18 @@ export class SeedReconciliationObjectsCommand extends ActiveOrSuspendedWorkspace
     targetFieldIcon: string;
     dryRun: boolean;
   }): Promise<void> {
-    const sourceObject = await this.objectMetadataRepository.findOne({
-      where: { workspaceId, nameSingular: sourceObjectNameSingular },
-      relations: ['fields'],
-    });
+    const sourceObject = await this.objectMetadataRepository.findOne(
+      workspaceId,
+      {
+        where: { nameSingular: sourceObjectNameSingular },
+        relations: ['fields'],
+      },
+    );
 
-    const targetObject = await this.objectMetadataRepository.findOne({
-      where: { workspaceId, nameSingular: targetObjectNameSingular },
-    });
+    const targetObject = await this.objectMetadataRepository.findOne(
+      workspaceId,
+      { where: { nameSingular: targetObjectNameSingular } },
+    );
 
     if (!isDefined(sourceObject) || !isDefined(targetObject)) {
       if (dryRun) {

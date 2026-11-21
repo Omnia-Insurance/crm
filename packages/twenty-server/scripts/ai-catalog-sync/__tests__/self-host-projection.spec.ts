@@ -1,0 +1,25 @@
+import canonicalCatalog from 'src/engine/metadata-modules/ai/ai-models/ai-models.json';
+import shippedCatalog from 'src/engine/metadata-modules/ai/ai-models/ai-providers.json';
+import selfHostSpec from 'src/engine/metadata-modules/ai/ai-models/ai-self-host-spec.json';
+
+import { type CatalogSpec } from '../types/catalog-spec.type';
+import { type CanonicalCatalog } from '../types/canonical-catalog.type';
+import { projectCatalog } from '../utils/project-catalog.util';
+import { splitOmniaHandMaintainedProviders } from '../utils/split-omnia-hand-maintained-providers.util';
+
+// The shipped catalog is generated, so a hand edit is the drift this pipeline exists to remove
+describe('the shipped catalog', () => {
+  it('is what the self-host spec projects from the model catalog', () => {
+    const projected = projectCatalog({
+      canonicalCatalog: canonicalCatalog as CanonicalCatalog,
+      spec: selfHostSpec as CatalogSpec,
+    });
+
+    // OMNIA-CUSTOM: the hand-maintained Bedrock route is outside the projection
+    const { projectedProviders } = splitOmniaHandMaintainedProviders(
+      shippedCatalog as CanonicalCatalog,
+    );
+
+    expect(projected).toEqual(projectedProviders);
+  });
+});

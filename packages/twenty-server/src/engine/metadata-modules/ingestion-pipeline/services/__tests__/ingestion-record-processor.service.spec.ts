@@ -1,10 +1,15 @@
+import { Logger } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 
 import { type IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
 import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { IngestionRecordProcessorService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-record-processor.service';
 import { IngestionRelationResolverService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-relation-resolver.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import {
+  TwentyOrmException,
+  TwentyOrmExceptionCode,
+} from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 const workspaceId = 'workspace-1';
 
@@ -13,6 +18,11 @@ const mockPipeline = {
   workspaceId,
   targetObjectNameSingular: 'person',
   dedupFieldNames: null,
+} as IngestionPipelineEntity;
+
+const pipelineWithDedup = {
+  ...mockPipeline,
+  dedupFieldNames: ['phones.primaryPhoneNumber'],
 } as IngestionPipelineEntity;
 
 const mockMappings: IngestionFieldMappingEntity[] = [
@@ -54,6 +64,12 @@ const mockMappings: IngestionFieldMappingEntity[] = [
   } as IngestionFieldMappingEntity,
 ];
 
+const buildDuplicateEntryError = () =>
+  new TwentyOrmException(
+    'A duplicate entry was detected',
+    TwentyOrmExceptionCode.DUPLICATE_ENTRY_DETECTED,
+  );
+
 describe('IngestionRecordProcessorService', () => {
   let service: IngestionRecordProcessorService;
   let mockRepository: {
@@ -62,13 +78,25 @@ describe('IngestionRecordProcessorService', () => {
     update: jest.Mock;
   };
   let mockRelationResolver: jest.Mocked<IngestionRelationResolverService>;
-  let mockOrmManager: jest.Mocked<GlobalWorkspaceOrmManager>;
+  let mockOrmManager: {
+    executeInWorkspaceContext: jest.Mock;
+    getRepositoryWithoutPermissionChecks: jest.Mock;
+  };
 
   beforeEach(async () => {
     mockRepository = {
       findOne: jest.fn(),
-      save: jest.fn().mockImplementation((data) => ({ id: 'new-id', ...data })),
+      save: jest
+        .fn()
+        .mockImplementation(async (data) => [{ id: 'new-id', ...data }]),
       update: jest.fn(),
+    };
+
+    mockOrmManager = {
+      executeInWorkspaceContext: jest.fn((callback) => callback()),
+      getRepositoryWithoutPermissionChecks: jest
+        .fn()
+        .mockReturnValue(mockRepository),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -84,10 +112,8 @@ describe('IngestionRecordProcessorService', () => {
           },
         },
         {
-          provide: GlobalWorkspaceOrmManager,
-          useValue: {
-            getRepository: jest.fn().mockResolvedValue(mockRepository),
-          },
+          provide: WorkspaceOrmManager,
+          useValue: mockOrmManager,
         },
       ],
     }).compile();
@@ -96,11 +122,27 @@ describe('IngestionRecordProcessorService', () => {
       IngestionRecordProcessorService,
     );
     mockRelationResolver = module.get(IngestionRelationResolverService);
-    mockOrmManager = module.get(GlobalWorkspaceOrmManager);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
+  });
+
+  it('should write as the system inside the pipeline workspace', async () => {
+    await service.processRecords(
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
+      mockPipeline,
+      mockMappings,
+      workspaceId,
+    );
+
+    expect(mockOrmManager.executeInWorkspaceContext).toHaveBeenCalledWith(
+      expect.any(Function),
+      { type: 'system', workspace: { id: workspaceId } },
+    );
+    expect(
+      mockOrmManager.getRepositoryWithoutPermissionChecks,
+    ).toHaveBeenCalledWith('person');
   });
 
   it('should create records when no dedup is configured', async () => {
@@ -120,30 +162,16 @@ describe('IngestionRecordProcessorService', () => {
     expect(result.recordsUpdated).toBe(0);
     expect(result.recordsFailed).toBe(0);
     expect(mockRepository.save).toHaveBeenCalledTimes(2);
-    expect(mockOrmManager.getRepository).toHaveBeenCalledWith(
-      workspaceId,
-      'person',
-      { shouldBypassPermissionChecks: true },
-    );
   });
 
   it('should update existing records when dedup match found', async () => {
-    const pipelineWithDedup = {
-      ...mockPipeline,
-      dedupFieldNames: ['phones.primaryPhoneNumber'],
-    } as IngestionPipelineEntity;
-
-    const records = [
-      { firstName: 'John', lastName: 'Doe', phone: '+15551234567' },
-    ];
-
     mockRepository.findOne.mockResolvedValue({
       id: 'existing-person-1',
       name: { firstName: 'Old', lastName: 'Name' },
     });
 
     const result = await service.processRecords(
-      records,
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
       pipelineWithDedup,
       mockMappings,
       workspaceId,
@@ -151,6 +179,9 @@ describe('IngestionRecordProcessorService', () => {
 
     expect(result.recordsUpdated).toBe(1);
     expect(result.recordsCreated).toBe(0);
+    expect(mockRepository.findOne).toHaveBeenCalledWith({
+      where: { phones: { primaryPhoneNumber: '+15551234567' } },
+    });
     expect(mockRepository.update).toHaveBeenCalledWith(
       'existing-person-1',
       expect.any(Object),
@@ -158,19 +189,10 @@ describe('IngestionRecordProcessorService', () => {
   });
 
   it('should create new record when dedup match not found', async () => {
-    const pipelineWithDedup = {
-      ...mockPipeline,
-      dedupFieldNames: ['phones.primaryPhoneNumber'],
-    } as IngestionPipelineEntity;
-
-    const records = [
-      { firstName: 'New', lastName: 'Person', phone: '+15559999999' },
-    ];
-
     mockRepository.findOne.mockResolvedValue(null);
 
     const result = await service.processRecords(
-      records,
+      [{ firstName: 'New', lastName: 'Person', phone: '+15559999999' }],
       pipelineWithDedup,
       mockMappings,
       workspaceId,
@@ -181,6 +203,49 @@ describe('IngestionRecordProcessorService', () => {
     expect(mockRepository.save).toHaveBeenCalled();
   });
 
+  it('should turn a duplicate-entry insert race into an update', async () => {
+    mockRepository.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'concurrent-person-1' });
+    mockRepository.save.mockRejectedValueOnce(buildDuplicateEntryError());
+
+    const result = await service.processRecords(
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
+      pipelineWithDedup,
+      mockMappings,
+      workspaceId,
+    );
+
+    expect(result.recordsUpdated).toBe(1);
+    expect(result.recordsCreated).toBe(0);
+    expect(result.recordsFailed).toBe(0);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      'concurrent-person-1',
+      expect.any(Object),
+    );
+  });
+
+  it('should count other insert errors on a dedup pipeline as failures', async () => {
+    mockRepository.findOne.mockResolvedValue(null);
+    mockRepository.save.mockRejectedValueOnce(
+      new TwentyOrmException(
+        'Invalid input',
+        TwentyOrmExceptionCode.INVALID_INPUT,
+      ),
+    );
+
+    const result = await service.processRecords(
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
+      pipelineWithDedup,
+      mockMappings,
+      workspaceId,
+    );
+
+    expect(result.recordsFailed).toBe(1);
+    expect(result.recordsUpdated).toBe(0);
+    expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
   it('should handle processing errors per record', async () => {
     const records = [
       { firstName: 'John', lastName: 'Doe', phone: '+15551234567' },
@@ -188,7 +253,7 @@ describe('IngestionRecordProcessorService', () => {
     ];
 
     mockRepository.save
-      .mockResolvedValueOnce({ id: 'new-1' })
+      .mockResolvedValueOnce([{ id: 'new-1' }])
       .mockRejectedValueOnce(new Error('Database constraint violation'));
 
     const result = await service.processRecords(
@@ -205,13 +270,35 @@ describe('IngestionRecordProcessorService', () => {
     expect(result.errors[0].message).toBe('Database constraint violation');
   });
 
-  it('should call relation resolver for each record', async () => {
-    const records = [
-      { firstName: 'John', lastName: 'Doe', phone: '+15551234567' },
-    ];
+  it('should keep a rejected value in the ingestion log but out of the server log', async () => {
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
 
+    mockRepository.save.mockRejectedValueOnce(
+      new TwentyOrmException(
+        'invalid input syntax for type date: "1980-02-30"',
+        TwentyOrmExceptionCode.INVALID_INPUT,
+      ),
+    );
+
+    const result = await service.processRecords(
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
+      mockPipeline,
+      mockMappings,
+      workspaceId,
+    );
+
+    expect(result.recordsFailed).toBe(1);
+    expect(result.errors[0].message).toContain('1980-02-30');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to process record 0 for pipeline pipeline-1: INVALID_INPUT',
+    );
+  });
+
+  it('should call relation resolver for each record', async () => {
     await service.processRecords(
-      records,
+      [{ firstName: 'John', lastName: 'Doe', phone: '+15551234567' }],
       mockPipeline,
       mockMappings,
       workspaceId,
@@ -220,7 +307,6 @@ describe('IngestionRecordProcessorService', () => {
     expect(mockRelationResolver.resolveRelations).toHaveBeenCalledTimes(1);
     expect(mockRelationResolver.resolveRelations).toHaveBeenCalledWith(
       expect.any(Object),
-      workspaceId,
       expect.any(Map),
     );
   });

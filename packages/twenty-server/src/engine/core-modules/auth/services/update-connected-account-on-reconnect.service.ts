@@ -2,16 +2,17 @@ import { Injectable } from '@nestjs/common';
 
 import { EntityManager } from 'typeorm';
 
+import { PlaintextString } from 'src/engine/core-modules/secret-encryption/branded-strings';
 import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 
 export type UpdateConnectedAccountOnReconnectInput = {
   workspaceId: string;
   connectedAccountId: string;
-  accessToken: string;
-  refreshToken: string;
+  accessToken: PlaintextString;
+  refreshToken: PlaintextString;
   scopes: string[];
   transactionManager: EntityManager;
 };
@@ -19,7 +20,7 @@ export type UpdateConnectedAccountOnReconnectInput = {
 @Injectable()
 export class UpdateConnectedAccountOnReconnectService {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
   ) {}
 
@@ -34,6 +35,9 @@ export class UpdateConnectedAccountOnReconnectService {
       scopes,
     } = input;
 
+    // Boundary: tokens entering here were just re-issued by the external
+    // OAuth provider on reconnect, so we brand them as plaintext before
+    // handing them to the encryption service.
     const { encryptedAccessToken, encryptedRefreshToken } =
       this.connectedAccountTokenEncryptionService.encryptTokenPair({
         accessToken,
@@ -43,7 +47,7 @@ export class UpdateConnectedAccountOnReconnectService {
 
     const authContext = buildSystemAuthContext(workspaceId);
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
+    await this.workspaceOrmManager.executeInWorkspaceContext(async () => {
       await input.transactionManager
         .getRepository(ConnectedAccountEntity)
         .update(
@@ -56,6 +60,8 @@ export class UpdateConnectedAccountOnReconnectService {
             refreshToken: encryptedRefreshToken,
             scopes,
             authFailedAt: null,
+            authFailedReason: null,
+            archivedAt: null,
           },
         );
     }, authContext);

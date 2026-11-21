@@ -3,18 +3,25 @@ import { styled } from '@linaria/react';
 import {
   Avatar,
   type AvatarSize,
-  OverflowingTextWithTooltip,
-} from 'twenty-ui/display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+  Chip,
+} from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { getAbsoluteImageUrl } from '~/utils/image/getAbsoluteImageUrl';
 
 type AppChipProps = {
   size?: AvatarSize;
   applicationId?: string | null;
+  // Resolved display url (e.g. the registration's logoUrl); takes precedence
+  // over the logo computed from the installed application.
+  logoUrl?: string | null;
   fallbackApplicationData?: {
-    logo?: string | null;
+    logoUrl?: string | null;
     name?: string | null;
   };
   className?: string;
+  chipOnly?: boolean;
+  rounded?: boolean;
+  pulsing?: boolean;
 };
 
 const StyledContainer = styled.div`
@@ -22,7 +29,6 @@ const StyledContainer = styled.div`
   color: ${themeCssVariables.font.color.secondary};
   display: inline-flex;
   font-size: ${themeCssVariables.font.size.sm};
-  font-weight: ${themeCssVariables.font.weight.regular};
   gap: ${themeCssVariables.spacing[1]};
   max-width: 100%;
   min-width: 0;
@@ -32,27 +38,56 @@ const StyledContainer = styled.div`
 export const AppChip = ({
   applicationId,
   size = 'sm',
+  logoUrl,
   fallbackApplicationData,
   className,
+  chipOnly = false,
+  rounded = false,
+  pulsing = false,
 }: AppChipProps) => {
   const { applicationChipData } = useApplicationChipData({
     applicationId,
     fallbackApplicationData,
   });
 
+  const avatar = (
+    <Avatar
+      shape={rounded ? 'circle' : 'square'}
+      variant={rounded ? 'soft' : 'outline'}
+      size={size}
+      src={getAbsoluteImageUrl(logoUrl ?? applicationChipData.logo)}
+      name={applicationChipData.name}
+      colorSeed={applicationChipData.seed}
+      color={applicationChipData.colors?.color}
+      backgroundColor={applicationChipData.colors?.backgroundColor}
+      borderColor={applicationChipData.colors?.borderColor}
+      pulsing={pulsing}
+    />
+  );
+
   return (
     <StyledContainer className={className}>
-      <Avatar
-        type="app"
-        size={size}
-        avatarUrl={applicationChipData.logo}
-        placeholder={applicationChipData.name}
-        placeholderColorSeed={applicationChipData.seed}
-        color={applicationChipData.colors?.color}
-        backgroundColor={applicationChipData.colors?.backgroundColor}
-        borderColor={applicationChipData.colors?.borderColor}
-      />
-      <OverflowingTextWithTooltip text={applicationChipData.name} />
+      {chipOnly ? (
+        avatar
+      ) : (
+        <Chip
+          variant="plain"
+          color="secondary"
+          weight="regular"
+          startElement={avatar}
+          style={{
+            blockSize: 'auto',
+            color: 'inherit',
+            fontSize: 'inherit',
+            fontWeight: themeCssVariables.font.weight.regular,
+            gap: 'inherit',
+            minWidth: 0,
+            paddingBlock: 0,
+          }}
+        >
+          {applicationChipData.name}
+        </Chip>
+      )}
     </StyledContainer>
   );
 };

@@ -4,7 +4,6 @@ import {
   BROKERAGE_ADOPTION_OBJECTS,
   BROKERAGE_APP_UNIVERSAL_IDENTIFIER,
 } from 'src/database/commands/custom/constants/brokerage-app-adoption.constants';
-import { ApplicationRegistrationSourceType } from 'src/engine/core-modules/application/application-registration/enums/application-registration-source-type.enum';
 
 const WORKSPACE_ID = 'workspace-id';
 const BROKERAGE_APPLICATION_ID = 'brokerage-application-id';
@@ -41,75 +40,87 @@ if (
   throw new Error('Brokerage adoption fixture is missing');
 }
 
+const POLICY_OBJECT_MATCHED_BY_NAME = {
+  id: 'policy-object-id',
+  nameSingular: 'policy',
+  universalIdentifier: '11111111-1111-4111-8111-111111111111',
+  applicationId: 'workspace-custom-application-id',
+};
+
+const REPOSITORY_WRITE_METHOD_NAMES = [
+  'insert',
+  'update',
+  'upsert',
+  'delete',
+  'softDelete',
+] as const;
+
+type RepositoryMock = Record<string, jest.Mock>;
+
+const createRepositoryMock = (overrides: RepositoryMock = {}) => ({
+  find: jest.fn().mockResolvedValue([]),
+  ...Object.fromEntries(
+    REPOSITORY_WRITE_METHOD_NAMES.map((methodName) => [methodName, jest.fn()]),
+  ),
+  ...overrides,
+});
+
+const expectNoWrites = (repository: RepositoryMock) => {
+  for (const methodName of REPOSITORY_WRITE_METHOD_NAMES) {
+    expect(repository[methodName]).not.toHaveBeenCalled();
+  }
+};
+
 const createCommand = ({
-  applicationService = {},
-  fieldMetadataRepository = {},
-  navigationMenuItemRepository = {},
-  objectMetadataRepository = {},
-  workspaceCacheService = {},
+  applicationService = {
+    findOneApplication: jest
+      .fn()
+      .mockResolvedValue({ id: BROKERAGE_APPLICATION_ID }),
+  },
+  fieldMetadataRepository = createRepositoryMock(),
+  navigationMenuItemRepository = createRepositoryMock(),
+  objectMetadataRepository = createRepositoryMock(),
 }: {
-  applicationService?: Record<string, unknown>;
-  fieldMetadataRepository?: Record<string, unknown>;
-  navigationMenuItemRepository?: Record<string, unknown>;
-  objectMetadataRepository?: Record<string, unknown>;
-  workspaceCacheService?: Record<string, unknown>;
+  applicationService?: RepositoryMock;
+  fieldMetadataRepository?: RepositoryMock;
+  navigationMenuItemRepository?: RepositoryMock;
+  objectMetadataRepository?: RepositoryMock;
 } = {}) => {
   const command = new AdoptBrokerageAppCommand(
     {} as never,
-    {
-      find: jest.fn().mockResolvedValue([]),
-      ...objectMetadataRepository,
-    } as never,
-    {
-      find: jest.fn().mockResolvedValue([]),
-      ...fieldMetadataRepository,
-    } as never,
-    {
-      find: jest.fn().mockResolvedValue([]),
-      ...navigationMenuItemRepository,
-    } as never,
-    {
-      findByUniversalIdentifier: jest.fn().mockResolvedValue({
-        id: BROKERAGE_APPLICATION_ID,
-      }),
-      create: jest.fn(),
-      ...applicationService,
-    } as never,
-    {
-      invalidateAndRecompute: jest.fn(),
-      ...workspaceCacheService,
-    } as never,
+    objectMetadataRepository as never,
+    fieldMetadataRepository as never,
+    navigationMenuItemRepository as never,
+    applicationService as never,
   );
 
-  command['logger'] = {
+  const logger = {
     error: jest.fn(),
     log: jest.fn(),
     warn: jest.fn(),
-  } as never;
+  };
 
-  return command;
+  command['logger'] = logger as never;
+
+  return { command, logger };
 };
 
 describe('AdoptBrokerageAppCommand', () => {
   it('plans object ownership and universal identifier updates when existing metadata matches by name', async () => {
-    const command = createCommand({
-      objectMetadataRepository: {
-        find: jest.fn().mockResolvedValue([
-          {
-            id: 'policy-object-id',
-            nameSingular: 'policy',
-            universalIdentifier: '11111111-1111-4111-8111-111111111111',
-            applicationId: 'workspace-custom-application-id',
-          },
-        ]),
-      },
+    const objectMetadataRepository = createRepositoryMock({
+      find: jest.fn().mockResolvedValue([POLICY_OBJECT_MATCHED_BY_NAME]),
     });
+    const { command } = createCommand({ objectMetadataRepository });
 
     const plan = await command['buildAdoptionPlan']({
       brokerageApplicationId: BROKERAGE_APPLICATION_ID,
       workspaceId: WORKSPACE_ID,
     });
 
+    expect(objectMetadataRepository.find).toHaveBeenCalledWith(
+      WORKSPACE_ID,
+      expect.objectContaining({ where: expect.any(Array) }),
+    );
     expect(plan.objectUpdates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -125,8 +136,8 @@ describe('AdoptBrokerageAppCommand', () => {
   });
 
   it('plans Carrier Product junction metadata needed by relation picker filtering', async () => {
-    const command = createCommand({
-      objectMetadataRepository: {
+    const { command } = createCommand({
+      objectMetadataRepository: createRepositoryMock({
         find: jest.fn().mockResolvedValue([
           {
             id: 'carrier-object-id',
@@ -142,8 +153,8 @@ describe('AdoptBrokerageAppCommand', () => {
             applicationId: BROKERAGE_APPLICATION_ID,
           },
         ]),
-      },
-      fieldMetadataRepository: {
+      }),
+      fieldMetadataRepository: createRepositoryMock({
         find: jest.fn().mockResolvedValue([
           {
             id: 'carrier-products-field-id',
@@ -177,7 +188,7 @@ describe('AdoptBrokerageAppCommand', () => {
             },
           },
         ]),
-      },
+      }),
     });
 
     const plan = await command['buildAdoptionPlan']({
@@ -199,22 +210,22 @@ describe('AdoptBrokerageAppCommand', () => {
     );
   });
 
-  it('allows dry-run planning before the Brokerage app shell exists', async () => {
+  it('prints the dry-run plan before the Brokerage app is installed without writing anything', async () => {
     const applicationService = {
-      findByUniversalIdentifier: jest.fn().mockResolvedValue(null),
+      findOneApplication: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
     };
-    const workspaceCacheService = {
-      invalidateAndRecompute: jest.fn(),
-    };
-    const objectMetadataRepository = {
-      find: jest.fn().mockResolvedValue([]),
-    };
+    const objectMetadataRepository = createRepositoryMock({
+      find: jest.fn().mockResolvedValue([POLICY_OBJECT_MATCHED_BY_NAME]),
+    });
+    const fieldMetadataRepository = createRepositoryMock();
+    const navigationMenuItemRepository = createRepositoryMock();
 
-    const command = createCommand({
+    const { command, logger } = createCommand({
       applicationService,
       objectMetadataRepository,
-      workspaceCacheService,
+      fieldMetadataRepository,
+      navigationMenuItemRepository,
     });
 
     await command.runOnWorkspace({
@@ -224,157 +235,65 @@ describe('AdoptBrokerageAppCommand', () => {
       total: 1,
     });
 
+    expect(applicationService.findOneApplication).toHaveBeenCalledWith({
+      universalIdentifier: BROKERAGE_APP_UNIVERSAL_IDENTIFIER,
+      workspaceId: WORKSPACE_ID,
+    });
+    expect(logger.log).toHaveBeenCalledWith(
+      `[DRY RUN] Brokerage adoption plan for workspace ${WORKSPACE_ID}: 1 objects, 0 fields, 0 navigation items`,
+    );
     expect(applicationService.create).not.toHaveBeenCalled();
-    expect(workspaceCacheService.invalidateAndRecompute).not.toHaveBeenCalled();
+    expectNoWrites(objectMetadataRepository);
+    expectNoWrites(fieldMetadataRepository);
+    expectNoWrites(navigationMenuItemRepository);
   });
 
-  it('bootstraps an empty Brokerage app shell before applying metadata adoption', async () => {
-    const update = jest.fn();
-    const query = jest.fn().mockResolvedValue([]);
-    const manager = {
-      getRepository: jest.fn().mockReturnValue({ update }),
-      query,
-    };
-    const objectMetadataRepository = {
-      find: jest.fn().mockResolvedValue([
-        {
-          id: 'policy-object-id',
-          nameSingular: 'policy',
-          universalIdentifier: '11111111-1111-4111-8111-111111111111',
-          applicationId: 'workspace-custom-application-id',
-        },
-      ]),
-      manager: {
-        transaction: jest.fn(async (callback) => callback(manager)),
-      },
-    };
-    const applicationService = {
-      findByUniversalIdentifier: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: BROKERAGE_APPLICATION_ID }),
-    };
-    const workspaceCacheService = {
-      invalidateAndRecompute: jest.fn(),
-    };
+  it.each([
+    { label: 'without --dry-run', options: {} },
+    { label: 'with dryRun false', options: { dryRun: false } },
+  ])(
+    'refuses to adopt $label before reading or writing anything',
+    async ({ options }) => {
+      const applicationService = {
+        findOneApplication: jest
+          .fn()
+          .mockResolvedValue({ id: BROKERAGE_APPLICATION_ID }),
+        create: jest.fn(),
+      };
+      const objectMetadataRepository = createRepositoryMock({
+        find: jest.fn().mockResolvedValue([POLICY_OBJECT_MATCHED_BY_NAME]),
+      });
+      const fieldMetadataRepository = createRepositoryMock();
+      const navigationMenuItemRepository = createRepositoryMock();
 
-    const command = createCommand({
-      applicationService,
-      objectMetadataRepository,
-      workspaceCacheService,
-    });
+      const { command } = createCommand({
+        applicationService,
+        objectMetadataRepository,
+        fieldMetadataRepository,
+        navigationMenuItemRepository,
+      });
 
-    await command.runOnWorkspace({
-      workspaceId: WORKSPACE_ID,
-      options: {},
-      index: 0,
-      total: 1,
-    });
+      await expect(
+        command.runOnWorkspace({
+          workspaceId: WORKSPACE_ID,
+          options,
+          index: 0,
+          total: 1,
+        }),
+      ).rejects.toThrow(
+        'workspace:adopt-brokerage-app is disabled on Twenty v2.58 until the Brokerage rewrite lands',
+      );
 
-    expect(applicationService.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        universalIdentifier: BROKERAGE_APP_UNIVERSAL_IDENTIFIER,
-        name: 'Brokerage',
-        sourcePath: BROKERAGE_APP_UNIVERSAL_IDENTIFIER,
-        sourceType: ApplicationRegistrationSourceType.LOCAL,
-        workspaceId: WORKSPACE_ID,
-      }),
-    );
-    expect(update).toHaveBeenCalledWith(
-      { id: 'policy-object-id' },
-      expect.objectContaining({
-        applicationId: BROKERAGE_APPLICATION_ID,
-        universalIdentifier: policyAdoptionObject.universalIdentifier,
-      }),
-    );
-    expect(workspaceCacheService.invalidateAndRecompute).toHaveBeenCalledWith(
-      WORKSPACE_ID,
-      expect.arrayContaining([
-        'flatApplicationMaps',
-        'flatObjectMetadataMaps',
-        'flatFieldMetadataMaps',
-        'flatRoleMaps',
-        'rolesPermissions',
-      ]),
-    );
-  });
-
-  it('copies Omnia Member role permissions onto Brokerage Agent during adoption', async () => {
-    const update = jest.fn();
-    const query = jest.fn(async (queryText: string) => {
-      if (queryText.includes("member_role.label = 'Member'")) {
-        return [
-          {
-            agent_role_id: 'agent-role-id',
-            member_role_id: 'member-role-id',
-          },
-        ];
+      for (const dependency of [
+        applicationService,
+        objectMetadataRepository,
+        fieldMetadataRepository,
+        navigationMenuItemRepository,
+      ]) {
+        for (const method of Object.values(dependency)) {
+          expect(method).not.toHaveBeenCalled();
+        }
       }
-
-      if (queryText.includes('AS object_permissions')) {
-        return [
-          {
-            object_permissions: '15',
-            field_permissions: '21',
-            permission_flags: '2',
-            rls_predicates: '2',
-            rls_groups: '2',
-          },
-        ];
-      }
-
-      return [];
-    });
-    const manager = {
-      getRepository: jest.fn().mockReturnValue({ update }),
-      query,
-    };
-    const objectMetadataRepository = {
-      find: jest.fn().mockResolvedValue([]),
-      manager: {
-        transaction: jest.fn(async (callback) => callback(manager)),
-      },
-    };
-    const workspaceCacheService = {
-      invalidateAndRecompute: jest.fn(),
-    };
-    const command = createCommand({
-      objectMetadataRepository,
-      workspaceCacheService,
-    });
-
-    await command.runOnWorkspace({
-      workspaceId: WORKSPACE_ID,
-      options: {},
-      index: 0,
-      total: 1,
-    });
-
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("member_role.label = 'Member'"),
-      expect.arrayContaining([WORKSPACE_ID]),
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE core.role agent_role'),
-      ['agent-role-id', 'member-role-id'],
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO core."objectPermission"'),
-      ['agent-role-id', 'member-role-id'],
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO core."fieldPermission"'),
-      ['agent-role-id', 'member-role-id'],
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('manifest_object_permissions'),
-      expect.arrayContaining(['agent-role-id']),
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('manifest_field_permissions'),
-      expect.arrayContaining(['agent-role-id']),
-    );
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO core."rowLevelPermissionPredicate"'),
-      ['agent-role-id', 'member-role-id'],
-    );
-  });
+    },
+  );
 });

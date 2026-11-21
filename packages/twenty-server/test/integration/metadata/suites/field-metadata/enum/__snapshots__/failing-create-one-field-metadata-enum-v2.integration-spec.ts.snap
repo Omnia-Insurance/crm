@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should fail with an invalid default value 1`] = `
 [
@@ -26,13 +26,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Multi-select field default value must be an array",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -66,13 +121,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Multi-select field default value must be an array",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -106,13 +216,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Label must not contain a comma",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -161,13 +308,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option id",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -216,13 +400,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option position",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -271,13 +492,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option value",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -326,13 +584,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option value",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -366,13 +661,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "If defined default value must contain at least one value",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -406,13 +756,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -437,8 +824,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"\" must be one of the option values",
+                "message": "Default value "" must be one of the option values",
+                "userFriendlyMessage": "Default value "" must be one of the option values",
                 "value": "",
               },
             ],
@@ -452,13 +839,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -492,13 +934,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -532,13 +1011,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -572,13 +1088,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -603,8 +1156,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"invalid\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"invalid\" must be one of the option values",
+                "message": "Default value "invalid" must be one of the option values",
+                "userFriendlyMessage": "Default value "invalid" must be one of the option values",
                 "value": "invalid",
               },
               {
@@ -615,8 +1168,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"format\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"format\" must be one of the option values",
+                "message": "Default value "format" must be one of the option values",
+                "userFriendlyMessage": "Default value "format" must be one of the option values",
                 "value": "format",
               },
             ],
@@ -630,13 +1183,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -670,13 +1278,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -695,8 +1340,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "errors": [
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
-                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
+                "message": "Value must be in UPPER_CASE and follow snake_case "Option 1 and some other things, /"",
+                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case "Option 1 and some other things, /"",
                 "value": "Option 1 and some other things, /",
               },
             ],
@@ -710,13 +1355,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -750,13 +1432,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Multi-select field default value must be an array",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -790,13 +1527,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value must be a string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -830,13 +1622,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -870,13 +1699,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -910,13 +1776,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -955,13 +1858,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -994,13 +1934,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1034,13 +2011,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1073,13 +2087,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1104,8 +2155,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"\" must be one of the option values",
+                "message": "Default value "" must be one of the option values",
+                "userFriendlyMessage": "Default value "" must be one of the option values",
                 "value": "",
               },
             ],
@@ -1119,13 +2170,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1159,13 +2265,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1199,13 +2342,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1239,13 +2419,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1270,8 +2487,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" must be one of the option values",
+                "message": "Default value "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" must be one of the option values",
+                "userFriendlyMessage": "Default value "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" must be one of the option values",
                 "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               },
             ],
@@ -1285,13 +2502,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1325,13 +2597,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1365,13 +2674,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label exceeds 63 characters",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1396,8 +2742,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Value must be in UPPER_CASE and follow snake_case \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
-                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+                "message": "Value must be in UPPER_CASE and follow snake_case "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"",
+                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"",
                 "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               },
             ],
@@ -1411,13 +2757,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value exceeds 63 characters",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1450,13 +2833,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1489,13 +2909,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1529,13 +2986,50 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1554,8 +3048,8 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "errors": [
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"'UNKNOWN_OPTION'\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"'UNKNOWN_OPTION'\" must be one of the option values",
+                "message": "Default value "'UNKNOWN_OPTION'" must be one of the option values",
+                "userFriendlyMessage": "Default value "'UNKNOWN_OPTION'" must be one of the option values",
                 "value": "'UNKNOWN_OPTION'",
               },
             ],
@@ -1569,13 +3063,68 @@ exports[`Failing create field metadata MULTI_SELECT tests suite v2 Create should
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value \"'UNKNOWN_OPTION'\" must be one of the option values",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1600,8 +3149,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"invalid\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"invalid\" must be one of the option values",
+                "message": "Default value "invalid" must be one of the option values",
+                "userFriendlyMessage": "Default value "invalid" must be one of the option values",
                 "value": "invalid",
               },
             ],
@@ -1615,13 +3164,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1640,8 +3244,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "errors": [
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"'OPTION_424242'\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"'OPTION_424242'\" must be one of the option values",
+                "message": "Default value "'OPTION_424242'" must be one of the option values",
+                "userFriendlyMessage": "Default value "'OPTION_424242'" must be one of the option values",
                 "value": "'OPTION_424242'",
               },
             ],
@@ -1655,13 +3259,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value \"'OPTION_424242'\" must be one of the option values",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1695,13 +3354,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Label must not contain a comma",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1750,13 +3446,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option id",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1805,13 +3538,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option position",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1860,13 +3630,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option value",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1915,13 +3722,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Duplicated option value",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1955,13 +3799,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -1986,8 +3867,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"\" must be one of the option values",
+                "message": "Default value "" must be one of the option values",
+                "userFriendlyMessage": "Default value "" must be one of the option values",
                 "value": "",
               },
             ],
@@ -2001,13 +3882,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2041,13 +3977,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2081,13 +4054,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2121,13 +4131,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2161,13 +4208,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2186,8 +4270,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "errors": [
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
-                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
+                "message": "Value must be in UPPER_CASE and follow snake_case "Option 1 and some other things, /"",
+                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case "Option 1 and some other things, /"",
                 "value": "Option 1 and some other things, /",
               },
             ],
@@ -2201,13 +4285,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"Option 1 and some other things, /\"",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2241,13 +4362,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value must be a string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2281,13 +4457,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2321,13 +4534,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2361,13 +4611,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2406,13 +4693,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2445,13 +4769,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2485,13 +4846,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2524,13 +4922,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2555,8 +4990,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"\" must be one of the option values",
+                "message": "Default value "" must be one of the option values",
+                "userFriendlyMessage": "Default value "" must be one of the option values",
                 "value": "",
               },
             ],
@@ -2570,13 +5005,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2610,13 +5100,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2650,13 +5177,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2690,13 +5254,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value format not supported",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2721,8 +5322,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Default value \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" must be one of the option values",
-                "userFriendlyMessage": "Default value \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" must be one of the option values",
+                "message": "Default value "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" must be one of the option values",
+                "userFriendlyMessage": "Default value "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" must be one of the option values",
                 "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               },
             ],
@@ -2736,13 +5337,68 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "fieldMetadataOption": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_FIELD_METADATA_OPTION_INPUT",
+                "message": "Field option field not found",
+                "userFriendlyMessage": "Field option field not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "universalIdentifier": Any<String>,
+            },
+            "metadataName": "fieldMetadataOption",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 1 fieldMetadataOption, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "fieldMetadataOption": 1,
+        "totalErrors": 4,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Default value should be as quoted string",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2776,13 +5432,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option id is invalid",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2816,13 +5509,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label exceeds 63 characters",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2847,8 +5577,8 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
               },
               {
                 "code": "INVALID_FIELD_INPUT",
-                "message": "Value must be in UPPER_CASE and follow snake_case \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
-                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+                "message": "Value must be in UPPER_CASE and follow snake_case "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"",
+                "userFriendlyMessage": "Value must be in UPPER_CASE and follow snake_case "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"",
                 "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               },
             ],
@@ -2862,13 +5592,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value exceeds 63 characters",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2901,13 +5668,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option label is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2940,13 +5744,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Option value is required",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",
@@ -2980,13 +5821,50 @@ exports[`Failing create field metadata SELECT tests suite v2 Create should fail 
             "type": "create",
           },
         ],
+        "viewField": [
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+          {
+            "errors": [
+              {
+                "code": "INVALID_VIEW_DATA",
+                "message": "Field metadata not found",
+                "userFriendlyMessage": "Field metadata not found",
+              },
+            ],
+            "flatEntityMinimalInformation": {
+              "fieldMetadataUniversalIdentifier": Any<String>,
+              "universalIdentifier": Any<String>,
+              "viewUniversalIdentifier": Any<String>,
+            },
+            "metadataName": "viewField",
+            "status": "fail",
+            "type": "create",
+          },
+        ],
       },
-      "message": "Validation failed for 1 fieldMetadata",
+      "message": "Validation failed for 1 fieldMetadata, 2 viewFields",
       "summary": {
         "fieldMetadata": 1,
-        "totalErrors": 1,
+        "totalErrors": 3,
+        "viewField": 2,
       },
-      "userFriendlyMessage": "Options are required for enum fields",
+      "userFriendlyMessage": "Many validation errors",
     },
     "message": "Multiple validation errors occurred while creating fields",
     "name": "GraphQLError",

@@ -18,6 +18,13 @@ export const timelineThreadFragment = gql`
     subject
     numberOfMessagesInThread
     participantCount
+    lastMessageIsDraft
+    channel {
+      type
+      provider
+      applicationId
+      conversationStyle
+    }
   }
   ${participantFragment}
 `;

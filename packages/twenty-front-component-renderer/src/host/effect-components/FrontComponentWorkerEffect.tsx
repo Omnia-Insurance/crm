@@ -1,0 +1,280 @@
+import { release, retain } from '@quilted/threads';
+import { RemoteReceiver } from '@remote-dom/core/receivers';
+import { useEffect, useRef } from 'react';
+import { fastDeepEqual, isDefined } from 'twenty-shared/utils';
+
+import { createFileInputAwareRemoteConnection } from '@/host/file-input/utils/createFileInputAwareRemoteConnection';
+import { createFileInputHost } from '@/host/file-input/utils/createFileInputHost';
+import { type HostFocusController } from '@/host/focus/types/HostFocusController';
+import { createFocusAwareRemoteConnection } from '@/host/focus/utils/createFocusAwareRemoteConnection';
+import { type HostOutsidePressController } from '@/host/events/types/HostOutsidePressController';
+import { type HostScrollController } from '@/host/scroll/types/HostScrollController';
+import { buildHostFetchPolicyFromFrontComponentUrls } from '@/host/fetch/utils/buildHostFetchPolicyFromFrontComponentUrls';
+import { createFrontComponentHostThread } from '@/host/thread/utils/createFrontComponentHostThread';
+import { createImageLoadingHost } from '@/host/image-loading/utils/createImageLoadingHost';
+import { createHostFetchEnforcingPolicy } from '@/host/fetch/utils/createHostFetchEnforcingPolicy';
+import { type GeometryTracker } from '@/host/geometry/types/GeometryTracker';
+import { type FrontComponentMediaSessionHost } from '@/host/media/types/FrontComponentMediaSessionHost';
+import { fetchComponentSource } from '@/host/component-source/utils/fetchComponentSource';
+import { fetchSdkClientSources } from '@/host/component-source/utils/fetchSdkClientSources';
+import { buildFrontComponentStorageSnapshots } from '@/host/storage/utils/buildFrontComponentStorageSnapshots';
+import { FRONT_COMPONENT_SANDBOX_DOCUMENT } from '@/remote/sandbox/generated/frontComponentSandboxDocument';
+import { createFrontComponentSandboxIframe } from '@/remote/sandbox/utils/createFrontComponentSandboxIframe';
+import { createFrontComponentSandboxMessageHandler } from '@/remote/sandbox/utils/createFrontComponentSandboxMessageHandler';
+import { type FrontComponentExecutionContext } from 'twenty-sdk/front-component';
+
+import { type FrontComponentThread } from '@/types/FrontComponentThread';
+import { type SdkClientSources } from '@/types/SdkClientSources';
+import { type SdkClientUrls } from '@/types/SdkClientUrls';
+import { buildAuthorizationHeadersFromAccessToken } from '@/host/component-source/utils/buildAuthorizationHeadersFromAccessToken';
+import { containsSdkClientImportSpecifier } from '@/utils/module-imports/containsSdkClientImportSpecifier';
+import { containsSharedDependenciesImportSpecifier } from '@/utils/module-imports/containsSharedDependenciesImportSpecifier';
+
+type FrontComponentWorkerEffectProps = {
+  componentUrl: string;
+  componentSource?: string;
+  componentProps?: Record<string, unknown>;
+  sharedDependenciesSource?: string;
+  onReady?: () => void;
+  applicationAccessToken?: string;
+  apiUrl?: string;
+  functionsBaseUrl?: string;
+  sdkClientUrls?: SdkClientUrls;
+  sdkClientSources?: SdkClientSources;
+  sharedDependenciesUrl?: string;
+  applicationVariables?: Record<string, string>;
+  storageNamespace?: string;
+  initialExecutionContext: FrontComponentExecutionContext;
+  geometryTracker: GeometryTracker;
+  mediaSessionHost?: FrontComponentMediaSessionHost;
+  setReceiver: React.Dispatch<React.SetStateAction<RemoteReceiver | null>>;
+  hostFocusController: HostFocusController;
+  hostScrollController: HostScrollController;
+  outsidePressController: HostOutsidePressController;
+  setThread: React.Dispatch<React.SetStateAction<FrontComponentThread | null>>;
+  setError: React.Dispatch<React.SetStateAction<Error | null>>;
+};
+
+export const FrontComponentWorkerEffect = ({
+  hostFocusController,
+  hostScrollController,
+  outsidePressController,
+  componentUrl,
+  componentSource: providedComponentSource,
+  componentProps,
+  sharedDependenciesSource: providedSharedDependenciesSource,
+  onReady,
+  applicationAccessToken,
+  apiUrl,
+  functionsBaseUrl,
+  sdkClientUrls,
+  sdkClientSources: providedSdkClientSources,
+  sharedDependenciesUrl,
+  applicationVariables,
+  storageNamespace,
+  initialExecutionContext,
+  geometryTracker,
+  mediaSessionHost,
+  setReceiver,
+  setThread,
+  setError,
+}: FrontComponentWorkerEffectProps) => {
+  const isInitializedRef = useRef(false);
+  const onReadyRef = useRef(onReady);
+  const componentPropsRef = useRef(componentProps);
+
+  if (!fastDeepEqual(componentPropsRef.current, componentProps)) {
+    componentPropsRef.current = componentProps;
+  }
+
+  const stableComponentProps = componentPropsRef.current;
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
+
+  useEffect(() => {
+    if (isInitializedRef.current) {
+      return;
+    }
+
+    setError(null);
+
+    const newReceiver = new RemoteReceiver({ retain, release });
+
+    const sandboxIframe = createFrontComponentSandboxIframe(
+      FRONT_COMPONENT_SANDBOX_DOCUMENT,
+    );
+    document.body.append(sandboxIframe);
+
+    const channel = new MessageChannel();
+
+    const hostFetchPolicy = buildHostFetchPolicyFromFrontComponentUrls({
+      componentUrl,
+      apiUrl,
+      functionsBaseUrl,
+      sdkClientUrls,
+      sharedDependenciesUrl,
+    });
+
+    const hostFetch = createHostFetchEnforcingPolicy(hostFetchPolicy);
+    const imageLoadingHost = createImageLoadingHost();
+    const fileInputHost = createFileInputHost({ geometryTracker });
+
+    const thread = createFrontComponentHostThread({
+      hostMessagePort: channel.port1,
+      hostFetch,
+      imageLoadingHost,
+      geometryTracker,
+      outsidePressController,
+      mediaSessionHost,
+    });
+
+    const handleSandboxMessage = createFrontComponentSandboxMessageHandler({
+      sandboxIframe,
+      workerMessagePort: channel.port2,
+      onSandboxError: setError,
+    });
+
+    window.addEventListener('message', handleSandboxMessage);
+
+    setThread(thread);
+
+    let isCancelled = false;
+
+    const resolveComponentSourceAndRender = async () => {
+      try {
+        const authorizationHeaders = buildAuthorizationHeadersFromAccessToken(
+          applicationAccessToken,
+        );
+
+        const componentSource =
+          providedComponentSource ??
+          (await fetchComponentSource({
+            url: componentUrl,
+            headers: authorizationHeaders,
+          }));
+
+        if (isCancelled) {
+          return;
+        }
+
+        const resolveSharedDependenciesSource = () => {
+          if (isDefined(providedSharedDependenciesSource)) {
+            return providedSharedDependenciesSource;
+          }
+
+          if (
+            !isDefined(sharedDependenciesUrl) ||
+            !containsSharedDependenciesImportSpecifier(componentSource)
+          ) {
+            return undefined;
+          }
+
+          return fetchComponentSource({
+            url: sharedDependenciesUrl,
+            headers: authorizationHeaders,
+          });
+        };
+
+        const [sdkClientSources, sharedDependenciesSource] = await Promise.all([
+          providedSdkClientSources ??
+            (isDefined(sdkClientUrls) &&
+            containsSdkClientImportSpecifier(componentSource)
+              ? fetchSdkClientSources({
+                  sdkClientUrls,
+                  headers: authorizationHeaders,
+                })
+              : undefined),
+          resolveSharedDependenciesSource(),
+        ]);
+
+        if (isCancelled) {
+          return;
+        }
+
+        const storageSnapshots = isDefined(storageNamespace)
+          ? buildFrontComponentStorageSnapshots(storageNamespace)
+          : undefined;
+
+        setReceiver(newReceiver);
+
+        await thread.imports.render(
+          createFileInputAwareRemoteConnection({
+            fileInputHost,
+            connection: createFocusAwareRemoteConnection({
+              connection: newReceiver.connection,
+              hostFocusController,
+            }),
+          }),
+          {
+            componentUrl,
+            componentSource,
+            componentProps: stableComponentProps,
+            applicationAccessToken,
+            apiUrl,
+            functionsBaseUrl,
+            sdkClientSources,
+            sharedDependenciesSource,
+            hostFetchOrigins: hostFetchPolicy.allowedOrigins,
+            applicationVariables,
+            initialViewportGeometry: geometryTracker.getViewportGeometry(),
+            initialExecutionContext,
+            storageSnapshots,
+            mediaRecorderCapabilities:
+              mediaSessionHost?.getRecorderCapabilities(),
+          },
+        );
+
+        if (!isCancelled) {
+          onReadyRef.current?.();
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setError(error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+    };
+
+    resolveComponentSourceAndRender();
+
+    isInitializedRef.current = true;
+
+    return () => {
+      isCancelled = true;
+      imageLoadingHost.dispose();
+      fileInputHost.dispose();
+      hostFocusController.reset();
+      hostScrollController.reset();
+      window.removeEventListener('message', handleSandboxMessage);
+      setThread(null);
+      channel.port1.close();
+      sandboxIframe.remove();
+      isInitializedRef.current = false;
+    };
+  }, [
+    componentUrl,
+    providedComponentSource,
+    providedSdkClientSources,
+    stableComponentProps,
+    providedSharedDependenciesSource,
+    applicationAccessToken,
+    apiUrl,
+    functionsBaseUrl,
+    sdkClientUrls,
+    sharedDependenciesUrl,
+    applicationVariables,
+    storageNamespace,
+    initialExecutionContext,
+    geometryTracker,
+    hostFocusController,
+    hostScrollController,
+    outsidePressController,
+    mediaSessionHost,
+    setError,
+    setReceiver,
+    setThread,
+  ]);
+
+  return null;
+};

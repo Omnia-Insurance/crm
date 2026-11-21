@@ -3,7 +3,10 @@ import {
   FieldMetadataOptions,
   FieldMetadataSettings,
   FieldMetadataType,
+  MetadataWritability,
+  type RequiredCondition,
 } from 'twenty-shared/types';
+import { type FieldPermissionAction } from 'twenty-shared/application';
 import {
   Check,
   Column,
@@ -20,22 +23,35 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { type FieldStandardOverridesDTO } from 'src/engine/metadata-modules/field-metadata/dtos/field-standard-overrides.dto';
+import { ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-15/is-system-side-effect-upgrade-command-name.constant';
+import { ADD_METADATA_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-19/add-metadata-overrides-column-upgrade-command-name.constant';
+import { ADD_FIELD_METADATA_DISABLED_FIELD_PERMISSION_ACTIONS_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-53/add-field-metadata-disabled-field-permission-actions-upgrade-command-name.constant';
+import { ADD_METADATA_WRITABILITY_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-32/add-metadata-writability-upgrade-command-name.constant';
+import { ADD_FIELD_METADATA_IS_AUDIT_LOGGED_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-40/add-field-metadata-is-audit-logged-upgrade-command-name.constant';
+import { DROP_METADATA_STANDARD_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-20/drop-metadata-standard-overrides-column-upgrade-command-name.constant';
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
+import { WasRemovedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-removed-in-upgrade.decorator';
 import { AssignIfIsGivenFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/types/assign-if-is-given-field-metadata-type.type';
 import { AssignTypeIfIsMorphOrRelationFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/types/assign-type-if-is-morph-or-relation-field-metadata-type.type';
+import { type FieldMetadataOverrides } from 'src/engine/metadata-modules/field-metadata/types/field-metadata-overrides.type';
 import { IndexFieldMetadataEntity } from 'src/engine/metadata-modules/index-metadata/index-field-metadata.entity';
+import { RENAME_IS_UI_READ_ONLY_TO_IS_UI_EDITABLE_UPGRADE_COMMAND_NAME } from 'src/engine/metadata-modules/object-metadata/constants/rename-is-ui-read-only-to-is-ui-editable-upgrade-command-name.constant';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { FieldPermissionEntity } from 'src/engine/metadata-modules/object-permission/field-permission/field-permission.entity';
+import { FieldMetadataOptionEntity } from 'src/engine/metadata-modules/field-metadata-option/entities/field-metadata-option.entity';
+import { RowLevelPermissionPredicateEntity } from 'src/engine/metadata-modules/row-level-permission-predicate/entities/row-level-permission-predicate.entity';
+import { SearchFieldMetadataEntity } from 'src/engine/metadata-modules/search-field-metadata/search-field-metadata.entity';
 import { ViewFieldEntity } from 'src/engine/metadata-modules/view-field/entities/view-field.entity';
 import { ViewFilterEntity } from 'src/engine/metadata-modules/view-filter/entities/view-filter.entity';
+import { ViewSortEntity } from 'src/engine/metadata-modules/view-sort/entities/view-sort.entity';
 import { ViewEntity } from 'src/engine/metadata-modules/view/entities/view.entity';
 import { SyncableEntity } from 'src/engine/workspace-manager/types/syncable-entity.interface';
+import { type AuthoredOverrides } from 'src/engine/metadata-modules/overrides/types/authored-overrides.type';
 import { JsonbProperty } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/jsonb-property.type';
-import { ViewSortEntity } from 'src/engine/metadata-modules/view-sort/entities/view-sort.entity';
 
-// This entity is used as a reference test case for type utilities in:
-// Modifying relations or properties may require updating type test expectations for Typecheck to pass.
+// changes here may require updating types/__tests__/field-metadata-entity.test-type.ts
 @Entity('fieldMetadata')
+@Index('IDX_FIELD_METADATA_APPLICATION_ID', ['applicationId'])
 @Check(
   'CHK_FIELD_METADATA_MORPH_RELATION_REQUIRES_MORPH_ID',
   `("type" != 'MORPH_RELATION') OR ("type" = 'MORPH_RELATION' AND "morphId" IS NOT NULL)`,
@@ -55,10 +71,9 @@ import { ViewSortEntity } from 'src/engine/metadata-modules/view-sort/entities/v
   'objectMetadataId',
   'workspaceId',
 ])
-@Index('IDX_FIELD_METADATA_WORKSPACE_ID', ['workspaceId'])
 export class FieldMetadataEntity<
-    TFieldMetadataType extends FieldMetadataType = FieldMetadataType,
-  >
+  TFieldMetadataType extends FieldMetadataType = FieldMetadataType,
+>
   extends SyncableEntity
   implements Required<FieldMetadataEntity>
 {
@@ -73,7 +88,6 @@ export class FieldMetadataEntity<
     nullable: false,
   })
   @JoinColumn({ name: 'objectMetadataId' })
-  @Index('IDX_FIELD_METADATA_OBJECT_METADATA_ID', ['objectMetadataId'])
   object: Relation<ObjectMetadataEntity>;
 
   @Column({
@@ -97,8 +111,21 @@ export class FieldMetadataEntity<
   @Column({ nullable: true, type: 'varchar' })
   icon: string | null;
 
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_METADATA_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME,
+  })
   @Column({ type: 'jsonb', nullable: true })
-  standardOverrides: JsonbProperty<FieldStandardOverridesDTO> | null;
+  overrides: JsonbProperty<AuthoredOverrides<FieldMetadataOverrides>> | null;
+
+  /**
+   * @deprecated Please use `overrides` instead.
+   */
+  @WasRemovedInUpgrade({
+    upgradeCommandName:
+      DROP_METADATA_STANDARD_OVERRIDES_COLUMN_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ type: 'jsonb', nullable: true })
+  standardOverrides: WasRemovedInUpgrade<JsonbProperty<FieldMetadataOverrides> | null>;
 
   @Column('jsonb', { nullable: true })
   options: JsonbProperty<FieldMetadataOptions<TFieldMetadataType>>;
@@ -106,8 +133,12 @@ export class FieldMetadataEntity<
   @Column('jsonb', { nullable: true })
   settings: JsonbProperty<FieldMetadataSettings<TFieldMetadataType>>;
 
-  @Column({ default: false })
-  isCustom: boolean;
+  @WasRemovedInUpgrade({
+    upgradeCommandName:
+      '2.12.0_DropIsCustomFromObjectAndFieldMetadataFastInstanceCommand_1780579070012',
+  })
+  @Column({ type: 'boolean', default: false })
+  isCustom: WasRemovedInUpgrade<boolean>;
 
   @Column({ default: false })
   isActive: boolean;
@@ -115,25 +146,61 @@ export class FieldMetadataEntity<
   @Column({ default: false })
   isSystem: boolean;
 
-  @Column({ default: false })
-  isUIReadOnly: boolean;
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: false, default: false, type: 'boolean' })
+  isSystemSideEffect: boolean;
 
-  // Is this really nullable ?
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      RENAME_IS_UI_READ_ONLY_TO_IS_UI_EDITABLE_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ default: true })
+  isUIEditable: boolean;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_METADATA_WRITABILITY_UPGRADE_COMMAND_NAME,
+  })
+  @Column({
+    type: 'enum',
+    enum: Object.values(MetadataWritability),
+    default: MetadataWritability.OPEN,
+  })
+  writability: MetadataWritability;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      ADD_FIELD_METADATA_DISABLED_FIELD_PERMISSION_ACTIONS_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ type: 'jsonb', nullable: true })
+  disabledFieldPermissionActions: JsonbProperty<FieldPermissionAction[]> | null;
+
+  // superseded by isUIEditable; no @WasRemovedInUpgrade yet: previous-release pods still SELECT it mid rolling deploy (core-team-issues#2542)
+  @Column({ type: 'boolean', default: false })
+  isUIReadOnly: WasRemovedInUpgrade<boolean>;
+
   @Column({ nullable: true, default: true, type: 'boolean' })
   isNullable: boolean | null;
 
-  // Is this really nullable ?
-  @Column({ nullable: true, default: false, type: 'boolean' })
+  // not persisted: derived from single-field UNIQUE IndexMetadata when the flat cache is built
   isUnique: boolean | null;
 
+  isSearchable: boolean;
+
+  // OMNIA-CUSTOM: soft, UI-only required rule (contract C5); the server never enforces it.
+  // No upgrade decorator: legacy migration 1773069763255 created the column.
   @Column({ type: 'jsonb', nullable: true })
-  requiredCondition: JsonbProperty<{
-    type: 'always' | 'fieldEmpty' | 'fieldNotEmpty';
-    fieldId?: string;
-  }> | null;
+  requiredCondition: JsonbProperty<RequiredCondition> | null;
 
   @Column({ default: false })
   isLabelSyncedWithName: boolean;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_FIELD_METADATA_IS_AUDIT_LOGGED_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: false, default: true, type: 'boolean' })
+  isAuditLogged: boolean;
 
   @Column({ nullable: true, type: 'uuid' })
   relationTargetFieldMetadataId: AssignTypeIfIsMorphOrRelationFieldMetadataType<
@@ -211,9 +278,48 @@ export class FieldMetadataEntity<
   @OneToMany(() => ViewEntity, (view) => view.calendarFieldMetadata)
   calendarViews: Relation<ViewEntity[]>;
 
+  @OneToMany(() => ViewEntity, (view) => view.calendarEndFieldMetadata)
+  calendarEndViews: Relation<ViewEntity[]>;
+
   @OneToMany(() => ViewEntity, (view) => view.mainGroupByFieldMetadata)
   mainGroupByFieldMetadataViews: Relation<ViewEntity[]>;
 
   @OneToMany(() => ViewSortEntity, (viewSort) => viewSort.fieldMetadata)
   viewSorts: Relation<ViewSortEntity[]>;
+
+  @OneToMany(
+    () => SearchFieldMetadataEntity,
+    (searchFieldMetadata) => searchFieldMetadata.fieldMetadata,
+  )
+  searchFieldMetadatas: Relation<SearchFieldMetadataEntity[]>;
+
+  @OneToMany(
+    () => FieldMetadataOptionEntity,
+    (fieldMetadataOption) => fieldMetadataOption.fieldMetadata,
+  )
+  fieldMetadataOptions: Relation<FieldMetadataOptionEntity[]>;
+
+  @OneToMany(
+    () => RowLevelPermissionPredicateEntity,
+    (rowLevelPermissionPredicate) => rowLevelPermissionPredicate.fieldMetadata,
+  )
+  rowLevelPermissionPredicates: Relation<RowLevelPermissionPredicateEntity[]>;
+
+  @OneToMany(
+    () => RowLevelPermissionPredicateEntity,
+    (rowLevelPermissionPredicate) =>
+      rowLevelPermissionPredicate.relationFieldMetadata,
+  )
+  relationRowLevelPermissionPredicates: Relation<
+    RowLevelPermissionPredicateEntity[]
+  >;
+
+  @OneToMany(
+    () => RowLevelPermissionPredicateEntity,
+    (rowLevelPermissionPredicate) =>
+      rowLevelPermissionPredicate.workspaceMemberFieldMetadata,
+  )
+  workspaceMemberRowLevelPermissionPredicates: Relation<
+    RowLevelPermissionPredicateEntity[]
+  >;
 }

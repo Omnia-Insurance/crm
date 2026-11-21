@@ -19,6 +19,10 @@ import { UserService } from 'src/engine/core-modules/user/services/user.service'
 import { UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { userValidator } from 'src/engine/core-modules/user/user.validate';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { RolePermissionsService } from 'src/engine/permissions/role-permissions.service';
+import { InjectWorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/inject-workspace-scoped-repository.decorator';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
+import { STANDARD_ROLE } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-role.constant';
 
 @Injectable()
 export class AdminPanelUserLookupService {
@@ -26,14 +30,15 @@ export class AdminPanelUserLookupService {
     private readonly workspaceDomainsService: WorkspaceDomainsService,
     private readonly fileUrlService: FileUrlService,
     private readonly userService: UserService,
+    private readonly rolePermissionsService: RolePermissionsService,
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
     @InjectRepository(WorkspaceEntity)
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     @InjectRepository(UserWorkspaceEntity)
     private readonly userWorkspaceRepository: Repository<UserWorkspaceEntity>,
-    @InjectRepository(FeatureFlagEntity)
-    private readonly featureFlagRepository: Repository<FeatureFlagEntity>,
+    @InjectWorkspaceScopedRepository(FeatureFlagEntity)
+    private readonly featureFlagRepository: WorkspaceScopedRepository<FeatureFlagEntity>,
   ) {}
 
   private buildFallbackAvatarUrlsByUserId(
@@ -46,6 +51,36 @@ export class AdminPanelUserLookupService {
           workspaceUser.user.id,
           workspaceUser.defaultAvatarUrl ?? null,
         ]),
+    );
+  }
+
+  private async getAdminUserIds({
+    workspaceId,
+    workspaceUsers,
+  }: {
+    workspaceId: string;
+    workspaceUsers: UserWorkspaceEntity[];
+  }): Promise<Set<string>> {
+    const rolesByUserWorkspaceId =
+      await this.rolePermissionsService.findRolesByUserWorkspaceIds({
+        workspaceId,
+        userWorkspaceIds: workspaceUsers.map(
+          (workspaceUser) => workspaceUser.id,
+        ),
+      });
+
+    return new Set(
+      workspaceUsers
+        .filter((workspaceUser) =>
+          rolesByUserWorkspaceId
+            .get(workspaceUser.id)
+            ?.some(
+              (role) =>
+                role.universalIdentifier ===
+                STANDARD_ROLE.admin.universalIdentifier,
+            ),
+        )
+        .map((workspaceUser) => workspaceUser.user.id),
     );
   }
 
@@ -85,12 +120,17 @@ export class AdminPanelUserLookupService {
         const workspaceUsers = userWorkspace.workspace.workspaceUsers.filter(
           (workspaceUser) => isDefined(workspaceUser.user),
         );
-        const avatarUrlsByUserId =
-          await this.userService.loadSignedAvatarUrlsByUserId({
+        const [avatarUrlsByUserId, adminUserIds] = await Promise.all([
+          this.userService.loadSignedAvatarUrlsByUserId({
             workspace: userWorkspace.workspace,
             fallbackAvatarUrlsByUserId:
               this.buildFallbackAvatarUrlsByUserId(workspaceUsers),
-          });
+          }),
+          this.getAdminUserIds({
+            workspaceId: userWorkspace.workspace.id,
+            workspaceUsers,
+          }),
+        ]);
 
         return {
           id: userWorkspace.workspace.id,
@@ -116,6 +156,7 @@ export class AdminPanelUserLookupService {
             lastName: workspaceUser.user.lastName,
             avatarUrl: avatarUrlsByUserId.get(workspaceUser.user.id) ?? null,
             createdAt: workspaceUser.user.createdAt,
+            isAdmin: adminUserIds.has(workspaceUser.user.id),
           })),
           featureFlags: allFeatureFlagKeys.map((key) => ({
             key,
@@ -160,22 +201,25 @@ export class AdminPanelUserLookupService {
         where: { workspaceId },
         relations: { user: true },
       }),
-      this.featureFlagRepository.find({
-        where: { workspaceId },
-      }),
+      this.featureFlagRepository.find(workspaceId),
     ]);
 
     const allFeatureFlagKeys = Object.values(FeatureFlagKey);
     const definedWorkspaceUsers = workspaceUsers.filter((wu) =>
       isDefined(wu.user),
     );
-    const avatarUrlsByUserId =
-      await this.userService.loadSignedAvatarUrlsByUserId({
+    const [avatarUrlsByUserId, adminUserIds] = await Promise.all([
+      this.userService.loadSignedAvatarUrlsByUserId({
         workspace,
         fallbackAvatarUrlsByUserId: this.buildFallbackAvatarUrlsByUserId(
           definedWorkspaceUsers,
         ),
-      });
+      }),
+      this.getAdminUserIds({
+        workspaceId,
+        workspaceUsers: definedWorkspaceUsers,
+      }),
+    ]);
 
     const workspaceInfo = {
       id: workspace.id,
@@ -199,6 +243,7 @@ export class AdminPanelUserLookupService {
         lastName: wu.user.lastName,
         avatarUrl: avatarUrlsByUserId.get(wu.user.id) ?? null,
         createdAt: wu.user.createdAt,
+        isAdmin: adminUserIds.has(wu.user.id),
       })),
       featureFlags: allFeatureFlagKeys.map((key) => ({
         key,

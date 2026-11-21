@@ -1,0 +1,190 @@
+---
+title: Automatizaciones de Cerrado Ganado
+description: Automatiza las actividades posteriores al cierre cuando las oportunidades se cierran como ganadas.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Problema
+
+Cuando una oportunidad pasa a "Cerrado ganado":
+
+* El tipo de empresa debe cambiar de "Prospect" a "Customer"
+* Se deben crear tareas de incorporación
+* Se debe notificar al equipo de Customer Success
+* El representante de ventas necesita una confirmación
+
+Hacer esto manualmente consume tiempo y es propenso a errores.
+
+## La solución
+
+Crea un flujo de trabajo que gestione automáticamente todas las actividades posteriores al cierre ganado.
+
+## Configuración completa del flujo de trabajo
+
+### Paso 1: Crear el flujo de trabajo
+
+1. Ve a **Configuración → Flujos de trabajo**
+2. Haz clic en **+ Nuevo flujo de trabajo**
+3. Asígnale el nombre "Deal Won - Post-Win Automation"
+
+### Paso 2: Configurar el disparador
+
+1. Selecciona **Record is Updated**
+2. Elige **Oportunidades**
+3. En "Campos a supervisar", selecciona **Etapa**
+
+### Paso 3: Agregar filtro de etapa
+
+1. Añade la acción **Filter**
+2. Condición: `{{trigger.properties.after.stage}}` es igual a "Closed Won"
+
+### Paso 4: Actualizar el tipo de empresa
+
+1. Añade la acción **Update Record**
+2. Configurar:
+
+| Campo                        | Valor                                    |
+| ---------------------------- | ---------------------------------------- |
+| **Objeto**                   | Empresas                                 |
+| **Registro**                 | `{{trigger.properties.after.companyId}}` |
+| **Tipo**                     | Cliente                                  |
+| **Fecha del primer negocio** | `{{trigger.properties.after.closeDate}}` |
+| **Propietario de la cuenta** | `{{trigger.properties.after.ownerId}}`   |
+
+Nombra este paso "Update Company". Su resultado es la empresa actualizada, por lo que los pasos posteriores pueden insertar sus campos desde el selector de variables, como se muestra a continuación en `{{Update Company.name}}`. Selecciónalos en el selector en lugar de escribirlos: las variables apuntan al ID del paso, no a su nombre.
+
+### Paso 5: Crear tarea de incorporación
+
+1. Añade la acción **Create Record**
+2. Configurar:
+
+| Campo                       | Valor                                                          |
+| --------------------------- | -------------------------------------------------------------- |
+| **Objeto**                  | Tareas                                                         |
+| **Título**                  | `Incorporación: {{trigger.properties.after.name}}`             |
+| **Asignado**                | Miembro del equipo de Customer Success                         |
+| **Fecha de vencimiento**    | Dentro de 3 días                                               |
+| **Prioridad**               | Alta                                                           |
+| **Empresa relacionada**     | `{{trigger.properties.after.companyId}}`                       |
+| **Oportunidad relacionada** | `{{trigger.properties.after.id}}`                              |
+| **Descripción**             | `Incorporación de nuevo cliente para {{Update Company.name}}.` |
+
+### Paso 6: Notificar a Customer Success
+
+1. Añade la acción **Send Email**
+2. Configurar:
+
+| Campo      | Valor                                       |
+| ---------- | ------------------------------------------- |
+| **Para**   | customer-success@yourcompany.com            |
+| **Asunto** | `🎉 Nuevo cliente: {{Update Company.name}}` |
+| **Cuerpo** | Consulta el ejemplo a continuación          |
+
+**Ejemplo de cuerpo del correo**:
+
+```
+Hi CS Team,
+
+We have a new customer!
+
+Company: {{Update Company.name}}
+Deal: {{trigger.properties.after.name}}
+Close Date: {{trigger.properties.after.closeDate}}
+
+An onboarding task has been created automatically.
+
+Let's give them a great start!
+```
+
+### Paso 7: Confirmar al representante de ventas
+
+1. Agrega una acción **Buscar registros** llamada "Find Owner" para obtener al representante de ventas:
+
+| Campo      | Valor                                             |
+| ---------- | ------------------------------------------------- |
+| **Objeto** | Miembros del espacio de trabajo                   |
+| **Filtro** | ID igual a `{{trigger.properties.after.ownerId}}` |
+
+2. Añade otra acción **Send Email**
+3. Configurar:
+
+| Campo      | Valor                                                                                                                       |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Para**   | `{{Find Owner.first.userEmail}}`                                                                                            |
+| **Asunto** | `✅ Negocio cerrado: {{trigger.properties.after.name}}`                                                                      |
+| **Cuerpo** | ¡Felicidades! Tu negocio ha sido procesado. Se ha notificado al equipo de Customer Success y la incorporación ha comenzado. |
+
+Selecciona el valor **Para** en el selector de variables bajo el paso "Find Owner".
+
+### Paso 8: Probar y activar
+
+1. Prueba moviendo una oportunidad de prueba a "Closed Won"
+2. Verificar:
+   * El tipo de empresa cambió a "Customer"
+   * Tarea de incorporación creada
+   * El equipo de CS recibió el correo electrónico
+   * El representante de ventas recibió la confirmación
+3. Actívalo cuando esté listo
+
+## Cómo gestionar Closed Lost
+
+Crea un flujo de trabajo similar para negocios perdidos:
+
+### Disparador
+
+* Record is Updated (Oportunidades, Etapa = "Closed Lost")
+
+### Acciones
+
+1. **Create Record**: Tarea para "Análisis de negocio perdido"
+2. **Update Record**: Agrega el motivo de pérdida al registro de la empresa
+3. **Send Email**: Notifica al gerente sobre el negocio perdido
+
+## Avanzado: incorporación de varios pasos
+
+Para una incorporación compleja, crea varias tareas:
+
+```javascript
+export const main = async (params) => {
+  const tasks = [
+    { title: "Welcome call", daysFromNow: 1, assignee: "CS" },
+    { title: "Send onboarding materials", daysFromNow: 2, assignee: "CS" },
+    { title: "Technical setup", daysFromNow: 5, assignee: "Support" },
+    { title: "30-day check-in", daysFromNow: 30, assignee: "CS" }
+  ];
+
+  return { tasks };
+};
+```
+
+Usa **Iterator** para crear cada tarea a partir del array.
+
+## Ideas de personalización
+
+### Mantén tus otras herramientas actualizadas
+
+* Crea el cliente en el sistema de facturación con una **HTTP Request**
+
+### Acciones condicionales
+
+Usa acciones **Filter** para:
+
+* Incorporación diferente para empresas grandes frente a pymes
+* Asignados diferentes según la región
+* Omitir notificaciones para negocios pequeños
+
+### Incluye detalles de la oferta
+
+Usa la acción **Code** para formatear:
+
+* Documentos de resumen del negocio
+* Notas de traspaso para el equipo de CS
+* Listas de verificación de incorporación personalizadas
+
+## Relacionado
+
+* [Acciones de flujos de trabajo](/es/user-guide/workflows/capabilities/workflow-actions)
+* [Enviar correos electrónicos desde flujos de trabajo](/es/user-guide/workflows/capabilities/send-emails-from-workflows)
+
+<PageBanner illustration="card-page-sales-automation" />

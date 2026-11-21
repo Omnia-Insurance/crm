@@ -7,14 +7,18 @@ import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { IconWorld, Status } from 'twenty-ui/display';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconWorld, IconWorldWww } from 'twenty-ui/icon';
+import { Status } from 'twenty-ui/primitives/data-display';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: ${themeCssVariables.spacing[2]};
+
+  @media (max-width: ${MOBILE_VIEWPORT}px) {
+    flex-direction: column;
+  }
 `;
 
 export const SettingsWorkspaceDomainCard = () => {
@@ -33,24 +37,25 @@ export const SettingsWorkspaceDomainCard = () => {
 
   return (
     <StyledContainer>
-      <UndecoratedLink to={getSettingsPath(SettingsPath.Subdomain)}>
-        <SettingsCard title={t`Subdomain`} Icon={<IconWorld />} />
-      </UndecoratedLink>
+      <SettingsCard
+        title={t`Subdomain`}
+        Icon={<IconWorldWww />}
+        to={getSettingsPath(SettingsPath.Subdomain)}
+      />
       {isCloudflareIntegrationEnabled && (
-        <UndecoratedLink to={getSettingsPath(SettingsPath.CustomDomain)}>
-          <SettingsCard
-            title={t`Custom Domain`}
-            Icon={<IconWorld />}
-            Status={
-              currentWorkspace?.customDomain &&
-              currentWorkspace?.isCustomDomainEnabled ? (
-                <Status text={t`Active`} color="turquoise" />
-              ) : currentWorkspace?.customDomain ? (
-                <Status text={t`Inactive`} color="orange" />
-              ) : undefined
-            }
-          />
-        </UndecoratedLink>
+        <SettingsCard
+          to={getSettingsPath(SettingsPath.CustomDomain)}
+          title={t`Custom Domain`}
+          Icon={<IconWorld />}
+          Status={
+            currentWorkspace?.customDomain &&
+            currentWorkspace?.isCustomDomainEnabled ? (
+              <Status color="turquoise">{t`Active`}</Status>
+            ) : currentWorkspace?.customDomain ? (
+              <Status color="orange">{t`Inactive`}</Status>
+            ) : undefined
+          }
+        />
       )}
     </StyledContainer>
   );

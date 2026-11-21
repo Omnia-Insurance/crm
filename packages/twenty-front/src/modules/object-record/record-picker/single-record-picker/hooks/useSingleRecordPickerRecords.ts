@@ -2,6 +2,7 @@ import { useSingleRecordPickerPerformSearch } from '@/object-record/record-picke
 import { singleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchFilterComponentState';
 import { singleRecordPickerSelectedIdComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSelectedIdComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
+import { type RecordGqlOperationFilter } from 'twenty-shared/types';
 
 export const useSingleRecordPickerRecords = ({
   objectNameSingulars,
@@ -10,7 +11,8 @@ export const useSingleRecordPickerRecords = ({
 }: {
   objectNameSingulars: string[];
   excludedRecordIds?: string[];
-  additionalFilter?: Record<string, unknown>;
+  // OMNIA-CUSTOM: narrows the selectable records (Carrier -> Product bridge)
+  additionalFilter?: RecordGqlOperationFilter;
 }) => {
   const singleRecordPickerSearchFilter = useAtomComponentStateValue(
     singleRecordPickerSearchFilterComponentState,
@@ -19,7 +21,7 @@ export const useSingleRecordPickerRecords = ({
   const singleRecordPickerSelectedId = useAtomComponentStateValue(
     singleRecordPickerSelectedIdComponentState,
   );
-  const { pickableMorphItems, loading } = useSingleRecordPickerPerformSearch({
+  return useSingleRecordPickerPerformSearch({
     searchFilter: singleRecordPickerSearchFilter,
     selectedIds: singleRecordPickerSelectedId
       ? [singleRecordPickerSelectedId]
@@ -28,6 +30,4 @@ export const useSingleRecordPickerRecords = ({
     objectNameSingulars,
     additionalFilter,
   });
-
-  return { pickableMorphItems, loading };
 };

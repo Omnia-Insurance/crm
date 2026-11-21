@@ -1,0 +1,204 @@
+/* @license Enterprise */
+
+import { Injectable, Logger } from '@nestjs/common';
+
+import { isDefined } from 'twenty-shared/utils';
+
+import {
+  BillingException,
+  BillingExceptionCode,
+} from 'src/engine/core-modules/billing/billing.exception';
+import { type BillingCreditGrantEntity } from 'src/engine/core-modules/billing/entities/billing-credit-grant.entity';
+import { type BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
+import { type BillingCreditGrantType } from 'src/engine/core-modules/billing/enums/billing-credit-grant-type.enum';
+import { BillingCreditGrantService } from 'src/engine/core-modules/billing/services/billing-credit-grant.service';
+import { BillingSubscriptionService } from 'src/engine/core-modules/billing/services/billing-subscription.service';
+import { BillingService } from 'src/engine/core-modules/billing/services/billing.service';
+import { alignGrantExpiryToPeriodEnd } from 'src/engine/core-modules/billing/utils/align-grant-expiry-to-period-end.util';
+import { buildBillingCreditStateLockKey } from 'src/engine/core-modules/billing/utils/build-billing-credit-state-lock-key.util';
+import { CacheLockService } from 'src/engine/core-modules/cache-lock/cache-lock.service';
+import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+
+type GrantCreditsParams = {
+  workspaceId: string;
+  amountMicro: number;
+  type: BillingCreditGrantType;
+  reason?: string | null;
+  grantedByUserId?: string | null;
+  idempotencyKey?: string | null;
+  effectiveAt?: Date;
+  // Only for time-boxed grants (unset: spendable until a transition settles them); a day count so period-end alignment happens here for every caller
+  expiresInDays?: number | null;
+  sourceGrantId?: string | null;
+};
+
+@Injectable()
+export class BillingCreditService {
+  private readonly logger = new Logger(BillingCreditService.name);
+
+  constructor(
+    private readonly billingService: BillingService,
+    private readonly billingCreditGrantService: BillingCreditGrantService,
+    private readonly billingSubscriptionService: BillingSubscriptionService,
+    private readonly cacheLockService: CacheLockService,
+    private readonly workspaceCacheService: WorkspaceCacheService,
+  ) {}
+
+  async grantCredits(
+    params: GrantCreditsParams,
+  ): Promise<BillingCreditGrantEntity | null> {
+    if (!this.billingService.isBillingEnabled()) {
+      return null;
+    }
+
+    const { workspaceId } = params;
+
+    return this.cacheLockService.withLock(
+      () => this.writeGrantAndRefreshState(params),
+      buildBillingCreditStateLockKey(workspaceId),
+    );
+  }
+
+  private async writeGrantAndRefreshState(
+    params: GrantCreditsParams,
+  ): Promise<BillingCreditGrantEntity | null> {
+    const { workspaceId } = params;
+
+    const subscription =
+      await this.billingSubscriptionService.getCurrentBillingSubscription({
+        workspaceId,
+      });
+
+    const effectiveAt = params.effectiveAt ?? new Date();
+
+    // A replay answers with the first write instead of re-deriving the expiry: its anchoring subscription may be gone
+    const knownGrant = await this.findGrantByIdempotencyKey(params);
+
+    const grant = isDefined(knownGrant)
+      ? null
+      : await this.billingCreditGrantService.createGrant({
+          ...params,
+          effectiveAt,
+          expiresAt: resolveGrantExpiry({
+            effectiveAt,
+            expiresInDays: params.expiresInDays,
+            subscription,
+            workspaceId,
+          }),
+        });
+
+    // Returns the existing row, not null; reread when the check above was empty, as another attempt won the key in between
+    if (!isDefined(grant)) {
+      const alreadyWrittenGrant =
+        knownGrant ?? (await this.findGrantByIdempotencyKey(params));
+
+      this.logger.log(
+        `Replayed credit grant for workspace ${workspaceId} (idempotency key ${params.idempotencyKey}), repairing derived state`,
+      );
+
+      await this.refreshWorkspaceCreditState(workspaceId);
+
+      return alreadyWrittenGrant;
+    }
+
+    await this.refreshWorkspaceCreditState(workspaceId);
+
+    return grant;
+  }
+
+  private async findGrantByIdempotencyKey({
+    workspaceId,
+    idempotencyKey,
+  }: GrantCreditsParams): Promise<BillingCreditGrantEntity | null> {
+    if (!isDefined(idempotencyKey)) {
+      return null;
+    }
+
+    return this.billingCreditGrantService.findGrantByIdempotencyKey(
+      workspaceId,
+      idempotencyKey,
+    );
+  }
+
+  async revokeGrant({
+    workspaceId,
+    grantId,
+    revokedByUserId,
+  }: {
+    workspaceId: string;
+    grantId: string;
+    revokedByUserId?: string | null;
+  }): Promise<BillingCreditGrantEntity> {
+    return this.cacheLockService.withLock(
+      () =>
+        this.markGrantRevokedAndRefreshState({
+          workspaceId,
+          grantId,
+          revokedByUserId,
+        }),
+      buildBillingCreditStateLockKey(workspaceId),
+    );
+  }
+
+  private async markGrantRevokedAndRefreshState({
+    workspaceId,
+    grantId,
+    revokedByUserId,
+  }: {
+    workspaceId: string;
+    grantId: string;
+    revokedByUserId?: string | null;
+  }): Promise<BillingCreditGrantEntity> {
+    const grant = await this.billingCreditGrantService.revokeGrant({
+      workspaceId,
+      grantId,
+      revokedByUserId,
+    });
+
+    await this.refreshWorkspaceCreditState(workspaceId);
+
+    return grant;
+  }
+
+  async refreshWorkspaceCreditState(workspaceId: string): Promise<void> {
+    await this.workspaceCacheService.invalidateAndRecompute(workspaceId, [
+      'currentBillingSubscription',
+    ]);
+  }
+}
+
+// Exact 24-hour days: local-time day arithmetic drifts by an hour across DST
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Throws with no period to align to: null would read as credits that never lapse
+const resolveGrantExpiry = ({
+  effectiveAt,
+  expiresInDays,
+  subscription,
+  workspaceId,
+}: {
+  effectiveAt: Date;
+  expiresInDays: number | null | undefined;
+  subscription: BillingSubscriptionEntity | undefined;
+  workspaceId: string;
+}): Date | null => {
+  if (!isDefined(expiresInDays)) {
+    return null;
+  }
+
+  if (!isDefined(subscription)) {
+    throw new BillingException(
+      `Cannot grant credits to workspace ${workspaceId} expiring in ${expiresInDays} days: it has no subscription, so there is no billing period to expire them at`,
+      BillingExceptionCode.BILLING_SUBSCRIPTION_NOT_FOUND,
+    );
+  }
+
+  return alignGrantExpiryToPeriodEnd({
+    requestedExpiresAt: new Date(
+      effectiveAt.getTime() + expiresInDays * MILLISECONDS_PER_DAY,
+    ),
+    currentPeriodStart: subscription.currentPeriodStart,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    interval: subscription.interval,
+  });
+};

@@ -1,16 +1,17 @@
 import { styled } from '@linaria/react';
-import { type ReactNode, useContext } from 'react';
+import { type ReactNode } from 'react';
 
 import { SettingsItemTypeTag } from '@/settings/components/SettingsItemTypeTag';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { OverflowingTextWithTooltip, useIcons } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { OverflowingTextWithTooltip } from 'twenty-ui/primitives/typography';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 import { type Skill } from '~/generated-metadata/graphql';
 
 export type SettingsSkillTableRowProps = {
-  skill: Skill;
+  skill: Omit<Skill, 'isCustom'>;
   action?: ReactNode;
   link?: string;
 };
@@ -26,9 +27,9 @@ export const SettingsSkillTableRow = ({
   action,
   link,
 }: SettingsSkillTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { getIcon } = useIcons();
-  const Icon = getIcon(skill.icon ?? 'IconSparkles');
+  const Icon = getIcon(skill.icon ?? 'IconBook');
 
   return (
     <TableRow

@@ -3,8 +3,9 @@ import { createOneObjectMetadata } from 'test/integration/metadata/suites/object
 import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
 import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
 import { destroyOneView } from 'test/integration/metadata/suites/view/utils/destroy-one-view.util';
-import { makeRestAPIRequest } from 'test/integration/rest/utils/make-rest-api-request.util';
+import { makeRestApiRequest } from 'test/integration/rest/utils/make-rest-api-request.util';
 import {
+  assertMetadataRestListResponse,
   assertRestApiErrorNotFoundResponse,
   assertRestApiSuccessfulResponse,
 } from 'test/integration/rest/utils/rest-test-assertions.util';
@@ -13,7 +14,7 @@ import { generateRecordName } from 'test/integration/utils/generate-record-name'
 import { assertViewStructure } from 'test/integration/utils/view-test.util';
 import { ViewOpenRecordIn, ViewType } from 'twenty-shared/types';
 
-import { ViewKey } from 'twenty-shared/types';
+import { type ViewDTO } from 'src/engine/metadata-modules/view/dtos/view.dto';
 
 describe('View REST API', () => {
   let testObjectMetadataId: string;
@@ -63,7 +64,9 @@ describe('View REST API', () => {
   });
 
   afterEach(async () => {
-    if (!testViewId) return;
+    if (!testViewId) {
+      return;
+    }
 
     await destroyOneView({
       viewId: testViewId,
@@ -74,28 +77,26 @@ describe('View REST API', () => {
 
   describe('GET /metadata/views', () => {
     it('should return all views for workspace', async () => {
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'get',
         path: '/metadata/views',
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
       });
 
-      assertRestApiSuccessfulResponse(response);
-      expect(Array.isArray(response.body)).toBe(true);
+      assertMetadataRestListResponse<ViewDTO>(response);
     });
 
     it('should return views filtered by objectMetadataId', async () => {
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'get',
         path: `/metadata/views?objectMetadataId=${testObjectMetadataId}`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
       });
 
-      assertRestApiSuccessfulResponse(response);
-      expect(Array.isArray(response.body)).toBe(true);
+      const views = assertMetadataRestListResponse<ViewDTO>(response);
 
-      if (response.body.length > 0) {
-        assertViewStructure(response.body[0]);
+      if (views.length > 0) {
+        assertViewStructure(views[0]);
       }
     });
   });
@@ -107,7 +108,7 @@ describe('View REST API', () => {
         name: viewName,
         icon: 'IconTable',
         type: ViewType.TABLE,
-        key: ViewKey.INDEX,
+        key: null,
         position: 0,
         isCompact: false,
         openRecordIn: ViewOpenRecordIn.SIDE_PANEL,
@@ -121,7 +122,7 @@ describe('View REST API', () => {
         objectMetadataId: testObjectMetadataId,
         icon: 'IconTable',
         type: ViewType.TABLE,
-        key: ViewKey.INDEX,
+        key: null,
         position: 0,
         isCompact: false,
         openRecordIn: ViewOpenRecordIn.SIDE_PANEL,
@@ -161,7 +162,7 @@ describe('View REST API', () => {
         name: viewName,
         icon: 'IconTable',
         type: ViewType.TABLE,
-        key: ViewKey.INDEX,
+        key: null,
         position: 0,
         isCompact: false,
         openRecordIn: ViewOpenRecordIn.SIDE_PANEL,
@@ -170,7 +171,7 @@ describe('View REST API', () => {
 
       testViewId = view.id;
 
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'get',
         path: `/metadata/views/${view.id}`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
@@ -185,7 +186,7 @@ describe('View REST API', () => {
     });
 
     it('should return empty object for non-existent view', async () => {
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'get',
         path: `/metadata/views/20202020-b7a4-4f8e-9c1d-2e3f4a5b6c7d`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
@@ -202,7 +203,7 @@ describe('View REST API', () => {
         name: viewName,
         icon: 'IconTable',
         type: ViewType.TABLE,
-        key: ViewKey.INDEX,
+        key: null,
         position: 0,
         isCompact: false,
         openRecordIn: ViewOpenRecordIn.SIDE_PANEL,
@@ -220,7 +221,7 @@ describe('View REST API', () => {
         mainGroupByFieldMetadataId: testSelectFieldMetadataId,
       };
 
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'patch',
         path: `/metadata/views/${view.id}`,
         body: updateData,
@@ -244,7 +245,7 @@ describe('View REST API', () => {
         type: ViewType.KANBAN,
       };
 
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'patch',
         path: `/metadata/views/20202020-b7a4-4f8e-9c1d-2e3f4a5b6c7d`,
         body: updateData,
@@ -262,7 +263,7 @@ describe('View REST API', () => {
         name: viewName,
         icon: 'IconTable',
         type: ViewType.TABLE,
-        key: ViewKey.INDEX,
+        key: null,
         position: 0,
         isCompact: false,
         openRecordIn: ViewOpenRecordIn.SIDE_PANEL,
@@ -271,7 +272,7 @@ describe('View REST API', () => {
 
       testViewId = view.id;
 
-      const deleteResponse = await makeRestAPIRequest({
+      const deleteResponse = await makeRestApiRequest({
         method: 'delete',
         path: `/metadata/views/${view.id}`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
@@ -279,8 +280,9 @@ describe('View REST API', () => {
 
       assertRestApiSuccessfulResponse(deleteResponse);
       expect(deleteResponse.body.success).toBe(true);
+      testViewId = undefined;
 
-      const getResponse = await makeRestAPIRequest({
+      const getResponse = await makeRestApiRequest({
         method: 'get',
         path: `/metadata/views/${view.id}`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,
@@ -290,7 +292,7 @@ describe('View REST API', () => {
     });
 
     it('should return 404 error when deleting non-existent view', async () => {
-      const response = await makeRestAPIRequest({
+      const response = await makeRestApiRequest({
         method: 'delete',
         path: `/metadata/views/20202020-b7a4-4f8e-9c1d-2e3f4a5b6c7d`,
         bearer: APPLE_JANE_ADMIN_ACCESS_TOKEN,

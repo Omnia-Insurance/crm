@@ -1,37 +1,53 @@
-import { CoreObjectNameSingular } from 'twenty-shared/types';
-import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
-import { useGetUpdatableWorkflowVersionOrThrow } from '@/workflow/hooks/useGetUpdatableWorkflowVersionOrThrow';
+import { useWorkflowEditorMutationErrorHandler } from '@/workflow/hooks/useWorkflowEditorMutationErrorHandler';
+import { invalidateCoreWorkflowVersions } from '@/object-core/workflows/versions/utils/invalidateCoreWorkflowVersions';
+import { useApolloCoreClient } from '@/object-metadata/hooks/useApolloCoreClient';
 import { type WorkflowTrigger } from '@/workflow/types/Workflow';
-
 import { useStepsOutputSchema } from '@/workflow/workflow-variables/hooks/useStepsOutputSchema';
+import { useMutation } from '@apollo/client/react';
+import { isDefined } from 'twenty-shared/utils';
 import { TRIGGER_STEP_ID } from 'twenty-shared/workflow';
+import { UpdateCoreWorkflowVersionTriggerDocument } from '~/generated/graphql';
 
-export const useUpdateWorkflowVersionTrigger = () => {
-  const { updateOneRecord: updateOneWorkflowVersion } = useUpdateOneRecord();
-
-  const { getUpdatableWorkflowVersion } =
-    useGetUpdatableWorkflowVersionOrThrow();
+export const useUpdateWorkflowVersionTrigger = (instanceId?: string) => {
+  const apolloCoreClient = useApolloCoreClient();
+  const handleCoreMutationError =
+    useWorkflowEditorMutationErrorHandler(instanceId);
+  const [mutateCore] = useMutation(UpdateCoreWorkflowVersionTriggerDocument, {
+    client: apolloCoreClient,
+    onError: handleCoreMutationError,
+  });
 
   const { markStepForRecomputation } = useStepsOutputSchema();
 
-  const updateTrigger = async (updatedTrigger: WorkflowTrigger) => {
-    const workflowVersionId = await getUpdatableWorkflowVersion();
-
-    await updateOneWorkflowVersion({
-      objectNameSingular: CoreObjectNameSingular.WorkflowVersion,
-      idToUpdate: workflowVersionId,
-      updateOneRecordInput: {
-        trigger: updatedTrigger,
+  const updateWorkflowVersionTrigger = async ({
+    workflowVersionId,
+    trigger,
+  }: {
+    workflowVersionId: string;
+    trigger: WorkflowTrigger;
+  }) => {
+    const { data } = await mutateCore({
+      variables: {
+        input: {
+          coreWorkflowVersionId: workflowVersionId,
+          trigger,
+        },
       },
     });
+
+    if (!isDefined(data?.updateWorkflowVersionTrigger)) {
+      return false;
+    }
 
     markStepForRecomputation({
       stepId: TRIGGER_STEP_ID,
       workflowVersionId,
     });
+
+    await invalidateCoreWorkflowVersions(apolloCoreClient);
+
+    return true;
   };
 
-  return {
-    updateTrigger,
-  };
+  return { updateWorkflowVersionTrigger };
 };

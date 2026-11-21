@@ -1,13 +1,11 @@
+import { type SingleRecordPickerMenuItemsWithSearchProps } from '@/object-record/record-picker/single-record-picker/types/SingleRecordPickerMenuItemsWithSearchProps';
 import { useRef } from 'react';
 
-import {
-  SingleRecordPickerMenuItemsWithSearch,
-  type SingleRecordPickerMenuItemsWithSearchProps,
-} from '@/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch';
+import { SingleRecordPickerMenuItemsWithSearch } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPickerMenuItemsWithSearch';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
 import { singleRecordPickerSearchFilterComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSearchFilterComponentState';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
-import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { LegacyDropdownContent } from '@/ui/layout/dropdown/components/LegacyDropdownContent';
 import { useListenClickOutside } from '@/ui/utilities/pointer-event/hooks/useListenClickOutside';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 
@@ -75,7 +73,7 @@ export const SingleRecordPicker = ({
     <SingleRecordPickerComponentInstanceContext.Provider
       value={{ instanceId: componentInstanceId }}
     >
-      <DropdownContent ref={containerRef} widthInPixels={dropdownWidth}>
+      <LegacyDropdownContent ref={containerRef} widthInPixels={dropdownWidth}>
         <SingleRecordPickerMenuItemsWithSearch
           focusId={focusId}
           {...{
@@ -87,10 +85,11 @@ export const SingleRecordPicker = ({
             onMorphItemSelected: handleMorphItemSelected,
             objectNameSingulars,
             layoutDirection,
+            // OMNIA-CUSTOM: forwarded to the search (Carrier -> Product bridge)
             additionalFilter,
           }}
         />
-      </DropdownContent>
+      </LegacyDropdownContent>
     </SingleRecordPickerComponentInstanceContext.Provider>
   );
 };

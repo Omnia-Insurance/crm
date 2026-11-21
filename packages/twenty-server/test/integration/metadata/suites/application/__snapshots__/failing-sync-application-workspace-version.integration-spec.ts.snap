@@ -1,0 +1,25 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Sync application is gated by the workspace completed upgrade version rejects sync when the workspace has not completed the required upgrade version 1`] = `
+{
+  "extensions": {
+    "code": "NOT_FOUND",
+    "subCode": "APPLICATION_NOT_FOUND",
+    "userFriendlyMessage": "Application not found.",
+  },
+  "message": "No registration found for "<applicationUniversalIdentifier>". Create one first with createApplicationRegistration.",
+  "name": "NotFoundError",
+}
+`;
+
+exports[`Sync application is gated by the workspace completed upgrade version rejects sync when the workspace upgrade cursor cannot be interpreted 1`] = `
+{
+  "extensions": {
+    "code": "NOT_FOUND",
+    "subCode": "APPLICATION_NOT_FOUND",
+    "userFriendlyMessage": "Application not found.",
+  },
+  "message": "No registration found for "<applicationUniversalIdentifier>". Create one first with createApplicationRegistration.",
+  "name": "NotFoundError",
+}
+`;

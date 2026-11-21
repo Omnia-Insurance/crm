@@ -2,18 +2,20 @@ import {
   useBackgroundJob,
   useBackgroundJobs,
 } from '@/ui/feedback/background-job-indicator/hooks/useBackgroundJob';
-import type { BackgroundJobData } from '@/ui/feedback/background-job-indicator/states/backgroundJobState';
+import { type BackgroundJobData } from '@/ui/feedback/background-job-indicator/states/backgroundJobState';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
+import { plural } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { useEffect } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { LightIconButton } from 'twenty-ui/components/input';
 import {
   IconAlertTriangle,
   IconSquareRoundedCheck,
   IconX,
-} from 'twenty-ui/display';
-import { CircularProgressBar, ProgressBar } from 'twenty-ui/feedback';
-import { LightIconButton } from 'twenty-ui/input';
-import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme-constants';
+} from 'twenty-ui/icon';
+import { ProgressBar, ProgressRing } from 'twenty-ui/primitives/feedback';
+import { MOBILE_VIEWPORT, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledStack = styled.div`
   bottom: ${themeCssVariables.spacing[3]};
@@ -25,9 +27,9 @@ const StyledStack = styled.div`
   z-index: 10000;
 
   @media (max-width: ${MOBILE_VIEWPORT}px) {
+    bottom: 0;
     left: 0;
     right: 0;
-    bottom: 0;
   }
 `;
 
@@ -93,8 +95,24 @@ const StyledProgressContainer = styled.div`
 
 const AUTO_DISMISS_MS = 5000;
 
-const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
+const MAX_VISIBLE_ERROR_MESSAGES = 3;
+
+type BackgroundJobCardProps = {
+  job: BackgroundJobData;
+};
+
+const BackgroundJobCard = ({ job }: BackgroundJobCardProps) => {
+  const { t } = useLingui();
   const { removeJob } = useBackgroundJob();
+
+  const {
+    label,
+    processedItems,
+    totalItems,
+    warningCount,
+    failureCount,
+    errorMessages = [],
+  } = job;
 
   const isRunning =
     job.status === 'uploading' ||
@@ -102,36 +120,45 @@ const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
     job.status === 'processing';
   const isDone = job.status === 'completed';
   const isFailed = job.status === 'failed';
+  const isCancelled = job.status === 'cancelled';
 
   useEffect(() => {
-    if (!isDone) return;
+    if (!isDone) {
+      return;
+    }
 
     const timer = setTimeout(() => removeJob(job.id), AUTO_DISMISS_MS);
 
     return () => clearTimeout(timer);
   }, [isDone, job.id, removeJob]);
-  const percent =
-    job.totalItems > 0
-      ? Math.round((job.processedItems / job.totalItems) * 100)
-      : 0;
 
-  const barColor = isDone
-    ? themeCssVariables.color.green
-    : isFailed
-      ? themeCssVariables.color.red
-      : themeCssVariables.color.blue;
+  const percent =
+    totalItems > 0 ? Math.round((processedItems / totalItems) * 100) : 0;
+
+  const doneMessage =
+    warningCount > 0
+      ? plural(warningCount, {
+          one: `${label} — done with # warning`,
+          other: `${label} — done with # warnings`,
+        })
+      : t`${label} — done`;
+
+  const progressDetails =
+    warningCount > 0
+      ? plural(warningCount, {
+          one: `${processedItems} of ${totalItems} (${percent}%) · # warning`,
+          other: `${processedItems} of ${totalItems} (${percent}%) · # warnings`,
+        })
+      : t`${processedItems} of ${totalItems} (${percent}%)`;
+
+  const hiddenErrorMessageCount =
+    errorMessages.length - MAX_VISIBLE_ERROR_MESSAGES;
 
   return (
     <StyledCard>
       <StyledHeader>
         <StyledIcon>
-          {isRunning && (
-            <CircularProgressBar
-              size={16}
-              barWidth={2}
-              barColor={themeCssVariables.color.blue}
-            />
-          )}
+          {isRunning && <ProgressRing value={null} aria-hidden />}
           {isDone && (
             <IconSquareRoundedCheck
               size={16}
@@ -141,27 +168,34 @@ const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
           {isFailed && (
             <IconAlertTriangle size={16} color={themeCssVariables.color.red} />
           )}
-          {job.status === 'cancelled' && <IconX size={16} />}
+          {isCancelled && <IconX size={16} />}
         </StyledIcon>
 
         <StyledMessage>
-          {isRunning && job.label}
-          {isDone &&
-            (job.warningCount > 0
-              ? t`${job.label} — done with ${job.warningCount} warnings`
-              : t`${job.label} — done`)}
-          {isFailed && t`${job.label} — failed`}
-          {job.status === 'cancelled' && t`${job.label} — cancelled`}
+          {isRunning && label}
+          {isDone && doneMessage}
+          {isFailed && t`${label} — failed`}
+          {isCancelled && t`${label} — cancelled`}
         </StyledMessage>
 
         <StyledActions>
+          {isRunning && isDefined(job.onCancel) && (
+            <LightIconButton
+              aria-label={t`Cancel`}
+              emphasis="subtle"
+              onClick={job.onCancel}
+            >
+              <IconX />
+            </LightIconButton>
+          )}
           {!isRunning && (
             <LightIconButton
-              Icon={IconX}
-              size="small"
+              aria-label={t`Dismiss`}
+              emphasis="subtle"
               onClick={() => removeJob(job.id)}
-              accent="tertiary"
-            />
+            >
+              <IconX />
+            </LightIconButton>
           )}
         </StyledActions>
       </StyledHeader>
@@ -171,29 +205,34 @@ const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
           <StyledProgressContainer>
             <ProgressBar
               value={percent}
-              barColor={barColor}
+              aria-label={label}
+              barColor={themeCssVariables.color.blue}
               backgroundColor={themeCssVariables.background.quaternary}
               withBorderRadius
             />
           </StyledProgressContainer>
-          <StyledDetails>
-            {t`${job.processedItems} of ${job.totalItems} (${percent}%)`}
-            {job.warningCount > 0 && ` · ${job.warningCount} warnings`}
-          </StyledDetails>
+          <StyledDetails>{progressDetails}</StyledDetails>
         </>
       )}
 
-      {!isRunning && job.failureCount > 0 && (
-        <StyledDetails>{t`${job.failureCount} failures`}</StyledDetails>
+      {!isRunning && failureCount > 0 && (
+        <StyledDetails>
+          {plural(failureCount, {
+            one: '# failure',
+            other: '# failures',
+          })}
+        </StyledDetails>
       )}
 
-      {!isRunning && job.errorMessages && job.errorMessages.length > 0 && (
+      {!isRunning && errorMessages.length > 0 && (
         <StyledDetails>
-          {job.errorMessages.slice(0, 3).map((msg, i) => (
-            <div key={i}>{msg}</div>
-          ))}
-          {job.errorMessages.length > 3 &&
-            t`...and ${job.errorMessages.length - 3} more`}
+          {errorMessages
+            .slice(0, MAX_VISIBLE_ERROR_MESSAGES)
+            .map((errorMessage, index) => (
+              <div key={index}>{errorMessage}</div>
+            ))}
+          {hiddenErrorMessageCount > 0 &&
+            t`...and ${hiddenErrorMessageCount} more`}
         </StyledDetails>
       )}
     </StyledCard>
@@ -203,7 +242,9 @@ const BackgroundJobCard = ({ job }: { job: BackgroundJobData }) => {
 export const BackgroundJobIndicator = () => {
   const jobs = useBackgroundJobs();
 
-  if (jobs.length === 0) return null;
+  if (jobs.length === 0) {
+    return null;
+  }
 
   return (
     <StyledStack>

@@ -1,18 +1,22 @@
+import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { recordFieldInputIsFieldInErrorComponentState } from '@/object-record/record-field/ui/states/recordFieldInputIsFieldInErrorComponentState';
+import { getRecordFormFieldInputInstanceId } from '@/object-record/record-form/utils/getRecordFormFieldInputInstanceId';
 import { contextStoreNumberOfSelectedRecordsComponentState } from '@/context-store/states/contextStoreNumberOfSelectedRecordsComponentState';
-import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { UpdateMultipleRecordsFooter } from '@/object-record/record-update-multiple/components/UpdateMultipleRecordsFooter';
 import { UpdateMultipleRecordsForm } from '@/object-record/record-update-multiple/components/UpdateMultipleRecordsForm';
 import { useUpdateMultipleRecordsActions } from '@/object-record/record-update-multiple/hooks/useUpdateMultipleRecordsActions';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
 import { ShowPageContainer } from '@/ui/layout/page/components/ShowPageContainer';
 import { SidePanelProvider } from '@/ui/layout/side-panel/contexts/SidePanelContext';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import { useState } from 'react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useStore } from 'jotai';
+import { useId, useState } from 'react';
+import { useToast } from 'twenty-ui/components/feedback';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const UPDATE_MULTIPLE_RECORDS_CONFIRMATION_MODAL_ID =
   'update-multiple-records-confirmation';
@@ -55,9 +59,16 @@ export const UpdateMultipleRecordsContainer = ({
 
   const hasSelectedRecords = contextStoreNumberOfSelectedRecords > 0;
 
+  const { objectMetadataItem } = useObjectMetadataItem({
+    objectNameSingular,
+  });
+  const store = useStore();
+  const formInstanceId = useId();
+  const contentId = useId();
+
   const { t } = useLingui();
-  const { enqueueErrorSnackBar } = useSnackBar();
-  const { openModal } = useModal();
+  const { enqueueToast } = useToast();
+  const { openDialog } = useDialog();
   const { closeSidePanelMenu } = useSidePanelMenu();
 
   const [fieldUpdates, setFieldUpdates] = useState<UpdateMultipleRecordsState>(
@@ -65,7 +76,27 @@ export const UpdateMultipleRecordsContainer = ({
   );
 
   const handleUpdateClick = () => {
-    openModal(UPDATE_MULTIPLE_RECORDS_CONFIRMATION_MODAL_ID);
+    const isAnyFieldInputInError = objectMetadataItem.fields.some(
+      (fieldMetadataItem) =>
+        store.get(
+          recordFieldInputIsFieldInErrorComponentState.atomFamily({
+            instanceId: getRecordFormFieldInputInstanceId({
+              formInstanceId,
+              fieldMetadataId: fieldMetadataItem.id,
+            }),
+          }),
+        ),
+    );
+
+    if (isAnyFieldInputInError) {
+      document
+        .getElementById(contentId)
+        ?.querySelector('[role="alert"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    openDialog(UPDATE_MULTIPLE_RECORDS_CONFIRMATION_MODAL_ID);
   };
 
   const handleConfirmedUpdate = async () => {
@@ -73,8 +104,9 @@ export const UpdateMultipleRecordsContainer = ({
       await updateRecords(fieldUpdates);
       closeSidePanelMenu();
     } catch (error) {
-      enqueueErrorSnackBar({
-        message:
+      enqueueToast({
+        status: 'error',
+        children:
           error instanceof Error
             ? error.message
             : t`Failed to update records. Please try again.`,
@@ -102,8 +134,9 @@ export const UpdateMultipleRecordsContainer = ({
     <SidePanelProvider value={{ isInSidePanel: true }}>
       <ShowPageContainer>
         <StyledShowPageRightContainer>
-          <StyledContentContainer>
+          <StyledContentContainer id={contentId}>
             <UpdateMultipleRecordsForm
+              formInstanceId={formInstanceId}
               disabled={isUpdating}
               values={fieldUpdates}
               onChange={handleFieldChange}
@@ -119,13 +152,13 @@ export const UpdateMultipleRecordsContainer = ({
           />
         </StyledShowPageRightContainer>
       </ShowPageContainer>
-      <ConfirmationModal
-        modalInstanceId={UPDATE_MULTIPLE_RECORDS_CONFIRMATION_MODAL_ID}
+      <ConfirmationDialog
+        dialogId={UPDATE_MULTIPLE_RECORDS_CONFIRMATION_MODAL_ID}
         title={t`Update ${contextStoreNumberOfSelectedRecords} records`}
         subtitle={t`This will modify ${contextStoreNumberOfSelectedRecords} records. This action cannot be undone.`}
         onConfirmClick={handleConfirmedUpdate}
         confirmButtonText={t`Update records`}
-        confirmButtonAccent="blue"
+        confirmButtonColor="accent"
       />
     </SidePanelProvider>
   );

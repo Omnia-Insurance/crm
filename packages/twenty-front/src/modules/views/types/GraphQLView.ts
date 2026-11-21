@@ -7,7 +7,6 @@ import { type ViewKey } from '@/views/types/ViewKey';
 import { type ViewType } from '@/views/types/ViewType';
 import {
   type ViewCalendarLayout,
-  type ViewOpenRecordIn,
   type ViewVisibility,
 } from '~/generated-metadata/graphql';
 import { type ViewSort } from '@/views/types/ViewSort';
@@ -19,11 +18,13 @@ export type GraphQLView = {
   key?: ViewKey | null;
   mainGroupByFieldMetadataId?: string | null;
   shouldHideEmptyGroups: boolean;
+  shouldDisplayGroupsAsTabs?: boolean | null;
+  kanbanColumnWidth?: number | null;
+  groupLoadLimit?: number | null;
   kanbanAggregateOperation?: AggregateOperations | null;
   kanbanAggregateOperationFieldMetadataId?: string | null;
   objectMetadataId: string;
   isCompact: boolean;
-  openRecordIn: ViewOpenRecordIn;
   viewFields: ViewField[];
   viewFilters: ViewFilter[];
   viewFilterGroups?: ViewFilterGroup[];
@@ -34,6 +35,8 @@ export type GraphQLView = {
   anyFieldFilterValue?: string | null;
   calendarLayout?: ViewCalendarLayout | null;
   calendarFieldMetadataId?: string | null;
+  calendarEndFieldMetadataId?: string | null;
   visibility: ViewVisibility;
   createdByUserWorkspaceId?: string | null;
+  applicationId?: string;
 };

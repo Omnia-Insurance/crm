@@ -17,10 +17,13 @@ export const STANDARD_FLAT_ROLE_METADATA_BUILDERS_BY_ROLE_NAME = {
         isEditable: false,
         canUpdateAllSettings: true,
         canAccessAllTools: true,
+        canAccessAllAgentChatChannels: true,
         canReadAllObjectRecords: true,
+        canCreateAllObjectRecords: true,
         canUpdateAllObjectRecords: true,
         canSoftDeleteAllObjectRecords: true,
         canDestroyAllObjectRecords: true,
+        // OMNIA-CUSTOM: Admin sees every object in the sidebar (C4)
         showAllObjectsInSidebar: true,
         canBeAssignedToUsers: true,
         canBeAssignedToAgents: false,

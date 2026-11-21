@@ -8,6 +8,7 @@ import { activeTabIdComponentState } from '@/ui/layout/tab-list/states/activeTab
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentStateCallbackState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateCallbackState';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
+import { t } from '@lingui/core/macro';
 import { useStore } from 'jotai';
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
@@ -55,13 +56,15 @@ export const useCreatePageLayoutTab = ({
       const newTab: PageLayoutTab = {
         id: newTabId,
         applicationId: '',
+        universalIdentifier: newTabId,
+        isSystemSideEffect: false,
         isActive: true,
-        title: title || `Tab ${tabsLength + 1}`,
+        title: title || t`Tab ${tabsLength + 1}`,
         position: maxPosition + 1,
         pageLayoutId: pageLayoutId,
         icon:
           pageLayoutDraft.type === PageLayoutType.RECORD_PAGE
-            ? 'IconAppWindow'
+            ? 'IconPerspective'
             : null,
         layoutMode: getDefaultTabLayoutMode(pageLayoutDraft.type),
         widgets: [],

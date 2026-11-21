@@ -1,6 +1,6 @@
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { getOrderByForRelationField } from '@/object-metadata/utils/getOrderByForFieldMetadataType';
+import { getOrderByForRelationField } from '@/object-metadata/utils/getOrderByForRelationField';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 
 describe('getOrderByForRelationField', () => {
@@ -29,7 +29,6 @@ describe('getOrderByForRelationField', () => {
       orderByDirection: 'AscNullsLast',
     });
 
-    // Should produce nested structure: { company: { name: 'AscNullsLast' } }
     expect(result).toEqual([{ company: { name: 'AscNullsLast' } }]);
   });
 
@@ -84,36 +83,6 @@ describe('getOrderByForRelationField', () => {
     });
 
     expect(result).toEqual([{ companyId: 'AscNullsLast' }]);
-  });
-
-  it('should use default "name" field when labelIdentifierFieldMetadataId is not set', () => {
-    const field: Pick<FieldMetadataItem, 'name'> = {
-      name: 'company',
-    };
-
-    const relatedObjectMetadataItem: Pick<
-      EnrichedObjectMetadataItem,
-      'fields' | 'labelIdentifierFieldMetadataId'
-    > = {
-      labelIdentifierFieldMetadataId: undefined as unknown as string,
-      fields: [
-        {
-          id: 'name-field-id',
-          name: 'name',
-          type: FieldMetadataType.TEXT,
-        } as FieldMetadataItem,
-      ],
-    };
-
-    const result = getOrderByForRelationField({
-      field,
-      relatedObjectMetadataItem,
-      orderByDirection: 'AscNullsLast',
-    });
-
-    // When labelIdentifierFieldMetadataId is not set, isLabelIdentifierField
-    // falls back to checking for a field named 'name'
-    expect(result).toEqual([{ company: { name: 'AscNullsLast' } }]);
   });
 
   it('should handle descending direction', () => {

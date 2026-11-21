@@ -7,21 +7,21 @@ import { Repository } from 'typeorm';
 
 import type Stripe from 'stripe';
 
-import { transformStripeEntitlementUpdatedEventToDatabaseEntitlement } from 'src/engine/core-modules/billing-webhook/utils/transform-stripe-entitlement-updated-event-to-database-entitlement.util';
+import { BillingEntitlementSyncService } from 'src/engine/core-modules/billing-webhook/services/billing-entitlement-sync.service';
 import {
   BillingException,
   BillingExceptionCode,
 } from 'src/engine/core-modules/billing/billing.exception';
 import { BillingCustomerEntity } from 'src/engine/core-modules/billing/entities/billing-customer.entity';
-import { BillingEntitlementEntity } from 'src/engine/core-modules/billing/entities/billing-entitlement.entity';
 
 @Injectable()
 export class BillingWebhookEntitlementService {
   constructor(
+    // Stripe webhook: workspace discovered from BillingCustomer by stripeCustomerId.
+    // eslint-disable-next-line twenty/prefer-workspace-scoped-repository
     @InjectRepository(BillingCustomerEntity)
     private readonly billingCustomerRepository: Repository<BillingCustomerEntity>,
-    @InjectRepository(BillingEntitlementEntity)
-    private readonly billingEntitlementRepository: Repository<BillingEntitlementEntity>,
+    private readonly billingEntitlementSyncService: BillingEntitlementSyncService,
   ) {}
 
   async processStripeEvent(
@@ -38,17 +38,12 @@ export class BillingWebhookEntitlementService {
       );
     }
 
-    const workspaceId = billingCustomer.workspaceId;
-
-    const billingEntitlements =
-      transformStripeEntitlementUpdatedEventToDatabaseEntitlement(
-        workspaceId,
-        data,
-      );
-
-    await this.billingEntitlementRepository.upsert(billingEntitlements, {
-      conflictPaths: ['workspaceId', 'key'],
-      skipUpdateIfNoValuesChanged: true,
+    await this.billingEntitlementSyncService.syncEntitlements({
+      workspaceId: billingCustomer.workspaceId,
+      stripeCustomerId: data.object.customer,
+      activeLookupKeys: data.object.entitlements.data.map(
+        (entitlement) => entitlement.lookup_key,
+      ),
     });
 
     return {

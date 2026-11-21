@@ -1,9 +1,10 @@
 import gql from 'graphql-tag';
-import { makeGraphqlAPIRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
 import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
 import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
 import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
 import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { waitForAllJobsToFinish } from 'test/integration/utils/wait-for-all-jobs-to-finish.util';
 import { FieldMetadataType } from 'twenty-shared/types';
 
 const createRecordsQuery = gql`
@@ -29,6 +30,20 @@ const deleteRecordsQuery = gql`
       secondUniqueTestField
       name
       deletedAt
+    }
+  }
+`;
+
+const createRecordsWithPositionQuery = gql`
+  mutation CreateRecordsWithPosition(
+    $data: [TestRecordObjectCreateInput!]!
+    $upsert: Boolean
+  ) {
+    createTestRecordObjects(data: $data, upsert: $upsert) {
+      id
+      firstUniqueTestField
+      name
+      position
     }
   }
 `;
@@ -89,6 +104,9 @@ describe('upsert (createMany with upsert:true)', () => {
   });
 
   afterEach(async () => {
+    // The global wait-for-jobs afterEach runs after this one, so drain jobs first or the deletion migration can deadlock against them.
+    await waitForAllJobsToFinish();
+
     await updateOneObjectMetadata({
       expectToFail: false,
       input: {
@@ -104,8 +122,7 @@ describe('upsert (createMany with upsert:true)', () => {
   });
 
   it('should update many records', async () => {
-    // Create 2 records
-    await makeGraphqlAPIRequest({
+    await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [
@@ -124,8 +141,7 @@ describe('upsert (createMany with upsert:true)', () => {
       },
     });
 
-    // Update 2 records using upsert
-    const updatedRecordsResponse = await makeGraphqlAPIRequest({
+    const updatedRecordsResponse = await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [
@@ -172,7 +188,7 @@ describe('upsert (createMany with upsert:true)', () => {
   });
 
   it('should throw an error when multiple records with the same unique field values are found', async () => {
-    await makeGraphqlAPIRequest({
+    await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [
@@ -191,7 +207,7 @@ describe('upsert (createMany with upsert:true)', () => {
       },
     });
 
-    const upsertResponse = await makeGraphqlAPIRequest({
+    const upsertResponse = await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [
@@ -214,8 +230,52 @@ describe('upsert (createMany with upsert:true)', () => {
     );
   });
 
+  it('should restore a soft-deleted record matched on its unique fields only', async () => {
+    const createResponse = await makeGraphqlApiRequest({
+      query: createRecordsQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'softDeletedByUniqueFields',
+            secondUniqueTestField: 'softDeletedByUniqueFieldsSecond',
+            name: 'originalRecord',
+          },
+        ],
+        upsert: false,
+      },
+    });
+
+    const createdRecord = createResponse.body.data.createTestRecordObjects[0];
+
+    await makeGraphqlApiRequest({
+      query: deleteRecordsQuery,
+      variables: {
+        filter: { id: { eq: createdRecord.id } },
+      },
+    });
+
+    const upsertResponse = await makeGraphqlApiRequest({
+      query: createRecordsQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'softDeletedByUniqueFields',
+            secondUniqueTestField: 'softDeletedByUniqueFieldsSecond',
+          },
+        ],
+        upsert: true,
+      },
+    });
+
+    const upsertedRecord = upsertResponse.body.data.createTestRecordObjects[0];
+
+    expect(upsertedRecord.id).toEqual(createdRecord.id);
+    expect(upsertedRecord.deletedAt).toBeNull();
+    expect(upsertedRecord.name).toEqual('originalRecord');
+  });
+
   it('should update and restore updated soft-deleted record', async () => {
-    const createResponse = await makeGraphqlAPIRequest({
+    const createResponse = await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [
@@ -231,14 +291,14 @@ describe('upsert (createMany with upsert:true)', () => {
 
     const createdRecord = createResponse.body.data.createTestRecordObjects[0];
 
-    const deleteResponse = await makeGraphqlAPIRequest({
+    const deleteResponse = await makeGraphqlApiRequest({
       query: deleteRecordsQuery,
       variables: {
         filter: { id: { eq: createdRecord.id } },
       },
     });
 
-    const updateResponse = await makeGraphqlAPIRequest({
+    const updateResponse = await makeGraphqlApiRequest({
       query: createRecordsQuery,
       variables: {
         data: [{ id: createdRecord.id, name: 'updatedRecord' }],
@@ -255,5 +315,109 @@ describe('upsert (createMany with upsert:true)', () => {
     expect(updateResponse.body.data.createTestRecordObjects[0].id).toEqual(
       createdRecord.id,
     );
+  });
+
+  it('should not change the position of an existing record when upserting without a position', async () => {
+    const createResponse = await makeGraphqlApiRequest({
+      query: createRecordsWithPositionQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'positionTestField',
+            secondUniqueTestField: 'positionTestSecondField',
+            name: 'originalRecord',
+          },
+        ],
+        upsert: false,
+      },
+    });
+
+    const createdRecord = createResponse.body.data.createTestRecordObjects[0];
+    const initialPosition = createdRecord.position;
+
+    expect(typeof initialPosition).toBe('number');
+
+    const upsertResponse = await makeGraphqlApiRequest({
+      query: createRecordsWithPositionQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'positionTestField',
+            name: 'updatedRecord',
+          },
+        ],
+        upsert: true,
+      },
+    });
+
+    const upsertedRecord = upsertResponse.body.data.createTestRecordObjects[0];
+
+    expect(upsertedRecord.id).toEqual(createdRecord.id);
+    expect(upsertedRecord.name).toEqual('updatedRecord');
+    expect(upsertedRecord.position).toEqual(initialPosition);
+  });
+
+  it('should auto-assign a position when an upsert creates a new record', async () => {
+    const upsertResponse = await makeGraphqlApiRequest({
+      query: createRecordsWithPositionQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'insertedViaUpsertField',
+            secondUniqueTestField: 'insertedViaUpsertSecondField',
+            name: 'insertedRecord',
+          },
+        ],
+        upsert: true,
+      },
+    });
+
+    const insertedRecord = upsertResponse.body.data.createTestRecordObjects[0];
+
+    expect(insertedRecord.id).toEqual(expect.any(String));
+    expect(typeof insertedRecord.position).toBe('number');
+  });
+
+  it('should update the position of an existing record when upserting with a position', async () => {
+    const createResponse = await makeGraphqlApiRequest({
+      query: createRecordsWithPositionQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'updatePositionTestField',
+            secondUniqueTestField: 'updatePositionTestSecondField',
+            name: 'originalRecord',
+            position: 1,
+          },
+        ],
+        upsert: false,
+      },
+    });
+
+    const createdRecord = createResponse.body.data.createTestRecordObjects[0];
+
+    expect(createdRecord.position).toEqual(1);
+
+    const newPosition = 5;
+
+    const upsertResponse = await makeGraphqlApiRequest({
+      query: createRecordsWithPositionQuery,
+      variables: {
+        data: [
+          {
+            firstUniqueTestField: 'updatePositionTestField',
+            name: 'updatedRecord',
+            position: newPosition,
+          },
+        ],
+        upsert: true,
+      },
+    });
+
+    const upsertedRecord = upsertResponse.body.data.createTestRecordObjects[0];
+
+    expect(upsertedRecord.id).toEqual(createdRecord.id);
+    expect(upsertedRecord.name).toEqual('updatedRecord');
+    expect(upsertedRecord.position).toEqual(newPosition);
   });
 });

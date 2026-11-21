@@ -2,14 +2,18 @@ import { useIsSettingsPage } from '@/navigation/hooks/useIsSettingsPage';
 import { currentMobileNavigationDrawerState } from '@/navigation/states/currentMobileNavigationDrawerState';
 import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { navigationDrawerExpandedMemorizedState } from '@/ui/navigation/states/navigationDrawerExpandedMemorizedState';
+import { navigationDrawerActiveTabState } from '@/ui/navigation/states/navigationDrawerActiveTabState';
+import { NAVIGATION_DRAWER_TABS } from '@/ui/navigation/states/navigationDrawerTabs';
 import { navigationMemorizedUrlState } from '@/ui/navigation/states/navigationMemorizedUrlState';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { useCallback } from 'react';
+import { useIsMobile } from 'twenty-ui/utilities';
 import { useLocation } from 'react-router-dom';
 
 export const useOpenSettingsMenu = () => {
   const location = useLocation();
+  const isMobile = useIsMobile();
   const isSettingsPage = useIsSettingsPage();
   const [isNavigationDrawerExpanded, setIsNavigationDrawerExpanded] =
     useAtomState(isNavigationDrawerExpandedState);
@@ -22,17 +26,24 @@ export const useOpenSettingsMenu = () => {
   const setCurrentMobileNavigationDrawer = useSetAtomState(
     currentMobileNavigationDrawerState,
   );
+  const setNavigationDrawerActiveTab = useSetAtomState(
+    navigationDrawerActiveTabState,
+  );
 
   const openSettingsMenu = useCallback(() => {
     if (isSettingsPage) {
       return;
     }
 
-    setNavigationDrawerExpandedMemorized(isNavigationDrawerExpanded);
-    setIsNavigationDrawerExpanded(true);
+    if (isMobile) {
+      setNavigationDrawerExpandedMemorized(isNavigationDrawerExpanded);
+      setIsNavigationDrawerExpanded(true);
+    }
     setNavigationMemorizedUrl(location.pathname + location.search);
     setCurrentMobileNavigationDrawer('settings');
+    setNavigationDrawerActiveTab(NAVIGATION_DRAWER_TABS.NAVIGATION_MENU);
   }, [
+    isMobile,
     isSettingsPage,
     isNavigationDrawerExpanded,
     location.pathname,
@@ -41,6 +52,7 @@ export const useOpenSettingsMenu = () => {
     setIsNavigationDrawerExpanded,
     setNavigationDrawerExpandedMemorized,
     setNavigationMemorizedUrl,
+    setNavigationDrawerActiveTab,
   ]);
 
   return { openSettingsMenu };

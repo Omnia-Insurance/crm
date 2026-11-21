@@ -1,15 +1,18 @@
 import { type PageLayoutTab } from '@/page-layout/types/PageLayoutTab';
 import { isNonEmptyString } from '@sniptt/guards';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
-type AssertPageLayoutTabHasDefinedLayoutModeOrThrow = (
-  tab: PageLayoutTab | undefined,
-) => asserts tab is PageLayoutTab & {
+type AssertPageLayoutTabHasDefinedLayoutModeOrThrow = <
+  TTab extends Pick<PageLayoutTab, 'layoutMode'>,
+>(
+  tab: TTab | undefined,
+) => asserts tab is TTab & {
   layoutMode: NonNullable<PageLayoutTab['layoutMode']>;
 };
 
 export const assertPageLayoutTabHasDefinedLayoutModeOrThrow: AssertPageLayoutTabHasDefinedLayoutModeOrThrow =
   (tab) => {
     if (!isNonEmptyString(tab?.layoutMode)) {
-      throw new Error('Tab layout mode is not defined');
+      throw new Error(doNotTranslate('Tab layout mode is not defined'));
     }
   };

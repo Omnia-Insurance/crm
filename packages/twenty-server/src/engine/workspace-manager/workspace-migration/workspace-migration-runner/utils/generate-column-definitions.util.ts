@@ -3,6 +3,7 @@ import {
   FieldMetadataType,
   RelationType,
 } from 'twenty-shared/types';
+import { isMorphRelationHead } from 'twenty-shared/utils';
 
 import { type ColumnType } from 'typeorm';
 
@@ -89,7 +90,6 @@ export const generateCompositeColumnDefinition = ({
         : columnType,
     isNullable:
       parentFlatFieldMetadata.isNullable || !compositeProperty.isRequired,
-    isUnique: parentFlatFieldMetadata.isUnique ?? false,
     default: serializedDefaultValue,
     isArray: isArrayFlag,
     isPrimary: false,
@@ -100,6 +100,7 @@ export const generateCompositeColumnDefinition = ({
 
 const generateTsVectorColumnDefinition = (
   flatFieldMetadata: FlatFieldMetadata<FieldMetadataType.TS_VECTOR>,
+  searchVectorAsExpression?: string,
 ): WorkspaceSchemaColumnDefinition => {
   const columnName = computeColumnName(flatFieldMetadata.name);
 
@@ -108,10 +109,9 @@ const generateTsVectorColumnDefinition = (
     type: fieldMetadataTypeToColumnType(flatFieldMetadata.type),
     isNullable: true,
     isArray: false,
-    isUnique: false,
     default: null,
-    asExpression: flatFieldMetadata.settings?.asExpression ?? undefined,
-    generatedType: flatFieldMetadata.settings?.generatedType ?? undefined,
+    asExpression: searchVectorAsExpression ?? undefined,
+    generatedType: 'STORED',
     isPrimary: false,
   };
 };
@@ -134,7 +134,6 @@ const generateRelationColumnDefinition = (
     type: fieldMetadataTypeToColumnType(FieldMetadataType.UUID),
     isNullable: true,
     isArray: false,
-    isUnique: false,
     default: null,
     isPrimary: false,
   };
@@ -171,7 +170,6 @@ const generateColumnDefinition = ({
     isArray:
       flatFieldMetadata.type === FieldMetadataType.ARRAY ||
       flatFieldMetadata.type === FieldMetadataType.MULTI_SELECT,
-    isUnique: flatFieldMetadata.isUnique ?? false,
     default: serializedDefaultValue,
     isPrimary: flatFieldMetadata.name === 'id',
   };
@@ -181,11 +179,17 @@ export const generateColumnDefinitions = ({
   flatFieldMetadata,
   flatObjectMetadata,
   workspaceId,
+  searchVectorAsExpression,
 }: {
   flatFieldMetadata: FlatFieldMetadata;
   flatObjectMetadata: FlatObjectMetadata;
   workspaceId: string;
+  searchVectorAsExpression?: string;
 }): WorkspaceSchemaColumnDefinition[] => {
+  if (isMorphRelationHead(flatFieldMetadata)) {
+    return [];
+  }
+
   const { tableName, schemaName } = getWorkspaceSchemaContextForMigration({
     workspaceId,
     objectMetadata: flatObjectMetadata,
@@ -207,7 +211,12 @@ export const generateColumnDefinitions = ({
   if (
     isFlatFieldMetadataOfType(flatFieldMetadata, FieldMetadataType.TS_VECTOR)
   ) {
-    return [generateTsVectorColumnDefinition(flatFieldMetadata)];
+    return [
+      generateTsVectorColumnDefinition(
+        flatFieldMetadata,
+        searchVectorAsExpression,
+      ),
+    ];
   }
 
   if (isMorphOrRelationFlatFieldMetadata(flatFieldMetadata)) {

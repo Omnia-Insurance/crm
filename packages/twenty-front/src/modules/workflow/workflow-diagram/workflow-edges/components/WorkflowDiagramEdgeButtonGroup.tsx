@@ -1,32 +1,31 @@
 import { styled } from '@linaria/react';
-import { IconButtonGroup, type IconButtonGroupProps } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { useLingui } from '@lingui/react/macro';
+import { type ReactNode } from 'react';
+import { ButtonGroup } from 'twenty-ui/primitives/input';
 
-const StyledIconButtonGroupContainer = styled.div`
+const StyledButtonGroupContainer = styled.div`
   pointer-events: all;
 `;
 
-const StyledSelectedIconButtonGroupContainer = styled.div`
-  background-color: ${themeCssVariables.color.blue2};
-  border-color: ${themeCssVariables.color.blue};
-  pointer-events: all;
-`;
-
-type WorkflowDiagramEdgeButtonGroupProps = IconButtonGroupProps & {
-  selected?: boolean;
+type WorkflowDiagramEdgeButtonGroupProps = {
+  children: ReactNode;
 };
 
 export const WorkflowDiagramEdgeButtonGroup = ({
-  selected = false,
-  iconButtons,
+  children,
 }: WorkflowDiagramEdgeButtonGroupProps) => {
-  const Container = selected
-    ? StyledSelectedIconButtonGroupContainer
-    : StyledIconButtonGroupContainer;
+  const { t } = useLingui();
 
   return (
-    <Container>
-      <IconButtonGroup className="nodrag nopan" iconButtons={iconButtons} />
-    </Container>
+    <StyledButtonGroupContainer>
+      <ButtonGroup
+        aria-label={t`Workflow connection controls`}
+        framed
+        attached={false}
+        className="nodrag nopan"
+      >
+        {children}
+      </ButtonGroup>
+    </StyledButtonGroupContainer>
   );
 };

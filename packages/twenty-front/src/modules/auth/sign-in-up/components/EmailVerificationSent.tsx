@@ -1,24 +1,21 @@
+import { Button } from 'twenty-ui/primitives/input';
 import { styled } from '@linaria/react';
 
 import { SubTitle } from '@/auth/components/SubTitle';
 import { Title } from '@/auth/components/Title';
+import { AnimatedEaseIn } from '@/auth/components/internal/AnimatedEaseIn/AnimatedEaseIn';
 import { useHandleResendEmailVerificationToken } from '@/auth/sign-in-up/hooks/useHandleResendEmailVerificationToken';
 import {
   SignInUpStep,
   signInUpStepState,
 } from '@/auth/states/signInUpStepState';
 import { OnboardingModalCircularIcon } from '@/onboarding/components/OnboardingModalCircularIcon';
-import { t } from '@lingui/core/macro';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
-import {
-  IconGmail,
-  IconMail,
-  IconMailX,
-  IconMicrosoft,
-} from 'twenty-ui/display';
-import { MainButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { AnimatedEaseIn } from 'twenty-ui/utilities';
+import { MainButton } from 'twenty-ui/components/input';
+import { IconGmail, IconMail, IconMailX, IconMicrosoft } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { openUrlInNewTab } from '~/utils/openUrlInNewTab';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   align-items: center;
@@ -56,29 +53,10 @@ const StyledBottomLinks = styled.div`
   justify-content: center;
 `;
 
-const StyledLinkButton = styled.button`
-  background: none;
-  border: none;
-  color: ${themeCssVariables.font.color.tertiary};
-  cursor: pointer;
-  font-family: ${themeCssVariables.font.family};
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${themeCssVariables.font.weight.regular};
-  line-height: 140%;
-
-  &:hover {
-    color: ${themeCssVariables.font.color.secondary};
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-`;
-
 const StyledDot = styled.div`
   background: ${themeCssVariables.font.color.light};
   border-radius: 50%;
+  corner-shape: round;
   height: 2px;
   width: 2px;
 `;
@@ -90,6 +68,7 @@ export const EmailVerificationSent = ({
   email: string | null;
   isError?: boolean;
 }) => {
+  const { t } = useLingui();
   const setSignInUpStep = useSetAtomState(signInUpStepState);
 
   const { handleResendEmailVerificationToken, loading: isLoading } =
@@ -99,14 +78,14 @@ export const EmailVerificationSent = ({
     const gmailUrl = email
       ? `https://mail.google.com/mail/u/${email}/`
       : 'https://mail.google.com/';
-    window.open(gmailUrl, '_blank');
+    openUrlInNewTab(gmailUrl);
   };
 
   const handleOpenOutlook = () => {
     const outlookUrl = email
       ? `https://outlook.live.com/mail/${email}/`
       : 'https://outlook.live.com/';
-    window.open(outlookUrl, '_blank');
+    openUrlInNewTab(outlookUrl);
   };
 
   const handleChangeEmail = () => {
@@ -123,34 +102,32 @@ export const EmailVerificationSent = ({
   const mainButtons = isError ? (
     <>
       <MainButton
-        title={t`Try with another email`}
         onClick={handleChangeEmail}
-        variant="secondary"
         fullWidth
-      />
+        variant="outline"
+      >{t`Try with another email`}</MainButton>
       <MainButton
-        title={isLoading ? t`Sending...` : t`Resend email`}
         onClick={handleResendEmailVerificationToken(email)}
         disabled={isLoading}
         fullWidth
-      />
+      >
+        {isLoading ? t`Sending...` : t`Resend email`}
+      </MainButton>
     </>
   ) : (
     <>
       <MainButton
-        title={t`Open Gmail`}
         onClick={handleOpenGmail}
-        Icon={IconGmail}
-        variant="secondary"
+        startIcon={<IconGmail />}
         fullWidth
-      />
+        variant="outline"
+      >{t`Open Gmail`}</MainButton>
       <MainButton
-        title={t`Open Outlook`}
         onClick={handleOpenOutlook}
-        Icon={IconMicrosoft}
-        variant="secondary"
+        startIcon={<IconMicrosoft />}
         fullWidth
-      />
+        variant="outline"
+      >{t`Open Outlook`}</MainButton>
     </>
   );
 
@@ -173,16 +150,18 @@ export const EmailVerificationSent = ({
 
       {!isError && (
         <StyledBottomLinks>
-          <StyledLinkButton
+          <Button
+            variant="link"
+            size="sm"
             onClick={handleResendEmailVerificationToken(email)}
             disabled={isLoading}
           >
             {isLoading ? t`Sending...` : t`Resend email`}
-          </StyledLinkButton>
+          </Button>
           <StyledDot />
-          <StyledLinkButton onClick={handleChangeEmail}>
+          <Button variant="link" size="sm" onClick={handleChangeEmail}>
             {t`Change email`}
-          </StyledLinkButton>
+          </Button>
         </StyledBottomLinks>
       )}
     </StyledContainer>

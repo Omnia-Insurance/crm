@@ -6,15 +6,10 @@ import {
   WorkflowQueryValidationException,
   WorkflowQueryValidationExceptionCode,
 } from 'src/modules/workflow/common/exceptions/workflow-query-validation.exception';
-import { type WorkflowVersionWorkspaceEntity } from 'src/modules/workflow/common/standard-objects/workflow-version.workspace-entity';
 
 @WorkspaceQueryHook(`workflowVersion.updateMany`)
-export class WorkflowVersionUpdateManyPreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
-  async execute(): Promise<
-    UpdateManyResolverArgs<WorkflowVersionWorkspaceEntity>
-  > {
+export class WorkflowVersionUpdateManyPreQueryHook implements WorkspacePreQueryHookInstance {
+  async execute(): Promise<UpdateManyResolverArgs> {
     throw new WorkflowQueryValidationException(
       'Method not allowed.',
       WorkflowQueryValidationExceptionCode.FORBIDDEN,

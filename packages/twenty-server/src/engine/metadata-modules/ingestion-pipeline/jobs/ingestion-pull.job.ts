@@ -5,6 +5,8 @@ import { isDefined } from 'twenty-shared/utils';
 import { Process } from 'src/engine/core-modules/message-queue/decorators/process.decorator';
 import { Processor } from 'src/engine/core-modules/message-queue/decorators/processor.decorator';
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
+import { getOutboundRequestOutcome } from 'src/engine/core-modules/secure-http-client/utils/get-outbound-request-outcome.util';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
@@ -15,8 +17,10 @@ import { type SourceAuthConfig } from 'src/engine/metadata-modules/ingestion-pip
 import { type SourceRequestConfig } from 'src/engine/metadata-modules/ingestion-pipeline/types/source-request-config.type';
 import { type PaginationConfig } from 'src/engine/metadata-modules/ingestion-pipeline/types/pagination-config.type';
 import { extractValueByPath } from 'src/engine/metadata-modules/ingestion-pipeline/utils/extract-value-by-path.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { isAllowedIngestionPipelineAuthEnvVar } from 'src/engine/metadata-modules/ingestion-pipeline/utils/is-allowed-ingestion-pipeline-auth-env-var.util';
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 // Bounds each outbound HTTP request to the source API, including paginated
 // pages and the body read. Without this, a stalled upstream response leaves
@@ -33,7 +37,8 @@ export class IngestionPullJob {
     private readonly logService: IngestionLogService,
     private readonly recordProcessorService: IngestionRecordProcessorService,
     private readonly preprocessorRegistry: IngestionPreprocessorRegistry,
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly secureHttpClientService: SecureHttpClientService,
   ) {}
 
   @Process(IngestionPullJob.name)
@@ -48,9 +53,11 @@ export class IngestionPullJob {
 
     this.logger.log(`Starting pull ingestion for pipeline ${pipelineId}`);
 
-    const log = await this.logService.createPending(pipelineId, 'pull');
+    const logId =
+      data.logId ??
+      (await this.logService.createPending(pipelineId, 'pull')).id;
 
-    await this.logService.markRunning(log.id);
+    await this.logService.markRunning(logId);
 
     try {
       const pipeline = await this.pipelineService.findEntityById(
@@ -59,7 +66,7 @@ export class IngestionPullJob {
       );
 
       if (!isDefined(pipeline)) {
-        await this.logService.markFailed(log.id, 'Pipeline not found');
+        await this.logService.markFailed(logId, 'Pipeline not found');
 
         return;
       }
@@ -69,25 +76,24 @@ export class IngestionPullJob {
       // pulls. Scheduled jobs are gated upstream by the scheduler service,
       // which removes the cron entry when isEnabled flips to false.
       if (!pipeline.isEnabled && !manual) {
-        await this.logService.markFailed(log.id, 'Pipeline disabled');
+        await this.logService.markFailed(logId, 'Pipeline disabled');
 
         return;
       }
 
       if (!isDefined(pipeline.sourceUrl)) {
-        await this.logService.markFailed(log.id, 'No source URL configured');
+        await this.logService.markFailed(logId, 'No source URL configured');
 
         return;
       }
 
-      const mappings =
-        await this.fieldMappingService.findEntitiesByPipelineId(pipelineId);
+      const mappings = await this.fieldMappingService.findEntitiesByPipelineId(
+        pipelineId,
+        workspaceId,
+      );
 
       if (mappings.length === 0) {
-        await this.logService.markFailed(
-          log.id,
-          'No field mappings configured',
-        );
+        await this.logService.markFailed(logId, 'No field mappings configured');
 
         return;
       }
@@ -102,7 +108,7 @@ export class IngestionPullJob {
       });
 
       if (allRecords.length === 0) {
-        await this.logService.markCompleted(log.id, {
+        await this.logService.markCompleted(logId, {
           totalRecordsReceived: 0,
           recordsCreated: 0,
           recordsUpdated: 0,
@@ -113,17 +119,16 @@ export class IngestionPullJob {
         return;
       }
 
-      // Run preprocessor if available (wrapped in workspace context for DB access)
-      const authContext = buildSystemAuthContext(workspaceId);
+      // Preprocessors read and write workspace records as the system: ingestion is not user-initiated
       const preprocessedRecords =
-        await this.globalWorkspaceOrmManager.executeInWorkspaceContext(
+        await this.workspaceOrmManager.executeInWorkspaceContext(
           () =>
             this.preprocessorRegistry.preProcessRecords(
               allRecords,
               pipeline,
               workspaceId,
             ),
-          authContext,
+          buildSystemAuthContext(workspaceId),
         );
 
       this.logger.log(
@@ -137,7 +142,7 @@ export class IngestionPullJob {
         workspaceId,
       );
 
-      await this.logService.markCompleted(log.id, {
+      await this.logService.markCompleted(logId, {
         totalRecordsReceived: allRecords.length,
         ...result,
       });
@@ -147,11 +152,11 @@ export class IngestionPullJob {
       );
     } catch (error) {
       this.logger.error(
-        `Pull ingestion failed: pipeline=${pipelineId}, error=${error}`,
+        `Pull ingestion failed: pipeline=${pipelineId}, error=${getIngestionErrorLogLabel(error)}`,
       );
 
       await this.logService.markFailed(
-        log.id,
+        logId,
         error instanceof Error ? error.message : 'Unknown error',
       );
     }
@@ -159,6 +164,7 @@ export class IngestionPullJob {
 
   private async fetchRecords(
     pipeline: {
+      id: string;
       sourceUrl: string | null;
       sourceHttpMethod: string | null;
       sourceAuthConfig: SourceAuthConfig | null;
@@ -171,6 +177,11 @@ export class IngestionPullJob {
       endTimeOverride?: string;
     } = {},
   ): Promise<Record<string, unknown>[]> {
+    // SSRF-safe: the source URL is admin-configurable
+    const httpClient = this.secureHttpClientService.getHttpClient({
+      timeout: SOURCE_REQUEST_TIMEOUT_MS,
+    });
+    const sourceAuthConfig = this.resolveSourceAuthConfig(pipeline);
     const allRecords: Record<string, unknown>[] = [];
     let hasMore = true;
     let page = 0;
@@ -184,8 +195,8 @@ export class IngestionPullJob {
       };
 
       // Apply auth
-      if (isDefined(pipeline.sourceAuthConfig)) {
-        applyAuth(url, headers, pipeline.sourceAuthConfig);
+      if (isDefined(sourceAuthConfig)) {
+        applyAuth(url, headers, sourceAuthConfig);
       }
 
       // Apply query params
@@ -248,45 +259,37 @@ export class IngestionPullJob {
       }
 
       const method = pipeline.sourceHttpMethod ?? 'GET';
-      const fetchOptions: RequestInit = {
-        method,
-        headers,
-      };
-
-      if (method === 'POST' && isDefined(pipeline.sourceRequestConfig?.body)) {
-        fetchOptions.body = JSON.stringify(pipeline.sourceRequestConfig!.body);
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        SOURCE_REQUEST_TIMEOUT_MS,
-      );
 
       let responseData: Record<string, unknown>;
 
       try {
-        const response = await fetch(url.toString(), {
-          ...fetchOptions,
-          signal: controller.signal,
+        const response = await httpClient.request<Record<string, unknown>>({
+          url: url.toString(),
+          method,
+          headers,
+          data:
+            method === 'POST' ? pipeline.sourceRequestConfig?.body : undefined,
+          validateStatus: () => true,
         });
 
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           throw new Error(
             `Source API returned ${response.status}: ${response.statusText}`,
           );
         }
 
-        responseData = (await response.json()) as Record<string, unknown>;
+        if (!isDefined(response.data) || typeof response.data !== 'object') {
+          throw new Error('Source API returned a non-JSON response');
+        }
+
+        responseData = response.data;
       } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (getOutboundRequestOutcome(error) === 'timeout') {
           throw new Error(
             `Source API request timed out after ${SOURCE_REQUEST_TIMEOUT_MS}ms (page=${page})`,
           );
         }
         throw error;
-      } finally {
-        clearTimeout(timeoutId);
       }
 
       // Extract records from response
@@ -336,6 +339,41 @@ export class IngestionPullJob {
 
     return allRecords;
   }
+
+  // envVar and sourceUrl come from API input: read the server env only for an allowed pair
+  private resolveSourceAuthConfig(pipeline: {
+    id: string;
+    sourceUrl: string | null;
+    sourceAuthConfig: SourceAuthConfig | null;
+  }): SourceAuthConfig | null {
+    const { sourceAuthConfig } = pipeline;
+
+    if (
+      sourceAuthConfig?.type !== 'query_param' ||
+      !isDefined(sourceAuthConfig.envVar)
+    ) {
+      return sourceAuthConfig;
+    }
+
+    if (
+      !isAllowedIngestionPipelineAuthEnvVar({
+        envVarName: sourceAuthConfig.envVar,
+        sourceUrl: pipeline.sourceUrl,
+      })
+    ) {
+      this.logger.warn(
+        `Skipped the query_param auth of pipeline ${pipeline.id}: its env var is not allowed for the source URL`,
+      );
+
+      return null;
+    }
+
+    return {
+      type: 'query_param',
+      paramName: sourceAuthConfig.paramName,
+      value: process.env[sourceAuthConfig.envVar],
+    };
+  }
 }
 
 const applyAuth = (
@@ -351,12 +389,8 @@ const applyAuth = (
       headers[auth.headerName] = auth.key;
       break;
     case 'query_param': {
-      const tokenValue = isDefined(auth.envVar)
-        ? process.env[auth.envVar]
-        : auth.value;
-
-      if (isDefined(tokenValue)) {
-        url.searchParams.set(auth.paramName, tokenValue);
+      if (isDefined(auth.value)) {
+        url.searchParams.set(auth.paramName, auth.value);
       }
       break;
     }

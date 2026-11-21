@@ -1,15 +1,16 @@
 import { type ObjectRecordUpdateEvent } from 'twenty-shared/database-events';
-import { FieldMetadataType } from 'twenty-shared/types';
+import { FieldMetadataType, RelationType } from 'twenty-shared/types';
 
 import { DatabaseEventAction } from 'src/engine/api/graphql/graphql-query-runner/enums/database-event-action';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
 import {
-  TwentyORMException,
-  TwentyORMExceptionCode,
+  TwentyOrmException,
+  TwentyOrmExceptionCode,
 } from 'src/engine/twenty-orm/exceptions/twenty-orm.exception';
 import { formatTwentyOrmEventToDatabaseBatchEvent } from 'src/engine/twenty-orm/utils/format-twenty-orm-event-to-database-batch-event.util';
+import { getFlatObjectMetadataMock } from 'src/engine/metadata-modules/flat-object-metadata/__mocks__/get-flat-object-metadata.mock';
 
 describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
   const workspaceId = 'workspace-id';
@@ -27,15 +28,14 @@ describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
       objectMetadataId,
       isNullable: true,
       isLabelSyncedWithName: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
       universalIdentifier: overrides.id,
       viewFieldIds: [],
       viewFilterIds: [],
       viewGroupIds: [],
       kanbanAggregateOperationViewIds: [],
       calendarViewIds: [],
-      applicationId: null,
       label: overrides.name,
       ...overrides,
     }) as FlatFieldMetadata;
@@ -57,27 +57,25 @@ describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
     universalIdentifiersByApplicationId: {},
   };
 
-  const flatObjectMetadata: FlatObjectMetadata = {
+  const flatObjectMetadata: FlatObjectMetadata = getFlatObjectMetadataMock({
     id: objectMetadataId,
     workspaceId,
     nameSingular: 'person',
     namePlural: 'people',
     labelSingular: 'Person',
     labelPlural: 'People',
-    isCustom: false,
     isRemote: false,
     isActive: true,
     isSystem: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z',
     universalIdentifier: objectMetadataId,
     fieldIds: ['name-id'],
     indexMetadataIds: [],
     objectPermissionIds: [],
     fieldPermissionIds: [],
     viewIds: [],
-    applicationId: null,
-  } as unknown as FlatObjectMetadata;
+  });
 
   const mockWorkspaceId = 'workspace-id';
   const mockAuthContext = {
@@ -86,7 +84,7 @@ describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
   } as any;
 
   describe('UPDATED action', () => {
-    it('should throw TwentyORMException when no matching before entity is found in array of beforeEntities', () => {
+    it('should throw TwentyOrmException when no matching before entity is found in array of beforeEntities', () => {
       const afterEntities = [
         {
           id: 'record-1',
@@ -120,11 +118,11 @@ describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
           recordsBefore: beforeEntities,
         });
       } catch (error) {
-        expect(error).toBeInstanceOf(TwentyORMException);
-        expect((error as TwentyORMException).code).toBe(
-          TwentyORMExceptionCode.ORM_EVENT_DATA_CORRUPTED,
+        expect(error).toBeInstanceOf(TwentyOrmException);
+        expect((error as TwentyOrmException).code).toBe(
+          TwentyOrmExceptionCode.ORM_EVENT_DATA_CORRUPTED,
         );
-        expect((error as TwentyORMException).message).toBe(
+        expect((error as TwentyOrmException).message).toBe(
           'Record mismatch detected while computing event data for UPDATED action',
         );
       }
@@ -182,5 +180,65 @@ describe('formatTwentyOrmEventToDatabaseBatchEvent', () => {
       expect(updateEvent2.properties?.before?.name).toBe('Jane Doe');
       expect(updateEvent2.properties?.after?.name).toBe('Jane Doe Updated');
     });
+
+    it.each([FieldMetadataType.RELATION, FieldMetadataType.MORPH_RELATION])(
+      'should include both %s field name and join column name in updatedFields',
+      (fieldMetadataType) => {
+        const companyField = createMockField({
+          id: 'company-id',
+          type: fieldMetadataType,
+          name: 'company',
+          label: 'Company',
+          settings: {
+            relationType: RelationType.MANY_TO_ONE,
+            joinColumnName: 'companyId',
+          },
+        } as Parameters<typeof createMockField>[0]);
+
+        const flatFieldMetadataMapsWithRelation: FlatEntityMaps<FlatFieldMetadata> =
+          {
+            byUniversalIdentifier: {
+              'name-id': nameField,
+              'company-id': companyField,
+            },
+            universalIdentifierById: {
+              'name-id': 'name-id',
+              'company-id': 'company-id',
+            },
+            universalIdentifiersByApplicationId: {},
+          };
+
+        const flatObjectMetadataWithRelation = {
+          ...flatObjectMetadata,
+          fieldIds: ['name-id', 'company-id'],
+        } as FlatObjectMetadata;
+
+        const result = formatTwentyOrmEventToDatabaseBatchEvent({
+          action: DatabaseEventAction.UPDATED,
+          objectMetadataItem: flatObjectMetadataWithRelation,
+          flatFieldMetadataMaps: flatFieldMetadataMapsWithRelation,
+          workspaceId: mockWorkspaceId,
+          authContext: mockAuthContext,
+          recordsAfter: [{ id: 'record-1', companyId: 'new-company-id' }],
+          recordsBefore: [{ id: 'record-1', companyId: 'old-company-id' }],
+        });
+
+        const updateEvent = result?.events[0] as ObjectRecordUpdateEvent<{
+          id: string;
+          companyId: string;
+        }>;
+
+        expect(updateEvent.properties?.updatedFields).toEqual([
+          'company',
+          'companyId',
+        ]);
+        expect(updateEvent.properties?.diff).toEqual({
+          company: {
+            before: { id: 'old-company-id' },
+            after: { id: 'new-company-id' },
+          },
+        });
+      },
+    );
   });
 });

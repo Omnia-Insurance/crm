@@ -1,0 +1,159 @@
+import { type Sandbox } from '@e2b/code-interpreter';
+
+import { isDefined } from 'twenty-shared/utils';
+
+import { SESSION_SANDBOX_METADATA_KEY } from 'src/engine/core-modules/code-interpreter/constants/session-sandbox-metadata-key.constant';
+
+type SandboxApi = typeof Sandbox;
+
+const SESSION_ACTOR_METADATA_KEY = 'twentySessionActor';
+
+type GetOrCreateSessionSandboxArgs = {
+  sandboxApi: SandboxApi;
+  apiKey: string;
+  template: string;
+  sessionId: string;
+  actorKey?: string;
+  timeoutMs: number;
+  idleTimeoutMs: number;
+};
+
+const listSandboxesForSession = async (
+  sandboxApi: SandboxApi,
+  apiKey: string,
+  sessionId: string,
+) => {
+  const paginator = sandboxApi.list({
+    apiKey,
+    query: {
+      state: ['running', 'paused'],
+      metadata: { [SESSION_SANDBOX_METADATA_KEY]: sessionId },
+    },
+  });
+
+  const sandboxes: Awaited<ReturnType<typeof paginator.nextItems>> = [];
+
+  while (paginator.hasNext) {
+    sandboxes.push(...(await paginator.nextItems()));
+  }
+
+  // A loose server-side tag match must never reuse another tenant's sandbox.
+  return sandboxes.filter(
+    (sandbox) => sandbox.metadata?.[SESSION_SANDBOX_METADATA_KEY] === sessionId,
+  );
+};
+
+const connectAndKeepAlive = async (
+  sandboxApi: SandboxApi,
+  apiKey: string,
+  sandboxId: string,
+  timeoutMs: number,
+): Promise<Sandbox | undefined> => {
+  const sandbox = await sandboxApi
+    .connect(sandboxId, { apiKey })
+    .catch(() => undefined);
+
+  if (!isDefined(sandbox)) {
+    return undefined;
+  }
+
+  try {
+    await sandbox.setTimeout(timeoutMs);
+
+    return sandbox;
+  } catch {
+    await sandbox.kill().catch(() => undefined);
+
+    return undefined;
+  }
+};
+
+const killSandboxById = (
+  sandboxApi: SandboxApi,
+  apiKey: string,
+  sandboxId: string,
+) => sandboxApi.kill(sandboxId, { apiKey }).catch(() => undefined);
+
+const createSessionSandbox = (
+  sandboxApi: SandboxApi,
+  apiKey: string,
+  template: string,
+  sessionId: string,
+  timeoutMs: number,
+  actorKey?: string,
+) =>
+  sandboxApi.create(template, {
+    apiKey,
+    timeoutMs,
+    lifecycle: { onTimeout: 'pause', autoResume: true },
+    metadata: {
+      [SESSION_SANDBOX_METADATA_KEY]: sessionId,
+      ...(isDefined(actorKey)
+        ? { [SESSION_ACTOR_METADATA_KEY]: actorKey }
+        : {}),
+    },
+  });
+
+export const getOrCreateSessionSandbox = async ({
+  sandboxApi,
+  apiKey,
+  template,
+  sessionId,
+  timeoutMs,
+  idleTimeoutMs,
+  actorKey,
+}: GetOrCreateSessionSandboxArgs): Promise<{
+  sandbox: Sandbox;
+  isReused: boolean;
+}> => {
+  const aliveTimeoutMs = Math.max(timeoutMs, idleTimeoutMs);
+
+  const sessionSandboxes = await listSandboxesForSession(
+    sandboxApi,
+    apiKey,
+    sessionId,
+  );
+
+  let reusedSandbox: Sandbox | undefined;
+  let reusedSandboxId: string | undefined;
+
+  for (const { sandboxId, metadata } of sessionSandboxes) {
+    if (metadata?.[SESSION_ACTOR_METADATA_KEY] !== actorKey) {
+      await killSandboxById(sandboxApi, apiKey, sandboxId);
+      continue;
+    }
+    const sandbox = await connectAndKeepAlive(
+      sandboxApi,
+      apiKey,
+      sandboxId,
+      aliveTimeoutMs,
+    );
+
+    if (isDefined(sandbox)) {
+      reusedSandbox = sandbox;
+      reusedSandboxId = sandboxId;
+      break;
+    }
+  }
+
+  if (isDefined(reusedSandbox)) {
+    await Promise.all(
+      sessionSandboxes
+        .filter(({ sandboxId }) => sandboxId !== reusedSandboxId)
+        .map(({ sandboxId }) => killSandboxById(sandboxApi, apiKey, sandboxId)),
+    );
+
+    return { sandbox: reusedSandbox, isReused: true };
+  }
+
+  const sandbox = await createSessionSandbox(
+    sandboxApi,
+    apiKey,
+    template,
+    sessionId,
+    aliveTimeoutMs,
+    actorKey,
+  );
+
+  return { sandbox, isReused: false };
+};

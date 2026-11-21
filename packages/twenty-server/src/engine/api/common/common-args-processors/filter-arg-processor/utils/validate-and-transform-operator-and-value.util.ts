@@ -5,15 +5,15 @@ import {
   CommonQueryRunnerException,
   CommonQueryRunnerExceptionCode,
 } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
-import type { FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 
 import { validateAndTransformValueOrThrow } from './validate-and-transform-value-or-throw.util';
 import { validateOperatorForFieldTypeOrThrow } from './validate-operator-for-field-type-or-throw.util';
 
 export const validateAndTransformOperatorAndValue = (
   fieldName: string,
-  filterValue: Record<string, unknown>,
-  fieldMetadata: FlatFieldMetadata,
+  filterValue: Record<string, unknown> | null,
+  fieldMetadata: OrmFlatFieldMetadata,
 ): Record<string, unknown> => {
   if (filterValue === null || typeof filterValue !== 'object') {
     throw new CommonQueryRunnerException(

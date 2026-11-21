@@ -10,16 +10,17 @@ import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataIte
 import { type RecordFilterGroup } from '@/object-record/record-filter-group/types/RecordFilterGroup';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
 import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
-import { RowLevelPermissionPredicateGroupLogicalOperator } from '~/generated-metadata/graphql';
+// OMNIA-CUSTOM: "<Relation> is Me" hop (contract C2)
+import { type WorkspaceMemberHop } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/findWorkspaceMemberHop';
 import {
-  type OmniaRowLevelPermissionPredicate,
-  type OmniaRowLevelPermissionPredicateGroup,
-  type RowLevelPermissionPredicateScope,
-} from '@/settings/roles/types/OmniaRoleExtensions';
-import { type RowLevelPermissionPredicateOperand } from '~/generated-metadata/graphql';
+  type RowLevelPermissionPredicate,
+  type RowLevelPermissionPredicateGroup,
+  RowLevelPermissionPredicateGroupLogicalOperator,
+  type RowLevelPermissionPredicateOperand,
+} from '~/generated-metadata/graphql';
 
 export const convertPredicateToRecordFilter = (
-  predicate: OmniaRowLevelPermissionPredicate,
+  predicate: RowLevelPermissionPredicate,
   fieldMetadataItem: FieldMetadataItem | undefined,
 ): RecordFilter | null => {
   if (!isDefined(fieldMetadataItem)) {
@@ -37,7 +38,9 @@ export const convertPredicateToRecordFilter = (
 
   return {
     id: predicate.id,
-    fieldMetadataId: predicate.fieldMetadataId,
+    // OMNIA-CUSTOM: a C2 hop row sits on its relation field (Policy ▸ Agent)
+    fieldMetadataId:
+      predicate.relationFieldMetadataId ?? predicate.fieldMetadataId,
     value: valueString,
     displayValue: valueString,
     type: filterType,
@@ -66,15 +69,37 @@ export const convertRecordFilterToPredicate = (
   filter: RecordFilter,
   roleId: string,
   objectMetadataId: string,
-  scope: RowLevelPermissionPredicateScope,
-): OmniaRowLevelPermissionPredicate => {
+  // OMNIA-CUSTOM: set when the row is "Me" on a relation to a member-owned record
+  workspaceMemberHop?: WorkspaceMemberHop,
+): RowLevelPermissionPredicate => {
+  // OMNIA-CUSTOM: saved as the relation hop (contract C2), never as the legacy
+  // relation-to-member-id comparison, which matches nothing (IS) or everything (IS_NOT)
+  if (isDefined(workspaceMemberHop)) {
+    return {
+      __typename: 'RowLevelPermissionPredicate',
+      id: filter.id,
+      fieldMetadataId: workspaceMemberHop.fieldMetadataId,
+      relationFieldMetadataId: workspaceMemberHop.relationFieldMetadataId,
+      objectMetadataId,
+      operand: filter.operand as unknown as RowLevelPermissionPredicateOperand,
+      value: null,
+      subFieldName: null,
+      rowLevelPermissionPredicateGroupId: filter.recordFilterGroupId ?? null,
+      positionInRowLevelPermissionPredicateGroup:
+        filter.positionInRecordFilterGroup ?? null,
+      roleId,
+      workspaceMemberFieldMetadataId:
+        workspaceMemberHop.workspaceMemberFieldMetadataId,
+      workspaceMemberSubFieldName: null,
+    };
+  }
+
   if (isDefined(filter.rlsDynamicValue)) {
     return {
       __typename: 'RowLevelPermissionPredicate',
       id: filter.id,
       fieldMetadataId: filter.fieldMetadataId,
       objectMetadataId,
-      scope,
       operand: filter.operand as unknown as RowLevelPermissionPredicateOperand,
       value: null,
       subFieldName: filter.subFieldName ?? null,
@@ -94,7 +119,6 @@ export const convertRecordFilterToPredicate = (
     id: filter.id,
     fieldMetadataId: filter.fieldMetadataId,
     objectMetadataId,
-    scope,
     operand: filter.operand as unknown as RowLevelPermissionPredicateOperand,
     value: filter.value || null,
     subFieldName: filter.subFieldName ?? null,
@@ -108,7 +132,7 @@ export const convertRecordFilterToPredicate = (
 };
 
 export const convertPredicateGroupToRecordFilterGroup = (
-  predicateGroup: OmniaRowLevelPermissionPredicateGroup,
+  predicateGroup: RowLevelPermissionPredicateGroup,
 ): RecordFilterGroup => {
   return {
     id: predicateGroup.id,
@@ -124,16 +148,26 @@ export const convertPredicateGroupToRecordFilterGroup = (
   };
 };
 
-export const convertRecordFilterGroupToPredicateGroup = (
-  filterGroup: RecordFilterGroup,
-  roleId: string,
-  objectMetadataId: string,
-  scope: RowLevelPermissionPredicateScope,
-): OmniaRowLevelPermissionPredicateGroup => {
+export const convertRecordFilterGroupToPredicateGroup = ({
+  filterGroup,
+  roleId,
+  objectMetadataId,
+  existingPredicateGroup,
+}: {
+  filterGroup: RecordFilterGroup;
+  roleId: string;
+  objectMetadataId: string;
+  existingPredicateGroup?: Pick<
+    RowLevelPermissionPredicateGroup,
+    | 'canReadRecords'
+    | 'canUpdateRecords'
+    | 'canSoftDeleteRecords'
+    | 'canDestroyRecords'
+  >;
+}): RowLevelPermissionPredicateGroup => {
   return {
     __typename: 'RowLevelPermissionPredicateGroup',
     id: filterGroup.id,
-    scope,
     parentRowLevelPermissionPredicateGroupId:
       filterGroup.parentRecordFilterGroupId ?? null,
     logicalOperator:
@@ -142,6 +176,10 @@ export const convertRecordFilterGroupToPredicateGroup = (
         : RowLevelPermissionPredicateGroupLogicalOperator.OR,
     positionInRowLevelPermissionPredicateGroup:
       filterGroup.positionInRecordFilterGroup ?? null,
+    canReadRecords: existingPredicateGroup?.canReadRecords ?? false,
+    canUpdateRecords: existingPredicateGroup?.canUpdateRecords ?? false,
+    canSoftDeleteRecords: existingPredicateGroup?.canSoftDeleteRecords ?? false,
+    canDestroyRecords: existingPredicateGroup?.canDestroyRecords ?? false,
     roleId,
     objectMetadataId,
   };

@@ -1,16 +1,34 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type View } from '@/views/types/View';
-import { NavigationMenuItemType } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import {
+  StandardObjectNameSingular,
+  NavigationMenuItemType,
+} from 'twenty-shared/types';
+import { isDefined, isNativePageKey } from 'twenty-shared/utils';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
 export const filterAndSortNavigationMenuItems = (
   navigationMenuItems: NavigationMenuItem[],
   views: Pick<View, 'id' | 'objectMetadataId' | 'key'>[],
-  objectMetadataItems: Pick<EnrichedObjectMetadataItem, 'id' | 'isActive'>[],
+  objectMetadataItems: Pick<
+    EnrichedObjectMetadataItem,
+    'id' | 'isActive' | 'nameSingular'
+  >[],
 ): NavigationMenuItem[] => {
   const activeObjectMetadataItems = objectMetadataItems.filter(
     (meta) => meta.isActive,
+  );
+
+  // Chat favorites are listed in the chat menu instead
+  const hiddenRecordObjectNames: string[] = [
+    StandardObjectNameSingular.AgentChatThread,
+    StandardObjectNameSingular.Workflow,
+  ];
+
+  const hiddenRecordObjectMetadataIds = new Set(
+    activeObjectMetadataItems
+      .filter((meta) => hiddenRecordObjectNames.includes(meta.nameSingular))
+      .map((meta) => meta.id),
   );
 
   return navigationMenuItems
@@ -21,8 +39,17 @@ export const filterAndSortNavigationMenuItems = (
       if (item.type === NavigationMenuItemType.LINK) {
         return true;
       }
+      if (item.type === NavigationMenuItemType.NATIVE_PAGE) {
+        return isNativePageKey(item.nativePageKey);
+      }
       if (item.type === NavigationMenuItemType.PAGE_LAYOUT) {
         return isDefined(item.pageLayoutId);
+      }
+      if (item.type === NavigationMenuItemType.WORKFLOW) {
+        return isDefined(item.workflowId);
+      }
+      if (item.type === NavigationMenuItemType.AGENT) {
+        return isDefined(item.agentId);
       }
       if (item.type === NavigationMenuItemType.OBJECT) {
         return (
@@ -49,6 +76,7 @@ export const filterAndSortNavigationMenuItems = (
           isDefined(item.targetRecordId) &&
           isDefined(item.targetObjectMetadataId) &&
           isDefined(item.targetRecordIdentifier) &&
+          !hiddenRecordObjectMetadataIds.has(item.targetObjectMetadataId) &&
           activeObjectMetadataItems.some(
             (meta) => meta.id === item.targetObjectMetadataId,
           )

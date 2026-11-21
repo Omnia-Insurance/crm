@@ -1,0 +1,81 @@
+import { msg, t } from '@lingui/core/macro';
+import { isDefined } from 'twenty-shared/utils';
+import {
+  IconAlertTriangle,
+  IconApps,
+  IconBrandTypescript,
+} from 'twenty-ui/icon';
+import { Tag } from 'twenty-ui/primitives/data-display';
+
+import { AppChip } from '@/applications/components/AppChip';
+import { ApplicationStackIcon } from '@/applications/components/ApplicationStackIcon';
+import { LOG_CONSOLE_LEVELS } from '@/log-console/constants/LogConsoleLevels';
+import { type LogConsoleFilterField } from '@/log-console/types/LogConsoleFilterField';
+import { APPLICATION_LOG_SOURCE_LABELS } from '@/settings/application-monitoring/constants/ApplicationLogSourceLabels';
+
+export const LOG_CONSOLE_APPLICATION_LOG_FILTER_FIELDS: LogConsoleFilterField[] =
+  [
+    {
+      id: 'level',
+      label: msg`Level`,
+      Icon: IconAlertTriangle,
+      serverField: 'level',
+      getOptions: () =>
+        Object.entries(LOG_CONSOLE_LEVELS).flatMap(([levelValue, level]) =>
+          isDefined(level)
+            ? [
+                {
+                  label: t(level.label),
+                  values: [levelValue],
+                  tag: <Tag color={level.color}>{t(level.label)}</Tag>,
+                },
+              ]
+            : [],
+        ),
+    },
+    {
+      id: 'source',
+      label: msg`Source`,
+      Icon: IconApps,
+      serverField: 'source',
+      getOptions: () =>
+        Object.entries(APPLICATION_LOG_SOURCE_LABELS).map(
+          ([applicationLogSource, sourceLabel]) => ({
+            label: t(sourceLabel),
+            values: [applicationLogSource],
+          }),
+        ),
+    },
+    {
+      id: 'function',
+      label: msg`Function`,
+      Icon: IconBrandTypescript,
+      serverField: 'logicFunctionId',
+      getOptions: ({ logicFunctions }) =>
+        logicFunctions.map((logicFunction) => ({
+          label: logicFunction.name,
+          values: [logicFunction.id],
+          startIcon: (
+            <ApplicationStackIcon
+              Icon={IconBrandTypescript}
+              applicationId={logicFunction.applicationId}
+              showFirstPartyApplication
+            />
+          ),
+        })),
+    },
+    {
+      id: 'app',
+      label: msg`App`,
+      Icon: IconApps,
+      serverField: 'applicationId',
+      getOptions: ({ applications }) =>
+        applications.map((application) => ({
+          label: application.name,
+          values: [application.id],
+          startIcon: (
+            <AppChip applicationId={application.id} size="md" chipOnly />
+          ),
+        })),
+    },
+  ];

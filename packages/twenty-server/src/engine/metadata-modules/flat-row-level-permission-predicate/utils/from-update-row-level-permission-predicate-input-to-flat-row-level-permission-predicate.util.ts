@@ -4,7 +4,6 @@ import { resolveEntityRelationUniversalIdentifiers } from 'src/engine/metadata-m
 import { type RowLevelPermissionPredicateInput } from 'src/engine/metadata-modules/row-level-permission-predicate/dtos/inputs/upsert-row-level-permission-predicates.input';
 import { type FlatRowLevelPermissionPredicateGroup } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate-group.type';
 import { type FlatRowLevelPermissionPredicate } from 'src/engine/metadata-modules/row-level-permission-predicate/types/flat-row-level-permission-predicate.type';
-import { RowLevelPermissionPredicateScope } from 'twenty-shared/types';
 
 export const fromUpdateRowLevelPermissionPredicateInputToFlatRowLevelPermissionPredicate =
   ({
@@ -20,12 +19,14 @@ export const fromUpdateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
     }): FlatRowLevelPermissionPredicate => {
     const {
       fieldMetadataUniversalIdentifier,
+      relationFieldMetadataUniversalIdentifier,
       rowLevelPermissionPredicateGroupUniversalIdentifier,
       workspaceMemberFieldMetadataUniversalIdentifier,
     } = resolveEntityRelationUniversalIdentifiers({
       metadataName: 'rowLevelPermissionPredicate',
       foreignKeyValues: {
         fieldMetadataId: input.fieldMetadataId,
+        relationFieldMetadataId: input.relationFieldMetadataId,
         rowLevelPermissionPredicateGroupId:
           input.rowLevelPermissionPredicateGroupId,
         workspaceMemberFieldMetadataId: input.workspaceMemberFieldMetadataId,
@@ -40,11 +41,9 @@ export const fromUpdateRowLevelPermissionPredicateInputToFlatRowLevelPermissionP
       ...existingPredicate,
       fieldMetadataId: input.fieldMetadataId,
       fieldMetadataUniversalIdentifier,
+      relationFieldMetadataId: input.relationFieldMetadataId ?? null,
+      relationFieldMetadataUniversalIdentifier,
       operand: input.operand,
-      scope:
-        input.scope ??
-        existingPredicate.scope ??
-        RowLevelPermissionPredicateScope.ALL,
       value: input.value ?? null,
       subFieldName: input.subFieldName ?? null,
       workspaceMemberFieldMetadataId:

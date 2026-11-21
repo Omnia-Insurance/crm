@@ -1,7 +1,7 @@
 import { styled } from '@linaria/react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type FieldMetadataItemRelation } from '@/object-metadata/types/FieldMetadataItemRelation';
 import { FieldDisplay } from '@/object-record/record-field/ui/components/FieldDisplay';
@@ -9,9 +9,8 @@ import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldCont
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 import { SettingsDataModelSetFieldValueEffect } from '@/settings/data-model/fields/preview/components/SettingsDataModelSetFieldValueEffect';
 import { useFieldPreviewValue } from '@/settings/data-model/fields/preview/hooks/useFieldPreviewValue';
-import { useIcons } from 'twenty-ui/display';
-import { useContext } from 'react';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { v4 } from 'uuid';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 
@@ -61,7 +60,7 @@ export const SettingsDataModelRelationFieldPreview = ({
     useObjectMetadataItem({
       objectNameSingular: relationTargetObjectNameSingular,
     });
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { getIcon } = useIcons();
   const FieldIcon = getIcon(fieldMetadataItem.icon);
 
@@ -77,7 +76,7 @@ export const SettingsDataModelRelationFieldPreview = ({
   const isRelation = fieldMetadataItem.type === FieldMetadataType.RELATION;
   const metadata = {
     fieldName,
-    objectMetadataNameSingular: CoreObjectNameSingular.Company,
+    objectMetadataNameSingular: StandardObjectNameSingular.Company,
     relationObjectMetadataNameSingular: relationTargetObjectNameSingular,
     options: [],
     settings: fieldMetadataItem.settings,

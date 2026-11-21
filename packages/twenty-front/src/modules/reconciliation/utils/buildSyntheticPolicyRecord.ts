@@ -1,3 +1,6 @@
+import { CurrencyCode } from 'twenty-shared/constants';
+import { doNotTranslate } from 'twenty-shared/i18n';
+
 import type { ObjectRecord } from '@/object-record/types/ObjectRecord';
 
 import {
@@ -7,10 +10,6 @@ import {
   type ComputedFieldDef,
   type CrmFieldLookup,
 } from '@/reconciliation/utils/invertColumnMapping';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 type ProductMappingEntry = {
   pattern: string;
@@ -24,16 +23,8 @@ type ResolvedRelations = {
   agent: { id: string; name: string } | null;
 };
 
-/**
- * The subset of `carrierConfig.statusConfig` the client status fallback
- * reads (OMN-12 tuning depth — audit 2026-06-11 §"Config-driven client
- * status fallback for the create-policy flow"): the placed threshold that
- * used to be a hardcoded 30, and the status-engine role → row-key map used
- * to resolve the engine inputs (eligibleForCommission has no columnMapping
- * entry to invert — it is a status role, not a CRM field — so without this
- * the cancel signal only fires on the legacy Ambetter snapshot key).
- * Admin-editable JSON, so both fields are optional and type-guarded.
- */
+// Part of carrierConfig.statusConfig read by the client status fallback (OMN-12).
+// Admin-editable JSON, so both keys are optional and type-guarded.
 export type ClientStatusConfig = {
   placedThresholdDays?: number;
   fieldMapping?: Record<string, string>;
@@ -42,27 +33,23 @@ export type ClientStatusConfig = {
 type BuildInput = {
   bobSnapshot: Record<string, unknown>;
   columnMapping: ColumnMapping | null;
-  /** Computed-field defs from carrierConfig.fieldConfig (outputKey → crmField) */
   computedFields?: ComputedFieldDef[] | null;
   resolvedRelations: ResolvedRelations;
   derivedStatus: string | null;
-  /** carrierConfig.statusConfig (UnmatchedView already loads the record);
-   *  parameterizes the status fallback. Null/absent = legacy literals. */
+  // Absent keeps the legacy Ambetter literals
   statusConfig?: ClientStatusConfig | null;
   ltvAmountMicros: number | null;
   tempPolicyId: string;
   tempLeadId: string;
 };
 
-// ---------------------------------------------------------------------------
-// Product resolution
-// ---------------------------------------------------------------------------
-
 export const resolveProductFromPlanName = (
   planName: string | null | undefined,
   productMapping: ProductMappingEntry[] | null | undefined,
 ): { id: string; name: string } | null => {
-  if (!planName || !productMapping) return null;
+  if (!planName || !productMapping) {
+    return null;
+  }
 
   const lower = planName.toLowerCase();
 
@@ -75,31 +62,31 @@ export const resolveProductFromPlanName = (
   return null;
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Convert a dollar amount (e.g., "1234.67" or 1234.67) to amountMicros. */
 const toCurrencyMicros = (
   value: unknown,
 ): { amountMicros: number; currencyCode: string } | null => {
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
 
   const num = typeof value === 'number' ? value : parseFloat(String(value));
 
-  if (isNaN(num)) return null;
+  if (isNaN(num)) {
+    return null;
+  }
 
-  return { amountMicros: Math.round(num * 1_000_000), currencyCode: 'USD' };
+  return {
+    amountMicros: Math.round(num * 1_000_000),
+    currencyCode: CurrencyCode.USD,
+  };
 };
-
-// ---------------------------------------------------------------------------
-// Status derivation from BOB data (mirrors backend status engine logic)
-// ---------------------------------------------------------------------------
 
 const PLACED_THRESHOLD_DAYS = 30;
 
 const parseDate = (value: unknown): Date | null => {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
   const d = new Date(String(value));
 
   return isNaN(d.getTime()) ? null : d;
@@ -120,8 +107,12 @@ export const normalizePaidThroughDateForEffectiveDate = (
   paidThroughDate: unknown,
   effectiveDate: unknown,
 ): string | null => {
-  if (paidThroughDate === null || paidThroughDate === undefined) return null;
-  if (paidThroughDate === '') return null;
+  if (paidThroughDate === null || paidThroughDate === undefined) {
+    return null;
+  }
+  if (paidThroughDate === '') {
+    return null;
+  }
 
   const paidThroughDateString = String(paidThroughDate);
 
@@ -137,25 +128,10 @@ export const normalizePaidThroughDateForEffectiveDate = (
   return paidThroughDateString;
 };
 
-/**
- * Derive a policy status from BOB fields. Mirrors the Ambetter status engine:
- * eligible=false → CANCELED, term past → CANCELED, otherwise compute from
- * effective↔paidThrough gap and current-month payment coverage.
- *
- * Pass the inverted columnMapping `lookup` so date fields resolve through the
- * carrier's actual headers; without it the legacy Ambetter literals apply.
- *
- * `statusConfig` (OMN-12 tuning depth) parameterizes the two previously
- * hardcoded knobs without redesigning the flow:
- *   - `placedThresholdDays` replaces the hardcoded 30 (the client-side
- *     remnant of the split-brain Phase 4.3 fixed server-side);
- *   - `fieldMapping` (status-engine role → row key) resolves the engine
- *     inputs ahead of the crmField/legacy resolution, exactly like
- *     `resolveBobValue`'s computed-key precedence: a mapped role key wins
- *     only when the snapshot actually carries it, so pre-mapping snapshots
- *     fall through to the legacy literals unchanged.
- * Omitting both reproduces the previous behavior bit-for-bit.
- */
+// Mirrors the server Ambetter status engine: not eligible or term past is CANCELED, otherwise
+// the effective/paid-through gap and current-month payment coverage decide. Without a lookup
+// the legacy Ambetter literals apply. A statusConfig.fieldMapping key wins only when the
+// snapshot carries it, so snapshots from before the mapping fall through unchanged.
 export const deriveStatusFromBob = (
   snapshot: Record<string, unknown>,
   lookup?: CrmFieldLookup,
@@ -170,10 +146,6 @@ export const deriveStatusFromBob = (
       : PLACED_THRESHOLD_DAYS;
   const fieldMapping = statusConfig?.fieldMapping ?? null;
 
-  // Status-engine role resolution: the statusConfig.fieldMapping key wins
-  // when the snapshot carries it (present-in-snapshot precedence, mirroring
-  // resolveBobValue's computed-key rule); otherwise fall through to the
-  // crmField-lookup / legacy-literal path below.
   const resolveRole = (role: string, fallback: () => unknown): unknown => {
     const mappedKey = fieldMapping?.[role];
 
@@ -184,10 +156,8 @@ export const deriveStatusFromBob = (
     return fallback();
   };
 
-  // 'Eligible for Commission' is a status-engine input role, not a CRM field,
-  // so it has no columnMapping entry to invert — without a statusConfig
-  // fieldMapping the parsed-row key from the legacy Ambetter export is the
-  // only handle the client has on it.
+  // A status-engine role, not a CRM field: no columnMapping entry exists, so without a
+  // fieldMapping only the legacy Ambetter row key carries it
   const eligible = resolveRole(
     'eligibleForCommission',
     () => snapshot.eligible_for_commission,
@@ -198,7 +168,10 @@ export const deriveStatusFromBob = (
     ),
   );
   const effectiveDateRaw = resolveRole('effectiveDate', () =>
-    resolve('effectiveDate', ['True Effective Date', 'policy_effective_date']),
+    resolve('effectiveDate', [
+      doNotTranslate('True Effective Date'),
+      'policy_effective_date',
+    ]),
   );
   const effectiveDate = parseDate(effectiveDateRaw);
   const normalizedPaidThroughDate = normalizePaidThroughDateForEffectiveDate(
@@ -252,16 +225,18 @@ export const deriveStatusFromBob = (
     isFullEffectiveMonthPaid(effectiveDate, paidThroughDate) ||
     daysSinceEffective >= placedThresholdDays;
 
-  if (hasPaymentError && isPlaced) return 'PAYMENT_ERROR_ACTIVE_PLACED';
-  if (hasPaymentError) return 'PAYMENT_ERROR_ACTIVE_APPROVED';
-  if (isPlaced) return 'ACTIVE_PLACED';
+  if (hasPaymentError && isPlaced) {
+    return 'PAYMENT_ERROR_ACTIVE_PLACED';
+  }
+  if (hasPaymentError) {
+    return 'PAYMENT_ERROR_ACTIVE_APPROVED';
+  }
+  if (isPlaced) {
+    return 'ACTIVE_PLACED';
+  }
 
   return 'ACTIVE_APPROVED';
 };
-
-// ---------------------------------------------------------------------------
-// Build synthetic policy record
-// ---------------------------------------------------------------------------
 
 export const buildSyntheticPolicyRecord = ({
   bobSnapshot,
@@ -277,9 +252,6 @@ export const buildSyntheticPolicyRecord = ({
   const snap = bobSnapshot;
   const crmLookup = invertColumnMapping(columnMapping, computedFields);
 
-  // Helper: get BOB value for a CRM field path, with legacy Ambetter header
-  // literals as the last resort (only when the mapping has no entry — see
-  // resolveBobValue for the rationale).
   const val = (crmField: string, legacyKeys: string[] = []): unknown =>
     resolveBobValue(snap, crmLookup, crmField, legacyKeys);
 
@@ -295,16 +267,12 @@ export const buildSyntheticPolicyRecord = ({
   const lastName = String(
     val('lead.name.lastName', ['insured_last_name']) ?? '',
   );
-  const email = String(
-    val('lead.emails.primaryEmail', ['member_email']) ?? '',
-  );
+  const email = String(val('lead.emails.primaryEmail', ['member_email']) ?? '');
   const phone = String(
     val('lead.phones.primaryPhoneNumber', ['member_phone_number']) ?? '',
   );
   const dob = val('lead.dateOfBirth', ['member_date_of_birth']) ?? null;
-  const state = String(
-    val('lead.addressCustom.addressState', ['state']) ?? '',
-  );
+  const state = String(val('lead.addressCustom.addressState', ['state']) ?? '');
 
   const lead: ObjectRecord = {
     id: tempLeadId,
@@ -338,8 +306,10 @@ export const buildSyntheticPolicyRecord = ({
   // 'True Effective Date') ahead of the raw mapped column when the snapshot
   // carries it — same precedence the server diff engine uses.
   const effectiveDate =
-    val('effectiveDate', ['True Effective Date', 'policy_effective_date']) ??
-    null;
+    val('effectiveDate', [
+      doNotTranslate('True Effective Date'),
+      'policy_effective_date',
+    ]) ?? null;
   const expirationDate = val('expirationDate', ['policy_term_date']) ?? null;
   const paidThroughDate = normalizePaidThroughDateForEffectiveDate(
     val('paidThroughDate', ['paid_through_date']),
@@ -374,7 +344,7 @@ export const buildSyntheticPolicyRecord = ({
     expirationDate: expirationDate ?? null,
     paidThroughDate: paidThroughDate ?? null,
     applicantCount: applicantCount || null,
-    premium: premium ?? { amountMicros: null, currencyCode: 'USD' },
+    premium: premium ?? { amountMicros: null, currencyCode: CurrencyCode.USD },
     status: derivedStatus ?? deriveStatusFromBob(snap, crmLookup, statusConfig),
     // Relations — nested objects for display
     product: resolvedRelations.product ?? null,
@@ -393,7 +363,7 @@ export const buildSyntheticPolicyRecord = ({
     submittedDate: null,
     applicationId: null,
     oldCrmPolicyId: null,
-    ltv: { amountMicros: ltvAmountMicros, currencyCode: 'USD' },
+    ltv: { amountMicros: ltvAmountMicros, currencyCode: CurrencyCode.USD },
   } as ObjectRecord;
 
   return { policy, lead };

@@ -8,7 +8,7 @@ import {
   bullMQToJobStateEnum,
   JobStateEnum,
   jobStateEnumToBullMQ,
-} from 'src/engine/core-modules/admin-panel/enums/job-state.enum';
+} from 'src/engine/core-modules/message-queue/enums/job-state.enum';
 import { InternalServerError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { QUEUE_RETENTION } from 'src/engine/core-modules/message-queue/constants/queue-retention.constants';
 import { type MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
@@ -20,6 +20,7 @@ type JobOperationResult = {
   error?: string;
 };
 
+// Bypasses the job memory limiter on purpose, so administrators can always retry or delete jobs
 @Injectable()
 export class AdminPanelQueueService {
   constructor(private readonly redisClient: RedisClientService) {}
@@ -31,7 +32,10 @@ export class AdminPanelQueueService {
     offset = 0,
   ) {
     const redis = this.redisClient.getQueueClient();
-    const queue = new Queue(queueName, { connection: redis });
+    const queue = new Queue(queueName, {
+      connection: redis,
+      prefix: this.redisClient.getQueuePrefix(),
+    });
 
     try {
       const validLimit = Math.min(Math.max(1, limit), 200);
@@ -40,7 +44,6 @@ export class AdminPanelQueueService {
       const start = validOffset;
       const end = validOffset + validLimit - 1;
 
-      // Convert GraphQL enum to BullMQ state
       const bullMQState = jobStateEnumToBullMQ[state];
       const jobs = await queue.getJobs([bullMQState], start, end, false);
 
@@ -58,9 +61,9 @@ export class AdminPanelQueueService {
             processedOn: job.processedOn,
             finishedOn: job.finishedOn,
             attemptsMade: job.attemptsMade,
-            returnValue: job.returnValue,
+            returnValue: job.returnvalue,
             logs: undefined,
-            stackTrace: job.stackTrace,
+            stackTrace: job.stacktrace ?? undefined,
           };
         }),
       );
@@ -125,7 +128,10 @@ export class AdminPanelQueueService {
     results: JobOperationResult[];
   }> {
     const redis = this.redisClient.getQueueClient();
-    const queue = new Queue(queueName, { connection: redis });
+    const queue = new Queue(queueName, {
+      connection: redis,
+      prefix: this.redisClient.getQueuePrefix(),
+    });
 
     try {
       if (jobIds.length === 0) {
@@ -197,7 +203,10 @@ export class AdminPanelQueueService {
     results: JobOperationResult[];
   }> {
     const redis = this.redisClient.getQueueClient();
-    const queue = new Queue(queueName, { connection: redis });
+    const queue = new Queue(queueName, {
+      connection: redis,
+      prefix: this.redisClient.getQueuePrefix(),
+    });
 
     try {
       const results: JobOperationResult[] = [];

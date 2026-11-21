@@ -1,33 +1,36 @@
-import { styled } from '@linaria/react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { EmailComposerFields } from '@/activities/emails/components/EmailComposerFields';
 import { useEmailComposerState } from '@/activities/emails/hooks/useEmailComposerState';
+import { useAttachEmailFiles } from '@/activities/emails/hooks/useAttachEmailFiles';
 import { type ReplyContextReady } from '@/activities/emails/hooks/useReplyContext';
+import { type AppReplyTarget } from '@/activities/emails/types/AppReplyTarget';
+import { type EmailDraftPrefill } from '@/activities/emails/types/EmailDraftPrefill';
+import { type WidgetCommandMenuItem } from '@/command-menu-item/types/WidgetCommandMenuItem';
+import { EmailThreadComposerCommandMenuItemsEffect } from '@/page-layout/widgets/email-thread/components/EmailThreadComposerCommandMenuItemsEffect';
 import { SIDE_PANEL_FOCUS_ID } from '@/side-panel/constants/SidePanelFocusId';
-import { sidePanelWidgetFooterCommandMenuItemsState } from '@/ui/layout/side-panel/states/sidePanelWidgetFooterCommandMenuItemsState';
-import { type SidePanelFooterCommandMenuItem } from '@/ui/layout/side-panel/types/SidePanelFooterCommandMenuItem';
+import { useOpenRecordInSidePanel } from '@/side-panel/hooks/useOpenRecordInSidePanel';
 import { useHotkeysOnFocusedElement } from '@/ui/utilities/hotkey/hooks/useHotkeysOnFocusedElement';
-import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
-import { t } from '@lingui/core/macro';
-import { IconArrowBackUp, IconSend, IconX } from 'twenty-ui/display';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { getOsControlSymbol } from 'twenty-ui/utilities';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import {
+  IconArrowBackUp,
+  IconPaperclip,
+  IconSend,
+  IconX,
+} from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
+import { PageFocusId } from '@/types/PageFocusId';
+import { EngineComponentKey } from '~/generated-metadata/graphql';
 
-const StyledReplyBar = styled.button`
-  align-items: center;
-  all: unset;
-  color: ${themeCssVariables.font.color.tertiary};
-  cursor: pointer;
+const StyledComposerContainer = styled.div`
+  border-top: 1px solid ${themeCssVariables.border.color.light};
   display: flex;
-  font-size: ${themeCssVariables.font.size.md};
-  gap: ${themeCssVariables.spacing[2]};
-  padding: ${themeCssVariables.spacing[3]} ${themeCssVariables.spacing[4]};
-
-  &:hover {
-    background: ${themeCssVariables.background.transparent.light};
-    color: ${themeCssVariables.font.color.secondary};
-  }
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 `;
 
 type EmailThreadComposerProps = {
@@ -35,6 +38,8 @@ type EmailThreadComposerProps = {
   isInSidePanel: boolean;
   isComposerOpen: boolean;
   setIsComposerOpen: (open: boolean) => void;
+  draftPrefill?: EmailDraftPrefill | null;
+  appReplyTarget?: AppReplyTarget | null;
 };
 
 export const EmailThreadComposer = ({
@@ -42,24 +47,49 @@ export const EmailThreadComposer = ({
   isInSidePanel,
   isComposerOpen,
   setIsComposerOpen,
+  draftPrefill,
+  appReplyTarget,
 }: EmailThreadComposerProps) => {
-  const handleReplySent = useCallback(() => {
-    setIsComposerOpen(false);
-  }, [setIsComposerOpen]);
+  const { t } = useLingui();
+  const { openRecordInSidePanel } = useOpenRecordInSidePanel();
+
+  const handleReplySent = useCallback(
+    (messageThreadId: string | null) => {
+      setIsComposerOpen(false);
+
+      if (isDefined(messageThreadId)) {
+        openRecordInSidePanel({
+          recordId: messageThreadId,
+          objectNameSingular: StandardObjectNameSingular.MessageThread,
+        });
+      }
+    },
+    [setIsComposerOpen, openRecordInSidePanel],
+  );
 
   const composerState = useEmailComposerState({
     connectedAccountId: replyContext.connectedAccountId,
+    draftPrefill,
     defaultTo: replyContext.to,
     defaultSubject: replyContext.subject,
     defaultInReplyTo: replyContext.inReplyTo,
+    appReplyTarget,
     onSent: handleReplySent,
   });
 
-  const setSidePanelWidgetFooterCommandMenuItems = useSetAtomState(
-    sidePanelWidgetFooterCommandMenuItemsState,
-  );
+  // app sends carry no files yet
+  const canAttachFiles =
+    appReplyTarget?.connectedAccountId !== composerState.connectedAccountId;
 
-  const footerActions = useMemo((): SidePanelFooterCommandMenuItem[] => {
+  const { handleSend, canSend } = composerState;
+
+  const { openAttachmentPicker, isUploadingAttachments } = useAttachEmailFiles({
+    onFilesAttached: composerState.setFiles,
+  });
+
+  const canSendReply = canSend && !isUploadingAttachments;
+
+  const widgetCommandMenuItems = useMemo((): WidgetCommandMenuItem[] => {
     if (!isComposerOpen) {
       return [
         {
@@ -68,65 +98,93 @@ export const EmailThreadComposer = ({
           Icon: IconArrowBackUp,
           isPrimaryCTA: true,
           onClick: () => setIsComposerOpen(true),
+          replacedEngineComponentKey: EngineComponentKey.REPLY_TO_EMAIL_THREAD,
         },
       ];
     }
 
-    return [
-      {
-        id: 'cancel-reply',
-        label: t`Cancel reply`,
-        Icon: IconX,
-        isPinned: false,
-        onClick: () => setIsComposerOpen(false),
-      },
-      {
-        id: 'send',
-        label: t`Send`,
-        Icon: IconSend,
-        isPrimaryCTA: true,
-        hotkeys: [getOsControlSymbol(), '⏎'],
-        onClick: composerState.handleSend,
-        disabled: !composerState.canSend,
-      },
-    ];
-  }, [isComposerOpen, composerState, setIsComposerOpen]);
+    const cancelReplyCommandMenuItem: WidgetCommandMenuItem = {
+      id: 'cancel-reply',
+      label: t`Cancel reply`,
+      Icon: IconX,
+      isPinned: !isInSidePanel,
+      onClick: () => setIsComposerOpen(false),
+      replacedEngineComponentKey: EngineComponentKey.REPLY_TO_EMAIL_THREAD,
+    };
 
-  useEffect(() => {
+    const sendCommandMenuItem: WidgetCommandMenuItem = {
+      id: 'send',
+      label: t`Send`,
+      Icon: IconSend,
+      isPrimaryCTA: true,
+      shortcut: ['Mod', 'Enter'],
+      onClick: handleSend,
+      disabled: !canSendReply,
+      replacedEngineComponentKey: EngineComponentKey.REPLY_TO_EMAIL_THREAD,
+    };
+
     if (!isInSidePanel) {
-      return;
+      return [cancelReplyCommandMenuItem, sendCommandMenuItem];
     }
 
-    setSidePanelWidgetFooterCommandMenuItems(footerActions);
-
-    return () => setSidePanelWidgetFooterCommandMenuItems([]);
-  }, [isInSidePanel, footerActions, setSidePanelWidgetFooterCommandMenuItems]);
+    return [
+      cancelReplyCommandMenuItem,
+      ...(canAttachFiles
+        ? [
+            {
+              id: 'attach-files',
+              label: t`Attach files`,
+              Icon: IconPaperclip,
+              isPinned: false,
+              onClick: openAttachmentPicker,
+            },
+          ]
+        : []),
+      sendCommandMenuItem,
+    ];
+  }, [
+    isComposerOpen,
+    isInSidePanel,
+    canAttachFiles,
+    handleSend,
+    canSendReply,
+    setIsComposerOpen,
+    openAttachmentPicker,
+    t,
+  ]);
 
   const handleSendHotkey = useCallback(() => {
-    if (isComposerOpen && composerState.canSend) {
-      composerState.handleSend();
+    if (isComposerOpen && canSendReply) {
+      handleSend();
     }
-  }, [isComposerOpen, composerState]);
+  }, [isComposerOpen, canSendReply, handleSend]);
 
   useHotkeysOnFocusedElement({
     keys: ['ctrl+Enter,meta+Enter'],
     callback: handleSendHotkey,
-    focusId: SIDE_PANEL_FOCUS_ID,
+    focusId: isInSidePanel ? SIDE_PANEL_FOCUS_ID : PageFocusId.RecordShowPage,
     dependencies: [handleSendHotkey],
   });
 
-  if (!isComposerOpen) {
-    if (isInSidePanel) {
-      return null;
-    }
-
-    return (
-      <StyledReplyBar onClick={() => setIsComposerOpen(true)}>
-        <IconArrowBackUp size={16} />
-        {t`Reply...`}
-      </StyledReplyBar>
-    );
-  }
-
-  return <EmailComposerFields composerState={composerState} />;
+  return (
+    <>
+      <EmailThreadComposerCommandMenuItemsEffect
+        commandMenuItems={widgetCommandMenuItems}
+        isInSidePanel={isInSidePanel}
+      />
+      {isComposerOpen && (
+        <StyledComposerContainer>
+          <EmailComposerFields
+            composerState={composerState}
+            appSender={appReplyTarget}
+            onAttachFiles={
+              isInSidePanel || !canAttachFiles
+                ? undefined
+                : openAttachmentPicker
+            }
+          />
+        </StyledComposerContainer>
+      )}
+    </>
+  );
 };

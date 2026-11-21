@@ -1,0 +1,238 @@
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useDeleteOneIndexMetadataItem } from '@/object-metadata/hooks/useDeleteOneIndexMetadataItem';
+import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
+import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { getCompositeSubFieldLabel } from '@/object-record/object-filter-dropdown/utils/getCompositeSubFieldLabel';
+import { type CompositeFieldSubFieldName } from '@/settings/data-model/types/CompositeFieldSubFieldName';
+import { type CompositeFieldType } from '@/settings/data-model/types/CompositeFieldType';
+import { NavigationButton } from '@/ui/input/components/NavigationButton';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
+import { TableFooter } from '@/ui/layout/table/components/TableFooter';
+import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
+import { isNonEmptyString } from '@sniptt/guards';
+import { useMemo, useState } from 'react';
+import { MAX_CUSTOM_INDEXES_PER_OBJECT } from 'twenty-shared/constants';
+import { isWorkspaceCustomIndex } from 'twenty-shared/metadata';
+import { SettingsPath } from 'twenty-shared/types';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { SearchInput } from 'twenty-ui/components/input';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
+import { IconEyeOff, IconPlus } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { SettingsObjectIndexTable } from '@/settings/data-model/object-details/components/SettingsObjectIndexTable';
+import { type SettingsObjectIndexesTableItem } from '@/settings/data-model/types/SettingsObjectIndexesTableItem';
+import { normalizeSearchText } from 'twenty-ui/utilities';
+import { SettingsSearchFilterTrigger } from '@/settings/components/SettingsSearchFilterTrigger';
+
+type SettingsObjectIndexesSectionProps = {
+  objectMetadataItem: EnrichedObjectMetadataItem;
+  isReadOnly: boolean;
+};
+
+const StyledContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledTableContainer = styled.div`
+  margin-top: ${themeCssVariables.spacing[3]};
+`;
+
+const DELETE_INDEX_MODAL_ID = 'delete-index-modal';
+const HIDE_SYSTEM_INDEXES_DROPDOWN_ID =
+  'settings-object-indexes-filter-dropdown';
+
+export const SettingsObjectIndexesSection = ({
+  objectMetadataItem,
+  isReadOnly,
+}: SettingsObjectIndexesSectionProps) => {
+  const { t } = useLingui();
+  const { openDialog, closeDialog } = useDialog();
+  const { enqueueToast } = useToast();
+  const { deleteOneIndexMetadataItem } = useDeleteOneIndexMetadataItem();
+  const { objectMetadataItems } = useObjectMetadataItems();
+  const workspaceCustomApplicationId = useAtomStateValue(currentWorkspaceState)
+    ?.workspaceCustomApplication?.id;
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [hideSystemIndexes, setHideSystemIndexes] = useState(false);
+  const [pendingDelete, setPendingDelete] =
+    useState<SettingsObjectIndexesTableItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const tableItems = useMemo<SettingsObjectIndexesTableItem[]>(() => {
+    const fieldsById = new Map(
+      objectMetadataItem.fields.map((field) => [field.id, field]),
+    );
+
+    const objectLabelsById = new Map(
+      objectMetadataItems.map(({ id, labelSingular }) => [id, labelSingular]),
+    );
+
+    const morphFieldLabelsById = new Map(
+      objectMetadataItem.fields
+        .flatMap((field) => field.morphRelations ?? [])
+        .filter(
+          ({ sourceFieldMetadata }) => !fieldsById.has(sourceFieldMetadata.id),
+        )
+        .map(({ sourceFieldMetadata, targetObjectMetadata }) => [
+          sourceFieldMetadata.id,
+          objectLabelsById.get(targetObjectMetadata.id),
+        ]),
+    );
+
+    return objectMetadataItem.indexMetadatas.map((indexMetadataItem) => ({
+      id: indexMetadataItem.id,
+      name: indexMetadataItem.name,
+      isUnique: indexMetadataItem.isUnique,
+      isCustom: isWorkspaceCustomIndex({
+        indexMetadata: indexMetadataItem,
+        workspaceCustomApplicationId,
+      }),
+      indexType: indexMetadataItem.indexType,
+      indexWhereClause: indexMetadataItem.indexWhereClause,
+      indexFields:
+        indexMetadataItem.indexFieldMetadatas
+          ?.map((indexField) => {
+            const fieldMetadataItem = fieldsById.get(
+              indexField.fieldMetadataId,
+            );
+
+            if (!isDefined(fieldMetadataItem)) {
+              return morphFieldLabelsById.get(indexField.fieldMetadataId);
+            }
+
+            if (isNonEmptyString(indexField.subFieldName)) {
+              return `${fieldMetadataItem.label} > ${getCompositeSubFieldLabel(
+                fieldMetadataItem.type as CompositeFieldType,
+                indexField.subFieldName as CompositeFieldSubFieldName,
+              )}`;
+            }
+
+            return fieldMetadataItem.label;
+          })
+          .filter((label): label is string => Boolean(label))
+          .join(', ') ?? '',
+    }));
+  }, [
+    objectMetadataItem.indexMetadatas,
+    objectMetadataItem.fields,
+    objectMetadataItems,
+    workspaceCustomApplicationId,
+  ]);
+
+  const filteredItems = useMemo(() => {
+    const searchNormalized = normalizeSearchText(searchTerm);
+
+    return tableItems
+      .filter((item) => (hideSystemIndexes ? item.isCustom : true))
+      .filter((item) =>
+        searchNormalized.length === 0
+          ? true
+          : normalizeSearchText(item.indexFields).includes(searchNormalized) ||
+            normalizeSearchText(item.indexType).includes(searchNormalized),
+      );
+  }, [tableItems, searchTerm, hideSystemIndexes]);
+
+  const customIndexCount = tableItems.filter((item) => item.isCustom).length;
+  const reachedCap = customIndexCount >= MAX_CUSTOM_INDEXES_PER_OBJECT;
+  const canCreate = !isReadOnly && !reachedCap;
+
+  const handleRequestDelete = (item: SettingsObjectIndexesTableItem) => {
+    setPendingDelete(item);
+    openDialog(DELETE_INDEX_MODAL_ID);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (pendingDelete === null) {
+      return;
+    }
+    setIsDeleting(true);
+
+    const result = await deleteOneIndexMetadataItem({
+      idToDelete: pendingDelete.id,
+    });
+
+    setIsDeleting(false);
+    closeDialog(DELETE_INDEX_MODAL_ID);
+
+    if (result.status === 'successful') {
+      enqueueToast({ status: 'success', children: t`Index deleted` });
+      setPendingDelete(null);
+    }
+  };
+
+  return (
+    <StyledContent>
+      <SearchInput
+        placeholder={t`Search an index...`}
+        value={searchTerm}
+        onValueChange={setSearchTerm}
+        actions={
+          <DropdownRoot
+            dropdownId={HIDE_SYSTEM_INDEXES_DROPDOWN_ID}
+            type="panel"
+          >
+            <SettingsSearchFilterTrigger />
+            <DropdownContent align="end" sideOffset={8}>
+              <Dropdown.Section>
+                <SettingsRow
+                  startElement={<IconEyeOff />}
+                  onCheckedChange={() =>
+                    setHideSystemIndexes(!hideSystemIndexes)
+                  }
+                  checked={hideSystemIndexes}
+                >{t`Hide system indexes`}</SettingsRow>
+              </Dropdown.Section>
+            </DropdownContent>
+          </DropdownRoot>
+        }
+      />
+      <StyledTableContainer>
+        <SettingsObjectIndexTable
+          items={filteredItems}
+          isReadOnly={isReadOnly}
+          onDeleteIndex={handleRequestDelete}
+        />
+        <TableFooter>
+          {!isReadOnly &&
+            (canCreate ? (
+              <NavigationButton
+                to={getSettingsPath(SettingsPath.ObjectNewIndex, {
+                  objectNamePlural: objectMetadataItem.namePlural,
+                })}
+                startIcon={<IconPlus />}
+                size="sm"
+                variant="outline"
+              >{t`Add Index`}</NavigationButton>
+            ) : (
+              <Button
+                startIcon={<IconPlus />}
+                size="sm"
+                disabled
+                variant="outline"
+              >{t`Add Index`}</Button>
+            ))}
+        </TableFooter>
+      </StyledTableContainer>
+      <ConfirmationDialog
+        dialogId={DELETE_INDEX_MODAL_ID}
+        title={t`Delete this index?`}
+        subtitle={t`Queries that relied on it will fall back to a sequential scan. You can recreate it later.`}
+        confirmButtonText={t`Delete`}
+        onConfirmClick={handleConfirmDelete}
+        onClose={() => setPendingDelete(null)}
+        loading={isDeleting}
+      />
+    </StyledContent>
+  );
+};

@@ -1,3 +1,4 @@
+import { useNumberFormat } from '@/localization/hooks/useNumberFormat';
 import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { useAggregateRecords } from '@/object-record/hooks/useAggregateRecords';
 import { transformAggregateRawValueIntoAggregateDisplayValue } from '@/object-record/record-aggregate/utils/transformAggregateRawValueIntoAggregateDisplayValue';
@@ -9,6 +10,7 @@ import { anyFieldFilterValueComponentState } from '@/object-record/record-filter
 import { currentRecordFiltersComponentState } from '@/object-record/record-filter/states/currentRecordFiltersComponentState';
 import { useRecordGroupFilter } from '@/object-record/record-group/hooks/useRecordGroupFilter';
 import { getRecordAggregateDisplayLabel } from '@/object-record/record-index/utils/getRecordndexAggregateDisplayLabel';
+import { useListenToJunctionRecordOperation } from '@/object-record/record-table-widget/hooks/useListenToJunctionRecordOperation';
 import { AggregateOperations } from '@/object-record/record-table/constants/AggregateOperations';
 import { useRecordTableContextOrThrow } from '@/object-record/record-table/contexts/RecordTableContext';
 import { RecordTableColumnAggregateFooterCellContext } from '@/object-record/record-table/record-table-footer/components/RecordTableColumnAggregateFooterCellContext';
@@ -22,19 +24,22 @@ import { UserContext } from '@/users/contexts/UserContext';
 import { useContext } from 'react';
 import { FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION } from 'twenty-shared/constants';
 import {
+  combineFilters,
   computeRecordGqlOperationFilter,
   findById,
   isDefined,
   isFieldMetadataDateKind,
   turnAnyFieldFilterIntoRecordGqlFilter,
 } from 'twenty-shared/utils';
-import { dateLocaleState } from '~/localization/states/dateLocaleState';
+import { dateLocaleState } from '@/localization/states/dateLocaleState';
 
 export const useAggregateRecordsForRecordTableColumnFooter = (
   aggregateFieldMetadataId: string,
 ) => {
   const { objectMetadataItem } = useRecordTableContextOrThrow();
   const { recordGroupFilter } = useRecordGroupFilter(objectMetadataItem.fields);
+
+  const { numberFormat, formatNumber } = useNumberFormat();
 
   const currentRecordFilterGroups = useAtomComponentStateValue(
     currentRecordFilterGroupsComponentState,
@@ -107,15 +112,23 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
 
   const { recordGqlOperationFilter: anyFieldFilter } =
     turnAnyFieldFilterIntoRecordGqlFilter({
-      fields: objectMetadataItem.fields,
+      fields: objectMetadataItem.readableFields,
       filterValue: anyFieldFilterValue,
     });
 
-  const { data, loading } = useAggregateRecords({
+  const { data, loading, refetch } = useAggregateRecords({
     objectNameSingular: objectMetadataItem.nameSingular,
     recordGqlFieldsAggregate,
-    filter: { ...requestFilters, ...recordGroupFilter, ...anyFieldFilter },
+    filter: combineFilters([requestFilters, recordGroupFilter, anyFieldFilter]),
     skip: !isDefined(aggregateOperationForViewField),
+  });
+
+  useListenToJunctionRecordOperation({
+    onJunctionRecordOperation: () => {
+      if (isDefined(aggregateOperationForViewField)) {
+        void refetch();
+      }
+    },
   });
 
   const { dateFormat, timeFormat, timeZone } = useContext(UserContext);
@@ -125,11 +138,15 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
   );
 
   if (!isDefined(aggregateFieldMetadataItem)) {
+    const totalCountAggregateValue =
+      data?.[FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION]?.[
+        AggregateOperations.COUNT
+      ];
+
     return {
-      aggregateValue:
-        data?.[FIELD_FOR_TOTAL_COUNT_AGGREGATE_OPERATION]?.[
-          AggregateOperations.COUNT
-        ],
+      aggregateValue: isDefined(totalCountAggregateValue)
+        ? formatNumber(Number(totalCountAggregateValue))
+        : totalCountAggregateValue,
       aggregateLabel: getAggregateOperationLabel(AggregateOperations.COUNT),
       isLoading: loading,
     };
@@ -155,6 +172,7 @@ export const useAggregateRecordsForRecordTableColumnFooter = (
       localeCatalog: dateLocale.localeCatalog,
       timeFormat,
       timeZone,
+      numberFormat,
     });
 
   const { aggregateLabel } = getRecordAggregateDisplayLabel({

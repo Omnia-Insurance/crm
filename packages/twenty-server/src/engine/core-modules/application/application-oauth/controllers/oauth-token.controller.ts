@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 
 import { type Request, type Response } from 'express';
+import { ApiPath } from 'twenty-shared/types';
 
 import { OAuthIntrospectInput } from 'src/engine/core-modules/application/application-oauth/dtos/oauth-introspect.input';
 import { OAuthRevokeInput } from 'src/engine/core-modules/application/application-oauth/dtos/oauth-revoke.input';
@@ -28,7 +29,7 @@ import { PublicEndpointGuard } from 'src/engine/guards/public-endpoint.guard';
 const OAUTH_RATE_LIMIT_MAX = 60;
 const OAUTH_RATE_LIMIT_WINDOW_MS = 60_000;
 
-@Controller('oauth')
+@Controller(ApiPath.OAuth)
 @UseFilters(AuthRestApiExceptionFilter)
 export class OAuthTokenController {
   constructor(
@@ -45,7 +46,9 @@ export class OAuthTokenController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    if (await this.applyRateLimit(req, res)) return;
+    if (await this.applyRateLimit(req, res)) {
+      return;
+    }
 
     let result: OAuthTokenResponse | OAuthErrorResponse;
 
@@ -104,7 +107,9 @@ export class OAuthTokenController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    if (await this.applyRateLimit(req, res)) return;
+    if (await this.applyRateLimit(req, res)) {
+      return;
+    }
     this.setSecurityHeaders(res);
 
     await this.oauthService.revokeToken({
@@ -126,7 +131,9 @@ export class OAuthTokenController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    if (await this.applyRateLimit(req, res)) return;
+    if (await this.applyRateLimit(req, res)) {
+      return;
+    }
     this.setSecurityHeaders(res);
 
     if (!body.client_id) {

@@ -26,6 +26,8 @@ export const useChangeRecordFieldVisibility = (
 
   const { saveViewFields } = useSaveCurrentViewFields();
 
+  // OMNIA-CUSTOM: subFieldName targets a relation sub-field column ("Lead / DOB"). It shares fieldMetadataId with
+  // the relation column, so columns match on the pair and the local update goes by record field id
   const changeRecordFieldVisibility = async ({
     fieldMetadataId,
     isVisible,
@@ -40,13 +42,10 @@ export const useChangeRecordFieldVisibility = (
         ?.position ?? 0;
 
     const shouldShowFieldMetadataItem = isVisible === true;
-
-    // OMNIA-CUSTOM: Match by both fieldMetadataId and subFieldName
     const correspondingRecordField = currentRecordFields.find(
       (recordFieldToFind) =>
         recordFieldToFind.fieldMetadataItemId === fieldMetadataId &&
-        (recordFieldToFind.subFieldName ?? undefined) ===
-          (subFieldName ?? undefined),
+        (recordFieldToFind.subFieldName ?? undefined) === subFieldName,
     );
 
     const noExistingRecordField = !isDefined(correspondingRecordField);
@@ -58,14 +57,14 @@ export const useChangeRecordFieldVisibility = (
         size: subFieldName ? 150 : 100,
         isVisible: shouldShowFieldMetadataItem,
         position: lastPosition + 1,
-        subFieldName: subFieldName ?? undefined,
+        subFieldName,
       };
 
       upsertRecordField(recordFieldToUpsert);
 
       await saveViewFields([mapRecordFieldToViewField(recordFieldToUpsert)]);
     } else {
-      updateRecordField(fieldMetadataId, {
+      updateRecordField(correspondingRecordField.id, {
         isVisible: shouldShowFieldMetadataItem,
       });
 

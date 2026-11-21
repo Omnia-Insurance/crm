@@ -1,4 +1,4 @@
-import { type RulesLogic } from 'json-logic-js';
+import { type AdditionalOperation, type RulesLogic } from 'json-logic-js';
 
 import { evaluateWidgetVisibility } from '@/page-layout/utils/evaluateWidgetVisibility';
 
@@ -9,6 +9,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay: undefined,
       context: {
         device: 'DESKTOP',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -29,6 +31,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'MOBILE',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -49,6 +53,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'DESKTOP',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -69,6 +75,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'DESKTOP',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -89,6 +97,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'MOBILE',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -112,6 +122,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'MOBILE',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -120,6 +132,8 @@ describe('evaluateWidgetVisibility', () => {
       conditionalDisplay,
       context: {
         device: 'DESKTOP',
+        selectedRecords: [],
+        featureFlags: {},
       },
     });
 
@@ -128,9 +142,9 @@ describe('evaluateWidgetVisibility', () => {
   });
 
   it('should throw error for invalid operator', () => {
-    const invalidConditionalDisplay = {
+    const invalidConditionalDisplay: RulesLogic<AdditionalOperation> = {
       invalidOperator: 'test',
-    } as unknown as RulesLogic;
+    };
 
     expect(() => {
       evaluateWidgetVisibility({
@@ -138,6 +152,8 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay: invalidConditionalDisplay,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
     }).toThrow();
@@ -150,6 +166,8 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay: undefined,
         context: {
           device: 'MOBILE',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 
@@ -162,6 +180,8 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay: undefined,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 
@@ -174,6 +194,8 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay: undefined,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 
@@ -194,11 +216,11 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 
-      // Expression says MOBILE only, so DESKTOP should be hidden
-      // even though conditionalDisplay says DESKTOP is visible
       expect(result).toBe(false);
     });
 
@@ -216,11 +238,11 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 
-      // Expression is null, so conditionalDisplay takes over
-      // conditionalDisplay says MOBILE only → DESKTOP hidden
       expect(result).toBe(false);
     });
 
@@ -238,6 +260,8 @@ describe('evaluateWidgetVisibility', () => {
         conditionalDisplay,
         context: {
           device: 'DESKTOP',
+          selectedRecords: [],
+          featureFlags: {},
         },
       });
 

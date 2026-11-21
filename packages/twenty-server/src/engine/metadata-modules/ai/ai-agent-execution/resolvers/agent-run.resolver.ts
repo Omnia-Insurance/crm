@@ -1,0 +1,126 @@
+import {
+  UseFilters,
+  UseGuards,
+  UseInterceptors,
+  UsePipes,
+} from '@nestjs/common';
+import { Args, Mutation } from '@nestjs/graphql';
+
+import { PermissionFlagType } from 'twenty-shared/constants';
+
+import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
+import { type FlatApiKey } from 'src/engine/core-modules/api-key/types/flat-api-key.type';
+import { type FlatApplication } from 'src/engine/core-modules/application/types/flat-application.type';
+import { BillingGraphqlApiExceptionFilter } from 'src/engine/core-modules/billing/filters/billing-graphql-api-exception.filter';
+import { ResolverValidationPipe } from 'src/engine/core-modules/graphql/pipes/resolver-validation.pipe';
+import { UsageLimitGraphqlApiExceptionFilter } from 'src/engine/core-modules/usage-limit/filters/usage-limit-graphql-api-exception.filter';
+import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
+import { AuthApiKey } from 'src/engine/decorators/auth/auth-api-key.decorator';
+import { AuthApplication } from 'src/engine/decorators/auth/auth-application.decorator';
+import { AuthUserWorkspaceId } from 'src/engine/decorators/auth/auth-user-workspace-id.decorator';
+import { AuthWorkspaceMemberId } from 'src/engine/decorators/auth/auth-workspace-member-id.decorator';
+import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
+import { GenerateInputDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/generate.input';
+import { GenerateResultDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/generate-result.dto';
+import { RunAgentInputDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/run-agent.input';
+import { RunAgentResultDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/run-agent-result.dto';
+import { StopGenerateInputDTO } from 'src/engine/metadata-modules/ai/ai-agent-execution/dtos/stop-generate.input';
+import { AgentRunService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-run.service';
+import { AiGenerateService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/ai-generate.service';
+import { AiGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/ai/interceptors/ai-graphql-api-exception.interceptor';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+
+@UseGuards(
+  AccessPolicyGuard({
+    authPrincipals: {
+      userSession: {
+        standard: true,
+        impersonated: true,
+        playground: true,
+        workspaceAgnostic: false,
+      },
+      apiKey: true,
+      oauthClient: true,
+      application: true,
+    },
+    requiredPermissionFlags: [PermissionFlagType.AI],
+  }),
+)
+@UseInterceptors(AiGraphqlApiExceptionInterceptor)
+@UseFilters(
+  UsageLimitGraphqlApiExceptionFilter,
+  BillingGraphqlApiExceptionFilter,
+  AuthGraphqlApiExceptionFilter,
+)
+@UsePipes(ResolverValidationPipe)
+@MetadataResolver()
+export class AgentRunResolver {
+  constructor(
+    private readonly agentRunService: AgentRunService,
+    private readonly aiGenerateService: AiGenerateService,
+  ) {}
+
+  @Mutation(() => RunAgentResultDTO)
+  async runAgent(
+    @Args('input') input: RunAgentInputDTO,
+    @AuthWorkspace() workspace: FlatWorkspace,
+    @AuthUserWorkspaceId({ allowUndefined: true })
+    userWorkspaceId: string | undefined,
+    @AuthApplication({ allowUndefined: true })
+    callerApplication: FlatApplication | undefined,
+    @AuthApiKey() callerApiKey: FlatApiKey | undefined,
+    @AuthWorkspaceMemberId()
+    workspaceMemberId: string | undefined,
+  ): Promise<RunAgentResultDTO> {
+    return this.agentRunService.run({
+      workspace,
+      requestUserWorkspaceId: userWorkspaceId ?? null,
+      requestWorkspaceMemberId: workspaceMemberId ?? null,
+      callerApplication,
+      callerApiKey,
+      input,
+    });
+  }
+
+  @Mutation(() => GenerateResultDTO)
+  async generate(
+    @Args('input') input: GenerateInputDTO,
+    @AuthWorkspace() workspace: FlatWorkspace,
+    @AuthUserWorkspaceId({ allowUndefined: true })
+    userWorkspaceId: string | undefined,
+    @AuthApplication({ allowUndefined: true })
+    callerApplication: FlatApplication | undefined,
+    @AuthApiKey() callerApiKey: FlatApiKey | undefined,
+    @AuthWorkspaceMemberId()
+    workspaceMemberId: string | undefined,
+  ): Promise<GenerateResultDTO> {
+    return this.aiGenerateService.generate({
+      workspace,
+      requestUserWorkspaceId: userWorkspaceId ?? null,
+      requestWorkspaceMemberId: workspaceMemberId ?? null,
+      callerApplication,
+      callerApiKey,
+      input,
+    });
+  }
+
+  @Mutation(() => Boolean)
+  async stopGenerate(
+    @Args('input') input: StopGenerateInputDTO,
+    @AuthWorkspace() workspace: FlatWorkspace,
+    @AuthApplication({ allowUndefined: true })
+    callerApplication: FlatApplication | undefined,
+    @AuthWorkspaceMemberId()
+    workspaceMemberId: string | undefined,
+  ): Promise<boolean> {
+    await this.aiGenerateService.stop({
+      workspace,
+      callerApplication,
+      requestWorkspaceMemberId: workspaceMemberId ?? null,
+      runId: input.runId,
+    });
+
+    return true;
+  }
+}

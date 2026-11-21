@@ -2,6 +2,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 
 import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
 import { getQueueToken } from 'src/engine/core-modules/message-queue/utils/get-queue-token.util';
+import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { AccessPolicyService } from 'src/engine/guards/access-policy/access-policy.service';
 import { type IngestionFieldMappingEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-field-mapping.entity';
 import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import {
@@ -9,7 +11,6 @@ import {
   IngestionPipelineExceptionCode,
 } from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception';
 import { IngestionPipelineResolver } from 'src/engine/metadata-modules/ingestion-pipeline/resolvers/ingestion-pipeline.resolver';
-import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
@@ -17,7 +18,7 @@ import { IngestionPullSchedulerService } from 'src/engine/metadata-modules/inges
 
 const workspaceId = 'workspace-1';
 
-const mockWorkspace = { id: workspaceId } as { id: string };
+const mockWorkspace = { id: workspaceId } as WorkspaceEntity;
 
 const mockPipeline = {
   id: 'pipeline-1',
@@ -70,6 +71,7 @@ const mockPipelineService = {
   findAll: jest.fn(),
   findById: jest.fn(),
   findEntityById: jest.fn(),
+  findEntityByIdOrThrow: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
@@ -90,10 +92,6 @@ const mockPullSchedulerService = {
 
 const mockMessageQueueService = {
   add: jest.fn(),
-};
-
-const mockPermissionsService = {
-  userHasWorkspaceSettingPermission: jest.fn().mockResolvedValue(true),
 };
 
 describe('IngestionPipelineResolver - testIngestionPipeline', () => {
@@ -123,16 +121,11 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
           provide: getQueueToken(MessageQueue.ingestionQueue),
           useValue: mockMessageQueueService,
         },
-        {
-          provide: PermissionsService,
-          useValue: mockPermissionsService,
-        },
+        { provide: AccessPolicyService, useValue: {} },
       ],
     }).compile();
 
-    resolver = module.get<IngestionPipelineResolver>(
-      IngestionPipelineResolver,
-    );
+    resolver = module.get<IngestionPipelineResolver>(IngestionPipelineResolver);
   });
 
   afterEach(() => {
@@ -140,7 +133,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
   });
 
   it('should return preview records for valid sample data', async () => {
-    mockPipelineService.findEntityById.mockResolvedValue(mockPipeline);
+    mockPipelineService.findEntityByIdOrThrow.mockResolvedValue(mockPipeline);
     mockFieldMappingService.findEntitiesByPipelineId.mockResolvedValue(
       mockMappings,
     );
@@ -161,9 +154,16 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
           },
         ],
       },
-      mockWorkspace as any,
+      mockWorkspace,
     );
 
+    expect(mockPipelineService.findEntityByIdOrThrow).toHaveBeenCalledWith(
+      'pipeline-1',
+      workspaceId,
+    );
+    expect(
+      mockFieldMappingService.findEntitiesByPipelineId,
+    ).toHaveBeenCalledWith('pipeline-1', workspaceId);
     expect(result.success).toBe(true);
     expect(result.totalRecords).toBe(2);
     expect(result.validRecords).toBe(2);
@@ -181,7 +181,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
   });
 
   it('should return errors for records missing mapped fields', async () => {
-    mockPipelineService.findEntityById.mockResolvedValue(mockPipeline);
+    mockPipelineService.findEntityByIdOrThrow.mockResolvedValue(mockPipeline);
     mockFieldMappingService.findEntitiesByPipelineId.mockResolvedValue(
       mockMappings,
     );
@@ -196,7 +196,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
           { first_name: 'John', email: 'john@test.com' },
         ],
       },
-      mockWorkspace as any,
+      mockWorkspace,
     );
 
     expect(result.success).toBe(true);
@@ -212,7 +212,12 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
   });
 
   it('should throw PIPELINE_NOT_FOUND for a bad pipeline ID', async () => {
-    mockPipelineService.findEntityById.mockResolvedValue(null);
+    mockPipelineService.findEntityByIdOrThrow.mockRejectedValue(
+      new IngestionPipelineException(
+        'Pipeline nonexistent-id not found',
+        IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
+      ),
+    );
 
     await expect(
       resolver.testIngestionPipeline(
@@ -220,7 +225,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
           pipelineId: 'nonexistent-id',
           sampleRecords: [{ first_name: 'John' }],
         },
-        mockWorkspace as any,
+        mockWorkspace,
       ),
     ).rejects.toThrow(IngestionPipelineException);
 
@@ -230,7 +235,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
           pipelineId: 'nonexistent-id',
           sampleRecords: [{ first_name: 'John' }],
         },
-        mockWorkspace as any,
+        mockWorkspace,
       ),
     ).rejects.toMatchObject({
       code: IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
@@ -238,7 +243,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
   });
 
   it('should handle empty sample records', async () => {
-    mockPipelineService.findEntityById.mockResolvedValue(mockPipeline);
+    mockPipelineService.findEntityByIdOrThrow.mockResolvedValue(mockPipeline);
     mockFieldMappingService.findEntitiesByPipelineId.mockResolvedValue(
       mockMappings,
     );
@@ -248,7 +253,7 @@ describe('IngestionPipelineResolver - testIngestionPipeline', () => {
         pipelineId: 'pipeline-1',
         sampleRecords: [],
       },
-      mockWorkspace as any,
+      mockWorkspace,
     );
 
     expect(result.success).toBe(true);

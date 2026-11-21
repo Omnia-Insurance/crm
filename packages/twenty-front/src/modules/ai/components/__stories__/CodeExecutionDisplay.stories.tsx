@@ -3,7 +3,9 @@ import { expect, userEvent, within } from 'storybook/test';
 import { ComponentDecorator } from 'twenty-ui/testing';
 
 import { CodeExecutionDisplay } from '@/ai/components/CodeExecutionDisplay';
-import { SnackBarDecorator } from '~/testing/decorators/SnackBarDecorator';
+import { ARGOS_CAPTURE_DISABLED } from '~/testing/constants/ArgosCaptureDisabled';
+import { ToastDecorator } from '~/testing/decorators/ToastDecorator';
+import { IMAGE_URL_MOCK } from '~/testing/mock-data/image-url';
 
 const samplePythonCode = `import pandas as pd
 import matplotlib.pyplot as plt
@@ -30,8 +32,9 @@ plt.savefig('revenue_chart.png')`;
 const meta: Meta<typeof CodeExecutionDisplay> = {
   title: 'Modules/AI/CodeExecutionDisplay',
   component: CodeExecutionDisplay,
-  decorators: [SnackBarDecorator, ComponentDecorator],
+  decorators: [ToastDecorator, ComponentDecorator],
   parameters: {
+    argos: ARGOS_CAPTURE_DISABLED,
     container: { width: 600 },
   },
   args: {
@@ -72,7 +75,6 @@ export const Success: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(await canvas.findByText('Completed')).toBeVisible();
-    // Output content is inside a scrollable container
     expect(await canvas.findByText(/Total Revenue/)).toBeInTheDocument();
   },
 };
@@ -105,13 +107,13 @@ export const WithImageFiles: Story = {
       {
         fileId: '550e8400-e29b-41d4-a716-446655440001',
         filename: 'revenue_chart.png',
-        url: 'https://picsum.photos/800/480',
+        url: IMAGE_URL_MOCK,
         mimeType: 'image/png',
       },
       {
         fileId: '550e8400-e29b-41d4-a716-446655440002',
         filename: 'pie_chart.png',
-        url: 'https://picsum.photos/600/400',
+        url: IMAGE_URL_MOCK,
         mimeType: 'image/png',
       },
     ],
@@ -176,11 +178,9 @@ export const CodeSectionExpanded: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Click to expand the code section
     const codeHeader = await canvas.findByText('Code');
     await userEvent.click(codeHeader);
 
-    // The code editor should now be visible
     expect(await canvas.findByText('Completed')).toBeVisible();
   },
 };

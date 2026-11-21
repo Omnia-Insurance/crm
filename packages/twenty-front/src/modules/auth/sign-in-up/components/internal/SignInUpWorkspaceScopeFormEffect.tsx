@@ -46,13 +46,13 @@ export const SignInUpWorkspaceScopeFormEffect = () => {
       return;
     }
 
-    const hasOnlySSOProvidersEnabled =
+    const hasOnlySsoProvidersEnabled =
       !workspaceAuthProviders.google &&
       !workspaceAuthProviders.microsoft &&
       !workspaceAuthProviders.password;
 
-    if (hasOnlySSOProvidersEnabled && workspaceAuthProviders.sso.length > 1) {
-      return setSignInUpStep(SignInUpStep.SSOIdentityProviderSelection);
+    if (hasOnlySsoProvidersEnabled && workspaceAuthProviders.sso.length > 1) {
+      return setSignInUpStep(SignInUpStep.SsoIdentityProviderSelection);
     }
   }, [setSignInUpStep, workspaceAuthProviders]);
 
@@ -79,7 +79,9 @@ export const SignInUpWorkspaceScopeFormEffect = () => {
   }, [captcha?.provider, isRequestingCaptchaToken, loadingStatus]);
 
   useEffect(() => {
-    if (!workspaceAuthProviders) return;
+    if (!workspaceAuthProviders) {
+      return;
+    }
 
     if (
       signInUpStep === SignInUpStep.Init &&

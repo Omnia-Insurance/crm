@@ -1,18 +1,20 @@
+import { UndecoratedLink } from '@/ui/navigation/link/components/UndecoratedLink/UndecoratedLink';
+import { getWorkspaceAvatarColorSeed } from '@/workspace/utils/getWorkspaceAvatarColorSeed';
 import { styled } from '@linaria/react';
 import { isNonEmptyString } from '@sniptt/guards';
 import { AppPath } from 'twenty-shared/types';
 import { getImageAbsoluteURI, isDefined } from 'twenty-shared/utils';
-import { Avatar } from 'twenty-ui/display';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Avatar } from 'twenty-ui/primitives/data-display';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { REACT_APP_SERVER_BASE_URL } from '~/config';
-import { useRedirectToDefaultDomain } from '~/modules/domain-manager/hooks/useRedirectToDefaultDomain';
+import { useRedirectToDefaultDomain } from '@/domain-manager/hooks/useRedirectToDefaultDomain';
 
 type LogoProps = {
   primaryLogo?: string | null;
   secondaryLogo?: string | null;
   placeholder?: string | null;
   onClick?: () => void;
+  to?: AppPath;
 };
 
 const StyledContainer = styled.div`
@@ -46,9 +48,13 @@ const StyledSecondaryLogoContainer = styled.div`
 
 const StyledPrimaryLogo = styled.div`
   background-size: cover;
-  border-radius: ${themeCssVariables.border.radius.md};
   height: 100%;
   width: 100%;
+`;
+
+// OMNIA-CUSTOM: styles the workspace logo promoted to the main logo (below).
+const StyledPromotedWorkspaceLogo = styled(StyledPrimaryLogo)`
+  border-radius: ${themeCssVariables.border.radius.md};
 `;
 
 export const Logo = ({
@@ -56,6 +62,7 @@ export const Logo = ({
   secondaryLogo,
   placeholder,
   onClick,
+  to = AppPath.SignInUp,
 }: LogoProps) => {
   const { redirectToDefaultDomain } = useRedirectToDefaultDomain();
   const defaultPrimaryLogoUrl = `${window.location.origin}/images/icons/android/android-launchericon-192-192.png`;
@@ -74,47 +81,50 @@ export const Logo = ({
 
   const isUsingDefaultLogo = !isDefined(primaryLogo);
 
-  // OMNIA-CUSTOM: When a workspace logo exists, show it as the primary logo
-  // instead of the Twenty "20" icon with a small workspace logo overlay.
-  const effectivePrimaryLogoUrl =
-    isDefined(secondaryLogoUrl) && isUsingDefaultLogo
-      ? secondaryLogoUrl
-      : primaryLogoUrl;
-  const hideSecondaryLogo = isDefined(secondaryLogoUrl) && isUsingDefaultLogo;
+  // OMNIA-CUSTOM: Omnia brands sign-in with its own logo, so a workspace logo
+  // replaces the Twenty icon and its corner overlay.
+  const shouldPromoteWorkspaceLogo =
+    isUsingDefaultLogo && isDefined(secondaryLogoUrl);
+
+  if (shouldPromoteWorkspaceLogo) {
+    return (
+      <StyledContainer onClick={() => onClick?.()}>
+        <StyledPromotedWorkspaceLogo
+          style={{ backgroundImage: `url(${secondaryLogoUrl})` }}
+        />
+      </StyledContainer>
+    );
+  }
 
   return (
     <StyledContainer onClick={() => onClick?.()}>
-      {isUsingDefaultLogo && !hideSecondaryLogo ? (
-        <UndecoratedLink
-          to={AppPath.SignInUp}
-          onClick={redirectToDefaultDomain}
-        >
+      {isUsingDefaultLogo ? (
+        <UndecoratedLink to={to} onClick={() => redirectToDefaultDomain()}>
           <StyledPrimaryLogo
-            style={{ backgroundImage: `url(${effectivePrimaryLogoUrl})` }}
+            style={{ backgroundImage: `url(${primaryLogoUrl})` }}
           />
         </UndecoratedLink>
       ) : (
         <StyledPrimaryLogo
-          style={{ backgroundImage: `url(${effectivePrimaryLogoUrl})` }}
+          style={{ backgroundImage: `url(${primaryLogoUrl})` }}
         />
       )}
-      {!hideSecondaryLogo &&
-        (isDefined(secondaryLogoUrl) ? (
+      {isDefined(secondaryLogoUrl) ? (
+        <StyledSecondaryLogoContainer>
+          <StyledSecondaryLogo src={secondaryLogoUrl} />
+        </StyledSecondaryLogoContainer>
+      ) : (
+        isDefined(placeholder) && (
           <StyledSecondaryLogoContainer>
-            <StyledSecondaryLogo src={secondaryLogoUrl} />
+            <Avatar
+              size="lg"
+              name={placeholder}
+              shape="square"
+              colorSeed={getWorkspaceAvatarColorSeed(placeholder)}
+            />
           </StyledSecondaryLogoContainer>
-        ) : (
-          isDefined(placeholder) && (
-            <StyledSecondaryLogoContainer>
-              <Avatar
-                size="lg"
-                placeholder={placeholder}
-                type="squared"
-                placeholderColorSeed={placeholder}
-              />
-            </StyledSecondaryLogoContainer>
-          )
-        ))}
+        )
+      )}
     </StyledContainer>
   );
 };

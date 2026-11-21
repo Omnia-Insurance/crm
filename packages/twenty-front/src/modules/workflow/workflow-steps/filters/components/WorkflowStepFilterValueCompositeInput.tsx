@@ -7,16 +7,16 @@ import {
   type FieldRelationToOneValue,
   type FieldRelationValue,
 } from '@/object-record/record-field/ui/types/FieldMetadata';
-import { CURRENCIES } from '@/settings/data-model/constants/Currencies';
+import { useCurrencies } from '@/ui/input/components/internal/hooks/useCurrencies';
 import { WorkflowStepFilterContext } from '@/workflow/workflow-steps/filters/states/context/WorkflowStepFilterContext';
 import { WorkflowVariablePicker } from '@/workflow/workflow-variables/components/WorkflowVariablePicker';
 import { useContext } from 'react';
 import {
-  CoreObjectNameSingular,
+  StandardObjectNameSingular,
   FieldActorSource,
   type StepFilter,
 } from 'twenty-shared/types';
-import { type SelectOption } from 'twenty-ui/input';
+import { type SelectOption } from 'twenty-ui/primitives/input';
 import { type JsonValue } from 'type-fest';
 
 const ACTOR_SOURCE_OPTIONS: SelectOption[] = Object.values(
@@ -36,6 +36,7 @@ export const WorkflowStepFilterValueCompositeInput = ({
   onClear: () => void;
 }) => {
   const { readonly } = useContext(WorkflowStepFilterContext);
+  const currencies = useCurrencies();
   const { type: filterType, compositeFieldSubFieldName: subFieldName } =
     stepFilter;
 
@@ -63,7 +64,7 @@ export const WorkflowStepFilterValueCompositeInput = ({
             defaultValue={stepFilter.value}
             onChange={onChange}
             VariablePicker={WorkflowVariablePicker}
-            options={CURRENCIES}
+            options={currencies}
             readonly={readonly}
           />
         ) : subFieldName === 'amountMicros' ? (
@@ -101,7 +102,7 @@ export const WorkflowStepFilterValueCompositeInput = ({
           />
         ) : subFieldName === 'workspaceMemberId' ? (
           <FormRelationToOneFieldInput
-            objectNameSingular={CoreObjectNameSingular.WorkspaceMember}
+            objectNameSingular={StandardObjectNameSingular.WorkspaceMember}
             defaultValue={
               stepFilter.value as
                 | FieldRelationValue<FieldRelationToOneValue>

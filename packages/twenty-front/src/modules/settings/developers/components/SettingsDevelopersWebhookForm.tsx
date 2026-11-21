@@ -1,15 +1,18 @@
+import { ToastOnQueryErrorEffect } from '@/apollo/components/ToastOnQueryErrorEffect';
 import { Controller, FormProvider } from 'react-hook-form';
 
 import { SaveAndCancelButtons } from '@/settings/components/SaveAndCancelButtons/SaveAndCancelButtons';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
 import { type WebhookFormMode } from '@/settings/developers/constants/WebhookFormMode';
+import { SettingsDevelopersRoleSelector } from '@/settings/developers/components/SettingsDevelopersRoleSelector';
+import { SettingsDevelopersWebhookDefaultRoleEffect } from '@/settings/developers/components/SettingsDevelopersWebhookDefaultRoleEffect';
 import { useWebhookForm } from '@/settings/developers/hooks/useWebhookForm';
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { TextArea } from '@/ui/input/components/TextArea';
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { useModal } from '@/ui/layout/modal/hooks/useModal';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
+import { useDialog } from '@/ui/layout/dialog/hooks/useDialog';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
 import {
@@ -18,10 +21,11 @@ import {
   isDefined,
   isValidUrl,
 } from 'twenty-shared/utils';
-import { H2Title, IconTrash } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
+import { Section } from 'twenty-ui/components/layout';
+import { IconTrash } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
+import { SETTINGS_DEVELOPERS_TABS } from '@/settings/developers/constants/SettingsDevelopersTabs';
 import { SettingsDatabaseEventsForm } from '@/settings/components/SettingsDatabaseEventsForm';
 
 const DELETE_WEBHOOK_MODAL_ID = 'delete-webhook-modal';
@@ -37,7 +41,7 @@ export const SettingsDevelopersWebhookForm = ({
 }: SettingsDevelopersWebhookFormProps) => {
   const { t } = useLingui();
   const navigate = useNavigateSettings();
-  const { openModal } = useModal();
+  const { openDialog } = useDialog();
   const {
     formConfig,
     loading,
@@ -47,6 +51,7 @@ export const SettingsDevelopersWebhookForm = ({
     removeOperation,
     handleDelete,
     isCreationMode,
+    roles,
     error,
   } = useWebhookForm({ webhookId, mode });
 
@@ -61,8 +66,16 @@ export const SettingsDevelopersWebhookForm = ({
     }
   };
 
-  if ((loading && !isCreationMode) || isDefined(error)) {
-    return <SettingsSkeletonLoader />;
+  if (loading || isDefined(error)) {
+    return (
+      <>
+        <ToastOnQueryErrorEffect
+          error={error}
+          message={t`Failed to load webhook`}
+        />
+        <SettingsSkeletonLoader />
+      </>
+    );
   }
 
   const descriptionTextAreaId = `${webhookId}-description`;
@@ -72,17 +85,24 @@ export const SettingsDevelopersWebhookForm = ({
   return (
     // oxlint-disable-next-line react/jsx-props-no-spreading
     <FormProvider {...formConfig}>
-      <SubMenuTopBarContainer
+      <SettingsDevelopersWebhookDefaultRoleEffect
+        defaultRoleId={roles[0]?.id}
+      />
+      <SettingsPageLayout
         title={getTitle()}
-        reserveTitleSpace
         links={[
           {
             children: t`Workspace`,
-            href: getSettingsPath(SettingsPath.Workspace),
+            href: getSettingsPath(SettingsPath.General),
           },
           {
-            children: t`APIs & Webhooks`,
-            href: getSettingsPath(SettingsPath.ApiWebhooks),
+            children: t`Developers`,
+            href: getSettingsPath(
+              SettingsPath.Developers,
+              undefined,
+              undefined,
+              SETTINGS_DEVELOPERS_TABS.TABS_IDS.WEBHOOKS,
+            ),
           },
           { children: isCreationMode ? t`New` : getTitle() },
         ]}
@@ -90,14 +110,22 @@ export const SettingsDevelopersWebhookForm = ({
           <SaveAndCancelButtons
             isSaveDisabled={!canSave}
             isCancelDisabled={formConfig.formState.isSubmitting}
-            onCancel={() => navigate(SettingsPath.ApiWebhooks)}
+            onCancel={() =>
+              navigate(
+                SettingsPath.Developers,
+                undefined,
+                undefined,
+                undefined,
+                SETTINGS_DEVELOPERS_TABS.TABS_IDS.WEBHOOKS,
+              )
+            }
             onSave={formConfig.handleSubmit(handleSave)}
           />
         }
       >
         <SettingsPageContainer>
-          <Section>
-            <H2Title
+          <Section.Root>
+            <Section.Header
               title={t`Endpoint URL`}
               description={t`We will send a POST request to this endpoint for each new event in application/json format`}
             />
@@ -121,9 +149,9 @@ export const SettingsDevelopersWebhookForm = ({
                 );
               }}
             />
-          </Section>
-          <Section>
-            <H2Title
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
               title={t`Description`}
               description={t`We will send a POST request to this endpoint for each new event in application/json format.`}
             />
@@ -135,14 +163,15 @@ export const SettingsDevelopersWebhookForm = ({
                   textAreaId={descriptionTextAreaId}
                   placeholder={t`Write a description`}
                   minRows={4}
+                  maxRows={5}
                   value={value || ''}
                   onChange={onChange}
                 />
               )}
             />
-          </Section>
-          <Section>
-            <H2Title
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
               title={t`Filters`}
               description={t`Select the events you wish to send to this endpoint`}
             />
@@ -157,9 +186,26 @@ export const SettingsDevelopersWebhookForm = ({
                 />
               )}
             />
-          </Section>
-          <Section>
-            <H2Title
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
+              title={t`Role`}
+              description={t`The role attached to this webhook.`}
+            />
+            <Controller
+              name="roleId"
+              control={formConfig.control}
+              render={({ field: { onChange, value } }) => (
+                <SettingsDevelopersRoleSelector
+                  value={value}
+                  onChange={onChange}
+                  roles={roles}
+                />
+              )}
+            />
+          </Section.Root>
+          <Section.Root>
+            <Section.Header
               title={t`Secret`}
               description={t`Optional secret used to compute the HMAC signature for webhook payloads`}
             />
@@ -176,29 +222,28 @@ export const SettingsDevelopersWebhookForm = ({
                 />
               )}
             />
-          </Section>
+          </Section.Root>
           {!isCreationMode && (
-            <Section>
-              <H2Title
+            <Section.Root>
+              <Section.Header
                 title={t`Danger zone`}
                 description={t`Delete this webhook`}
               />
               <Button
-                accent="danger"
-                variant="secondary"
-                title={t`Delete`}
-                Icon={IconTrash}
-                onClick={() => openModal(DELETE_WEBHOOK_MODAL_ID)}
-              />
-            </Section>
+                startIcon={<IconTrash />}
+                onClick={() => openDialog(DELETE_WEBHOOK_MODAL_ID)}
+                variant="outline"
+                color="danger"
+              >{t`Delete`}</Button>
+            </Section.Root>
           )}
         </SettingsPageContainer>
-      </SubMenuTopBarContainer>
+      </SettingsPageLayout>
       {!isCreationMode && (
-        <ConfirmationModal
+        <ConfirmationDialog
           confirmationPlaceholder={t`yes`}
           confirmationValue={t`yes`}
-          modalInstanceId={DELETE_WEBHOOK_MODAL_ID}
+          dialogId={DELETE_WEBHOOK_MODAL_ID}
           title={t`Delete webhook`}
           subtitle={
             <Trans>

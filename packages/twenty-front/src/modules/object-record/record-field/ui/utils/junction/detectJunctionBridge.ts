@@ -1,167 +1,112 @@
+import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
-import { type EnrichedObjectMetadataItem as ObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { getJoinColumnName } from '@/object-record/record-field/ui/utils/junction/getJoinColumnName';
-import { getJunctionConfig } from '@/object-record/record-field/ui/utils/junction/getJunctionConfig';
 import { getSourceJoinColumnName } from '@/object-record/record-field/ui/utils/junction/getSourceJoinColumnName';
-import { hasJunctionConfig } from '@/object-record/record-field/ui/utils/junction/hasJunctionConfig';
+import { getTargetObjectMetadataIdsFromField } from '@/object-record/record-field/ui/utils/junction/getTargetObjectMetadataIdsFromField';
+import { isUsableJunctionConfig } from '@/object-record/record-field/ui/utils/junction/isUsableJunctionConfig';
+import { resolveJunctionConfig } from '@/object-record/record-field/ui/utils/junction/resolveJunctionConfig';
 import { FieldMetadataType } from 'twenty-shared/types';
-import { isDefined } from 'twenty-shared/utils';
+import {
+  computeRelationGqlFieldJoinColumnName,
+  isDefined,
+} from 'twenty-shared/utils';
 import { RelationType } from '~/generated-metadata/graphql';
 
-export type JunctionBridgeDetection = {
+export type JunctionBridge = {
   junctionObjectNameSingular: string;
   sourceJoinColumnName: string;
   targetJoinColumnName: string;
   parentFieldName: string;
 };
 
-// Checks relation type from either field.relation.type or field.settings.relationType
-// as a fallback when the relation resolver returns null.
-const isRelationType = (
-  field: FieldMetadataItem,
-  type: RelationType,
-): boolean =>
-  field.relation?.type === type ||
-  (field.settings as Record<string, unknown> | null)?.relationType === type;
+const isRelationFieldOfType = (
+  fieldMetadataItem: FieldMetadataItem,
+  relationType: RelationType,
+) =>
+  fieldMetadataItem.type === FieldMetadataType.RELATION &&
+  fieldMetadataItem.relation?.type === relationType;
 
-// Resolves the target object metadata ID for a relation field.
-// Uses the relation resolver first, falling back to inverse relation search.
-const getTargetObjectId = (
-  field: FieldMetadataItem,
-  objectMetadataItems: ObjectMetadataItem[],
-): string | undefined => {
-  if (isDefined(field.relation?.targetObjectMetadata?.id)) {
-    return field.relation.targetObjectMetadata.id;
-  }
-
-  // Last resort: search for an inverse relation field across all objects
-  // that references this field as its target.
-  for (const obj of objectMetadataItems) {
-    for (const otherField of obj.fields) {
-      if (
-        otherField.type === FieldMetadataType.RELATION &&
-        otherField.relation?.targetFieldMetadata.id === field.id
-      ) {
-        return obj.id;
-      }
-    }
-  }
-
-  return undefined;
-};
-
+// Finds the junction that bridges a relation through a to-one sibling:
+// Policy.product -> Product is reachable from Policy.carrier -> Carrier
+// through Carrier.carrierProducts -> CarrierProduct.product.
 export const detectJunctionBridge = ({
   objectMetadataItem,
   fieldMetadataItem,
   objectMetadataItems,
 }: {
-  objectMetadataItem: ObjectMetadataItem;
+  objectMetadataItem: EnrichedObjectMetadataItem;
   fieldMetadataItem: FieldMetadataItem;
-  objectMetadataItems: ObjectMetadataItem[];
-}): JunctionBridgeDetection | undefined => {
-  const fieldTargetObjectId = getTargetObjectId(
-    fieldMetadataItem,
-    objectMetadataItems,
-  );
+  objectMetadataItems: EnrichedObjectMetadataItem[];
+}): JunctionBridge | undefined => {
+  const [fieldTargetObjectMetadataId] =
+    getTargetObjectMetadataIdsFromField(fieldMetadataItem);
 
-  if (!isDefined(fieldTargetObjectId)) {
+  if (
+    fieldMetadataItem.type !== FieldMetadataType.RELATION ||
+    !isDefined(fieldTargetObjectMetadataId)
+  ) {
     return undefined;
   }
 
-  // Find sibling MANY_TO_ONE fields on the same object.
-  // Uses both relation.type and settings.relationType for robustness.
   const siblingManyToOneFields = objectMetadataItem.fields.filter(
     (field) =>
       field.id !== fieldMetadataItem.id &&
-      field.type === FieldMetadataType.RELATION &&
-      isRelationType(field, RelationType.MANY_TO_ONE),
+      isRelationFieldOfType(field, RelationType.MANY_TO_ONE),
   );
 
   for (const siblingField of siblingManyToOneFields) {
-    const siblingTargetObjectId = getTargetObjectId(
-      siblingField,
-      objectMetadataItems,
+    const [parentObjectMetadataId] =
+      getTargetObjectMetadataIdsFromField(siblingField);
+
+    const parentObjectMetadataItem = objectMetadataItems.find(
+      ({ id }) => id === parentObjectMetadataId,
     );
 
-    if (!isDefined(siblingTargetObjectId)) {
+    if (!isDefined(parentObjectMetadataItem)) {
       continue;
     }
 
-    const siblingTargetObject = objectMetadataItems.find(
-      (item) => item.id === siblingTargetObjectId,
-    );
-
-    if (!isDefined(siblingTargetObject)) {
-      continue;
-    }
-
-    for (const targetField of siblingTargetObject.fields) {
+    for (const parentField of parentObjectMetadataItem.fields) {
       if (
-        targetField.type !== FieldMetadataType.RELATION ||
-        !isRelationType(targetField, RelationType.ONE_TO_MANY)
+        !isRelationFieldOfType(parentField, RelationType.ONE_TO_MANY) ||
+        !isDefined(parentField.relation)
       ) {
         continue;
       }
 
-      if (!hasJunctionConfig(targetField.settings)) {
-        continue;
-      }
-
-      const relationObjectMetadataId = getTargetObjectId(
-        targetField,
-        objectMetadataItems,
-      );
-
-      if (!isDefined(relationObjectMetadataId)) {
-        continue;
-      }
-
-      const junctionConfig = getJunctionConfig({
-        settings: targetField.settings,
-        relationObjectMetadataId,
-        sourceObjectMetadataId: siblingTargetObjectId,
+      const junctionConfig = resolveJunctionConfig({
+        settings: parentField.settings,
+        relationObjectMetadataId: parentField.relation.targetObjectMetadata.id,
+        relationTargetFieldMetadataId:
+          parentField.relation.targetFieldMetadata.id,
+        sourceObjectMetadataId: parentObjectMetadataItem.id,
         objectMetadataItems,
       });
 
-      if (!isDefined(junctionConfig) || junctionConfig.isMorphRelation) {
+      if (
+        !isUsableJunctionConfig(junctionConfig) ||
+        junctionConfig.isMorphRelation ||
+        !isDefined(junctionConfig.sourceField)
+      ) {
         continue;
       }
 
-      const firstTargetField = junctionConfig.targetFields[0];
-
-      if (!isDefined(firstTargetField)) {
-        continue;
-      }
-
-      const junctionTargetObjectId = getTargetObjectId(
-        firstTargetField,
-        objectMetadataItems,
-      );
-
-      if (junctionTargetObjectId !== fieldTargetObjectId) {
-        continue;
-      }
-
-      const { sourceField } = junctionConfig;
+      const [junctionTargetField] = junctionConfig.targetFields;
 
       if (
-        !isDefined(sourceField) ||
-        !isDefined(junctionConfig.junctionObjectMetadata)
+        !isDefined(junctionTargetField) ||
+        !getTargetObjectMetadataIdsFromField(junctionTargetField).includes(
+          fieldTargetObjectMetadataId,
+        )
       ) {
         continue;
       }
 
       const sourceJoinColumnName = getSourceJoinColumnName({
-        sourceField,
-        sourceObjectMetadata: siblingTargetObject,
+        sourceField: junctionConfig.sourceField,
+        sourceObjectMetadata: parentObjectMetadataItem,
       });
 
-      const targetJoinColumnName = getJoinColumnName(firstTargetField.settings);
-
-      if (
-        !isDefined(sourceJoinColumnName) ||
-        !isDefined(targetJoinColumnName)
-      ) {
+      if (!isDefined(sourceJoinColumnName)) {
         continue;
       }
 
@@ -169,7 +114,9 @@ export const detectJunctionBridge = ({
         junctionObjectNameSingular:
           junctionConfig.junctionObjectMetadata.nameSingular,
         sourceJoinColumnName,
-        targetJoinColumnName,
+        targetJoinColumnName: computeRelationGqlFieldJoinColumnName({
+          name: junctionTargetField.name,
+        }),
         parentFieldName: siblingField.name,
       };
     }

@@ -1,3 +1,9 @@
+{{- /*
+OMNIA-CUSTOM: owns schema upgrades (server pods set DISABLE_DB_MIGRATIONS). Only upgrade, never the forced
+instance-commands runner: it records fast commands per workspace, so upgrade then skips every slow and workspace command.
+Env mirrors deployment-server.yaml, storage env included (upgrade commands use file storage).
+Pre-upgrade only: a first install (new cluster, DR, staging) needs the one-off upgrade pod before helm install.
+*/}}
 {{- if .Values.server.enabled }}
 apiVersion: batch/v1
 kind: Job
@@ -14,7 +20,7 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: 3600
   template:
     metadata:
       labels:
@@ -22,16 +28,17 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: migration
     spec:
-      {{- with .Values.server.nodeSelector | default .Values.nodeSelector }}
+      serviceAccountName: {{ include "twenty.serviceAccountName" . }}
+      securityContext:
+{{- toYaml .Values.securityContext | nindent 8 }}
+      {{- with .Values.server.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.server.tolerations | default .Values.tolerations }}
+      {{- with .Values.server.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      securityContext:
-{{- toYaml .Values.securityContext | nindent 8 }}
       restartPolicy: Never
       initContainers:
         - name: wait-for-db
@@ -47,36 +54,8 @@ spec:
                 sleep 2
               done
               echo "Database socket is ready!"
-        {{- if .Values.db.enabled }}
-        - name: ensure-database-exists
-          image: postgres:16-alpine
-          env:
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.fullname" . }}-db-superuser
-                  key: password
-            - name: APP_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.fullname" . }}-db-url
-                  key: appPassword
-          command:
-            - sh
-            - -c
-            - |
-              DBNAME={{ .Values.db.internal.database | default "twenty" }}
-              APP_USER={{ .Values.db.internal.appUser | default "twenty_app_user" }}
-              DB_HOST={{ include "twenty.fullname" . }}-db
-              export PGPASSWORD
-              export APP_PASSWORD
-              echo "Creating database ${DBNAME} if it doesn't exist..."
-              psql -h ${DB_HOST} -p 5432 -U postgres -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname = '${DBNAME}'" | grep -q 1 || \
-              psql -h ${DB_HOST} -p 5432 -U postgres -d postgres -c "CREATE DATABASE ${DBNAME};"
-              echo "Database ${DBNAME} is ready."
-        {{- end }}
       containers:
-        - name: run-migrations
+        - name: upgrade
           {{- $img := include "twenty.server.image" . }}
           image: {{ include "twenty.image.repository" $img }}:{{ include "twenty.image.tag" $img }}
           imagePullPolicy: {{ include "twenty.image.pullPolicy" $img }}
@@ -84,19 +63,14 @@ spec:
             - sh
             - -c
             - >-
-              cd /app/packages/twenty-server &&
-              node /app/node_modules/typeorm/cli.js migration:run -d /app/packages/twenty-server/dist/database/typeorm/core/core.datasource &&
-              node /app/packages/twenty-server/dist/command/command.js run-instance-commands --force
+              node dist/command/command.js omnia:run-legacy-typeorm-migrations &&
+              node dist/command/command.js cache:flush &&
+              node dist/command/command.js upgrade &&
+              node dist/command/command.js cache:flush
           env:
-            {{- if .Values.db.enabled }}
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "twenty.fullname" . }}-db-superuser
-                  key: password
-            - name: PG_DATABASE_URL
-              value: "postgres://postgres:$(PGPASSWORD)@{{ include "twenty.fullname" . }}-db.{{ include "twenty.namespace" . }}.svc.cluster.local/{{ .Values.db.internal.database | default "twenty" }}"
-            {{- else if eq (include "twenty.db.useExternalSecret" .) "true" }}
+            - name: SERVER_URL
+              value: {{ include "twenty.serverUrl" . | quote }}
+            {{- if eq (include "twenty.db.useExternalSecret" .) "true" }}
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -123,16 +97,26 @@ spec:
             {{- end }}
             - name: REDIS_URL
               value: {{ include "twenty.redisUrl" . | quote }}
+            - name: SIGN_IN_PREFILLED
+              value: {{ .Values.server.env.SIGN_IN_PREFILLED | quote }}
+            - name: STORAGE_TYPE
+              value: {{ include "twenty.storageType" . | quote }}
+            - name: ACCESS_TOKEN_EXPIRES_IN
+              value: {{ .Values.server.env.ACCESS_TOKEN_EXPIRES_IN | quote }}
+            - name: LOGIN_TOKEN_EXPIRES_IN
+              value: {{ .Values.server.env.LOGIN_TOKEN_EXPIRES_IN | quote }}
             - name: APP_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "twenty.secret.tokens.name" . }}
                   key: accessToken
+            {{- $storageEnv := (include "twenty.storageEnv" .) }}
+            {{- if $storageEnv }}
+            {{- $storageEnv | nindent 12 }}
+            {{- end }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
+            {{- toYaml .Values.server.resources | nindent 12 }}
 {{- end }}

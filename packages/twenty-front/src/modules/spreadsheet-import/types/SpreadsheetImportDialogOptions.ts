@@ -9,9 +9,7 @@ import { type SpreadsheetImportTableHook } from '@/spreadsheet-import/types/Spre
 import { type SpreadsheetImportStep } from '@/spreadsheet-import/steps/types/SpreadsheetImportStep';
 
 export type SpreadsheetImportDialogOptions = {
-  // callback when RSI is closed before final submit
   onClose: () => void;
-  // Field description for requested data
   spreadsheetImportFields: SpreadsheetImportFields;
   // Runs after file upload step, receives and returns raw sheet data
   uploadStepHook?: (importedRows: ImportedRow[]) => Promise<ImportedRow[]>;
@@ -30,44 +28,32 @@ export type SpreadsheetImportDialogOptions = {
   rowHook?: SpreadsheetImportRowHook;
   // Runs after column matching and on entry change
   tableHook?: SpreadsheetImportTableHook;
-  // Function called after user finishes the flow
   onSubmit: (
     validationResult: SpreadsheetImportImportValidationResult,
     file: File,
   ) => Promise<void>;
-  // Function called when user aborts the importing flow
   onAbortSubmit?: () => void;
   // Allows submitting with errors. Default: true
   allowInvalidSubmit?: boolean;
-  // Theme configuration passed to underlying Chakra-UI
   customTheme?: object;
-  // Specifies maximum number of rows for a single import
   maxRecords?: number;
-  // Maximum upload filesize (in bytes)
   maxFileSize?: number;
   // Automatically map imported headers to specified fields if possible. Default: true
   autoMapHeaders?: boolean;
   // Headers matching accuracy: 1 for strict and up for more flexible matching
   autoMapDistance?: number;
-  // Initial Step state to be rendered on load
   initialStepState?: SpreadsheetImportStep;
   // Sets SheetJS dateNF option. If date parsing is applied, date will be formatted e.g. "yyyy-mm-dd hh:mm:ss", "m/d/yy h:mm", 'mmm-yy', etc.
   dateFormat?: string;
   // Sets SheetJS "raw" option. If true, parsing will only be applied to xlsx date fields.
   parseRaw?: boolean;
-  // Use for right-to-left (RTL) support
   rtl?: boolean;
-  // Allow header selection
   selectHeader?: boolean;
-  // Available field for import
   availableFieldMetadataItems: FieldMetadataItem[];
-  // OMNIA-CUSTOM: Allow multiple XLSX columns to map to the same target field.
-  // Used by reconciliation where broker + policy dates both map to CRM dates.
+  // OMNIA-CUSTOM: payment reconciliation lets two columns share a field, gets
+  // the chosen sheet back, and pre-fills matches from the carrier's saved
+  // header -> SpreadsheetImportField.key map before Fuse runs.
   allowDuplicateFieldMatching?: boolean;
-  // OMNIA-CUSTOM: Called when the user selects a sheet in a multi-sheet workbook.
   onSheetSelected?: (sheetName: string) => void;
-  // OMNIA-CUSTOM: Pre-computed column→field matches from a saved mapping.
-  // Applied before Fuse.js auto-matching for pre-fill on subsequent runs.
-  // Keys are XLSX column headers, values are SpreadsheetImportField.key values.
   precomputedMatches?: Record<string, string>;
 };

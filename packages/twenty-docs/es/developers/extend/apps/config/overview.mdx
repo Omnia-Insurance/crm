@@ -1,0 +1,65 @@
+---
+title: Resumen
+description: "Configura la propia app: su identidad, los permisos predeterminados y lo que se ejecuta en el momento de la instalación."
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Qué cubre la capa de configuración
+
+La **capa de configuración** de una app de Twenty es lo que describe la app *a la plataforma*: su identidad, los permisos que posee y el código que se ejecuta durante la instalación o la actualización. Estas declaraciones no añaden nuevas estructuras de datos ni comportamiento en tiempo de ejecución; le indican a Twenty *quién es la app* y *cómo configurarla*.
+
+```text
+┌────────────────────────────────────────────────────────┐
+│ Application — identity, default role, variables,       │
+│               marketplace metadata                     │
+│                                                        │
+│   ┌──────────────────────────────────────────────────┐ │
+│   │ Role — what the app's logic functions can read   │ │
+│   │ and write (referenced by Application)            │ │
+│   └──────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────┘
+                          │
+                          ▼  (at install / upgrade time)
+       ┌──────────────────────────────────┐
+       │ Pre-install hook                 │  before metadata migration
+       └──────────────────────────────────┘
+       ┌──────────────────────────────────┐
+       │ Post-install hook                │  after metadata migration
+       └──────────────────────────────────┘
+                          │
+                          ▼  (at uninstall time)
+       ┌──────────────────────────────────┐
+       │ Uninstall hook                   │  before app removal
+       └──────────────────────────────────┘
+```
+
+## En esta sección
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/es/developers/extend/apps/config/application" img="/images/user-guide/halftone/card-page-application-config.svg">
+    <CardTitle>Configuración de la aplicación</CardTitle>
+    `defineApplication` — identidad, rol predeterminado, variables, metadatos del mercado.
+  </Card>
+  <Card href="/es/developers/extend/apps/config/roles" img="/images/user-guide/halftone/card-page-roles.svg">
+    <CardTitle>Roles & Permissions</CardTitle>
+    `defineRole` — declara lo que las funciones lógicas de tu aplicación pueden leer y escribir.
+  </Card>
+  <Card href="/es/developers/extend/apps/config/install-hooks" img="/images/user-guide/halftone/card-page-install-hooks.svg">
+    <CardTitle>Install Hooks</CardTitle>
+    `definePreInstallLogicFunction`, `definePostInstallLogicFunction`, y `defineUninstallLogicFunction` — copia de seguridad de datos, valores predeterminados de semilla, validar actualizaciones, limpiar al eliminar.
+  </Card>
+</CardGroup>
+
+## Cómo se relacionan las piezas
+
+* **Application** es el punto de entrada. Cada app tiene exactamente una llamada a `defineApplication()`, y apunta a un **Role** como su valor predeterminado.
+* El **Role** controla qué pueden leer y escribir las funciones lógicas y los componentes de interfaz de la app. Sigue el principio de privilegios mínimos: concede solo los permisos que tu código realmente necesita.
+* Los **hooks de instalación** se ejecutan durante la instalación o la actualización: el hook de preinstalación antes de la migración de metadatos (para poder rechazar una actualización arriesgada) y el hook de postinstalación después de la migración (para poder cargar datos predeterminados con el nuevo esquema). El hook de desinstalación se ejecuta justo antes de que se elimine la aplicación, por lo que puede limpiar recursos externos mientras los datos de la aplicación siguen siendo legibles.
+
+<Note>
+Los hooks de instalación comparten el entorno de ejecución de la [función lógica](/es/developers/extend/apps/logic/logic-functions): misma firma del handler, mismas variables de entorno, mismo cliente de API tipado, pero se declaran con sus propias funciones de definición y viven fuera del modelo de triggers habitual (HTTP, cron, eventos de base de datos).
+</Note>
+
+<PageBanner illustration="section-apps-config" />

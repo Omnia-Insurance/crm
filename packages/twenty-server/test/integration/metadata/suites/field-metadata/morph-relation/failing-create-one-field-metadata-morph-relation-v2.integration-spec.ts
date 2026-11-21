@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { type CreateOneFieldFactoryInput } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata-query-factory.util';
 import { createOneFieldMetadata } from 'test/integration/metadata/suites/field-metadata/utils/create-one-field-metadata.util';
 import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
 import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
@@ -19,11 +20,8 @@ type FailingTestCases = EachTestingContext<
     createdObjectMetadataPersonId: string;
     createdObjectMetadataOpportunityId: string;
     createdObjectMetadataCompanyId: string;
-  }) => Omit<
-    CreateFieldInput,
-    'morphRelationsCreationPayload' | 'workspaceId'
-  > &
-    Required<Pick<CreateFieldInput, 'morphRelationsCreationPayload'>>
+  }) => CreateOneFieldFactoryInput &
+    Required<Pick<CreateOneFieldFactoryInput, 'morphRelationsCreationPayload'>>
 >[];
 
 const morphCreationPayloadMalformedFailingTestCases: FailingTestCases = [
@@ -309,7 +307,7 @@ const relationCreationPayloadEdgeCasesFailingTestsCases: FailingTestCases = [
           targetFieldIcon: 'Icon123',
           targetFieldLabel: 'test',
           targetObjectMetadataId: createdObjectMetadataOpportunityId,
-          type: undefined as unknown as RelationType,
+          type: undefined,
         },
       ],
     }),
@@ -446,7 +444,7 @@ describe('failing createOne FieldMetadataService morph relation fields v2', () =
     },
   );
 
-  describe('Morh relation collision tests suite', () => {
+  describe('Morph relation collision tests suite', () => {
     beforeAll(async () => {
       const morphRelationCreateFieldInput: Omit<
         CreateFieldInput,
@@ -502,7 +500,7 @@ describe('failing createOne FieldMetadataService morph relation fields v2', () =
       expect(firstError.extensions.code).not.toBe('INTERNAL_SERVER_ERROR');
     });
 
-    it('it should fail to create a already existing morph relation with samefield', async () => {
+    it('it should fail to create a already existing morph relation with same field', async () => {
       const morphRelationCreateFieldInput: Omit<
         CreateFieldInput,
         'workspaceId'

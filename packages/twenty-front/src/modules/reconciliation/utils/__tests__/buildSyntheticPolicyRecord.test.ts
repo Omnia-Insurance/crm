@@ -1,12 +1,6 @@
-// OMNIA-CUSTOM: tests for the config-driven client status fallback (OMN-12
-// tuning depth — multi-carrier audit 2026-06-11 §"Config-driven client status
-// fallback for the create-policy flow"). Contract under test:
-//   - omitting statusConfig reproduces the legacy hardcoded behavior
-//     bit-for-bit (threshold 30, legacy Ambetter snapshot keys);
-//   - statusConfig.placedThresholdDays replaces the hardcoded 30;
-//   - statusConfig.fieldMapping (status-engine role → row key) resolves the
-//     engine inputs ahead of the crmField/legacy path, with present-in-
-//     snapshot precedence so pre-mapping snapshots fall through unchanged.
+// Config-driven client status fallback (OMN-12): no statusConfig keeps the legacy threshold
+// and Ambetter keys; placedThresholdDays replaces 30; a fieldMapping key wins only when the
+// snapshot carries it.
 
 import {
   buildSyntheticPolicyRecord,

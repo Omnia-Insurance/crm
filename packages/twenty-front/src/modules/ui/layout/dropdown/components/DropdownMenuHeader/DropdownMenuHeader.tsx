@@ -1,13 +1,18 @@
 import { styled } from '@linaria/react';
 import { type ComponentProps, type MouseEvent } from 'react';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledHeader = styled.li`
   align-items: center;
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
-  border-top-left-radius: ${themeCssVariables.border.radius.sm};
-  border-top-right-radius: ${themeCssVariables.border.radius.sm};
+  border-top-left-radius: calc(
+    ${themeCssVariables.border.radius.md} - ${themeCssVariables.spacing[1]}
+  );
+  border-top-right-radius: calc(
+    ${themeCssVariables.border.radius.md} - ${themeCssVariables.spacing[1]}
+  );
+  box-sizing: content-box;
   color: ${themeCssVariables.font.color.primary};
   cursor: ${({ onClick }) => (onClick ? 'pointer' : 'default')};
   display: flex;
@@ -35,24 +40,11 @@ const StyledChildrenWrapper = styled.span`
   white-space: nowrap;
 `;
 
-const StyledEndComponent = styled.div`
-  color: ${themeCssVariables.font.color.tertiary};
-  display: inline-flex;
-  margin-left: auto;
-  margin-right: 0;
-
-  & > svg {
-    height: ${themeCssVariables.icon.size.md}px;
-    width: ${themeCssVariables.icon.size.md}px;
-  }
-`;
-
 type DropdownMenuHeaderProps = ComponentProps<'li'> & {
   onClick?: (event: MouseEvent<HTMLLIElement>) => void;
   testId?: string;
   className?: string;
   StartComponent?: React.ReactNode;
-  EndComponent?: React.ReactNode;
 };
 
 export const DropdownMenuHeader = ({
@@ -61,15 +53,11 @@ export const DropdownMenuHeader = ({
   onClick,
   testId,
   className,
-  EndComponent,
 }: DropdownMenuHeaderProps) => {
   return (
     <StyledHeader data-testid={testId} className={className} onClick={onClick}>
       {isDefined(StartComponent) && StartComponent}
       <StyledChildrenWrapper>{children}</StyledChildrenWrapper>
-      {isDefined(EndComponent) && (
-        <StyledEndComponent>{EndComponent}</StyledEndComponent>
-      )}
     </StyledHeader>
   );
 };

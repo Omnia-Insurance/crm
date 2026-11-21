@@ -9,6 +9,7 @@ import { type ObjectMetadataMinimalInformation } from 'src/engine/metadata-modul
 import { ObjectMetadataExceptionCode } from 'src/engine/metadata-modules/object-metadata/object-metadata.exception';
 import { IDENTIFIER_MIN_CHAR_LENGTH } from 'src/engine/metadata-modules/utils/constants/identifier-min-char-length.constants';
 import { type UniversalFlatObjectMetadata } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/types/universal-flat-object-metadata.type';
+import { camelCase } from 'src/utils/camel-case';
 
 const STARTS_WITH_LOWER_CASE_AND_CONTAINS_ONLY_CAPS_AND_LOWER_LETTERS_AND_NUMBER_STRING_REGEX =
   /^[a-z][a-zA-Z0-9]*$/;
@@ -20,9 +21,7 @@ export const validateFlatObjectMetadataNames = ({
   ObjectMetadataMinimalInformation) => {
   const errors: FlatObjectMetadataValidationError[] = [];
 
-  // Validate both nameSingular and namePlural
   for (const name of [nameSingular, namePlural]) {
-    // Length too long check
     if (name.length > IDENTIFIER_MAX_CHAR_LENGTH) {
       errors.push({
         code: ObjectMetadataExceptionCode.INVALID_OBJECT_INPUT,
@@ -32,7 +31,6 @@ export const validateFlatObjectMetadataNames = ({
       });
     }
 
-    // Length too short check
     if (name.length < IDENTIFIER_MIN_CHAR_LENGTH) {
       errors.push({
         code: ObjectMetadataExceptionCode.INVALID_OBJECT_INPUT,
@@ -42,7 +40,6 @@ export const validateFlatObjectMetadataNames = ({
       });
     }
 
-    // Format check
     if (
       !name.match(
         STARTS_WITH_LOWER_CASE_AND_CONTAINS_ONLY_CAPS_AND_LOWER_LETTERS_AND_NUMBER_STRING_REGEX,
@@ -54,9 +51,18 @@ export const validateFlatObjectMetadataNames = ({
         userFriendlyMessage: msg`Name is not valid: it must start with lowercase letter and contain only alphanumeric letters`,
         value: name,
       });
+    } else if (camelCase(name) !== name) {
+      // GraphQL resolver and type names are derived through camelCase
+      const camelCasedName = camelCase(name);
+
+      errors.push({
+        code: ObjectMetadataExceptionCode.INVALID_OBJECT_INPUT,
+        message: `Name is not valid: it must be camelCase, e.g. "${camelCasedName}"`,
+        userFriendlyMessage: msg`Name is not valid: it must be camelCase, e.g. "${camelCasedName}"`,
+        value: name,
+      });
     }
 
-    // Reserved keywords check
     if (RESERVED_METADATA_NAME_KEYWORDS.includes(name)) {
       errors.push({
         code: ObjectMetadataExceptionCode.INVALID_OBJECT_INPUT,
@@ -67,7 +73,6 @@ export const validateFlatObjectMetadataNames = ({
     }
   }
 
-  // Check if names are identical
   const namesAreIdentical =
     namePlural.trim().toLowerCase() === nameSingular.trim().toLowerCase();
 

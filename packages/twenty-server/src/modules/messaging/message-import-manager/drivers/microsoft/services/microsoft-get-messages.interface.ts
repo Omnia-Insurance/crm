@@ -1,3 +1,5 @@
+import { type MicrosoftGraphMessageAttachment } from 'src/modules/messaging/message-import-manager/drivers/microsoft/types/microsoft-graph-message-attachment.type';
+
 export interface MicrosoftGraphBatchResponse {
   responses: {
     id: string;
@@ -13,12 +15,13 @@ export interface MicrosoftGraphBatchResponse {
       createdDateTime?: string;
       lastModifiedDateTime?: string;
       changeKey?: string;
-      // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       categories?: any[];
       receivedDateTime?: string;
       sentDateTime?: string;
       hasAttachments?: boolean;
       internetMessageId?: string;
+      internetMessageHeaders?: { name: string; value: string }[];
       subject?: string;
       bodyPreview?: string;
       importance?: string;
@@ -41,6 +44,7 @@ export interface MicrosoftGraphBatchResponse {
           address?: string;
         };
       };
+      attachments?: MicrosoftGraphMessageAttachment[];
     };
   }[];
 }

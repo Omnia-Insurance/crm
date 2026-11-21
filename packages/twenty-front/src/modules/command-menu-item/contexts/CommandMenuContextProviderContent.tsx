@@ -1,27 +1,53 @@
+import { useGlobalRecordCreationCommandMenuItems } from '@/command-menu-item/hooks/useGlobalRecordCreationCommandMenuItems';
+import { CommandMenuItemContainerType } from '@/command-menu-item/types/CommandMenuItemContainerType';
 import {
   CommandMenuContext,
   type CommandMenuContextType,
 } from '@/command-menu-item/contexts/CommandMenuContext';
 import { commandMenuItemsDraftState } from '@/command-menu-item/edit/states/commandMenuItemsDraftState';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
-// OMNIA-CUSTOM: import resolvers for object-aware labels and permission gate
-import { resolveCreateRecordActionLabels } from '@/command-menu-item/utils/resolveCreateRecordActionLabels';
-import { resolveGoToActionLabels } from '@/command-menu-item/utils/resolveGoToActionLabels';
+import { doesCommandMenuItemMatchCoreObjectName } from '@/command-menu-item/utils/doesCommandMenuItemMatchCoreObjectName';
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
+import { resolveCommandMenuItemPinning } from '@/command-menu-item/utils/resolveCommandMenuItemPinning';
+import { doesCommandMenuItemMatchObjectContext } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectContext';
 import { doesCommandMenuItemMatchPageType } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageType';
 import { doesCommandMenuItemMatchSelectionState } from '@/command-menu-item/utils/doesCommandMenuItemMatchSelectionState';
-import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
-import { currentPageLayoutIdState } from '@/page-layout/states/currentPageLayoutIdState';
-import { usePermissionFlagMap } from '@/settings/roles/hooks/usePermissionFlagMap';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
-import { useMemo } from 'react';
-import { type CommandMenuContextApi } from 'twenty-shared/types';
-import { evaluateConditionalAvailabilityExpression } from 'twenty-shared/utils';
+import { getCommandMenuContextApiForContainerType } from '@/command-menu-item/utils/getCommandMenuContextApiForContainerType';
+import { mergeGlobalRecordCreationCommandMenuItems } from '@/command-menu-item/utils/mergeGlobalRecordCreationCommandMenuItems';
+import { useIsLayoutCustomizationAllowedOnCurrentPage } from '@/layout-customization/hooks/useIsLayoutCustomizationAllowedOnCurrentPage';
 import {
-  EngineComponentKey,
-  PermissionFlagType,
-} from '~/generated-metadata/graphql';
+  currentPageLayoutIdState,
+  PageLayoutIdContext,
+} from '@/page-layout/states/currentPageLayoutIdState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { useContext, useMemo } from 'react';
+import { isString } from '@sniptt/guards';
+import {
+  ContextStorePageType,
+  StandardObjectNameSingular,
+  type CommandMenuContextApi,
+} from 'twenty-shared/types';
+import { evaluateConditionalAvailabilityExpression } from 'twenty-shared/utils';
+import { EngineComponentKey } from '~/generated-metadata/graphql';
+
+const WORKSPACE_DEFINITION_COMMANDS = new Set<EngineComponentKey>([
+  EngineComponentKey.ADD_TO_FAVORITES,
+  EngineComponentKey.REMOVE_FROM_FAVORITES,
+  EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT,
+  EngineComponentKey.EXPORT_RECORDS,
+  EngineComponentKey.EXPORT_FROM_RECORD_INDEX,
+  EngineComponentKey.EXPORT_VIEW,
+  EngineComponentKey.IMPORT_RECORDS,
+  EngineComponentKey.SEE_DELETED_RECORDS,
+  EngineComponentKey.CREATE_NEW_VIEW,
+  EngineComponentKey.HIDE_DELETED_RECORDS,
+  EngineComponentKey.EXPORT_FROM_RECORD_SHOW,
+  EngineComponentKey.EXPORT_MULTIPLE_RECORDS,
+  EngineComponentKey.UPDATE_MULTIPLE_RECORDS,
+  EngineComponentKey.NAVIGATE_TO_NEXT_RECORD,
+  EngineComponentKey.NAVIGATE_TO_PREVIOUS_RECORD,
+]);
 
 type CommandMenuContextProviderContentProps = {
   displayType: CommandMenuContextType['displayType'];
@@ -38,25 +64,35 @@ export const CommandMenuContextProviderContent = ({
   commandMenuContextApi,
   isInPreviewMode,
 }: CommandMenuContextProviderContentProps) => {
+  const isCoreWorkflow = commandMenuContextApi.coreObjectName === 'workflow';
+  const isCoreWorkflowIndex =
+    isCoreWorkflow &&
+    commandMenuContextApi.pageType === ContextStorePageType.Index;
   const commandMenuItems = useAtomStateValue(commandMenuItemsSelector);
+  const {
+    hasGlobalRecordCreationCommandTemplate,
+    globalRecordCreationCommandMenuItems,
+  } = useGlobalRecordCreationCommandMenuItems(commandMenuItems);
+  const shouldDisplayGlobalRecordCreationCommands =
+    containerType === CommandMenuItemContainerType.CommandMenuList &&
+    hasGlobalRecordCreationCommandTemplate;
+  const isLayoutCustomizationAllowedOnCurrentPage =
+    useIsLayoutCustomizationAllowedOnCurrentPage();
   const commandMenuItemsDraft = useAtomStateValue(commandMenuItemsDraftState);
   const currentPageLayoutId = useAtomStateValue(currentPageLayoutIdState);
+  const pageLayoutIdFromContext = useContext(PageLayoutIdContext);
+  const effectivePageLayoutId =
+    pageLayoutIdFromContext === undefined
+      ? currentPageLayoutId
+      : pageLayoutIdFromContext;
 
-  // OMNIA-CUSTOM: object metadata for label resolution and permission gating
-  const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
-  const permissionMap = usePermissionFlagMap();
-
-  // OMNIA-CUSTOM: permission-gated engine component keys
-  const permissionGatedKeys: Record<string, PermissionFlagType> = useMemo(
-    () => ({
-      [EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT]: PermissionFlagType.LAYOUTS,
-      [EngineComponentKey.IMPORT_RECORDS]: PermissionFlagType.IMPORT_CSV,
-      [EngineComponentKey.EXPORT_RECORDS]: PermissionFlagType.EXPORT_CSV,
-      [EngineComponentKey.EXPORT_VIEW]: PermissionFlagType.EXPORT_CSV,
-      [EngineComponentKey.ASK_AI]: PermissionFlagType.AI,
-      [EngineComponentKey.VIEW_PREVIOUS_AI_CHATS]: PermissionFlagType.AI,
-    }),
-    [],
+  const commandMenuContextApiForAvailability = useMemo(
+    () =>
+      getCommandMenuContextApiForContainerType({
+        commandMenuContextApi,
+        containerType,
+      }),
+    [commandMenuContextApi, containerType],
   );
 
   const filteredCommandMenuItems = useMemo(() => {
@@ -68,53 +104,88 @@ export const CommandMenuContextProviderContent = ({
       ? (commandMenuItemsDraft ?? commandMenuItems)
       : commandMenuItems;
 
-    const currentObjectMetadataItem = objectMetadataItems.find(
-      (item) => item.id === currentObjectMetadataItemId,
-    );
+    const isAiChatInboxHeader =
+      containerType === CommandMenuItemContainerType.ShowPageHeader &&
+      commandMenuContextApi.objectMetadataItem.nameSingular ===
+        StandardObjectNameSingular.AgentChatThread &&
+      (commandMenuContextApi.featureFlags.IS_AI_CHAT_INBOX_ENABLED ?? false);
 
-    let items = commandMenuItemsToDisplay
+    const contextCommandMenuItems = commandMenuItemsToDisplay
+      .filter(
+        (item) =>
+          !isCoreWorkflowIndex ||
+          item.engineComponentKey !== EngineComponentKey.DELETE_RECORDS,
+      )
+      .filter(
+        (item) =>
+          !isCoreWorkflow ||
+          !WORKSPACE_DEFINITION_COMMANDS.has(item.engineComponentKey),
+      )
+      .filter(
+        (item) =>
+          item.engineComponentKey !==
+          EngineComponentKey.SEE_VERSION_WORKFLOW_RUN,
+      )
+      .filter(
+        (item) =>
+          item.engineComponentKey !==
+            EngineComponentKey.EDIT_RECORD_PAGE_LAYOUT ||
+          isLayoutCustomizationAllowedOnCurrentPage,
+      )
       .filter(
         doesCommandMenuItemMatchObjectMetadataId(currentObjectMetadataItemId),
       )
+      .filter(
+        doesCommandMenuItemMatchObjectContext(currentObjectMetadataItemId),
+      )
+      .filter(
+        doesCommandMenuItemMatchCoreObjectName(
+          commandMenuContextApi.coreObjectName,
+        ),
+      )
       .filter(doesCommandMenuItemMatchPageType(commandMenuContextApi.pageType))
       .filter(doesCommandMenuItemMatchSelectionState(hasSelectedRecords))
-      .filter(doesCommandMenuItemMatchPageLayoutId(currentPageLayoutId))
+      .filter(doesCommandMenuItemMatchPageLayoutId(effectivePageLayoutId))
       .filter((item) =>
         evaluateConditionalAvailabilityExpression(
           item.conditionalAvailabilityExpression,
-          commandMenuContextApi,
+          commandMenuContextApiForAvailability,
+        ),
+      )
+      .map((item) =>
+        resolveCommandMenuItemPinning(
+          {
+            ...item,
+            isPinned:
+              item.isPinned ||
+              (isAiChatInboxHeader &&
+                item.engineComponentKey === EngineComponentKey.SHARE_RECORD),
+          },
+          commandMenuContextApiForAvailability,
         ),
       );
 
-    // OMNIA-CUSTOM: apply object-aware create-record labels (e.g. "Create Policy")
-    items = resolveCreateRecordActionLabels(items, currentObjectMetadataItem);
-
-    // OMNIA-CUSTOM: apply object-aware Go To labels and filter deactivated objects
-    items = resolveGoToActionLabels(items, objectMetadataItems);
-
-    // OMNIA-CUSTOM: gate command menu items behind role permission flags
-    items = items.filter((item) => {
-      const engineKey = item.engineComponentKey;
-      if (!engineKey) return true;
-      const requiredPermission = permissionGatedKeys[engineKey];
-      if (requiredPermission && !permissionMap[requiredPermission]) {
-        return false;
-      }
-      return true;
+    return mergeGlobalRecordCreationCommandMenuItems({
+      commandMenuItems: contextCommandMenuItems,
+      contextObjectMetadataId: isString(currentObjectMetadataItemId)
+        ? currentObjectMetadataItemId
+        : undefined,
+      globalRecordCreationCommandMenuItems,
+      shouldDisplayGlobalRecordCreationCommands,
     });
-
-    return items.sort(
-      (firstItem, secondItem) => firstItem.position - secondItem.position,
-    );
   }, [
+    containerType,
+    commandMenuContextApi,
+    commandMenuContextApiForAvailability,
+    globalRecordCreationCommandMenuItems,
+    shouldDisplayGlobalRecordCreationCommands,
+    isCoreWorkflow,
     commandMenuItems,
     commandMenuItemsDraft,
+    effectivePageLayoutId,
     isInPreviewMode,
-    commandMenuContextApi,
-    currentPageLayoutId,
-    objectMetadataItems,
-    permissionGatedKeys,
-    permissionMap,
+    isLayoutCustomizationAllowedOnCurrentPage,
+    isCoreWorkflowIndex,
   ]);
 
   return (

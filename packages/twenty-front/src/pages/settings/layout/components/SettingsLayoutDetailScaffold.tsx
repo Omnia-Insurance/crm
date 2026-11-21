@@ -5,15 +5,14 @@ import { TableBody } from '@/ui/layout/table/components/TableBody';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableHeader } from '@/ui/layout/table/components/TableHeader';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
 import { type ReactNode } from 'react';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import { H2Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 export type DetailRow = { key: string; label: string; value: ReactNode };
 
@@ -47,6 +46,7 @@ export const SettingsLayoutDetailScaffold = ({
   isLoading: boolean;
   children?: ReactNode;
 }) => {
+  const { t } = useLingui();
   const trimmedDescription = description?.trim();
 
   const applicationContentHref = getSettingsPath(
@@ -57,7 +57,7 @@ export const SettingsLayoutDetailScaffold = ({
   );
 
   const breadcrumbLinks = [
-    { children: t`Workspace`, href: getSettingsPath(SettingsPath.Workspace) },
+    { children: t`Workspace`, href: getSettingsPath(SettingsPath.General) },
     {
       children: t`Applications`,
       href: getSettingsPath(SettingsPath.Applications),
@@ -68,23 +68,23 @@ export const SettingsLayoutDetailScaffold = ({
   ];
 
   return (
-    <SubMenuTopBarContainer title={entityName} links={breadcrumbLinks}>
+    <SettingsPageLayout title={entityName} links={breadcrumbLinks}>
       <SettingsPageContainer>
         {isLoading ? (
           <SettingsSectionSkeletonLoader />
         ) : (
           <>
             {isDefined(trimmedDescription) && trimmedDescription.length > 0 && (
-              <Section>
-                <H2Title
+              <Section.Root>
+                <Section.Header
                   title={t`About`}
                   description={t`Description provided by the application`}
                 />
                 <StyledDescription>{trimmedDescription}</StyledDescription>
-              </Section>
+              </Section.Root>
             )}
-            <Section>
-              <H2Title
+            <Section.Root>
+              <Section.Header
                 title={t`Details`}
                 description={t`Read-only ${entityTypeLabel} definition shipped by this app`}
               />
@@ -106,11 +106,11 @@ export const SettingsLayoutDetailScaffold = ({
                   ))}
                 </TableBody>
               </Table>
-            </Section>
+            </Section.Root>
             {children}
           </>
         )}
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

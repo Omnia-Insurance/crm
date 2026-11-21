@@ -1,4 +1,4 @@
-import { resolveInput } from '../variable-resolver';
+import { resolveInput, resolveStringTemplate } from '../variable-resolver';
 
 describe('resolveInput', () => {
   const context = {
@@ -94,6 +94,27 @@ describe('resolveInput', () => {
     expect(resolveInput(input, context)).toEqual(expected);
   });
 
+  it('should serialize an object variable embedded in a string', () => {
+    expect(resolveInput('Log this message: {{user}}', context)).toBe(
+      'Log this message: {"name":"John Doe","age":30}',
+    );
+  });
+
+  it('should serialize an array variable embedded in a string', () => {
+    expect(
+      resolveInput('Themes: {{preferences}}', {
+        preferences: ['dark', 'light'],
+      }),
+    ).toBe('Themes: ["dark","light"]');
+  });
+
+  it('should return the raw object when the whole string is a single variable', () => {
+    expect(resolveInput('{{user}}', context)).toEqual({
+      name: 'John Doe',
+      age: 30,
+    });
+  });
+
   it('does not wrap string variables with double quotes', () => {
     expect(
       resolveInput('{ {{test}}: 2 }', {
@@ -178,5 +199,34 @@ describe('resolveInput', () => {
         'dotted value',
       );
     });
+  });
+});
+
+describe('resolveStringTemplate', () => {
+  const context = { trigger: { amount: 42, meta: { source: 'form' } } };
+
+  it('keeps a whole-string variable a string instead of its native type', () => {
+    expect(resolveStringTemplate('{{trigger.amount}}', context)).toBe('42');
+    expect(resolveInput('{{trigger.amount}}', context)).toBe(42);
+  });
+
+  it('interpolates variables inside text', () => {
+    expect(
+      resolveStringTemplate('Amount: {{trigger.amount}} EUR', context),
+    ).toBe('Amount: 42 EUR');
+  });
+
+  it('serializes an object variable as JSON', () => {
+    expect(resolveStringTemplate('{{trigger.meta}}', context)).toBe(
+      '{"source":"form"}',
+    );
+  });
+
+  it('serializes an array variable as JSON', () => {
+    expect(
+      resolveStringTemplate('IDs: {{trigger.ids}}', {
+        trigger: { ids: [1, 2, 3] },
+      }),
+    ).toBe('IDs: [1,2,3]');
   });
 });

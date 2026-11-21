@@ -1,8 +1,19 @@
 # ===========================================================================
+# Base image
+# ===========================================================================
+
+FROM node:26.13.1-alpine3.23@sha256:39d8c143e60e99ae98f014bebea1e72fc96d3c9bdf9504bc3a27af5c05bfa39f AS node-base
+
+# Node 26 images no longer bundle Yarn; run the release pinned in .yarnrc.yml.
+RUN printf '%s\n' '#!/bin/sh' 'exec node "/app/$(sed -n "s/^yarnPath: //p" /app/.yarnrc.yml)" "$@"' \
+      > /usr/local/bin/yarn && \
+    chmod +x /usr/local/bin/yarn
+
+# ===========================================================================
 # Dependency stages
 # ===========================================================================
 
-FROM node:24.15.0-alpine3.23@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS front-deps
+FROM node-base AS front-deps
 
 WORKDIR /app
 
@@ -17,10 +28,10 @@ COPY ./packages/twenty-front-component-renderer/package.json /app/packages/twent
 COPY ./packages/twenty-sdk/package.json /app/packages/twenty-sdk/
 COPY ./packages/twenty-client-sdk/package.json /app/packages/twenty-client-sdk/
 
-RUN yarn workspaces focus twenty twenty-front twenty-front-component-renderer twenty-ui twenty-shared twenty-sdk twenty-client-sdk && yarn cache clean && npx nx reset
+RUN yarn workspaces focus twenty-monorepo twenty-front twenty-front-component-renderer twenty-ui twenty-shared twenty-sdk twenty-client-sdk && yarn cache clean && npx nx reset
 
 
-FROM node:24.15.0-alpine3.23@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS server-deps
+FROM node-base AS server-deps
 
 WORKDIR /app
 
@@ -33,8 +44,9 @@ COPY ./packages/twenty-server/package.json /app/packages/twenty-server/
 COPY ./packages/twenty-server/patches /app/packages/twenty-server/patches
 COPY ./packages/twenty-shared/package.json /app/packages/twenty-shared/
 COPY ./packages/twenty-client-sdk/package.json /app/packages/twenty-client-sdk/
+COPY ./packages/twenty-oxlint-rules/package.json /app/packages/twenty-oxlint-rules/
 
-RUN yarn workspaces focus twenty twenty-server twenty-emails twenty-shared twenty-client-sdk && yarn cache clean && npx nx reset
+RUN yarn workspaces focus twenty-monorepo twenty-server twenty-emails twenty-shared twenty-client-sdk && yarn cache clean && npx nx reset
 
 
 FROM server-deps AS twenty-server-build
@@ -84,9 +96,20 @@ RUN if [ -d /app/packages/twenty-front/build ]; then \
 #   docker build --target twenty-server -f packages/twenty-docker/twenty/Dockerfile .
 # ===========================================================================
 
-FROM node:24.15.0-alpine3.23@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS twenty-server
+FROM node-base AS twenty-server
 
-RUN apk add --no-cache curl jq postgresql-client
+# Force the patched Alpine OpenSSL libs to the fixed release (3.5.8-r0 clears
+# CVE-2026-14456/14457/18798/54874/63072/63075/63076). Node bundles its own
+# OpenSSL, but psql/curl link these system libs, so the upgrade hardens
+# runtime TLS and clears the scanner. libexpat 2.8.5-r0 clears CVE-2026-93990.
+RUN apk add --no-cache \
+    'curl>=8.22.0-r0' \
+    'libexpat>=2.8.5-r0' \
+    'nghttp2-libs>=1.69.0-r0' \
+    'libcrypto3>=3.5.8-r0' \
+    'libssl3>=3.5.8-r0' \
+    'postgresql18-client>=18.5-r0' \
+    'jq>=1.8.2-r0'
 
 COPY ./packages/twenty-docker/twenty/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
@@ -94,6 +117,7 @@ WORKDIR /app/packages/twenty-server
 
 ARG APP_VERSION
 ENV APP_VERSION=$APP_VERSION
+ENV NODE_ENV=production
 
 # Workspace root config
 COPY --chown=1000 --from=twenty-server-build /app/package.json /app/yarn.lock /app/.yarnrc.yml /app/
@@ -105,6 +129,11 @@ COPY --chown=1000 --from=twenty-server-build /app/node_modules /app/node_modules
 COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-server/package.json /app/packages/twenty-server/
 COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-server/dist /app/packages/twenty-server/dist
 COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-server/patches /app/packages/twenty-server/patches
+# Shell entrypoints referenced by package.json scripts (command:prod:background*)
+COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-server/scripts /app/packages/twenty-server/scripts
+# COPY preserves the committed mode, but the scripts are also invoked directly
+# and not only through yarn, so do not let a dropped exec bit reach the pod
+RUN chmod +x /app/packages/twenty-server/scripts/command-background.sh
 
 # Workspace packages (dist + package.json; node_modules symlinks resolve to these)
 COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-shared/package.json /app/packages/twenty-shared/
@@ -116,6 +145,20 @@ COPY --chown=1000 --from=twenty-server-build /app/packages/twenty-client-sdk/dis
 
 LABEL org.opencontainers.image.source=https://github.com/twentyhq/twenty
 LABEL org.opencontainers.image.description="Twenty server image (no frontend)."
+
+# Remove unused, unpatchable components the scanner flags (none are executed at
+# runtime, and none can be fixed by upgrading our deps or Node):
+#  - the bundled npm CLI: the app uses yarn (see node-base) and never invokes npm,
+#    and npm's bundled ip-address has no patched release;
+#  - example/ apps vendored inside dependencies, e.g. passport-microsoft's
+#    example/login ships a package-lock.json for an old Express demo
+#    (body-parser, ejs, express, ...) that is never installed or run.
+#  - the Node dev headers: only node-gyp needs them and native addons are
+#    compiled in the build stages; their vendored openssl/opensslv.h is what
+#    scanners fingerprint whenever OpenSSL patches ahead of Node releases.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+      /usr/local/include/node && \
+    find /app/node_modules -type d -name example -prune -exec rm -rf {} +
 
 RUN mkdir -p /app/.local-storage /app/packages/twenty-server/.local-storage && \
     chown 1000:1000 /app/.local-storage /app/packages/twenty-server/.local-storage
@@ -163,7 +206,7 @@ USER 1000
 
 
 # ===========================================================================
-# Target: twenty-app-dev (all-in-one with Postgres + Redis)
+# Target: twenty-app-dev (all-in-one with Postgres + Redis + ClickHouse)
 #   docker build --target twenty-app-dev -f packages/twenty-docker/twenty/Dockerfile .
 # ===========================================================================
 
@@ -187,7 +230,9 @@ RUN S6_ARCH=$(cat /tmp/s6arch) && \
     echo "$NOARCH_SUM  s6-overlay-noarch.tar.xz" | sha256sum -c - && \
     echo "$ARCH_SUM  s6-overlay-arch.tar.xz" | sha256sum -c -
 
-FROM node:24.15.0-alpine3.23@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS twenty-app-dev
+FROM clickhouse/clickhouse-server:25.8.8-alpine@sha256:68b9d9eb4cb949a03d1f90b76fd8d396a5999dd57ba1ee914ea36c77716ce937 AS clickhouse
+
+FROM node-base AS twenty-app-dev
 
 # s6-overlay
 COPY --from=s6-fetch /tmp/s6-overlay-noarch.tar.xz /tmp/
@@ -196,10 +241,30 @@ RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
  && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
  && rm /tmp/s6-overlay-*.tar.xz
 
+# See twenty-server above: patched Alpine OpenSSL libs (psql/curl/redis link
+# these system libs; Node bundles its own).
 RUN apk add --no-cache \
     postgresql18 postgresql18-contrib \
     redis \
-    curl jq su-exec
+    'libcrypto3>=3.5.8-r0' \
+    'libssl3>=3.5.8-r0' \
+    'libexpat>=2.8.5-r0' \
+    'curl>=8.22.0-r0' 'jq>=1.8.2-r0' su-exec
+
+# ClickHouse binaries are linked against glibc: reuse the glibc runtime its
+# official alpine image ships alongside musl, and expose the loader at the path
+# glibc binaries expect.
+ARG TARGETARCH
+COPY --from=clickhouse --chown=root:root /usr/bin/clickhouse /usr/bin/clickhouse
+COPY --from=clickhouse \
+     /lib/ld-2.35.so /lib/libc.so.6 /lib/libdl.so.2 /lib/libm.so.6 \
+     /lib/libpthread.so.0 /lib/librt.so.1 /lib/libresolv.so.2 \
+     /lib/libnss_dns.so.2 /lib/libnss_files.so.2 \
+     /lib/
+RUN if [ "$TARGETARCH" = "arm64" ]; then ln -s /lib/ld-2.35.so /lib/ld-linux-aarch64.so.1; \
+    else mkdir -p /lib64 && ln -s /lib/ld-2.35.so /lib64/ld-linux-x86-64.so.2; fi \
+ && addgroup -S clickhouse \
+ && adduser -S -D -H -h /data/clickhouse -G clickhouse clickhouse
 
 # Workspace root config
 COPY --from=twenty-server-build /app/package.json /app/yarn.lock /app/.yarnrc.yml /app/
@@ -223,14 +288,17 @@ COPY --from=twenty-server-build /app/packages/twenty-client-sdk/dist /app/packag
 # Frontend static build
 COPY --from=twenty-front-build /app/packages/twenty-front/build /app/packages/twenty-server/dist/front
 
-# Source maps are not needed in the dev image (no Sentry)
-RUN find /app/packages/twenty-server/dist -name '*.js.map' -delete
+# Source maps are not needed in the dev image (no Sentry). Node dev headers are
+# dropped for the same scanner-hygiene reasons as in twenty-server above.
+RUN find /app/packages/twenty-server/dist -name '*.js.map' -delete \
+ && rm -rf /usr/local/include/node
 
 # s6 service definitions
 COPY packages/twenty-docker/twenty-app-dev/rootfs/ /
 
-RUN mkdir -p /data/postgres /data/redis /app/packages/twenty-server/.local-storage \
+RUN mkdir -p /data/postgres /data/redis /data/clickhouse /app/packages/twenty-server/.local-storage \
  && chown -R postgres:postgres /data/postgres \
+ && chown clickhouse:clickhouse /data/clickhouse \
  && chown 1000:1000 /data/redis /app/packages/twenty-server/.local-storage
 
 ARG APP_VERSION=0.0.0
@@ -239,6 +307,7 @@ ENV S6_KEEP_ENV=1
 ENV PG_DATABASE_URL=postgres://twenty:twenty@localhost:5432/default \
     SERVER_URL=http://localhost:2020 \
     REDIS_URL=redis://localhost:6379 \
+    CLICKHOUSE_URL=http://localhost:8123/twenty \
     STORAGE_TYPE=local \
     APP_SECRET=twenty-app-dev-secret-not-for-production \
     APP_VERSION=$APP_VERSION \
@@ -251,9 +320,9 @@ ENV PG_DATABASE_URL=postgres://twenty:twenty@localhost:5432/default \
     APPLICATION_LOG_DRIVER=CONSOLE
 
 EXPOSE 2020
-VOLUME ["/data/postgres", "/app/packages/twenty-server/.local-storage"]
+VOLUME ["/data/postgres", "/data/clickhouse", "/app/packages/twenty-server/.local-storage"]
 
 LABEL org.opencontainers.image.source=https://github.com/twentyhq/twenty
-LABEL org.opencontainers.image.description="All-in-one Twenty image for local development and SDK usage. Includes PostgreSQL, Redis, server, and worker."
+LABEL org.opencontainers.image.description="All-in-one Twenty image for local development and SDK usage. Includes PostgreSQL, Redis, ClickHouse, server, and worker."
 
 ENTRYPOINT ["/init"]

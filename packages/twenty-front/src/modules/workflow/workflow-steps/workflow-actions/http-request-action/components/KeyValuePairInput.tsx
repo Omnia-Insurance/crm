@@ -1,16 +1,17 @@
-import { FormFieldInputContainer } from '@/object-record/record-field/ui/form-types/components/FormFieldInputContainer';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
-import { InputLabel } from '@/ui/input/components/InputLabel';
+import { FormFieldInputContainer } from '@/ui/input/components/FormFieldInputContainer';
+import { InputLabel } from '@/ui/input/components/internal/InputLabel/InputLabel';
 import { AUTO_SET_HEADER_KEYS } from '@/workflow/workflow-steps/workflow-actions/http-request-action/constants/AutoSetHeaderKeys';
 import { isAutoSetHeaderKey } from '@/workflow/workflow-steps/workflow-actions/http-request-action/utils/isReadOnlyHeaderKey';
 import { WorkflowVariablePicker } from '@/workflow/workflow-variables/components/WorkflowVariablePicker';
-import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
+import { t } from '@lingui/core/macro';
+import { isNonEmptyString } from '@sniptt/guards';
 import { useState } from 'react';
-import { IconTrash } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
+import { IconTrash } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { v4 } from 'uuid';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -88,7 +89,7 @@ export const KeyValuePairInput = ({
     if (
       index === pairs.length - 1 &&
       (field === 'key' || field === 'value') &&
-      Boolean(newValue.trim())
+      isNonEmptyString(newValue.trim())
     ) {
       newPairs.push({ id: v4(), key: '', value: '', isAutoSet: false });
     }
@@ -168,10 +169,15 @@ export const KeyValuePairInput = ({
               (pair.id !== pairs[pairs.length - 1].id && !pair.isAutoSet ? (
                 <Button
                   onClick={() => handleRemovePair(pair.id)}
-                  Icon={IconTrash}
+                  startIcon={<IconTrash />}
+                  aria-label={t`Delete`}
                 />
               ) : (
-                <Button Icon={IconTrash} disabled={true} />
+                <Button
+                  startIcon={<IconTrash />}
+                  aria-label={t`Delete`}
+                  disabled={true}
+                />
               ))}
           </StyledKeyValueContainer>
         ))}

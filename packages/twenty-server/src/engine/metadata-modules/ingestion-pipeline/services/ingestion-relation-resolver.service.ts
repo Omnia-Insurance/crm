@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { isDefined } from 'twenty-shared/utils';
 
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { getIngestionErrorLogLabel } from 'src/engine/metadata-modules/ingestion-pipeline/utils/get-ingestion-error-log-label.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 type RelationRef = {
   __relation: true;
@@ -20,9 +21,7 @@ type RelationCache = Map<string, string>;
 export class IngestionRelationResolverService {
   private readonly logger = new Logger(IngestionRelationResolverService.name);
 
-  constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  ) {}
+  constructor(private readonly workspaceOrmManager: WorkspaceOrmManager) {}
 
   createCache(): RelationCache {
     return new Map();
@@ -30,7 +29,6 @@ export class IngestionRelationResolverService {
 
   async resolveRelations(
     record: Record<string, unknown>,
-    workspaceId: string,
     cache: RelationCache,
   ): Promise<Record<string, unknown>> {
     const resolved = { ...record };
@@ -40,11 +38,7 @@ export class IngestionRelationResolverService {
         continue;
       }
 
-      const resolvedId = await this.resolveRelation(
-        value,
-        workspaceId,
-        cache,
-      );
+      const resolvedId = await this.resolveRelation(value, cache);
 
       if (isDefined(resolvedId)) {
         resolved[fieldName] = resolvedId;
@@ -58,7 +52,6 @@ export class IngestionRelationResolverService {
 
   private async resolveRelation(
     ref: RelationRef,
-    workspaceId: string,
     cache: RelationCache,
   ): Promise<string | null> {
     const cacheKey = `${ref.targetObjectName}:${ref.matchFieldName}:${String(ref.matchValue)}`;
@@ -69,40 +62,43 @@ export class IngestionRelationResolverService {
     }
 
     try {
-      const repository = await this.globalWorkspaceOrmManager.getRepository(
-        workspaceId,
-        ref.targetObjectName,
-        { shouldBypassPermissionChecks: true },
-      );
+      // Ingestion is system work, not on behalf of the settings user
+      const repository =
+        this.workspaceOrmManager.getRepositoryWithoutPermissionChecks(
+          ref.targetObjectName,
+        );
 
       const existing = await repository.findOne({
         where: { [ref.matchFieldName]: ref.matchValue },
       });
 
       if (isDefined(existing)) {
-        const id = (existing as Record<string, unknown>).id as string;
+        cache.set(cacheKey, existing.id);
 
-        cache.set(cacheKey, id);
-
-        return id;
+        return existing.id;
       }
 
       if (ref.autoCreate) {
-        const created = await repository.save({
+        const [created] = await repository.save({
           [ref.matchFieldName]: ref.matchValue,
         });
 
-        const id = (created as Record<string, unknown>).id as string;
+        if (!isDefined(created)) {
+          throw new Error(
+            `Saving a new ${ref.targetObjectName} returned no record`,
+          );
+        }
 
-        cache.set(cacheKey, id);
+        cache.set(cacheKey, created.id);
 
-        return id;
+        return created.id;
       }
 
       return null;
     } catch (error) {
+      // The match value is a record value (phone, email, name): never log it
       this.logger.warn(
-        `Failed to resolve relation ${ref.targetObjectName}.${ref.matchFieldName}=${String(ref.matchValue)}: ${error}`,
+        `Failed to resolve relation ${ref.targetObjectName}.${ref.matchFieldName}: ${getIngestionErrorLogLabel(error)}`,
       );
 
       return null;

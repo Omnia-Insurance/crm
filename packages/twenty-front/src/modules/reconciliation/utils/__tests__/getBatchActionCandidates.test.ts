@@ -115,9 +115,7 @@ describe('getBatchUndoCandidates', () => {
   });
 
   it('excludes UNMATCHED items even when APPROVED', () => {
-    const items = [
-      makeItem({ decision: 'APPROVED', category: 'UNMATCHED' }),
-    ];
+    const items = [makeItem({ decision: 'APPROVED', category: 'UNMATCHED' })];
 
     expect(getBatchUndoCandidates(items)).toEqual([]);
   });

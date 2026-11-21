@@ -7,21 +7,20 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
 
+import { ApiPath, ViewSortDirection } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
+import { paginateMetadataRestItems } from 'src/engine/api/rest/metadata/utils/paginate-metadata-rest-items.util';
+import { type AuthenticatedRequest } from 'src/engine/api/rest/types/authenticated-request.type';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 import { FlatEntityMapsRestApiExceptionFilter } from 'src/engine/metadata-modules/flat-entity/filters/flat-entity-maps-rest-api-exception.filter';
-import { PermissionsRestApiExceptionFilter } from 'src/engine/metadata-modules/permissions/utils/permissions-rest-api-exception.filter';
-import { CreateViewSortPermissionGuard } from 'src/engine/metadata-modules/view-permissions/guards/create-view-sort-permission.guard';
-import { DeleteViewSortPermissionGuard } from 'src/engine/metadata-modules/view-permissions/guards/delete-view-sort-permission.guard';
-import { UpdateViewSortPermissionGuard } from 'src/engine/metadata-modules/view-permissions/guards/update-view-sort-permission.guard';
+import { PermissionsRestApiExceptionFilter } from 'src/engine/permissions/utils/permissions-rest-api-exception.filter';
 import { CreateViewSortInput } from 'src/engine/metadata-modules/view-sort/dtos/inputs/create-view-sort.input';
 import { type ViewSortDTO } from 'src/engine/metadata-modules/view-sort/dtos/view-sort.dto';
 import {
@@ -34,34 +33,38 @@ import {
 import { ViewSortRestApiExceptionFilter } from 'src/engine/metadata-modules/view-sort/filters/view-sort-rest-api-exception.filter';
 import { ViewSortService } from 'src/engine/metadata-modules/view-sort/services/view-sort.service';
 import { WorkspaceMigrationRunnerRestApiExceptionFilter } from 'src/engine/workspace-manager/workspace-migration/filters/workspace-migration-runner-rest-api-exception.filter';
-import { ViewSortDirection } from 'twenty-shared/types';
+import { CreateViewChildEntityPermissionGuard } from 'src/engine/metadata-modules/view/guards/create-view-child-entity-permission.guard';
+import { ViewChildEntityPermissionGuard } from 'src/engine/metadata-modules/view/guards/view-child-entity-permission.guard';
+import { AuthRestApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-rest-api-exception.filter';
+import { VIEW_SORT_ACCESS_POLICY } from 'src/engine/metadata-modules/view-sort/constants/view-sort-access-policy.constant';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
 
-@Controller('rest/metadata/viewSorts')
-@UseGuards(WorkspaceAuthGuard)
+@Controller(`${ApiPath.Rest}/metadata/viewSorts`)
+@UseGuards(AccessPolicyGuard(VIEW_SORT_ACCESS_POLICY))
 @UseFilters(
   PermissionsRestApiExceptionFilter,
   ViewSortRestApiExceptionFilter,
   FlatEntityMapsRestApiExceptionFilter,
   WorkspaceMigrationRunnerRestApiExceptionFilter,
+  AuthRestApiExceptionFilter,
 )
 export class ViewSortController {
   constructor(private readonly viewSortService: ViewSortService) {}
 
   @Get()
-  @UseGuards(NoPermissionGuard)
   async findMany(
+    @Req() request: AuthenticatedRequest,
     @AuthWorkspace() workspace: WorkspaceEntity,
     @Query('viewId') viewId?: string,
-  ): Promise<ViewSortDTO[]> {
-    if (viewId) {
-      return this.viewSortService.findByViewId(workspace.id, viewId);
-    }
+  ) {
+    const items = viewId
+      ? await this.viewSortService.findByViewId(workspace.id, viewId)
+      : await this.viewSortService.findByWorkspaceId(workspace.id);
 
-    return this.viewSortService.findByWorkspaceId(workspace.id);
+    return paginateMetadataRestItems({ items, request });
   }
 
   @Get(':id')
-  @UseGuards(NoPermissionGuard)
   async findOne(
     @Param('id') id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -87,7 +90,7 @@ export class ViewSortController {
   }
 
   @Post()
-  @UseGuards(CreateViewSortPermissionGuard)
+  @UseGuards(CreateViewChildEntityPermissionGuard)
   async create(
     @Body() input: CreateViewSortInput,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,
@@ -99,7 +102,7 @@ export class ViewSortController {
   }
 
   @Patch(':id')
-  @UseGuards(UpdateViewSortPermissionGuard)
+  @UseGuards(ViewChildEntityPermissionGuard('viewSort'))
   async update(
     @Param('id') id: string,
     @Body() input: { direction?: ViewSortDirection },
@@ -112,7 +115,7 @@ export class ViewSortController {
   }
 
   @Delete(':id')
-  @UseGuards(DeleteViewSortPermissionGuard)
+  @UseGuards(ViewChildEntityPermissionGuard('viewSort'))
   async delete(
     @Param('id') id: string,
     @AuthWorkspace() { id: workspaceId }: WorkspaceEntity,

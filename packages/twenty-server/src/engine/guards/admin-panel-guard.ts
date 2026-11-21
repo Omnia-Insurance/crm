@@ -3,6 +3,9 @@ import { GqlExecutionContext } from '@nestjs/graphql';
 
 import { type Observable } from 'rxjs';
 
+import { userIsFullAdmin } from 'src/engine/core-modules/impersonation/utils/user-is-full-admin.util';
+import { isImpersonating } from 'src/engine/guards/utils/is-impersonating.util';
+
 export class AdminPanelGuard implements CanActivate {
   canActivate(
     context: ExecutionContext,
@@ -10,6 +13,9 @@ export class AdminPanelGuard implements CanActivate {
     const ctx = GqlExecutionContext.create(context);
     const request = ctx.getContext().req;
 
-    return request.user.canAccessFullAdminPanel === true;
+    return (
+      !isImpersonating(request.impersonationContext) &&
+      userIsFullAdmin(request.user)
+    );
   }
 }

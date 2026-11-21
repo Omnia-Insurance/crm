@@ -1,26 +1,30 @@
 import { FieldMetadataType } from 'twenty-shared/types';
-import { isDefined, isPlainObject } from 'twenty-shared/utils';
+import {
+  isDefined,
+  isFieldMetadataArrayKind,
+  isFieldMetadataSupportedInGroupBy,
+  isPlainObject,
+} from 'twenty-shared/utils';
 
-import { type GroupByField } from 'src/engine/api/common/common-query-runners/types/group-by-field.types';
+import { isGroupByDateFieldDefinition } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/is-group-by-date-field-definition.util';
+import { validateAndTransformRelationGroupByFieldOrThrow } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/validate-and-transform-relation-group-by-field-or-throw.util';
+import { validateSingleKeyForGroupByOrThrow } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/validate-single-key-for-group-by-or-throw.util';
 import {
   CommonQueryRunnerException,
   CommonQueryRunnerExceptionCode,
 } from 'src/engine/api/common/common-query-runners/errors/common-query-runner.exception';
-import { STANDARD_ERROR_MESSAGE } from 'src/engine/api/common/common-query-runners/errors/standard-error-message.constant';
-import { isGroupByDateFieldDefinition } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/is-group-by-date-field-definition.util';
-import { validateAndTransformRelationGroupByFieldOrThrow } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/validate-and-transform-relation-group-by-field-or-throw.util';
-import { validateSingleKeyForGroupByOrThrow } from 'src/engine/api/common/common-args-processors/group-by-arg-processor/utils/validate-single-key-for-group-by-or-throw.util';
+import { STANDARD_ERROR_MESSAGE } from 'src/engine/constants/standard-error-message.constant';
+import { type GroupByField } from 'src/engine/api/common/common-query-runners/types/group-by-field.type';
 import {
   ObjectRecordGroupByForAtomicField,
   ObjectRecordGroupByForCompositeField,
   ObjectRecordGroupByForDateField,
 } from 'src/engine/api/graphql/workspace-query-builder/interfaces/object-record.interface';
+import { getGroupableSubFieldsForCompositeType } from 'src/engine/metadata-modules/field-metadata/utils/get-groupable-sub-fields-for-composite-type.util';
+import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
 import { type FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
-import { isCompositeFieldMetadataType } from 'src/engine/metadata-modules/field-metadata/utils/is-composite-field-metadata-type.util';
-import { getGroupableSubFieldsForCompositeType } from 'src/engine/metadata-modules/field-metadata/utils/get-groupable-sub-fields-for-composite-type.util';
-import { isFlatFieldMetadataSupportedInGroupBy } from 'src/engine/metadata-modules/field-metadata/utils/is-supported-in-group-by.util';
-import { type FlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/flat-field-metadata.type';
+import { type OrmFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/types/orm-flat-field-metadata.type';
 import { buildFieldMapsFromFlatObjectMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/build-field-maps-from-flat-object-metadata.util';
 import { isMorphOrRelationFlatFieldMetadata } from 'src/engine/metadata-modules/flat-field-metadata/utils/is-morph-or-relation-flat-field-metadata.util';
 import { type FlatObjectMetadata } from 'src/engine/metadata-modules/flat-object-metadata/types/flat-object-metadata.type';
@@ -34,8 +38,8 @@ const getFieldMetadataForGroupByOrThrow = ({
   fieldName: string;
   fieldIdByName: Record<string, string>;
   fieldIdByJoinColumnName: Record<string, string>;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
-}): FlatFieldMetadata => {
+  flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
+}): OrmFlatFieldMetadata => {
   const fieldMetadataId =
     fieldIdByName[fieldName] || fieldIdByJoinColumnName[fieldName];
   const fieldMetadata = fieldMetadataId
@@ -63,7 +67,7 @@ const validateAndTransformCompositeGroupByDefinitionOrThrow = ({
   groupByFields,
 }: {
   fieldName: string;
-  fieldMetadata: FlatFieldMetadata;
+  fieldMetadata: OrmFlatFieldMetadata;
   fieldGroupByDefinition: Record<string, unknown>;
   groupByFields: GroupByField[];
 }) => {
@@ -126,7 +130,7 @@ const validateAndTransformSingleGroupByFieldOrThrow = ({
   fieldIdByName: Record<string, string>;
   fieldIdByJoinColumnName: Record<string, string>;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
   groupByFields: GroupByField[];
 }) => {
   const fieldMetadata = getFieldMetadataForGroupByOrThrow({
@@ -136,7 +140,18 @@ const validateAndTransformSingleGroupByFieldOrThrow = ({
     flatFieldMetadataMaps,
   });
 
-  if (!isFlatFieldMetadataSupportedInGroupBy(fieldMetadata)) {
+  const relationType = isMorphOrRelationFlatFieldMetadata(fieldMetadata)
+    ? fieldMetadata.settings.relationType
+    : null;
+
+  if (
+    !isFieldMetadataSupportedInGroupBy({
+      type: fieldMetadata.type,
+      name: fieldMetadata.name,
+      isSystem: fieldMetadata.isSystem,
+      relationType,
+    })
+  ) {
     throw new CommonQueryRunnerException(
       `Field "${fieldName}" is not supported in groupBy`,
       CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
@@ -146,6 +161,35 @@ const validateAndTransformSingleGroupByFieldOrThrow = ({
 
   const fieldGroupByDefinition = fieldNames[fieldName];
   const isObjectFieldGroupByDefinition = isPlainObject(fieldGroupByDefinition);
+
+  if (isObjectFieldGroupByDefinition && 'unnest' in fieldGroupByDefinition) {
+    const errorMessage = `Invalid unnest groupBy for field "${fieldName}". Use {"${fieldName}": {"unnest": true}} on ARRAY or MULTI_SELECT fields.`;
+
+    validateSingleKeyForGroupByOrThrow({
+      groupByKeys: Object.keys(fieldGroupByDefinition),
+      errorMessage,
+    });
+
+    if (
+      fieldGroupByDefinition.unnest !== true ||
+      !isFieldMetadataArrayKind(fieldMetadata.type)
+    ) {
+      throw new CommonQueryRunnerException(
+        errorMessage,
+        CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+        { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+      );
+    }
+
+    groupByFields.push({
+      fieldMetadata,
+      subFieldName: undefined,
+      shouldUnnest: true,
+    });
+
+    return;
+  }
+
   const isGroupByRelationField =
     isMorphOrRelationFlatFieldMetadata(fieldMetadata) &&
     isObjectFieldGroupByDefinition &&
@@ -182,16 +226,6 @@ const validateAndTransformSingleGroupByFieldOrThrow = ({
       dateGranularity: fieldGroupByDefinition.granularity,
       weekStartDay: fieldGroupByDefinition.weekStartDay,
       timeZone: fieldGroupByDefinition.timeZone,
-    });
-
-    return;
-  }
-
-  if (isObjectFieldGroupByDefinition && 'unnest' in fieldGroupByDefinition) {
-    groupByFields.push({
-      fieldMetadata,
-      subFieldName: undefined,
-      shouldUnnest: true,
     });
 
     return;
@@ -237,7 +271,7 @@ export const validateAndTransformGroupByFieldsOrThrow = ({
   >;
   flatObjectMetadata: FlatObjectMetadata;
   flatObjectMetadataMaps: FlatEntityMaps<FlatObjectMetadata>;
-  flatFieldMetadataMaps: FlatEntityMaps<FlatFieldMetadata>;
+  flatFieldMetadataMaps: FlatEntityMaps<OrmFlatFieldMetadata>;
 }): GroupByField[] => {
   const groupByFields: GroupByField[] = [];
 
@@ -265,6 +299,19 @@ export const validateAndTransformGroupByFieldsOrThrow = ({
         groupByFields,
       });
     }
+  }
+
+  const unnestedGroupByFields = groupByFields.filter(
+    (groupByField) =>
+      'shouldUnnest' in groupByField && groupByField.shouldUnnest,
+  );
+
+  if (unnestedGroupByFields.length > 1) {
+    throw new CommonQueryRunnerException(
+      'Only one groupBy field can use unnest',
+      CommonQueryRunnerExceptionCode.INVALID_QUERY_INPUT,
+      { userFriendlyMessage: STANDARD_ERROR_MESSAGE },
+    );
   }
 
   return groupByFields;

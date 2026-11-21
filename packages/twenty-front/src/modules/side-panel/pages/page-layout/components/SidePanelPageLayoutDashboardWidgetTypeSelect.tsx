@@ -1,11 +1,8 @@
 import { CommandMenuItem } from '@/command-menu/components/CommandMenuItem';
 import { FIND_MANY_FRONT_COMPONENTS } from '@/front-components/graphql/queries/findManyFrontComponents';
 import { useReadableObjectMetadataItems } from '@/object-metadata/hooks/useReadableObjectMetadataItems';
-import { useCreatePageLayoutFrontComponentWidget } from '@/page-layout/hooks/useCreatePageLayoutFrontComponentWidget';
 import { useCreatePageLayoutGraphWidget } from '@/page-layout/hooks/useCreatePageLayoutGraphWidget';
-import { useCreatePageLayoutIframeWidget } from '@/page-layout/hooks/useCreatePageLayoutIframeWidget';
-import { useCreatePageLayoutRecordTableWidget } from '@/page-layout/hooks/useCreatePageLayoutRecordTableWidget';
-import { useCreatePageLayoutStandaloneRichTextWidget } from '@/page-layout/hooks/useCreatePageLayoutStandaloneRichTextWidget';
+import { useCreatePageLayoutWidget } from '@/page-layout/hooks/useCreatePageLayoutWidget';
 import { useOpportunityDefaultChartConfig } from '@/page-layout/hooks/useOpportunityDefaultChartConfig';
 import { useRemovePageLayoutWidgetAndPreservePosition } from '@/page-layout/hooks/useRemovePageLayoutWidgetAndPreservePosition';
 import { pageLayoutDraftComponentState } from '@/page-layout/states/pageLayoutDraftComponentState';
@@ -16,15 +13,18 @@ import { SidePanelGroup } from '@/side-panel/components/SidePanelGroup';
 import { SidePanelList } from '@/side-panel/components/SidePanelList';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { useNavigatePageLayoutSidePanel } from '@/side-panel/pages/page-layout/hooks/useNavigatePageLayoutSidePanel';
-import { usePageLayoutIdFromContextStore } from '@/side-panel/pages/page-layout/hooks/usePageLayoutIdFromContextStore';
+import { usePageLayoutSidePanelTarget } from '@/side-panel/pages/page-layout/hooks/usePageLayoutSidePanelTarget';
 import { getFrontComponentWidgetTypeSelectItemId } from '@/side-panel/pages/page-layout/utils/getFrontComponentWidgetTypeSelectItemId';
 import { isExistingWidgetMissingOrDifferentType } from '@/side-panel/pages/page-layout/utils/isExistingWidgetMissingOrDifferentType';
+import { isFrontComponentAvailableInWidgetPicker } from '@/side-panel/pages/page-layout/utils/isFrontComponentAvailableInWidgetPicker';
 import { SelectableListItem } from '@/ui/layout/selectable-list/components/SelectableListItem';
 import { useAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useAtomComponentState';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useQuery } from '@apollo/client/react';
-import { t } from '@lingui/core/macro';
-import { CoreObjectNameSingular, SidePanelPages } from 'twenty-shared/types';
+import {
+  StandardObjectNameSingular,
+  SidePanelPages,
+} from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
 import {
   IconAlignBoxLeftTop,
@@ -32,11 +32,19 @@ import {
   IconChartPie,
   IconFrame,
   IconTable,
-} from 'twenty-ui/display';
-import { type FrontComponent, WidgetType } from '~/generated-metadata/graphql';
+} from 'twenty-ui/icon';
+import {
+  type FrontComponent,
+  PageLayoutType,
+  WidgetConfigurationType,
+  WidgetType,
+} from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
-  const { pageLayoutId, recordId } = usePageLayoutIdFromContextStore();
+  const { t } = useLingui();
+  const { pageLayoutId, targetRecordIdentifier } =
+    usePageLayoutSidePanelTarget();
 
   const { closeSidePanelMenu } = useSidePanelMenu();
 
@@ -52,7 +60,7 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
   const tabListInstanceId = getTabListInstanceIdFromPageLayoutAndRecord({
     pageLayoutId,
     layoutType: pageLayoutDraft.type,
-    targetRecordIdentifier: { id: recordId, targetObjectNameSingular: '' },
+    targetRecordIdentifier,
   });
 
   const { createPageLayoutGraphWidget } = useCreatePageLayoutGraphWidget({
@@ -60,25 +68,10 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
     tabListInstanceId,
   });
 
-  const { createPageLayoutIframeWidget } = useCreatePageLayoutIframeWidget({
+  const { createPageLayoutWidget } = useCreatePageLayoutWidget({
     pageLayoutId,
     tabListInstanceId,
   });
-
-  const { createPageLayoutStandaloneRichTextWidget } =
-    useCreatePageLayoutStandaloneRichTextWidget({
-      pageLayoutId,
-      tabListInstanceId,
-    });
-
-  const { createPageLayoutFrontComponentWidget } =
-    useCreatePageLayoutFrontComponentWidget({
-      pageLayoutId,
-      tabListInstanceId,
-    });
-
-  const { createPageLayoutRecordTableWidget } =
-    useCreatePageLayoutRecordTableWidget(pageLayoutId);
 
   const { removePageLayoutWidgetAndPreservePosition } =
     useRemovePageLayoutWidgetAndPreservePosition(pageLayoutId);
@@ -90,7 +83,7 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
   const firstAvailableObjectMetadataItem =
     readableObjectMetadataItems.find(
       (objectMetadataItem) =>
-        objectMetadataItem.nameSingular === CoreObjectNameSingular.Company,
+        objectMetadataItem.nameSingular === StandardObjectNameSingular.Company,
     ) ||
     [...readableObjectMetadataItems].sort((first, second) =>
       first.labelPlural.localeCompare(second.labelPlural),
@@ -100,7 +93,13 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
     frontComponents: FrontComponent[];
   }>(FIND_MANY_FRONT_COMPONENTS);
 
-  const frontComponents = frontComponentsData?.frontComponents ?? [];
+  const frontComponents = (frontComponentsData?.frontComponents ?? []).filter(
+    (frontComponent) =>
+      isFrontComponentAvailableInWidgetPicker({
+        frontComponent,
+        pageLayoutType: PageLayoutType.DASHBOARD,
+      }),
+  );
 
   const frontComponentsWithSelectItemId = frontComponents.map(
     (frontComponent) => ({
@@ -154,7 +153,14 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
         removePageLayoutWidgetAndPreservePosition(pageLayoutEditingWidgetId);
       }
 
-      const newWidget = createPageLayoutIframeWidget(t`Untitled iFrame`, null);
+      const newWidget = createPageLayoutWidget({
+        type: WidgetType.IFRAME,
+        title: t`Untitled iFrame`,
+        configuration: {
+          configurationType: WidgetConfigurationType.IFRAME,
+          url: null,
+        },
+      });
       setPageLayoutEditingWidgetId(newWidget.id);
     }
 
@@ -175,9 +181,13 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
         removePageLayoutWidgetAndPreservePosition(pageLayoutEditingWidgetId);
       }
 
-      const newWidget = createPageLayoutStandaloneRichTextWidget({
-        blocknote: '',
-        markdown: null,
+      const newWidget = createPageLayoutWidget({
+        type: WidgetType.STANDALONE_RICH_TEXT,
+        title: t`Untitled Rich Text`,
+        configuration: {
+          configurationType: WidgetConfigurationType.STANDALONE_RICH_TEXT,
+          body: { tiptap: '', markdown: null },
+        },
       });
       setPageLayoutEditingWidgetId(newWidget.id);
     }
@@ -196,9 +206,15 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
         removePageLayoutWidgetAndPreservePosition(pageLayoutEditingWidgetId);
       }
 
-      const newRecordTableWidget = createPageLayoutRecordTableWidget(
-        firstAvailableObjectMetadataItem,
-      );
+      const newRecordTableWidget = createPageLayoutWidget({
+        type: WidgetType.RECORD_TABLE,
+        title: firstAvailableObjectMetadataItem?.labelPlural ?? t`Record Table`,
+        configuration: {
+          configurationType: WidgetConfigurationType.RECORD_TABLE,
+          isUIEditable: pageLayoutDraft.type === PageLayoutType.RECORD_PAGE,
+        },
+        objectMetadataId: firstAvailableObjectMetadataItem?.id,
+      });
 
       setPageLayoutEditingWidgetId(newRecordTableWidget.id);
 
@@ -225,10 +241,15 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
         removePageLayoutWidgetAndPreservePosition(pageLayoutEditingWidgetId);
       }
 
-      const newWidget = createPageLayoutFrontComponentWidget(
-        frontComponent.name,
-        frontComponent.id,
-      );
+      const newWidget = createPageLayoutWidget({
+        type: WidgetType.FRONT_COMPONENT,
+        title: frontComponent.name,
+        configuration: {
+          __typename: 'FrontComponentConfiguration',
+          configurationType: WidgetConfigurationType.FRONT_COMPONENT,
+          frontComponentId: frontComponent.id,
+        },
+      });
       setPageLayoutEditingWidgetId(newWidget.id);
     }
 
@@ -245,7 +266,7 @@ export const SidePanelPageLayoutDashboardWidgetTypeSelect = () => {
 
   return (
     <SidePanelList selectableItemIds={selectableItemIds}>
-      <SidePanelGroup heading={t`Widget type`}>
+      <SidePanelGroup heading={t`Standard widgets`}>
         <SelectableListItem
           itemId="chart"
           onEnter={handleNavigateToGraphTypeSelect}

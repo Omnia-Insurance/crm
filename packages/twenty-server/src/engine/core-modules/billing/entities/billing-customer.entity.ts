@@ -1,8 +1,6 @@
 /* @license Enterprise */
 
-import { ObjectType } from '@nestjs/graphql';
-
-import { IDField } from '@ptc-org/nestjs-query-graphql';
+import { Field, ObjectType } from '@nestjs/graphql';
 import {
   Column,
   CreateDateColumn,
@@ -17,7 +15,9 @@ import {
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
 import { BillingEntitlementEntity } from 'src/engine/core-modules/billing/entities/billing-entitlement.entity';
 import { BillingSubscriptionEntity } from 'src/engine/core-modules/billing/entities/billing-subscription.entity';
-import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity';
+import { UserCreditsFallback } from 'src/engine/core-modules/billing/enums/billing-user-credits-fallback.enum';
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
+import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/workspace-related-entity.type';
 
 @Entity({ name: 'billingCustomer', schema: 'core' })
 @ObjectType('BillingCustomer')
@@ -25,7 +25,7 @@ import { WorkspaceRelatedEntity } from 'src/engine/workspace-manager/types/works
   unique: true,
 })
 export class BillingCustomerEntity extends WorkspaceRelatedEntity {
-  @IDField(() => UUIDScalarType)
+  @Field(() => UUIDScalarType)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -41,17 +41,22 @@ export class BillingCustomerEntity extends WorkspaceRelatedEntity {
   @Column({ nullable: false, unique: true })
   stripeCustomerId: string;
 
-  @Column({
-    type: 'bigint',
-    nullable: false,
-    default: 0,
-    transformer: {
-      to: (value: number) => value,
-      from: (value: string | number | null) =>
-        typeof value === 'string' ? Number(value) : (value ?? 0),
-    },
+  // Null means unknown (customer created before the flag existed and not synced yet).
+  @Field(() => Boolean, { nullable: true })
+  @Column({ nullable: true, type: 'boolean' })
+  hasPaymentMethod: boolean | null;
+
+  @Field(() => UserCreditsFallback)
+  @WasIntroducedInUpgrade({
+    upgradeCommandName:
+      '2.49.0_AddUserCreditsFallbackToBillingCustomerFastInstanceCommand_1792154197828',
   })
-  creditBalanceMicro: number;
+  @Column({
+    type: 'varchar',
+    nullable: false,
+    default: UserCreditsFallback.WORKSPACE_CREDITS,
+  })
+  userCreditsFallback: UserCreditsFallback;
 
   @OneToMany(
     () => BillingSubscriptionEntity,

@@ -1,9 +1,14 @@
+import { MONOSPACE_FONT_FAMILY } from '@/ui/theme/constants/MonospaceFontFamily';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
-import { IconCopy, IconTerminal } from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import {
+  LightIconButton,
+  SegmentedControl,
+  type SegmentedControlOption,
+} from 'twenty-ui/components/input';
+import { IconCopy, IconTerminal } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useCopyToClipboard } from '~/hooks/useCopyToClipboard';
 
 const StyledContainer = styled.div`
@@ -31,37 +36,10 @@ const StyledHeaderLeft = styled.div`
   gap: ${themeCssVariables.spacing[1]};
 `;
 
-const StyledTabContainer = styled.div`
+const StyledHeaderRight = styled.div`
+  align-items: center;
   display: flex;
   gap: ${themeCssVariables.spacing[1]};
-`;
-
-const StyledTab = styled.button<{ isActive: boolean; hasError?: boolean }>`
-  background: ${({ isActive }) =>
-    isActive ? themeCssVariables.background.secondary : 'transparent'};
-  border: none;
-  border-radius: ${themeCssVariables.border.radius.xs};
-  color: ${({ isActive, hasError }) =>
-    hasError
-      ? themeCssVariables.color.red
-      : isActive
-        ? themeCssVariables.font.color.primary
-        : themeCssVariables.font.color.tertiary};
-  cursor: pointer;
-  font-size: ${themeCssVariables.font.size.xs};
-  font-weight: ${({ isActive }) =>
-    isActive
-      ? themeCssVariables.font.weight.medium
-      : themeCssVariables.font.weight.regular};
-  padding: ${themeCssVariables.spacing['0.5']} ${themeCssVariables.spacing[1]};
-
-  &:hover {
-    background: ${themeCssVariables.background.secondary};
-    color: ${({ hasError }) =>
-      hasError
-        ? themeCssVariables.color.red
-        : themeCssVariables.font.color.primary};
-  }
 `;
 
 const StyledOutputArea = styled.div<{ isError?: boolean }>`
@@ -70,7 +48,7 @@ const StyledOutputArea = styled.div<{ isError?: boolean }>`
     isError
       ? themeCssVariables.color.red
       : themeCssVariables.font.color.primary};
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-family: ${MONOSPACE_FONT_FAMILY};
   font-size: ${themeCssVariables.font.size.sm};
   line-height: 1.5;
   max-height: 300px;
@@ -131,6 +109,11 @@ export const TerminalOutput = ({
 
   const currentOutput = activeTab === 'stdout' ? stdout : stderr;
 
+  const outputStreamOptions: SegmentedControlOption<TabType>[] = [
+    { value: 'stdout', label: 'stdout' },
+    ...(hasStderr ? [{ value: 'stderr' as const, label: 'stderr' }] : []),
+  ];
+
   return (
     <StyledContainer>
       <StyledHeader>
@@ -138,30 +121,24 @@ export const TerminalOutput = ({
           <IconTerminal size={14} />
           {t`Output`}
         </StyledHeaderLeft>
-        <StyledTabContainer>
-          <StyledTab
-            isActive={activeTab === 'stdout'}
-            onClick={() => setUserSelectedTab('stdout')}
-          >
-            stdout
-          </StyledTab>
-          {hasStderr && (
-            <StyledTab
-              isActive={activeTab === 'stderr'}
-              hasError
-              onClick={() => setUserSelectedTab('stderr')}
-            >
-              stderr
-            </StyledTab>
-          )}
+        <StyledHeaderRight>
+          <SegmentedControl
+            aria-label={t`Output stream`}
+            itemWidth="content"
+            options={outputStreamOptions}
+            value={activeTab}
+            onValueChange={setUserSelectedTab}
+          />
           <LightIconButton
-            Icon={IconCopy}
             onClick={() => copyToClipboard(currentOutput)}
             title={t`Copy output`}
-            size="small"
-            accent="tertiary"
-          />
-        </StyledTabContainer>
+            size="sm"
+            emphasis="subtle"
+            aria-label={t`Copy output`}
+          >
+            <IconCopy />
+          </LightIconButton>
+        </StyledHeaderRight>
       </StyledHeader>
       <StyledOutputArea isError={activeTab === 'stderr'}>
         {currentOutput ? (

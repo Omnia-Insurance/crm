@@ -6,98 +6,72 @@ import { type WorkspacePreQueryHookInstance } from 'src/engine/api/graphql/works
 import { type UpdateOneResolverArgs } from 'src/engine/api/graphql/workspace-resolver-builder/interfaces/workspace-resolvers-builder.interface';
 
 import { WorkspaceQueryHook } from 'src/engine/api/graphql/workspace-query-runner/workspace-query-hook/decorators/workspace-query-hook.decorator';
-import { type AuthContext } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { isUserAuthContext } from 'src/engine/core-modules/auth/guards/is-user-auth-context.guard';
 import { type WorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
-import { AgentProfileResolverService } from 'src/modules/agent-profile/services/agent-profile-resolver.service';
+import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
+import { findPolicyUpdateTargets } from 'src/modules/policy/query-hooks/utils/find-policy-update-targets.util';
 import { PolicyWriteAuthorizationService } from 'src/modules/policy/services/policy-write-authorization.service';
 import { buildPolicyDisplayName } from 'src/modules/policy/utils/build-policy-display-name.util';
 
 @Injectable()
 @WorkspaceQueryHook(`policy.updateOne`)
-export class PolicyUpdateOnePreQueryHook
-  implements WorkspacePreQueryHookInstance
-{
-  private readonly policyWriteAuthorizationService: PolicyWriteAuthorizationService;
-
-  // The authorization service is built from the injected dependencies (rather
-  // than injected itself) to keep this hook's constructor signature stable
-  // for existing consumers and tests.
+export class PolicyUpdateOnePreQueryHook implements WorkspacePreQueryHookInstance {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-    workspaceCacheService: WorkspaceCacheService,
-    agentProfileResolverService: AgentProfileResolverService,
-  ) {
-    this.policyWriteAuthorizationService = new PolicyWriteAuthorizationService(
-      workspaceCacheService,
-      agentProfileResolverService,
-    );
-  }
+    private readonly workspaceOrmManager: WorkspaceOrmManager,
+    private readonly policyWriteAuthorizationService: PolicyWriteAuthorizationService,
+  ) {}
 
   async execute(
-    authContext: AuthContext,
+    authContext: WorkspaceAuthContext,
     _objectName: string,
     payload: UpdateOneResolverArgs,
   ): Promise<UpdateOneResolverArgs> {
-    const workspace = authContext.workspace;
+    const isRenaming =
+      isDefined(payload.data.carrierId) || isDefined(payload.data.productId);
 
-    if (!isDefined(workspace)) {
+    if (!isUserAuthContext(authContext) && !isRenaming) {
       return payload;
     }
 
-    await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {
-      const policyRepo = await this.globalWorkspaceOrmManager.getRepository(
-        workspace.id,
-        'policy',
-        { shouldBypassPermissionChecks: true },
+    const [policy] = await findPolicyUpdateTargets({
+      workspaceId: authContext.workspace.id,
+      policyIds: [payload.id],
+      workspaceOrmManager: this.workspaceOrmManager,
+    });
+
+    // The runner reports an unknown id as not found
+    if (!isDefined(policy)) {
+      return payload;
+    }
+
+    await this.policyWriteAuthorizationService.assertUserMayUpdatePolicies({
+      authContext,
+      policies: [policy],
+    });
+
+    if (!isRenaming) {
+      return payload;
+    }
+
+    // An explicit null clears the field, so only an absent value falls back to the stored one
+    const { carrierId = policy.carrierId, productId = policy.productId } =
+      payload.data;
+
+    const displayName =
+      await this.workspaceOrmManager.executeInWorkspaceContext(
+        () =>
+          buildPolicyDisplayName(
+            { carrierId, productId },
+            this.workspaceOrmManager,
+          ),
+        buildSystemAuthContext(authContext.workspace.id),
+        { lite: true },
       );
 
-      const existing = (await policyRepo.findOne({
-        where: { id: payload.id },
-      })) as Record<string, unknown> | null;
-
-      // Agent ownership RLS denial ("Editing this record violates row-level security.")
-      // is asserted before the edit-window denial, exactly as the previous
-      // inline implementation did.
-      await this.policyWriteAuthorizationService.assertUserMayWritePolicy({
-        workspaceId: workspace.id,
-        userWorkspaceId: authContext.userWorkspaceId,
-        workspaceMemberId: authContext.workspaceMemberId,
-        policy: {
-          id: payload.id,
-          agentId: existing?.agentId as string | null | undefined,
-          createdAt: existing?.createdAt as string | Date | null | undefined,
-        },
-      });
-
-      // Auto-derive name when carrier or product changes
-      if (
-        isDefined(payload.data.carrierId) ||
-        isDefined(payload.data.productId)
-      ) {
-        const carrierId =
-          (payload.data.carrierId as string) ??
-          (existing?.carrierId as string | null) ??
-          null;
-
-        const productId =
-          (payload.data.productId as string) ??
-          (existing?.productId as string | null) ??
-          null;
-
-        const displayName = await buildPolicyDisplayName(
-          carrierId,
-          productId,
-          workspace.id,
-          this.globalWorkspaceOrmManager,
-        );
-
-        if (displayName) {
-          payload.data.name = displayName;
-        }
-      }
-    }, authContext as WorkspaceAuthContext);
+    if (isDefined(displayName)) {
+      payload.data.name = displayName;
+    }
 
     return payload;
   }

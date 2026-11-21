@@ -2,14 +2,19 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 
 import { FileFolder } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
 import { v4 } from 'uuid';
 import { type DataSource } from 'typeorm';
 
 import {
   FileStorageService,
   type ResourceIdentifier,
-} from 'src/engine/core-modules/file-storage/file-storage.service';
+} from 'src/engine/core-modules/file-storage/services/file-storage.service';
 import { FileService } from 'src/engine/core-modules/file/services/file.service';
+import {
+  FILE_STATUS,
+  type FileStatus,
+} from 'src/engine/core-modules/file/types/file-status.type';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
 import { TWENTY_STANDARD_APPLICATION } from 'src/engine/workspace-manager/twenty-standard-application/constants/twenty-standard-applications';
 import { MAX_SOURCE_FILE_BYTES } from 'src/modules/reconciliation/parsers/xlsx';
@@ -18,7 +23,7 @@ import { ReconciliationMutationService } from 'src/modules/reconciliation/servic
 import type { GenericRow } from 'src/modules/reconciliation/types/reconciliation';
 import { streamToBuffer } from 'src/utils/stream-to-buffer';
 
-type AttachmentRow = { id: string; name: string; file: unknown };
+type AttachmentRow = { id: string; file: unknown };
 
 @Injectable()
 export class ReconciliationAttachmentService {
@@ -93,7 +98,9 @@ export class ReconciliationAttachmentService {
         if (Array.isArray(parsed) && parsed.length > 0) {
           fileId = parsed[0].fileId ?? parsed[0].id ?? null;
         }
-      } catch { /* not JSON */ }
+      } catch {
+        /* not JSON */
+      }
     }
 
     if (!fileId) {
@@ -103,17 +110,29 @@ export class ReconciliationAttachmentService {
     }
 
     this.logger.log(
-      `Reading source file: attachment=${attachment.id} ("${attachment.name}"), fileId=${fileId}`,
+      `Reading source file: attachment=${attachment.id}, fileId=${fileId}`,
     );
 
     // 3. Use FileService.getFileContentById — the production pattern for
     //    reading uploaded files. Handles FileEntity lookup, application
     //    resolution, and storage abstraction (local + S3).
-    const { buffer } = await this.fileService.getFileContentById({
+    const fileContent = await this.fileService.getFileContentById({
       fileId,
       workspaceId,
       fileFolder: FileFolder.FilesField,
     });
+
+    if (!isDefined(fileContent)) {
+      const fileStatus = await this.findFileStatus(workspaceId, fileId);
+
+      throw new Error(
+        fileStatus === FILE_STATUS.PENDING
+          ? `Source file for attachment ${attachment.id} (fileId=${fileId}) in reconciliation ${reconciliationId} has not finished uploading (file status PENDING); re-run once the upload completes`
+          : `Failed to read source file content for attachment ${attachment.id} (fileId=${fileId}, file status ${fileStatus ?? 'missing'}) in reconciliation ${reconciliationId}`,
+      );
+    }
+
+    const { buffer } = fileContent;
 
     // Cap input size before handing the untrusted buffer to the unpatched
     // xlsx parser (prototype-pollution/ReDoS CVEs) — bounds blast radius.
@@ -150,7 +169,7 @@ export class ReconciliationAttachmentService {
 
     if (pinnedAttachmentId) {
       const pinnedRows: AttachmentRow[] = await this.dataSource.query(
-        `SELECT id, name, file FROM "${schemaName}"."attachment"
+        `SELECT id, file FROM "${schemaName}"."attachment"
          WHERE id = $1 AND "targetReconciliationId" = $2
          LIMIT 1`,
         [pinnedAttachmentId, reconciliationId],
@@ -170,7 +189,7 @@ export class ReconciliationAttachmentService {
     }
 
     const fallbackRows: AttachmentRow[] = await this.dataSource.query(
-      `SELECT id, name, file FROM "${schemaName}"."attachment"
+      `SELECT id, file FROM "${schemaName}"."attachment"
        WHERE "targetReconciliationId" = $1
          AND name ~* '\\.(xlsx|xls|csv)$'
        ORDER BY "createdAt" DESC LIMIT 1`,
@@ -186,7 +205,7 @@ export class ReconciliationAttachmentService {
     const chosen = fallbackRows[0];
 
     this.logger.log(
-      `Resolved source attachment by newest-spreadsheet fallback: ${chosen.id} ("${chosen.name}") for reconciliation ${reconciliationId}`,
+      `Resolved source attachment by newest-spreadsheet fallback: ${chosen.id} for reconciliation ${reconciliationId}`,
     );
 
     // Pin the choice so every subsequent read uses exactly this file.
@@ -216,6 +235,19 @@ export class ReconciliationAttachmentService {
 
   // --- Helpers ---
 
+  // getFileContentById only serves UPLOADED files; the status says why it did not
+  private async findFileStatus(
+    workspaceId: string,
+    fileId: string,
+  ): Promise<FileStatus | null> {
+    const rows: { status: FileStatus }[] = await this.dataSource.query(
+      `SELECT status FROM core."file" WHERE id = $1 AND "workspaceId" = $2 LIMIT 1`,
+      [fileId, workspaceId],
+    );
+
+    return rows[0]?.status ?? null;
+  }
+
   private async writeJsonToStorage(
     workspaceId: string,
     reconciliationId: string,
@@ -227,7 +259,6 @@ export class ReconciliationAttachmentService {
     await this.fileStorageService.writeFile({
       ...this.buildResourceId(workspaceId, reconciliationId, filename),
       sourceFile: json,
-      mimeType: 'application/json',
       fileId: v4(),
       settings: { isTemporaryFile: false, toDelete: false },
     });
@@ -254,7 +285,8 @@ export class ReconciliationAttachmentService {
   ): ResourceIdentifier {
     return {
       workspaceId,
-      applicationUniversalIdentifier: TWENTY_STANDARD_APPLICATION.universalIdentifier,
+      applicationUniversalIdentifier:
+        TWENTY_STANDARD_APPLICATION.universalIdentifier,
       fileFolder: FileFolder.FilesField,
       resourcePath: `reconciliation/${reconciliationId}/${filename}`,
     };

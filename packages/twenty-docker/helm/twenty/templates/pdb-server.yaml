@@ -1,3 +1,4 @@
+{{- /* OMNIA-CUSTOM: keep one server pod up through voluntary disruptions (node drains, upgrades) */}}
 {{- if and .Values.server.enabled (gt (int .Values.server.replicaCount) 1) }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget

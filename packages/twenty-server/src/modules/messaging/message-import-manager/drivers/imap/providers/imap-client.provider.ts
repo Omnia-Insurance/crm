@@ -1,18 +1,22 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 
 import { ImapFlow } from 'imapflow';
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
+import { Repository } from 'typeorm';
 
+import { buildImapTlsOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-imap-tls-options.util';
+import { buildMailServerCertificateOptions } from 'src/engine/core-modules/imap-smtp-caldav-connection/utils/build-mail-server-certificate-options.util';
 import { SecureHttpClientService } from 'src/engine/core-modules/secure-http-client/secure-http-client.service';
-import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
+import { ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { ConnectedAccountTokenEncryptionService } from 'src/engine/metadata-modules/connected-account/services/connected-account-token-encryption.service';
+import {
+  MessageImportDriverException,
+  MessageImportDriverExceptionCode,
+} from 'src/modules/messaging/message-import-manager/drivers/exceptions/message-import-driver.exception';
 import { parseImapAuthenticationError } from 'src/modules/messaging/message-import-manager/drivers/imap/utils/parse-imap-authentication-error.util';
-
-type ConnectedAccountIdentifier = Pick<
-  ConnectedAccountEntity,
-  'id' | 'provider' | 'connectionParameters' | 'handle' | 'workspaceId'
->;
 
 @Injectable()
 export class ImapClientProvider {
@@ -23,12 +27,16 @@ export class ImapClientProvider {
 
   constructor(
     private readonly secureHttpClientService: SecureHttpClientService,
+    private readonly twentyConfigService: TwentyConfigService,
     private readonly connectedAccountTokenEncryptionService: ConnectedAccountTokenEncryptionService,
+    @InjectRepository(ConnectedAccountEntity)
+    private readonly connectedAccountRepository: Repository<ConnectedAccountEntity>,
   ) {}
 
-  async getClient(
-    connectedAccount: ConnectedAccountIdentifier,
-  ): Promise<ImapFlow> {
+  async getClient(connectedAccountId: string): Promise<ImapFlow> {
+    const connectedAccount =
+      await this.loadConnectedAccount(connectedAccountId);
+
     try {
       return await this.createConnection(connectedAccount);
     } catch (error) {
@@ -50,13 +58,31 @@ export class ImapClientProvider {
     }
   }
 
-  private async createConnection(
-    connectedAccount: ConnectedAccountIdentifier,
-  ): Promise<ImapFlow> {
+  private async loadConnectedAccount(
+    connectedAccountId: string,
+  ): Promise<ConnectedAccountEntity> {
+    const connectedAccount = await this.connectedAccountRepository.findOne({
+      where: { id: connectedAccountId },
+    });
+
     if (
+      !isDefined(connectedAccount) ||
       connectedAccount.provider !== ConnectedAccountProvider.IMAP_SMTP_CALDAV ||
       !isDefined(connectedAccount.connectionParameters?.IMAP)
     ) {
+      throw new MessageImportDriverException(
+        `Missing IMAP credentials for connected account ${connectedAccountId}`,
+        MessageImportDriverExceptionCode.INSUFFICIENT_PERMISSIONS,
+      );
+    }
+
+    return connectedAccount;
+  }
+
+  private async createConnection(
+    connectedAccount: ConnectedAccountEntity,
+  ): Promise<ImapFlow> {
+    if (!isDefined(connectedAccount.connectionParameters?.IMAP)) {
       throw new Error('Connected account is not an IMAP provider');
     }
 
@@ -72,7 +98,7 @@ export class ImapClientProvider {
     const client = new ImapFlow({
       host: validatedImapHost,
       port: imapParams.port || 993,
-      secure: imapParams.secure,
+      ...buildImapTlsOptions(imapParams.connectionSecurity),
       auth: {
         user: isDefined(imapParams.username)
           ? imapParams.username
@@ -80,9 +106,13 @@ export class ImapClientProvider {
         pass: imapParams.password,
       },
       logger: false,
-      tls: {
-        rejectUnauthorized: false,
-      },
+      disableIMAP4rev2: true,
+      tls: buildMailServerCertificateOptions({
+        host: imapParams.host,
+        isSelfSignedCertificateAllowed: this.twentyConfigService.get(
+          'IMAP_SMTP_ALLOW_SELF_SIGNED',
+        ),
+      }),
       connectionTimeout: ImapClientProvider.CONNECTION_TIMEOUT_MS,
       greetingTimeout: ImapClientProvider.GREETING_TIMEOUT_MS,
     });

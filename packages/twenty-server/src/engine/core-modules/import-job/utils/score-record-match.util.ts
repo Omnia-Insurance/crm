@@ -27,7 +27,9 @@ const fuzzyNameMatch = (a: string, b: string): boolean => {
   const la = a.toLowerCase().trim();
   const lb = b.toLowerCase().trim();
 
-  if (la === lb) return true;
+  if (la === lb) {
+    return true;
+  }
   if (la.length >= 3 && lb.length >= 3 && la.slice(0, 3) === lb.slice(0, 3)) {
     return true;
   }
@@ -66,8 +68,9 @@ export function extractMatchDataFromRecord(
   let phone: string | undefined;
 
   if (typeof record.phones === 'object' && record.phones !== null) {
-    phone = (record.phones as Record<string, unknown>)
-      .primaryPhoneNumber as string | undefined;
+    phone = (record.phones as Record<string, unknown>).primaryPhoneNumber as
+      | string
+      | undefined;
   } else {
     phone = record.phonesPrimaryPhoneNumber as string | undefined;
   }
@@ -76,8 +79,9 @@ export function extractMatchDataFromRecord(
   let email: string | undefined;
 
   if (typeof record.emails === 'object' && record.emails !== null) {
-    email = (record.emails as Record<string, unknown>)
-      .primaryEmail as string | undefined;
+    email = (record.emails as Record<string, unknown>).primaryEmail as
+      | string
+      | undefined;
   } else {
     email = record.emailsPrimaryEmail as string | undefined;
   }
@@ -140,9 +144,7 @@ export function scoreRecordMatch(
 
   // First Name — 15 exact, 10 fuzzy
   if (candidate.firstName && target.firstName) {
-    if (
-      candidate.firstName.toLowerCase() === target.firstName.toLowerCase()
-    ) {
+    if (candidate.firstName.toLowerCase() === target.firstName.toLowerCase()) {
       breakdown.firstName = 15;
       score += 15;
     } else if (fuzzyNameMatch(candidate.firstName, target.firstName)) {

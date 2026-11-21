@@ -1,10 +1,11 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { type ImportedRow } from '@/spreadsheet-import/types';
 
 import { type SpreadsheetColumn } from '@/spreadsheet-import/types/SpreadsheetColumn';
 import { isDefined } from 'twenty-shared/utils';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledContainer = styled.div`
   display: flex;
@@ -39,6 +40,7 @@ export const UserTableColumn = ({
   column,
   importedRow,
 }: UserTableColumnProps) => {
+  const { t } = useLingui();
   const { header } = column;
   const firstDefinedValue = importedRow.find(isDefined);
 
@@ -46,7 +48,7 @@ export const UserTableColumn = ({
     <StyledContainer>
       <StyledValue>{header}</StyledValue>
       {firstDefinedValue && (
-        <StyledExample>{`ex: ${firstDefinedValue}`}</StyledExample>
+        <StyledExample>{t`ex: ${firstDefinedValue}`}</StyledExample>
       )}
     </StyledContainer>
   );

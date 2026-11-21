@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 
+import { buildWorkspaceAuthContextFromRequest } from 'src/engine/core-modules/auth/utils/build-workspace-auth-context-from-request.util';
 import { msg } from '@lingui/core/macro';
 import { isDefined } from 'class-validator';
 import { PermissionFlagType } from 'twenty-shared/constants';
@@ -14,12 +15,14 @@ import {
   PermissionsException,
   PermissionsExceptionCode,
   PermissionsExceptionMessage,
-} from 'src/engine/metadata-modules/permissions/permissions.exception';
-import { PermissionsService } from 'src/engine/metadata-modules/permissions/permissions.service';
+} from 'src/engine/permissions/permissions.exception';
+import { SettingPermissionsService } from 'src/engine/permissions/setting-permissions.service';
 
 @Injectable()
 export class UploadProfilePicturePermissionGuard implements CanActivate {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(
+    private readonly settingPermissionsService: SettingPermissionsService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const gqlContext = GqlExecutionContext.create(context);
@@ -35,12 +38,8 @@ export class UploadProfilePicturePermissionGuard implements CanActivate {
       );
     }
 
-    const workspaceId = request.workspace.id;
-    const userWorkspaceId = request.userWorkspaceId;
     const workspaceActivationStatus = request.workspace.activationStatus;
-    const apiKeyId = request.apiKey?.id;
 
-    // Allow during workspace creation
     if (
       [
         WorkspaceActivationStatus.PENDING_CREATION,
@@ -50,26 +49,22 @@ export class UploadProfilePicturePermissionGuard implements CanActivate {
       return true;
     }
 
-    // Check if user has WORKSPACE_MEMBERS permission (can edit any profile picture)
+    const authContext = buildWorkspaceAuthContextFromRequest(request);
+
     const hasWorkspaceMembersPermission =
-      await this.permissionsService.userHasWorkspaceSettingPermission({
-        userWorkspaceId,
-        workspaceId,
-        setting: PermissionFlagType.WORKSPACE_MEMBERS,
-        apiKeyId,
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: authContext,
+        permissionFlag: PermissionFlagType.WORKSPACE_MEMBERS,
       });
 
     if (hasWorkspaceMembersPermission) {
       return true;
     }
 
-    // Check if user has PROFILE_INFORMATION permission (can edit their own profile picture)
     const hasProfileInformationPermission =
-      await this.permissionsService.userHasWorkspaceSettingPermission({
-        userWorkspaceId,
-        workspaceId,
-        setting: PermissionFlagType.PROFILE_INFORMATION,
-        apiKeyId,
+      await this.settingPermissionsService.hasPermissionFlag({
+        authContext: authContext,
+        permissionFlag: PermissionFlagType.PROFILE_INFORMATION,
       });
 
     if (hasProfileInformationPermission) {

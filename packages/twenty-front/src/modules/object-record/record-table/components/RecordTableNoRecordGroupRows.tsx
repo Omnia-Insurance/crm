@@ -1,12 +1,10 @@
-import { RecordTableNoRecordGroupAddNew } from '@/object-record/record-table/components/RecordTableNoRecordGroupAddNew';
-import { RecordTableRowVirtualizedContainer } from '@/object-record/record-table/virtualization/components/RecordTableRowVirtualizedContainer';
+import { styled } from '@linaria/react';
+
+import { RecordTableNoRecordGroupAddNewDropZone } from '@/object-record/record-table/components/RecordTableNoRecordGroupAddNewDropZone';
+import { RecordTableRowSlot } from '@/object-record/record-table/virtualization/components/RecordTableRowSlot';
 import { RecordTableVirtualizedBodyPlaceholder } from '@/object-record/record-table/virtualization/components/RecordTableVirtualizedBodyPlaceholder';
 import { RecordTableVirtualizedDebugHelper } from '@/object-record/record-table/virtualization/components/RecordTableVirtualizedDebugHelper';
-import { NUMBER_OF_VIRTUALIZED_ROWS } from '@/object-record/record-table/virtualization/constants/NumberOfVirtualizedRows';
-import { totalNumberOfRecordsToVirtualizeComponentState } from '@/object-record/record-table/virtualization/states/totalNumberOfRecordsToVirtualizeComponentState';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { styled } from '@linaria/react';
-import { getContiguousIncrementalValues } from 'twenty-shared/utils';
+import { ROW_SLOTS } from '@/object-record/record-table/virtualization/constants/RowSlots';
 
 const StyledNoRecordGroupContainer = styled.div`
   display: flex;
@@ -14,32 +12,13 @@ const StyledNoRecordGroupContainer = styled.div`
   width: 100%;
 `;
 
-export const RecordTableNoRecordGroupRows = () => {
-  const totalNumberOfRecordsToVirtualize =
-    useAtomComponentStateValue(
-      totalNumberOfRecordsToVirtualizeComponentState,
-    ) ?? 0;
-
-  const numberOfRows = Math.min(
-    totalNumberOfRecordsToVirtualize,
-    NUMBER_OF_VIRTUALIZED_ROWS,
-  );
-
-  const virtualRowIndices = getContiguousIncrementalValues(numberOfRows);
-
-  return (
-    <StyledNoRecordGroupContainer>
-      <RecordTableVirtualizedBodyPlaceholder />
-      {virtualRowIndices.map((virtualRowIndex) => {
-        return (
-          <RecordTableRowVirtualizedContainer
-            key={virtualRowIndex}
-            virtualIndex={virtualRowIndex}
-          />
-        );
-      })}
-      <RecordTableNoRecordGroupAddNew />
-      <RecordTableVirtualizedDebugHelper />
-    </StyledNoRecordGroupContainer>
-  );
-};
+export const RecordTableNoRecordGroupRows = () => (
+  <StyledNoRecordGroupContainer>
+    <RecordTableVirtualizedBodyPlaceholder />
+    {ROW_SLOTS.map((rowSlot) => (
+      <RecordTableRowSlot key={rowSlot} rowSlot={rowSlot} />
+    ))}
+    <RecordTableNoRecordGroupAddNewDropZone />
+    <RecordTableVirtualizedDebugHelper />
+  </StyledNoRecordGroupContainer>
+);

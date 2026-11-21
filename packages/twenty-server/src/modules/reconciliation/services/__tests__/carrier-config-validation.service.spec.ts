@@ -56,14 +56,18 @@ const createHarness = ({
 } = {}) => {
   const dataService = {
     getCarrierConfig: jest.fn(async () => {
-      if (carrierConfig instanceof Error) throw carrierConfig;
+      if (carrierConfig instanceof Error) {
+        throw carrierConfig;
+      }
 
       return carrierConfig;
     }),
   };
   const attachmentService = {
     readParsedData: jest.fn(async () => {
-      if (parsedRows instanceof Error) throw parsedRows;
+      if (parsedRows instanceof Error) {
+        throw parsedRows;
+      }
 
       return parsedRows;
     }),
@@ -71,17 +75,17 @@ const createHarness = ({
   const reconciliationRepo = {
     find: jest.fn(async () => (latestParsedRun ? [latestParsedRun] : [])),
   };
-  const globalWorkspaceOrmManager = {
+  const workspaceOrmManager = {
     executeInWorkspaceContext: jest.fn(
       async (callback: () => Promise<unknown>) => callback(),
     ),
-    getRepository: jest.fn(async () => reconciliationRepo),
+    getRepositoryWithoutPermissionChecks: jest.fn(() => reconciliationRepo),
   };
 
   const service = new CarrierConfigValidationService(
     dataService as unknown as ReconciliationDataService,
     attachmentService as unknown as ReconciliationAttachmentService,
-    globalWorkspaceOrmManager as never,
+    workspaceOrmManager as never,
   );
 
   return {

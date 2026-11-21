@@ -1,0 +1,108 @@
+---
+title: Crediti
+description: "Il saldo condiviso che alimenta i tuoi workflow, gli agenti AI e la chat AI, oltre all'utilizzo personale dell'AI di ciascun membro: quanto vale un credito, fino a dove arriva e come gestirlo."
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Cosa sono i crediti?
+
+I crediti del workspace sono un unico saldo, condiviso dall'intero workspace, che alimenta tutto ciò che eseguiamo per tuo conto e che ha un costo reale: **automazioni dei workflow**, **agenti AI** e la **chat AI**. Invece di destreggiarti tra quote separate per "automation runs" e "AI tokens", hai un unico saldo semplice da tenere d’occhio. Nei piani Pro e Organization, la chat AI utilizza prima l'[utilizzo personale dell'AI](#personal-ai-usage) di ciascun membro.
+
+**1 credito = $1 di utilizzo.** Un credito è semplicemente un dollaro di lavoro, quindi il tuo saldo è facile da capire — nessuna unità astratta da convertire.
+
+## Quanto può coprire un credito?
+
+Il costo varia in base al lavoro. Le automazioni quotidiane e i messaggi AI rapidi costano una piccola frazione di un credito; le grandi attività degli agenti AI multi-step costano di più. Ecco un quadro approssimativo:
+
+| Cosa fai                                                                                       | Costo approssimativo                                 | Cosa significa                         |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------- |
+| Esegui uno step di workflow standard (ricerca, creazione o aggiornamento di record)            | $0.0001                                              | **10.000 esecuzioni per credito**      |
+| Attiva la funzione di logica dell'app                                                          | $0.0001 + $0.0001 per secondo di tempo di esecuzione | **Migliaia di esecuzioni per credito** |
+| Chiama un'API esterna o esegui un nodo di codice                                               | Una piccola frazione di un credito                   | Migliaia per credito                   |
+| Invia un messaggio di chat AI rapido o uno step AI semplice                                    | Una frazione di un centesimo                         | Centinaia per credito                  |
+| Esegui una grande attività di agente AI (ad es. "configura 10 oggetti dello spazio di lavoro") | Può arrivare a **~$1 o più**                         | Alcuni per credito                     |
+| Esegui una ricerca web con AI                                                                  | Un costo fisso per ricerca                           | Centinaia di ricerche per credito      |
+
+<Note>
+Per la maggior parte dei team, le automazioni standard sono di fatto gratuite — noterai un impatto sul saldo solo quando ti affidi alle funzionalità AI o esegui nodi di codice pesanti. È voluto: i crediti inclusi sono pensati per permetterti di costruire senza dover controllare un contatore.
+</Note>
+
+<Note>
+Non tutte le app addebitano le proprie esecuzioni. Call Recorder, Last Contact, Fathom e Granola reagiscono a ogni e-mail, evento del calendario e registrazione importati nel tuo spazio di lavoro, e Slack viene eseguito su ogni evento Slack a cui il suo bot è iscritto, quindi le esecuzioni delle loro funzioni logiche sono gratuite. Ti viene comunque addebitato il lavoro a consumo che svolgono, ad esempio i minuti delle chiamate registrate o i crediti AI alla base delle risposte dell'assistente Slack.
+</Note>
+
+## Come viene fatturato l'utilizzo delle esecuzioni delle funzioni logiche
+
+I prezzi delle funzioni logiche rispecchiano AWS Lambda: un costo fisso per invocazione più un costo basato sulla durata per il tempo in cui il codice viene effettivamente eseguito, fatturato al millisecondo.
+
+* **Per invocazione**: $0.0001
+* **Per durata**: $0.0001 per secondo di tempo di esecuzione ($0.0000001 per millisecondo)
+
+Una funzione tipica che termina in meno di un secondo costa al massimo il doppio del costo fisso per invocazione. Le funzioni a lunga esecuzione pagano per il calcolo che utilizzano: una funzione in esecuzione per un intero minuto aggiunge $0.006, mentre una che raggiunge il timeout di 15 minuti aggiunge $0.09. Una funzione che raggiunge il timeout viene fatturata per l'intero tempo trascorso, proprio come su AWS.
+
+Per le app con [route del server](/it/developers/extend/apps/operations/publishing#owner-workspace-costs-and-availability), il resolver viene eseguito rispetto al saldo dello spazio di lavoro del proprietario dell'app. Una funzione di destinazione inviata a un altro spazio di lavoro viene fatturata separatamente a tale spazio di lavoro.
+
+## Come viene misurato l'utilizzo dell'AI
+
+Quando un'azione chiama un modello AI, misuriamo esattamente i token utilizzati e li tariffiamo alle **tariffe pubblicate dal provider del modello**, quindi convertiamo direttamente quell'importo in dollari in crediti — così ciò che spendi rispecchia il costo reale del lavoro, non una tariffa interna maggiorata. Un breve messaggio di chat costa una frazione di un centesimo. Una grande attività di agente — ad esempio, la configurazione di 10 oggetti di workspace — fa molte chiamate di modello su un contesto in crescita, così può aggiungere fino a un dollaro o più. Ti viene addebitato ciò che usi effettivamente, fino al singolo token.
+
+Il costo varia in base al modello: un modello leggero è drasticamente più economico per messaggio rispetto a un modello di ragionamento di fascia alta. Puoi vedere il dettaglio per azione — incluso quale modello è stato utilizzato — in **Impostazioni → Fatturazione**.
+
+## Cosa è incluso
+
+Ogni abbonamento include **crediti del workspace**, condivisi dall'intero workspace. L'importo dipende dal tuo piano e dal numero di utenti:
+
+| Piano          | Crediti inclusi                                  | Uso Equivalente                            |
+| -------------- | ------------------------------------------------ | ------------------------------------------ |
+| Pro            | 1 per utente al mese                             | ~$1 di utilizzo per utente ogni mese       |
+| Organizzazione | 4 per utente al mese                             | ~$4 di utilizzo per utente ogni mese       |
+| Piani Early    | 5 al mese o 50 all'anno con fatturazione annuale | ~$5 di utilizzo ogni mese o ~$50 ogni anno |
+
+Con la fatturazione annuale, l'assegnazione copre l'intero anno: 12 crediti per utente su Pro e 48 su Organization.
+
+Questi crediti sono pensati per coprire comodamente le automazioni quotidiane. Un credito copre circa 10.000 passaggi standard dei workflow o centinaia di messaggi AI rapidi, anche se alcune attività di agenti di grandi dimensioni e con più passaggi possono esaurirli più velocemente. Puoi aggiungere un pacchetto di crediti in qualsiasi momento (vedi sotto).
+
+## Utilizzo personale dell'AI
+
+Nei piani Pro e Organization, ogni membro riceve anche un'assegnazione settimanale di AI personale. La chat AI e la ricerca web la utilizzano prima dei crediti del workspace:
+
+| Piano          | Utilizzo personale dell'AI                   |
+| -------------- | -------------------------------------------- |
+| Pro            | Circa 100 attività AI per membro a settimana |
+| Organizzazione | Circa 500 attività AI per membro a settimana |
+
+Un'attività AI è una richiesta di chat con il modello predefinito; i modelli più intelligenti ne utilizzano di più. L'assegnazione si rinnova ogni lunedì alle 00:00 UTC. Gli agenti AI nei workflow vengono sempre eseguiti usando i crediti del workspace.
+
+Quando un membro esaurisce la propria assegnazione, le sue chat continuano a usare i crediti del workspace fino al rinnovo dell'assegnazione. Per mettere invece in pausa le sue chat, un membro con l'autorizzazione alle impostazioni **Fatturazione** può disattivare **Usa i crediti del workspace dopo che un membro raggiunge il proprio limite** in **Impostazioni → Fatturazione**. I piani Early non prevedono un utilizzo personale dell'AI, quindi la chat AI usa i crediti del workspace.
+
+## Riporto dei crediti
+
+I crediti inclusi nei piani Pro e Organization vengono utilizzati per primi e si rinnovano a ogni periodo di fatturazione. Non vengono riportati.
+
+I crediti non utilizzati di un pacchetto di crediti e i crediti inclusi nei piani Early vengono riportati automaticamente al periodo di fatturazione successivo.
+
+* **Limite**: il riporto è limitato all'assegnazione di un periodo, quindi questi crediti non si accumulano mai fino a superare il doppio di quanto fornisce un periodo.
+* La sezione **Crediti** in **Impostazioni → Fatturazione** mostra quali crediti provengono dal tuo piano e quali dal tuo pacchetto di crediti, oltre a quanti possono essere riportati.
+
+## Monitoraggio dell'utilizzo
+
+Tieni traccia del tuo saldo e di dove sta andando:
+
+1. Vai a **Impostazioni → Fatturazione**
+2. Vedi i **crediti rimanenti** e **l'utilizzo per il periodo corrente**
+3. Approfondisci il dettaglio per vedere quali workflow e azioni AI stanno consumando crediti — e quali modelli sono stati utilizzati dalle azioni AI
+
+Rivedere questo regolarmente rende facile individuare in anticipo un workflow pesante e decidere se ottimizzarlo o effettuare una ricarica.
+
+## Hai bisogno di più crediti?
+
+Se esaurisci i crediti o vuoi un margine prima di una grande iniziativa di automazione, puoi aggiungere un pacchetto di crediti in qualsiasi momento. I pacchetti costano $1 per credito, a partire da $20 al mese, e si rinnovano con il tuo abbonamento:
+
+1. Vai a **Impostazioni → Fatturazione**
+2. Nella sezione **Crediti**, fai clic su **Gestisci** oppure su una delle scorciatoie **Aumenta a $…**
+3. Scegli un pacchetto di crediti e conferma
+
+I crediti acquistati vengono aggiunti immediatamente al tuo saldo disponibile.
+
+<PageBanner illustration="card-page-charging-credits" />

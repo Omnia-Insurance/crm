@@ -2,7 +2,7 @@ import { createHash } from 'crypto';
 
 import * as jwt from 'jsonwebtoken';
 
-import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/auth-context.type';
+import { JwtTokenTypeEnum } from 'src/engine/core-modules/auth/types/jwt-token-type.enum';
 
 // Mirrors JwtWrapperService.generateAppSecret + extractAppSecretBody so tests
 // can hand-craft tokens that match what a pre-2.5 server would have signed.
@@ -17,7 +17,7 @@ const generateLegacyHs256Secret = (
     .update(`${HS256_APP_SECRET}${appSecretBody}${type}`)
     .digest('hex');
 
-export const forgeLegacyHs256Token = <TPayload extends Record<string, unknown>>(
+export const forgeLegacyHs256Token = <TPayload extends object>(
   payload: TPayload & { type: JwtTokenTypeEnum },
   appSecretBody: string,
   options: jwt.SignOptions = { expiresIn: '5m' },

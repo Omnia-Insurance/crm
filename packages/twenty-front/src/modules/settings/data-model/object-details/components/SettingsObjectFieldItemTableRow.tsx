@@ -1,41 +1,42 @@
+import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { useDeleteOneFieldMetadataItem } from '@/object-metadata/hooks/useDeleteOneFieldMetadataItem';
 import { useFieldMetadataItem } from '@/object-metadata/hooks/useFieldMetadataItem';
+import { useGetIsMetadataItemCustom } from '@/object-metadata/hooks/useGetIsMetadataItemCustom';
 import { useGetRelationMetadata } from '@/object-metadata/hooks/useGetRelationMetadata';
 import { isLabelIdentifierField } from '@/object-metadata/utils/isLabelIdentifierField';
-import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { isObjectMetadataReadOnly } from '@/object-record/read-only/utils/isObjectMetadataReadOnly';
 import { SettingsItemTypeTag } from '@/settings/components/SettingsItemTypeTag';
+import { SettingsNameCellSecondaryLabel } from '@/settings/components/SettingsNameCellSecondaryLabel';
 import { RELATION_TYPES } from '@/settings/data-model/constants/RelationTypes';
 import { SettingsObjectFieldInactiveActionDropdown } from '@/settings/data-model/object-details/components/SettingsObjectFieldDisabledActionDropdown';
 import { settingsObjectFieldsFamilyState } from '@/settings/data-model/object-details/states/settingsObjectFieldsFamilyState';
 import { isFieldTypeSupportedInSettings } from '@/settings/data-model/utils/isFieldTypeSupportedInSettings';
 import { TableCell } from '@/ui/layout/table/components/TableCell';
 import { TableRow } from '@/ui/layout/table/components/TableRow';
-import { useContext, useMemo } from 'react';
-import { styled } from '@linaria/react';
-import { useLingui } from '@lingui/react/macro';
+import { TooltipDelay } from '@/ui/layout/tooltip/constants/TooltipDelay';
+import { UndecoratedLink } from '@/ui/navigation/link/components/UndecoratedLink/UndecoratedLink';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
+import { styled } from '@linaria/react';
+import { useLingui } from '@lingui/react/macro';
+import { useMemo } from 'react';
 import { FieldMetadataType, SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath, isDefined } from 'twenty-shared/utils';
-import {
-  IconChevronRight,
-  IconMinus,
-  IconPlus,
-  useIcons,
-} from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
-import { UndecoratedLink } from 'twenty-ui/navigation';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconChevronRight, IconMinus, IconPlus } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { Tooltip } from 'twenty-ui/primitives/surfaces';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 import { RelationType } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
-import { type SettingsObjectDetailTableItem } from '~/pages/settings/data-model/types/SettingsObjectDetailTableItem';
+import { type SettingsObjectDetailTableItem } from '@/settings/data-model/types/SettingsObjectDetailTableItem';
 import { SettingsObjectFieldDataType } from './SettingsObjectFieldDataType';
 
 type SettingsObjectFieldItemTableRowProps = {
   settingsObjectDetailTableItem: SettingsObjectDetailTableItem;
   status: 'active' | 'disabled';
   mode: 'view' | 'new-field';
+  isMostlyEmpty?: boolean;
 };
 
 export const OBJECT_FIELD_TABLE_ROW_GRID_TEMPLATE_COLUMNS =
@@ -55,21 +56,6 @@ const StyledNameLabel = styled.div`
   white-space: nowrap;
 `;
 
-const StyledInactiveLabel = styled.span`
-  color: ${themeCssVariables.font.color.extraLight};
-  flex: 0 999 auto;
-  font-size: ${themeCssVariables.font.size.sm};
-  min-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  &::before {
-    content: '·';
-    margin-right: ${themeCssVariables.spacing[1]};
-  }
-`;
-
 const StyledIconChevronRightContainer = styled.span`
   align-items: center;
   color: ${themeCssVariables.font.color.tertiary};
@@ -80,11 +66,14 @@ export const SettingsObjectFieldItemTableRow = ({
   settingsObjectDetailTableItem,
   mode,
   status,
+  isMostlyEmpty = false,
 }: SettingsObjectFieldItemTableRowProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { t } = useLingui();
   const { fieldMetadataItem, objectMetadataItem } =
     settingsObjectDetailTableItem;
+
+  const getIsMetadataItemCustom = useGetIsMetadataItemCustom();
 
   const isDDLLocked = useAtomStateValue(isDDLLockedState);
 
@@ -116,6 +105,8 @@ export const SettingsObjectFieldItemTableRow = ({
     fieldMetadataItem,
     objectMetadataItem,
   });
+
+  const mostlyEmptyLabelId = `mostly-empty-field-${fieldMetadataItem.id}`;
 
   const canToggleField = !isLabelIdentifier;
 
@@ -154,11 +145,13 @@ export const SettingsObjectFieldItemTableRow = ({
     });
   };
 
-  if (!isFieldTypeSupported) return null;
+  if (!isFieldTypeSupported) {
+    return null;
+  }
 
-  const isRelatedObjectLinkable =
-    isDefined(relationObjectMetadataItem?.namePlural) &&
-    !relationObjectMetadataItem.isSystem;
+  const isRelatedObjectLinkable = isDefined(
+    relationObjectMetadataItem?.namePlural,
+  );
 
   const morphRelationCount = fieldMetadataItem.morphRelations?.length;
   const morphRelationLabel =
@@ -196,7 +189,19 @@ export const SettingsObjectFieldItemTableRow = ({
               {fieldMetadataItem.label}
             </StyledNameLabel>
             {!fieldMetadataItem.isActive && (
-              <StyledInactiveLabel>{t`Deactivated`}</StyledInactiveLabel>
+              <SettingsNameCellSecondaryLabel>
+                {t`Deactivated`}
+              </SettingsNameCellSecondaryLabel>
+            )}
+            {fieldMetadataItem.isActive && isMostlyEmpty && (
+              <Tooltip
+                content={t`Appears filled in fewer than 5% of ${objectMetadataItem.labelPlural}. Fields that stay empty can be deactivated.`}
+                delay={TooltipDelay.shortDelay}
+              >
+                <SettingsNameCellSecondaryLabel id={mostlyEmptyLabelId}>
+                  {t`Mostly empty`}
+                </SettingsNameCellSecondaryLabel>
+              </Tooltip>
             )}
           </StyledNameContainer>
         </TableCell>
@@ -206,7 +211,6 @@ export const SettingsObjectFieldItemTableRow = ({
         <SettingsItemTypeTag
           item={{
             applicationId: fieldMetadataItem.applicationId,
-            isCustom: fieldMetadataItem.isCustom ?? undefined,
           }}
         />
       </TableCell>
@@ -249,15 +253,18 @@ export const SettingsObjectFieldItemTableRow = ({
           ) : (
             canToggleField && (
               <LightIconButton
-                Icon={IconMinus}
-                accent="tertiary"
+                emphasis="subtle"
                 onClick={handleToggleField}
-              />
+                aria-label={t`Deactivate field`}
+              >
+                <IconMinus />
+              </LightIconButton>
             )
           )
         ) : mode === 'view' ? (
           <SettingsObjectFieldInactiveActionDropdown
-            isCustomField={fieldMetadataItem.isCustom === true}
+            isCustomField={getIsMetadataItemCustom(fieldMetadataItem)}
+            isSystemField={fieldMetadataItem.isSystem === true}
             readonly={readonly}
             fieldMetadataItemId={fieldMetadataItem.id}
             onEdit={navigateToFieldEdit}
@@ -272,10 +279,12 @@ export const SettingsObjectFieldItemTableRow = ({
           />
         ) : (
           <LightIconButton
-            Icon={IconPlus}
-            accent="tertiary"
+            emphasis="subtle"
             onClick={handleToggleField}
-          />
+            aria-label={t`Add`}
+          >
+            <IconPlus />
+          </LightIconButton>
         )}
       </TableCell>
     </TableRow>

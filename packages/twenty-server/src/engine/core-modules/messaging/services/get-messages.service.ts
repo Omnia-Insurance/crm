@@ -1,28 +1,41 @@
 import { Injectable } from '@nestjs/common';
 
+import { isNonEmptyString } from '@sniptt/guards';
+import { isDefined } from 'twenty-shared/utils';
+
 import { TIMELINE_THREADS_DEFAULT_PAGE_SIZE } from 'src/engine/core-modules/messaging/constants/messaging.constants';
+import { type TimelineThreadSearchResultDTO } from 'src/engine/core-modules/messaging/dtos/timeline-thread-search-result.dto';
+import { type TimelineThreadDTO } from 'src/engine/core-modules/messaging/dtos/timeline-thread.dto';
 import { type TimelineThreadsWithTotalDTO } from 'src/engine/core-modules/messaging/dtos/timeline-threads-with-total.dto';
 import { TimelineMessagingService } from 'src/engine/core-modules/messaging/services/timeline-messaging.service';
 import { formatThreads } from 'src/engine/core-modules/messaging/utils/format-threads.util';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
-import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
-import { type OpportunityWorkspaceEntity } from 'src/modules/opportunity/standard-objects/opportunity.workspace-entity';
-import { type PersonWorkspaceEntity } from 'src/modules/person/standard-objects/person.workspace-entity';
+import { RelatedPersonIdsService } from 'src/engine/core-modules/related-person-ids/services/related-person-ids.service';
+import { type TargetFilter } from 'src/engine/core-modules/target/utils/get-target-field-name-for-object-record.util';
+import { MessageCalendarTargetReadinessService } from 'src/engine/core-modules/target/services/message-calendar-target-readiness.service';
 
 @Injectable()
 export class GetMessagesService {
   constructor(
-    private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly timelineMessagingService: TimelineMessagingService,
+    private readonly relatedPersonIdsService: RelatedPersonIdsService,
+    private readonly messageCalendarTargetReadinessService: MessageCalendarTargetReadinessService,
   ) {}
 
-  async getMessagesFromPersonIds(
-    workspaceMemberId: string,
-    personIds: string[],
-    workspaceId: string,
+  async getMessagesFromPersonIds({
+    userWorkspaceId,
+    personIds,
+    workspaceId,
     page = 1,
-    pageSize: number = TIMELINE_THREADS_DEFAULT_PAGE_SIZE,
-  ): Promise<TimelineThreadsWithTotalDTO> {
+    pageSize = TIMELINE_THREADS_DEFAULT_PAGE_SIZE,
+    targetFilter,
+  }: {
+    userWorkspaceId: string;
+    personIds: string[];
+    workspaceId: string;
+    page?: number;
+    pageSize?: number;
+    targetFilter?: TargetFilter;
+  }): Promise<TimelineThreadsWithTotalDTO> {
     const offset = (page - 1) * pageSize;
 
     const { messageThreads, totalNumberOfThreads } =
@@ -31,13 +44,125 @@ export class GetMessagesService {
         workspaceId,
         offset,
         pageSize,
+        targetFilter,
       );
 
     if (!messageThreads) {
       return {
         totalNumberOfThreads: 0,
         timelineThreads: [],
+        relatedPersonIds: personIds,
       };
+    }
+
+    return {
+      totalNumberOfThreads,
+      timelineThreads: await this.formatTimelineThreads({
+        messageThreads,
+        userWorkspaceId,
+        workspaceId,
+      }),
+      relatedPersonIds: personIds,
+    };
+  }
+
+  async searchMessagesFromObjectRecord({
+    userWorkspaceId,
+    objectNameSingular,
+    recordId,
+    workspaceId,
+    searchInput,
+  }: {
+    userWorkspaceId: string;
+    objectNameSingular: string;
+    recordId: string;
+    workspaceId: string;
+    searchInput?: string;
+  }): Promise<TimelineThreadSearchResultDTO> {
+    if (!isNonEmptyString(searchInput?.trim())) {
+      const { timelineThreads } = await this.getMessagesFromObjectRecord({
+        userWorkspaceId,
+        objectNameSingular,
+        recordId,
+        workspaceId,
+      });
+
+      return {
+        recordTimelineThreads: timelineThreads,
+        otherTimelineThreads: [],
+      };
+    }
+
+    const [
+      personIds,
+      targetFilter,
+      { ownedMessageChannelIds, subjectVisibleMessageChannelIds },
+    ] = await Promise.all([
+      this.relatedPersonIdsService.getRelatedPersonIds({
+        workspaceId,
+        objectNameSingular,
+        recordId,
+      }),
+      this.messageCalendarTargetReadinessService.resolveTargetFilter({
+        objectNameSingular,
+        recordId,
+        workspaceId,
+      }),
+      this.timelineMessagingService.getSearchableMessageChannelIds({
+        userWorkspaceId,
+        workspaceId,
+      }),
+    ]);
+
+    // Only channels sharing at least the subject are searched, so a match never reveals a hidden subject
+    const recordMessageThreads =
+      await this.timelineMessagingService.searchMessageThreads({
+        workspaceId,
+        searchInput,
+        messageChannelIds: subjectVisibleMessageChannelIds,
+        recordFilter: { targetFilter, personIds },
+      });
+
+    // The fallback searches only the viewer's own mailboxes, as nothing else narrows it down
+    const otherMessageThreads =
+      await this.timelineMessagingService.searchMessageThreads({
+        workspaceId,
+        searchInput,
+        messageChannelIds: ownedMessageChannelIds,
+        excludedMessageThreadIds: recordMessageThreads.map(({ id }) => id),
+      });
+
+    const recordMessageThreadIds = new Set(
+      recordMessageThreads.map(({ id }) => id),
+    );
+
+    const timelineThreads = await this.formatTimelineThreads({
+      messageThreads: [...recordMessageThreads, ...otherMessageThreads],
+      userWorkspaceId,
+      workspaceId,
+    });
+
+    return {
+      recordTimelineThreads: timelineThreads.filter(({ id }) =>
+        recordMessageThreadIds.has(id),
+      ),
+      otherTimelineThreads: timelineThreads.filter(
+        ({ id }) => !recordMessageThreadIds.has(id),
+      ),
+    };
+  }
+
+  private async formatTimelineThreads({
+    messageThreads,
+    userWorkspaceId,
+    workspaceId,
+  }: {
+    messageThreads: Parameters<typeof formatThreads>[0];
+    userWorkspaceId: string;
+    workspaceId: string;
+  }): Promise<TimelineThreadDTO[]> {
+    if (messageThreads.length === 0) {
+      return [];
     }
 
     const messageThreadIds = messageThreads.map(
@@ -50,117 +175,65 @@ export class GetMessagesService {
         workspaceId,
       );
 
-    const threadVisibilityByThreadId =
-      await this.timelineMessagingService.getThreadVisibilityByThreadId(
-        messageThreadIds,
-        workspaceMemberId,
-        workspaceId,
+    const { threadVisibilityByThreadId, threadChannelByThreadId } =
+      await this.timelineMessagingService.getThreadVisibilityAndChannelByThreadId(
+        {
+          messageThreadIds,
+          userWorkspaceId,
+          workspaceId,
+        },
       );
 
-    return {
-      totalNumberOfThreads,
-      timelineThreads: formatThreads(
-        messageThreads,
-        threadParticipantsByThreadId,
-        threadVisibilityByThreadId,
-      ),
-    };
-  }
-
-  async getMessagesFromCompanyId(
-    workspaceMemberId: string,
-    companyId: string,
-    workspaceId: string,
-    page = 1,
-    pageSize: number = TIMELINE_THREADS_DEFAULT_PAGE_SIZE,
-  ): Promise<TimelineThreadsWithTotalDTO> {
-    const authContext = buildSystemAuthContext(workspaceId);
-
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const personRepository =
-          await this.globalWorkspaceOrmManager.getRepository<PersonWorkspaceEntity>(
-            workspaceId,
-            'person',
-            { shouldBypassPermissionChecks: true },
-          );
-        const personIds = (
-          await personRepository.find({
-            where: {
-              companyId,
-            },
-            select: {
-              id: true,
-            },
-          })
-        ).map((person) => person.id);
-
-        if (personIds.length === 0) {
-          return {
-            totalNumberOfThreads: 0,
-            timelineThreads: [],
-          };
-        }
-
-        const messageThreads = await this.getMessagesFromPersonIds(
-          workspaceMemberId,
-          personIds,
-          workspaceId,
-          page,
-          pageSize,
-        );
-
-        return messageThreads;
-      },
-      authContext,
+    return formatThreads(
+      messageThreads,
+      threadParticipantsByThreadId,
+      threadVisibilityByThreadId,
+      threadChannelByThreadId,
     );
   }
 
-  async getMessagesFromOpportunityId(
-    workspaceMemberId: string,
-    opportunityId: string,
-    workspaceId: string,
+  async getMessagesFromObjectRecord({
+    userWorkspaceId,
+    objectNameSingular,
+    recordId,
+    workspaceId,
     page = 1,
-    pageSize: number = TIMELINE_THREADS_DEFAULT_PAGE_SIZE,
-  ): Promise<TimelineThreadsWithTotalDTO> {
-    const authContext = buildSystemAuthContext(workspaceId);
+    pageSize = TIMELINE_THREADS_DEFAULT_PAGE_SIZE,
+  }: {
+    userWorkspaceId: string;
+    objectNameSingular: string;
+    recordId: string;
+    workspaceId: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<TimelineThreadsWithTotalDTO> {
+    const personIds = await this.relatedPersonIdsService.getRelatedPersonIds({
+      workspaceId,
+      objectNameSingular,
+      recordId,
+    });
+    const targetFilter =
+      await this.messageCalendarTargetReadinessService.resolveTargetFilter({
+        objectNameSingular,
+        recordId,
+        workspaceId,
+      });
 
-    return this.globalWorkspaceOrmManager.executeInWorkspaceContext(
-      async () => {
-        const opportunityRepository =
-          await this.globalWorkspaceOrmManager.getRepository<OpportunityWorkspaceEntity>(
-            workspaceId,
-            'opportunity',
-            { shouldBypassPermissionChecks: true },
-          );
+    if (!isDefined(targetFilter) && personIds.length === 0) {
+      return {
+        totalNumberOfThreads: 0,
+        timelineThreads: [],
+        relatedPersonIds: [],
+      };
+    }
 
-        const opportunity = await opportunityRepository.findOne({
-          where: {
-            id: opportunityId,
-          },
-          select: {
-            companyId: true,
-          },
-        });
-
-        if (!opportunity?.companyId) {
-          return {
-            totalNumberOfThreads: 0,
-            timelineThreads: [],
-          };
-        }
-
-        const messageThreads = await this.getMessagesFromCompanyId(
-          workspaceMemberId,
-          opportunity.companyId,
-          workspaceId,
-          page,
-          pageSize,
-        );
-
-        return messageThreads;
-      },
-      authContext,
-    );
+    return this.getMessagesFromPersonIds({
+      userWorkspaceId,
+      personIds,
+      workspaceId,
+      page,
+      pageSize,
+      targetFilter,
+    });
   }
 }

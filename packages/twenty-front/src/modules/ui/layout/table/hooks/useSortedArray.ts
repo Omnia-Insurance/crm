@@ -30,11 +30,11 @@ export const useSortedArray = <T>(
     const sortFieldType = tableMetadata.fields.find(
       (field) => field.fieldName === sortFieldName,
     )?.fieldType;
-    const sortOrder = sortValueToUse.orderBy;
+    const sortDirection = sortValueToUse.direction;
 
     return [...arrayToSort].sort((a: T, b: T) => {
       if (sortFieldType === 'string') {
-        return sortOrder === 'AscNullsLast' || sortOrder === 'AscNullsFirst'
+        return sortDirection === 'asc'
           ? (a[sortFieldName] as string)?.localeCompare(
               b[sortFieldName] as string,
             )
@@ -42,12 +42,11 @@ export const useSortedArray = <T>(
               a[sortFieldName] as string,
             );
       } else if (sortFieldType === 'number') {
-        return sortOrder === 'AscNullsLast' || sortOrder === 'AscNullsFirst'
+        return sortDirection === 'asc'
           ? (a[sortFieldName] as number) - (b[sortFieldName] as number)
           : (b[sortFieldName] as number) - (a[sortFieldName] as number);
-      } else {
-        return 0;
       }
+      return 0;
     });
   }, [arrayToSort, tableMetadata, initialSort, sortedFieldByTable]);
 

@@ -1,17 +1,17 @@
-import { CoreObjectNameSingular, FieldActorSource } from 'twenty-shared/types';
+import { FieldActorSource } from 'twenty-shared/types';
 import { AdvancedFilterContext } from '@/object-record/advanced-filter/states/context/AdvancedFilterContext';
 import { subFieldNameUsedInDropdownComponentState } from '@/object-record/object-filter-dropdown/states/subFieldNameUsedInDropdownComponentState';
 import { FormCountryMultiSelectInput } from '@/object-record/record-field/ui/form-types/components/FormCountryMultiSelectInput';
 import { FormMultiSelectFieldInput } from '@/object-record/record-field/ui/form-types/components/FormMultiSelectFieldInput';
 import { FormNumberFieldInput } from '@/object-record/record-field/ui/form-types/components/FormNumberFieldInput';
-import { FormRelationToOneFieldInput } from '@/object-record/record-field/ui/form-types/components/FormRelationToOneFieldInput';
 import { FormTextFieldInput } from '@/object-record/record-field/ui/form-types/components/FormTextFieldInput';
+import { FormWorkspaceMemberFilterValueInput } from '@/object-record/record-field/ui/form-types/components/FormWorkspaceMemberFilterValueInput';
 
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
-import { CURRENCIES } from '@/settings/data-model/constants/Currencies';
+import { useCurrencies } from '@/ui/input/components/internal/hooks/useCurrencies';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useContext } from 'react';
-import { type SelectOption } from 'twenty-ui/input';
+import { type SelectOption } from 'twenty-ui/primitives/input';
 import { type JsonValue } from 'type-fest';
 
 const ACTOR_SOURCE_OPTIONS: SelectOption[] = Object.values(
@@ -40,6 +40,8 @@ export const AdvancedFilterSidePanelValueFormCompositeFieldInput = ({
 
   const { readonly } = useContext(AdvancedFilterContext);
 
+  const currencies = useCurrencies();
+
   return (
     <>
       {filterType === 'ADDRESS' ? (
@@ -64,7 +66,7 @@ export const AdvancedFilterSidePanelValueFormCompositeFieldInput = ({
             defaultValue={recordFilter.value}
             onChange={onChange}
             VariablePicker={VariablePicker}
-            options={CURRENCIES}
+            options={currencies}
             readonly={readonly}
           />
         ) : recordFilter.subFieldName === 'amountMicros' ? (
@@ -101,8 +103,7 @@ export const AdvancedFilterSidePanelValueFormCompositeFieldInput = ({
             VariablePicker={VariablePicker}
           />
         ) : recordFilter.subFieldName === 'workspaceMemberId' ? (
-          <FormRelationToOneFieldInput
-            objectNameSingular={CoreObjectNameSingular.WorkspaceMember}
+          <FormWorkspaceMemberFilterValueInput
             defaultValue={recordFilter.value}
             onChange={onChange}
             onClear={onClear}

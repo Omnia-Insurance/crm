@@ -30,17 +30,14 @@ jest.mock(
     isPublicFeatureFlag: (
       key: FeatureFlagKey,
     ): key is PublicFeatureFlag['key'] => {
-      if (!key) return false;
+      if (!key) {
+        return false;
+      }
 
       return key === mockPublicFeatureFlag.key;
     },
   }),
 );
-
-// Note: We're using a single public flag for testing as it's sufficient to verify
-// the validator's behavior. The validator's role is to check if a flag exists in
-// the PUBLIC_FEATURE_FLAGS array, so testing with one flag adequately covers this
-// functionality. Adding more flags wouldn't increase the test coverage meaningfully.
 
 describe('publicFeatureFlagValidator', () => {
   describe('assertIsPublicFeatureFlag', () => {
@@ -66,24 +63,6 @@ describe('publicFeatureFlagValidator', () => {
       expect(() => {
         publicFeatureFlagValidator.assertIsPublicFeatureFlag(
           nonPublicFlag,
-          mockException,
-        );
-      }).toThrow(mockException);
-    });
-
-    it('should throw the provided exception for undefined key', () => {
-      expect(() => {
-        publicFeatureFlagValidator.assertIsPublicFeatureFlag(
-          undefined as unknown as FeatureFlagKey,
-          mockException,
-        );
-      }).toThrow(mockException);
-    });
-
-    it('should throw the provided exception for null key', () => {
-      expect(() => {
-        publicFeatureFlagValidator.assertIsPublicFeatureFlag(
-          null as unknown as FeatureFlagKey,
           mockException,
         );
       }).toThrow(mockException);

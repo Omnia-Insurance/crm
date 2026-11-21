@@ -1,15 +1,16 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+// OMNIA-CUSTOM: sidebar visibility and edit window rows (contracts C3/C4)
 import { SettingsRolePermissionsObjectLevelEditWindowRow } from '@/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelEditWindowRow';
+import { SettingsRolePermissionsObjectLevelShowInSidebarRow } from '@/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelShowInSidebarRow';
 import { SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader } from '@/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableHeader';
 import { SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableRow } from '@/settings/roles/role-permissions/object-level-permissions/object-form/components/SettingsRolePermissionsObjectLevelObjectFormObjectLevelTableRow';
 import { type SettingsRolePermissionsObjectLevelPermission } from '@/settings/roles/role-permissions/objects-permissions/types/SettingsRolePermissionsObjectPermission';
 import { settingsDraftRoleFamilyState } from '@/settings/roles/states/settingsDraftRoleFamilyState';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { H2Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledTable = styled.div`
   border-bottom: 1px solid ${themeCssVariables.border.color.light};
@@ -29,6 +30,7 @@ export const SettingsRolePermissionsObjectLevelObjectFormObjectLevel = ({
   roleId,
   objectMetadataItem,
 }: SettingsRolePermissionsObjectLevelObjectFormObjectLevelProps) => {
+  const { t } = useLingui();
   const settingsDraftRole = useAtomFamilyStateValue(
     settingsDraftRoleFamilyState,
     roleId,
@@ -63,16 +65,11 @@ export const SettingsRolePermissionsObjectLevelObjectFormObjectLevel = ({
         label: t`Destroy ${objectLabelPlural}`,
         value: settingsDraftRoleObjectPermissions?.canDestroyObjectRecords,
       },
-      {
-        key: 'showInSidebar',
-        label: t`Show in Sidebar`,
-        value: settingsDraftRoleObjectPermissions?.showInSidebar,
-      },
     ];
 
   return (
-    <Section>
-      <H2Title
+    <Section.Root>
+      <Section.Header
         title={t`Object-Level`}
         description={t`Actions users can perform on this object`}
       />
@@ -91,6 +88,15 @@ export const SettingsRolePermissionsObjectLevelObjectFormObjectLevel = ({
               objectMetadataItemId={objectMetadataItem.id}
             />
           ))}
+          {/* OMNIA-CUSTOM: own rows, kept out of the record-permission keys so they never grant read */}
+          <SettingsRolePermissionsObjectLevelShowInSidebarRow
+            roleId={roleId}
+            objectMetadataItemId={objectMetadataItem.id}
+            isEditable={settingsDraftRole.isEditable}
+            settingsDraftRoleObjectPermissions={
+              settingsDraftRoleObjectPermissions
+            }
+          />
           <SettingsRolePermissionsObjectLevelEditWindowRow
             roleId={roleId}
             objectMetadataItemId={objectMetadataItem.id}
@@ -101,6 +107,6 @@ export const SettingsRolePermissionsObjectLevelObjectFormObjectLevel = ({
           />
         </StyledTableRows>
       </StyledTable>
-    </Section>
+    </Section.Root>
   );
 };

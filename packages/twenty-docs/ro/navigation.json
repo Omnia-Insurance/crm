@@ -1,0 +1,274 @@
+{
+  "tabs": {
+    "gettingStarted": {
+      "label": "Începeți",
+      "groups": {
+        "welcome": {
+          "label": "Noțiuni de bază"
+        },
+        "coreConcepts": {
+          "label": "Concepte cheie"
+        }
+      }
+    },
+    "userGuide": {
+      "label": "Ghid de utilizator",
+      "groups": {
+        "userGuideOverview": {
+          "label": "Ghid de utilizator"
+        },
+        "dataModel": {
+          "label": "Model de date",
+          "groups": {
+            "dataModelReference": {
+              "label": "Referință"
+            },
+            "dataModelHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "dataMigration": {
+          "label": "Migrarea Datelor",
+          "groups": {
+            "dataMigrationReference": {
+              "label": "Referință"
+            },
+            "dataMigrationHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "calendarEmails": {
+          "label": "Calendar & E-mailuri",
+          "groups": {
+            "calendarEmailsReference": {
+              "label": "Referință"
+            },
+            "calendarEmailsHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "emailCampaigns": {
+          "label": "Campanii de e-mail",
+          "groups": {
+            "emailCampaignsHowTos": {
+              "label": "Ghiduri practice"
+            }
+          }
+        },
+        "workflows": {
+          "label": "Fluxuri de lucru",
+          "groups": {
+            "workflowsReference": {
+              "label": "Referință"
+            },
+            "workflowsHowTos": {
+              "label": "How-Tos",
+              "groups": {
+                "crmAutomations": {
+                  "label": "CRM Automate"
+                },
+                "connectToOtherTools": {
+                  "label": "Conectează-te la alte instrumente"
+                },
+                "advancedConfigurations": {
+                  "label": "Configurații avansate"
+                },
+                "needMoreHelp": {
+                  "label": "Ai nevoie de mai mult ajutor"
+                }
+              }
+            }
+          }
+        },
+        "ai": {
+          "label": "AI",
+          "groups": {
+            "aiReference": {
+              "label": "Referință"
+            },
+            "aiHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "layout": {
+          "label": "Aspect",
+          "groups": {
+            "layoutReference": {
+              "label": "Referință",
+              "groups": {
+                "layoutViews": {
+                  "label": "Vizualizări"
+                }
+              }
+            },
+            "layoutHowTos": {
+              "label": "Ghiduri practice"
+            }
+          }
+        },
+        "dashboards": {
+          "label": "Tablouri de Bord",
+          "groups": {
+            "dashboardsReference": {
+              "label": "Referință"
+            },
+            "dashboardsHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "permissionsAccess": {
+          "label": "Permisiuni & Acces",
+          "groups": {
+            "permissionsAccessReference": {
+              "label": "Referință"
+            },
+            "permissionsAccessHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "billing": {
+          "label": "Facturare",
+          "groups": {
+            "billingReference": {
+              "label": "Referință"
+            },
+            "billingHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "settings": {
+          "label": "Setări",
+          "groups": {
+            "settingsReference": {
+              "label": "Referință"
+            },
+            "settingsHowTos": {
+              "label": "How-Tos"
+            }
+          }
+        },
+        "legal": {
+          "label": "Juridic",
+          "groups": {
+            "legalHowTos": {
+              "label": "Ghiduri practice"
+            }
+          }
+        }
+      }
+    },
+    "developers": {
+      "label": "Dezvoltatori",
+      "groups": {
+        "developersOverview": {
+          "label": "Dezvoltatori"
+        },
+        "apps": {
+          "label": "Aplicații",
+          "groups": {
+            "appsGettingStarted": {
+              "label": "Începeți"
+            },
+            "appsTutorial": {
+              "label": "Tutorial"
+            },
+            "appsConfig": {
+              "label": "Configurare"
+            },
+            "appsData": {
+              "label": "Date"
+            },
+            "appsLogic": {
+              "label": "Logică"
+            },
+            "appsLayout": {
+              "label": "Aspect"
+            },
+            "appsOperations": {
+              "label": "Operațiuni"
+            }
+          }
+        },
+        "api": {
+          "label": "API"
+        },
+        "selfHost": {
+          "label": "Autogazda"
+        },
+        "contribute": {
+          "label": "Contribuie"
+        },
+        "uiLibrary": {
+          "label": "Biblioteca UI",
+          "groups": {
+            "uiGuides": {
+              "label": "Ghiduri"
+            },
+            "uiPrimitives": {
+              "label": "Primitive",
+              "groups": {
+                "uiAccessibility": {
+                  "label": "Accesibilitate"
+                },
+                "uiDataDisplay": {
+                  "label": "Afișarea datelor"
+                },
+                "uiFeedback": {
+                  "label": "Feedback"
+                },
+                "uiForms": {
+                  "label": "Formulare"
+                },
+                "uiLayout": {
+                  "label": "Aspect"
+                },
+                "uiNavigation": {
+                  "label": "Navigare"
+                },
+                "uiSurfaces": {
+                  "label": "Suprafețe"
+                },
+                "uiTypography": {
+                  "label": "Tipografie"
+                }
+              }
+            },
+            "uiComponents": {
+              "label": "Componente",
+              "groups": {
+                "uiComponentsDataDisplay": {
+                  "label": "Afișarea datelor"
+                },
+                "uiComponentsFeedback": {
+                  "label": "Feedback"
+                },
+                "uiComponentsInput": {
+                  "label": "Intrare"
+                },
+                "uiComponentsLayout": {
+                  "label": "Aspect"
+                },
+                "uiComponentsNavigation": {
+                  "label": "Navigare"
+                },
+                "uiComponentsSettings": {
+                  "label": "Setări"
+                },
+                "uiComponentsCodeEditor": {
+                  "label": "Editor de cod"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

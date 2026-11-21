@@ -1,5 +1,4 @@
 import { isFieldRatingValue } from '@/object-record/record-field/ui/types/guards/isFieldRatingValue';
-import { emailSchema } from '@/object-record/record-field/ui/validation-schemas/emailSchema';
 import { type SpreadsheetImportFieldValidationDefinition } from '@/spreadsheet-import/types';
 import { t } from '@lingui/core/macro';
 import { isDate, isString } from '@sniptt/guards';
@@ -7,11 +6,14 @@ import { parsePhoneNumberWithError } from 'libphonenumber-js';
 import { RATING_VALUES } from 'twenty-shared/constants';
 import {
   absoluteUrlSchema,
+  isValidDomain,
+  emailSchema,
   getCountryCodesForCallingCode,
   isDefined,
   isValidCountryCode,
   isValidUuid,
 } from 'twenty-shared/utils';
+import { type FieldLinksVariant } from 'twenty-shared/types';
 import { FieldMetadataType } from '~/generated-metadata/graphql';
 
 const getNumberValidationDefinition = (
@@ -41,7 +43,13 @@ export const getSpreadSheetFieldValidationDefinitions = (
   type: FieldMetadataType,
   fieldName: string,
   subFieldKey?: string,
+  linksVariant?: FieldLinksVariant,
 ): SpreadsheetImportFieldValidationDefinition[] => {
+  const isValidLinkUrl = (url: string) =>
+    linksVariant === 'domain'
+      ? isValidDomain(url)
+      : absoluteUrlSchema.safeParse(url).success;
+
   switch (type) {
     case FieldMetadataType.NUMBER:
       return [getNumberValidationDefinition(fieldName)];
@@ -78,7 +86,9 @@ export const getSpreadSheetFieldValidationDefinitions = (
             {
               rule: 'function',
               isValid: (stringifiedAdditionalEmails: string) => {
-                if (!isDefined(stringifiedAdditionalEmails)) return true;
+                if (!isDefined(stringifiedAdditionalEmails)) {
+                  return true;
+                }
                 try {
                   const additionalEmails = JSON.parse(
                     stringifiedAdditionalEmails,
@@ -104,8 +114,10 @@ export const getSpreadSheetFieldValidationDefinitions = (
             {
               rule: 'function',
               isValid: (primaryLinkUrl: string) => {
-                if (!isDefined(primaryLinkUrl)) return true;
-                return absoluteUrlSchema.safeParse(primaryLinkUrl).success;
+                if (!isDefined(primaryLinkUrl)) {
+                  return true;
+                }
+                return isValidLinkUrl(primaryLinkUrl);
               },
               errorMessage: `${fieldName} ${t`is not a valid URL`}`,
               level: 'error',
@@ -116,12 +128,16 @@ export const getSpreadSheetFieldValidationDefinitions = (
             {
               rule: 'function',
               isValid: (stringifiedSecondaryLinks: string) => {
-                if (!isDefined(stringifiedSecondaryLinks)) return true;
+                if (!isDefined(stringifiedSecondaryLinks)) {
+                  return true;
+                }
                 try {
                   const secondaryLinks = JSON.parse(stringifiedSecondaryLinks);
                   return secondaryLinks.every((link: { url: string }) => {
-                    if (!isDefined(link.url)) return true;
-                    return absoluteUrlSchema.safeParse(link.url).success;
+                    if (!isDefined(link.url)) {
+                      return true;
+                    }
+                    return isValidLinkUrl(link.url);
                   });
                 } catch {
                   return false;
@@ -193,7 +209,9 @@ export const getSpreadSheetFieldValidationDefinitions = (
             {
               rule: 'function',
               isValid: (stringifiedAdditionalPhones: string) => {
-                if (!isDefined(stringifiedAdditionalPhones)) return true;
+                if (!isDefined(stringifiedAdditionalPhones)) {
+                  return true;
+                }
                 try {
                   const additionalPhones = JSON.parse(
                     stringifiedAdditionalPhones,

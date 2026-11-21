@@ -1,0 +1,140 @@
+---
+title: 6. Pubblicazione
+description: Aggiungi metadati di mercato e pubblica la tua app.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Aggiungi metadati di mercato
+
+La [application config](/it/developers/extend/apps/config/application) contiene l'identità
+che appare nel marketplace: autore, categoria, logo e supporta i link
+. Metti un logo in `public/` e fai riferimento con `logo`.
+
+```ts filename="src/application-config.ts"
+import { defineApplication } from 'twenty-sdk/define';
+
+export default defineApplication({
+  universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER,
+  displayName: 'Document Generator',
+  description:
+    'Create reusable document templates and generate personalized documents from your CRM records.',
+  logo: 'public/document-generator.svg',
+  author: 'Twenty',
+  category: 'Productivity',
+  websiteUrl: 'https://docs.twenty.com/it/developers/extend/apps',
+  termsUrl: 'https://www.twenty.com/terms',
+  emailSupport: 'contact@twenty.com',
+  issueReportUrl: 'https://github.com/twentyhq/twenty/issues',
+});
+```
+
+<Tip>
+  Il ruolo predefinito viene dichiarato con `defineApplicationRole()` nel proprio file —
+  non passi più `defaultRoleUniversalIdentifier` qui.
+</Tip>
+
+Aggiungi anche la parola chiave `twenty-app` a `package.json` così l'app è scopribile:
+
+```json filename="package.json"
+{ "keywords": ["twenty-app"] }
+```
+
+## Aggiungi screenshot galleria
+
+Una quotazione di mercato si vende con screenshot. Trascina alcuni PNG in `public/gallery/` di
+e li referenzia con `galleryImages` — rendono come una galleria
+nella pagina di elenco, in ordine array.
+
+```ts filename="src/application-config.ts"
+export default defineApplication({
+  // ...identity from above
+  galleryImages: [
+    'public/gallery/01-generated-document.png',
+    'public/gallery/02-command-menu.png',
+    'public/gallery/03-template-editor.png',
+    'public/gallery/04-documents.png',
+  ],
+});
+```
+
+<Tip>
+  Lead with the payoff: make the first screenshot the finished result (an
+  generated document), then show how it's triggered and authored. Usa cattura ad alta risoluzione croccanti,
+  — sono la prima cosa che un utente vede.
+</Tip>
+
+Dare `README.md` lo stesso trattamento — è la prima pagina su npm e GitHub.
+Apri con la proposizione del valore e uno screenshot, elenca le caratteristiche del titolo,
+quindi tieni i dettagli della build sotto la piega.
+
+## Controllare prima di spedire
+
+Eseguire lo stesso cancelli CI fa:
+
+```bash filename="Terminal"
+yarn lint          # oxlint
+yarn typecheck     # tsgo
+yarn test:unit     # unit tests
+twenty app plan   # preview the metadata diff
+```
+
+Il piano mostra esattamente cosa verrebbe modificato sul server senza applicare effettivamente le modifiche —
+un buon controllo finale di coerenza. Vedi
+[Testing](/it/developers/extend/apps/operations/testing) e
+[Sincronizzazione & recupero](/it/developers/extend/apps/operations/sync-and-recovery).
+
+## Pubblica
+
+```bash filename="Terminal"
+# Public app → npm (default)
+twenty app publish
+
+# Or deploy privately to a specific server's registry
+twenty app publish --private -r <remote>
+```
+
+`venti app publish` costruisce e pubblica a npm per impostazione predefinita; `--private` carica un tarball
+su un registro privato di Twenty server. Per superficiare un'app pubblicata
+nel marketplace di un'istanza, attendere la sincronizzazione del catalogo del marketplace del server.
+
+Dettagli completi e la lista di controllo rilascio:
+[Publishing](/it/developers/extend/apps/operations/publishing).
+
+## Hai costruito un'app 🎉
+
+In sei capitoli hai usato la maggior parte della superficie SDK:
+
+* **Oggetti, campi e una relazione** per modellare i dati
+* Una **funzione logica** esposta come **strumento di intelligenza artificiale**, un **workflow action**, e **HTTP routes**
+* **Viste, navigazione, un comando e un componente frontale** per l'interfaccia utente
+* Un **agente + abilità** per la generazione di linguaggio naturale
+* **Marketplace metadata** e il flusso di pubblicazione
+
+L'app completata è su
+[`packages/twenty-apps/examples/document-generator`](https://github.com/twentyhq/twenty/tree/main/packages/twenty-apps/examples/document-generator).
+
+## Dove andare avanti
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/it/developers/extend/apps/data/overview" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>Riferimento dati</CardTitle>
+    Ogni tipo di campo, relazione e opzione indice.
+  </Card>
+  <Card href="/it/developers/extend/apps/logic/overview" img="/images/documentation/section-overview-icons-v1/apps-logic.svg">
+    <CardTitle>Logica riferimento</CardTitle>
+    Cron e database-event triggers, il key-value store, connessioni OAuth.
+  </Card>
+  <Card href="/it/developers/extend/apps/layout/overview" img="/images/user-guide/halftone/layout-window-v1.svg">
+    <CardTitle>Layout reference</CardTitle>
+    Page layouts, dashboard widget, e altre superfici dell'interfaccia utente.
+  </Card>
+  <Card href="/it/developers/extend/apps/operations/overview" img="/images/documentation/section-overview-icons-v1/apps-operations.svg">
+    <CardTitle>Operations</CardTitle>
+    CLI, test, telecomandi e IC.
+  </Card>
+</CardGroup>
+
+<PageBanner illustration="card-page-tutorial-publishing" />

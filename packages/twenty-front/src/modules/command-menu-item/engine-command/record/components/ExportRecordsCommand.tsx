@@ -1,237 +1,41 @@
-import { useApolloClient } from '@apollo/client/react';
-import { useCallback } from 'react';
-
+import { RecordExportConnectionEffect } from '@/record-export/components/RecordExportConnectionEffect';
+import { useRecordIndexAsyncExportRecords } from '@/object-record/record-index/export/hooks/useRecordIndexAsyncExportRecords';
 import { HeadlessEngineCommandWrapperEffect } from '@/command-menu-item/engine-command/components/HeadlessEngineCommandWrapperEffect';
 import { useHeadlessCommandContextApi } from '@/command-menu-item/engine-command/hooks/useHeadlessCommandContextApi';
 import { CommandComponentInstanceContext } from '@/command-menu-item/engine-command/states/contexts/CommandComponentInstanceContext';
 import { commandMenuItemProgressFamilyState } from '@/command-menu-item/states/commandMenuItemProgressFamilyState';
-import { contextStoreAnyFieldFilterValueComponentState } from '@/context-store/states/contextStoreAnyFieldFilterValueComponentState';
-import { contextStoreFilterGroupsComponentState } from '@/context-store/states/contextStoreFilterGroupsComponentState';
-import { contextStoreFiltersComponentState } from '@/context-store/states/contextStoreFiltersComponentState';
-import { contextStoreTargetedRecordsRuleComponentState } from '@/context-store/states/contextStoreTargetedRecordsRuleComponentState';
-import { computeContextStoreFilters } from '@/context-store/utils/computeContextStoreFilters';
-import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
-import { flattenedFieldMetadataItemsSelector } from '@/object-metadata/states/flattenedFieldMetadataItemsSelector';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { useFilterValueDependencies } from '@/object-record/record-filter/hooks/useFilterValueDependencies';
-import { visibleRecordFieldsComponentSelector } from '@/object-record/record-field/states/visibleRecordFieldsComponentSelector';
-import { type RecordField } from '@/object-record/record-field/types/RecordField';
-import { START_EXPORT_JOB } from '@/object-record/record-index/export/graphql/mutations/startExportJob';
-import { useExportJobProgress } from '@/object-record/record-index/export/hooks/useExportJobProgress';
-import { useFindManyRecordIndexTableParams } from '@/object-record/record-index/hooks/useFindManyRecordIndexTableParams';
-import { useUnmountCommand } from '@/command-menu-item/engine-command/hooks/useUnmountEngineCommand';
 import { useExportSingleRecord } from '@/object-record/record-show/hooks/useExportSingleRecord';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentSelectorValue';
-import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
-import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
-import { isOneToManyBackReferenceSubField } from '@/views/utils/isOneToManyBackReferenceSubField';
 import { isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
-type StartExportJobResponse = {
-  startExportJob?: {
-    id: string;
-    status: string;
-    totalRecords: number;
-  };
-};
-
-// OMNIA-CUSTOM: ExportIndexRecordsContent uses direct Apollo mutation with
-// relation configs derived from sub-field columns, so exports include exactly
-// what the user sees (including relation sub-field columns).
 const ExportIndexRecordsContent = ({
   objectMetadataItem,
   recordIndexId,
+  onProgress,
 }: {
   objectMetadataItem: EnrichedObjectMetadataItem;
   recordIndexId: string;
-  setCommandMenuItemProgress: (value: number | undefined) => void;
+  onProgress: (progress: number) => void;
 }) => {
-  const apolloClient = useApolloClient();
-  const { startTracking } = useExportJobProgress();
-
-  const engineCommandId = useAvailableComponentInstanceIdOrThrow(
-    CommandComponentInstanceContext,
-  );
-  const unmountCommand = useUnmountCommand();
-
-  // Get current filters
-  const contextStoreTargetedRecordsRule = useAtomComponentStateValue(
-    contextStoreTargetedRecordsRuleComponentState,
-  );
-  const contextStoreFilters = useAtomComponentStateValue(
-    contextStoreFiltersComponentState,
-  );
-  const contextStoreFilterGroups = useAtomComponentStateValue(
-    contextStoreFilterGroupsComponentState,
-  );
-  const contextStoreAnyFieldFilterValue = useAtomComponentStateValue(
-    contextStoreAnyFieldFilterValueComponentState,
-  );
-  const { filterValueDependencies } = useFilterValueDependencies();
-  const flattenedFieldMetadataItems = useAtomStateValue(
-    flattenedFieldMetadataItemsSelector,
-  );
-  const { objectMetadataItems } = useObjectMetadataItems();
-
-  const queryFilter = computeContextStoreFilters({
-    contextStoreTargetedRecordsRule,
-    contextStoreFilters,
-    contextStoreFilterGroups,
-    objectMetadataItem,
-    fieldMetadataItems: flattenedFieldMetadataItems,
-    filterValueDependencies,
-    contextStoreAnyFieldFilterValue,
-  });
-
-  const findManyRecordsParams = useFindManyRecordIndexTableParams(
-    objectMetadataItem.nameSingular,
-    recordIndexId,
-  );
-
-  const visibleRecordFields = useAtomComponentSelectorValue(
-    visibleRecordFieldsComponentSelector,
-    recordIndexId,
-  );
-
-  // OMNIA-CUSTOM: Separate direct fields from sub-field columns
-  const directRecordFields = visibleRecordFields.filter(
-    (f: RecordField) => !f.subFieldName,
-  );
-  const subFieldRecordFields = visibleRecordFields.filter(
-    (f: RecordField) => !!f.subFieldName,
-  );
-
-  const columns = directRecordFields
-    .map((field: RecordField) => {
-      const fieldMetadataItem = objectMetadataItem.fields.find(
-        (f) => f.id === field.fieldMetadataItemId,
-      );
-
-      if (!fieldMetadataItem) return null;
-
-      return {
-        fieldName: fieldMetadataItem.name,
-        label: fieldMetadataItem.label,
-        type: fieldMetadataItem.type,
-      };
-    })
-    .filter(isDefined);
-
-  const hasSpecificSelection =
-    contextStoreTargetedRecordsRule.mode === 'selection' &&
-    contextStoreTargetedRecordsRule.selectedRecordIds.length > 0;
-
-  const doExport = useCallback(async () => {
-    // Use the view's filter (from useFindManyRecordIndexTableParams) as the base,
-    // which includes the active view's filters/sorts. If specific records are
-    // selected, use the context store filter instead (which has the id IN list).
-    // Guard against empty selection filter ({ id: { in: [] } }).
-    const effectiveFilter = hasSpecificSelection
-      ? queryFilter
-      : findManyRecordsParams.filter;
-
-    // OMNIA-CUSTOM: Build relation configs from sub-field columns in the view
-    const relationConfigMap = new Map<
-      string,
-      {
-        relationFieldName: string;
-        relationFieldLabel: string;
-        targetObjectNameSingular: string;
-        selectedFieldPaths: string[];
-      }
-    >();
-
-    for (const subField of subFieldRecordFields) {
-      const meta = objectMetadataItem.fields.find(
-        (f) => f.id === subField.fieldMetadataItemId,
-      );
-
-      if (!meta || !subField.subFieldName) continue;
-
-      const targetName = meta.relation?.targetObjectMetadata?.nameSingular;
-
-      if (!targetName) continue;
-
-      // OMNIA-CUSTOM: never send a ONE_TO_MANY back-reference to the export
-      // job (e.g. product.policies on a policy export) — it would fan out to
-      // every sibling row per cell. Saved views may still carry such a
-      // column; the server skips it too, this just keeps the CSV honest.
-      const subFieldMeta = objectMetadataItems
-        .find((item) => item.nameSingular === targetName)
-        ?.fields.find((f) => f.name === subField.subFieldName);
-
-      if (
-        isDefined(subFieldMeta) &&
-        isOneToManyBackReferenceSubField({
-          subFieldMetadataItem: subFieldMeta,
-          baseObjectNameSingular: objectMetadataItem.nameSingular,
-        })
-      ) {
-        continue;
-      }
-
-      const existing = relationConfigMap.get(meta.name);
-
-      if (existing) {
-        if (!existing.selectedFieldPaths.includes(subField.subFieldName)) {
-          existing.selectedFieldPaths.push(subField.subFieldName);
-        }
-      } else {
-        relationConfigMap.set(meta.name, {
-          relationFieldName: meta.name,
-          relationFieldLabel: meta.label,
-          targetObjectNameSingular: targetName,
-          selectedFieldPaths: [subField.subFieldName],
-        });
-      }
-    }
-
-    const relationConfigs = Array.from(relationConfigMap.values());
-
-    const { data } = await apolloClient.mutate<StartExportJobResponse>({
-      mutation: START_EXPORT_JOB,
-      variables: {
-        objectNameSingular: objectMetadataItem.nameSingular,
-        columns,
-        filter: effectiveFilter,
-        orderBy: findManyRecordsParams.orderBy,
-        relationConfigs:
-          relationConfigs.length > 0 ? relationConfigs : undefined,
-      },
+  // OMNIA-CUSTOM: every index export runs as the server job, which re-checks the requester's
+  // permissions on PHI and keeps one CSV shape at any row count, sub-field columns included
+  const { download: downloadAsync, cancel: cancelAsync } =
+    useRecordIndexAsyncExportRecords({
+      objectMetadataItem,
+      recordIndexId,
+      onProgress,
     });
 
-    const exportJob = data?.startExportJob;
-
-    if (exportJob?.id) {
-      startTracking({
-        exportJobId: exportJob.id,
-        objectNameSingular: objectMetadataItem.nameSingular,
-        objectNamePlural: objectMetadataItem.namePlural,
-      });
-    }
-
-    unmountCommand(engineCommandId);
-  }, [
-    apolloClient,
-    objectMetadataItem.nameSingular,
-    objectMetadataItem.namePlural,
-    objectMetadataItem.fields,
-    columns,
-    queryFilter,
-    hasSpecificSelection,
-    findManyRecordsParams.orderBy,
-    findManyRecordsParams.filter,
-    subFieldRecordFields,
-    objectMetadataItems,
-    startTracking,
-    unmountCommand,
-    engineCommandId,
-  ]);
-
-  return <HeadlessEngineCommandWrapperEffect execute={doExport} />;
+  return (
+    <>
+      <RecordExportConnectionEffect cancel={cancelAsync} />
+      <HeadlessEngineCommandWrapperEffect execute={downloadAsync} />
+    </>
+  );
 };
 
 const ExportShowRecordContent = ({
@@ -265,7 +69,9 @@ export const ExportRecordsCommand = () => {
   );
 
   if (!isDefined(objectMetadataItem)) {
-    throw new Error('Object metadata item is required to export records');
+    throw new Error(
+      doNotTranslate('Object metadata item is required to export records'),
+    );
   }
 
   const recordId = selectedRecords[0]?.id;
@@ -282,7 +88,9 @@ export const ExportRecordsCommand = () => {
 
   if (!isDefined(recordIndexId)) {
     throw new Error(
-      'Record index ID is required to export records from index page',
+      doNotTranslate(
+        'Record index ID is required to export records from index page',
+      ),
     );
   }
 
@@ -293,7 +101,7 @@ export const ExportRecordsCommand = () => {
       <ExportIndexRecordsContent
         objectMetadataItem={objectMetadataItem}
         recordIndexId={recordIndexId}
-        setCommandMenuItemProgress={setCommandMenuItemProgress}
+        onProgress={setCommandMenuItemProgress}
       />
     </ViewComponentInstanceContext.Provider>
   );

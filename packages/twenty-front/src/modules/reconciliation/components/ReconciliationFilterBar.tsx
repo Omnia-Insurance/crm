@@ -1,18 +1,18 @@
 import { styled } from '@linaria/react';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 import { ObjectFilterDropdownComponentInstanceContext } from '@/object-record/object-filter-dropdown/states/contexts/ObjectFilterDropdownComponentInstanceContext';
 import { ViewBarDetails } from '@/views/components/ViewBarDetails';
 import { ViewBarFilterDropdown } from '@/views/components/ViewBarFilterDropdown';
-import { ViewBarFilterDropdownIds } from '@/views/constants/ViewBarFilterDropdownIds';
+import { getViewBarFilterDropdownId } from '@/views/utils/getViewBarFilterDropdownId';
 
-type Props = {
+type ReconciliationFilterBarProps = {
   viewBarId: string;
 };
 
 const StyledRow = styled.div`
-  display: flex;
   align-items: center;
+  display: flex;
   gap: ${themeCssVariables.spacing[2]};
   padding: 0 ${themeCssVariables.spacing[2]};
 `;
@@ -26,17 +26,16 @@ const StyledChips = styled.div`
   min-width: 0;
 `;
 
-/**
- * Native Twenty filter UI for the reconciliation review page: persistent
- * "Filter" button on the left, chip strip + reset on the right. Uses the same
- * components the table view uses; isolated by `viewBarId`.
- */
-export const ReconciliationFilterBar = ({ viewBarId }: Props) => {
+// The table's own filter UI, keyed by viewBarId so it stays apart from any
+// other filter bar on the page (the comments side panel has its own).
+export const ReconciliationFilterBar = ({
+  viewBarId,
+}: ReconciliationFilterBarProps) => {
   return (
     <StyledRow>
       <StyledFilterButton>
         <ObjectFilterDropdownComponentInstanceContext.Provider
-          value={{ instanceId: ViewBarFilterDropdownIds.MAIN }}
+          value={{ instanceId: getViewBarFilterDropdownId(viewBarId) }}
         >
           <ViewBarFilterDropdown />
         </ObjectFilterDropdownComponentInstanceContext.Provider>

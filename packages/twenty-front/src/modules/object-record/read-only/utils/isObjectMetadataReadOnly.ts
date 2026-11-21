@@ -1,12 +1,12 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
-import { type ObjectPermission } from '~/generated-metadata/graphql';
-import { isDefined } from 'twenty-shared/utils';
+import { canReachSomeRecords, isDefined } from 'twenty-shared/utils';
+import { type ObjectRecordsPermissions } from 'twenty-shared/types';
 
 type IsObjectMetadataReadOnlyParams = {
-  objectPermissions?: ObjectPermission;
+  objectPermissions?: ObjectRecordsPermissions;
   objectMetadataItem?: Pick<
     EnrichedObjectMetadataItem,
-    'isUIReadOnly' | 'isRemote' | 'applicationId'
+    'isUIEditable' | 'isRemote'
   >;
 };
 
@@ -16,8 +16,11 @@ export const isObjectMetadataReadOnly = ({
 }: IsObjectMetadataReadOnlyParams) => {
   return (
     (isDefined(objectPermissions) &&
-      !objectPermissions.canUpdateObjectRecords) ||
+      !canReachSomeRecords({
+        objectRecordsPermissions: objectPermissions,
+        operationType: 'update',
+      })) ||
     (isDefined(objectMetadataItem) &&
-      (objectMetadataItem.isUIReadOnly || objectMetadataItem.isRemote))
+      (!objectMetadataItem.isUIEditable || objectMetadataItem.isRemote))
   );
 };

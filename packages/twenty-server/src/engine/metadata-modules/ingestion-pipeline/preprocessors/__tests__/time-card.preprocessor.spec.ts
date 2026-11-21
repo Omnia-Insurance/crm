@@ -31,7 +31,11 @@ describe('TimeCardPreprocessor', () => {
 
   describe('preProcess (per-record)', () => {
     it('returns null — aggregation only happens in batch mode', async () => {
-      const result = await preprocessor.preProcess(event(), pipeline, workspaceId);
+      const result = await preprocessor.preProcess(
+        event(),
+        pipeline,
+        workspaceId,
+      );
 
       expect(result).toBeNull();
     });
@@ -40,10 +44,7 @@ describe('TimeCardPreprocessor', () => {
   describe('preProcessBatch', () => {
     it('aggregates a single agent-day into one row', async () => {
       const result = await preprocessor.preProcessBatch(
-        [
-          event({ event_sec: '01:00:00' }),
-          event({ event_sec: '00:30:00' }),
-        ],
+        [event({ event_sec: '01:00:00' }), event({ event_sec: '00:30:00' })],
         pipeline,
         workspaceId,
       );
@@ -119,10 +120,7 @@ describe('TimeCardPreprocessor', () => {
 
     it('sums across multiple campaigns for the same (agent, day)', async () => {
       const result = await preprocessor.preProcessBatch(
-        [
-          event({ event_sec: '04:00:00' }),
-          event({ event_sec: '04:00:00' }),
-        ],
+        [event({ event_sec: '04:00:00' }), event({ event_sec: '04:00:00' })],
         pipeline,
         workspaceId,
       );
@@ -135,9 +133,21 @@ describe('TimeCardPreprocessor', () => {
     it('emits separate rows for different agents and different days', async () => {
       const result = await preprocessor.preProcessBatch(
         [
-          event({ user_id: 'A', created_at: '2026-05-10 09:00:00', event_sec: '01:00:00' }),
-          event({ user_id: 'A', created_at: '2026-05-11 09:00:00', event_sec: '02:00:00' }),
-          event({ user_id: 'B', created_at: '2026-05-10 09:00:00', event_sec: '03:00:00' }),
+          event({
+            user_id: 'A',
+            created_at: '2026-05-10 09:00:00',
+            event_sec: '01:00:00',
+          }),
+          event({
+            user_id: 'A',
+            created_at: '2026-05-11 09:00:00',
+            event_sec: '02:00:00',
+          }),
+          event({
+            user_id: 'B',
+            created_at: '2026-05-10 09:00:00',
+            event_sec: '03:00:00',
+          }),
         ],
         pipeline,
         workspaceId,

@@ -22,20 +22,22 @@ export abstract class CustomException<
 > extends CustomError {
   code: ExceptionCode;
   userFriendlyMessage: MessageDescriptor;
+  statusCode?: number;
 
   constructor(
     message: ExceptionMessage,
     code: ExceptionCode,
-    { userFriendlyMessage }: { userFriendlyMessage: MessageDescriptor },
+    {
+      userFriendlyMessage,
+      statusCode,
+    }: { userFriendlyMessage: MessageDescriptor; statusCode?: number },
   ) {
     super(message);
     this.code = code;
     this.userFriendlyMessage = userFriendlyMessage;
+    this.statusCode = statusCode;
   }
 }
 
-/**
- * Exception class for test scenarios and edge cases.
- * Prefer domain-specific exceptions in production code.
- */
+// For test scenarios and edge cases; prefer domain-specific exceptions in production code.
 export class UnknownException extends CustomException {}

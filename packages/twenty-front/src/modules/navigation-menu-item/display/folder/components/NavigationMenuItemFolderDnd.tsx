@@ -1,18 +1,19 @@
+import { navigationMenuItemInsertionPreviewState } from '@/navigation-menu-item/common/states/navigationMenuItemInsertionPreviewState';
+import { NavigationMenuItemFolderChevron } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderChevron';
+import { NavigationMenuItemFolderChevronButton } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderChevronButton';
+import { NavigationMenuItemEditable } from '@/navigation-menu-item/edit/components/NavigationMenuItemEditable';
+import { NavigationMenuItemEntrance } from '@/navigation-menu-item/edit/components/NavigationMenuItemEntrance';
+import { ColoredIcon } from '@/ui/icon/components/ColoredIcon';
+import { isNavigationDrawerExpandedState } from '@/ui/navigation/states/isNavigationDrawerExpanded';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
-import React, { Fragment, useCallback, useContext } from 'react';
+import React, { Fragment, useContext } from 'react';
 import { createPortal } from 'react-dom';
 import { isDefined } from 'twenty-shared/utils';
-import {
-  IconChevronDown,
-  IconChevronRight,
-  IconFolder,
-  IconHeartOff,
-  IconPlus,
-  useIcons,
-} from 'twenty-ui/display';
-import { LightIconButton } from 'twenty-ui/input';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { LightIconButton } from 'twenty-ui/components/input';
+import { IconHeartOff, IconPlus } from 'twenty-ui/icon';
+import { useIcons } from 'twenty-ui/icon/provider';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useIsMobile } from 'twenty-ui/utilities';
 import { type NavigationMenuItem } from '~/generated-metadata/graphql';
 
@@ -20,7 +21,7 @@ import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/st
 import { FOLDER_ICON_DEFAULT } from '@/navigation-menu-item/common/constants/FolderIconDefault';
 import { DEFAULT_NAVIGATION_MENU_ITEM_COLOR_FOLDER } from '@/navigation-menu-item/common/constants/NavigationMenuItemDefaultColorFolder';
 import { NAVIGATION_MENU_ITEM_SECTION_DROPPABLE_CONFIG } from '@/navigation-menu-item/common/constants/NavigationMenuItemSectionDroppableConfig';
-import { NavigationSections } from '@/navigation-menu-item/common/constants/NavigationSections.constants';
+import { NavigationSections } from '@/navigation-menu-item/common/constants/NavigationSections';
 import { NavigationDropTargetContext } from '@/navigation-menu-item/common/contexts/NavigationDropTargetContext';
 import { NavigationMenuItemDragContext } from '@/navigation-menu-item/common/contexts/NavigationMenuItemDragContext';
 import { SortableDropTargetRefContext } from '@/navigation-menu-item/common/contexts/SortableDropTargetRefContext';
@@ -37,16 +38,15 @@ import { NavigationMenuItemSortableItem } from '@/navigation-menu-item/display/d
 import { useIsDropDisabledForSection } from '@/navigation-menu-item/display/dnd/hooks/useIsDropDisabledForSection';
 import { NavigationMenuItemFolderLayout } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderLayout';
 import { NavigationMenuItemFolderNavigationDrawerItemDropdown } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderNavigationDrawerItemDropdown';
-import { NavigationMenuItemFolderSubItem } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderSubItem';
+import { NavigationMenuItemFolderSubItemDispatcher } from '@/navigation-menu-item/display/folder/components/NavigationMenuItemFolderSubItemDispatcher';
 import { useNavigationMenuItemFolderOpenState } from '@/navigation-menu-item/display/folder/hooks/useNavigationMenuItemFolderOpenState';
 import { useIsNavigationMenuItemEditHighlighted } from '@/navigation-menu-item/display/hooks/useIsNavigationMenuItemEditHighlighted';
 import type { NavigationMenuItemClickParams } from '@/navigation-menu-item/display/hooks/useNavigationMenuItemSectionItems';
+import { NavigationMenuItemAddDropdown } from '@/navigation-menu-item/edit/components/NavigationMenuItemAddDropdown';
 import { useFavoritesFolderEdit } from '@/navigation-menu-item/edit/folder/hooks/useFavoritesFolderEdit';
-import { useOpenAddItemToFolderPage } from '@/navigation-menu-item/edit/hooks/useOpenAddItemToFolderPage';
 import type { EditModeProps } from '@/object-metadata/components/EditModeProps';
 
-import { ConfirmationModal } from '@/ui/layout/modal/components/ConfirmationModal';
-import { NavigationDrawerInput } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerInput';
+import { ConfirmationDialog } from '@/ui/layout/dialog/components/ConfirmationDialog';
 import { NavigationDrawerItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerItem';
 import { NavigationDrawerSubItem } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSubItem';
 import { getNavigationSubItemLeftAdornment } from '@/ui/navigation/navigation-drawer/utils/getNavigationSubItemLeftAdornment';
@@ -55,11 +55,12 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 const StyledFolderContainer = styled.div<{
   $isSelectedInEditMode: boolean;
 }>`
-  border: ${({ $isSelectedInEditMode }) =>
+  border-radius: ${themeCssVariables.border.radius.md};
+  outline: ${({ $isSelectedInEditMode }) =>
     $isSelectedInEditMode
       ? `1px solid ${themeCssVariables.color.blue}`
       : 'none'};
-  border-radius: ${themeCssVariables.border.radius.sm};
+  outline-offset: -1px;
   transition: background-color 150ms ease-in-out;
 
   &[data-drag-over-header='true'] {
@@ -71,12 +72,17 @@ const StyledFolderContainer = styled.div<{
   }
 `;
 
+const StyledAddMenuItem = styled.div<{ isHidden: boolean }>`
+  display: ${({ isHidden }) => (isHidden ? 'none' : 'contents')};
+`;
+
 const StyledFolderDroppableContent = styled.div`
   display: flex;
   flex-direction: column;
 `;
 
 type NavigationMenuItemFolderDndProps = {
+  item: NavigationMenuItem;
   folderId: string;
   folderName: string;
   folderIconKey?: string | null;
@@ -91,6 +97,7 @@ type NavigationMenuItemFolderDndProps = {
 };
 
 export const NavigationMenuItemFolderDnd = ({
+  item,
   folderId,
   folderName,
   folderIconKey,
@@ -104,19 +111,33 @@ export const NavigationMenuItemFolderDnd = ({
   orphanIndex,
 }: NavigationMenuItemFolderDndProps) => {
   const { t } = useLingui();
-  const { theme } = useContext(ThemeContext);
   const { getIcon } = useIcons();
   const isMobile = useIsMobile();
+  const isNavigationDrawerExpanded = useAtomStateValue(
+    isNavigationDrawerExpandedState,
+  );
+  const isExpanded = isNavigationDrawerExpanded || isMobile;
 
+  const navigationMenuItemInsertionPreview = useAtomStateValue(
+    navigationMenuItemInsertionPreviewState,
+  );
   const section: NavigationMenuItemSection = isEditInPlace
     ? 'favorite'
     : 'workspace';
+  const insertionIndex =
+    navigationMenuItemInsertionPreview?.section === section &&
+    navigationMenuItemInsertionPreview.folderId === folderId
+      ? navigationMenuItemInsertionPreview.index
+      : null;
+  const hasInsertionPreview = isDefined(insertionIndex);
+  const isAddingFavoriteFolderItem = isEditInPlace && hasInsertionPreview;
+
   const isWorkspace = !isEditInPlace;
   const sectionId = isEditInPlace
     ? NavigationSections.FAVORITES
     : NavigationSections.WORKSPACE;
 
-  const { isOpen, handleToggle, hasActiveChild } =
+  const { isOpen, handleToggle, hasActiveChild, activeChildIndex } =
     useNavigationMenuItemFolderOpenState({
       folderId,
       folderChildrenNavigationMenuItems: navigationMenuItems,
@@ -136,14 +157,12 @@ export const NavigationMenuItemFolderDnd = ({
   const { deleteManyNavigationMenuItems } = useDeleteManyNavigationMenuItems();
   const favoritesEdit = useFavoritesFolderEdit({
     folderId,
-    folderName,
     navigationMenuItems,
   });
 
   const isLayoutCustomizationModeEnabled = useAtomStateValue(
     isLayoutCustomizationModeEnabledState,
   );
-  const { openAddItemToFolderPage } = useOpenAddItemToFolderPage();
   const isFolderEditHighlighted = useIsNavigationMenuItemEditHighlighted({
     id: folderId,
     folderId: null,
@@ -186,56 +205,27 @@ export const NavigationMenuItemFolderDnd = ({
   const headerRightOptions = isEditInPlace ? (
     <NavigationMenuItemFolderNavigationDrawerItemDropdown
       folderId={folderId}
-      onRename={() => favoritesEdit.setIsRenaming(true)}
+      itemCount={navigationMenuItems.length}
+      onEdit={favoritesEdit.startEditing}
       onDelete={favoritesEdit.handleFolderDelete}
-      closeDropdown={favoritesEdit.closeDropdown}
     />
   ) : (
-    <div
-      onClick={(event) => {
-        event.stopPropagation();
-        handleToggle();
-      }}
-    >
-      {isOpen ? (
-        <IconChevronDown
-          size={theme.icon.size.sm}
-          stroke={theme.icon.stroke.sm}
-          color={theme.font.color.tertiary}
-        />
-      ) : (
-        <IconChevronRight
-          size={theme.icon.size.sm}
-          stroke={theme.icon.stroke.sm}
-          color={theme.font.color.tertiary}
-        />
-      )}
-    </div>
+    <NavigationMenuItemFolderChevron isOpen={isOpen} />
   );
 
-  const headerOverride =
-    isEditInPlace && favoritesEdit.isRenaming ? (
-      <NavigationDrawerInput
-        Icon={IconFolder}
-        value={favoritesEdit.folderNameValue}
-        onChange={favoritesEdit.setFolderNameValue}
-        onSubmit={favoritesEdit.handleSubmitRename}
-        onCancel={favoritesEdit.handleCancelRename}
-        onClickOutside={favoritesEdit.handleClickOutsideRename}
-      />
-    ) : undefined;
-
-  const header = headerOverride ?? (
+  const header = (
     <NavigationDrawerItem
       label={folderName}
-      Icon={FolderIcon}
-      iconColor={iconColor}
+      Icon={() => <ColoredIcon Icon={FolderIcon} color={iconColor} />}
       active={
         (!isOpen && hasActiveChild) ||
         (isWorkspace && isSelectedInEditMode && !isOpen)
       }
+      isSelectedInEditMode={
+        isWorkspace && isFolderEditHighlighted && !isExpanded
+      }
       onClick={handleHeaderClick}
-      rightOptions={headerRightOptions}
+      rightOptions={shouldUseEditModeClick ? undefined : headerRightOptions}
       className="navigation-drawer-item"
       isRightOptionsDropdownOpen={
         isEditInPlace ? favoritesEdit.isDropdownOpen : undefined
@@ -277,24 +267,29 @@ export const NavigationMenuItemFolderDnd = ({
     ? isLayoutCustomizationModeEnabled || navigationMenuItems.length === 0
     : true;
 
+  const showAddMenuItem = isEditInPlace
+    ? navigationMenuItems.length === 0
+    : isLayoutCustomizationModeEnabled;
   const folderContentLength =
-    isWorkspace && isLayoutCustomizationModeEnabled
-      ? navigationMenuItems.length + 1
-      : navigationMenuItems.length;
-
-  const handleAddMenuItemToFolder = useCallback(() => {
-    openAddItemToFolderPage({
-      folderId,
-      position: navigationMenuItems.length,
-      resetNavigationStack: true,
+    navigationMenuItems.length +
+    (showAddMenuItem && !isAddingFavoriteFolderItem ? 1 : 0) +
+    (hasInsertionPreview ? 1 : 0);
+  const getIndexWithInsertionPreview = (index: number) =>
+    isDefined(insertionIndex) && index >= insertionIndex ? index + 1 : index;
+  const selectedIndexWithInsertionPreview =
+    getIndexWithInsertionPreview(activeChildIndex);
+  const getPreviewSubItemState = (index: number) =>
+    getNavigationSubItemLeftAdornment({
+      index,
+      arrayLength: folderContentLength,
+      selectedIndex: selectedIndexWithInsertionPreview,
     });
-  }, [folderId, navigationMenuItems.length, openAddItemToFolderPage]);
 
   const deleteModal =
-    isEditInPlace && favoritesEdit.isModalOpened
+    isEditInPlace && favoritesEdit.isDialogOpened
       ? createPortal(
-          <ConfirmationModal
-            modalInstanceId={favoritesEdit.modalId}
+          <ConfirmationDialog
+            dialogId={favoritesEdit.modalId}
             title={
               favoritesEdit.navigationMenuItemCount > 1
                 ? t`Remove ${favoritesEdit.navigationMenuItemCount} navigation menu items?`
@@ -315,12 +310,32 @@ export const NavigationMenuItemFolderDnd = ({
   return (
     <>
       <StyledFolderContainer
-        $isSelectedInEditMode={isWorkspace && isFolderEditHighlighted}
+        $isSelectedInEditMode={
+          isWorkspace && isFolderEditHighlighted && isExpanded
+        }
         data-drag-over-header={isDragOverFolderHeader ? 'true' : undefined}
         data-forbidden-drop-target={isForbiddenDropTarget ? 'true' : undefined}
       >
         <NavigationMenuItemFolderLayout
-          header={wrappedHeader}
+          header={
+            <NavigationMenuItemEditable
+              item={item}
+              rightOptions={
+                shouldUseEditModeClick &&
+                isExpanded && (
+                  <NavigationMenuItemFolderChevronButton
+                    isOpen={isOpen}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggle();
+                    }}
+                  />
+                )
+              }
+            >
+              {wrappedHeader}
+            </NavigationMenuItemEditable>
+          }
           isOpen={isOpen}
           isGroup={isGroup}
         >
@@ -332,6 +347,7 @@ export const NavigationMenuItemFolderDnd = ({
                   index={index}
                   sectionId={sectionId}
                   compact={isCompact}
+                  previewSubItemState={getPreviewSubItemState(index)}
                   dropTargetIdOverride={getDndKitDropTargetId(
                     folderContentDroppableId,
                     index,
@@ -347,23 +363,26 @@ export const NavigationMenuItemFolderDnd = ({
                       : dropDisabled
                   }
                 >
-                  <NavigationMenuItemFolderSubItem
+                  <NavigationMenuItemFolderSubItemDispatcher
                     navigationMenuItem={navigationMenuItem}
-                    index={index}
+                    index={getIndexWithInsertionPreview(index)}
                     arrayLength={folderContentLength}
+                    selectedIndex={selectedIndexWithInsertionPreview}
                     isDragging={isDragging}
                     rightOptions={
                       isEditInPlace ? (
                         <LightIconButton
-                          Icon={IconHeartOff}
                           onClick={(event) => {
                             event.stopPropagation();
                             deleteManyNavigationMenuItems([
                               navigationMenuItem.id,
                             ]);
                           }}
-                          accent="tertiary"
-                        />
+                          emphasis="subtle"
+                          aria-label={t`Remove from favorites`}
+                        >
+                          <IconHeartOff />
+                        </LightIconButton>
                       ) : undefined
                     }
                     onNavigationMenuItemClick={
@@ -377,31 +396,46 @@ export const NavigationMenuItemFolderDnd = ({
               droppableId={folderContentDroppableId}
               index={navigationMenuItems.length}
               disabled={dropDisabled}
+              collisionPriority={FOLDER_HEADER_SLOT_COLLISION_PRIORITY}
             >
               <NavigationItemDropTarget
                 folderId={folderId}
                 index={navigationMenuItems.length}
                 sectionId={sectionId}
                 compact={isCompact}
+                previewSubItemState={getPreviewSubItemState(
+                  navigationMenuItems.length,
+                )}
                 dropTargetIdOverride={getDndKitDropTargetId(
                   folderContentDroppableId,
                   navigationMenuItems.length,
                 )}
               />
-              {isWorkspace && isLayoutCustomizationModeEnabled && (
-                <NavigationDrawerSubItem
-                  label={t`Add menu item`}
-                  Icon={IconPlus}
-                  onClick={handleAddMenuItemToFolder}
-                  triggerEvent="CLICK"
-                  variant="tertiary"
-                  isSelectedInEditMode={false}
-                  subItemState={getNavigationSubItemLeftAdornment({
-                    index: navigationMenuItems.length,
-                    arrayLength: folderContentLength,
-                    selectedIndex: -1,
-                  })}
-                />
+              {showAddMenuItem && (
+                <StyledAddMenuItem isHidden={isAddingFavoriteFolderItem}>
+                  <NavigationMenuItemEntrance>
+                    <NavigationMenuItemAddDropdown
+                      folderId={folderId}
+                      section={section}
+                      position={navigationMenuItems.length}
+                    >
+                      <NavigationDrawerSubItem
+                        label={t`Add menu item`}
+                        Icon={IconPlus}
+                        triggerEvent="CLICK"
+                        variant="tertiary"
+                        isSelectedInEditMode={false}
+                        subItemState={getNavigationSubItemLeftAdornment({
+                          index: getIndexWithInsertionPreview(
+                            navigationMenuItems.length,
+                          ),
+                          arrayLength: folderContentLength,
+                          selectedIndex: -1,
+                        })}
+                      />
+                    </NavigationMenuItemAddDropdown>
+                  </NavigationMenuItemEntrance>
+                </StyledAddMenuItem>
               )}
             </NavigationMenuItemDroppableSlot>
           </StyledFolderDroppableContent>

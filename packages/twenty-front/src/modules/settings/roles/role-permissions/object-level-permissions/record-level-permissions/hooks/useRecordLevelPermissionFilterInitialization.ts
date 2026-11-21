@@ -2,21 +2,29 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { isDefined } from 'twenty-shared/utils';
+// OMNIA-CUSTOM: id of the root group for rows stored without a group (contract C2)
+import { v4 } from 'uuid';
 
 import { type FieldMetadataItem } from '@/object-metadata/types/FieldMetadataItem';
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
 import { type RecordFilterGroup } from '@/object-record/record-filter-group/types/RecordFilterGroup';
 import { type RecordFilter } from '@/object-record/record-filter/types/RecordFilter';
+// OMNIA-CUSTOM: "<Relation> is Me" hop rows (contract C2)
+import { useWorkspaceMemberHopMetadata } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/hooks/useWorkspaceMemberHopMetadata';
+import { isWorkspaceMemberHopPredicate } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/isWorkspaceMemberHopPredicate';
 import {
   convertPredicateGroupToRecordFilterGroup,
   convertPredicateToRecordFilter,
 } from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/recordLevelPermissionPredicateConversion';
+// OMNIA-CUSTOM: rows stored without a group load under a root group (contract C2)
+import {
+  type UngroupedRecordFiltersRootGroup,
+  wrapUngroupedRecordFiltersInRootGroup,
+} from '@/settings/roles/role-permissions/object-level-permissions/record-level-permissions/utils/wrapUngroupedRecordFiltersInRootGroup';
 import { type RoleWithPartialMembers } from '@/settings/roles/types/RoleWithPartialMembers';
-import { type RowLevelPermissionPredicateScope } from '@/settings/roles/types/OmniaRoleExtensions';
 
 type UseRecordLevelPermissionFilterInitializationProps = {
   roleId: string;
-  scope: RowLevelPermissionPredicateScope;
   objectMetadataItem: EnrichedObjectMetadataItem;
   settingsDraftRole: RoleWithPartialMembers;
   filterableFieldMetadataItems: FieldMetadataItem[];
@@ -29,7 +37,6 @@ type UseRecordLevelPermissionFilterInitializationProps = {
 
 export const useRecordLevelPermissionFilterInitialization = ({
   roleId,
-  scope,
   objectMetadataItem,
   settingsDraftRole,
   filterableFieldMetadataItems,
@@ -42,20 +49,36 @@ export const useRecordLevelPermissionFilterInitialization = ({
     useState<string>('');
   const [lastInitializedObjectId, setLastInitializedObjectId] =
     useState<string>('');
+  // OMNIA-CUSTOM: the draft sync stores these rows back without a group while they are unchanged
+  const [ungroupedRecordFiltersRootGroup, setUngroupedRecordFiltersRootGroup] =
+    useState<UngroupedRecordFiltersRootGroup>();
+
+  // OMNIA-CUSTOM: same metadata as the draft sync, which owns the hops loaded here
+  const workspaceMemberHopMetadata = useWorkspaceMemberHopMetadata(
+    objectMetadataItem.id,
+  );
 
   const initialFilters = useMemo(() => {
     const predicates = settingsDraftRole.rowLevelPermissionPredicates ?? [];
     const objectPredicates = predicates.filter(
       (predicate) =>
         predicate.objectMetadataId === objectMetadataItem.id &&
-        predicate.scope === scope,
+        // OMNIA-CUSTOM: the builder edits the C2 hops it writes;
+        // other hops stay hidden and untouched
+        (!isDefined(predicate.relationFieldMetadataId) ||
+          isWorkspaceMemberHopPredicate({
+            predicate,
+            ...workspaceMemberHopMetadata,
+          })),
     );
 
     return objectPredicates
       .map((predicate) => {
         const fieldMetadataItem = filterableFieldMetadataItems.find(
           (fieldMetadataItemToFind) =>
-            fieldMetadataItemToFind.id === predicate.fieldMetadataId,
+            fieldMetadataItemToFind.id ===
+            // OMNIA-CUSTOM: a hop row sits on its relation field
+            (predicate.relationFieldMetadataId ?? predicate.fieldMetadataId),
         );
         return convertPredicateToRecordFilter(predicate, fieldMetadataItem);
       })
@@ -63,60 +86,50 @@ export const useRecordLevelPermissionFilterInitialization = ({
   }, [
     settingsDraftRole.rowLevelPermissionPredicates,
     objectMetadataItem.id,
-    scope,
     filterableFieldMetadataItems,
+    // OMNIA-CUSTOM: hop rows depend on the hop metadata (contract C2)
+    workspaceMemberHopMetadata,
   ]);
 
   const initialFilterGroups = useMemo(() => {
-    const predicateGroups = (
-      settingsDraftRole.rowLevelPermissionPredicateGroups ?? []
-    ).filter(
-      (group) =>
-        group.objectMetadataId === objectMetadataItem.id &&
-        group.scope === scope,
-    );
+    const predicateGroups =
+      settingsDraftRole.rowLevelPermissionPredicateGroups ?? [];
 
     const objectPredicateGroupIds = new Set(
       (settingsDraftRole.rowLevelPermissionPredicates ?? [])
         .filter(
-          (predicate) =>
-            predicate.objectMetadataId === objectMetadataItem.id &&
-            predicate.scope === scope,
+          (predicate) => predicate.objectMetadataId === objectMetadataItem.id,
         )
         .map((predicate) => predicate.rowLevelPermissionPredicateGroupId)
         .filter(isDefined),
     );
 
-    const groupsById = new Map(
-      predicateGroups.map((predicateGroup) => [
-        predicateGroup.id,
-        predicateGroup,
-      ]),
+    const relevantGroups = predicateGroups.filter(
+      (group) =>
+        objectPredicateGroupIds.has(group.id) ||
+        (isDefined(group.parentRowLevelPermissionPredicateGroupId) &&
+          objectPredicateGroupIds.has(
+            group.parentRowLevelPermissionPredicateGroupId,
+          )),
     );
 
-    for (const groupId of [...objectPredicateGroupIds]) {
-      let currentGroupId: string | null | undefined = groupId;
+    const rootGroups = predicateGroups.filter(
+      (group) =>
+        !group.parentRowLevelPermissionPredicateGroupId &&
+        relevantGroups.some(
+          (relevantGroup) =>
+            relevantGroup.id === group.id ||
+            relevantGroup.parentRowLevelPermissionPredicateGroupId === group.id,
+        ),
+    );
 
-      while (isDefined(currentGroupId)) {
-        const currentGroup = groupsById.get(currentGroupId);
+    const allRelevantGroups = [...new Set([...rootGroups, ...relevantGroups])];
 
-        if (!isDefined(currentGroup)) {
-          break;
-        }
-
-        objectPredicateGroupIds.add(currentGroup.id);
-        currentGroupId = currentGroup.parentRowLevelPermissionPredicateGroupId;
-      }
-    }
-
-    return predicateGroups
-      .filter((group) => objectPredicateGroupIds.has(group.id))
-      .map(convertPredicateGroupToRecordFilterGroup);
+    return allRelevantGroups.map(convertPredicateGroupToRecordFilterGroup);
   }, [
     settingsDraftRole.rowLevelPermissionPredicateGroups,
     settingsDraftRole.rowLevelPermissionPredicates,
     objectMetadataItem.id,
-    scope,
   ]);
 
   useEffect(() => {
@@ -130,10 +143,25 @@ export const useRecordLevelPermissionFilterInitialization = ({
       isDraftRolePopulated && (isRoleOrObjectChanged || !hasInitialized);
 
     if (shouldInitialize) {
-      setCurrentRecordFilters(initialFilters);
-      setCurrentRecordFilterGroups(initialFilterGroups);
+      // OMNIA-CUSTOM: without a root group, rows stored without a group (the C2 hop) would not render,
+      // and "Add filter" would save a second rule that the engine ORs with them
+      const {
+        recordFilters: initialRecordFilters,
+        recordFilterGroups: initialRecordFilterGroups,
+        ungroupedRecordFiltersRootGroup: initialUngroupedRecordFiltersRootGroup,
+      } = wrapUngroupedRecordFiltersInRootGroup({
+        recordFilters: initialFilters,
+        recordFilterGroups: initialFilterGroups,
+        rootRecordFilterGroupId: v4(),
+      });
 
-      for (const filter of initialFilters) {
+      setCurrentRecordFilters(initialRecordFilters);
+      setCurrentRecordFilterGroups(initialRecordFilterGroups);
+      setUngroupedRecordFiltersRootGroup(
+        initialUngroupedRecordFiltersRootGroup,
+      );
+
+      for (const filter of initialRecordFilters) {
         setRecordFilterUsedInAdvancedFilterDropdownRow(filter);
       }
 
@@ -157,5 +185,7 @@ export const useRecordLevelPermissionFilterInitialization = ({
 
   return {
     hasInitialized,
+    // OMNIA-CUSTOM: read by the draft sync (contract C2)
+    ungroupedRecordFiltersRootGroup,
   };
 };

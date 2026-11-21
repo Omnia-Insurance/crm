@@ -3,7 +3,11 @@ title: Formula Fields
 description: Create formula fields using workflows until native support is available.
 ---
 
-Twenty doesn't yet support native formula fields yet (coming in 2026), but you can achieve the same result using workflows. This workaround lets you automatically calculate and populate field values—from simple concatenations to complex business logic.
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Overview
+
+Twenty doesn't yet support native formula fields (coming in 2026), but you can achieve the same result using workflows. This workaround lets you automatically calculate and populate field values—from simple concatenations to complex business logic.
 
 ## Common Use Cases
 
@@ -55,7 +59,7 @@ export const main = async (params) => {
 
 See [How to Show Expected Amount in Pipeline](/user-guide/views-pipelines/how-tos/show-expected-amount-in-pipeline) for the complete workflow.
 
-### Quick Setup
+### Setup
 
 1. **Trigger**: Record is Updated (Opportunities, Amount OR Probability field)
 
@@ -197,3 +201,5 @@ export const main = async (params) => {
 - [How to Show Expected Amount in Pipeline](/user-guide/views-pipelines/how-tos/show-expected-amount-in-pipeline)
 - [How to Track Time in Stage](/user-guide/views-pipelines/how-tos/track-time-in-stage)
 - [Workflow Actions](/user-guide/workflows/capabilities/workflow-actions)
+
+<PageBanner illustration="card-page-logic-functions" />

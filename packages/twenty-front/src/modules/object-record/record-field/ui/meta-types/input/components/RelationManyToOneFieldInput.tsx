@@ -4,26 +4,24 @@ import { useRelationField } from '@/object-record/record-field/ui/meta-types/hoo
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { getFieldMetadataItemById } from '@/object-metadata/utils/getFieldMetadataItemById';
-import { getLabelIdentifierFieldMetadataItem } from '@/object-metadata/utils/getLabelIdentifierFieldMetadataItem';
+// OMNIA-CUSTOM: Carrier -> Product junction bridge
+import { useJunctionBridgeFilter } from '@/object-record/record-field/ui/hooks/useJunctionBridgeFilter';
 import { useAddNewRecordAndOpenSidePanel } from '@/object-record/record-field/ui/meta-types/input/hooks/useAddNewRecordAndOpenSidePanel';
-import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 import { recordFieldInputLayoutDirectionComponentState } from '@/object-record/record-field/ui/states/recordFieldInputLayoutDirectionComponentState';
 import { recordFieldInputLayoutDirectionLoadingComponentState } from '@/object-record/record-field/ui/states/recordFieldInputLayoutDirectionLoadingComponentState';
 import { SingleRecordPicker } from '@/object-record/record-picker/single-record-picker/components/SingleRecordPicker';
 import { singleRecordPickerSelectedIdComponentState } from '@/object-record/record-picker/single-record-picker/states/singleRecordPickerSelectedIdComponentState';
 import { type RecordPickerPickableMorphItem } from '@/object-record/record-picker/types/RecordPickerPickableMorphItem';
-import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { useSetAtomComponentState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentState';
 import { useLingui } from '@lingui/react/macro';
-import { useStore } from 'jotai';
 import { useContext } from 'react';
-import { FieldMetadataType } from 'twenty-shared/types';
 import { CustomError, isDefined } from 'twenty-shared/utils';
-import { IconForbid } from 'twenty-ui/display';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { IconForbid } from 'twenty-ui/icon';
 
 export const RelationManyToOneFieldInput = () => {
   const { t } = useLingui();
@@ -36,12 +34,11 @@ export const RelationManyToOneFieldInput = () => {
   });
   if (!isDefined(fieldMetadataItem) || !isDefined(objectMetadataItem)) {
     throw new CustomError(
-      'Field metadata item or object metadata item not found',
+      doNotTranslate('Field metadata item or object metadata item not found'),
       'FIELD_METADATA_ITEM_OR_OBJECT_METADATA_ITEM_NOT_FOUND',
     );
   }
   const { onSubmit, onCancel } = useContext(FieldInputEventContext);
-  const store = useStore();
 
   const instanceId = useAvailableComponentInstanceIdOrThrow(
     RecordFieldComponentInstanceContext,
@@ -49,56 +46,12 @@ export const RelationManyToOneFieldInput = () => {
 
   const handleMorphItemSelected = (
     selectedMorphItem: RecordPickerPickableMorphItem | null | undefined,
-  ) => {
-    // Pre-store the picked record in the Jotai store so draft persistence
-    // can read the full record (with name/label) instead of just { id }.
-    if (isDefined(selectedMorphItem)) {
-      const existingRecord = store.get(
-        recordStoreFamilyState.atomFamily(selectedMorphItem.recordId),
-      );
-      if (!isDefined(existingRecord)) {
-        const searchRecord = store.get(
-          searchRecordStoreFamilyState.atomFamily(selectedMorphItem.recordId),
-        );
-        const label = searchRecord?.label ?? '';
-
-        // Build the label field value matching the target object's label
-        // identifier type. FULL_NAME fields expect { firstName, lastName },
-        // not a plain string — otherwise the chip generator shows "-".
-        const labelField =
-          getLabelIdentifierFieldMetadataItem(relationObjectMetadataItem);
-        const fieldName = labelField?.name ?? 'name';
-
-        let labelValue: unknown;
-        if (labelField?.type === FieldMetadataType.FULL_NAME) {
-          const spaceIdx = label.indexOf(' ');
-          labelValue =
-            spaceIdx === -1
-              ? { firstName: label, lastName: '' }
-              : {
-                  firstName: label.slice(0, spaceIdx),
-                  lastName: label.slice(spaceIdx + 1),
-                };
-        } else {
-          labelValue = label;
-        }
-
-        store.set(
-          recordStoreFamilyState.atomFamily(selectedMorphItem.recordId),
-          {
-            id: selectedMorphItem.recordId,
-            [fieldName]: labelValue,
-          } as unknown as ObjectRecord,
-        );
-      }
-    }
-
+  ) =>
     onSubmit?.({
       newValue: isDefined(selectedMorphItem)
         ? { id: selectedMorphItem.recordId }
         : null,
     });
-  };
 
   const { objectMetadataItem: relationObjectMetadataItem } =
     useObjectMetadataItem({
@@ -111,7 +64,7 @@ export const RelationManyToOneFieldInput = () => {
   );
   if (!relationFieldMetadataItem) {
     throw new CustomError(
-      'Relation field metadata item not found',
+      doNotTranslate('Relation field metadata item not found'),
       'RELATION_FIELD_METADATA_ITEM_NOT_FOUND',
     );
   }
@@ -123,6 +76,14 @@ export const RelationManyToOneFieldInput = () => {
       fieldDefinition.metadata.relationObjectMetadataNameSingular,
     relationObjectMetadataItem,
     relationFieldMetadataItem,
+    recordId,
+  });
+
+  // OMNIA-CUSTOM: a Policy's Product picker offers only products its Carrier sells
+  const junctionBridgeFilter = useJunctionBridgeFilter({
+    objectMetadataItem,
+    fieldMetadataItem,
+    objectMetadataItems,
     recordId,
   });
 
@@ -140,8 +101,12 @@ export const RelationManyToOneFieldInput = () => {
     instanceId,
   );
 
-  const handleCreateNew = (searchInput?: string) => {
-    createNewRecordAndOpenSidePanel?.(searchInput);
+  const handleCreateNew = async (searchInput?: string) => {
+    const newRecordId = await createNewRecordAndOpenSidePanel?.(searchInput);
+
+    if (isDefined(newRecordId)) {
+      setSingleRecordPickerSelectedId(newRecordId);
+    }
   };
 
   if (recordFieldInputLayoutDirectionLoading) {
@@ -156,8 +121,12 @@ export const RelationManyToOneFieldInput = () => {
       EmptyIcon={IconForbid}
       emptyLabel={t`No ${fieldLabel}`}
       onCancel={onCancel}
+      // OMNIA-CUSTOM: no Add New under the junction allowlist, which a new record would bypass
       onCreate={
-        isDefined(createNewRecordAndOpenSidePanel) ? handleCreateNew : undefined
+        isDefined(createNewRecordAndOpenSidePanel) &&
+        !isDefined(junctionBridgeFilter)
+          ? handleCreateNew
+          : undefined
       }
       onMorphItemSelected={handleMorphItemSelected}
       objectNameSingulars={[
@@ -169,6 +138,8 @@ export const RelationManyToOneFieldInput = () => {
           ? 'search-bar-on-top'
           : 'search-bar-on-bottom'
       }
+      // OMNIA-CUSTOM: Carrier -> Product junction bridge
+      additionalFilter={junctionBridgeFilter}
     />
   );
 };

@@ -10,8 +10,8 @@ import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/
 import { useAtomComponentStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentStateValue';
 import { styled } from '@linaria/react';
 import { useContext, useState } from 'react';
-import { IconChevronDown } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconChevronDown } from 'twenty-ui/icon';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledCell = styled.div<{ isUnfolded: boolean; isFirstCell: boolean }>`
   align-items: center;
@@ -62,7 +62,7 @@ export const RecordTableColumnAggregateFooterValueCell = ({
     dropdownId,
   );
 
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
   const { viewFieldId, fieldMetadataId } = useContext(
     RecordTableColumnAggregateFooterCellContext,
   );

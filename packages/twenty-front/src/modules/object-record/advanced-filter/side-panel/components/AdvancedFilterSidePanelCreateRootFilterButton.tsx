@@ -9,19 +9,21 @@ import { useAtomComponentSelectorValue } from '@/ui/utilities/state/jotai/hooks/
 import { useSetAtomComponentFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomComponentFamilyState';
 import { hasInitializedCurrentRecordFiltersComponentFamilyState } from '@/views/states/hasInitializedCurrentRecordFiltersComponentFamilyState';
 import { useAtomFamilySelectorValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilySelectorValue';
-import { t } from '@lingui/core/macro';
 import { useContext } from 'react';
 import { RecordFilterGroupLogicalOperator } from 'twenty-shared/types';
 import { isDefined } from 'twenty-shared/utils';
-import { IconFilter } from 'twenty-ui/display';
-import { Button } from 'twenty-ui/input';
+import { doNotTranslate } from 'twenty-shared/i18n';
+import { IconFilter } from 'twenty-ui/icon';
+import { Button } from 'twenty-ui/primitives/input';
 import { v4 } from 'uuid';
+import { useLingui } from '@lingui/react/macro';
 
 export const AdvancedFilterSidePanelCreateRootFilterButton = ({
   objectMetadataItem,
 }: {
   objectMetadataItem: EnrichedObjectMetadataItem;
 }) => {
+  const { t } = useLingui();
   const { readonly } = useContext(AdvancedFilterContext);
   const rootRecordFilterGroup = useAtomComponentSelectorValue(
     rootLevelRecordFilterGroupComponentSelector,
@@ -67,7 +69,7 @@ export const AdvancedFilterSidePanelCreateRootFilterButton = ({
       upsertRecordFilterGroup(newRecordFilterGroup);
 
       if (!isDefined(defaultFieldMetadataItem)) {
-        throw new Error('Missing default filter definition');
+        throw new Error(doNotTranslate('Missing default filter definition'));
       }
 
       const { newRecordFilter } = createEmptyRecordFilterFromFieldMetadataItem(
@@ -82,14 +84,12 @@ export const AdvancedFilterSidePanelCreateRootFilterButton = ({
 
   return (
     <Button
-      Icon={IconFilter}
-      size="small"
-      variant="secondary"
-      accent="default"
+      startIcon={<IconFilter />}
+      size="sm"
       onClick={addRootRecordFilterGroup}
-      ariaLabel={t`Add filter`}
-      title={t`Add filter`}
+      aria-label={t`Add filter`}
       disabled={readonly}
-    />
+      variant="outline"
+    >{t`Add filter`}</Button>
   );
 };

@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { STANDARD_SKILL } from 'src/engine/workspace-manager/twenty-standard-application/constants/standard-skill.constant';
 import { expectOneNotInternalServerErrorSnapshot } from 'test/integration/graphql/utils/expect-one-not-internal-server-error-snapshot.util';
 import { deleteSkill } from 'test/integration/metadata/suites/skill/utils/delete-skill.util';
 import { findSkills } from 'test/integration/metadata/suites/skill/utils/find-skills.util';
@@ -47,12 +48,13 @@ describe('Skill deletion should fail', () => {
     const { data } = await findSkills({
       expectToFail: false,
       input: undefined,
-      gqlFields: 'id name isCustom',
+      gqlFields: 'id name',
     });
 
-    const standardSkill = data.skills.find((skill) => skill.isCustom === false);
+    const standardSkill = data.skills.find((skill) =>
+      Object.keys(STANDARD_SKILL).includes(skill.name),
+    );
 
-    // If there are no standard skills, skip this test
     if (!standardSkill) {
       return;
     }

@@ -11,8 +11,8 @@ import { isFieldRawJson } from '@/object-record/record-field/ui/types/guards/isF
 import { isFieldRelation } from '@/object-record/record-field/ui/types/guards/isFieldRelation';
 import { isFieldText } from '@/object-record/record-field/ui/types/guards/isFieldText';
 import { isFieldUuid } from '@/object-record/record-field/ui/types/guards/isFieldUuid';
-import { CurrencyCode } from 'twenty-shared/constants';
 import { CustomError } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type computeEmptyDraftValueParams = {
   fieldDefinition: Pick<FieldDefinition<FieldMetadata>, 'type'>;
@@ -56,7 +56,7 @@ export const computeEmptyDraftValue = <FieldValue>({
   if (isFieldCurrency(fieldDefinition)) {
     return {
       amount: '',
-      currenyCode: CurrencyCode.USD,
+      currencyCode: '',
     } as unknown as FieldInputDraftValue<FieldValue>;
   }
 
@@ -68,7 +68,9 @@ export const computeEmptyDraftValue = <FieldValue>({
   }
 
   throw new CustomError(
-    `Record field type not supported : ${fieldDefinition.type}}`,
+    doNotTranslate(
+      `Record field type not supported : ${fieldDefinition.type}}`,
+    ),
     'RECORD_FIELD_TYPE_NOT_SUPPORTED',
   );
 };

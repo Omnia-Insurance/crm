@@ -1,0 +1,43 @@
+import {
+  type RunAgentInput,
+  type RunAgentResult,
+} from 'twenty-shared/application';
+import { isDefined } from 'twenty-shared/utils';
+
+import { postGraphqlRequest } from '@/sdk/logic-function/utils/post-graphql-request.util';
+import { toRunAgentMessages } from '@/sdk/logic-function/utils/to-run-agent-messages.util';
+
+const RUN_AGENT_MUTATION = `
+  mutation RunAgent($input: RunAgentInput!) {
+    runAgent(input: $input) {
+      threadId
+      runId
+      status
+      result
+      error
+      success
+    }
+  }
+`;
+
+export const runAgent = async ({
+  input,
+  ...rest
+}: RunAgentInput): Promise<RunAgentResult> => {
+  const variables = {
+    input: isDefined(input)
+      ? { ...rest, input: toRunAgentMessages(input) }
+      : rest,
+  };
+
+  const { runAgent: result } = await postGraphqlRequest<
+    typeof variables,
+    { runAgent: RunAgentResult }
+  >({
+    query: RUN_AGENT_MUTATION,
+    variables,
+    caller: 'runAgent',
+  });
+
+  return result;
+};

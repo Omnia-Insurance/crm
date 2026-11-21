@@ -1,0 +1,187 @@
+---
+title: Тестирование
+description: Настройка Vitest, интеграционные тесты с использованием реального сервера Twenty, проверка типов и CI с GitHub Actions.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Обзор
+
+Используйте автономный CLI с `--json`, чтобы собирать, публиковать, устанавливать и удалять приложение из тестового кода. Установите его глобально с помощью `npm install -g twenty`. В сочетании с [Vitest](https://vitest.dev/) и типизированными клиентами API вы можете писать интеграционные тесты, которые проверяют, что ваше приложение работает сквозным образом на реальном сервере Twenty.
+
+## Использование пакетов npm
+
+Вы можете устанавливать и использовать любые пакеты npm в своём приложении. И логические функции, и компоненты фронтенда собираются с помощью [esbuild](https://esbuild.github.io/), который встраивает их зависимости в выходной файл — каталоги `node_modules` во время выполнения не нужны.
+
+### Установка пакета
+
+```bash filename="Terminal"
+yarn add axios
+```
+
+Затем импортируйте его в своём коде:
+
+```ts src/logic-functions/fetch-data.ts
+import { defineLogicFunction } from 'twenty-sdk/define';
+import axios from 'axios';
+
+const handler = async () => {
+  const { data } = await axios.get('https://api.example.com/data');
+
+  return { data };
+};
+
+export default defineLogicFunction({
+  universalIdentifier: '...',
+  name: 'fetch-data',
+  description: 'Fetches data from an external API',
+  timeoutSeconds: 10,
+  handler,
+});
+```
+
+То же самое работает для компонентов фронтенда:
+
+```tsx src/front-components/chart.tsx
+import { defineFrontComponent } from 'twenty-sdk/define';
+import { format } from 'date-fns';
+
+const DateWidget = () => {
+  return <p>Today is {format(new Date(), 'MMMM do, yyyy')}</p>;
+};
+
+export default defineFrontComponent({
+  universalIdentifier: '...',
+  name: 'date-widget',
+  component: DateWidget,
+});
+```
+
+### Как работает бандлинг
+
+Этап сборки использует esbuild для создания одного самодостаточного файла на каждую логическую функцию и на каждый компонент фронтенда. Импортированные пакеты встраиваются в бандл, за исключением перечисленных ниже.
+
+**Логические функции** выполняются в среде Node.js. Встроенные модули Node (`fs`, `path`, `crypto`, `http` и т. д.) доступны и не требуют установки.
+
+**Компоненты фронтенда** выполняются в Web Worker. Встроенные модули Node **недоступны** — доступны только пакеты npm, работающие в браузерной среде. Обратите внимание, что в песочнице реализован *частичный* DOM, поэтому пакет может успешно собраться, но всё равно завершиться с ошибкой во время выполнения; см. раздел [Текущие ограничения](/ru/developers/extend/apps/layout/front-components#current-limitations).
+
+В обеих средах доступны как предварительно предоставленные модули `twenty-client-sdk/core` и `twenty-client-sdk/metadata` — они не включаются в бандл, а подставляются сервером во время выполнения.
+
+Фронтенд‑компоненты также могут совместно использовать зависимости через [общий бандл зависимостей](/ru/developers/extend/apps/layout/front-components#sharing-dependencies-across-front-components). Пакеты, перечисленные в поле `frontComponentSharedDependencies` файла package.json приложения, один раз собираются в отдельный файл и загружаются из него во время выполнения вместо внедрения в каждый компонент, поэтому компонент, который импортирует только общие пакеты, практически не содержит собственного кода зависимостей.
+
+## Настройка
+
+Приложение, созданное скэффолдером, уже включает Vitest. Если вы настраиваете его вручную, установите зависимости:
+
+```bash filename="Terminal"
+yarn add -D vitest vite-tsconfig-paths
+```
+
+Создайте `vitest.config.ts` в корне вашего приложения:
+
+```ts vitest.config.ts
+import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from 'vitest/config';
+
+const TWENTY_API_URL = process.env.TWENTY_API_URL ?? 'http://localhost:2020';
+const TWENTY_API_KEY =
+  process.env.TWENTY_API_KEY ?? '<the pre-seeded local dev key>';
+
+// Make env vars available to globalSetup (test.env only applies to workers)
+process.env.TWENTY_API_URL = TWENTY_API_URL;
+process.env.TWENTY_API_KEY = TWENTY_API_KEY;
+
+export default defineConfig({
+  plugins: [
+    tsconfigPaths({
+      projects: ['tsconfig.spec.json'],
+      ignoreConfigErrors: true,
+    }),
+  ],
+  test: {
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
+    fileParallelism: false,
+    include: ['src/**/*.integration-test.ts'],
+    globalSetup: ['src/__tests__/global-setup.ts'],
+    env: {
+      TWENTY_API_URL,
+      TWENTY_API_KEY,
+    },
+  },
+});
+```
+
+Сгенерированный шаблон включает `src/__tests__/run-twenty.ts`, вспомогательный модуль для подпроцессов, который вызывает глобальный CLI и анализирует его результат JSON. Установите для `TWENTY_CLI` абсолютный путь к исполняемому файлу, чтобы использовать локальную сборку CLI. Он наследует `TWENTY_API_URL` и `TWENTY_API_KEY`; файл конфигурации в домашнем каталоге не требуется.
+
+Используйте этот вспомогательный модуль для настройки и очистки:
+
+```ts src/__tests__/global-setup.ts
+import { runTwenty } from './run-twenty';
+
+export async function setup() {
+  const result = await runTwenty(['app', 'apply', '--create']);
+  if (!result.ok) throw new Error(result.error.message);
+}
+
+export async function teardown() {
+  const result = await runTwenty(['app', 'uninstall', '--yes']);
+  if (!result.ok) throw new Error(result.error.message);
+}
+```
+
+Запускайте интеграционные тесты для одноразовой рабочей области: настройка устанавливает приложение, а очистка удаляет его. Чтобы проверить установку из реестра, выполните `app publish --private`, а затем `app install` вместо `app apply --create`.
+
+## Написание интеграционного теста
+
+Используйте `twenty-client-sdk` для проверки данных и метаданных после завершения настройки CLI:
+
+```ts
+import { MetadataApiClient } from 'twenty-client-sdk/metadata';
+import { expect, it } from 'vitest';
+import { APPLICATION_UNIVERSAL_IDENTIFIER } from 'src/constants/universal-identifiers';
+
+it('installs the app', async () => {
+  const result = await new MetadataApiClient().query({
+    findOneApplication: {
+      __args: { universalIdentifier: APPLICATION_UNIVERSAL_IDENTIFIER },
+      id: true,
+    },
+  });
+  expect(result.findOneApplication.id).toBeTruthy();
+});
+```
+
+Для манифеста прочитайте `data.manifest` из `twenty app build --json`. Для тестов развернутых функций используйте мутацию `executeOneLogicFunction` клиента метаданных с пользовательским токеном. Перед вызовом функции определите её в пределах ID установленного приложения.
+
+## Запуск тестов
+
+Убедитесь, что ваш локальный сервер Twenty запущен, затем:
+
+```bash filename="Terminal"
+yarn test
+```
+
+Или в режиме наблюдения во время разработки:
+
+```bash filename="Terminal"
+yarn test:watch
+```
+
+## Проверка типов
+
+Вы также можете запустить проверку типов для своего приложения без запуска тестов:
+
+```bash filename="Terminal"
+twenty app typecheck
+```
+
+Это запускает `tsc --noEmit` для `tsconfig.json` вашего приложения и сообщает о любых ошибках типов. Сгенерированные с помощью скэффолдера приложения также поставляются со скриптом `yarn typecheck`, который проверяет и тестовые файлы (`tsconfig.spec.json`).
+
+## CI с GitHub Actions
+
+Скэффолдер генерирует готовый к использованию рабочий процесс в `.github/workflows/ci.yml`. При каждом пуше в `main` и каждом pull request он запускает эфемерный сервер Twenty в раннере (через экшен `twentyhq/twenty/.github/actions/spawn-twenty-app-dev-test`), затем выполняет `yarn lint`, `yarn typecheck`, `yarn test:unit` и `yarn test` с `TWENTY_API_URL` / `TWENTY_API_KEY`, указывающими на этот сервер. Секреты не требуются, и вы можете зафиксировать версию сервера через переменную окружения `TWENTY_VERSION` в начале рабочего процесса.
+
+См. раздел [Публикация → Автоматизированный CI/CD](/ru/developers/extend/apps/operations/publishing#automated-cicd-scaffolded-workflows) для полного пошагового руководства по трем сгенерированным рабочим процессам (`ci.yml`, конвейер деплоя `cd.yml` и `publish.yml` для публикации в npm).
+
+<PageBanner illustration="card-page-testing" />

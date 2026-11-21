@@ -1,65 +1,66 @@
-import { Trans, useLingui } from '@lingui/react/macro';
-import { useNavigate } from 'react-router-dom';
+import { useLingui } from '@lingui/react/macro';
 import { SettingsPath } from 'twenty-shared/types';
-import { getSettingsPath } from 'twenty-shared/utils';
+import { getSettingsPath, isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
 
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { IngestionPipelineForm } from '@/settings/ingestion-pipeline/components/IngestionPipelineForm.component';
 import { useIngestionPipeline } from '@/settings/ingestion-pipeline/hooks/useIngestionPipeline';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { type IngestionPipelineFormValues } from '@/settings/ingestion-pipeline/types/IngestionPipelineFormValues';
+import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
 export const SettingsIngestionPipelineNew = () => {
   const { t } = useLingui();
-  const navigate = useNavigate();
+  const navigate = useNavigateSettings();
+  const { enqueueToast } = useToast();
   const { createPipeline } = useIngestionPipeline();
 
-  const handleSubmit = async (values: {
-    name: string;
-    mode: 'push' | 'pull';
-    targetObjectNameSingular: string;
-    description?: string;
-    sourceUrl?: string;
-    schedule?: string;
-    dedupFieldNames?: string[];
-  }) => {
-    const pipeline = await createPipeline({
-      name: values.name,
-      mode: values.mode,
-      targetObjectNameSingular: values.targetObjectNameSingular,
-      description: values.description ?? null,
-      sourceUrl: values.sourceUrl ?? null,
-      sourceHttpMethod: null,
-      sourceAuthConfig: null,
-      sourceRequestConfig: null,
-      responseRecordsPath: null,
-      schedule: values.schedule ?? null,
-      dedupFieldNames: values.dedupFieldNames ?? null,
-      paginationConfig: null,
-      isEnabled: false,
-    });
+  const handleSubmit = async (values: IngestionPipelineFormValues) => {
+    try {
+      const createdPipeline = await createPipeline({
+        ...values,
+        isEnabled: false,
+      });
 
-    navigate(
-      getSettingsPath(SettingsPath.IngestionPipelineDetail, {
-        pipelineId: pipeline.id,
-      }),
-    );
+      if (!isDefined(createdPipeline)) {
+        navigate(SettingsPath.IngestionPipelines);
+
+        return;
+      }
+
+      enqueueToast({
+        status: 'success',
+        children: t`Pipeline created`,
+      });
+
+      navigate(SettingsPath.IngestionPipelineDetail, {
+        pipelineId: createdPipeline.id,
+      });
+    } catch (error) {
+      enqueueToast(getToastOptionsFromError({ error }));
+    }
   };
 
   return (
-    <SubMenuTopBarContainer
-      title={t`New Pipeline`}
+    <SettingsPageLayout
+      title={t`New pipeline`}
       links={[
-        { children: <Trans>Settings</Trans>, href: '/settings' },
         {
-          children: <Trans>Ingestion Pipelines</Trans>,
+          children: t`Workspace`,
+          href: getSettingsPath(SettingsPath.General),
+        },
+        {
+          children: t`Ingestion pipelines`,
           href: getSettingsPath(SettingsPath.IngestionPipelines),
         },
-        { children: <Trans>New</Trans> },
+        { children: t`New` },
       ]}
     >
       <SettingsPageContainer>
         <IngestionPipelineForm onSubmit={handleSubmit} />
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

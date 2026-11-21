@@ -6,13 +6,14 @@ export type FormFieldMetadata = {
   name: string;
   label: string;
   type: WorkflowFormFieldType;
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   value?: any;
   placeholder?: string;
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   settings?: Record<string, any>;
 };
 
 export type WorkflowFormActionSettings = BaseWorkflowActionSettings & {
   input: FormFieldMetadata[];
+  instructions?: string;
 };

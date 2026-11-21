@@ -1,91 +1,38 @@
-import { useEffect } from 'react';
-
-import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
-import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
-import { useSetAtomFamilyState } from '@/ui/utilities/state/jotai/hooks/useSetAtomFamilyState';
-import { shouldWorkflowRefetchRequestFamilyState } from '@/workflow/states/shouldWorkflowRefetchRequestFamilyState';
-import {
-  type Workflow,
-  type WorkflowVersion,
-  type WorkflowWithCurrentVersion,
-} from '@/workflow/types/Workflow';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
+import { useCoreWorkflowForShowPage } from '@/object-core/workflows/hooks/useCoreWorkflowForShowPage';
+import { useCoreWorkflowVersionContent } from '@/object-core/workflows/hooks/useCoreWorkflowVersionContent';
+import { getWorkflowCurrentVersion } from '@/workflow/utils/getWorkflowCurrentVersion';
+import { type WorkflowWithCurrentVersion } from '@/workflow/types/Workflow';
 import { isDefined } from 'twenty-shared/utils';
-
-type WorkflowWithAllVersions = Omit<Workflow, 'versions'> & {
-  versions: Array<
-    Pick<WorkflowVersion, 'id' | 'status' | 'name' | 'createdAt'>
-  >;
-};
 
 export const useWorkflowWithCurrentVersion = (
   workflowId: string | undefined,
 ): WorkflowWithCurrentVersion | undefined => {
-  const shouldWorkflowRefetchRequest = useAtomFamilyStateValue(
-    shouldWorkflowRefetchRequestFamilyState,
-    workflowId ?? '',
-  );
-  const setShouldWorkflowRefetchRequest = useSetAtomFamilyState(
-    shouldWorkflowRefetchRequestFamilyState,
-    workflowId ?? '',
-  );
+  const { coreWorkflow, versions } = useCoreWorkflowForShowPage({
+    coreWorkflowId: workflowId,
+  });
 
-  const { record: workflow, refetch: refetchWorkflow } =
-    useFindOneRecord<WorkflowWithAllVersions>({
-      objectNameSingular: CoreObjectNameSingular.Workflow,
-      objectRecordId: workflowId,
-      recordGqlFields: {
-        id: true,
-        name: true,
-        statuses: true,
-        lastPublishedVersionId: true,
-        versions: {
-          id: true,
-          status: true,
-          name: true,
-          createdAt: true,
-        },
-      },
-      skip: !isDefined(workflowId),
-    });
-
-  useEffect(() => {
-    if (shouldWorkflowRefetchRequest) {
-      setShouldWorkflowRefetchRequest(false);
-      refetchWorkflow();
-    }
-  }, [
-    shouldWorkflowRefetchRequest,
-    setShouldWorkflowRefetchRequest,
-    refetchWorkflow,
-  ]);
-
-  const draftVersion = workflow?.versions.find(
-    (workflowVersion) => workflowVersion.status === 'DRAFT',
+  const workflowVersions = [...versions].sort((a, b) =>
+    a.createdAt > b.createdAt ? -1 : 1,
   );
 
-  const workflowVersions = [...(workflow?.versions ?? [])];
+  const currentVersionId = getWorkflowCurrentVersion({
+    versions: workflowVersions,
+    lastPublishedVersionId: coreWorkflow?.lastPublishedVersionId,
+  })?.id;
 
-  workflowVersions.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1));
+  const currentVersion = useCoreWorkflowVersionContent({
+    coreWorkflowId: workflowId,
+    coreWorkflowVersionId: currentVersionId,
+  });
 
-  const latestVersion = workflowVersions[0];
-
-  const currentVersionWithoutSteps = draftVersion ?? latestVersion;
-
-  const { record: currentVersionWithSteps } = useFindOneRecord<WorkflowVersion>(
-    {
-      objectNameSingular: CoreObjectNameSingular.WorkflowVersion,
-      objectRecordId: currentVersionWithoutSteps?.id,
-      skip: !isDefined(currentVersionWithoutSteps?.id),
-    },
-  );
-
-  if (!isDefined(workflow) || !isDefined(currentVersionWithSteps)) {
+  if (!isDefined(coreWorkflow) || !isDefined(currentVersion)) {
     return undefined;
   }
 
   return {
-    ...workflow,
-    currentVersion: currentVersionWithSteps,
+    ...coreWorkflow,
+    __typename: 'Workflow',
+    versions: workflowVersions,
+    currentVersion,
   };
 };

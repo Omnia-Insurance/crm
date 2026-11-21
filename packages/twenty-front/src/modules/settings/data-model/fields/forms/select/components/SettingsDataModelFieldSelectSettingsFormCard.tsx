@@ -1,8 +1,9 @@
 import { useFormContext } from 'react-hook-form';
 import { type z } from 'zod';
 
-import { Separator } from '@/settings/components/Separator';
+import { SettingsCardSeparator } from '@/settings/components/SettingsCardSeparator';
 import { SettingsDataModelPreviewFormCard } from '@/settings/data-model/components/SettingsDataModelPreviewFormCard';
+// OMNIA-CUSTOM: soft Required rule (contract C5)
 import { SettingsDataModelFieldRequiredForm } from '@/settings/data-model/fields/forms/components/SettingsDataModelFieldRequiredForm';
 import {
   type settingsDataModelFieldMultiSelectFormSchema,
@@ -11,7 +12,7 @@ import {
 } from '@/settings/data-model/fields/forms/select/components/SettingsDataModelFieldSelectForm';
 import { SettingsDataModelFieldPreviewWidget } from '@/settings/data-model/fields/preview/components/SettingsDataModelFieldPreviewWidget';
 import { type FieldMetadataType } from 'twenty-shared/types';
-import { type SettingsDataModelFieldEditFormValues } from '~/pages/settings/data-model/SettingsObjectFieldEdit';
+import { type SettingsDataModelFieldEditFormValues } from '@/settings/data-model/types/SettingsDataModelFieldEditFormValues';
 
 type SettingsDataModelFieldSelectOrMultiSelectFormValues = z.infer<
   | typeof settingsDataModelFieldSelectFormSchema
@@ -57,7 +58,8 @@ export const SettingsDataModelFieldSelectSettingsFormCard = ({
             existingFieldMetadataId={existingFieldMetadataId}
             disabled={disabled}
           />
-          <Separator />
+          {/* OMNIA-CUSTOM: soft Required rule (contract C5) */}
+          <SettingsCardSeparator />
           <SettingsDataModelFieldRequiredForm
             existingFieldMetadataId={existingFieldMetadataId}
             objectNameSingular={objectNameSingular}

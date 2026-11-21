@@ -4,47 +4,54 @@ import {
   FlatEntityMapsException,
   FlatEntityMapsExceptionCode,
 } from 'src/engine/metadata-modules/flat-entity/exceptions/flat-entity-maps.exception';
+import { fromEntityToScalarEntity } from 'src/engine/metadata-modules/flat-entity/utils/from-entity-to-scalar-entity.util';
 import { type FlatRoleTarget } from 'src/engine/metadata-modules/flat-role-target/types/flat-role-target.type';
 import { type FromEntityToFlatEntityArgs } from 'src/engine/workspace-cache/types/from-entity-to-flat-entity-args.type';
+import { resolveManyToOneRelationIdsToUniversalIdentifiers } from 'src/engine/workspace-manager/workspace-migration/universal-flat-entity/utils/resolve-many-to-one-relation-ids-to-universal-identifiers.util';
 
-export const fromRoleTargetEntityToFlatRoleTarget = ({
+const resolveTargetApplicationUniversalIdentifier = ({
   entity: roleTargetEntity,
   applicationIdToUniversalIdentifierMap,
-  roleIdToUniversalIdentifierMap,
-}: FromEntityToFlatEntityArgs<'roleTarget'>): FlatRoleTarget => {
-  const applicationUniversalIdentifier =
-    applicationIdToUniversalIdentifierMap.get(roleTargetEntity.applicationId);
+}: FromEntityToFlatEntityArgs<'roleTarget'>): string | null => {
+  const { targetApplicationId } = roleTargetEntity;
 
-  if (!isDefined(applicationUniversalIdentifier)) {
+  if (!isDefined(targetApplicationId)) {
+    return null;
+  }
+
+  const targetApplicationUniversalIdentifier =
+    applicationIdToUniversalIdentifierMap.get(targetApplicationId);
+
+  if (!isDefined(targetApplicationUniversalIdentifier)) {
     throw new FlatEntityMapsException(
-      `Application with id ${roleTargetEntity.applicationId} not found when building flat role target for role target ${roleTargetEntity.id}`,
+      `Application with id ${targetApplicationId} not found for roleTarget ${roleTargetEntity.id}`,
       FlatEntityMapsExceptionCode.ENTITY_NOT_FOUND,
     );
   }
 
-  const roleUniversalIdentifier = roleIdToUniversalIdentifierMap.get(
-    roleTargetEntity.roleId,
-  );
+  return targetApplicationUniversalIdentifier;
+};
 
-  if (!isDefined(roleUniversalIdentifier)) {
-    throw new FlatEntityMapsException(
-      `Role with id ${roleTargetEntity.roleId} not found when building flat role target for role target ${roleTargetEntity.id}`,
-      FlatEntityMapsExceptionCode.ENTITY_NOT_FOUND,
-    );
-  }
+export const fromRoleTargetEntityToFlatRoleTarget = (
+  args: FromEntityToFlatEntityArgs<'roleTarget'>,
+): FlatRoleTarget => {
+  const { entity: roleTargetEntity } = args;
+
+  const roleTargetScalarEntity = fromEntityToScalarEntity({
+    metadataName: 'roleTarget',
+    entity: roleTargetEntity,
+  });
+
+  const relationUniversalIdentifiers =
+    resolveManyToOneRelationIdsToUniversalIdentifiers({
+      metadataName: 'roleTarget',
+      ...args,
+    });
 
   return {
-    id: roleTargetEntity.id,
-    workspaceId: roleTargetEntity.workspaceId,
-    roleId: roleTargetEntity.roleId,
-    userWorkspaceId: roleTargetEntity.userWorkspaceId,
-    agentId: roleTargetEntity.agentId,
-    apiKeyId: roleTargetEntity.apiKeyId,
-    applicationId: roleTargetEntity.applicationId,
-    universalIdentifier: roleTargetEntity.universalIdentifier,
-    createdAt: roleTargetEntity.createdAt.toISOString(),
-    updatedAt: roleTargetEntity.updatedAt.toISOString(),
-    applicationUniversalIdentifier,
-    roleUniversalIdentifier,
+    ...roleTargetScalarEntity,
+    ...relationUniversalIdentifiers,
+    targetApplicationUniversalIdentifier:
+      resolveTargetApplicationUniversalIdentifier(args),
   };
 };

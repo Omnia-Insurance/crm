@@ -64,7 +64,10 @@ const applyMap = (
   return values[stringValue] ?? value;
 };
 
-const parseDateValue = (value: unknown, sourceFormat: string): string | unknown => {
+const parseDateValue = (
+  value: unknown,
+  sourceFormat: string,
+): string | unknown => {
   if (typeof value !== 'string' && typeof value !== 'number') {
     return value;
   }

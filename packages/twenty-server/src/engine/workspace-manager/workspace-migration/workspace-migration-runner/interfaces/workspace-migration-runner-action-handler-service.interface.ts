@@ -1,15 +1,19 @@
 import { Inject, SetMetadata } from '@nestjs/common';
 
 import { AllMetadataName } from 'twenty-shared/metadata';
+import { isDefined } from 'twenty-shared/utils';
 import { QueryRunner } from 'typeorm';
 
 import { LoggerService } from 'src/engine/core-modules/logger/logger.service';
+import { WORKSPACE_MIGRATION_DURATION_MS_BUCKET_BOUNDARIES } from 'src/engine/core-modules/metrics/constants/workspace-migration-duration-ms-bucket-boundaries.constant';
+import { MetricsService } from 'src/engine/core-modules/metrics/metrics.service';
+import { MetricsKeys } from 'src/engine/core-modules/metrics/types/metrics-keys.type';
 import { ALL_METADATA_ENTITY_BY_METADATA_NAME } from 'src/engine/metadata-modules/flat-entity/constant/all-metadata-entity-by-metadata-name.constant';
 import { type AllFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/all-flat-entity-maps.type';
 import { FlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/types/flat-entity-maps.type';
 import { MetadataFlatEntity } from 'src/engine/metadata-modules/flat-entity/types/metadata-flat-entity.type';
 import { MetadataRelatedFlatEntityMapsKeys } from 'src/engine/metadata-modules/flat-entity/types/metadata-related-flat-entity-maps-keys.type';
-import { MetadataToFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/types/metadata-to-flat-entity-maps-key';
+import { MetadataToFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/types/metadata-to-flat-entity-maps-key.type';
 import { WorkspaceMigrationActionType } from 'src/engine/metadata-modules/flat-entity/types/metadata-workspace-migration-action.type';
 import { findFlatEntityByUniversalIdentifierOrThrow } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-universal-identifier-or-throw.util';
 import { getMetadataFlatEntityMapsKey } from 'src/engine/metadata-modules/flat-entity/utils/get-metadata-flat-entity-maps-key.util';
@@ -20,13 +24,14 @@ import {
   buildActionHandlerKey,
   type AllFlatWorkspaceMigrationAction,
   type AllUniversalWorkspaceMigrationAction,
-} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common';
+} from 'src/engine/workspace-manager/workspace-migration/workspace-migration-builder/types/workspace-migration-action-common.type';
 import { WORKSPACE_MIGRATION_ACTION_HANDLER_METADATA_KEY } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/constants/workspace-migration-action-handler-metadata-key.constant';
 import {
   WorkspaceMigrationRunnerException,
   WorkspaceMigrationRunnerExceptionCode,
 } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/exceptions/workspace-migration-runner.exception';
-import { type MetadataEvent } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event';
+import { type DeferredWorkspaceMigrationAction } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/deferred-workspace-migration-action.type';
+import { type MetadataEvent } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/types/metadata-event.type';
 import {
   WorkspaceMigrationActionRunnerContext,
   type WorkspaceMigrationActionRunnerArgs,
@@ -54,6 +59,7 @@ export type ActionHandlerExecuteResult<TMetadataName extends AllMetadataName> =
       | MetadataToFlatEntityMapsKey<TMetadataName>
     >;
     metadataEvents: MetadataEvent[];
+    deferredActions: DeferredWorkspaceMigrationAction[];
   };
 
 export abstract class BaseWorkspaceMigrationRunnerActionHandlerService<
@@ -64,17 +70,17 @@ export abstract class BaseWorkspaceMigrationRunnerActionHandlerService<
     TActionType,
     TMetadataName
   >,
-  TFlatAction extends
-    AllFlatWorkspaceMigrationAction = AllFlatWorkspaceMigrationAction<
-    TActionType,
-    TMetadataName
-  >,
+  TFlatAction extends AllFlatWorkspaceMigrationAction =
+    AllFlatWorkspaceMigrationAction<TActionType, TMetadataName>,
 > {
   public actionType: TActionType;
   public metadataName: TMetadataName;
 
   @Inject(LoggerService)
   protected readonly logger: LoggerService;
+
+  @Inject(MetricsService)
+  protected readonly metricsService: MetricsService;
 
   public abstract transpileUniversalActionToFlatAction(
     context: WorkspaceMigrationActionRunnerArgs<TUniversalAction>,
@@ -135,6 +141,12 @@ export abstract class BaseWorkspaceMigrationRunnerActionHandlerService<
     _context: WorkspaceMigrationActionRunnerContext<TFlatAction>,
   ): Promise<void> {
     return Promise.resolve();
+  }
+
+  protected getDeferredAction(
+    _context: WorkspaceMigrationActionRunnerContext<TFlatAction>,
+  ): DeferredWorkspaceMigrationAction | undefined {
+    return undefined;
   }
 
   private optimisticallyApplyActionOnAllFlatEntityMaps({
@@ -281,13 +293,24 @@ export abstract class BaseWorkspaceMigrationRunnerActionHandlerService<
       allFlatEntityMaps: context.allFlatEntityMaps,
     });
 
+    const deferredAction = this.getDeferredAction({
+      ...context,
+      flatAction,
+    });
+
+    const deferredActions: DeferredWorkspaceMigrationAction[] = isDefined(
+      deferredAction,
+    )
+      ? [deferredAction]
+      : [];
+
     const partialOptimisticCache =
       this.optimisticallyApplyActionOnAllFlatEntityMaps({
         flatAction,
         allFlatEntityMaps: context.allFlatEntityMaps,
       });
 
-    return { partialOptimisticCache, metadataEvents };
+    return { partialOptimisticCache, metadataEvents, deferredActions };
   }
 
   async rollback(
@@ -310,18 +333,43 @@ export abstract class BaseWorkspaceMigrationRunnerActionHandlerService<
     label,
     method,
   }: {
-    label: string;
+    label: 'executeForMetadata' | 'executeForWorkspaceSchema';
     method: () => Promise<void>;
   }): Promise<void> {
-    this.logger.time(
+    const startedAt = performance.now();
+
+    const recordActionDuration = (status: 'success' | 'fail') =>
+      this.metricsService.recordHistogram({
+        key: MetricsKeys.WorkspaceMigrationActionDurationMs,
+        value: performance.now() - startedAt,
+        unit: 'ms',
+        attributes: {
+          actionType: this.actionType,
+          metadataName: this.metadataName,
+          step: label,
+          status,
+        },
+        bucketBoundaries: WORKSPACE_MIGRATION_DURATION_MS_BUCKET_BOUNDARIES,
+      });
+
+    this.logger.perfTime(
       'BaseWorkspaceMigrationRunnerActionHandlerService',
       `${this.actionType}_${this.metadataName} ${label}`,
     );
-    await method();
-    this.logger.timeEnd(
+
+    try {
+      await method();
+    } catch (error) {
+      recordActionDuration('fail');
+      throw error;
+    }
+
+    this.logger.perfTimeEnd(
       'BaseWorkspaceMigrationRunnerActionHandlerService',
       `${this.actionType}_${this.metadataName} ${label}`,
     );
+
+    recordActionDuration('success');
   }
 }
 

@@ -1,10 +1,21 @@
-import { spawn } from 'child_process';
+import { type ChildProcess, spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
 import { basename, join } from 'path';
+import { type Readable, type Writable } from 'stream';
 
-import { DEFAULT_CODE_INTERPRETER_TIMEOUT_MS } from 'src/engine/core-modules/code-interpreter/code-interpreter.constants';
+import { isDefined } from 'twenty-shared/utils';
+import { v4 as uuidv4 } from 'uuid';
+
+import {
+  CODE_INTERPRETER_MAX_OUTPUT_FILE_COUNT,
+  CODE_INTERPRETER_MAX_OUTPUT_FILE_SIZE_BYTES,
+  CODE_INTERPRETER_MAX_OUTPUT_LENGTH,
+  DEFAULT_CODE_INTERPRETER_TIMEOUT_MS,
+} from 'src/engine/core-modules/code-interpreter/code-interpreter.constants';
+import { LOCAL_DRIVER_PERSISTENT_KERNEL_SCRIPT } from 'src/engine/core-modules/code-interpreter/drivers/local-driver-kernel.constant';
 import { getMimeType } from 'src/engine/core-modules/code-interpreter/utils/get-mime-type.util';
+import { truncateCodeInterpreterOutput } from 'src/engine/core-modules/code-interpreter/utils/truncate-code-interpreter-output.util';
 
 import {
   type CodeExecutionResult,
@@ -17,9 +28,32 @@ import {
 
 export type LocalDriverOptions = {
   timeoutMs?: number;
+  idleTimeoutMs?: number;
 };
 
 const SANDBOX_SCRIPTS_PATH = join(__dirname, '..', 'sandbox-scripts');
+
+type KernelResponse = {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+};
+
+type LocalSession = {
+  actorKey?: string;
+  workDir: string;
+  outputDir: string;
+  scriptsDir: string;
+  child: ChildProcess;
+  controlIn: Writable;
+  controlOut: Readable;
+  controlBuffer: string;
+  pending?: {
+    resolve: (response: KernelResponse) => void;
+    reject: (error: Error) => void;
+  };
+  hasExited: boolean;
+};
 
 async function copyDirectoryRecursive(src: string, dest: string) {
   await fs.mkdir(dest, { recursive: true });
@@ -38,9 +72,30 @@ async function copyDirectoryRecursive(src: string, dest: string) {
   }
 }
 
-// WARNING: This driver is UNSAFE and should only be used for development.
-// It executes arbitrary Python code on the server without any sandboxing.
+const buildEnvSetup = (env?: Record<string, string>): string => {
+  if (!isDefined(env)) {
+    return '';
+  }
+
+  const assignments = Object.entries(env)
+    .map(([key, value]) => {
+      const escapedValue = value
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+
+      return `os.environ['${key}'] = '${escapedValue}'`;
+    })
+    .join('\n');
+
+  return `import os\n${assignments}\n\n`;
+};
+
+// UNSAFE: executes arbitrary Python on the server without sandboxing; development only.
 export class LocalDriver implements CodeInterpreterDriver {
+  private readonly sessions = new Map<string, LocalSession>();
+
   constructor(private options: LocalDriverOptions = {}) {}
 
   async execute(
@@ -49,13 +104,100 @@ export class LocalDriver implements CodeInterpreterDriver {
     context?: ExecutionContext,
     callbacks?: StreamCallbacks,
   ): Promise<CodeExecutionResult> {
+    if (isDefined(context?.sessionId)) {
+      return this.executeInSession(
+        context.sessionId,
+        code,
+        files,
+        context,
+        callbacks,
+      );
+    }
+
+    return this.executeEphemeral(code, files, context, callbacks);
+  }
+
+  private async executeInSession(
+    sessionId: string,
+    code: string,
+    files: InputFile[] | undefined,
+    context: ExecutionContext | undefined,
+    callbacks?: StreamCallbacks,
+  ): Promise<CodeExecutionResult> {
+    const session = await this.getOrCreateSession(
+      sessionId,
+      context?.env,
+      context?.actorKey,
+    );
+
+    // Cleared on every call to match E2B behavior and the tool contract.
+    await fs.rm(session.outputDir, { recursive: true, force: true });
+    await fs.mkdir(session.outputDir, { recursive: true });
+
+    for (const file of files ?? []) {
+      const safeFilename = basename(file.filename);
+
+      await fs.writeFile(join(session.workDir, safeFilename), file.content);
+    }
+
+    const rewrittenCode = this.rewriteSandboxPaths(
+      code,
+      session.workDir,
+      session.scriptsDir,
+      session.outputDir,
+    );
+
+    const submission = buildEnvSetup(context?.env) + rewrittenCode;
+    const timeoutMs =
+      this.options.timeoutMs ?? DEFAULT_CODE_INTERPRETER_TIMEOUT_MS;
+
+    let response: KernelResponse;
+
+    try {
+      response = await this.runInSession(session, submission, timeoutMs);
+    } catch (error) {
+      session.hasExited = true;
+      if (this.sessions.get(sessionId) === session) {
+        this.sessions.delete(sessionId);
+      }
+      session.child.kill('SIGKILL');
+
+      return {
+        stdout: '',
+        stderr: error instanceof Error ? error.message : String(error),
+        exitCode: 1,
+        files: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    this.streamCaptured(response, callbacks);
+
+    const outputFiles = await this.collectOutputFiles(
+      session.outputDir,
+      callbacks,
+    );
+
+    return {
+      stdout: truncateCodeInterpreterOutput(response.stdout),
+      stderr: truncateCodeInterpreterOutput(response.stderr),
+      exitCode: response.exitCode,
+      files: outputFiles,
+    };
+  }
+
+  private async executeEphemeral(
+    code: string,
+    files: InputFile[] | undefined,
+    context: ExecutionContext | undefined,
+    callbacks?: StreamCallbacks,
+  ): Promise<CodeExecutionResult> {
     const workDir = await fs.mkdtemp(join(tmpdir(), 'code-interpreter-'));
     const outputDir = join(workDir, 'output');
     const scriptsDir = join(workDir, 'scripts');
 
     await fs.mkdir(outputDir);
 
-    // Copy pre-installed scripts to sandbox
     try {
       await copyDirectoryRecursive(SANDBOX_SCRIPTS_PATH, scriptsDir);
     } catch {
@@ -69,14 +211,12 @@ export class LocalDriver implements CodeInterpreterDriver {
         await fs.writeFile(join(workDir, safeFilename), file.content);
       }
 
-      // Rewrite E2B-style paths to local paths for compatibility
-      const rewrittenCode = code
-        .replace(/\/home\/user\/scripts\//g, `${scriptsDir}/`)
-        .replace(/\/home\/user\/scripts/g, scriptsDir)
-        .replace(/\/home\/user\/output\//g, `${outputDir}/`)
-        .replace(/\/home\/user\/output/g, outputDir)
-        .replace(/\/home\/user\//g, `${workDir}/`)
-        .replace(/\/home\/user/g, workDir);
+      const rewrittenCode = this.rewriteSandboxPaths(
+        code,
+        workDir,
+        scriptsDir,
+        outputDir,
+      );
 
       const scriptPath = join(workDir, 'script.py');
 
@@ -94,29 +234,7 @@ export class LocalDriver implements CodeInterpreterDriver {
         callbacks,
       );
 
-      const outputFiles: OutputFile[] = [];
-
-      try {
-        const outputEntries = await fs.readdir(outputDir, {
-          withFileTypes: true,
-        });
-
-        for (const entry of outputEntries) {
-          if (entry.isFile()) {
-            const content = await fs.readFile(join(outputDir, entry.name));
-            const outputFile: OutputFile = {
-              filename: entry.name,
-              content,
-              mimeType: getMimeType(entry.name),
-            };
-
-            outputFiles.push(outputFile);
-            await callbacks?.onResult?.(outputFile);
-          }
-        }
-      } catch {
-        // Output directory might be empty or not exist
-      }
+      const outputFiles = await this.collectOutputFiles(outputDir, callbacks);
 
       return {
         stdout,
@@ -128,6 +246,241 @@ export class LocalDriver implements CodeInterpreterDriver {
     } finally {
       await fs.rm(workDir, { recursive: true, force: true });
     }
+  }
+
+  private rewriteSandboxPaths(
+    code: string,
+    workDir: string,
+    scriptsDir: string,
+    outputDir: string,
+  ): string {
+    return code
+      .replace(/\/home\/user\/scripts\//g, `${scriptsDir}/`)
+      .replace(/\/home\/user\/scripts/g, scriptsDir)
+      .replace(/\/home\/user\/output\//g, `${outputDir}/`)
+      .replace(/\/home\/user\/output/g, outputDir)
+      .replace(/\/home\/user\//g, `${workDir}/`)
+      .replace(/\/home\/user/g, workDir);
+  }
+
+  private async collectOutputFiles(
+    outputDir: string,
+    callbacks?: StreamCallbacks,
+  ): Promise<OutputFile[]> {
+    const outputFiles: OutputFile[] = [];
+
+    try {
+      const outputEntries = await fs.readdir(outputDir, {
+        withFileTypes: true,
+      });
+
+      for (const entry of outputEntries) {
+        if (outputFiles.length >= CODE_INTERPRETER_MAX_OUTPUT_FILE_COUNT) {
+          break;
+        }
+
+        if (entry.isFile()) {
+          const filePath = join(outputDir, entry.name);
+          const { size } = await fs.stat(filePath);
+
+          if (size > CODE_INTERPRETER_MAX_OUTPUT_FILE_SIZE_BYTES) {
+            continue;
+          }
+
+          const content = await fs.readFile(filePath);
+          const outputFile: OutputFile = {
+            filename: entry.name,
+            content,
+            mimeType: getMimeType(entry.name),
+          };
+
+          outputFiles.push(outputFile);
+          await callbacks?.onResult?.(outputFile);
+        }
+      }
+    } catch {
+      // Output directory might be empty or not exist
+    }
+
+    return outputFiles;
+  }
+
+  private streamCaptured(
+    response: KernelResponse,
+    callbacks?: StreamCallbacks,
+  ): void {
+    for (const line of response.stdout.split('\n')) {
+      if (line) {
+        callbacks?.onStdout?.(line);
+      }
+    }
+
+    for (const line of response.stderr.split('\n')) {
+      if (line) {
+        callbacks?.onStderr?.(line);
+      }
+    }
+  }
+
+  async releaseSession(sessionId: string): Promise<void> {
+    const session = this.sessions.get(sessionId);
+    if (!isDefined(session)) {
+      return;
+    }
+    this.sessions.delete(sessionId);
+    session.hasExited = true;
+    session.child.kill('SIGKILL');
+    await fs.rm(session.workDir, { recursive: true, force: true });
+  }
+
+  private async getOrCreateSession(
+    sessionId: string,
+    env?: Record<string, string>,
+    actorKey?: string,
+  ): Promise<LocalSession> {
+    const existing = this.sessions.get(sessionId);
+
+    if (
+      isDefined(existing) &&
+      !existing.hasExited &&
+      existing.actorKey === actorKey
+    ) {
+      return existing;
+    }
+    if (isDefined(existing) && !existing.hasExited) {
+      await this.releaseSession(sessionId);
+    }
+
+    if (isDefined(existing)) {
+      this.sessions.delete(sessionId);
+    }
+
+    const sessionDirName = `code-interpreter-session-${sessionId}-${uuidv4()}`;
+    const workDir = join(tmpdir(), sessionDirName);
+    const outputDir = join(workDir, 'output');
+    const scriptsDir = join(workDir, 'scripts');
+
+    await fs.mkdir(outputDir, { recursive: true });
+
+    try {
+      await copyDirectoryRecursive(SANDBOX_SCRIPTS_PATH, scriptsDir);
+    } catch {
+      // Scripts directory might not exist in dev environment
+    }
+
+    const kernelPath = join(workDir, 'kernel.py');
+
+    await fs.writeFile(kernelPath, LOCAL_DRIVER_PERSISTENT_KERNEL_SCRIPT);
+
+    const child = spawn('python3', ['-u', kernelPath], {
+      cwd: workDir,
+      env: {
+        ...process.env,
+        OUTPUT_DIR: outputDir,
+        KERNEL_IDLE_TIMEOUT_MS: String(this.options.idleTimeoutMs ?? 0),
+        ...env,
+      },
+      stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'],
+    });
+
+    const controlIn = child.stdio[3] as Writable;
+    const controlOut = child.stdio[4] as Readable;
+
+    const session: LocalSession = {
+      actorKey,
+      workDir,
+      outputDir,
+      scriptsDir,
+      child,
+      controlIn,
+      controlOut,
+      controlBuffer: '',
+      hasExited: false,
+    };
+
+    controlOut.on('data', (chunk: Buffer) => {
+      session.controlBuffer += chunk.toString();
+
+      let newlineIndex = session.controlBuffer.indexOf('\n');
+
+      while (newlineIndex >= 0) {
+        const line = session.controlBuffer.slice(0, newlineIndex);
+
+        session.controlBuffer = session.controlBuffer.slice(newlineIndex + 1);
+
+        if (line.trim().length > 0 && isDefined(session.pending)) {
+          const pending = session.pending;
+
+          session.pending = undefined;
+
+          try {
+            pending.resolve(JSON.parse(line) as KernelResponse);
+          } catch (error) {
+            pending.reject(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+        }
+
+        newlineIndex = session.controlBuffer.indexOf('\n');
+      }
+    });
+
+    const markExited = () => {
+      session.hasExited = true;
+      if (this.sessions.get(sessionId) === session) {
+        this.sessions.delete(sessionId);
+      }
+      session.pending?.reject(new Error('Python kernel process exited'));
+      session.pending = undefined;
+      void fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    };
+
+    child.on('exit', markExited);
+    child.on('error', markExited);
+
+    this.sessions.set(sessionId, session);
+
+    return session;
+  }
+
+  private runInSession(
+    session: LocalSession,
+    submission: string,
+    timeoutMs: number,
+  ): Promise<KernelResponse> {
+    return new Promise<KernelResponse>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (session.pending) {
+          session.pending = undefined;
+          reject(new Error('Process timed out'));
+        }
+      }, timeoutMs);
+
+      session.pending = {
+        resolve: (response) => {
+          clearTimeout(timeout);
+          resolve(response);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      };
+
+      const payload =
+        JSON.stringify({
+          code: Buffer.from(submission, 'utf-8').toString('base64'),
+        }) + '\n';
+
+      session.controlIn.write(payload, (error) => {
+        if (isDefined(error) && session.pending) {
+          session.pending = undefined;
+          clearTimeout(timeout);
+          reject(error);
+        }
+      });
+    });
   }
 
   private runPythonScript(
@@ -165,7 +518,10 @@ export class LocalDriver implements CodeInterpreterDriver {
       child.stdout.on('data', (data: Buffer) => {
         const text = data.toString();
 
-        stdout += text;
+        if (stdout.length <= CODE_INTERPRETER_MAX_OUTPUT_LENGTH) {
+          stdout = truncateCodeInterpreterOutput(stdout + text);
+        }
+
         const lines = text.split('\n');
 
         for (const line of lines) {
@@ -178,7 +534,10 @@ export class LocalDriver implements CodeInterpreterDriver {
       child.stderr.on('data', (data: Buffer) => {
         const text = data.toString();
 
-        stderr += text;
+        if (stderr.length <= CODE_INTERPRETER_MAX_OUTPUT_LENGTH) {
+          stderr = truncateCodeInterpreterOutput(stderr + text);
+        }
+
         const lines = text.split('\n');
 
         for (const line of lines) {

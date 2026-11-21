@@ -4,15 +4,15 @@ import { SettingsAdminIndicatorHealthStatusContent } from '@/settings/admin-pane
 import { SettingsAdminIndicatorHealthContext } from '@/settings/admin-panel/health-status/contexts/SettingsAdminIndicatorHealthContext';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsSkeletonLoader } from '@/settings/components/SettingsSkeletonLoader';
-import { SubMenuTopBarContainer } from '@/ui/layout/page/components/SubMenuTopBarContainer';
+import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { styled } from '@linaria/react';
 import { useLingui } from '@lingui/react/macro';
 import { useParams } from 'react-router-dom';
 import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
-import { H2Title, H3Title } from 'twenty-ui/display';
-import { Section } from 'twenty-ui/layout';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { Section } from 'twenty-ui/components/layout';
+import { Heading } from 'twenty-ui/primitives/typography';
+import { themeCssVariables } from 'twenty-ui/theme';
 import { useQuery } from '@apollo/client/react';
 import {
   AdminPanelHealthServiceStatus,
@@ -47,7 +47,7 @@ export const SettingsAdminIndicatorHealthStatus = () => {
   }
 
   return (
-    <SubMenuTopBarContainer
+    <SettingsPageLayout
       links={[
         {
           children: t`Other`,
@@ -76,29 +76,31 @@ export const SettingsAdminIndicatorHealthStatus = () => {
             },
           }}
         >
-          <Section>
+          <Section.Root>
             <StyledTitleContainer>
-              <H3Title title={data?.getIndicatorHealthStatus?.label} />
+              <Heading level={3} size="lg">
+                {data?.getIndicatorHealthStatus?.label}
+              </Heading>
               {data?.getIndicatorHealthStatus?.status && (
                 <SettingsAdminHealthStatusRightContainer
                   status={data?.getIndicatorHealthStatus.status}
                 />
               )}
             </StyledTitleContainer>
-          </Section>
-          <Section>
+          </Section.Root>
+          <Section.Root>
             {data?.getIndicatorHealthStatus?.id !== HealthIndicatorId.worker &&
               data?.getIndicatorHealthStatus?.id !==
                 HealthIndicatorId.connectedAccount && (
-                <H2Title
+                <Section.Header
                   title={t`Status`}
                   description={data?.getIndicatorHealthStatus?.description}
                 />
               )}
             <SettingsAdminIndicatorHealthStatusContent />
-          </Section>
+          </Section.Root>
         </SettingsAdminIndicatorHealthContext.Provider>
       </SettingsPageContainer>
-    </SubMenuTopBarContainer>
+    </SettingsPageLayout>
   );
 };

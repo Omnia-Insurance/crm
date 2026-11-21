@@ -1,0 +1,803 @@
+import { useIsLogged } from '@/auth/hooks/useIsLogged';
+import { getTrustedExternalReturnUrl } from '@/auth/sign-in-up/utils/getTrustedExternalReturnUrl';
+import { useShouldOpenGettingStarted } from '@/getting-started/hooks/useShouldOpenGettingStarted';
+import { useDefaultHomePagePath } from '@/navigation/hooks/useDefaultHomePagePath';
+import { useOnboardingStatus } from '@/onboarding/hooks/useOnboardingStatus';
+import { useIsWorkspaceActivationStatusEqualsTo } from '@/workspace/hooks/useIsWorkspaceActivationStatusEqualsTo';
+import { useQuery } from '@apollo/client/react';
+import { useLocation, useMatches } from 'react-router-dom';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { AppPath, SettingsPath } from 'twenty-shared/types';
+import { getAppPath, getSettingsPath } from 'twenty-shared/utils';
+import { OnboardingStatus, PageLayoutType } from '~/generated-metadata/graphql';
+
+import { useIsCurrentLocationOnAWorkspace } from '@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace';
+import { usePageChangeEffectNavigateLocation } from '@/app/hooks/usePageChangeEffectNavigateLocation';
+import { UNTESTED_APP_PATHS } from '~/testing/constants/UntestedAppPaths';
+import { isMatchingLocation } from '~/utils/isMatchingLocation';
+
+jest.mock('@/onboarding/hooks/useOnboardingStatus');
+const setupMockOnboardingStatus = (
+  onboardingStatus: OnboardingStatus | undefined,
+) => {
+  jest.mocked(useOnboardingStatus).mockReturnValueOnce(onboardingStatus);
+};
+
+jest.mock('@/workspace/hooks/useIsWorkspaceActivationStatusEqualsTo');
+const setupMockIsWorkspaceActivationStatusEqualsTo = (
+  isWorkspaceSuspended: boolean,
+) => {
+  jest
+    .mocked(useIsWorkspaceActivationStatusEqualsTo)
+    .mockReturnValueOnce(isWorkspaceSuspended);
+};
+
+jest.mock('~/utils/isMatchingLocation');
+const mockIsMatchingLocation = jest.mocked(isMatchingLocation);
+
+const setupMockIsMatchingLocation = (pathname: string) => {
+  mockIsMatchingLocation.mockImplementation(
+    (_location, path) => path === pathname,
+  );
+};
+
+jest.mock('@/auth/hooks/useIsLogged');
+const setupMockIsLogged = (isLogged: boolean) => {
+  jest.mocked(useIsLogged).mockReturnValueOnce(isLogged);
+};
+
+// OMNIA-CUSTOM: the hook reads the trusted sibling return URL from window.location
+jest.mock('@/auth/sign-in-up/utils/getTrustedExternalReturnUrl');
+
+const defaultHomePagePath = '/objects/companies';
+
+jest.mock('@/navigation/hooks/useDefaultHomePagePath');
+jest.mocked(useDefaultHomePagePath).mockReturnValue({
+  defaultHomePagePath,
+});
+
+jest.mock('@/getting-started/hooks/useShouldOpenGettingStarted');
+jest.mocked(useShouldOpenGettingStarted).mockReturnValue({
+  shouldOpenGettingStarted: false,
+  isLoading: false,
+});
+const setupMockShouldOpenGettingStarted = (
+  shouldOpenGettingStartedResult?: ReturnType<
+    typeof useShouldOpenGettingStarted
+  >,
+) => {
+  jest.mocked(useShouldOpenGettingStarted).mockReturnValueOnce(
+    shouldOpenGettingStartedResult ?? {
+      shouldOpenGettingStarted: false,
+      isLoading: false,
+    },
+  );
+};
+
+jest.mock('@/domain-manager/hooks/useIsCurrentLocationOnAWorkspace');
+const setupMockIsOnAWorkspace = (isOnAWorkspace: boolean) => {
+  jest.mocked(useIsCurrentLocationOnAWorkspace).mockReturnValue({
+    isOnAWorkspace,
+  });
+};
+
+jest.mock('@apollo/client/react');
+const setupMockUseQuery = (result?: { data?: unknown; loading?: boolean }) => {
+  jest.mocked(useQuery).mockReturnValueOnce({
+    data: result?.data ?? undefined,
+    loading: result?.loading ?? false,
+  } as ReturnType<typeof useQuery>);
+};
+
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useLocation: jest.fn(),
+  useMatches: jest.fn(),
+}));
+
+const setupMockUseLocation = ({
+  loc,
+  objectNamePlural,
+  pageLayoutId,
+  isMatchedByDedicatedRoute = false,
+}: {
+  loc: AppPath;
+  objectNamePlural?: string;
+  pageLayoutId?: string;
+  isMatchedByDedicatedRoute?: boolean;
+}) => {
+  const pathname =
+    loc === AppPath.RecordIndexPage
+      ? getAppPath(AppPath.RecordIndexPage, {
+          objectNamePlural: objectNamePlural ?? 'default-object',
+        })
+      : loc === AppPath.PageLayoutPage && pageLayoutId
+        ? getAppPath(AppPath.PageLayoutPage, { pageLayoutId })
+        : loc === AppPath.PageLayoutPage
+          ? '/page-layout'
+          : loc;
+
+  jest.mocked(useMatches).mockReturnValue([
+    {
+      id: 'route',
+      pathname,
+      params:
+        loc === AppPath.RecordIndexPage && !isMatchedByDedicatedRoute
+          ? { objectNamePlural: objectNamePlural ?? 'default-object' }
+          : {},
+      data: undefined,
+      loaderData: undefined,
+      handle: undefined,
+    },
+  ]);
+
+  jest.mocked(useLocation).mockReturnValueOnce({
+    pathname,
+    search: '',
+    hash: '',
+    state: null,
+    key: 'test-location',
+  });
+};
+
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue');
+const setupMockState = (
+  objectNamePlural?: string,
+  verifyEmailRedirectPath?: string,
+  returnToPath?: string,
+  currentWorkspace: object | null = { id: 'mock-workspace-id' },
+  isBillingEnabled: boolean = true,
+  isMinimalMetadataReady: boolean = true,
+  isOnboardingCheckoutPending: boolean = false,
+  // OMNIA-CUSTOM: the hook skips deactivated objects, so mocks carry isActive
+  isObjectActive: boolean = true,
+) => {
+  jest
+    .mocked(useAtomStateValue)
+    .mockReturnValueOnce(currentWorkspace)
+    .mockReturnValueOnce({ isBillingEnabled })
+    .mockReturnValueOnce([
+      { namePlural: objectNamePlural ?? '', isActive: isObjectActive },
+    ])
+    .mockReturnValueOnce(isMinimalMetadataReady)
+    .mockReturnValueOnce(verifyEmailRedirectPath)
+    .mockReturnValueOnce(returnToPath ?? '')
+    .mockReturnValueOnce(isOnboardingCheckoutPending);
+};
+
+// prettier-ignore
+const testCases: {
+  loc: AppPath;
+  isLogged: boolean;
+  isWorkspaceSuspended: boolean;
+  onboardingStatus: OnboardingStatus | undefined;
+  res: string | undefined;
+  isOnAWorkspace?: boolean;
+  objectNamePluralFromParams?: string;
+  isMatchedByDedicatedRoute?: boolean;
+  objectNamePluralFromMetadata?: string;
+  verifyEmailRedirectPath?: string;
+  returnToPath?: string;
+  pageLayoutId?: string;
+  useQueryResult?: { data?: unknown; loading?: boolean };
+  isBillingEnabled?: boolean;
+  isMinimalMetadataReady?: boolean;
+  isOnboardingCheckoutPending?: boolean;
+  shouldOpenGettingStartedResult?: { shouldOpenGettingStarted: boolean; isLoading: boolean };
+}[] = [
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Verify, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: undefined },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.SignInUp, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: undefined },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: '/plan-required' },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Invite, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: undefined },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: '/workspace-activation' },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: '/create/profile' },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: '/sync/emails' },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: '/invite-team' },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Invite, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: '/plan-required' },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.ResetPassword, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: undefined },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: '/workspace-activation' },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: '/create/profile' },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: '/sync/emails' },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: '/invite-team' },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.ResetPassword, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, verifyEmailRedirectPath: '/nextPath?key=value', res: '/nextPath?key=value' },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.VerifyEmail, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, verifyEmailRedirectPath: '/nextPath?key=value', res: undefined },
+  { loc: AppPath.VerifyEmail, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: undefined },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.VerifyEmail, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.WorkspaceActivation, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: undefined },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.WorkspaceActivation, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.CreateProfile, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: undefined },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.CreateProfile, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.SyncEmails, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: undefined },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.SyncEmails, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.InviteTeam, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: undefined },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: AppPath.PlanRequired },
+
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: undefined },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.BookCall, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: undefined },
+  { loc: AppPath.BookCall, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: undefined },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.PlanRequired, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: undefined },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Index, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: defaultHomePagePath },
+
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.TasksPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.TasksPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Dpa, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Dpa, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.LegalDpa) },
+
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.AiChat, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.AiChat, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.AiChatInbox, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.AiChatInbox, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Home, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Home, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.GettingStarted, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.GettingStarted, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.OpportunitiesPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.OpportunitiesPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.RecordIndexPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined, objectNamePluralFromParams: 'existing-object', objectNamePluralFromMetadata: 'existing-object' },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: AppPath.NotFound, objectNamePluralFromParams: 'non-existing-object', objectNamePluralFromMetadata: 'existing-object' },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined, objectNamePluralFromParams: 'non-existing-object', objectNamePluralFromMetadata: 'existing-object', isMinimalMetadataReady: false },
+  { loc: AppPath.RecordIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined, objectNamePluralFromParams: 'workflows', isMatchedByDedicatedRoute: true, objectNamePluralFromMetadata: 'existing-object' },
+
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.RecordShowPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.RecordShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.WorkflowIndexPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.WorkflowIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.WorkflowCoreShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.AgentIndexPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.AgentIndexPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.AgentShowPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.AgentShowPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.PageLayoutPage, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined, pageLayoutId: 'valid-id', useQueryResult: { loading: true } },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: AppPath.NotFound, pageLayoutId: 'non-existent-id', useQueryResult: { data: { getPageLayout: null }, loading: false } },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: AppPath.NotFound, pageLayoutId: 'wrong-type-id', useQueryResult: { data: { getPageLayout: { type: PageLayoutType.RECORD_PAGE } }, loading: false } },
+  { loc: AppPath.PageLayoutPage, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined, pageLayoutId: 'valid-standalone-id', useQueryResult: { data: { getPageLayout: { type: PageLayoutType.STANDALONE_PAGE } }, loading: false } },
+
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.SettingsCatchAll, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.SettingsCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.DevelopersCatchAll, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.DevelopersCatchAll, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.Authorize, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.Authorize, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.NotFoundWildcard, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.NotFoundWildcard, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PLAN_REQUIRED, res: AppPath.PlanRequired },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: true, onboardingStatus: OnboardingStatus.COMPLETED, res: getSettingsPath(SettingsPath.Billing) },
+  { loc: AppPath.NotFound, isLogged: false, isWorkspaceSuspended: false, onboardingStatus: undefined, res: AppPath.SignInUp },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.WORKSPACE_ACTIVATION, res: AppPath.WorkspaceActivation },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.PROFILE_CREATION, res: AppPath.CreateProfile },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.SYNC_EMAIL, res: AppPath.SyncEmails },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.INVITE_TEAM, res: AppPath.InviteTeam },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.BOOK_CALL, res: AppPath.BookCall },
+  { loc: AppPath.NotFound, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, res: undefined },
+
+  // isBillingEnabled:false — no post-invite-team upgrade interception on billing-disabled instances
+  { loc: AppPath.InviteTeam, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isBillingEnabled: false, res: defaultHomePagePath },
+  { loc: AppPath.PlanRequired, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isBillingEnabled: false, res: defaultHomePagePath },
+
+  // returnToPath: should redirect to saved path instead of defaultHomePagePath
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, returnToPath: '/authorize?clientId=abc', res: '/authorize?clientId=abc' },
+  // OMNIA-CUSTOM: an object returnToPath is only followed when the object exists and is active
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, returnToPath: '/objects/tasks', objectNamePluralFromMetadata: 'tasks', res: '/objects/tasks' },
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, returnToPath: '/settings/api-keys', shouldOpenGettingStartedResult: { shouldOpenGettingStarted: true, isLoading: false }, res: '/settings/api-keys' },
+
+
+  { loc: AppPath.PlanRequiredSuccess, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isOnboardingCheckoutPending: true, res: undefined },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isOnboardingCheckoutPending: true, res: defaultHomePagePath },
+
+  // isOnAWorkspace:false — on default domain, don't redirect to returnToPath or defaultHomePagePath from auth pages
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isOnAWorkspace: false, res: undefined },
+  { loc: AppPath.SignInUp, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, isOnAWorkspace: false, res: undefined },
+
+  { loc: AppPath.Index, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, shouldOpenGettingStartedResult: { shouldOpenGettingStarted: true, isLoading: false }, res: AppPath.GettingStarted },
+  { loc: AppPath.Verify, isLogged: true, isWorkspaceSuspended: false, onboardingStatus: OnboardingStatus.COMPLETED, shouldOpenGettingStartedResult: { shouldOpenGettingStarted: false, isLoading: true }, res: undefined },
+];
+
+describe('usePageChangeEffectNavigateLocation', () => {
+  it.each(testCases)(
+    'with location $loc and onboardingStatus $onboardingStatus and isWorkspaceSuspended $isWorkspaceSuspended should return $res`',
+    ({
+      loc,
+      onboardingStatus,
+      isWorkspaceSuspended,
+      isLogged,
+      isOnAWorkspace,
+      objectNamePluralFromParams,
+      isMatchedByDedicatedRoute,
+      objectNamePluralFromMetadata,
+      verifyEmailRedirectPath,
+      returnToPath,
+      pageLayoutId,
+      useQueryResult,
+      isBillingEnabled,
+      isMinimalMetadataReady,
+      isOnboardingCheckoutPending,
+      shouldOpenGettingStartedResult,
+      res,
+    }) => {
+      setupMockIsMatchingLocation(loc);
+      setupMockShouldOpenGettingStarted(shouldOpenGettingStartedResult);
+      setupMockOnboardingStatus(onboardingStatus);
+      setupMockIsWorkspaceActivationStatusEqualsTo(isWorkspaceSuspended);
+      setupMockIsLogged(isLogged);
+      setupMockIsOnAWorkspace(isOnAWorkspace ?? true);
+      setupMockUseQuery(useQueryResult);
+      setupMockUseLocation({
+        loc,
+        objectNamePlural: objectNamePluralFromParams,
+        pageLayoutId,
+        isMatchedByDedicatedRoute,
+      });
+      setupMockState(
+        objectNamePluralFromMetadata ??
+          (loc === AppPath.RecordIndexPage ? 'default-object' : undefined),
+        verifyEmailRedirectPath,
+        returnToPath,
+        undefined,
+        isBillingEnabled ?? true,
+        isMinimalMetadataReady ?? true,
+        isOnboardingCheckoutPending ?? false,
+      );
+
+      expect(usePageChangeEffectNavigateLocation()).toEqual(res);
+    },
+  );
+
+  describe('tests should be exhaustive', () => {
+    it('all location, onboarding status and suspended/not suspended workspace activation status should be tested', () => {
+      expect(testCases.length).toEqual(
+        (Object.keys(AppPath).length - UNTESTED_APP_PATHS.length) *
+          (Object.keys(OnboardingStatus).length +
+            ['isWorkspaceSuspended:true', 'isWorkspaceSuspended:false']
+              .length) +
+          ['nonExistingObjectInParam', 'existingObjectInParam:false'].length +
+          ['nonExistingObjectInParam:metadataNotReady'].length +
+          ['dedicatedObjectsRoute'].length +
+          ['caseWithRedirectionToVerifyEmailRedirectPath', 'caseWithout']
+            .length +
+          [
+            'pageLayout:loading',
+            'pageLayout:missing',
+            'pageLayout:wrongType',
+            'pageLayout:validStandalone',
+          ].length +
+          ['returnToPath:verify', 'returnToPath:signInUp', 'returnToPath:index']
+            .length +
+          ['notOnWorkspace:verify', 'notOnWorkspace:signInUp'].length +
+          [
+            'billingDisabled:inviteTeamCompleted',
+            'billingDisabled:planRequiredCompleted',
+          ].length +
+          [
+            'checkoutPending:paymentSuccessDefersRedirect',
+            'checkoutPending:verifyStillRedirects',
+          ].length +
+          ['gettingStarted:open', 'gettingStarted:loading'].length,
+      );
+    });
+  });
+});
+
+describe('usePageChangeEffectNavigateLocation — authenticated with no current workspace', () => {
+  it.each([AppPath.Index, AppPath.TasksPage, AppPath.SettingsCatchAll])(
+    'redirects to SignInUp from %s when authenticated with no current workspace',
+    (loc) => {
+      setupMockIsMatchingLocation(loc);
+      setupMockOnboardingStatus(undefined);
+      setupMockIsWorkspaceActivationStatusEqualsTo(false);
+      setupMockIsLogged(true);
+      setupMockIsOnAWorkspace(true);
+      setupMockUseQuery();
+      setupMockUseLocation({ loc });
+      setupMockState(undefined, undefined, undefined, null);
+
+      expect(usePageChangeEffectNavigateLocation()).toEqual(AppPath.SignInUp);
+    },
+  );
+});
+
+describe('usePageChangeEffectNavigateLocation — suspended workspace settings pages', () => {
+  it.each([
+    { loc: getSettingsPath(SettingsPath.Billing), res: undefined },
+    { loc: getSettingsPath(SettingsPath.BillingPlans), res: undefined },
+    { loc: getSettingsPath(SettingsPath.ProfilePage), res: undefined },
+    {
+      loc: getSettingsPath(SettingsPath.Usage),
+      res: getSettingsPath(SettingsPath.Billing),
+    },
+  ])('returns $res from $loc', ({ loc, res }) => {
+    setupMockIsMatchingLocation(loc);
+    setupMockOnboardingStatus(OnboardingStatus.COMPLETED);
+    setupMockIsWorkspaceActivationStatusEqualsTo(true);
+    setupMockIsLogged(true);
+    setupMockIsOnAWorkspace(true);
+    setupMockUseQuery();
+    setupMockUseLocation({ loc: loc as AppPath });
+    setupMockState();
+
+    expect(usePageChangeEffectNavigateLocation()).toEqual(res);
+  });
+});
+
+// OMNIA-CUSTOM: deactivated or deleted objects never become a landing or return path
+describe('usePageChangeEffectNavigateLocation — unavailable objects', () => {
+  it.each([
+    {
+      title: 'sends a deactivated object index to the home page',
+      loc: AppPath.RecordIndexPage,
+      objectNamePluralFromParams: 'opportunities',
+      isObjectActive: false,
+      isMinimalMetadataReady: true,
+      returnToPath: undefined,
+      res: defaultHomePagePath,
+    },
+    {
+      title: 'waits for metadata before leaving a deactivated object index',
+      loc: AppPath.RecordIndexPage,
+      objectNamePluralFromParams: 'opportunities',
+      isObjectActive: false,
+      isMinimalMetadataReady: false,
+      returnToPath: undefined,
+      res: undefined,
+    },
+    {
+      title: 'ignores a returnToPath to a deactivated object',
+      loc: AppPath.SignInUp,
+      objectNamePluralFromParams: undefined,
+      isObjectActive: false,
+      isMinimalMetadataReady: true,
+      returnToPath: '/objects/opportunities?viewId=view-id',
+      res: defaultHomePagePath,
+    },
+    {
+      title: 'ignores a returnToPath to a deleted object',
+      loc: AppPath.Index,
+      objectNamePluralFromParams: undefined,
+      isObjectActive: true,
+      isMinimalMetadataReady: true,
+      returnToPath: '/objects/deletedObjects',
+      res: defaultHomePagePath,
+    },
+    {
+      title: 'follows a returnToPath to an active object',
+      loc: AppPath.Index,
+      objectNamePluralFromParams: undefined,
+      isObjectActive: true,
+      isMinimalMetadataReady: true,
+      returnToPath: '/objects/opportunities',
+      res: '/objects/opportunities',
+    },
+    {
+      title: 'keeps an object returnToPath while metadata is loading',
+      loc: AppPath.Index,
+      objectNamePluralFromParams: undefined,
+      isObjectActive: false,
+      isMinimalMetadataReady: false,
+      returnToPath: '/objects/opportunities',
+      res: '/objects/opportunities',
+    },
+  ])(
+    '$title',
+    ({
+      loc,
+      objectNamePluralFromParams,
+      isObjectActive,
+      isMinimalMetadataReady,
+      returnToPath,
+      res,
+    }) => {
+      setupMockIsMatchingLocation(loc);
+      setupMockShouldOpenGettingStarted();
+      setupMockOnboardingStatus(OnboardingStatus.COMPLETED);
+      setupMockIsWorkspaceActivationStatusEqualsTo(false);
+      setupMockIsLogged(true);
+      setupMockIsOnAWorkspace(true);
+      setupMockUseQuery();
+      setupMockUseLocation({
+        loc,
+        objectNamePlural: objectNamePluralFromParams,
+      });
+      setupMockState(
+        'opportunities',
+        undefined,
+        returnToPath,
+        undefined,
+        true,
+        isMinimalMetadataReady,
+        false,
+        isObjectActive,
+      );
+
+      expect(usePageChangeEffectNavigateLocation()).toEqual(res);
+    },
+  );
+});
+
+// OMNIA-CUSTOM: a signed-in user sent by the omniaagent.com dashboard stays on the auth page
+// while the trusted sibling redirect runs, instead of landing in the CRM
+describe('usePageChangeEffectNavigateLocation — trusted external return URL', () => {
+  const trustedExternalReturnUrl = 'https://omniaagent.com/retention';
+
+  afterEach(() => {
+    jest.mocked(getTrustedExternalReturnUrl).mockReset();
+  });
+
+  it.each([
+    {
+      title: 'stays on SignInUp while a trusted sibling URL is in the query',
+      loc: AppPath.SignInUp,
+      externalReturnUrl: trustedExternalReturnUrl,
+      res: undefined,
+    },
+    {
+      title: 'stays on Verify while a trusted sibling URL is in the query',
+      loc: AppPath.Verify,
+      externalReturnUrl: trustedExternalReturnUrl,
+      res: undefined,
+    },
+    {
+      title:
+        'lands on the home page from SignInUp without a trusted sibling URL',
+      loc: AppPath.SignInUp,
+      externalReturnUrl: null,
+      res: defaultHomePagePath,
+    },
+    {
+      title:
+        'lands on the home page from the index even with a trusted sibling URL',
+      loc: AppPath.Index,
+      externalReturnUrl: trustedExternalReturnUrl,
+      res: defaultHomePagePath,
+    },
+  ])('$title', ({ loc, externalReturnUrl, res }) => {
+    jest.mocked(getTrustedExternalReturnUrl).mockReturnValue(externalReturnUrl);
+    setupMockIsMatchingLocation(loc);
+    setupMockShouldOpenGettingStarted();
+    setupMockOnboardingStatus(OnboardingStatus.COMPLETED);
+    setupMockIsWorkspaceActivationStatusEqualsTo(false);
+    setupMockIsLogged(true);
+    setupMockIsOnAWorkspace(true);
+    setupMockUseQuery();
+    setupMockUseLocation({ loc });
+    setupMockState();
+
+    expect(usePageChangeEffectNavigateLocation()).toEqual(res);
+  });
+});

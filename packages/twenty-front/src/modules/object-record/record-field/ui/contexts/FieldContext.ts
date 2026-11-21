@@ -1,8 +1,8 @@
 import { createContext, type MouseEvent } from 'react';
 
-import { type TriggerEventType } from 'twenty-ui/utilities';
 import { type FieldDefinition } from '@/object-record/record-field/ui/types/FieldDefinition';
 import { type FieldMetadata } from '@/object-record/record-field/ui/types/FieldMetadata';
+import { type TriggerEventType } from '@/ui/navigation/types/TriggerEventType';
 
 export type RecordUpdateHookParams = {
   variables: {
@@ -20,24 +20,12 @@ export type RecordUpdateHook = () => [
   RecordUpdateHookReturn,
 ];
 
-// OMNIA-CUSTOM: Reconciliation diff overlay data
-export type FieldDiffOverlay = {
-  oldValue: string | null;
-  newValue: string | null;
-  label: string;
-  /** Full CRM field path, e.g. "emails.primaryEmail" for composite sub-fields */
-  crmFieldPath?: string;
-  /** Tooltip body shown on the inline diff (e.g. status change reason) */
-  note?: string | null;
-};
-
 export type GenericFieldContextType = {
   fieldMetadataItemId?: string;
   recordId: string;
   fieldDefinition: FieldDefinition<FieldMetadata>;
   useUpdateRecord?: RecordUpdateHook;
   isLabelIdentifier: boolean;
-  isLabelIdentifierCompact?: boolean;
   clearable?: boolean;
   maxWidth?: number;
   isCentered?: boolean;
@@ -54,8 +42,6 @@ export type GenericFieldContextType = {
   triggerEvent?: TriggerEventType;
   isForbidden?: boolean;
   anchorId?: string;
-  // OMNIA-CUSTOM: reconciliation diff overlay
-  fieldDiff?: FieldDiffOverlay;
 };
 
 export const FieldContext = createContext<GenericFieldContextType>(

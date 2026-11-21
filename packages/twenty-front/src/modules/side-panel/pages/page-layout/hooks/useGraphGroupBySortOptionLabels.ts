@@ -1,17 +1,19 @@
+import { findFieldMetadataItemByFieldMetadataId } from '@/object-metadata/utils/findFieldMetadataItemByFieldMetadataId';
 import { getFieldLabelWithSubField } from '@/side-panel/pages/page-layout/utils/getFieldLabelWithSubField';
 import { getSortLabelSuffixForFieldType } from '@/side-panel/pages/page-layout/utils/getSortLabelSuffixForFieldType';
 import { objectMetadataItemsSelector } from '@/object-metadata/states/objectMetadataItemsSelector';
-import { t } from '@lingui/core/macro';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { type CompositeFieldSubFieldName } from 'twenty-shared/types';
 import { assertUnreachable } from 'twenty-shared/utils';
 import { GraphOrderBy } from '~/generated-metadata/graphql';
+import { useLingui } from '@lingui/react/macro';
 
 export const useGraphGroupBySortOptionLabels = ({
   objectMetadataId,
 }: {
   objectMetadataId: string;
 }) => {
+  const { t } = useLingui();
   const objectMetadataItems = useAtomStateValue(objectMetadataItemsSelector);
 
   const objectMetadataItem = objectMetadataItems.find(
@@ -27,9 +29,10 @@ export const useGraphGroupBySortOptionLabels = ({
     groupByFieldMetadataId: string;
     groupBySubFieldName?: CompositeFieldSubFieldName;
   }): string => {
-    const field = objectMetadataItem?.fields.find(
-      (fieldMetadataItem) => fieldMetadataItem.id === groupByFieldMetadataId,
-    );
+    const field = findFieldMetadataItemByFieldMetadataId({
+      fieldMetadataItems: objectMetadataItem?.fields,
+      fieldMetadataId: groupByFieldMetadataId,
+    });
 
     const fieldLabel = getFieldLabelWithSubField({
       field,

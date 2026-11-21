@@ -1,5 +1,6 @@
+import { type JSX } from 'react';
 import { I18nProvider } from '@lingui/react';
-import { Container, Html } from '@react-email/components';
+import { Container, Html } from 'react-email';
 
 import { BaseHead } from 'src/components/BaseHead';
 import { Footer } from 'src/components/Footer';
@@ -19,9 +20,9 @@ export const BaseEmail = ({ children, width, locale }: BaseEmailProps) => {
   return (
     <I18nProvider i18n={i18nInstance}>
       <Html lang={locale}>
-        <BaseHead />
+        <BaseHead i18n={i18nInstance} />
         <Container width={width || 290}>
-          <Logo />
+          <Logo i18n={i18nInstance} />
           {children}
           <Footer i18n={i18nInstance} />
         </Container>

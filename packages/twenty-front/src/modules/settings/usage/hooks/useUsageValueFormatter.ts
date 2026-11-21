@@ -5,7 +5,9 @@ import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomState
 // Returns how many decimal places are needed to represent a small value.
 // Always two digits precision, no more than 7 decimal places.
 const getDecimalsNeeded = (value: number): number => {
-  if (value === 0) return 2;
+  if (value === 0) {
+    return 2;
+  }
   return Math.min(7, Math.max(0, Math.ceil(-Math.log10(value))) + 2);
 };
 
@@ -14,17 +16,29 @@ export const useUsageValueFormatter = () => {
   const isBillingEnabled = billing?.isBillingEnabled ?? false;
   const { formatNumber } = useNumberFormat();
 
-  const formatUsageValue = (value: number): string => {
+  const formatUsageValue = (
+    value: number,
+    { abbreviate = false }: { abbreviate?: boolean } = {},
+  ): string => {
     if (isBillingEnabled) {
       const decimals = getDecimalsNeeded(value);
 
-      return `${formatNumber(value, { decimals })} credits`;
+      return `${formatNumber(value, { decimals, abbreviate })} credits`;
     }
 
-    return `$${formatNumber(value, { decimals: 2 })}`;
+    return `$${formatNumber(value, { decimals: 2, abbreviate })}`;
   };
+
+  const formatUsageAmount = (
+    value: number,
+    { abbreviate = false }: { abbreviate?: boolean } = {},
+  ): string =>
+    formatNumber(value, {
+      decimals: isBillingEnabled ? getDecimalsNeeded(value) : 2,
+      abbreviate,
+    });
 
   const unitLabel = isBillingEnabled ? 'credits' : '$';
 
-  return { formatUsageValue, isBillingEnabled, unitLabel };
+  return { formatUsageValue, formatUsageAmount, isBillingEnabled, unitLabel };
 };

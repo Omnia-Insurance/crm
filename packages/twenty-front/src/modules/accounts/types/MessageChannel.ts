@@ -5,11 +5,12 @@ import {
   type MessageChannelSyncStatus,
   type MessageFolderImportPolicy,
 } from 'twenty-shared/types';
-import { type MessageChannelVisibility } from '~/generated/graphql';
+import { type MessageChannelVisibility } from '~/generated-metadata/graphql';
 
 export type MessageChannel = {
   id: string;
   handle: string;
+  displayName: string | null;
   visibility: MessageChannelVisibility;
   type: MessageChannelType;
   isContactAutoCreationEnabled: boolean;
@@ -21,6 +22,7 @@ export type MessageChannel = {
   syncStatus: MessageChannelSyncStatus;
   syncStage: MessageChannelSyncStage;
   syncStageStartedAt: string | null;
+  importProgress: number | null;
   connectedAccountId: string;
   connectedAccount: {
     id: string;

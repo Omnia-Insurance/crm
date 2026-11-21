@@ -3,6 +3,25 @@ import { type QueryRunner } from 'typeorm';
 
 const tableName = 'featureFlag';
 
+const DEFAULT_SEEDED_FEATURE_FLAGS: Partial<Record<FeatureFlagKey, boolean>> = {
+  [FeatureFlagKey.IS_RECORD_LEVEL_SHARING_ENABLED]: false,
+  [FeatureFlagKey.IS_CALENDAR_EVENT_SHARED_ACROSS_CHANNELS_ENABLED]: true,
+  [FeatureFlagKey.IS_AI_CHAT_INBOX_ENABLED]: true,
+  [FeatureFlagKey.IS_MCP_SERVERS_ENABLED]: true,
+  [FeatureFlagKey.IS_AGENT_CHAT_DIRECT_MESSAGE_IDENTITY_ENABLED]: true,
+  [FeatureFlagKey.IS_RELATED_RECORD_PATHS_ENABLED]: false,
+  [FeatureFlagKey.IS_ROW_LEVEL_PERMISSION_RELATION_HOP_ENABLED]: false,
+  [FeatureFlagKey.IS_GETTING_STARTED_ENABLED]: true,
+  [FeatureFlagKey.IS_MESSAGE_ATTACHMENT_ENABLED]: true,
+  [FeatureFlagKey.IS_AI_DATA_POLICY_ENABLED]: true,
+  [FeatureFlagKey.IS_CREATE_RECORDS_PERMISSION_ENABLED]: false,
+  [FeatureFlagKey.IS_ACCESS_GROUPS_ENABLED]: false,
+  [FeatureFlagKey.IS_PRIVATE_RECORDS_ENABLED]: false,
+  [FeatureFlagKey.IS_PERMISSION_TABLES_ENABLED]: false,
+  [FeatureFlagKey.IS_RECORD_GROUP_TABS_ENABLED]: true,
+  [FeatureFlagKey.IS_HTTP_EGRESS_LAMBDA_ENABLED]: false,
+};
+
 type SeedFeatureFlagsArgs = {
   queryRunner: QueryRunner;
   schemaName: string;
@@ -19,38 +38,13 @@ export const seedFeatureFlags = async ({
     .insert()
     .into(`${schemaName}.${tableName}`, ['key', 'workspaceId', 'value'])
     .orIgnore()
-    .values([
-      {
-        key: FeatureFlagKey.IS_UNIQUE_INDEXES_ENABLED,
-        workspaceId: workspaceId,
-        value: false,
-      },
-      {
-        key: FeatureFlagKey.IS_PUBLIC_DOMAIN_ENABLED,
-        workspaceId: workspaceId,
-        value: true,
-      },
-      {
-        key: FeatureFlagKey.IS_EMAILING_DOMAIN_ENABLED,
-        workspaceId: workspaceId,
-        value: true,
-      },
-      {
-        key: FeatureFlagKey.IS_EMAIL_GROUP_ENABLED,
-        workspaceId: workspaceId,
-        value: true,
-      },
-      {
-        key: FeatureFlagKey.IS_JUNCTION_RELATIONS_ENABLED,
-        workspaceId: workspaceId,
-        value: true,
-      },
-      {
-        key: FeatureFlagKey.IS_MARKETPLACE_SETTING_TAB_VISIBLE,
-        workspaceId: workspaceId,
-        value: true,
-      },
-    ])
+    .values(
+      Object.entries(DEFAULT_SEEDED_FEATURE_FLAGS).map(([key, value]) => ({
+        key,
+        workspaceId,
+        value,
+      })),
+    )
     .execute();
 };
 

@@ -5,46 +5,36 @@
   "projectType": "library",
   "tags": ["scope:shared"],
   "targets": {
-    "build": {
-      "dependsOn": ["^build", "generateBarrels"],
-      "outputs": [
-        "{projectRoot}/dist",
-        "{projectRoot}/accessibility/package.json",
-        "{projectRoot}/accessibility/dist",
-        "{projectRoot}/assets/package.json",
-        "{projectRoot}/assets/dist",
-        "{projectRoot}/components/package.json",
-        "{projectRoot}/components/dist",
-        "{projectRoot}/display/package.json",
-        "{projectRoot}/display/dist",
-        "{projectRoot}/feedback/package.json",
-        "{projectRoot}/feedback/dist",
-        "{projectRoot}/input/package.json",
-        "{projectRoot}/input/dist",
-        "{projectRoot}/json-visualizer/package.json",
-        "{projectRoot}/json-visualizer/dist",
-        "{projectRoot}/layout/package.json",
-        "{projectRoot}/layout/dist",
-        "{projectRoot}/navigation/package.json",
-        "{projectRoot}/navigation/dist",
-        "{projectRoot}/testing/package.json",
-        "{projectRoot}/testing/dist",
-        "{projectRoot}/theme/package.json",
-        "{projectRoot}/theme/dist",
-        "{projectRoot}/theme-constants/package.json",
-        "{projectRoot}/theme-constants/dist",
-        "{projectRoot}/utilities/package.json",
-        "{projectRoot}/utilities/dist"
-      ]
-    },
-    "generateThemeConstants": {
+    "build": { "dependsOn": ["^build"], "outputs": ["{projectRoot}/dist"] },
+    "check:ownership": {
       "executor": "nx:run-commands",
-      "dependsOn": ["build"],
       "cache": true,
-      "inputs": ["{projectRoot}/scripts/generateThemeConstants.ts"],
-      "outputs": ["{projectRoot}/src/theme-constants/generated"],
+      "inputs": [
+        "{projectRoot}/src/**/*",
+        "{projectRoot}/docs/module-ownership.json",
+        "{projectRoot}/docs/public-exports.json",
+        "{projectRoot}/scripts/**/*",
+        "{projectRoot}/package.json",
+        "{projectRoot}/project.json",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/yarn.lock"
+      ],
       "options": {
-        "command": "tsx {projectRoot}/scripts/generateThemeConstants.ts"
+        "command": "tsx {projectRoot}/scripts/generateBarrels.ts --check && tsx {projectRoot}/scripts/checkModuleOwnership.ts"
+      }
+    },
+    "generateTokens": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "tsx {projectRoot}/scripts/generateThemeTokens.ts"
+      }
+    },
+    "generate:check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "tsx {projectRoot}/scripts/generateThemeTokens.ts --check"
       }
     },
     "generateBarrels": {
@@ -52,10 +42,38 @@
       "cache": true,
       "inputs": ["production", "{projectRoot}/scripts/generateBarrels.ts"],
       "outputs": [
+        "{projectRoot}/src/index.ts",
+        "{projectRoot}/src/individual-entry.ts",
         "{projectRoot}/src/**/*/index.ts",
         "{projectRoot}/package.json"
       ],
       "options": { "command": "tsx {projectRoot}/scripts/generateBarrels.ts" }
+    },
+    "generateIconDictionary": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/scripts/generateIconDictionary.ts",
+        "{projectRoot}/src/icon/constants/TwentyIconDictionary.ts",
+        "{projectRoot}/src/icon/internal/generateTwentyIconDictionaryMarkdown.ts"
+      ],
+      "outputs": ["{projectRoot}/src/icon/icon-dictionary.md"],
+      "options": {
+        "command": "tsx {projectRoot}/scripts/generateIconDictionary.ts"
+      }
+    },
+    "checkIconDictionary": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/scripts/generateIconDictionary.ts",
+        "{projectRoot}/src/icon/constants/TwentyIconDictionary.ts",
+        "{projectRoot}/src/icon/internal/generateTwentyIconDictionaryMarkdown.ts",
+        "{projectRoot}/src/icon/icon-dictionary.md"
+      ],
+      "options": {
+        "command": "tsx {projectRoot}/scripts/generateIconDictionary.ts --check"
+      }
     },
     "build:individual": {
       "executor": "nx:run-commands",
@@ -68,22 +86,132 @@
         "command": "npx vite build -c vite.config.individual.ts"
       }
     },
+    "size": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["build"],
+      "inputs": ["{projectRoot}/dist", "{projectRoot}/.size-limit.json"],
+      "options": { "cwd": "{projectRoot}", "command": "npx size-limit" },
+      "configurations": { "why": { "command": "npx size-limit --why" } }
+    },
+    "pack-size": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["build"],
+      "inputs": [
+        "{projectRoot}/dist",
+        "{projectRoot}/package.json",
+        "{projectRoot}/scripts/checkPackSize.ts"
+      ],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsx scripts/checkPackSize.ts"
+      }
+    },
+    "test:package": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["build"],
+      "inputs": ["production"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "tsx scripts/checkOptionalDependencies.ts && tsx scripts/checkThemeExports.ts"
+      }
+    },
     "clean": {
       "executor": "nx:run-commands",
       "options": { "command": "rimraf {projectRoot}/dist" }
     },
-    "lint": {},
+    "set-local-version": {},
+    "lint": {
+      "dependsOn": [
+        "^build",
+        "twenty-oxlint-rules:build",
+        "lint:unlocalized-strings"
+      ]
+    },
+    "lint:unlocalized-strings": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/src/**/*.{ts,tsx}",
+        "{projectRoot}/.oxlintrc.i18n.json",
+        "{workspaceRoot}/packages/twenty-oxlint-rules/scripts/check-unlocalized-strings.mjs",
+        "{workspaceRoot}/packages/twenty-oxlint-rules/scripts/filter-unlocalized-strings.mjs",
+        "{workspaceRoot}/packages/twenty-oxlint-rules/.oxlintrc.i18n.json",
+        "{workspaceRoot}/yarn.lock"
+      ],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "node ../twenty-oxlint-rules/scripts/check-unlocalized-strings.mjs . src"
+      }
+    },
     "fmt": { "options": { "files": "src" }, "configurations": { "fix": {} } },
-    "test": {},
+    "test": {
+      "dependsOn": ["check:ownership", "test:exports"],
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "npx vitest run --project unit"
+      },
+      "configurations": { "watch": { "command": "npx vitest --project unit" } }
+    },
     "typecheck": {},
-    "storybook:build": { "configurations": { "test": {} } },
-    "storybook:serve:dev": { "options": { "port": 6007 } },
+    "knip": {},
+    "storybook:build": {
+      "configurations": {
+        "test": {},
+        "docs": {
+          "command": "NODE_OPTIONS='--max-old-space-size=10240' storybook build --disable-telemetry"
+        }
+      }
+    },
+    "storybook:index": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "mkdir -p ../../.cache/ui-docs && storybook index --output-file ../../.cache/ui-docs/storybook-index.json --disable-telemetry"
+      }
+    },
+    "storybook:serve:dev": { "options": { "port": 6008 } },
     "storybook:serve:static": {
-      "options": { "buildTarget": "twenty-ui:storybook:build", "port": 6007 },
+      "options": { "buildTarget": "twenty-ui:storybook:build", "port": 6008 },
       "configurations": { "test": {} }
     },
-    "storybook:test": {},
-    "storybook:test:no-coverage": {},
-    "storybook:coverage": {}
+    "storybook:test": {
+      "options": {
+        "command": "STORYBOOK_COVERAGE=true vitest run --coverage --shard={args.shard} --project storybook --project reduced-motion"
+      }
+    },
+    "storybook:test:no-coverage": {
+      "options": {
+        "command": "vitest run --shard={args.shard} --project storybook --project reduced-motion"
+      }
+    },
+    "storybook:visual-diff": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["storybook:build"],
+      "options": {
+        "cwd": "{projectRoot}",
+        "command": "bash scripts/visual-diff.sh"
+      }
+    },
+    "storybook:coverage": {},
+    "test:exports": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/scripts/**/*",
+        "{projectRoot}/src/utilities/utils/isDefined.ts",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/yarn.lock"
+      ],
+      "options": {
+        "command": "node --import tsx --test {projectRoot}/scripts/__tests__/*.test.ts"
+      }
+    }
   }
 }

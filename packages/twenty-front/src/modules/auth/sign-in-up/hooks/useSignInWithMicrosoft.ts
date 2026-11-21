@@ -1,8 +1,9 @@
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '@/auth/hooks/useAuth';
+import { getTrustedExternalReturnUrl } from '@/auth/sign-in-up/utils/getTrustedExternalReturnUrl';
 import { billingCheckoutSessionState } from '@/auth/states/billingCheckoutSessionState';
-import { type SocialSSOSignInUpActionType } from '@/auth/types/socialSSOSignInUp.type';
+import { type SocialSsoSignInUpActionType } from '@/auth/types/SocialSsoSignInUpActionType';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 
 export const useSignInWithMicrosoft = () => {
@@ -10,12 +11,6 @@ export const useSignInWithMicrosoft = () => {
   const [searchParams] = useSearchParams();
   const workspacePersonalInviteToken =
     searchParams.get('inviteToken') ?? undefined;
-  // OMNIA-CUSTOM: returnToPath can carry trusted absolute URLs. Keep
-  // postSignInRedirect as an input-only compatibility fallback.
-  const returnToPath =
-    searchParams.get('returnToPath') ??
-    searchParams.get('postSignInRedirect') ??
-    undefined;
   const billingCheckoutSession = useAtomStateValue(billingCheckoutSessionState);
 
   const { signInWithMicrosoft } = useAuth();
@@ -23,14 +18,15 @@ export const useSignInWithMicrosoft = () => {
     signInWithMicrosoft: ({
       action,
     }: {
-      action: SocialSSOSignInUpActionType;
+      action: SocialSsoSignInUpActionType;
     }) =>
       signInWithMicrosoft({
         workspaceInviteHash,
         workspacePersonalInviteToken,
         billingCheckoutSession,
         action,
-        returnToPath,
+        // OMNIA-CUSTOM: carries a trusted sibling URL (omniaagent.com dashboard) through SSO
+        returnToPath: getTrustedExternalReturnUrl() ?? undefined,
       }),
   };
 };

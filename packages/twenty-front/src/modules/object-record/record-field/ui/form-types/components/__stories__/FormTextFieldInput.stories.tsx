@@ -39,6 +39,27 @@ export const WithLabel: Story = {
     const canvas = within(canvasElement);
 
     await canvas.findByText(/^Text$/);
+
+    expect(await canvas.findByRole('textbox', { name: 'Text' })).toBeVisible();
+  },
+};
+
+export const WithError: Story = {
+  args: {
+    label: 'Variable Name',
+    placeholder: 'Text field...',
+    defaultValue: 'invalid name',
+    error:
+      'Use only letters, numbers, underscores, dots or hyphens (max 64 characters).',
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    const error = await canvas.findByText(
+      'Use only letters, numbers, underscores, dots or hyphens (max 64 characters).',
+    );
+
+    expect(error).toBeVisible();
   },
 };
 
@@ -205,6 +226,57 @@ export const DisabledWithVariable: Story = {
       'button',
     );
     expect(deleteVariableButton).not.toBeInTheDocument();
+  },
+};
+
+export const WithTemplateVariableFallback: Story = {
+  args: {
+    label: 'Subject',
+    defaultValue: 'Hi {{jobTitle | default: "there"}}',
+    enableTemplateVariableFallback: true,
+    onChange: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    expect(await canvas.findByText('{{jobTitle}}')).toBeVisible();
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Edit fallback value' }),
+    );
+
+    expect(
+      await body.findByRole('textbox', { name: 'Fallback value' }),
+    ).toHaveValue('there');
+  },
+};
+
+export const WithMissingTemplateVariableFallback: Story = {
+  args: {
+    label: 'Subject',
+    defaultValue: 'Hi {{jobTitle}}',
+    enableTemplateVariableFallback: true,
+    onChange: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Edit fallback value' }),
+    );
+
+    await userEvent.type(
+      await body.findByRole('textbox', { name: 'Fallback value' }),
+      'there{Enter}',
+    );
+
+    await waitFor(() => {
+      expect(args.onChange).toHaveBeenLastCalledWith(
+        'Hi {{jobTitle | default: "there"}}',
+      );
+    });
   },
 };
 

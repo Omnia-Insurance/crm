@@ -1,11 +1,13 @@
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
 
-import { IconGripVertical, Label } from 'twenty-ui/display';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { IconGripVertical } from 'twenty-ui/icon';
+import { Text } from 'twenty-ui/primitives/typography';
+import { useTheme, themeCssVariables } from 'twenty-ui/theme';
 
 const StyledContainer = styled.div`
   align-items: center;
+  /* Height below is sized against the content box. */
+  box-sizing: content-box;
   cursor: grab;
   display: flex;
   gap: ${themeCssVariables.spacing[2]};
@@ -27,7 +29,7 @@ type FieldsConfigurationGroupDraggableHeaderProps = {
 export const FieldsConfigurationGroupDraggableHeader = ({
   text,
 }: FieldsConfigurationGroupDraggableHeaderProps) => {
-  const { theme } = useContext(ThemeContext);
+  const theme = useTheme();
 
   return (
     <StyledContainer>
@@ -38,7 +40,9 @@ export const FieldsConfigurationGroupDraggableHeader = ({
           color={themeCssVariables.font.color.tertiary}
         />
       </StyledIconContainer>
-      <Label>{text}</Label>
+      <Text size="xs" weight="semibold" color="light">
+        {text}
+      </Text>
     </StyledContainer>
   );
 };

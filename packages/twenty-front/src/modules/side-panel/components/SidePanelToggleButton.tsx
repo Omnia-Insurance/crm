@@ -1,18 +1,22 @@
+import { formatShortcut } from 'twenty-ui/primitives/typography';
 import { SIDE_PANEL_TOP_BAR_HEIGHT_MOBILE } from '@/side-panel/constants/SidePanelTopBarHeightMobile';
+import { COMMAND_MENU_SIDE_PANEL_PAGES } from '@/side-panel/constants/CommandMenuSidePanelPages';
 import { useSidePanelMenu } from '@/side-panel/hooks/useSidePanelMenu';
 import { isSidePanelOpenedState } from '@/side-panel/states/isSidePanelOpenedState';
+import { sidePanelNavigationStackState } from '@/side-panel/states/sidePanelNavigationStackState';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
 import { RootStackingContextZIndices } from '@/ui/layout/constants/RootStackingContextZIndices';
 import { PAGE_HEADER_SIDE_PANEL_BUTTON_CLICK_OUTSIDE_ID } from '@/ui/layout/page-header/constants/PageHeaderSidePanelButtonClickOutsideId';
+import { TooltipDelay } from '@/ui/layout/tooltip/constants/TooltipDelay';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { motion } from 'framer-motion';
-import { useContext } from 'react';
-import { AppTooltip, TooltipDelay, TooltipPosition } from 'twenty-ui/display';
-import { AnimatedButton } from 'twenty-ui/input';
-import { getOsControlSymbol, useIsMobile } from 'twenty-ui/utilities';
-import { ThemeContext, themeCssVariables } from 'twenty-ui/theme-constants';
+import { SidePanelPages } from 'twenty-shared/types';
+import { IconDotsVertical } from 'twenty-ui/icon';
+import { IconButton } from 'twenty-ui/components/input';
+import { Tooltip } from 'twenty-ui/primitives/surfaces';
+import { useIsMobile } from 'twenty-ui/utilities';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { useLingui } from '@lingui/react/macro';
 
 const StyledButtonWrapper = styled.div<{ alignToTop: boolean }>`
   align-items: ${({ alignToTop }) => (alignToTop ? 'center' : 'initial')};
@@ -23,155 +27,74 @@ const StyledButtonWrapper = styled.div<{ alignToTop: boolean }>`
   right: ${({ alignToTop }) =>
     alignToTop ? themeCssVariables.spacing[3] : 'auto'};
   top: ${({ alignToTop }) => (alignToTop ? '0' : 'auto')};
-  z-index: ${RootStackingContextZIndices.SidePanelButton};
+  z-index: ${({ alignToTop }) =>
+    alignToTop ? RootStackingContextZIndices.SidePanelButton : 'auto'};
 `;
-
-const StyledTooltipWrapper = styled.div`
-  font-size: ${themeCssVariables.font.size.md};
-`;
-
-const xPaths = {
-  topLeft: `M12 12 L6 6`,
-  topRight: `M12 12 L18 6`,
-  bottomLeft: `M12 12 L6 18`,
-  bottomRight: `M12 12 L18 18`,
-};
-
-const AnimatedIcon = ({
-  isSidePanelOpened,
-}: {
-  isSidePanelOpened: boolean;
-}) => {
-  const { theme } = useContext(ThemeContext);
-
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={theme.icon.stroke.md}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        display: 'block',
-        width: theme.icon.size.sm,
-        height: theme.icon.size.sm,
-      }}
-    >
-      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-      <motion.circle
-        cx={12}
-        cy={12}
-        r="1"
-        initial={{ opacity: 0 }}
-        animate={{
-          scale: isSidePanelOpened ? 0 : 1,
-          opacity: isSidePanelOpened ? 0 : 1,
-        }}
-        transition={{
-          duration: theme.animation.duration.fast,
-        }}
-      />
-
-      {Object.values(xPaths).map((path, index) => (
-        <motion.path
-          key={index}
-          d={path}
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{
-            pathLength: isSidePanelOpened ? 1 : 0,
-            opacity: isSidePanelOpened ? 1 : 0,
-          }}
-          transition={{
-            duration: theme.animation.duration.fast,
-            ease: 'easeInOut',
-            delay: isSidePanelOpened ? 0.1 : 0,
-          }}
-        />
-      ))}
-
-      <motion.circle
-        cx="12"
-        cy="5"
-        r="1"
-        initial={{ opacity: 0 }}
-        animate={{
-          scale: isSidePanelOpened ? 0 : 1,
-          opacity: isSidePanelOpened ? 0 : 1,
-        }}
-        transition={{
-          duration: theme.animation.duration.fast,
-        }}
-      />
-
-      <motion.circle
-        cx="12"
-        cy="19"
-        r="1"
-        initial={{ opacity: 0 }}
-        animate={{
-          scale: isSidePanelOpened ? 0 : 1,
-          opacity: isSidePanelOpened ? 0 : 1,
-        }}
-        transition={{
-          duration: theme.animation.duration.fast,
-        }}
-      />
-    </svg>
-  );
-};
 
 export const SidePanelToggleButton = () => {
-  const { toggleSidePanelMenu } = useSidePanelMenu();
+  const { t } = useLingui();
+  const { openSidePanelMenu } = useSidePanelMenu();
   const isSidePanelOpened = useAtomStateValue(isSidePanelOpenedState);
+  const sidePanelNavigationStack = useAtomStateValue(
+    sidePanelNavigationStackState,
+  );
+  const sidePanelPage =
+    sidePanelNavigationStack.at(-1)?.page ?? SidePanelPages.CommandMenuDisplay;
   const isLayoutCustomizationModeEnabled = useAtomStateValue(
     isLayoutCustomizationModeEnabledState,
   );
 
   const isMobile = useIsMobile();
 
+  const isCommandMenuOpened =
+    isSidePanelOpened && COMMAND_MENU_SIDE_PANEL_PAGES.includes(sidePanelPage);
+
   const alignWithSidePanelTopBar =
     isMobile && isLayoutCustomizationModeEnabled && isSidePanelOpened;
 
-  const ariaLabel = isSidePanelOpened
-    ? t`Close side panel`
-    : t`Open side panel`;
+  const hasCommandMenuPageInNavigationStack = sidePanelNavigationStack.some(
+    ({ page }) => COMMAND_MENU_SIDE_PANEL_PAGES.includes(page),
+  );
 
-  const { theme } = useContext(ThemeContext);
+  const isCoveredBySidePanelOnMobile =
+    isMobile && isSidePanelOpened && !alignWithSidePanelTopBar;
+
+  const shouldHideButton =
+    isCommandMenuOpened ||
+    (isSidePanelOpened && hasCommandMenuPageInNavigationStack) ||
+    isCoveredBySidePanelOnMobile;
+
+  if (shouldHideButton) {
+    return null;
+  }
+
+  const ariaLabel = t`Command Menu`;
+  const tooltipContent = t`Command menu | ${formatShortcut({ shortcut: ['Mod', 'K'] })}`;
+
   return (
     <StyledButtonWrapper alignToTop={alignWithSidePanelTopBar}>
-      <div id="toggle-side-panel-button">
-        <AnimatedButton
-          animatedSvg={<AnimatedIcon isSidePanelOpened={isSidePanelOpened} />}
-          dataClickOutsideId={PAGE_HEADER_SIDE_PANEL_BUTTON_CLICK_OUTSIDE_ID}
-          dataTestId="page-header-side-panel-button"
-          size={isMobile ? 'medium' : 'small'}
-          variant="secondary"
-          accent="default"
-          hotkeys={[getOsControlSymbol(), 'K']}
-          ariaLabel={ariaLabel}
-          onClick={toggleSidePanelMenu}
-          animate={{
-            rotate: isSidePanelOpened ? 90 : 0,
-          }}
-          transition={{
-            duration: theme.animation.duration.normal,
-            ease: 'easeInOut',
-          }}
-        />
-      </div>
-
-      <StyledTooltipWrapper>
-        <AppTooltip
-          anchorSelect="#toggle-side-panel-button"
-          content={ariaLabel}
-          delay={TooltipDelay.longDelay}
-          place={TooltipPosition.Bottom}
-          offset={5}
-          noArrow
-        />
-      </StyledTooltipWrapper>
+      <Tooltip
+        content={tooltipContent}
+        delay={TooltipDelay.longDelay}
+        side="bottom"
+        sideOffset={5}
+      >
+        <div
+          id="toggle-side-panel-button"
+          data-click-outside-id={PAGE_HEADER_SIDE_PANEL_BUTTON_CLICK_OUTSIDE_ID}
+        >
+          <IconButton
+            data-testid="page-header-side-panel-button"
+            size="sm"
+            variant="outline"
+            color="neutral"
+            aria-label={ariaLabel}
+            onClick={openSidePanelMenu}
+          >
+            <IconDotsVertical />
+          </IconButton>
+        </div>
+      </Tooltip>
     </StyledButtonWrapper>
   );
 };

@@ -1,33 +1,28 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
-import { EDITABLE_PROFILE_FIELDS_DROPDOWN_ID } from '@/settings/security/constants/EditableProfileFields.constants';
-import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
-import { SelectControl } from '@/ui/input/components/SelectControl';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { getToastOptionsFromError } from '@/error-handler/utils/getToastOptionsFromError';
+import { SettingsOptionCardContentSelect } from '@/settings/components/SettingsOptions/SettingsOptionCardContentSelect';
+import { EDITABLE_PROFILE_FIELDS_DROPDOWN_ID } from '@/settings/security/constants/EditableProfileFields';
+import { MultiSelectControl } from '@/ui/input/components/MultiSelectControl';
+import { SelectOptionIcon } from '@/ui/input/components/SelectOptionIcon';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
-import { CombinedGraphQLErrors } from '@apollo/client/errors';
-import { styled } from '@linaria/react';
-import { useLingui } from '@lingui/react/macro';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
+import { useMutation } from '@apollo/client/react';
+import { plural } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import { isDefined } from 'twenty-shared/utils';
+import { useToast } from 'twenty-ui/components/feedback';
+import { Dropdown } from 'twenty-ui/components/navigation';
 import {
+  IconId,
+  IconListSearch,
   IconMail,
   IconPhoto,
   IconUser,
   IconUserCircle,
   type IconComponent,
-} from 'twenty-ui/display';
-import { type SelectOption } from 'twenty-ui/input';
-import { MenuItemMultiSelect } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { useMutation } from '@apollo/client/react';
+} from 'twenty-ui/icon';
 import { UpdateWorkspaceDocument } from '~/generated-metadata/graphql';
-
-const StyledDropdownContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${themeCssVariables.spacing[3]};
-`;
 
 type ProfileFieldOption = {
   value: string;
@@ -35,9 +30,15 @@ type ProfileFieldOption = {
   Icon: IconComponent;
 };
 
-export const SettingsSecurityEditableProfileFields = () => {
+type SettingsSecurityEditableProfileFieldsProps = {
+  divider?: boolean;
+};
+
+export const SettingsSecurityEditableProfileFields = ({
+  divider,
+}: SettingsSecurityEditableProfileFieldsProps) => {
   const { t } = useLingui();
-  const { enqueueErrorSnackBar } = useSnackBar();
+  const { enqueueToast } = useToast();
 
   const [currentWorkspace, setCurrentWorkspace] = useAtomState(
     currentWorkspaceState,
@@ -54,33 +55,30 @@ export const SettingsSecurityEditableProfileFields = () => {
   const selectedFields =
     currentWorkspace?.editableProfileFields?.filter(isDefined) ?? [];
 
-  const optionByValue = new Map(
-    profileFieldOptions.map((option) => [option.value, option]),
+  const selectedOptions = profileFieldOptions.filter((option) =>
+    selectedFields.includes(option.value),
   );
 
-  const selectedLabelList = selectedFields
-    .map((value) => optionByValue.get(value)?.label ?? value)
-    .filter(isDefined);
+  const hasSeveralSelectedOptions = selectedOptions.length > 1;
 
-  const selectedDisplayLabel =
-    selectedLabelList.length > 0
-      ? selectedLabelList.join(', ')
-      : t`No fields selected`;
+  const getSelectedFieldsText = () => {
+    if (selectedOptions.length === 0) {
+      return t`None`;
+    }
 
-  const firstSelectedIcon =
-    selectedFields.length === 1
-      ? optionByValue.get(selectedFields[0])?.Icon
-      : undefined;
+    if (!hasSeveralSelectedOptions) {
+      return undefined;
+    }
 
-  const selectedOption: SelectOption<string> = {
-    value: selectedDisplayLabel,
-    label: selectedDisplayLabel,
-    Icon: firstSelectedIcon,
+    return plural(selectedOptions.length, {
+      one: `# Field`,
+      other: `# Fields`,
+    });
   };
 
   const toggleField = (field: string) => {
     if (!currentWorkspace?.id) {
-      enqueueErrorSnackBar({ message: t`User is not logged in` });
+      enqueueToast({ status: 'error', children: t`User is not logged in` });
       return;
     }
 
@@ -108,42 +106,51 @@ export const SettingsSecurityEditableProfileFields = () => {
       setCurrentWorkspace((prev) =>
         prev ? { ...prev, editableProfileFields: previousFields } : prev,
       );
-      enqueueErrorSnackBar({
-        apolloError: CombinedGraphQLErrors.is(err) ? err : undefined,
-      });
+      enqueueToast(getToastOptionsFromError({ error: err }));
     });
   };
 
   return (
-    <StyledDropdownContainer>
-      <Dropdown
+    <SettingsOptionCardContentSelect
+      Icon={IconId}
+      title={t`Editable Profile Fields`}
+      description={t`Fields members with the Edit Profile permission can change`}
+      divider={divider}
+    >
+      <DropdownRoot
         dropdownId={EDITABLE_PROFILE_FIELDS_DROPDOWN_ID}
-        dropdownPlacement="bottom-start"
-        dropdownOffset={{ y: 8 }}
-        clickableComponent={
-          <SelectControl
-            selectedOption={selectedOption}
+        type="picker"
+        multiple
+      >
+        <Dropdown.Trigger
+          render={<div />}
+          nativeButton={false}
+          disabled={!isDefined(currentWorkspace)}
+          aria-label={t`Editable Profile Fields`}
+        >
+          <MultiSelectControl
+            selectedOptions={selectedOptions}
+            fixedIcon={hasSeveralSelectedOptions ? IconListSearch : undefined}
+            fixedText={getSelectedFieldsText()}
             isDisabled={!currentWorkspace}
             hasRightElement={false}
           />
-        }
-        dropdownComponents={
-          <DropdownContent>
-            <DropdownMenuItemsContainer>
-              {profileFieldOptions.map((option) => (
-                <MenuItemMultiSelect
-                  key={option.value}
-                  text={option.label}
-                  LeftIcon={option.Icon}
-                  selected={selectedFields.includes(option.value)}
-                  className="settings-security-editable-profile-fields-menu-item"
-                  onSelectChange={() => toggleField(option.value)}
-                />
-              ))}
-            </DropdownMenuItemsContainer>
-          </DropdownContent>
-        }
-      />
-    </StyledDropdownContainer>
+        </Dropdown.Trigger>
+        <DropdownContent side="bottom" align="end" sideOffset={8}>
+          <Dropdown.Section>
+            {profileFieldOptions.map((option) => (
+              <Dropdown.OptionItem
+                key={option.value}
+                selected={selectedFields.includes(option.value)}
+                onSelect={() => toggleField(option.value)}
+                startIcon={<SelectOptionIcon Icon={option.Icon} />}
+              >
+                {option.label}
+              </Dropdown.OptionItem>
+            ))}
+          </Dropdown.Section>
+        </DropdownContent>
+      </DropdownRoot>
+    </SettingsOptionCardContentSelect>
   );
 };

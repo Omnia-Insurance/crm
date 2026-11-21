@@ -1,20 +1,38 @@
+import { Button } from 'twenty-ui/primitives/input';
+import { useMarketplaceApps } from '@/marketplace/hooks/useMarketplaceApps';
 import { SettingsEmptyPlaceholder } from '@/settings/components/SettingsEmptyPlaceholder';
-import { Dropdown } from '@/ui/layout/dropdown/components/Dropdown';
+import { SettingsSectionSkeletonLoader } from '@/settings/components/SettingsSectionSkeletonLoader';
 import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
-import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
 import { styled } from '@linaria/react';
+import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
-import { type ReactNode, useState } from 'react';
-import { IconSparkles } from 'twenty-ui/display';
-import { SearchInput } from 'twenty-ui/input';
-import { Section } from 'twenty-ui/layout';
-import { MenuItemToggle } from 'twenty-ui/navigation';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { useMarketplaceApps } from '~/modules/marketplace/hooks/useMarketplaceApps';
+import { useState } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { InlineBanner } from 'twenty-ui/components/feedback';
+import { SearchInput } from 'twenty-ui/components/input';
+import { Section } from 'twenty-ui/components/layout';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
+import { IconEyeOff } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { SettingsApplicationLoadErrorBanner } from '@/settings/applications/components/SettingsApplicationLoadErrorBanner';
 import { SettingsAvailableApplicationCard } from '~/pages/settings/applications/components/SettingsAvailableApplicationCard';
+import { filterMarketplaceApps } from '~/pages/settings/applications/utils/filterMarketplaceApps';
+import { SettingsSearchFilterTrigger } from '@/settings/components/SettingsSearchFilterTrigger';
 
 const StyledSearchInputContainer = styled.div`
   padding-bottom: ${themeCssVariables.spacing[2]};
+`;
+
+const StyledContentContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[3]};
+`;
+
+const StyledUnlistedContainer = styled.div`
+  margin-top: ${themeCssVariables.spacing[3]};
 `;
 
 const StyledCardsGrid = styled.div`
@@ -27,109 +45,159 @@ const StyledCardsGrid = styled.div`
   }
 `;
 
-const StyledHintLink = styled.button`
-  background: none;
-  border: none;
-  color: ${themeCssVariables.color.blue};
-  cursor: pointer;
-  font-size: inherit;
-  padding: 0;
-  text-decoration: underline;
+const StyledEmptyState = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[2]};
 `;
 
 export const SettingsApplicationsAvailableTab = () => {
   const { t } = useLingui();
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFeaturedOnly, setShowFeaturedOnly] = useState(true);
+  const [showUnlisted, setShowUnlisted] = useState(false);
 
-  const { data: marketplaceApps, isLoading } = useMarketplaceApps();
+  const {
+    data: marketplaceApps,
+    isLoading,
+    error,
+    refetch,
+  } = useMarketplaceApps();
 
-  const textFilteredApplications = searchTerm
-    ? marketplaceApps.filter((application) => {
-        const lowerSearch = searchTerm.toLowerCase();
+  const hasSearchTerm = searchTerm.trim().length > 0;
 
-        return (
-          application.name.toLowerCase().includes(lowerSearch) ||
-          application.description.toLowerCase().includes(lowerSearch) ||
-          application.author.toLowerCase().includes(lowerSearch)
-        );
-      })
-    : marketplaceApps;
+  const textFilteredApplications = filterMarketplaceApps({
+    marketplaceApps,
+    searchTerm,
+  });
 
-  const filteredApplications = showFeaturedOnly
-    ? textFilteredApplications.filter((application) => application.isFeatured)
-    : textFilteredApplications;
+  const listedApplications = textFilteredApplications.filter(
+    (application) => application.isListed,
+  );
 
-  const nonFeaturedCount = showFeaturedOnly
-    ? textFilteredApplications.filter((application) => !application.isFeatured)
-        .length
-    : 0;
+  const unlistedApplications = textFilteredApplications.filter(
+    (application) => !application.isListed,
+  );
 
   if (isLoading) {
     return (
-      <Section>
-        <SettingsEmptyPlaceholder padding="4">{t`Loading applications...`}</SettingsEmptyPlaceholder>
-      </Section>
+      <Section.Root>
+        <SettingsSectionSkeletonLoader />
+      </Section.Root>
     );
   }
 
-  const showNonFeaturedHint =
-    filteredApplications.length === 0 && nonFeaturedCount > 0;
+  if (isDefined(error)) {
+    return (
+      <Section.Root>
+        <SettingsApplicationLoadErrorBanner
+          message={t`The marketplace could not be loaded. Check your connection and try again.`}
+          onRetry={() => refetch().catch(() => undefined)}
+        />
+      </Section.Root>
+    );
+  }
+
+  const showUnlistedHint =
+    !showUnlisted &&
+    listedApplications.length === 0 &&
+    unlistedApplications.length > 0;
+
+  const hasNoApplications = textFilteredApplications.length === 0;
+
+  const unlistedCount = unlistedApplications.length;
+
+  const getEmptyStateMessage = () => {
+    if (showUnlistedHint) {
+      return plural(unlistedCount, {
+        one: 'No listed application matches. # unlisted application is available.',
+        other:
+          'No listed application matches. # unlisted applications are available.',
+      });
+    }
+
+    if (hasSearchTerm) {
+      return t`No application matches your search`;
+    }
+
+    return t`No applications available yet`;
+  };
 
   return (
-    <Section>
+    <Section.Root>
       <StyledSearchInputContainer>
         <SearchInput
           placeholder={t`Search an application`}
           value={searchTerm}
-          onChange={setSearchTerm}
-          filterDropdown={(filterButton: ReactNode) => (
-            <Dropdown
-              dropdownId="marketplace-filter-dropdown"
-              dropdownPlacement="bottom-end"
-              dropdownOffset={{ x: 0, y: 8 }}
-              clickableComponent={filterButton}
-              dropdownComponents={
-                <DropdownContent>
-                  <DropdownMenuItemsContainer>
-                    <MenuItemToggle
-                      LeftIcon={IconSparkles}
-                      onToggleChange={() =>
-                        setShowFeaturedOnly(!showFeaturedOnly)
-                      }
-                      toggled={showFeaturedOnly}
-                      text={t`Featured only`}
-                      toggleSize="small"
-                    />
-                  </DropdownMenuItemsContainer>
-                </DropdownContent>
-              }
-            />
-          )}
+          onValueChange={setSearchTerm}
+          actions={
+            <DropdownRoot dropdownId="marketplace-filter-dropdown" type="panel">
+              <SettingsSearchFilterTrigger ariaLabel={t`Filter applications`} />
+              <DropdownContent
+                side="bottom"
+                align="end"
+                sideOffset={8}
+                alignOffset={0}
+              >
+                <Dropdown.Section>
+                  <SettingsRow
+                    startElement={<IconEyeOff />}
+                    onCheckedChange={() => setShowUnlisted(!showUnlisted)}
+                    checked={showUnlisted}
+                  >{t`Show unlisted apps`}</SettingsRow>
+                </Dropdown.Section>
+              </DropdownContent>
+            </DropdownRoot>
+          }
         />
       </StyledSearchInputContainer>
 
-      {filteredApplications.length === 0 ? (
+      {hasNoApplications ||
+      (!showUnlisted && listedApplications.length === 0) ? (
         <SettingsEmptyPlaceholder padding="4">
-          {showNonFeaturedHint
-            ? t`No featured applications found. ${nonFeaturedCount} non-featured result(s) available — `
-            : t`No applications available`}
-          {showNonFeaturedHint && (
-            <StyledHintLink onClick={() => setShowFeaturedOnly(false)}>
-              {t`show all`}
-            </StyledHintLink>
-          )}
+          <StyledEmptyState role="status">
+            {getEmptyStateMessage()}
+            {showUnlistedHint && (
+              <Button
+                variant="link"
+                color="accent"
+                size="sm"
+                type="button"
+                onClick={() => setShowUnlisted(true)}
+              >
+                {t`Show all applications`}
+              </Button>
+            )}
+          </StyledEmptyState>
         </SettingsEmptyPlaceholder>
       ) : (
-        <StyledCardsGrid>
-          {filteredApplications.map((application) => (
-            <SettingsAvailableApplicationCard
-              key={application.id}
-              application={application}
-            />
-          ))}
-        </StyledCardsGrid>
+        <StyledContentContainer>
+          {listedApplications.length > 0 && (
+            <StyledCardsGrid>
+              {listedApplications.map((application) => (
+                <SettingsAvailableApplicationCard
+                  key={application.id}
+                  application={application}
+                />
+              ))}
+            </StyledCardsGrid>
+          )}
+
+          {showUnlisted && unlistedApplications.length > 0 && (
+            <StyledUnlistedContainer>
+              <InlineBanner status="warning">{t`Applications below have not been reviewed by Twenty. Use at your own risk.`}</InlineBanner>
+              <StyledCardsGrid>
+                {unlistedApplications.map((application) => (
+                  <SettingsAvailableApplicationCard
+                    key={application.id}
+                    application={application}
+                  />
+                ))}
+              </StyledCardsGrid>
+            </StyledUnlistedContainer>
+          )}
+        </StyledContentContainer>
       )}
-    </Section>
+    </Section.Root>
   );
 };

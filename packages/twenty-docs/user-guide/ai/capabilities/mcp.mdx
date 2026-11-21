@@ -3,9 +3,9 @@ title: MCP Server
 description: Connect AI assistants to your Twenty workspace using the Model Context Protocol.
 ---
 
-<Warning>
-MCP is currently in **alpha** and is only available on some workspaces. It may not be enabled for your workspace yet.
-</Warning>
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Overview
 
 Twenty exposes an [MCP](https://modelcontextprotocol.io/) server so that AI assistants — Claude Desktop, Claude Code, Cursor, ChatGPT, and others — can read and write your CRM data through natural language.
 
@@ -72,20 +72,20 @@ If your MCP client does not support OAuth, or you prefer static credentials, pas
 Your API key grants access to workspace data. Keep it out of version control and shared dotfiles.
 </Warning>
 
-To create an API key, go to **Settings > APIs & Webhooks > + Create key**. See [APIs](/developers/extend/api#create-an-api-key) for details.
+To create an API key, go to **Settings → Developers → API → + Create key**. See [APIs](/developers/extend/api#create-an-api-key) for details.
 
 ## Quick Start
 
 ### 1. Copy the config
 
-Go to **Settings > AI > More > MCP Server** in Twenty. Choose your authentication method (OAuth or API Key), copy the JSON snippet (it will already use your workspace URL), and paste it into your MCP client's config file.
+Go to **Settings → AI → MCP** in Twenty. Choose your authentication method (OAuth or API Key), copy the JSON snippet (it will already use your workspace URL), and paste it into your MCP client's config file.
 
 | Client | Config file location |
 |--------|---------------------|
 | **Claude Desktop** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
 | **Claude Code** | `~/.claude.json` (user) or `.mcp.json` (project) |
 | **Cursor** | `.cursor/mcp.json` in your project, or `~/.cursor/mcp.json` globally |
-| **ChatGPT** | Turn on Developer Mode in **Settings > Apps & Connectors > Advanced settings**, then use **Create** in **Settings > Apps & Connectors** to add the MCP server |
+| **ChatGPT** | Turn on Developer Mode in **Settings → Apps & Connectors → Advanced settings**, then use **Create** in **Settings → Apps & Connectors** to add the MCP server |
 
 ### 2. Connect
 
@@ -101,20 +101,27 @@ Ask your AI assistant to interact with your CRM:
 
 ## Available Tools
 
-Once connected, the MCP server exposes tools that mirror the Twenty API. The recommended workflow is:
+Once connected, the MCP server lists the tools your connection can use, with their input schemas: `find_many_companies`, `create_one_person`, `list_workflows`, and several hundred more. Your assistant calls them by name. Tools for objects or app functions created while you are connected appear after reconnecting.
 
-1. **`get_tool_catalog`** — discover all available tools
-2. **`learn_tools`** — get the input schema for specific tools
-3. **`execute_tool`** — run a tool
+This needs a client that loads tools on demand, as Claude, Claude Code, Codex and OpenCode do by default. A client that loads every tool definition up front, including Claude Code with tool search turned off, can run out of context.
 
-You don't need to remember tool names. Ask your AI assistant what it can do and it will call `get_tool_catalog` automatically.
+### Meta mode
+
+For clients that load every tool up front, connect to `/mcp?mode=meta`. It lists a few meta-tools instead:
+
+1. **`learn_tools`** — get the input schema for specific tools
+2. **`execute_tool`** — run a tool
+
+Record operation names follow a grammar, so an assistant can build them without a discovery call: `find_many_companies`, `find_one_person`, `update_one_opportunity`. If a name is wrong, `learn_tools` reports it under `notFound` along with the closest matching names.
+
+For anything else, `get_tool_catalog` browses the remaining tools one category at a time. It is a fallback: an unfiltered call returns hundreds of operations and most assistants will truncate the response.
 
 ## Permissions
 
 MCP connections inherit the permissions of the authenticated user (OAuth) or the role assigned to the API key. To restrict what the MCP server can do:
 
 - **OAuth**: The user's workspace role applies.
-- **API Key**: Assign a role to the API key under **Settings > Roles**. See [Permissions](/user-guide/permissions-access/capabilities/permissions).
+- **API Key**: Assign a role to the API key under **Settings → Members → Roles**. See [Permissions](/user-guide/permissions-access/capabilities/permissions).
 
 ## Self-Hosted Configuration
 
@@ -137,3 +144,5 @@ The MCP endpoint, OAuth endpoints, and discovery metadata all derive from this v
 
 **Connection timeout**
 - Confirm the MCP endpoint URL is reachable from your machine. For self-hosted instances, check that the server is running and `SERVER_URL` is set correctly.
+
+<PageBanner illustration="card-page-mcp" />

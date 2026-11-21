@@ -1,8 +1,8 @@
-import { SKELETON_LOADER_HEIGHT_SIZES } from '@/activities/components/SkeletonLoader';
+import { SkeletonLine } from '@/ui/feedback/skeleton/components/SkeletonLine';
 import { NavigationDrawerSection } from '@/ui/navigation/navigation-drawer/components/NavigationDrawerSection';
 import { styled } from '@linaria/react';
-import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { SKELETON_HEIGHT_SIZES } from 'twenty-ui/primitives/feedback';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledTitleSkeleton = styled.div`
   align-items: center;
@@ -13,41 +13,38 @@ const StyledTitleSkeleton = styled.div`
 `;
 
 const StyledRowsContainer = styled.div`
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: ${themeCssVariables.spacing[1]};
   padding-left: ${themeCssVariables.spacing[1]};
+  width: 100%;
 `;
 
 export const NavigationDrawerWorkspaceSectionSkeletonLoader = () => {
   return (
     <NavigationDrawerSection>
-      <SkeletonTheme
-        baseColor={themeCssVariables.background.tertiary}
-        highlightColor={themeCssVariables.background.transparent.light}
-        borderRadius={4}
-      >
-        <StyledTitleSkeleton>
-          <Skeleton
-            width={72}
-            height={SKELETON_LOADER_HEIGHT_SIZES.standard.xs}
-          />
-        </StyledTitleSkeleton>
-        <StyledRowsContainer>
-          <Skeleton
-            width={196}
-            height={SKELETON_LOADER_HEIGHT_SIZES.standard.s}
-          />
-          <Skeleton
-            width={196}
-            height={SKELETON_LOADER_HEIGHT_SIZES.standard.s}
-          />
-          <Skeleton
-            width={196}
-            height={SKELETON_LOADER_HEIGHT_SIZES.standard.s}
-          />
-        </StyledRowsContainer>
-      </SkeletonTheme>
+      <StyledTitleSkeleton>
+        <SkeletonLine
+          width={72}
+          height={SKELETON_HEIGHT_SIZES.xs}
+          highlightColor={themeCssVariables.background.transparent.light}
+        />
+      </StyledTitleSkeleton>
+      <StyledRowsContainer>
+        <SkeletonLine
+          height={SKELETON_HEIGHT_SIZES.s}
+          highlightColor={themeCssVariables.background.transparent.light}
+        />
+        <SkeletonLine
+          height={SKELETON_HEIGHT_SIZES.s}
+          highlightColor={themeCssVariables.background.transparent.light}
+        />
+        <SkeletonLine
+          height={SKELETON_HEIGHT_SIZES.s}
+          highlightColor={themeCssVariables.background.transparent.light}
+        />
+      </StyledRowsContainer>
     </NavigationDrawerSection>
   );
 };

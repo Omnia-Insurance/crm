@@ -1,0 +1,24 @@
+import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
+import { type WorkflowRun } from '@/workflow/types/Workflow';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+
+export const useWorkflowRunStepLog = ({
+  workflowRunId,
+  stepId,
+  skip = false,
+}: {
+  workflowRunId: string;
+  stepId: string;
+  skip?: boolean;
+}): unknown | undefined => {
+  const { record } = useFindOneRecord<
+    Pick<WorkflowRun, '__typename' | 'id' | 'stepLogs'>
+  >({
+    objectNameSingular: StandardObjectNameSingular.WorkflowRun,
+    objectRecordId: workflowRunId,
+    recordGqlFields: { id: true, stepLogs: true, updatedAt: true },
+    skip,
+  });
+
+  return record?.stepLogs?.[stepId];
+};

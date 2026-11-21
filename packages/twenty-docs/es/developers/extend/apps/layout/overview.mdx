@@ -1,0 +1,70 @@
+---
+title: Resumen
+description: Coloca tu aplicación dentro de la interfaz de usuario de Twenty — entradas de la barra lateral, vistas guardadas, pestañas de la página de registro y componentes React aislados.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+import { CardTitle } from "/snippets/card-title.mdx"
+
+## Qué cubre la capa de diseño
+
+La **capa de diseño** de una aplicación de Twenty es todo lo que el usuario ve: dónde aparece la aplicación en la barra lateral, qué vistas de lista incluye, cómo se organizan sus páginas de detalles de registro y qué componentes React personalizados se renderizan dentro de esas páginas.
+
+```text
+   Sidebar               Record list            Record detail page
+   ───────               ───────────            ──────────────────
+   [📋 My View]    ────▶ ┌──────────┐          ┌─────────────────────┐
+   [📋 Drafts ]          │ Companies│          │ Tabs: [Overview ]   │
+   [📋 Inbox  ]          │ ──────── │          │       [Notes    ]   │
+        ▲                │  Apple   │          │       [Hello    ]◀──── definePageLayoutTab
+        │                │  Acme    │          │                     │   adds a tab...
+        └ defineNavi-    │  …       │          │  ┌────────────────┐ │
+          gationMenu-    └────▲─────┘          │  │                │ │
+          Item points         │                │  │   React UI     │◀── …with a
+          to a defineView     │                │  │  (sandboxed in │ │   defineFrontComponent
+                              └ defineView     │  │   a Worker)    │ │   widget inside
+                                picks columns  │  └────────────────┘ │
+                                and filters    └─────────────────────┘
+```
+
+## En esta sección
+
+<CardGroup cols={2} className="documentation-card-group">
+  <Card href="/es/developers/extend/apps/layout/views" img="/images/documentation/section-overview-icons-v1/apps-data.svg">
+    <CardTitle>Vistas</CardTitle>
+    `defineView` — configuraciones de lista guardadas: columnas visibles, filtros, grupos.
+  </Card>
+  <Card href="/es/developers/extend/apps/layout/navigation-menu-items" img="/images/user-guide/halftone/card-page-navigation.svg">
+    <CardTitle>Los elementos del menú de navegación</CardTitle>
+    `defineNavigationMenuItem` — entradas laterales apuntando a vistas o URL externas.
+  </Card>
+  <Card href="/es/developers/extend/apps/layout/page-layouts" img="/images/user-guide/halftone/card-page-page-layouts.svg">
+    <CardTitle>Page Layouts</CardTitle>
+    `definePageLayout`, `definePageLayoutTab` y `definePageLayoutWidget` — pestañas y widgets en la página de detalle de un registro.
+  </Card>
+  <Card href="/es/developers/extend/apps/layout/front-components" img="/images/user-guide/halftone/card-page-front-components.svg">
+    <CardTitle>Componentes delanteros</CardTitle>
+    `defineFrontComponent` — componentes React encajados que se renderizan dentro de Twenty.
+  </Card>
+  <Card href="/es/developers/extend/apps/layout/command-menu-items" img="/images/user-guide/halftone/card-page-command-menu.svg">
+    <CardTitle>Command Menu Items</CardTitle>
+    `defineCommandMenuItem` - registra componentes frontales como entradas Cmd+K y acciones rápidas.
+  </Card>
+</CardGroup>
+
+## Dónde aparece la aplicación
+
+| Ubicación                                  | Qué controla                                                                             | Entidad                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Barra lateral**                          | Una entrada personalizada que enlaza a una vista guardada o a una URL externa            | `defineNavigationMenuItem`                                          |
+| **Lista de registros**                     | Una configuración guardada para un objeto — columnas visibles, orden, filtros, grupos    | `defineView`                                                        |
+| **Página de detalles del registro**        | Las pestañas y widgets en una página de registro (de tu propio objeto o de uno estándar) | `definePageLayout`, `definePageLayoutTab`, `definePageLayoutWidget` |
+| **Dentro de cualquiera de las anteriores** | Un widget React personalizado — botones, formularios, paneles, integraciones             | `defineFrontComponent`                                              |
+| **Configuración de la app**                | Una entrada en el menú de configuración de la aplicación; declara tantas como necesites  | `defineSettingsMenuItem`                                            |
+| **Menú de comandos (Cmd+K)**               | Una acción rápida fijada o un comando oculto                                             | `defineCommandMenuItem`                                             |
+
+Los componentes de frontend se ejecutan dentro de un Web Worker aislado usando Remote DOM — se renderizan de forma nativa en la página (no dentro de un iframe), pero no pueden acceder directamente a la página o al DOM del host. La comunicación con Twenty ocurre a través de una API de host de paso de mensajes.
+
+Todavía están en desarrollo activo: el sandbox implementa un DOM parcial, por lo que los usos avanzados pueden fallar. Consulta [Limitaciones actuales](/es/developers/extend/apps/layout/front-components#current-limitations).
+
+<PageBanner illustration="section-apps-layout" />

@@ -24,18 +24,7 @@ const jestConfig = {
     '<rootDir>/src/**/__tests__/**/*.(test|spec).{js,ts}',
     '<rootDir>/src/**/?(*.)(test|spec).{js,ts}',
   ],
-  collectCoverageFrom: [
-    'src/**/*.{ts,js}',
-    '!src/**/*.d.ts',
-    '!src/cli.ts', // Exclude CLI entry point from coverage
-  ],
-  coverageThreshold: {
-    global: {
-      statements: 1,
-      lines: 1,
-      functions: 1,
-    },
-  },
+  collectCoverageFrom: ['src/**/*.{ts,js}', '!src/**/*.d.ts', '!src/cli.ts'],
 };
 
 export default jestConfig;

@@ -1,0 +1,28 @@
+import { type RunAgentMessage } from 'twenty-shared/application';
+
+import { type AgentRunCaller } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/agent-run-caller.type';
+import { type AgentRunConversation } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/agent-run-conversation.type';
+import { type AgentRunExecutionContext } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/agent-run-execution-context.type';
+import { type AgentRunSpec } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/agent-run-spec.type';
+import { type ResolvedAgentRunPersona } from 'src/engine/metadata-modules/ai/ai-agent-execution/types/resolved-agent-run-persona.type';
+
+// A run that pauses is suspended with its spec, and the engine continues it on its own and hands
+// the outcome to its caller's handler
+export type AgentRunnerRunInput = {
+  workspaceId: string;
+  // null for a one-shot run: no thread, no claim, and nothing to pause on
+  conversation: AgentRunConversation | null;
+  // chosen before the run starts, so a retried job finds the turn its first attempt left
+  turnId?: string;
+  // null for a run answered within its caller's request, which pauses on nothing and is called back by no one
+  caller: AgentRunCaller | null;
+  spec: AgentRunSpec;
+  persona: ResolvedAgentRunPersona;
+  // what the run is asked and who asked it; absent when the run continues its conversation without a new message
+  prompt: {
+    messages: RunAgentMessage[];
+    senderUserWorkspaceId: string | null;
+    senderApplicationId: string | null;
+  } | null;
+  executionContext: AgentRunExecutionContext;
+};

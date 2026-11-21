@@ -1,0 +1,19 @@
+import { type AllMetadataName } from 'twenty-shared/metadata';
+
+import { type MetadataEntityPropertyName } from 'src/engine/metadata-modules/flat-entity/constant/all-entity-properties-configuration-by-metadata-name.constant';
+
+// Properties a workspace owns on the entities an application ships: the
+// application creates them with a default, then leaves whatever the workspace
+// chose, instead of resetting it on every synchronization.
+export const WORKSPACE_OWNED_PROPERTIES_BY_METADATA_NAME: Partial<{
+  [P in AllMetadataName]: MetadataEntityPropertyName<P>[];
+}> = {
+  agentChatChannel: ['name', 'icon', 'color', 'position'],
+  // OMNIA-CUSTOM: a workspace's required rule survives app and standard syncs (contract C5)
+  fieldMetadata: ['requiredCondition'],
+  mcpServer: ['isActive'],
+  pageLayout: ['isFirstTabPinned'],
+  role: ['canBeAssignedToApplications'],
+  view: ['createdByUserWorkspaceId'],
+  workflow: ['createdByUserWorkspaceId', 'workspaceWorkflowId', 'visibility'],
+};

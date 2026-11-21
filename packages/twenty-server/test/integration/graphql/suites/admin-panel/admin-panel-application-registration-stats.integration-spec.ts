@@ -1,0 +1,713 @@
+import { randomUUID } from 'crypto';
+
+import { gql } from 'graphql-tag';
+import { type DataSource } from 'typeorm';
+
+import { ClickHouseService } from 'src/database/clickhouse/clickhouse.service';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+import { makeAdminPanelApiRequestAsNonServerAdmin } from 'test/integration/graphql/suites/admin-panel/utils/make-admin-panel-api-request-as-non-server-admin.util';
+import { makeAdminPanelApiRequest } from 'test/integration/twenty-config/utils/make-admin-panel-api-request.util';
+
+import {
+  SEED_APPLE_WORKSPACE_ID,
+  SEED_YCOMBINATOR_WORKSPACE_ID,
+} from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+
+// displayNames of the seeded workspaces (see seeder-workspaces.constant.ts).
+// They drive the ASC ordering and the searchTerm-by-workspace-name assertions.
+const APPLE_WORKSPACE_DISPLAY_NAME = 'Apple';
+const YCOMBINATOR_WORKSPACE_DISPLAY_NAME = 'YCombinator';
+
+const FIND_STATS = gql`
+  query FindAdminApplicationRegistrationStats($id: String!) {
+    findAdminApplicationRegistrationStats(id: $id) {
+      activeInstalls
+      autoUpdateEnabled
+      suspendedInstalls
+      mostInstalledVersion
+      versionDistribution {
+        version
+        count
+      }
+    }
+  }
+`;
+
+const FIND_INSTALLED_WORKSPACES = gql`
+  query FindAdminApplicationRegistrationInstalledWorkspaces(
+    $input: FindApplicationRegistrationInstalledWorkspacesInput!
+  ) {
+    findAdminApplicationRegistrationInstalledWorkspaces(input: $input) {
+      totalCount
+      hasMore
+      workspaces {
+        id
+        displayName
+        logo
+        version
+      }
+    }
+  }
+`;
+
+const FIND_ALL_REGISTRATIONS = gql`
+  query FindAllApplicationRegistrations(
+    $limit: Int
+    $offset: Int
+    $searchTerm: String
+    $isPreInstalledOnly: Boolean
+  ) {
+    findAllApplicationRegistrations(
+      limit: $limit
+      offset: $offset
+      searchTerm: $searchTerm
+      isPreInstalledOnly: $isPreInstalledOnly
+    ) {
+      totalCount
+      hasMore
+      registrations {
+        id
+        name
+      }
+    }
+  }
+`;
+
+const REGISTRATION_NAME = 'admin-panel-stats-integration-test-registration';
+
+const DELETED_WORKSPACE_ONLY_VERSION = '9.9.9';
+
+type SeededApplication = {
+  id: string;
+  workspaceId: string;
+  version: string;
+};
+
+describe('Admin panel application registration stats and installed workspaces (integration)', () => {
+  let dataSource: DataSource;
+  let applicationRegistrationId: string;
+  let deletedWorkspaceId: string;
+  const seededApplicationIds: string[] = [];
+
+  const insertApplication = async ({
+    workspaceId,
+    version,
+    autoUpgrade = false,
+  }: {
+    workspaceId: string;
+    version: string;
+    autoUpgrade?: boolean;
+  }): Promise<SeededApplication> => {
+    const id = randomUUID();
+
+    await dataSource.query(
+      `INSERT INTO core."application"
+        (id, "universalIdentifier", name, version, "sourcePath",
+         "sourceType", "workspaceId", "applicationRegistrationId", "autoUpgrade")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        id,
+        randomUUID(),
+        'admin-panel-stats-integration-test-app',
+        version,
+        '',
+        'local',
+        workspaceId,
+        applicationRegistrationId,
+        autoUpgrade,
+      ],
+    );
+
+    seededApplicationIds.push(id);
+
+    return { id, workspaceId, version };
+  };
+
+  beforeAll(async () => {
+    dataSource = global.testDataSource;
+
+    applicationRegistrationId = randomUUID();
+
+    await dataSource.query(
+      `INSERT INTO core."applicationRegistration"
+        (id, "universalIdentifier", name, "oAuthClientId",
+         "oAuthRedirectUris", "oAuthScopes", "sourceType")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        applicationRegistrationId,
+        randomUUID(),
+        REGISTRATION_NAME,
+        randomUUID(),
+        [],
+        [],
+        'local',
+      ],
+    );
+
+    // Two installs on version 2.0.0 (one per seeded workspace) and one on
+    // 1.0.0, so the distribution is deterministic and 2.0.0 is the most
+    // installed version.
+    await insertApplication({
+      workspaceId: SEED_APPLE_WORKSPACE_ID,
+      version: '2.0.0',
+      autoUpgrade: true,
+    });
+    await insertApplication({
+      workspaceId: SEED_YCOMBINATOR_WORKSPACE_ID,
+      version: '2.0.0',
+    });
+    await insertApplication({
+      workspaceId: SEED_YCOMBINATOR_WORKSPACE_ID,
+      version: '1.0.0',
+    });
+
+    deletedWorkspaceId = randomUUID();
+
+    const [{ workspaceCustomApplicationId }] = await dataSource.query(
+      `SELECT "workspaceCustomApplicationId" FROM core."workspace" WHERE id = $1`,
+      [SEED_APPLE_WORKSPACE_ID],
+    );
+
+    await dataSource.query(
+      `INSERT INTO core."workspace"
+        (id, "displayName", subdomain, "activationStatus",
+         "workspaceCustomApplicationId", "deletedAt")
+       VALUES ($1, $2, $3, $4, $5, now())`,
+      [
+        deletedWorkspaceId,
+        'admin-panel-stats-deleted-workspace',
+        `admin-panel-stats-deleted-${deletedWorkspaceId}`,
+        'PENDING_CREATION',
+        workspaceCustomApplicationId,
+      ],
+    );
+
+    await insertApplication({
+      workspaceId: deletedWorkspaceId,
+      version: DELETED_WORKSPACE_ONLY_VERSION,
+      autoUpgrade: true,
+    });
+  });
+
+  afterAll(async () => {
+    if (seededApplicationIds.length > 0) {
+      await dataSource.query(
+        `DELETE FROM core."application" WHERE id = ANY($1)`,
+        [seededApplicationIds],
+      );
+    }
+
+    await dataSource.query(
+      `DELETE FROM core."applicationRegistration" WHERE id = $1`,
+      [applicationRegistrationId],
+    );
+
+    await dataSource.query(`DELETE FROM core."workspace" WHERE id = $1`, [
+      deletedWorkspaceId,
+    ]);
+  });
+
+  describe('credits used', () => {
+    const findCreditsUsed = gql`
+      query FindAdminApplicationRegistrationCreditsUsed(
+        $id: String!
+        $periodStart: DateTime
+        $periodEnd: DateTime
+      ) {
+        findAdminApplicationRegistrationStats(
+          id: $id
+          periodStart: $periodStart
+          periodEnd: $periodEnd
+        ) {
+          totalCreditsUsed
+          creditsUsedBreakdown {
+            label
+            resource
+            operation
+            creditsUsed
+          }
+        }
+      }
+    `;
+    let clickHouse: ClickHouseService;
+    const periodStart = new Date(Date.now() + 86_400_000);
+    const periodEnd = new Date(periodStart.getTime() + 1_000);
+    const period = {
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+    };
+    const findStats = (dates: Record<string, string | undefined> = period) =>
+      makeAdminPanelApiRequest({
+        query: findCreditsUsed,
+        variables: { id: applicationRegistrationId, ...dates },
+      });
+    const getQueryCacheHits = async () => {
+      const result = await clickHouse.getMainClient()!.query({
+        query: "SELECT value FROM system.events WHERE event = 'QueryCacheHits'",
+        format: 'JSONEachRow',
+      });
+      const rows = await result.json<{ value: string }>();
+      return Number(rows[0]?.value ?? 0);
+    };
+
+    beforeAll(async () => {
+      clickHouse =
+        getAppProviderByClassName<ClickHouseService>('ClickHouseService');
+      const timestamp = periodStart
+        .toISOString()
+        .replace('T', ' ')
+        .replace('Z', '');
+      const result = await clickHouse.insert('usageEvent', [
+        {
+          timestamp,
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          applicationId: seededApplicationIds[0],
+          resourceType: 'LOGIC_FUNCTION',
+          operationType: 'CODE_EXECUTION',
+          creditsUsedMicro: 1_000_001,
+        },
+        {
+          timestamp,
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          applicationId: seededApplicationIds[0],
+          resourceType: 'HISTORICAL_RESOURCE',
+          operationType: 'HISTORICAL_OPERATION',
+          creditsUsedMicro: 2_000_000,
+        },
+        {
+          timestamp: periodEnd.toISOString().replace('T', ' ').replace('Z', ''),
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          applicationId: seededApplicationIds[0],
+          resourceType: 'LOGIC_FUNCTION',
+          operationType: 'CODE_EXECUTION',
+          creditsUsedMicro: 8_000_000,
+        },
+        {
+          timestamp,
+          workspaceId: deletedWorkspaceId,
+          applicationId: seededApplicationIds[0],
+          resourceType: 'LOGIC_FUNCTION',
+          operationType: 'CODE_EXECUTION',
+          creditsUsedMicro: 32_000_000,
+        },
+        {
+          timestamp,
+          workspaceId: SEED_APPLE_WORKSPACE_ID,
+          applicationId: randomUUID(),
+          resourceId: seededApplicationIds[0],
+          resourceType: 'LOGIC_FUNCTION',
+          operationType: 'CODE_EXECUTION',
+          creditsUsedMicro: 500_000,
+        },
+      ]);
+
+      expect(result.success).toBe(true);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    afterAll(async () => {
+      await clickHouse.getMainClient()?.command({
+        query:
+          'ALTER TABLE usageEvent DELETE WHERE applicationId = {applicationId:String} OR resourceId = {applicationId:String} SETTINGS mutations_sync=1',
+        query_params: { applicationId: seededApplicationIds[0] },
+      });
+    });
+
+    it('does not query credits when the client requests only installation statistics', async () => {
+      const select = jest.spyOn(clickHouse, 'selectOrThrow');
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_STATS,
+        variables: { id: applicationRegistrationId },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+      expect(select).not.toHaveBeenCalled();
+    });
+
+    it('scopes precise credits to the period, workspaces and application, uses the ClickHouse cache, and checks authorization', async () => {
+      const select = jest.spyOn(clickHouse, 'selectOrThrow');
+      const response = await findStats();
+
+      expect(response.body.errors).toBeUndefined();
+      expect(response.body.data.findAdminApplicationRegistrationStats).toEqual({
+        totalCreditsUsed: 3.000001,
+        creditsUsedBreakdown: [
+          {
+            label: 'HISTORICAL_OPERATION',
+            resource: null,
+            operation: null,
+            creditsUsed: 2,
+          },
+          {
+            label: null,
+            resource: 'LOGIC_FUNCTION',
+            operation: 'CODE_EXECUTION',
+            creditsUsed: 1.000001,
+          },
+        ],
+      });
+      const cacheHits = await getQueryCacheHits();
+      expect((await findStats()).body.data).toEqual(response.body.data);
+      expect(await getQueryCacheHits()).toBeGreaterThan(cacheHits);
+      const forbidden = await makeAdminPanelApiRequestAsNonServerAdmin({
+        query: findCreditsUsed,
+        variables: { id: applicationRegistrationId, ...period },
+      });
+
+      expect(forbidden.body.errors).toBeDefined();
+      expect(select).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      {},
+      { periodStart: period.periodEnd, periodEnd: period.periodStart },
+    ])(
+      'rejects missing or reversed periods before querying ClickHouse: %j',
+      async (dates) => {
+        const select = jest.spyOn(clickHouse, 'selectOrThrow');
+        const response = await findStats(dates);
+        expect(response.body.errors).toBeDefined();
+        expect(select).not.toHaveBeenCalled();
+      },
+    );
+
+    it('uses a different cache entry for a different period', async () => {
+      const response = await findStats({
+        periodStart: period.periodEnd,
+        periodEnd: new Date(periodEnd.getTime() + 1).toISOString(),
+      });
+      expect(response.body.errors).toBeUndefined();
+      expect(
+        response.body.data.findAdminApplicationRegistrationStats
+          .totalCreditsUsed,
+      ).toBe(8);
+    });
+
+    it('returns null when ClickHouse fails and recovers on the next request', async () => {
+      const select = jest
+        .spyOn(clickHouse, 'selectOrThrow')
+        .mockRejectedValueOnce(new Error('ClickHouse unavailable'));
+      const response = await findStats();
+
+      expect(response.body.errors).toBeUndefined();
+      expect(response.body.data.findAdminApplicationRegistrationStats).toEqual({
+        totalCreditsUsed: null,
+        creditsUsedBreakdown: null,
+      });
+      expect(
+        (await findStats()).body.data.findAdminApplicationRegistrationStats
+          .totalCreditsUsed,
+      ).toBe(3.000001);
+      expect(select).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('findAdminApplicationRegistrationStats', () => {
+    it('returns active installs, version distribution and the most installed version', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_STATS,
+        variables: { id: applicationRegistrationId },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const stats = response.body.data?.findAdminApplicationRegistrationStats;
+
+      expect(stats).toBeDefined();
+      expect(stats.activeInstalls).toBe(3);
+      expect(stats.autoUpdateEnabled).toBe(1);
+      expect(stats.suspendedInstalls).toBe(0);
+      expect(stats.mostInstalledVersion).toBe('2.0.0');
+
+      const distributionByVersion = Object.fromEntries(
+        stats.versionDistribution.map(
+          (entry: { version: string; count: number }) => [
+            entry.version,
+            entry.count,
+          ],
+        ),
+      );
+
+      expect(distributionByVersion).toEqual({ '2.0.0': 2, '1.0.0': 1 });
+      // Distribution is ordered by count DESC, so the top entry matches
+      // mostInstalledVersion.
+      expect(stats.versionDistribution[0].version).toBe('2.0.0');
+    });
+
+    it('excludes installs on soft-deleted workspaces', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_STATS,
+        variables: { id: applicationRegistrationId },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const stats = response.body.data?.findAdminApplicationRegistrationStats;
+
+      expect(stats.activeInstalls).toBe(3);
+      expect(stats.autoUpdateEnabled).toBe(1);
+      expect(
+        stats.versionDistribution.map(
+          (entry: { version: string }) => entry.version,
+        ),
+      ).not.toContain(DELETED_WORKSPACE_ONLY_VERSION);
+    });
+
+    it('rejects a caller without server admin access', async () => {
+      const response = await makeAdminPanelApiRequestAsNonServerAdmin({
+        query: FIND_STATS,
+        variables: { id: applicationRegistrationId },
+      });
+
+      expect(response.body.errors).toBeDefined();
+      expect(
+        response.body.data?.findAdminApplicationRegistrationStats,
+      ).toBeFalsy();
+    });
+  });
+
+  describe('findAdminApplicationRegistrationInstalledWorkspaces', () => {
+    it('returns installed workspaces ordered by display name with totalCount and hasMore', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: { input: { id: applicationRegistrationId, offset: 0 } },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result =
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces;
+
+      expect(result).toBeDefined();
+      expect(result.totalCount).toBe(3);
+      expect(result.hasMore).toBe(false);
+      expect(result.workspaces).toHaveLength(3);
+
+      // Ordered by workspace.displayName ASC — Apple before YCombinator.
+      expect(result.workspaces[0].displayName).toBe(
+        APPLE_WORKSPACE_DISPLAY_NAME,
+      );
+      expect(result.workspaces[0].version).toBe('2.0.0');
+      expect(result.workspaces[1].displayName).toBe(
+        YCOMBINATOR_WORKSPACE_DISPLAY_NAME,
+      );
+      expect(result.workspaces[2].displayName).toBe(
+        YCOMBINATOR_WORKSPACE_DISPLAY_NAME,
+      );
+    });
+
+    it('filters by workspace display name via searchTerm', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: {
+          input: {
+            id: applicationRegistrationId,
+            offset: 0,
+            searchTerm: APPLE_WORKSPACE_DISPLAY_NAME,
+          },
+        },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result =
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces;
+
+      expect(result.totalCount).toBe(1);
+      expect(result.hasMore).toBe(false);
+      expect(result.workspaces).toHaveLength(1);
+      expect(result.workspaces[0].displayName).toBe(
+        APPLE_WORKSPACE_DISPLAY_NAME,
+      );
+    });
+
+    it('returns an empty result instead of erroring when a search only matches installs on soft-deleted workspaces', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: {
+          input: {
+            id: applicationRegistrationId,
+            offset: 0,
+            searchTerm: DELETED_WORKSPACE_ONLY_VERSION,
+          },
+        },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result =
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces;
+
+      expect(result.totalCount).toBe(0);
+      expect(result.hasMore).toBe(false);
+      expect(result.workspaces).toHaveLength(0);
+    });
+
+    it('filters by application version via searchTerm', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: {
+          input: {
+            id: applicationRegistrationId,
+            offset: 0,
+            searchTerm: '1.0.0',
+          },
+        },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result =
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces;
+
+      expect(result.totalCount).toBe(1);
+      expect(result.workspaces).toHaveLength(1);
+      expect(result.workspaces[0].version).toBe('1.0.0');
+      expect(result.workspaces[0].displayName).toBe(
+        YCOMBINATOR_WORKSPACE_DISPLAY_NAME,
+      );
+    });
+
+    it('rejects a caller without server admin access', async () => {
+      const response = await makeAdminPanelApiRequestAsNonServerAdmin({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: { input: { id: applicationRegistrationId, offset: 0 } },
+      });
+
+      expect(response.body.errors).toBeDefined();
+      expect(
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces,
+      ).toBeFalsy();
+    });
+  });
+
+  describe('findAllApplicationRegistrations', () => {
+    it('filters registrations by name via searchTerm', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_ALL_REGISTRATIONS,
+        variables: { limit: 25, offset: 0, searchTerm: REGISTRATION_NAME },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result = response.body.data?.findAllApplicationRegistrations;
+
+      expect(result.totalCount).toBe(1);
+      expect(result.hasMore).toBe(false);
+      expect(result.registrations).toHaveLength(1);
+      expect(result.registrations[0].id).toBe(applicationRegistrationId);
+      expect(result.registrations[0].name).toBe(REGISTRATION_NAME);
+    });
+
+    it('returns no registrations when searchTerm matches nothing', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_ALL_REGISTRATIONS,
+        variables: {
+          limit: 25,
+          offset: 0,
+          searchTerm: 'no-registration-matches-this-search-term',
+        },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result = response.body.data?.findAllApplicationRegistrations;
+
+      expect(result.totalCount).toBe(0);
+      expect(result.registrations).toHaveLength(0);
+    });
+
+    it('rejects a caller without server admin access', async () => {
+      const response = await makeAdminPanelApiRequestAsNonServerAdmin({
+        query: FIND_ALL_REGISTRATIONS,
+        variables: { limit: 25, offset: 0 },
+      });
+
+      expect(response.body.errors).toBeDefined();
+      expect(response.body.data?.findAllApplicationRegistrations).toBeFalsy();
+    });
+  });
+
+  describe('suspended workspace installs', () => {
+    let suspendedWorkspaceId: string;
+    let suspendedApplicationId: string;
+
+    beforeAll(async () => {
+      suspendedWorkspaceId = randomUUID();
+
+      const [{ workspaceCustomApplicationId }] = await dataSource.query(
+        `SELECT "workspaceCustomApplicationId" FROM core."workspace" WHERE id = $1`,
+        [SEED_APPLE_WORKSPACE_ID],
+      );
+
+      await dataSource.query(
+        `INSERT INTO core."workspace"
+          (id, "displayName", subdomain, "activationStatus", "defaultRoleId",
+           "databaseSchema", "workspaceCustomApplicationId")
+         VALUES ($1, $2, $3, 'SUSPENDED', $4, $5, $6)`,
+        [
+          suspendedWorkspaceId,
+          'admin-panel-stats-suspended-workspace',
+          `admin-panel-stats-suspended-${suspendedWorkspaceId}`,
+          randomUUID(),
+          'admin_panel_stats_suspended',
+          workspaceCustomApplicationId,
+        ],
+      );
+
+      const { id } = await insertApplication({
+        workspaceId: suspendedWorkspaceId,
+        version: '2.0.0',
+      });
+
+      suspendedApplicationId = id;
+    });
+
+    afterAll(async () => {
+      await dataSource.query(`DELETE FROM core."application" WHERE id = $1`, [
+        suspendedApplicationId,
+      ]);
+      await dataSource.query(`DELETE FROM core."workspace" WHERE id = $1`, [
+        suspendedWorkspaceId,
+      ]);
+    });
+
+    it('counts them as installs and reports them separately', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_STATS,
+        variables: { id: applicationRegistrationId },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const stats = response.body.data?.findAdminApplicationRegistrationStats;
+
+      expect(stats.activeInstalls).toBe(4);
+      expect(stats.suspendedInstalls).toBe(1);
+    });
+
+    it('lists them alongside installs on active workspaces', async () => {
+      const response = await makeAdminPanelApiRequest({
+        query: FIND_INSTALLED_WORKSPACES,
+        variables: {
+          input: {
+            id: applicationRegistrationId,
+            offset: 0,
+            searchTerm: 'admin-panel-stats-suspended-workspace',
+          },
+        },
+      });
+
+      expect(response.body.errors).toBeUndefined();
+
+      const result =
+        response.body.data?.findAdminApplicationRegistrationInstalledWorkspaces;
+
+      expect(result.totalCount).toBe(1);
+      expect(result.workspaces[0].id).toBe(suspendedWorkspaceId);
+    });
+  });
+});

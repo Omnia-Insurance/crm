@@ -1,28 +1,133 @@
+import { DropdownRoot } from '@/ui/layout/dropdown/components/DropdownRoot';
+import { DropdownContent } from '@/ui/layout/dropdown/components/DropdownContent';
 import { styled } from '@linaria/react';
-import { useContext } from 'react';
-import { Section } from 'twenty-ui/layout';
-import { ThemeContext } from 'twenty-ui/theme-constants';
-import { SettingsToolsTable } from '~/pages/settings/ai/components/SettingsToolsTable';
+import { useLingui } from '@lingui/react/macro';
+import { useState } from 'react';
+import { isDefined } from 'twenty-shared/utils';
+import { SearchInput } from 'twenty-ui/components/input';
+import { Section } from 'twenty-ui/components/layout';
+import { Dropdown } from 'twenty-ui/components/navigation';
+import { SettingsRow } from 'twenty-ui/components/settings';
+import { IconLock, IconPuzzle, IconTool } from 'twenty-ui/icon';
+import { themeCssVariables } from 'twenty-ui/theme';
+import { SettingsAgentToolsTable } from '~/pages/settings/ai/components/SettingsAgentToolsTable';
+import { useSettingsAgentToolsTable } from '~/pages/settings/ai/hooks/useSettingsAgentToolsTable';
+import { type SettingsAgentToolItem } from '~/pages/settings/ai/types/SettingsAgentToolItem';
+import { isOwnedByInstalledApplication } from '@/applications/utils/isOwnedByInstalledApplication';
+import { normalizeSearchText } from 'twenty-ui/utilities';
+import { SettingsSearchFilterTrigger } from '@/settings/components/SettingsSearchFilterTrigger';
 
-const StyledCoverImage = styled.div`
-  background-position: center;
-  background-size: cover;
-  height: 160px;
-  overflow: hidden;
+const StyledSearchContainer = styled.div`
+  padding-bottom: ${themeCssVariables.spacing[2]};
 `;
 
 export const SettingsAgentToolsTab = () => {
-  const { colorScheme } = useContext(ThemeContext);
-  const coverImage =
-    colorScheme === 'light'
-      ? '/images/ai/ai-tools-cover-light.png'
-      : '/images/ai/ai-tools-cover-dark.png';
+  const { t } = useLingui();
+  const {
+    allTools,
+    applicationById,
+    marketplaceAppByUniversalIdentifier,
+    currentWorkspace,
+    isLoading,
+  } = useSettingsAgentToolsTable();
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showCustomTools, setShowCustomTools] = useState(true);
+  const [showManagedTools, setShowManagedTools] = useState(true);
+  const [showStandardTools, setShowStandardTools] = useState(true);
+
+  const workspaceCustomApplicationId =
+    currentWorkspace?.workspaceCustomApplication?.id;
+
+  const isManaged = (applicationId?: string | null) =>
+    isOwnedByInstalledApplication({
+      applicationId,
+      workspaceCustomApplicationId,
+    });
+
+  const isCustom = (tool: SettingsAgentToolItem) =>
+    isDefined(tool.applicationId);
+
+  const filteredTools = allTools
+    .filter((tool) => {
+      const searchNormalized = normalizeSearchText(searchTerm);
+
+      const matchesSearch =
+        normalizeSearchText(tool.label ?? tool.name).includes(
+          searchNormalized,
+        ) ||
+        normalizeSearchText(tool.description ?? '').includes(searchNormalized);
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      if (!isCustom(tool)) {
+        return showStandardTools;
+      }
+
+      if (isManaged(tool.applicationId)) {
+        return showManagedTools;
+      }
+
+      return showCustomTools;
+    })
+    .sort((a, b) => (a.label ?? a.name).localeCompare(b.label ?? b.name));
+
   return (
-    <>
-      <Section>
-        <StyledCoverImage style={{ backgroundImage: `url('${coverImage}')` }} />
-      </Section>
-      <SettingsToolsTable />
-    </>
+    <Section.Root>
+      <Section.Header
+        title={t`Tools`}
+        description={t`Use filter to see existing tools or create your own`}
+      />
+      <StyledSearchContainer>
+        <SearchInput
+          placeholder={t`Search a tool...`}
+          value={searchTerm}
+          onValueChange={setSearchTerm}
+          actions={
+            <DropdownRoot
+              dropdownId="settings-tools-filter-dropdown"
+              type="panel"
+            >
+              <SettingsSearchFilterTrigger />
+              <DropdownContent
+                side="bottom"
+                align="end"
+                sideOffset={8}
+                alignOffset={0}
+              >
+                <Dropdown.Section>
+                  <SettingsRow
+                    startElement={<IconTool />}
+                    onCheckedChange={setShowCustomTools}
+                    checked={showCustomTools}
+                  >{t`Custom`}</SettingsRow>
+                  <SettingsRow
+                    startElement={<IconLock />}
+                    onCheckedChange={setShowManagedTools}
+                    checked={showManagedTools}
+                  >{t`Managed`}</SettingsRow>
+                  <SettingsRow
+                    startElement={<IconPuzzle />}
+                    onCheckedChange={setShowStandardTools}
+                    checked={showStandardTools}
+                  >{t`Standard`}</SettingsRow>
+                </Dropdown.Section>
+              </DropdownContent>
+            </DropdownRoot>
+          }
+        />
+      </StyledSearchContainer>
+      <SettingsAgentToolsTable
+        tools={filteredTools}
+        isLoading={isLoading}
+        applicationById={applicationById}
+        marketplaceAppByUniversalIdentifier={
+          marketplaceAppByUniversalIdentifier
+        }
+        currentWorkspace={currentWorkspace}
+      />
+    </Section.Root>
   );
 };

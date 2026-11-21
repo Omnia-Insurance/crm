@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h2 align="center" >The #1 Open-Source CRM</h2>
+<h2 align="center">The #1 Open-Source CRM</h2>
 
 <p align="center"><a href="https://twenty.com"><img src="./packages/twenty-website/public/images/readme/globe-icon.svg" width="12" height="12"/> Website</a> · <a href="https://docs.twenty.com"><img src="./packages/twenty-website/public/images/readme/book-icon.svg" width="12" height="12"/> Documentation</a> · <a href="https://github.com/orgs/twentyhq/projects/1"><img src="./packages/twenty-website/public/images/readme/map-icon.svg" width="12" height="12"/> Roadmap </a> · <a href="https://discord.gg/cx5n4Jzs57"><img src="./packages/twenty-website/public/images/readme/discord-icon.svg" width="12" height="12"/> Discord</a> · <a href="https://www.figma.com/file/xt8O9mFeLl46C5InWwoMrN/Twenty"><img src="./packages/twenty-website/public/images/readme/figma-icon.webp"  width="12" height="12"/>  Figma</a></p>
 
@@ -39,7 +39,10 @@ The fastest way to get started. Sign up at [twenty.com](https://twenty.com) and 
 Scaffold a new app with the Twenty CLI:
 
 ```bash
-npx create-twenty-app my-app
+npm install -g twenty
+twenty app init my-app
+cd my-app
+yarn install
 ```
 
 Define objects, fields, and views as code:
@@ -63,10 +66,19 @@ export default defineObject({
 Then ship it to your workspace:
 
 ```bash
-npx twenty app:publish --private
+twenty auth login --url https://your-workspace.twenty.com
+twenty app publish --private
 ```
 
 See the [app development guide](https://docs.twenty.com/developers/extend/apps/getting-started) for objects, views, agents, and logic functions.
+
+Building with a coding agent? Install the official [Twenty app skills](./packages/twenty-agent-skills), which work in Claude Code, Codex, Cursor, Pi, and any other harness supported by the `skills` CLI:
+
+```bash
+npx skills add https://github.com/twentyhq/twenty/tree/agent-skills --list
+```
+
+The `agent-skills` branch is created by the first successful publish from `main`. Until then, use the [local build instructions](./packages/twenty-agent-skills#local-development). [`SKILLS.md`](./SKILLS.md) explains the other skill families in this repository and who they are for.
 
 ### <img src="./packages/twenty-website/public/images/readme/rocket-icon.svg" width="14" height="14"/> Self-hosting
 
@@ -147,13 +159,9 @@ Want to go deeper? Read the <a href="https://docs.twenty.com/user-guide/introduc
 - <a href="https://nestjs.com/"><img src="./packages/twenty-website/public/images/readme/stack-nestjs.svg" width="14" height="14"/> NestJS</a>, with <a href="https://bullmq.io/">BullMQ</a>, <a href="https://www.postgresql.org/"><img src="./packages/twenty-website/public/images/readme/stack-postgresql.svg" width="14" height="14"/> PostgreSQL</a>, <a href="https://redis.io/"><img src="./packages/twenty-website/public/images/readme/stack-redis.svg" width="14" height="14"/> Redis</a>
 - <a href="https://reactjs.org/"><img src="./packages/twenty-website/public/images/readme/stack-react.svg" width="14" height="14"/> React</a>, with <a href="https://jotai.org/">Jotai</a>, <a href="https://linaria.dev/">Linaria</a> and <a href="https://lingui.dev/">Lingui</a>
 
-
-
 # Thanks
 
 <p align="center">
-  <a href="https://www.chromatic.com/"><img src="./packages/twenty-website/public/images/readme/chromatic.webp" height="28" alt="Chromatic" /></a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://greptile.com"><img src="./packages/twenty-website/public/images/readme/greptile.webp" height="28" alt="Greptile" /></a>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://sentry.io/"><img src="./packages/twenty-website/public/images/readme/sentry.webp" height="28" alt="Sentry" /></a>
@@ -161,8 +169,7 @@ Want to go deeper? Read the <a href="https://docs.twenty.com/user-guide/introduc
   <a href="https://crowdin.com/"><img src="./packages/twenty-website/public/images/readme/crowdin.webp" height="28" alt="Crowdin" /></a>
 </p>
 
-  Thanks to these amazing services that we use and recommend for UI testing (Chromatic), code review (Greptile), catching bugs (Sentry) and translating (Crowdin).
-
+Thanks to these amazing services that we use and recommend for code review (Greptile), catching bugs (Sentry) and translating (Crowdin).
 
 # Join the Community
 

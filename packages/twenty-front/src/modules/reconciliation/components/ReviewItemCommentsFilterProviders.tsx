@@ -1,60 +1,31 @@
+import { type PropsWithChildren } from 'react';
+import { StandardObjectNameSingular } from 'twenty-shared/types';
+
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
-import { useColumnDefinitionsFromObjectMetadata } from '@/object-metadata/hooks/useColumnDefinitionsFromObjectMetadata';
 import { RecordComponentInstanceContextsWrapper } from '@/object-record/components/RecordComponentInstanceContextsWrapper';
+import { useObjectPermissions } from '@/object-record/hooks/useObjectPermissions';
 import { RecordIndexContextProvider } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useRecordIndexFieldMetadataDerivedStates } from '@/object-record/record-index/hooks/useRecordIndexFieldMetadataDerivedStates';
 import { ViewComponentInstanceContext } from '@/views/states/contexts/ViewComponentInstanceContext';
-import { useInitViewBar } from '@/views/hooks/useInitViewBar';
-import { type PropsWithChildren, useEffect } from 'react';
-import { CoreObjectNameSingular } from 'twenty-shared/types';
 
-type Props = PropsWithChildren<{
+type ReviewItemCommentsFilterProvidersProps = PropsWithChildren<{
   viewBarId: string;
 }>;
 
-const InitEffect = ({ viewBarId }: { viewBarId: string }) => {
-  const { objectMetadataItem: taskMetadata } = useObjectMetadataItem({
-    objectNameSingular: CoreObjectNameSingular.Task,
-  });
-
-  const { columnDefinitions } =
-    useColumnDefinitionsFromObjectMetadata(taskMetadata);
-
-  const { setViewObjectMetadataId, setAvailableFieldDefinitions } =
-    useInitViewBar(viewBarId);
-
-  useEffect(() => {
-    setViewObjectMetadataId?.(taskMetadata.id);
-    setAvailableFieldDefinitions?.(columnDefinitions);
-  }, [
-    setViewObjectMetadataId,
-    setAvailableFieldDefinitions,
-    taskMetadata.id,
-    columnDefinitions,
-  ]);
-
-  return null;
-};
-
-/**
- * Mounts the context stack Twenty's native filter UI expects, scoped to a
- * dedicated `viewBarId` and bound to the Task object metadata. Used by the
- * comments rail on the reconciliation review page so filters built with
- * <ViewBarFilterDropdown /> resolve task fields (assignee, status, dueAt,
- * createdAt) — not reviewItem fields.
- */
+// Scopes the native filter UI to the comments panel and binds it to Task
+// fields, so filters resolve against tasks rather than review items.
 export const ReviewItemCommentsFilterProviders = ({
   viewBarId,
   children,
-}: Props) => {
-  const { objectMetadataItem: taskMetadata } = useObjectMetadataItem({
-    objectNameSingular: CoreObjectNameSingular.Task,
+}: ReviewItemCommentsFilterProvidersProps) => {
+  const { objectMetadataItem: taskObjectMetadataItem } = useObjectMetadataItem({
+    objectNameSingular: StandardObjectNameSingular.Task,
   });
 
-  const derived = useRecordIndexFieldMetadataDerivedStates(
-    taskMetadata,
-    viewBarId,
-  );
+  const { objectPermissionsByObjectMetadataId } = useObjectPermissions();
+
+  const recordIndexFieldMetadataDerivedStates =
+    useRecordIndexFieldMetadataDerivedStates(taskObjectMetadataItem, viewBarId);
 
   return (
     <RecordComponentInstanceContextsWrapper componentInstanceId={viewBarId}>
@@ -63,16 +34,15 @@ export const ReviewItemCommentsFilterProviders = ({
           value={{
             indexIdentifierUrl: () => '',
             onIndexRecordsLoaded: () => {},
-            objectNamePlural: taskMetadata.namePlural,
-            objectNameSingular: taskMetadata.nameSingular,
-            objectMetadataItem: taskMetadata,
-            objectPermissionsByObjectMetadataId: {},
+            objectNamePlural: taskObjectMetadataItem.namePlural,
+            objectNameSingular: taskObjectMetadataItem.nameSingular,
+            objectMetadataItem: taskObjectMetadataItem,
+            objectPermissionsByObjectMetadataId,
             recordIndexId: viewBarId,
             viewBarInstanceId: viewBarId,
-            ...derived,
+            ...recordIndexFieldMetadataDerivedStates,
           }}
         >
-          <InitEffect viewBarId={viewBarId} />
           {children}
         </RecordIndexContextProvider>
       </ViewComponentInstanceContext.Provider>

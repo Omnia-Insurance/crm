@@ -1,12 +1,15 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Logger } from '@nestjs/common';
+import { Test, type TestingModule } from '@nestjs/testing';
 
-import { IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
+import { type IngestionPipelineEntity } from 'src/engine/metadata-modules/ingestion-pipeline/entities/ingestion-pipeline.entity';
 import { ConvosoCallPreprocessor } from 'src/engine/metadata-modules/ingestion-pipeline/preprocessors/convoso-call.preprocessor';
-import { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 
 describe('ConvosoCallPreprocessor', () => {
   let preprocessor: ConvosoCallPreprocessor;
-  let mockWorkspaceOrmManager: jest.Mocked<GlobalWorkspaceOrmManager>;
+  let mockWorkspaceOrmManager: {
+    getRepositoryWithoutPermissionChecks: jest.Mock;
+  };
   let mockLeadSourceRepo: {
     find: jest.Mock;
     findOne: jest.Mock;
@@ -72,7 +75,7 @@ describe('ConvosoCallPreprocessor', () => {
     };
 
     mockWorkspaceOrmManager = {
-      getRepository: jest.fn((_, objectName) => {
+      getRepositoryWithoutPermissionChecks: jest.fn((objectName: string) => {
         if (objectName === 'leadSource') {
           return mockLeadSourceRepo;
         }
@@ -83,13 +86,13 @@ describe('ConvosoCallPreprocessor', () => {
 
         return {};
       }),
-    } as any;
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ConvosoCallPreprocessor,
         {
-          provide: GlobalWorkspaceOrmManager,
+          provide: WorkspaceOrmManager,
           useValue: mockWorkspaceOrmManager,
         },
       ],
@@ -99,7 +102,7 @@ describe('ConvosoCallPreprocessor', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   afterAll(() => {
@@ -243,9 +246,9 @@ describe('ConvosoCallPreprocessor', () => {
           },
         ],
       }),
-    } as any);
+    });
     mockPersonRepo.findOne.mockResolvedValue(null);
-    mockPersonRepo.save.mockResolvedValue({ id: 'person-123' });
+    mockPersonRepo.save.mockResolvedValue([{ id: 'person-123' }]);
 
     const result = await preprocessor.preProcess(
       {
@@ -302,9 +305,9 @@ describe('ConvosoCallPreprocessor', () => {
           },
         ],
       }),
-    } as any);
+    });
     mockPersonRepo.findOne.mockResolvedValue(null);
-    mockPersonRepo.save.mockResolvedValue({ id: 'person-456' });
+    mockPersonRepo.save.mockResolvedValue([{ id: 'person-456' }]);
 
     await preprocessor.preProcess(
       {
@@ -348,7 +351,7 @@ describe('ConvosoCallPreprocessor', () => {
           },
         ],
       }),
-    } as any);
+    });
     mockPersonRepo.findOne.mockResolvedValue({
       id: 'person-existing',
       name: {
@@ -406,9 +409,9 @@ describe('ConvosoCallPreprocessor', () => {
           },
         ],
       }),
-    } as any);
+    });
     mockPersonRepo.findOne.mockResolvedValue(null);
-    mockPersonRepo.save.mockResolvedValue({ id: 'person-789' });
+    mockPersonRepo.save.mockResolvedValue([{ id: 'person-789' }]);
 
     await preprocessor.preProcess(
       {
@@ -432,5 +435,72 @@ describe('ConvosoCallPreprocessor', () => {
         lastName: '',
       },
     });
+  });
+
+  it('links the created Person and Lead Source ids from the saved rows', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ success: true, data: [] }),
+    });
+    mockLeadSourceRepo.findOne.mockResolvedValue(null);
+    mockLeadSourceRepo.save.mockResolvedValue([{ id: 'lead-source-new' }]);
+    mockPersonRepo.findOne.mockResolvedValue(null);
+    mockPersonRepo.save.mockResolvedValue([{ id: 'person-new' }]);
+
+    const result = await preprocessor.preProcess(
+      {
+        uniqueid: 'call-new-lead',
+        call_type: 'Inbound',
+        queue_name: 'Google ACA National',
+        source_name: 'Brand New Source',
+        list_id: '4242',
+        phone_number: '2391231802',
+      },
+      buildPipeline(),
+      workspaceId,
+    );
+
+    expect(mockLeadSourceRepo.save).toHaveBeenCalledWith({
+      name: 'Brand New Source',
+      convosoListId: '4242',
+    });
+    expect(mockPersonRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ leadSourceId: 'lead-source-new' }),
+    );
+    expect(result?._leadSourceId).toBe('lead-source-new');
+    expect(result?._personId).toBe('person-new');
+  });
+
+  it('leaves the call unlinked and logs no phone number when the Person save returns no row', async () => {
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ success: true, data: [] }),
+    });
+    mockPersonRepo.findOne.mockResolvedValue(null);
+    mockPersonRepo.save.mockResolvedValue([]);
+
+    const result = await preprocessor.preProcess(
+      {
+        uniqueid: 'call-no-row',
+        call_type: 'Inbound',
+        queue_name: 'SMS Cancel Inbound',
+        phone_number: '2391231802',
+      },
+      buildPipeline(),
+      workspaceId,
+    );
+
+    expect(result?._personId).toBeNull();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Person save returned no record'),
+    );
+
+    for (const [message] of errorSpy.mock.calls) {
+      expect(String(message)).not.toContain('2391231802');
+    }
   });
 });

@@ -49,6 +49,8 @@ export const normalizeTableData = (
           return acc;
         }
         case SpreadsheetColumnType.matched: {
+          // OMNIA-CUSTOM: stray spaces in spreadsheet cells must not reach the
+          // record or defeat duplicate matching
           const trimmedValue = typeof curr === 'string' ? curr.trim() : curr;
           acc[column.value] = trimmedValue === '' ? undefined : trimmedValue;
           return acc;

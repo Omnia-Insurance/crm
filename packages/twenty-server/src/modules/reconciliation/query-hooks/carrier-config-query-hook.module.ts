@@ -6,11 +6,9 @@
 
 import { Module } from '@nestjs/common';
 
-import { GlobalWorkspaceDataSourceModule } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-datasource.module';
 import { CarrierConfigUpdateOnePreQueryHook } from 'src/modules/reconciliation/query-hooks/carrier-config-update-one.pre-query.hook';
 
 @Module({
-  imports: [GlobalWorkspaceDataSourceModule],
   providers: [CarrierConfigUpdateOnePreQueryHook],
 })
 export class CarrierConfigQueryHookModule {}

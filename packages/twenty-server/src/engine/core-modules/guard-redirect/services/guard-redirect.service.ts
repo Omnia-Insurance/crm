@@ -49,17 +49,17 @@ export class GuardRedirectService {
   getSubdomainAndCustomDomainFromContext(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<Request>();
 
-    const subdomainAndDomainFromReferer = request.headers.referer
-      ? this.domainsServerConfigService.getSubdomainAndDomainFromUrl(
+    const subdomainAndCustomDomainFromReferer = request.headers.referer
+      ? this.domainsServerConfigService.getSubdomainAndCustomDomainFromUrl(
           request.headers.referer,
         )
       : null;
 
-    return subdomainAndDomainFromReferer &&
-      subdomainAndDomainFromReferer.subdomain
+    return subdomainAndCustomDomainFromReferer &&
+      subdomainAndCustomDomainFromReferer.subdomain
       ? {
-          subdomain: subdomainAndDomainFromReferer.subdomain,
-          customDomain: subdomainAndDomainFromReferer.domain,
+          subdomain: subdomainAndCustomDomainFromReferer.subdomain,
+          customDomain: subdomainAndCustomDomainFromReferer.customDomain,
         }
       : {
           subdomain: this.twentyConfigService.get('DEFAULT_SUBDOMAIN'),
@@ -71,8 +71,9 @@ export class GuardRedirectService {
     if (
       err instanceof AuthException &&
       err.code !== AuthExceptionCode.INTERNAL_SERVER_ERROR
-    )
+    ) {
       return;
+    }
 
     this.exceptionHandlerService.captureExceptions([err], {
       workspace: {
@@ -85,6 +86,9 @@ export class GuardRedirectService {
     error,
     workspace,
     pathname,
+    searchParams,
+    hash,
+    errorMessage,
   }: {
     error: Error | AuthException;
     workspace: {
@@ -94,22 +98,30 @@ export class GuardRedirectService {
       isCustomDomainEnabled?: boolean;
     };
     pathname: string;
+    searchParams?: Record<string, string>;
+    hash?: string;
+    errorMessage?: string;
   }) {
     this.captureException(error, workspace.id);
 
-    const errorMessage =
-      error instanceof AuthException
-        ? error.message
-        : `Authentication error: ${error instanceof Error ? error.message : String(error)}`;
-
-    return this.workspaceDomainsService.computeWorkspaceRedirectErrorUrl(
-      errorMessage,
-      {
+    return this.workspaceDomainsService.computeWorkspaceRedirectErrorUrl({
+      errorMessage: errorMessage ?? this.getDefaultRedirectErrorMessage(error),
+      workspace: {
         subdomain: workspace.subdomain,
         customDomain: workspace.customDomain,
         isCustomDomainEnabled: workspace.isCustomDomainEnabled ?? false,
       },
       pathname,
-    );
+      searchParams,
+      hash,
+    });
+  }
+
+  private getDefaultRedirectErrorMessage(error: Error | AuthException) {
+    if (error instanceof AuthException) {
+      return error.message;
+    }
+
+    return `Authentication error: ${error.message}`;
   }
 }

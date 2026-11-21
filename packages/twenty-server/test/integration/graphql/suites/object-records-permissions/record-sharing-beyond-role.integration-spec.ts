@@ -1,0 +1,618 @@
+import { randomUUID } from 'node:crypto';
+
+import { parse } from 'graphql';
+import { EVERYONE_PRINCIPAL_ID } from 'twenty-shared/constants';
+import { type ObjectRecordEvent } from 'twenty-shared/database-events';
+import { isDefined } from 'twenty-shared/utils';
+import {
+  FeatureFlagKey,
+  RecordShareAccessLevel,
+  RowLevelPermissionPredicateOperand,
+} from 'twenty-shared/types';
+
+import { createOneOperationFactory } from 'test/integration/graphql/utils/create-one-operation-factory.util';
+import { deleteOneOperationFactory } from 'test/integration/graphql/utils/delete-one-operation-factory.util';
+import { destroyManyOperationFactory } from 'test/integration/graphql/utils/destroy-many-operation-factory.util';
+import { findManyOperationFactory } from 'test/integration/graphql/utils/find-many-operation-factory.util';
+import { makeGraphqlApiRequest } from 'test/integration/graphql/utils/make-graphql-api-request.util';
+import { mergeManyOperationFactory } from 'test/integration/graphql/utils/merge-many-operation-factory.util';
+import { restoreOneOperationFactory } from 'test/integration/graphql/utils/restore-one-operation-factory.util';
+import { updateOneOperationFactory } from 'test/integration/graphql/utils/update-one-operation-factory.util';
+import { createOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/create-one-object-metadata.util';
+import { deleteOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/delete-one-object-metadata.util';
+import { updateOneObjectMetadata } from 'test/integration/metadata/suites/object-metadata/utils/update-one-object-metadata.util';
+import { upsertObjectPermissions } from 'test/integration/metadata/suites/object-permission/utils/upsert-object-permissions.util';
+import { findOneRoleByLabel } from 'test/integration/metadata/suites/role/utils/find-one-role-by-label.util';
+import { upsertRowLevelPermissionPredicates } from 'test/integration/metadata/suites/row-level-permission-predicate/utils/upsert-row-level-permission-predicates.util';
+import { updateFeatureFlag } from 'test/integration/metadata/suites/utils/update-feature-flag.util';
+import { makeMetadataApiRequest } from 'test/integration/metadata/suites/utils/make-metadata-api-request.util';
+import { resolveWorkspaceMemberAuthContext } from 'test/integration/utils/resolve-workspace-member-auth-context.util';
+import { getAppProviderByClassName } from 'test/integration/utils/get-app-provider-by-class-name.util';
+
+import { type RecordSharePrincipalInput } from 'src/engine/permissions/record-share/dtos/record-sharing.dto';
+import { type PrincipalPermissionsReadService } from 'src/engine/permissions/principal-permissions-read.service';
+import { type RecordEventPermissionsReadService } from 'src/engine/permissions/record-event-permissions-read.service';
+import { type RecordPermissionsReadService } from 'src/engine/permissions/record-permissions-read.service';
+import { findFlatEntityByIdInFlatEntityMaps } from 'src/engine/metadata-modules/flat-entity/utils/find-flat-entity-by-id-in-flat-entity-maps.util';
+import { type WorkspaceCacheService } from 'src/engine/workspace-cache/services/workspace-cache.service';
+import { type RecordShareStorageService } from 'src/engine/permissions/internal/record-share/services/record-share-storage.service';
+import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
+import { WORKSPACE_MEMBER_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/data/constants/workspace-member-data-seeds.constant';
+
+const OBJECT_NAME = 'beyondRoleRecord';
+const OBJECT_PLURAL = 'beyondRoleRecords';
+const SHARED_RECORD_ID = randomUUID();
+const OTHER_RECORD_ID = randomUUID();
+const workspaceId = SEED_APPLE_WORKSPACE_ID;
+const JONY = { workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY };
+const SET_SHARE = parse(
+  `mutation SetShare($target: RecordTargetInput!, $principal: RecordSharePrincipalInput!, $accessLevel: RecordShareAccessLevel!) { setRecordShare(target: $target, principal: $principal, accessLevel: $accessLevel) { canManageSharing } }`,
+);
+const SET_PRIVATE = parse(
+  `mutation SetPrivate($target: RecordTargetInput!, $isPrivate: Boolean!) { setRecordPrivate(target: $target, isPrivate: $isPrivate) { canManageSharing } }`,
+);
+const READ_SHARING = parse(
+  `query RecordSharing($target: RecordTargetInput!) { recordSharing(target: $target) { canManageSharing permissions { canRead canUpdate canDelete } shares { principalId } } }`,
+);
+
+describe('Records shared beyond the role that can access their object', () => {
+  let objectMetadataId: string;
+  let nameFieldMetadataId: string;
+  let memberRoleId: string;
+  let shares: RecordShareStorageService;
+  const target = (recordId = SHARED_RECORD_ID) => ({
+    objectMetadataId,
+    recordId,
+  });
+
+  const setRecordSharingAndPrivateRecordsEnabled = async (value: boolean) => {
+    for (const featureFlag of [
+      FeatureFlagKey.IS_RECORD_LEVEL_SHARING_ENABLED,
+      FeatureFlagKey.IS_PRIVATE_RECORDS_ENABLED,
+    ]) {
+      await updateFeatureFlag({ featureFlag, value, expectToFail: false });
+    }
+  };
+
+  const setShare = ({
+    principal,
+    accessLevel = RecordShareAccessLevel.READ,
+    token = APPLE_JANE_ADMIN_ACCESS_TOKEN,
+  }: {
+    principal: RecordSharePrincipalInput;
+    accessLevel?: RecordShareAccessLevel;
+    token?: string;
+  }) =>
+    makeMetadataApiRequest(
+      {
+        query: SET_SHARE,
+        variables: { target: target(), principal, accessLevel },
+      },
+      token,
+    );
+
+  const setPrivate = ({
+    isPrivate,
+    token = APPLE_JANE_ADMIN_ACCESS_TOKEN,
+  }: {
+    isPrivate: boolean;
+    token?: string;
+  }) =>
+    makeMetadataApiRequest(
+      {
+        query: SET_PRIVATE,
+        variables: { target: target(), isPrivate },
+      },
+      token,
+    );
+
+  const setMemberObjectAccess = (canAccessObject: boolean) =>
+    upsertObjectPermissions({
+      expectToFail: false,
+      input: {
+        roleId: memberRoleId,
+        objectPermissions: [
+          {
+            objectMetadataId,
+            canReadObjectRecords: canAccessObject,
+            canUpdateObjectRecords: canAccessObject,
+            canSoftDeleteObjectRecords: canAccessObject,
+            canDestroyObjectRecords: canAccessObject,
+          },
+        ],
+      },
+    });
+
+  const findIdsAsJony = async () => {
+    const response = await makeGraphqlApiRequest(
+      findManyOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        objectMetadataPluralName: OBJECT_PLURAL,
+        gqlFields: 'id name',
+        filter: { id: { in: [SHARED_RECORD_ID, OTHER_RECORD_ID] } },
+      }),
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    return {
+      errors: response.body.errors,
+      ids: (response.body.data?.[OBJECT_PLURAL]?.edges ?? []).map(
+        ({ node }: { node: { id: string } }) => node.id,
+      ),
+    };
+  };
+
+  const renameAsJony = (name: string) =>
+    makeGraphqlApiRequest(
+      updateOneOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        gqlFields: 'id',
+        recordId: SHARED_RECORD_ID,
+        data: { name },
+      }),
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+  beforeAll(async () => {
+    shares = getAppProviderByClassName<RecordShareStorageService>(
+      'RecordShareStorageService',
+    );
+    memberRoleId = (await findOneRoleByLabel({ label: 'Member' })).id;
+
+    const { data } = await createOneObjectMetadata({
+      input: {
+        nameSingular: OBJECT_NAME,
+        namePlural: OBJECT_PLURAL,
+        labelSingular: 'Beyond role record',
+        labelPlural: 'Beyond role records',
+        icon: 'IconShare',
+        isLabelSyncedWithName: false,
+      },
+      gqlFields: 'id labelIdentifierFieldMetadataId',
+    });
+
+    objectMetadataId = data.createOneObject.id;
+    // Custom objects come with a name field as their label identifier
+    nameFieldMetadataId = data.createOneObject.labelIdentifierFieldMetadataId!;
+
+    for (const [id, name] of [
+      [SHARED_RECORD_ID, 'Shared'],
+      [OTHER_RECORD_ID, 'Visible'],
+    ]) {
+      const created = await makeGraphqlApiRequest(
+        createOneOperationFactory({
+          objectMetadataSingularName: OBJECT_NAME,
+          gqlFields: 'id',
+          data: { id, name },
+        }),
+      );
+
+      expect(created.body.errors).toBeUndefined();
+    }
+
+    await setRecordSharingAndPrivateRecordsEnabled(true);
+  });
+
+  beforeEach(async () => {
+    await shares.deleteByRecordIds({
+      workspaceId,
+      objectMetadataId,
+      recordIds: [SHARED_RECORD_ID, OTHER_RECORD_ID],
+    });
+    await setMemberObjectAccess(false);
+  });
+
+  afterAll(async () => {
+    await setRecordSharingAndPrivateRecordsEnabled(false);
+    await setMemberObjectAccess(true);
+    await shares.deleteByRecordIds({
+      workspaceId,
+      objectMetadataId,
+      recordIds: [SHARED_RECORD_ID, OTHER_RECORD_ID],
+    });
+    await makeGraphqlApiRequest(
+      destroyManyOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        objectMetadataPluralName: OBJECT_PLURAL,
+        gqlFields: 'id',
+        filter: { id: { in: [SHARED_RECORD_ID, OTHER_RECORD_ID] } },
+      }),
+    );
+    await updateOneObjectMetadata({
+      input: {
+        idToUpdate: objectMetadataId,
+        updatePayload: { isActive: false },
+      },
+      expectToFail: false,
+    });
+    await deleteOneObjectMetadata({ input: { idToDelete: objectMetadataId } });
+  });
+
+  it('should show nothing to a role without access until a record is named for it', async () => {
+    expect(await findIdsAsJony()).toEqual({ errors: undefined, ids: [] });
+  });
+
+  it('should reach only the record named for the member', async () => {
+    expect((await setShare({ principal: JONY })).body.errors).toBeUndefined();
+
+    expect(await findIdsAsJony()).toEqual({
+      errors: undefined,
+      ids: [SHARED_RECORD_ID],
+    });
+    expect((await renameAsJony('Not allowed')).body.errors).toBeDefined();
+  });
+
+  it('should answer access questions for the member from their shares', async () => {
+    const principalPermissionsReadService =
+      getAppProviderByClassName<PrincipalPermissionsReadService>(
+        'PrincipalPermissionsReadService',
+      );
+    const recordPermissionsReadService =
+      getAppProviderByClassName<RecordPermissionsReadService>(
+        'RecordPermissionsReadService',
+      );
+    const { flatObjectMetadataMaps } =
+      await getAppProviderByClassName<WorkspaceCacheService>(
+        'WorkspaceCacheService',
+      ).getOrRecompute(workspaceId, ['flatObjectMetadataMaps']);
+    const flatObjectMetadata = findFlatEntityByIdInFlatEntityMaps({
+      flatEntityId: objectMetadataId,
+      flatEntityMaps: flatObjectMetadataMaps,
+    });
+
+    if (!isDefined(flatObjectMetadata)) {
+      throw new Error('The object under test is not cached');
+    }
+
+    const buildJonyPrincipals = async () =>
+      principalPermissionsReadService.resolvePermissionsPrincipals({
+        authContext: await resolveWorkspaceMemberAuthContext({
+          workspaceId,
+          workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+        }),
+      });
+
+    expect(
+      await recordPermissionsReadService.canAccessSomeRecords({
+        operationType: 'read',
+        principals: await buildJonyPrincipals(),
+        objectMetadataId: flatObjectMetadata.id,
+      }),
+    ).toBe(false);
+
+    await setShare({ principal: JONY });
+
+    const principals = await buildJonyPrincipals();
+
+    expect(
+      await recordPermissionsReadService.canAccessSomeRecords({
+        operationType: 'read',
+        principals,
+        objectMetadataId: flatObjectMetadata.id,
+      }),
+    ).toBe(true);
+    expect(
+      await recordPermissionsReadService.canAccessSomeRecords({
+        operationType: 'update',
+        principals,
+        objectMetadataId: flatObjectMetadata.id,
+      }),
+    ).toBe(false);
+    expect(
+      await recordPermissionsReadService.canAccessRecords({
+        operationType: 'read',
+        principals,
+        objectMetadataId: flatObjectMetadata.id,
+        recordIds: [OTHER_RECORD_ID],
+      }),
+    ).toBe(false);
+    expect(
+      await recordPermissionsReadService.canAccessRecords({
+        operationType: 'read',
+        principals,
+        objectMetadataId: flatObjectMetadata.id,
+        recordIds: [SHARED_RECORD_ID],
+      }),
+    ).toBe(true);
+    expect(
+      await recordPermissionsReadService.canAccessRecords({
+        operationType: 'read',
+        principals,
+        objectMetadataId: flatObjectMetadata.id,
+        recordIds: [SHARED_RECORD_ID, OTHER_RECORD_ID],
+      }),
+    ).toBe(false);
+  });
+
+  it('should let an edit grant edit, but never delete or manage access', async () => {
+    await setShare({
+      principal: JONY,
+      accessLevel: RecordShareAccessLevel.READ_WRITE,
+    });
+
+    expect((await renameAsJony('Edited by Jony')).body.errors).toBeUndefined();
+
+    const deleted = await makeGraphqlApiRequest(
+      deleteOneOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        gqlFields: 'id',
+        recordId: SHARED_RECORD_ID,
+      }),
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(deleted.body.errors).toBeDefined();
+    expect(
+      (
+        await setPrivate({
+          isPrivate: true,
+          token: APPLE_JONY_MEMBER_ACCESS_TOKEN,
+        })
+      ).body.errors,
+    ).toBeDefined();
+
+    const sharing = await makeMetadataApiRequest(
+      { query: READ_SHARING, variables: { target: target() } },
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(sharing.body.data.recordSharing).toMatchObject({
+      canManageSharing: false,
+      permissions: { canRead: true, canUpdate: true, canDelete: false },
+      shares: [],
+    });
+  });
+
+  it('should let a full access grant delete the record', async () => {
+    await setShare({
+      principal: JONY,
+      accessLevel: RecordShareAccessLevel.FULL,
+    });
+
+    const sharing = await makeMetadataApiRequest(
+      { query: READ_SHARING, variables: { target: target() } },
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(sharing.body.data.recordSharing.permissions).toEqual({
+      canRead: true,
+      canUpdate: true,
+      canDelete: true,
+    });
+
+    const deleted = await makeGraphqlApiRequest(
+      deleteOneOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        gqlFields: 'id',
+        recordId: SHARED_RECORD_ID,
+      }),
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(deleted.body.errors).toBeUndefined();
+
+    const restored = await makeGraphqlApiRequest(
+      restoreOneOperationFactory({
+        objectMetadataSingularName: OBJECT_NAME,
+        gqlFields: 'id',
+        recordId: SHARED_RECORD_ID,
+      }),
+      APPLE_JONY_MEMBER_ACCESS_TOKEN,
+    );
+
+    expect(restored.body.errors).toBeUndefined();
+  });
+
+  it('should not let a record that follows its roles reach beyond the role', async () => {
+    const share = await setPrivate({ isPrivate: false });
+
+    expect(share.body.errors).toBeUndefined();
+    expect(await findIdsAsJony()).toEqual({ errors: undefined, ids: [] });
+  });
+
+  it('should let a role grant reach every member of the role', async () => {
+    await setShare({ principal: { roleId: memberRoleId } });
+
+    expect((await findIdsAsJony()).ids).toEqual([SHARED_RECORD_ID]);
+  });
+
+  it('should tell owners what the role of each recipient grants on its own', async () => {
+    await setShare({ principal: JONY });
+    await setShare({ principal: { roleId: memberRoleId } });
+    await setPrivate({ isPrivate: true });
+
+    const sharing = await makeMetadataApiRequest({
+      query: parse(
+        `query RecordSharing($target: RecordTargetInput!) { recordSharing(target: $target) { isPrivate shares { principalId principalRoleId } roles { id canRead canUpdate } } }`,
+      ),
+      variables: { target: target() },
+    });
+
+    expect(sharing.body.errors).toBeUndefined();
+    expect(sharing.body.data.recordSharing.isPrivate).toBe(true);
+    expect(sharing.body.data.recordSharing.shares).toEqual(
+      expect.arrayContaining([
+        {
+          principalId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+          principalRoleId: memberRoleId,
+        },
+        { principalId: memberRoleId, principalRoleId: null },
+      ]),
+    );
+    expect(
+      sharing.body.data.recordSharing.shares.map(
+        ({ principalId }: { principalId: string }) => principalId,
+      ),
+    ).not.toContain(EVERYONE_PRINCIPAL_ID);
+    expect(sharing.body.data.recordSharing.roles).toEqual(
+      expect.arrayContaining([
+        { id: memberRoleId, canRead: false, canUpdate: false },
+      ]),
+    );
+  });
+
+  it('should let a named grant reach a record the row filter of the role hides', async () => {
+    await upsertRowLevelPermissionPredicates({
+      expectToFail: false,
+      input: {
+        roleId: memberRoleId,
+        objectMetadataId,
+        canCreateRecords: true,
+        canReadRecords: true,
+        canUpdateRecords: true,
+        canSoftDeleteRecords: true,
+        canDestroyRecords: true,
+        predicates: [
+          {
+            fieldMetadataId: nameFieldMetadataId,
+            operand: RowLevelPermissionPredicateOperand.CONTAINS,
+            value: 'Visible',
+          },
+        ],
+        predicateGroups: [],
+      },
+    });
+
+    try {
+      expect((await findIdsAsJony()).ids).toEqual([OTHER_RECORD_ID]);
+
+      await setShare({
+        principal: JONY,
+        accessLevel: RecordShareAccessLevel.READ_WRITE,
+      });
+
+      expect((await findIdsAsJony()).ids.sort()).toEqual(
+        [SHARED_RECORD_ID, OTHER_RECORD_ID].sort(),
+      );
+      expect(
+        (await renameAsJony('Edited under a row filter')).body.errors,
+      ).toBeUndefined();
+    } finally {
+      await upsertRowLevelPermissionPredicates({
+        expectToFail: false,
+        input: {
+          roleId: memberRoleId,
+          objectMetadataId,
+          predicates: [],
+          predicateGroups: [],
+        },
+      });
+    }
+  });
+
+  it('should refuse a merge that would delete a record shared for editing only', async () => {
+    await upsertRowLevelPermissionPredicates({
+      expectToFail: false,
+      input: {
+        roleId: memberRoleId,
+        objectMetadataId,
+        canCreateRecords: true,
+        canReadRecords: true,
+        canUpdateRecords: true,
+        canSoftDeleteRecords: true,
+        canDestroyRecords: true,
+        predicates: [
+          {
+            fieldMetadataId: nameFieldMetadataId,
+            operand: RowLevelPermissionPredicateOperand.CONTAINS,
+            value: 'Visible',
+          },
+        ],
+        predicateGroups: [],
+      },
+    });
+
+    try {
+      await setShare({
+        principal: JONY,
+        accessLevel: RecordShareAccessLevel.READ_WRITE,
+      });
+
+      const merged = await makeGraphqlApiRequest(
+        mergeManyOperationFactory({
+          objectMetadataPluralName: OBJECT_PLURAL,
+          gqlFields: 'id',
+          ids: [OTHER_RECORD_ID, SHARED_RECORD_ID],
+          conflictPriorityIndex: 0,
+        }),
+        APPLE_JONY_MEMBER_ACCESS_TOKEN,
+      );
+
+      expect(merged.body.errors?.[0]?.extensions?.userFriendlyMessage).toBe(
+        'Your role cannot delete some of these records, so they cannot be merged.',
+      );
+      expect((await findIdsAsJony()).ids.sort()).toEqual(
+        [SHARED_RECORD_ID, OTHER_RECORD_ID].sort(),
+      );
+    } finally {
+      await upsertRowLevelPermissionPredicates({
+        expectToFail: false,
+        input: {
+          roleId: memberRoleId,
+          objectMetadataId,
+          predicates: [],
+          predicateGroups: [],
+        },
+      });
+    }
+  });
+
+  it('should deliver events of the records named for the member only', async () => {
+    const workspaceCacheService =
+      getAppProviderByClassName<WorkspaceCacheService>('WorkspaceCacheService');
+    const resolveReadableRecordIds = async () => {
+      const { flatObjectMetadataMaps } =
+        await workspaceCacheService.getOrRecompute(workspaceId, [
+          'flatObjectMetadataMaps',
+        ]);
+      const objectMetadata = findFlatEntityByIdInFlatEntityMaps({
+        flatEntityId: objectMetadataId,
+        flatEntityMaps: flatObjectMetadataMaps,
+      });
+
+      if (!isDefined(objectMetadata)) {
+        throw new Error('Test object metadata is missing');
+      }
+
+      const readableEvents =
+        await getAppProviderByClassName<RecordEventPermissionsReadService>(
+          'RecordEventPermissionsReadService',
+        ).filterReadableEvents({
+          authContext: await resolveWorkspaceMemberAuthContext({
+            workspaceId,
+            workspaceMemberId: WORKSPACE_MEMBER_DATA_SEED_IDS.JONY,
+          }),
+          eventBatch: {
+            name: `${OBJECT_NAME}.updated`,
+            workspaceId,
+            objectMetadata,
+            events: [SHARED_RECORD_ID, OTHER_RECORD_ID].map((recordId) => ({
+              recordId,
+              properties: { after: { id: recordId } },
+            })) as ObjectRecordEvent[],
+          },
+        });
+
+      return readableEvents.map(({ recordId }) => recordId);
+    };
+
+    expect((await findIdsAsJony()).ids).toEqual([]);
+    expect(await resolveReadableRecordIds()).toEqual([]);
+
+    await setShare({ principal: JONY });
+
+    expect((await findIdsAsJony()).ids).toEqual([SHARED_RECORD_ID]);
+    expect(await resolveReadableRecordIds()).toEqual([SHARED_RECORD_ID]);
+  });
+
+  it('should keep grants within the role while the flag is off', async () => {
+    await setShare({ principal: JONY });
+    await setRecordSharingAndPrivateRecordsEnabled(false);
+
+    try {
+      expect((await findIdsAsJony()).errors).toBeDefined();
+    } finally {
+      await setRecordSharingAndPrivateRecordsEnabled(true);
+    }
+  });
+});

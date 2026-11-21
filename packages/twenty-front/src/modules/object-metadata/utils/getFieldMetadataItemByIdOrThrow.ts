@@ -1,5 +1,7 @@
 import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/EnrichedObjectMetadataItem';
+import { findFieldMetadataItemByFieldMetadataId } from '@/object-metadata/utils/findFieldMetadataItemByFieldMetadataId';
 import { CustomError, isDefined } from 'twenty-shared/utils';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 type GetFieldMetadataItemByIdParams = {
   fieldMetadataId: string;
@@ -13,30 +15,24 @@ export const getFieldMetadataItemByIdOrThrow = ({
   fieldMetadataId,
   objectMetadataItems,
 }: GetFieldMetadataItemByIdParams) => {
-  const objectMetadataItem = objectMetadataItems.find((objectMetadataItem) =>
-    objectMetadataItem.fields.some((field) => field.id === fieldMetadataId),
-  );
+  for (const objectMetadataItem of objectMetadataItems) {
+    const fieldMetadataItem = findFieldMetadataItemByFieldMetadataId({
+      fieldMetadataItems: objectMetadataItem.fields,
+      fieldMetadataId,
+    });
 
-  if (!isDefined(objectMetadataItem)) {
-    throw new CustomError(
+    if (isDefined(fieldMetadataItem)) {
+      return {
+        fieldMetadataItem,
+        objectMetadataItem,
+      };
+    }
+  }
+
+  throw new CustomError(
+    doNotTranslate(
       `Object metadata item not found for field id ${fieldMetadataId}`,
-      FIELD_METADATA_ITEM_NOT_FOUND_ERROR_CODE,
-    );
-  }
-
-  const fieldMetadataItem = objectMetadataItem.fields.find(
-    (field) => field.id === fieldMetadataId,
+    ),
+    FIELD_METADATA_ITEM_NOT_FOUND_ERROR_CODE,
   );
-
-  if (!isDefined(fieldMetadataItem)) {
-    throw new CustomError(
-      `Field metadata item not found for field id ${fieldMetadataId}`,
-      FIELD_METADATA_ITEM_NOT_FOUND_ERROR_CODE,
-    );
-  }
-
-  return {
-    fieldMetadataItem,
-    objectMetadataItem,
-  };
 };

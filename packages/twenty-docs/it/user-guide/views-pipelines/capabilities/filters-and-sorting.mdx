@@ -1,0 +1,118 @@
+---
+title: Filtri e ordinamento
+description: Filtra e ordina i record per trovare esattamente quello che ti serve.
+---
+
+import { PageBanner } from "/snippets/page-banner.mdx"
+
+## Filtraggio dei dati
+
+I filtri ti aiutano a concentrarti su record specifici mostrando solo quelli che corrispondono ai tuoi criteri.
+
+### Aggiunta di un filtro
+
+1. Fai clic su **Filtro** nella barra degli strumenti
+2. Seleziona il campo su cui filtrare
+3. Scegli un operatore
+4. Inserisci o seleziona un valore
+
+Il filtro viene applicato non appena inserisci o selezioni un valore. Operatori come **È vuoto** o **È nel passato** vengono applicati subito.
+
+### Operatori di filtro
+
+| Tipo di campo                                                                  | Operatori                                                                                                     |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| **Testo**, **Email**, **Telefoni**, **Link**, **Indirizzo**, **Nome completo** | Contiene, Non contiene, È vuoto, Non è vuoto                                                                  |
+| **Numero**, **Valuta**, **Valutazione**                                        | È, Non è, Maggiore o uguale, Minore o uguale, È vuoto, Non è vuoto                                            |
+| **Data**, **Data e ora**                                                       | È, È relativo, È nel passato, È nel futuro, È oggi, È precedente, È successivo o uguale, È vuoto, Non è vuoto |
+| **Seleziona**                                                                  | È, Non è, È vuoto, Non è vuoto                                                                                |
+| **Multi-selezione**                                                            | Contiene, Non contiene, È vuoto, Non è vuoto                                                                  |
+| **Vero/Falso**                                                                 | È                                                                                                             |
+| **Relazione**                                                                  | È, Non è, È vuoto, Non è vuoto                                                                                |
+| **Autore** (ad esempio, Creato da)                                             | Contiene, Non contiene, È vuoto, Non è vuoto                                                                  |
+| **Array**, **JSON**, **File**                                                  | Contiene, Non contiene, È vuoto, Non è vuoto                                                                  |
+
+<Tip>
+**Contiene** trova una parte del testo, indipendentemente dalle maiuscole e minuscole. Usalo per trovare un valore in un campo Testo, ad esempio il nome di una città.
+</Tip>
+
+* I filtri **Seleziona**, **Multi-selezione** e **Relazione** accettano più valori e mostrano i record che corrispondono a uno qualsiasi di essi
+* I filtri Relazione funzionano su campi che puntano a un record, ad esempio l'**Azienda** di una persona
+
+### Combinazione di filtri
+
+I filtri aggiunti da **Filtro** si combinano con AND: i record devono corrispondere a tutti. Selezionando un campo che ha già un filtro, il filtro viene aperto per la modifica.
+
+### Filtro avanzato
+
+Usa il filtro avanzato per mostrare i record che corrispondono a una condizione o a un'altra (logica OR):
+
+1. Fai clic su **Filtro → Filtro avanzato**
+2. Imposta la prima regola: un campo, un operatore e un valore
+3. Fai clic su **Aggiungi regola di filtro → Aggiungi regola** e imposta la seconda regola
+4. Nella seconda regola, cambia **E** in **O**
+
+**Esempio:** persone che vivono a Parigi o Londra
+
+* **Città** Contiene "Parigi"
+* **O** **Città** Contiene "Londra"
+
+Puoi anche:
+
+* Combina **E** e **O** con **Aggiungi regola di filtro → Aggiungi gruppo di regole**. Ogni gruppo ha il proprio connettore
+* Filtra in base a un campo di un record correlato, ad esempio il **Nome** dell'**Azienda** di una persona
+* Filtra in base a una parte di un campo composito, ad esempio la città di un indirizzo
+
+Il filtro avanzato appare nella barra della vista come chip, ad esempio **2 regole avanzate**. Fai clic su di esso per modificare le regole. Si combina con gli altri filtri tramite AND.
+
+### Rimozione dei filtri
+
+* Fai clic sulla **X** su un chip del filtro
+* Fai clic sulla **X** sul chip delle regole avanzate per rimuovere il filtro avanzato
+* Per rimuovere una regola, fai clic sul menu **⋮** alla fine della relativa riga e seleziona **Rimuovi regola** (o **Rimuovi gruppo di regole**)
+* Fai clic su **Reimposta** per tornare ai filtri e agli ordinamenti salvati della vista
+
+## Ordinamento dei dati
+
+L'ordinamento determina l'ordine in cui vengono visualizzati i record.
+
+### Aggiunta di un ordinamento
+
+1. Fai clic su **Ordina** nella barra degli strumenti
+2. Scegli **Crescente** o **Decrescente** nella parte superiore del menu
+3. Seleziona il campo su cui ordinare
+
+L'ordinamento viene applicato non appena selezioni il campo.
+
+### Più ordinamenti
+
+Aggiungi più livelli di ordinamento:
+
+* Il primo ordinamento è quello principale
+* Gli ordinamenti successivi si applicano all'interno di gruppi di valori uguali
+
+### Ordinamento dall'intestazione di una colonna
+
+1. Fai clic sull'intestazione di una colonna
+2. Seleziona **Ordina**
+
+Il primo ordinamento è crescente. Seleziona di nuovo **Ordina** per passare dall'ordinamento crescente a quello decrescente.
+
+Per rimuovere un ordinamento, fai clic sulla **X** sul relativo chip nella barra della vista.
+
+## Salvataggio delle impostazioni di filtro e ordinamento
+
+Salva i filtri e gli ordinamenti in una vista:
+
+1. Configura filtri e ordinamenti
+2. Fai clic su **Aggiorna vista** per salvarli nella vista corrente
+3. Oppure fai clic sulla freccia accanto a **Aggiorna vista** e seleziona **Crea vista** per salvarli come nuova vista
+
+Nelle viste predefinite, ad esempio **Tutte le aziende**, fai clic su **Salva come nuova vista**.
+
+## Correlati
+
+* [Viste tabella](/it/user-guide/views-pipelines/capabilities/table-views) — funzionalità Raggruppa per
+* [Panoramica delle viste](/it/user-guide/views-pipelines/overview) — creazione e gestione delle viste
+
+<PageBanner illustration="page-cover-filter" />

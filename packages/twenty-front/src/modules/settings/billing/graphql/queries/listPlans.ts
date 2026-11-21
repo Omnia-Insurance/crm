@@ -6,6 +6,10 @@ export const LIST_PLANS = gql`
   query listPlans {
     listPlans {
       planKey
+      isSellable
+      isCheckoutDefault
+      upgradePlanKeys
+      downgradePlanKeys
       baseProducts {
         name
         description
@@ -14,6 +18,7 @@ export const LIST_PLANS = gql`
           productKey
           planKey
           priceUsageBased
+          isLegacy
         }
         ... on BillingLicensedProduct {
           prices {
@@ -29,6 +34,7 @@ export const LIST_PLANS = gql`
           productKey
           planKey
           priceUsageBased
+          isLegacy
         }
         ... on BillingLicensedProduct {
           prices {
@@ -44,6 +50,7 @@ export const LIST_PLANS = gql`
           productKey
           planKey
           priceUsageBased
+          isLegacy
         }
         ... on BillingMeteredProduct {
           prices {

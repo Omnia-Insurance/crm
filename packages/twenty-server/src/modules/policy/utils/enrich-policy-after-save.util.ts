@@ -1,63 +1,121 @@
-import { isDefined } from 'twenty-shared/utils';
+import { Logger } from '@nestjs/common';
 
-import type { GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-workspace-datasource/global-workspace-orm.manager';
+import { isNonEmptyString } from '@sniptt/guards';
+import { type ObjectRecord } from 'twenty-shared/types';
+import { isDefined } from 'twenty-shared/utils';
+import { In } from 'typeorm';
+
+import { type WorkspaceOrmManager } from 'src/engine/twenty-orm/workspace-orm.manager';
 import { lookupCarrierProductCommission } from 'src/modules/policy/utils/lookup-carrier-product-commission.util';
 
-// Enriches policy records after save with bypassed permissions.
-// Handles: LTV from CarrierProduct commission, submittedDate, agentId.
-// These fields are set post-save because members may not have write
-// permission on them — pre-query hooks would fail field-level checks.
-export async function enrichPolicyAfterSave(
-  records: Record<string, unknown>[],
-  workspaceId: string,
-  globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
-  options?: {
-    submittedDate?: string;
-    agentProfileId?: string | null;
-  },
-): Promise<void> {
-  const policyRepo = await globalWorkspaceOrmManager.getRepository(
-    workspaceId,
-    'policy',
-    { shouldBypassPermissionChecks: true },
-  );
+type Commission = NonNullable<
+  Awaited<ReturnType<typeof lookupCarrierProductCommission>>
+>;
 
-  for (const record of records) {
-    const carrierId = record.carrierId as string | null | undefined;
-    const productId = record.productId as string | null | undefined;
-    const id = record.id as string;
+type SavedPolicy = {
+  id: string;
+  carrierId: string | null;
+  productId: string | null;
+  ltv: { amountMicros: number | null; currencyCode: string | null } | null;
+};
 
-    const updates: Record<string, unknown> = {};
+const logger = new Logger('enrichPolicyAfterSave');
 
-    // Stamp LTV from CarrierProduct commission
-    if (isDefined(carrierId) && isDefined(productId)) {
-      const ltvCommission = await lookupCarrierProductCommission(
-        carrierId,
-        productId,
-        workspaceId,
-        globalWorkspaceOrmManager,
+const buildCarrierProductKey = (carrierId: string, productId: string) =>
+  `${carrierId}:${productId}`;
+
+// One lookup per distinct carrier and product pair, however many policies share it
+const findCommissionByCarrierProductKey = async (
+  policies: SavedPolicy[],
+  workspaceOrmManager: WorkspaceOrmManager,
+): Promise<Map<string, Commission | null>> => {
+  const commissionByCarrierProductKey = new Map<string, Commission | null>();
+
+  for (const { carrierId, productId } of policies) {
+    if (!isNonEmptyString(carrierId) || !isNonEmptyString(productId)) {
+      continue;
+    }
+
+    const carrierProductKey = buildCarrierProductKey(carrierId, productId);
+
+    if (!commissionByCarrierProductKey.has(carrierProductKey)) {
+      commissionByCarrierProductKey.set(
+        carrierProductKey,
+        await lookupCarrierProductCommission(
+          carrierId,
+          productId,
+          workspaceOrmManager,
+        ),
       );
-
-      if (ltvCommission) {
-        updates.ltv = {
-          amountMicros: ltvCommission.amountMicros,
-          currencyCode: ltvCommission.currencyCode,
-        };
-      }
-    }
-
-    // Auto-set submittedDate if not already set on the record
-    if (options?.submittedDate && !isDefined(record.submittedDate)) {
-      updates.submittedDate = options.submittedDate;
-    }
-
-    // Auto-assign agent profile if not already set on the record
-    if (options?.agentProfileId && !isDefined(record.agentId)) {
-      updates.agentId = options.agentProfileId;
-    }
-
-    if (Object.keys(updates).length > 0) {
-      await policyRepo.update({ id }, updates as Record<string, unknown>);
     }
   }
-}
+
+  return commissionByCarrierProductKey;
+};
+
+const isSameCommission = (
+  ltv: SavedPolicy['ltv'],
+  commission: Commission,
+): boolean =>
+  ltv?.amountMicros === commission.amountMicros &&
+  ltv?.currencyCode === commission.currencyCode;
+
+// Stamps LTV on saved policies; callers run inside a workspace context
+export const enrichPolicyAfterSave = async (
+  records: Pick<ObjectRecord, 'id'>[],
+  workspaceOrmManager: WorkspaceOrmManager,
+): Promise<void> => {
+  const policyIds = [
+    ...new Set(records.map(({ id }) => id).filter(isNonEmptyString)),
+  ];
+
+  if (policyIds.length === 0) {
+    return;
+  }
+
+  try {
+    // System write: agents may lack write access to the system-stamped LTV
+    const policyRepository =
+      workspaceOrmManager.getRepositoryWithoutPermissionChecks<SavedPolicy>(
+        'policy',
+      );
+
+    // Read back: the saved payload only carries the fields the caller selected
+    const policies = await policyRepository.find({
+      where: { id: In(policyIds) },
+      select: [
+        'id',
+        'carrierId',
+        'productId',
+        'ltvAmountMicros',
+        'ltvCurrencyCode',
+      ],
+    });
+
+    const commissionByCarrierProductKey =
+      await findCommissionByCarrierProductKey(policies, workspaceOrmManager);
+
+    const updates = policies.flatMap(({ id, carrierId, productId, ltv }) => {
+      const commission =
+        isNonEmptyString(carrierId) && isNonEmptyString(productId)
+          ? commissionByCarrierProductKey.get(
+              buildCarrierProductKey(carrierId, productId),
+            )
+          : undefined;
+
+      return isDefined(commission) && !isSameCommission(ltv, commission)
+        ? [{ criteria: id, partialEntity: { ltv: commission } }]
+        : [];
+    });
+
+    if (updates.length > 0) {
+      await policyRepository.updateMany(updates);
+    }
+  } catch (error) {
+    // Best effort, as after-commit hooks are: the policy write itself already succeeded
+    logger.error(
+      `Could not enrich ${policyIds.length} saved policies`,
+      error instanceof Error ? error.stack : undefined,
+    );
+  }
+};

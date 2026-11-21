@@ -1,19 +1,18 @@
-import { TextInput } from '@/ui/field/input/components/TextInput';
+import { type ClipboardEvent, type KeyboardEvent, useContext } from 'react';
+import { doNotTranslate } from 'twenty-shared/i18n';
 
 import { FieldInputEventContext } from '@/object-record/record-field/ui/contexts/FieldInputEventContext';
+import { useNumberField } from '@/object-record/record-field/ui/meta-types/hooks/useNumberField';
+import { getNumberValueToPersist } from '@/object-record/record-field/ui/meta-types/input/utils/getNumberValueToPersist';
 import { RecordFieldComponentInstanceContext } from '@/object-record/record-field/ui/states/contexts/RecordFieldComponentInstanceContext';
 import { FieldInputContainer } from '@/ui/field/input/components/FieldInputContainer';
+import { StyledFieldInputSuffix } from '@/ui/field/input/components/StyledFieldInputSuffix';
+import { TextInput } from '@/ui/field/input/components/TextInput';
 import { useAvailableComponentInstanceIdOrThrow } from '@/ui/utilities/state/component-state/hooks/useAvailableComponentInstanceIdOrThrow';
-import { isNull } from '@sniptt/guards';
-import { useContext } from 'react';
-import {
-  canBeCastAsNumberOrNull,
-  castAsNumberOrNull,
-} from '~/utils/cast-as-number-or-null';
-import { useNumberField } from '@/object-record/record-field/ui/meta-types/hooks/useNumberField';
 
 export const NumberFieldInput = () => {
   const { fieldDefinition, draftValue, setDraftValue } = useNumberField();
+  const isPercentage = fieldDefinition.metadata.settings?.type === 'percentage';
 
   const { onEnter, onEscape, onClickOutside, onTab, onShiftTab } = useContext(
     FieldInputEventContext,
@@ -23,83 +22,79 @@ export const NumberFieldInput = () => {
     RecordFieldComponentInstanceContext,
   );
 
-  const getNumberValueToPersist = (
-    newValue: string,
-  ): { success: boolean; value?: any } => {
-    if (fieldDefinition?.metadata?.settings?.type === 'percentage') {
-      const newValueEscaped = newValue.replaceAll('%', '');
+  const getFieldInputEventArgs = (newValue: string) => {
+    const persistResult = getNumberValueToPersist({
+      newValue,
+      numberType: fieldDefinition.metadata.settings?.type,
+    });
 
-      if (!canBeCastAsNumberOrNull(newValueEscaped)) {
-        return { success: false };
-      }
-
-      const castedValue = castAsNumberOrNull(newValue);
-
-      if (!isNull(castedValue)) {
-        return { success: true, value: castedValue / 100 };
-      }
-
-      return { success: true, value: null };
-    }
-
-    if (!canBeCastAsNumberOrNull(newValue)) {
-      return { success: false };
-    }
-
-    const castedValue = castAsNumberOrNull(newValue);
-
-    return { success: true, value: castedValue };
+    return persistResult.success
+      ? { newValue: persistResult.value, skipPersist: false }
+      : { skipPersist: true };
   };
 
   const handleEnter = (newText: string) => {
-    const { success, value } = getNumberValueToPersist(newText);
-
-    const shouldNotPersist = !success;
-
-    onEnter?.({ newValue: value, skipPersist: shouldNotPersist });
+    onEnter?.(getFieldInputEventArgs(newText));
   };
 
   const handleEscape = (newText: string) => {
-    const { success, value } = getNumberValueToPersist(newText);
-
-    const shouldNotPersist = !success;
-
-    onEscape?.({ newValue: value, skipPersist: shouldNotPersist });
+    onEscape?.(getFieldInputEventArgs(newText));
   };
 
   const handleClickOutside = (
     event: MouseEvent | TouchEvent,
     newText: string,
   ) => {
-    const { success, value } = getNumberValueToPersist(newText);
-
-    const shouldNotPersist = !success;
-
-    onClickOutside?.({ newValue: value, skipPersist: shouldNotPersist, event });
+    onClickOutside?.({
+      ...getFieldInputEventArgs(newText),
+      event,
+    });
   };
 
   const handleTab = (newText: string) => {
-    const { success, value } = getNumberValueToPersist(newText);
-
-    const shouldNotPersist = !success;
-
-    onTab?.({ newValue: value, skipPersist: shouldNotPersist });
+    onTab?.(getFieldInputEventArgs(newText));
   };
 
   const handleShiftTab = (newText: string) => {
-    const { success, value } = getNumberValueToPersist(newText);
-
-    const shouldNotPersist = !success;
-
-    onShiftTab?.({ newValue: value, skipPersist: shouldNotPersist });
+    onShiftTab?.(getFieldInputEventArgs(newText));
   };
 
   const handleChange = (newText: string) => {
     setDraftValue(newText);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (isPercentage && event.key === '%') {
+      event.preventDefault();
+    }
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const input = event.target;
+    const pastedText = event.clipboardData.getData('text').trim();
+
+    if (
+      !isPercentage ||
+      !(input instanceof HTMLInputElement) ||
+      !pastedText.endsWith('%')
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const selectionStart = input.selectionStart ?? input.value.length;
+    const selectionEnd = input.selectionEnd ?? input.value.length;
+
+    setDraftValue(
+      input.value.slice(0, selectionStart) +
+        pastedText.slice(0, -1).trim() +
+        input.value.slice(selectionEnd),
+    );
+  };
+
   return (
-    <FieldInputContainer>
+    <FieldInputContainer onKeyDown={handleKeyDown} onPaste={handlePaste}>
       <TextInput
         instanceId={instanceId}
         placeholder={fieldDefinition.metadata.placeHolder}
@@ -111,7 +106,16 @@ export const NumberFieldInput = () => {
         onShiftTab={handleShiftTab}
         onTab={handleTab}
         onChange={handleChange}
+        copyButton={!isPercentage}
       />
+      {isPercentage && (
+        <StyledFieldInputSuffix
+          data-globally-prevent-click-outside="true"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {doNotTranslate('%')}
+        </StyledFieldInputSuffix>
+      )}
     </FieldInputContainer>
   );
 };

@@ -12,8 +12,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
+import { WasIntroducedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-introduced-in-upgrade.decorator';
+import { WasRemovedInUpgrade } from 'src/engine/core-modules/upgrade/decorators/was-removed-in-upgrade.decorator';
+import { ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-15/is-system-side-effect-upgrade-command-name.constant';
+import { DROP_IS_CUSTOM_FROM_AGENT_SKILL_VIEW_INDEX_AND_AGENT_CHAT_CHANNEL_UPGRADE_COMMAND_NAME } from 'src/database/commands/upgrade-version-command/2-54/drop-is-custom-from-agent-skill-view-index-and-agent-chat-channel-upgrade-command-name.constant';
 import { IndexFieldMetadataEntity } from 'src/engine/metadata-modules/index-metadata/index-field-metadata.entity';
-import { IndexType } from 'src/engine/metadata-modules/index-metadata/types/indexType.types';
+import { IndexType } from 'twenty-shared/types';
 import { ObjectMetadataEntity } from 'src/engine/metadata-modules/object-metadata/object-metadata.entity';
 import { SyncableEntity } from 'src/engine/workspace-manager/types/syncable-entity.interface';
 
@@ -22,11 +26,12 @@ import { SyncableEntity } from 'src/engine/workspace-manager/types/syncable-enti
   'workspaceId',
   'objectMetadataId',
 ])
-@Index('IDX_INDEX_METADATA_WORKSPACE_ID_OBJECT_METADATA_ID', [
-  'workspaceId',
+@Index('IDX_INDEX_METADATA_OBJECT_METADATA_ID_WORKSPACE_ID', [
   'objectMetadataId',
+  'workspaceId',
 ])
 @Entity('indexMetadata')
+@Index('IDX_INDEX_METADATA_APPLICATION_ID', ['applicationId'])
 export class IndexMetadataEntity
   extends SyncableEntity
   implements Required<IndexMetadataEntity>
@@ -62,8 +67,12 @@ export class IndexMetadataEntity
   )
   indexFieldMetadatas: Relation<IndexFieldMetadataEntity[]>;
 
-  @Column({ default: false })
-  isCustom: boolean;
+  @WasRemovedInUpgrade({
+    upgradeCommandName:
+      DROP_IS_CUSTOM_FROM_AGENT_SKILL_VIEW_INDEX_AND_AGENT_CHAT_CHANNEL_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ type: 'boolean', default: false })
+  isCustom: WasRemovedInUpgrade<boolean>;
 
   @Column({ nullable: false, default: false })
   isUnique: boolean;
@@ -78,4 +87,10 @@ export class IndexMetadataEntity
     nullable: false,
   })
   indexType: IndexType;
+
+  @WasIntroducedInUpgrade({
+    upgradeCommandName: ADD_IS_SYSTEM_SIDE_EFFECT_UPGRADE_COMMAND_NAME,
+  })
+  @Column({ nullable: false, default: false, type: 'boolean' })
+  isSystemSideEffect: boolean;
 }

@@ -5,7 +5,7 @@ import { useLingui } from '@lingui/react/macro';
 import { motion } from 'framer-motion';
 import { Controller, useFormContext } from 'react-hook-form';
 import { isDefined } from 'twenty-shared/utils';
-import { themeCssVariables } from 'twenty-ui/theme-constants';
+import { themeCssVariables } from 'twenty-ui/theme';
 
 const StyledFullWidthMotionDiv = styled(motion.div)`
   width: 100%;
@@ -51,7 +51,9 @@ export const SignInUpEmailField = ({
               placeholder={t`Email`}
               onBlur={onBlur}
               onChange={(email: string) => {
-                if (isDefined(onInputChange)) onInputChange(email);
+                if (isDefined(onInputChange)) {
+                  onInputChange(email);
+                }
                 onChange(email);
               }}
               error={showErrors ? error?.message : undefined}

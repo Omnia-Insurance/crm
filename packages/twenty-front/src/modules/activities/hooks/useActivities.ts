@@ -3,26 +3,26 @@ import { useStore } from 'jotai';
 
 import { useActivityTargetsForTargetableObjects } from '@/activities/hooks/useActivityTargetsForTargetableObjects';
 import { type ActivityTargetableObject } from '@/activities/types/ActivityTargetableEntity';
-import { type Note } from '@/activities/types/Note';
-import { type NoteTarget } from '@/activities/types/NoteTarget';
-import { type Task } from '@/activities/types/Task';
-import { type TaskTarget } from '@/activities/types/TaskTarget';
+import { type ActivityTarget } from '@/activities/types/ActivityTarget';
+import { getRelatedRecordFromJunction } from '@/object-record/record-field/ui/utils/junction/getRelatedRecordFromJunction';
 import {
-  type CoreObjectNameSingular,
+  type StandardObjectNameSingular,
   type RecordGqlOperationOrderBy,
 } from 'twenty-shared/types';
 import { getRecordsFromRecordConnection } from '@/object-record/cache/utils/getRecordsFromRecordConnection';
 import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { isDefined } from 'twenty-shared/utils';
 
-export const useActivities = <T extends Task | Note>({
+export const useActivities = ({
   objectNameSingular,
   targetableObjects,
   activityTargetsOrderByVariables,
   skip,
   limit,
 }: {
-  objectNameSingular: CoreObjectNameSingular.Note | CoreObjectNameSingular.Task;
+  objectNameSingular:
+    | StandardObjectNameSingular.Note
+    | StandardObjectNameSingular.Task;
   targetableObjects: ActivityTargetableObject[];
   activityTargetsOrderByVariables: RecordGqlOperationOrderBy;
   skip?: boolean;
@@ -30,9 +30,12 @@ export const useActivities = <T extends Task | Note>({
 }) => {
   const store = useStore();
   const updateActivitiesInStore = useCallback(
-    (activityTargets: (TaskTarget | NoteTarget)[]) => {
+    (activityTargets: ActivityTarget[], activityRelationFieldName: string) => {
       for (const activityTarget of activityTargets) {
-        const activity = activityTarget[objectNameSingular];
+        const activity = getRelatedRecordFromJunction({
+          junctionRecord: activityTarget,
+          relationFieldName: activityRelationFieldName,
+        });
 
         if (!isDefined(activity)) {
           continue;
@@ -41,7 +44,7 @@ export const useActivities = <T extends Task | Note>({
         store.set(recordStoreFamilyState.atomFamily(activity.id), activity);
       }
     },
-    [store, objectNameSingular],
+    [store],
   );
 
   const {
@@ -50,6 +53,7 @@ export const useActivities = <T extends Task | Note>({
     totalCountActivityTargets,
     fetchMoreActivityTargets,
     hasNextPage,
+    activityRelationFieldName,
   } = useActivityTargetsForTargetableObjects({
     objectNameSingular,
     targetableObjects,
@@ -61,9 +65,12 @@ export const useActivities = <T extends Task | Note>({
 
   const activities = activityTargets
     .map((activityTarget) => {
-      return activityTarget[objectNameSingular];
+      return getRelatedRecordFromJunction({
+        junctionRecord: activityTarget,
+        relationFieldName: activityRelationFieldName,
+      });
     })
-    .filter(isDefined) as T[];
+    .filter(isDefined);
 
   const fetchMoreActivities = async () => {
     const result = await fetchMoreActivityTargets();
@@ -72,23 +79,24 @@ export const useActivities = <T extends Task | Note>({
       return [];
     }
 
-    const activityTargets = getRecordsFromRecordConnection<
-      TaskTarget | NoteTarget
-    >({
+    const activityTargets = getRecordsFromRecordConnection<ActivityTarget>({
       recordConnection: result.data,
     });
 
-    updateActivitiesInStore(activityTargets);
+    updateActivitiesInStore(activityTargets, activityRelationFieldName);
 
     return activityTargets
       .map((activityTarget) => {
-        return activityTarget[objectNameSingular];
+        return getRelatedRecordFromJunction({
+          junctionRecord: activityTarget,
+          relationFieldName: activityRelationFieldName,
+        });
       })
-      .filter(isDefined) as T[];
+      .filter(isDefined);
   };
 
   return {
-    activities: activities as T[],
+    activities,
     loading: loadingActivityTargets,
     totalCountActivities: totalCountActivityTargets,
     fetchMoreActivities,

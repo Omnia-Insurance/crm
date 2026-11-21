@@ -1,5 +1,5 @@
-// Must be the very first import — activates i18n before any module
-// can call i18n._() at module scope (e.g. Zod schemas in PasswordReset)
+// OMNIA-CUSTOM: keep first. Activates English before module-scope i18n._()
+// calls (PasswordReset zod schema) and silences graphql-tag fragment warnings.
 import '~/utils/i18n/initialI18nActivate';
 
 import { disableFragmentWarnings } from '@apollo/client';
@@ -8,14 +8,30 @@ disableFragmentWarnings();
 import ReactDOM from 'react-dom/client';
 
 import { App } from '@/app/components/App';
-import 'react-loading-skeleton/dist/skeleton.css';
+import '@/app/utils/setupMonacoEnvironment';
+import { hydrateMetadataStore } from '@/metadata-store/storage/metadataStoreStorage';
+import '@fontsource/dm-mono/400.css';
+import '@fontsource/dm-mono/500.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
 import 'twenty-ui/style.css';
 import 'twenty-ui/theme-light.css';
 import 'twenty-ui/theme-dark.css';
 import './index.css';
+// Salesfarce: remove with the theme
+import { salesfarceLoadStyles } from '@/salesfarce/utils/salesfarceLoadStyles';
 
-const root = ReactDOM.createRoot(
-  document.getElementById('root') ?? document.body,
+const renderApp = () => {
+  const root = ReactDOM.createRoot(
+    document.getElementById('root') ?? document.body,
+  );
+
+  root.render(<App />);
+};
+
+// Salesfarce: on removal, restore hydrateMetadataStore().then(renderApp, renderApp)
+void Promise.allSettled([hydrateMetadataStore(), salesfarceLoadStyles()]).then(
+  renderApp,
 );
-
-root.render(<App />);

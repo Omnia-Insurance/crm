@@ -148,6 +148,7 @@ export const WorkflowStepFilterValueInput = ({
 
   const isDateTimeField = variableType === FieldMetadataType.DATE_TIME;
 
+  // OMNIA-CUSTOM: IS_NOT_RELATIVE takes the same relative-date value
   const isRelativeDateFilter =
     isDateField &&
     (stepFilter.operand === ViewFilterOperand.IS_RELATIVE ||

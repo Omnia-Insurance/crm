@@ -1,21 +1,25 @@
-import { UseGuards, UseInterceptors } from '@nestjs/common';
+import { UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
 import { Args, Mutation, Query } from '@nestjs/graphql';
 
-import { PermissionFlagType } from 'twenty-shared/constants';
-
+import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
 import { UUIDScalarType } from 'src/engine/api/graphql/workspace-schema-builder/graphql-types/scalars';
+import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filters/auth-graphql-api-exception.filter';
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { AuthWorkspace } from 'src/engine/decorators/auth/auth-workspace.decorator';
-import { MetadataResolver } from 'src/engine/api/graphql/graphql-config/decorators/metadata-resolver.decorator';
-import { SettingsPermissionGuard } from 'src/engine/guards/settings-permission.guard';
-import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
+import { AccessPolicyGuard } from 'src/engine/guards/access-policy.guard';
+import { INGESTION_PIPELINE_READ_ACCESS_POLICY } from 'src/engine/metadata-modules/ingestion-pipeline/constants/ingestion-pipeline-read-access-policy.constant';
+import { INGESTION_PIPELINE_WRITE_ACCESS_POLICY } from 'src/engine/metadata-modules/ingestion-pipeline/constants/ingestion-pipeline-write-access-policy.constant';
 import { CreateIngestionPipelineInput } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/create-ingestion-pipeline.input';
-import { IngestionPipelineDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/ingestion-pipeline.dto';
-import { UpdateIngestionPipelineInput } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/update-ingestion-pipeline.input';
-import { TestIngestionPipelineInput } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/test-ingestion-pipeline.input';
-import { TestIngestionPipelineResultDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/test-ingestion-pipeline-result.dto';
 import { IngestionLogDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/ingestion-log.dto';
+import { IngestionPipelineDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/ingestion-pipeline.dto';
+import { TestIngestionPipelineResultDTO } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/test-ingestion-pipeline-result.dto';
+import { TestIngestionPipelineInput } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/test-ingestion-pipeline.input';
+import { UpdateIngestionPipelineInput } from 'src/engine/metadata-modules/ingestion-pipeline/dtos/update-ingestion-pipeline.input';
 import { IngestionPipelineGraphqlApiExceptionInterceptor } from 'src/engine/metadata-modules/ingestion-pipeline/interceptors/ingestion-pipeline-graphql-api-exception.interceptor';
+import { IngestionPullJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-pull.job';
 import { IngestionFieldMappingService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-field-mapping.service';
 import { IngestionLogService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-log.service';
 import { IngestionPipelineService } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pipeline.service';
@@ -23,19 +27,12 @@ import {
   IngestionPullSchedulerService,
   type IngestionPullJobData,
 } from 'src/engine/metadata-modules/ingestion-pipeline/services/ingestion-pull-scheduler.service';
-import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
-import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
-import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
-import { IngestionPullJob } from 'src/engine/metadata-modules/ingestion-pipeline/jobs/ingestion-pull.job';
-import {
-  IngestionPipelineException,
-  IngestionPipelineExceptionCode,
-} from 'src/engine/metadata-modules/ingestion-pipeline/ingestion-pipeline.exception';
 import { buildRecordFromMappings } from 'src/engine/metadata-modules/ingestion-pipeline/utils/build-record-from-mappings.util';
+import { PermissionsGraphqlApiExceptionFilter } from 'src/engine/permissions/utils/permissions-graphql-api-exception.filter';
 
-@UseGuards(WorkspaceAuthGuard)
 @UseInterceptors(IngestionPipelineGraphqlApiExceptionInterceptor)
 @MetadataResolver(() => IngestionPipelineDTO)
+@UseFilters(AuthGraphqlApiExceptionFilter, PermissionsGraphqlApiExceptionFilter)
 export class IngestionPipelineResolver {
   constructor(
     private readonly ingestionPipelineService: IngestionPipelineService,
@@ -47,7 +44,7 @@ export class IngestionPipelineResolver {
   ) {}
 
   @Query(() => [IngestionPipelineDTO])
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_READ_ACCESS_POLICY))
   async ingestionPipelines(
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<IngestionPipelineDTO[]> {
@@ -55,7 +52,7 @@ export class IngestionPipelineResolver {
   }
 
   @Query(() => IngestionPipelineDTO, { nullable: true })
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_READ_ACCESS_POLICY))
   async ingestionPipeline(
     @Args('id', { type: () => UUIDScalarType }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -64,7 +61,7 @@ export class IngestionPipelineResolver {
   }
 
   @Mutation(() => IngestionPipelineDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_WRITE_ACCESS_POLICY))
   async createIngestionPipeline(
     @Args('input') input: CreateIngestionPipelineInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -85,7 +82,7 @@ export class IngestionPipelineResolver {
   }
 
   @Mutation(() => IngestionPipelineDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_WRITE_ACCESS_POLICY))
   async updateIngestionPipeline(
     @Args('input') input: UpdateIngestionPipelineInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -106,7 +103,7 @@ export class IngestionPipelineResolver {
   }
 
   @Mutation(() => IngestionPipelineDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_WRITE_ACCESS_POLICY))
   async deleteIngestionPipeline(
     @Args('id', { type: () => UUIDScalarType }) id: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -127,7 +124,7 @@ export class IngestionPipelineResolver {
   }
 
   @Mutation(() => IngestionLogDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_WRITE_ACCESS_POLICY))
   async triggerIngestionPull(
     @Args('pipelineId', { type: () => UUIDScalarType }) pipelineId: string,
     @AuthWorkspace() workspace: WorkspaceEntity,
@@ -136,17 +133,10 @@ export class IngestionPipelineResolver {
     @Args('endTime', { type: () => String, nullable: true })
     endTime?: string,
   ): Promise<IngestionLogDTO> {
-    const pipeline = await this.ingestionPipelineService.findEntityById(
+    await this.ingestionPipelineService.findEntityByIdOrThrow(
       pipelineId,
       workspace.id,
     );
-
-    if (!pipeline) {
-      throw new IngestionPipelineException(
-        `Pipeline ${pipelineId} not found`,
-        IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
-      );
-    }
 
     const log = await this.logService.createPending(pipelineId, 'pull');
 
@@ -161,8 +151,9 @@ export class IngestionPipelineResolver {
         // pipeline config.
         startTimeOverride: startTime,
         endTimeOverride: endTime,
+        logId: log.id,
       },
-      { retryLimit: 3 },
+      { isWorkspaceJob: true, workspaceId: workspace.id, retryLimit: 3 },
     );
 
     return {
@@ -184,25 +175,19 @@ export class IngestionPipelineResolver {
   }
 
   @Mutation(() => TestIngestionPipelineResultDTO)
-  @UseGuards(SettingsPermissionGuard(PermissionFlagType.API_KEYS_AND_WEBHOOKS))
+  @UseGuards(AccessPolicyGuard(INGESTION_PIPELINE_WRITE_ACCESS_POLICY))
   async testIngestionPipeline(
     @Args('input') input: TestIngestionPipelineInput,
     @AuthWorkspace() workspace: WorkspaceEntity,
   ): Promise<TestIngestionPipelineResultDTO> {
-    const pipeline = await this.ingestionPipelineService.findEntityById(
+    await this.ingestionPipelineService.findEntityByIdOrThrow(
       input.pipelineId,
       workspace.id,
     );
 
-    if (!pipeline) {
-      throw new IngestionPipelineException(
-        `Pipeline ${input.pipelineId} not found`,
-        IngestionPipelineExceptionCode.PIPELINE_NOT_FOUND,
-      );
-    }
-
     const mappings = await this.fieldMappingService.findEntitiesByPipelineId(
       input.pipelineId,
+      workspace.id,
     );
 
     const previewRecords: Record<string, unknown>[] = [];

@@ -1,10 +1,11 @@
 import { shouldCreateFolderByDefault } from 'src/modules/messaging/message-folder-manager/utils/should-create-folder-by-default.util';
-import { StandardFolder } from 'src/modules/messaging/message-import-manager/drivers/types/standard-folder';
+import { StandardFolder } from 'src/modules/messaging/message-import-manager/drivers/types/standard-folder.type';
 
 describe('shouldCreateFolderByDefault', () => {
   it('should allow creating user folders', () => {
     expect(shouldCreateFolderByDefault(StandardFolder.INBOX)).toBe(true);
     expect(shouldCreateFolderByDefault(StandardFolder.SENT)).toBe(true);
+    expect(shouldCreateFolderByDefault(StandardFolder.DRAFTS)).toBe(true);
   });
 
   it('should allow creating custom folders', () => {
@@ -13,7 +14,6 @@ describe('shouldCreateFolderByDefault', () => {
   });
 
   it('should prevent creating system-excluded folders', () => {
-    expect(shouldCreateFolderByDefault(StandardFolder.DRAFTS)).toBe(false);
     expect(shouldCreateFolderByDefault(StandardFolder.TRASH)).toBe(false);
     expect(shouldCreateFolderByDefault(StandardFolder.JUNK)).toBe(false);
   });

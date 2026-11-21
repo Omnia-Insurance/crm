@@ -1,12 +1,24 @@
-export type SdkClientUrls = {
-  core: string;
-  metadata: string;
-};
+import { type FrontComponentExecutionContext } from 'twenty-sdk/front-component';
+
+import { type FrontComponentStorageSnapshots } from '@/types/FrontComponentStorageSnapshots';
+import { type MediaRecorderCapabilities } from '@/types/MediaSession';
+import { type SdkClientSources } from '@/types/SdkClientSources';
+import { type ViewportGeometrySnapshot } from '@/types/ViewportGeometrySnapshot';
 
 export type HostToWorkerRenderContext = {
   componentUrl: string;
+  componentSource: string;
+  componentProps?: Record<string, unknown>;
   applicationAccessToken?: string;
   apiUrl?: string;
-  sdkClientUrls?: SdkClientUrls;
+  functionsBaseUrl?: string;
+  sdkClientSources?: SdkClientSources;
+  sharedDependenciesSource?: string;
+  hostFetchOrigins?: string[];
   applicationVariables?: Record<string, string>;
+  initialViewportGeometry?: ViewportGeometrySnapshot;
+  initialExecutionContext?: FrontComponentExecutionContext;
+  storageSnapshots?: FrontComponentStorageSnapshots;
+  // isTypeSupported is synchronous, so the worker polyfill answers from this snapshot.
+  mediaRecorderCapabilities?: MediaRecorderCapabilities;
 };

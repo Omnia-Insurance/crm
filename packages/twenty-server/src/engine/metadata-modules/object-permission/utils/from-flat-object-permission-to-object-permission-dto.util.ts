@@ -9,6 +9,7 @@ export const fromFlatObjectPermissionToObjectPermissionDto = (
   canUpdateObjectRecords: flatObjectPermission.canUpdateObjectRecords,
   canSoftDeleteObjectRecords: flatObjectPermission.canSoftDeleteObjectRecords,
   canDestroyObjectRecords: flatObjectPermission.canDestroyObjectRecords,
+  // OMNIA-CUSTOM: per-object sidebar visibility and edit window (C3, C4)
   showInSidebar: flatObjectPermission.showInSidebar,
   editWindowMinutes: flatObjectPermission.editWindowMinutes,
 });

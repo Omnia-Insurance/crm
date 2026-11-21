@@ -1,7 +1,12 @@
 import { useCurrentWidget } from '@/page-layout/widgets/hooks/useCurrentWidget';
+import { TooltipDelay } from '@/ui/layout/tooltip/constants/TooltipDelay';
 import { styled } from '@linaria/react';
-import { t } from '@lingui/core/macro';
-import { AppTooltip, Status } from 'twenty-ui/display';
+import { type FallbackProps } from 'react-error-boundary';
+import { Status } from 'twenty-ui/primitives/data-display';
+import { Tooltip } from 'twenty-ui/primitives/surfaces';
+import { useLingui } from '@lingui/react/macro';
+
+type PageLayoutWidgetInvalidConfigDisplayProps = FallbackProps;
 
 const StyledInvalidConfigContainer = styled.div`
   align-items: center;
@@ -9,23 +14,28 @@ const StyledInvalidConfigContainer = styled.div`
   justify-content: center;
 `;
 
-export const PageLayoutWidgetInvalidConfigDisplay = () => {
+export const PageLayoutWidgetInvalidConfigDisplay = ({
+  error,
+}: PageLayoutWidgetInvalidConfigDisplayProps) => {
+  const { t } = useLingui();
   const widget = useCurrentWidget();
   const tooltipId = `widget-invalid-config-tooltip-${widget.id}`;
 
   const text = t`Invalid Configuration`;
-  const tooltipContent = t`Invalid configuration. Click edit to configure this widget.`;
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const tooltipContent = t`Invalid configuration: ${errorMessage}`;
 
   return (
     <StyledInvalidConfigContainer>
-      <div id={tooltipId}>
-        <Status color="red" text={text} />
-      </div>
-      <AppTooltip
-        anchorSelect={`#${tooltipId}`}
+      <Tooltip
+        delay={TooltipDelay.mediumDelay}
         content={tooltipContent}
-        place="top"
-      />
+        side="top"
+      >
+        <div id={tooltipId}>
+          <Status color="red">{text}</Status>
+        </div>
+      </Tooltip>
     </StyledInvalidConfigContainer>
   );
 };

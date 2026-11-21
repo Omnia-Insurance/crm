@@ -6,7 +6,7 @@ export type Leaf = {
   icon?: string;
   label?: string;
   description?: string;
-  // oxlint-disable-next-line @typescripttypescript/no-explicit-any
+  // oxlint-disable-next-line typescript/no-explicit-any
   value: any;
   isCompositeSubField?: boolean;
 };
@@ -18,13 +18,6 @@ export type Node = {
   label?: string;
   description?: string;
   value: OutputSchema;
-};
-
-type Link = {
-  isLeaf: true;
-  tab?: string;
-  icon?: string;
-  label?: string;
 };
 
 export type BaseOutputSchema = Record<string, Leaf | Node>;
@@ -44,12 +37,4 @@ export type RecordOutputSchema = {
   _outputSchemaType: 'RECORD';
 };
 
-export type LinkOutputSchema = {
-  link: Link;
-  _outputSchemaType: 'LINK';
-};
-
-export type OutputSchema =
-  | BaseOutputSchema
-  | RecordOutputSchema
-  | LinkOutputSchema;
+export type OutputSchema = BaseOutputSchema | RecordOutputSchema;

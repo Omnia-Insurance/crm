@@ -11,7 +11,7 @@ import {
   FieldMetadataSettingsOnClickAction,
   FieldMetadataType,
 } from 'twenty-shared/types';
-import { IconClick } from 'twenty-ui/display';
+import { IconClick } from 'twenty-ui/icon';
 
 type SettingsDataModelFieldOnClickActionFormProps = {
   disabled?: boolean;
@@ -85,7 +85,6 @@ export const SettingsDataModelFieldOnClickActionForm = ({
             Icon={IconClick}
             title={t`Action on click`}
             description={description}
-            disabled={disabled}
           >
             <Select<FieldMetadataSettingsOnClickAction>
               dropdownWidth={180}
