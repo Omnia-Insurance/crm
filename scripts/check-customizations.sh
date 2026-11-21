@@ -1175,6 +1175,12 @@ check_file_not_contains \
   "Local deploys must not install a release (an install skips the migration job)"
 
 echo ""
+echo "--- Image builds exclude PHI on disk (.dockerignore) ---"
+check_file_contains \
+  ".dockerignore" \
+  "**/.local-storage" \
+  "Image builds must not send local file storage (prod-copy exports and recordings) to the build context"
+
 echo "--- Local prod restore (scripts/replicate-db-to-local.sh) ---"
 check_file_contains \
   "scripts/replicate-db-to-local.sh" \

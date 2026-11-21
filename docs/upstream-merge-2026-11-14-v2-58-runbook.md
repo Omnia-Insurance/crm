@@ -85,6 +85,7 @@ Omnia upgrade steps, in the order `upgrade` runs them:
     export TAG=$(git rev-parse HEAD | cut -c1-7)
     APP_VERSION=$(sed -n "s/^export const TWENTY_CURRENT_VERSION = '\([0-9.]*\)'.*/\1/p" \
       packages/twenty-server/src/engine/core-modules/upgrade/constants/twenty-current-version.constant.ts)
+    git worktree add "../crm-build-$TAG" "$TAG" && cd "../crm-build-$TAG"   # a clean tree: no local storage or data exports
     aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${REPO%/*}"
     docker buildx build --platform linux/amd64 -f packages/twenty-docker/twenty/Dockerfile --target twenty \
       --build-arg "APP_VERSION=$APP_VERSION" -t "$REPO:$TAG" --push .

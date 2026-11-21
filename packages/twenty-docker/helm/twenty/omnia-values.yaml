@@ -63,7 +63,7 @@ server:
     # OMNIA-CUSTOM: applicationRegistration ids whose logic functions get the Pod Identity
     # credentials (comma-separated). Empty grants none.
     - name: LOGIC_FUNCTION_AWS_CONTAINER_CREDENTIALS_APP_REGISTRATION_IDS
-      value: ""
+      value: "49be799b-501c-4d05-a195-67b41a0168cc"
     - name: CONVOSO_API_TOKEN
       valueFrom:
         secretKeyRef:
