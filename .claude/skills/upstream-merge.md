@@ -325,6 +325,7 @@ npx nx run twenty-server:command-no-deps -- upgrade:status
 - If `upgrade` fails, fix the cause and rerun: it resumes from the cursor in `core."upgradeMigration"`. Never mark a step completed by hand, because the cursor then skips it for good. A failed instance step right after a workspace segment leaves failed per-workspace rows that block a plain rerun: delete them by the step's name (the v2.58 runbook's contingencies show the query).
 - `TWENTY_CURRENT_VERSION` (`packages/twenty-server/src/engine/core-modules/upgrade/constants/twenty-current-version.constant.ts`) is the upgrade version. `APP_VERSION` only stamps `executedByVersion` and drives the client refresh prompt; `deploy-eks.yaml` and `scripts/deploy-local.sh` derive it from that constant.
 - A deploy that crosses many versions needs its own cutover runbook in `docs/`.
+- ClickHouse (event logs, `infra/clickhouse/`): the pre-upgrade job applies upstream's ClickHouse migrations after `upgrade` and only warns on failure. After the deploy, grep the job log for `WARNING: ClickHouse migrations failed`; rehearse new ClickHouse migrations against a local copy first (runbook in `infra/clickhouse/README.md`).
 
 ### 3e. Smoke test
 
@@ -335,6 +336,7 @@ Start the app and verify:
 - Export: upstream record export, RLS-filtered, with the relation sub-field columns
 - Search as an agent: no other agent's leads; a pasted policy number, the last 7 digits of a lead's phone and a formatted phone number each find the record
 - Command menu: `Create <Object>` CTA, pinned Delete, Import/Export/AI hidden without their permission flags
+- Logs: as an Admin, the Settings Logs switch opens the Logs console, and Record changes lists a change made a moment ago
 - Auth: sign-in and sign-out, the omniaagent.com dashboard round trip (`/welcome?postSignInRedirect=…`) and dashboard Sign out (`/welcome?omniaSignOut=1&postSignInRedirect=…`)
 
 ## Subagent Instructions
