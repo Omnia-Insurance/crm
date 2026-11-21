@@ -19,6 +19,12 @@ and apps are refused).
 | `clickhouse-migrate-job.yaml` | One-off migration Job plus a check of the exact app URL |
 | `backup-selection.json` | AWS Backup selection for volumes tagged `backup=twenty-crm-daily` |
 
+## Where people see it
+
+People whose role has the Security permission (Admin today), on desktop: the Logs switch at the
+bottom of the Settings drawer, or "Show logs" in the command menu, opens the Logs console. Pick
+Record changes, Security or App logs. At phone width: Settings > General > Logs.
+
 ## Users
 
 | User | Used by | Grants | Network |
@@ -68,7 +74,7 @@ An empty Settings > Logs page proves nothing: failed reads render as an empty li
 
 ## Retention
 
-The workspace setting (Settings > Security > Audit Logs > Log retention, 90 days) is enforced by
+The workspace setting (Settings > General > Security > Audit Logs > Log retention, 90 days) is enforced by
 the hourly `EventLogCleanupCronJob` in the worker (`ALTER TABLE ... DELETE`). The tables' own TTL
 (3 years) is only a backstop. After an upstream merge, check that ClickHouse migrations did not
 change those TTLs: `SELECT name, engine_full FROM system.tables WHERE database = 'twenty'`.
